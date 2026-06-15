@@ -141,6 +141,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         string callref_consumer = snippets_dir + "/callrefconsumer.qc";
         string constinit_provider = snippets_dir + "/constinitprovider.qc";
         string constinit_consumer = snippets_dir + "/constinitconsumer.qc";
+        string const_hashdecl_provider = snippets_dir + "/consthashdeclprovider.qc";
+        string const_hashdecl_consumer = snippets_dir + "/consthashdeclconsumer.qc";
         write(provider,
 "%new-style
 class CMakeQoProvider {
@@ -264,6 +266,22 @@ class CMakeQoConstInitConsumer {
     }
 }
 ");
+        write(const_hashdecl_provider,
+"%new-style
+hashdecl CMakeQoConstHashInfo {
+    string value;
+}
+");
+        write(const_hashdecl_consumer,
+"%new-style
+class CMakeQoConstHashConsumer {
+    public {
+        const Values = (
+            <CMakeQoConstHashInfo>{\"value\": \"const\"}
+        );
+    }
+}
+");
 
         write(src_dir + "/CMakeLists.txt",
 "cmake_minimum_required(VERSION 3.16)
@@ -291,7 +309,9 @@ set(QO_SOURCES
     \"${CMAKE_SOURCE_DIR}/srcs/callrefprovider.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/callrefconsumer.qc\"
     \"${CMAKE_SOURCE_DIR}/srcs/constinitprovider.qc\"
-    \"${CMAKE_SOURCE_DIR}/srcs/constinitconsumer.qc\")
+    \"${CMAKE_SOURCE_DIR}/srcs/constinitconsumer.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclprovider.qc\"
+    \"${CMAKE_SOURCE_DIR}/srcs/consthashdeclconsumer.qc\")
 
 qore_qcc_compile_objects(QO_OBJECTS
     GROUP cmake-smoke
@@ -364,10 +384,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "enum annotations and members become source-scanned build prerequisites: " + direct);
         assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_13.*callrefprovider_qc\\.qo"),
             "function call references become source-scanned build prerequisites: " + direct);
-        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_15.*constinitprovider_qc\\.qo"),
-            "static calls in constant initializers become source-scanned build prerequisites: " + direct);
+        assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_15 \"\"\\)"),
+            "static calls in constant initializers remain source-deferred callable imports: " + direct);
+        assertTrue(direct.regex("QORE_QCC_DIRECT_DEPS_cmake_smoke_17.*consthashdeclprovider_qc\\.qo"),
+            "typed-hash constructors in constant initializers become source-scanned build prerequisites: " + direct);
 
-        string build1 = run(sprintf("cmake --build %s -- -j17", build_dir));
+        string build1 = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(is_file(build_dir + "/linked.qo"), "linked .qo aggregate built: " + build1);
         assertTrue(is_file(build_dir + "/linked.qo.qolink.json"),
             "linked .qo map built: " + build1);
@@ -385,7 +407,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
         assertTrue(link_map.find("CMakeQoProvider::label") != -1,
             "qo-link map records static method resolution: " + link_map);
 
-        string no_op = run(sprintf("cmake --build %s -- -j17", build_dir));
+        string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(no_op.find("qcc -c:") == -1
                 && no_op.find("qcc: scanning") == -1
                 && no_op.find("qcc --link-qo:") == -1
@@ -395,7 +417,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
         string link_content_stamp = read(build_dir + "/linked.qo.content.stamp");
         string provider_body = read(provider);
         write(provider, provider_body);
-        string same_content = run(sprintf("cmake --build %s -- -j17", build_dir));
+        string same_content = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(link_content_stamp, read(build_dir + "/linked.qo.content.stamp"),
             "same-content source mtime rebuild does not relink aggregate: " + same_content);
     }

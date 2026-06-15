@@ -34,11 +34,42 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <cstdlib>
 #include <cstring>
 
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
+
+static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value) {
+    if (!typeInfo || value.isNothing()) {
+        return;
+    }
+
+    ExceptionSink type_xsink;
+    QoreTypeInfo::retypeValue(value, typeInfo, &type_xsink);
+    if (type_xsink) {
+        type_xsink.clear();
+    }
+    QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", value, &type_xsink);
+    if (type_xsink) {
+        type_xsink.clear();
+    }
+}
+
+class AOTPreloadedSourceSymbolResolutionHelper {
+public:
+    DLLLOCAL AOTPreloadedSourceSymbolResolutionHelper()
+            : old(qore_aot_set_allow_preloaded_source_symbols(true)) {
+    }
+
+    DLLLOCAL ~AOTPreloadedSourceSymbolResolutionHelper() {
+        qore_aot_set_allow_preloaded_source_symbols(old);
+    }
+
+private:
+    bool old;
+};
 
 #ifdef DEBUG
 const char* ClassNs::getName() const {
@@ -134,24 +165,10 @@ void ConstantEntry::del(ExceptionSink* xsink) {
 }
 
 void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
-    if (getenv("QORE_AOT_INIT_TRACE")) {
-        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue ce=%p name=%s result=%s pending=%d has=%d\n",
-            (void*)this, name.c_str(), result.getTypeName(), (int)aot_shell_pending, (int)hasValue());
-    }
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
-    if (typeInfo && !result.isNothing()) {
-        ExceptionSink type_xsink;
-        QoreTypeInfo::retypeValue(result, typeInfo, &type_xsink);
-        if (type_xsink) {
-            type_xsink.clear();
-        }
-        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
-        if (type_xsink) {
-            type_xsink.clear();
-        }
-    }
+    reapplyConstantType(typeInfo, result);
     saved_val.discard(xsink);
     if (val.getType() == NT_RTCONSTREF) {
         saved_val = result;
@@ -163,15 +180,12 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     saved_val_set = true;
     init = true;
     aot_shell_pending = false;
-    if (getenv("QORE_AOT_INIT_TRACE")) {
-        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
-            (void*)this, name.c_str(), (int)aot_shell_pending, (int)hasValue(), (int)saved_val.hasNode());
-    }
 }
 
 void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
+    QoreValue& target = saved_val_set ? saved_val : val;
     bool changed = false;
-    QoreValue resolved = resolveRtConstRefDeep(val, xsink, changed);
+    QoreValue resolved = resolveRtConstRefDeep(target, xsink, changed);
     if (xsink && *xsink) {
         resolved.discard(nullptr);
         return;
@@ -181,11 +195,15 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         return;
     }
 
-    val.discard(xsink);
-    val = resolved;
-    saved_val.discard(xsink);
-    saved_val = resolved.refSelf();
-    saved_val_set = true;
+    reapplyConstantType(typeInfo, resolved);
+
+    target.discard(xsink);
+    target = resolved;
+    if (!saved_val_set) {
+        saved_val.discard(xsink);
+        saved_val = target.refSelf();
+        saved_val_set = true;
+    }
 }
 
 void ConstantEntry::makeExternalStubDeclaration() {
@@ -248,6 +266,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
+        AOTPreloadedSourceSymbolResolutionHelper apssrh;
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
         // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
         // parse context pushed above is in scope, matching the behavior of type inference

@@ -61,6 +61,7 @@ class QoreFunction;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
+class QoreClass;
 class QoreNamespace;
 class QoreParseListNode;
 class QoreProgram;
@@ -77,6 +78,10 @@ class qore_class_private;
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
+
+//! Resolve a namespace function for a serialized class-qualified call after method lookup fails.
+const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
+    QoreProgram* pgm, const QoreClass* qc, const char* class_ref, const char* method_name);
 
 //! Create a dynamic call_function() fallback for an unresolved serialized function call.
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args);

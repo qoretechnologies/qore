@@ -97,6 +97,13 @@ DLLEXPORT bool qore_aot_source_parse_active();
 DLLLOCAL const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
         const QoreAOTSourceSymbolManifest* manifest);
 
+//! Allow preloaded source symbols to satisfy source-symbol manifest matches.
+/** This is only enabled around parse-time constant initialization, where the
+    initializer must evaluate the real provider if it is already available.
+    Ordinary source parsing keeps deferring matching build-group symbols so
+    source-deferred call semantics are preserved. */
+DLLLOCAL bool qore_aot_set_allow_preloaded_source_symbols(bool allow);
+
 //! Returns true when @p qore_path should be deferred to another source object
 //! in the active build group instead of resolving against currently-loaded
 //! declarations.

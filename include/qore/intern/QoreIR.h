@@ -1932,6 +1932,7 @@ public:
 
 enum class QoreIRBackgroundKind : uint8_t {
     DotEval = 1,  //!< background obj.method(args), receiver in operand 0
+    StaticMethod = 2,  //!< background Class::method(args), args in operands
 };
 
 //! Native background-call instruction metadata.

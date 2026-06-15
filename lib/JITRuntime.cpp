@@ -37,6 +37,7 @@
 #include "qore/intern/QoreTransliteration.h"
 #include "qore/intern/QoreTransliterationOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
+#include "qore/intern/QoreAOT.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -148,6 +149,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot) },
     { "qore_rt_background_dot_eval_name_call_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot_throwing) },
+    { "qore_rt_background_static_method_name_call_aot",
+        reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot) },
+    { "qore_rt_background_static_method_name_call_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_static_method_name_call_aot_throwing) },
     { "qore_rt_background_call_ref_value_aot",
         reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot) },
     { "qore_rt_background_call_ref_value_aot_throwing",
@@ -264,6 +269,14 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_throwing) },
     { "qore_rt_load_static_var_by_path_for_call_throwing",
         reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_throwing) },
+    { "qore_rt_load_static_var_by_path_aot",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_aot) },
+    { "qore_rt_load_static_var_by_path_for_call_aot",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_aot) },
+    { "qore_rt_load_static_var_by_path_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_aot_throwing) },
+    { "qore_rt_load_static_var_by_path_for_call_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_aot_throwing) },
     { "qore_rt_create_closure_aot", reinterpret_cast<void*>(&qore_rt_create_closure_aot) },
     { "qore_rt_create_static_method_call_ref_aot",
         reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot) },
@@ -1921,7 +1934,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_for_call(QoreVarInfo* vi, 
     return qore_rt_load_static_var_impl(vi, var_name, xsink, true);
 }
 
-static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
+static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const char* class_path,
         const char* var_name, ExceptionSink* xsink, bool preserve_weak_result) {
     if (!class_path || !var_name || !*var_name) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve static variable '%s::%s'",
@@ -1929,7 +1942,6 @@ static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
         return toBits(QoreValue());
     }
 
-    QoreProgram* pgm = getProgram();
     if (!pgm) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve static variable '%s::%s': no program context",
             class_path, var_name);
@@ -1966,6 +1978,14 @@ static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
     if (!*resolved_class_path) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve variable or constant '%s'", var_name);
         return toBits(QoreValue());
+    }
+
+    found_ns = nullptr;
+    if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(*pp->RootNS, resolved_class_path,
+            found_ns)) {
+        if (const QoreEnumMember* member = ed->findMember(var_name)) {
+            return toBits(QoreValue::makeEnum(member));
+        }
     }
 
     found_ns = nullptr;
@@ -2027,12 +2047,24 @@ static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path(const char* class_path,
         const char* var_name, ExceptionSink* xsink) {
-    return qore_rt_load_static_var_by_path_impl(class_path, var_name, xsink, false);
+    return qore_rt_load_static_var_by_path_impl(getProgram(), class_path, var_name, xsink, false);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path_for_call(const char* class_path,
         const char* var_name, ExceptionSink* xsink) {
-    return qore_rt_load_static_var_by_path_impl(class_path, var_name, xsink, true);
+    return qore_rt_load_static_var_by_path_impl(getProgram(), class_path, var_name, xsink, true);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path_aot(QoreAOTContext* ctx, const char* class_path,
+        const char* var_name, ExceptionSink* xsink) {
+    return qore_rt_load_static_var_by_path_impl(ctx && ctx->pgm ? ctx->pgm : getProgram(),
+        class_path, var_name, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path_for_call_aot(QoreAOTContext* ctx,
+        const char* class_path, const char* var_name, ExceptionSink* xsink) {
+    return qore_rt_load_static_var_by_path_impl(ctx && ctx->pgm ? ctx->pgm : getProgram(),
+        class_path, var_name, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object(const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
@@ -2427,7 +2459,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_call_ref(uint64_t expr_bits, Except
 extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path,
         const char* method_name, ExceptionSink* xsink) {
     if (!class_path || !*class_path || !method_name || !*method_name) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve static method call reference '%s::%s()'",
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
             class_path ? class_path : "<null>", method_name ? method_name : "<null>");
         return toBits(QoreValue());
     }
@@ -2435,36 +2467,52 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const ch
     QoreProgram* pgm = getProgram();
     if (!pgm) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve static method call reference '%s::%s()': no program context",
+            "cannot resolve method call reference '%s::%s()': no program context",
             class_path, method_name);
         return toBits(QoreValue());
     }
 
-    const char* resolved_class_path = (class_path[0] == ':' && class_path[1] == ':')
-        ? class_path + 2 : class_path;
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, resolved_class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, class_path, false);
     if (!qc) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve class '%s' for static method call reference '%s()'",
+            "cannot resolve class '%s' for method call reference '%s()'",
             class_path, method_name);
         return toBits(QoreValue());
     }
 
-    const QoreMethod* method = qc->findStaticMethod(method_name);
+    ClassAccess access = Public;
+    const QoreMethod* method = qc->findStaticMethod(method_name, access);
+    if (!method) {
+        method = qc->findMethod(method_name, access);
+    }
     if (!method) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve static method call reference '%s::%s()'",
+            "cannot resolve method call reference '%s::%s()'",
             class_path, method_name);
+        return toBits(QoreValue());
+    }
+    if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*qc)) {
+        xsink->raiseException("ILLEGAL-CALL-REFERENCE",
+            "cannot create a call reference to %s %s::%s() from outside the class",
+            privpub(access), class_path, method_name);
         return toBits(QoreValue());
     }
 
     RuntimeConfig& rc = rc_get_current_ref();
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
-    return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
+    if (method->isStatic()) {
+        return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
+    }
+
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    if (!obj) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot create instance method call reference '%s::%s()': no current object",
+            class_path, method_name);
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method, cls)));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(const char* class_path,
@@ -7303,7 +7351,6 @@ static uint64_t qore_rt_call_method_direct_impl(const QoreMethod* method,
     // evalList() and dereferences ReferenceNode values.
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*method->getClass()));
     QoreValue result = qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list);
-
     return toBits(result);
 }
 
@@ -8137,11 +8184,34 @@ extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32
 
 static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    auto trace_slot = [ctx, idx]() -> bool {
+        const char* trace = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
+        if (!trace) {
+            return false;
+        }
+        if (!*trace) {
+            return true;
+        }
+        const char* name = (static_cast<size_t>(idx) < ctx->global_names.size())
+            ? ctx->global_names[idx].c_str() : "";
+        return strstr(name, trace) != nullptr;
+    };
+    auto slot_name = [ctx, idx]() -> const char* {
+        return (static_cast<size_t>(idx) < ctx->global_names.size())
+            ? ctx->global_names[idx].c_str() : "";
+    };
     Var* var = ctx->globals[idx];
     if (var) {
+        if (trace_slot()) {
+            fprintf(stderr, "[qore-aot-global] slot=%d name=%s cached var=%p\n",
+                idx, slot_name(), static_cast<void*>(var));
+        }
         return var;
     }
     if (static_cast<size_t>(idx) >= ctx->global_names.size() || ctx->global_names[idx].empty()) {
+        if (trace_slot()) {
+            fprintf(stderr, "[qore-aot-global] slot=%d has no global name\n", idx);
+        }
         return nullptr;
     }
 
@@ -8157,8 +8227,16 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
         var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, ctx->global_names[idx].c_str(), vns);
         if (var) {
             ctx->globals[idx] = var;
+            if (trace_slot()) {
+                fprintf(stderr, "[qore-aot-global] slot=%d name=%s resolved var=%p\n",
+                    idx, slot_name(), static_cast<void*>(var));
+            }
             return var;
         }
+    }
+
+    if (trace_slot()) {
+        fprintf(stderr, "[qore-aot-global] slot=%d name=%s unresolved\n", idx, slot_name());
     }
 
     bool required = static_cast<size_t>(idx) < ctx->global_required_imports.size()
@@ -8172,7 +8250,19 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
-    return qore_rt_load_global(qore_rt_resolve_global_slot_aot(ctx, idx, xsink), xsink);
+    Var* var = qore_rt_resolve_global_slot_aot(ctx, idx, xsink);
+    uint64_t rv = qore_rt_load_global(var, xsink);
+    const char* trace = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
+    if (trace) {
+        const char* name = (ctx && static_cast<size_t>(idx) < ctx->global_names.size())
+            ? ctx->global_names[idx].c_str() : "";
+        if (!*trace || strstr(name, trace)) {
+            QoreValue v = fromBits(rv);
+            fprintf(stderr, "[qore-aot-global] load slot=%d name=%s var=%p value=%s%s\n",
+                idx, name, static_cast<void*>(var), v.getTypeName(), v.isNothing() ? " (NOTHING)" : "");
+        }
+    }
+    return rv;
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
@@ -8336,6 +8426,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_by_path_for_call_throwing(
         const char* class_path, const char* var_name, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_static_var_by_path_for_call(class_path, var_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_by_path_aot_throwing(
+        QoreAOTContext* ctx, const char* class_path, const char* var_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_static_var_by_path_aot(ctx, class_path, var_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_by_path_for_call_aot_throwing(
+        QoreAOTContext* ctx, const char* class_path, const char* var_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_static_var_by_path_for_call_aot(ctx, class_path, var_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -12564,6 +12672,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
         return qore_rt_call_static_method_direct_impl(target.method, target.variant, args, nullptr, nargs, xsink,
                 target.receiver_type_info);
     }
+    if (target.func) {
+        qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_direct_aot",
+            "function", "use");
+        if (target.variant) {
+            if (!qore_rt_user_fast_call_eligible(target.variant)) {
+                return qore_rt_call_function_direct(target.func, target.variant,
+                    target.pgm, args, nargs, xsink);
+            }
+            return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
+        }
+        return qore_rt_call_function_dynamic(target.func, target.pgm, args, nargs, xsink);
+    }
 
     return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
         "qore_rt_call_static_method_direct_aot", "static_method",
@@ -12587,6 +12707,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_consume_args
         return qore_rt_call_static_method_direct_impl(target.method,
                 target.variant, args, arg_cleanups, nargs, xsink,
                 target.receiver_type_info);
+    }
+    if (target.func) {
+        qore_rt_trace_aot_prelink(ctx, slot,
+            "qore_rt_call_static_method_direct_aot_consume_args", "function", "use");
+        if (target.variant) {
+            return qore_rt_call_function_direct_impl(target.func, target.variant,
+                target.pgm, args, arg_cleanups, nargs, xsink);
+        }
+        return qore_rt_call_function_dynamic_impl(target.func, target.pgm, args,
+            arg_cleanups, nargs, xsink);
     }
 
     return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
@@ -12703,6 +12833,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(
 
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     if (!target.method) {
+        if (target.func) {
+            qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_fast_aot",
+                "function", "use");
+            if (target.variant) {
+                if (!qore_rt_user_fast_call_eligible(target.variant)) {
+                    return qore_rt_call_function_direct(target.func, target.variant,
+                        target.pgm, args, nargs, xsink);
+                }
+                return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
+            }
+            return qore_rt_call_function_dynamic(target.func, target.pgm, args, nargs, xsink);
+        }
         return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
             "qore_rt_call_static_method_fast_aot", "static_method",
             "missing pre-resolved static method target");
@@ -13196,6 +13338,39 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_name_call_aot(
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_name_call_aot(
+        const char* qualified_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(qualified_name);
+    NamedScope scope(qualified_name);
+    if (scope.size() < 2) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "invalid static background call target '%s'", qualified_name);
+        return 0;
+    }
+
+    const QoreClass* qc = qore_root_ns_private::get(*(getRootNS()))->runtimeFindScopedClassWithMethod(scope);
+    if (!qc) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "cannot resolve class for static background call '%s'", qualified_name);
+        return 0;
+    }
+
+    ClassAccess access;
+    const QoreMethod* method = qc->findStaticMethod(scope.getIdentifier(), access);
+    if (!method) {
+        xsink->raiseException("AOT-BACKGROUND-ERROR",
+            "cannot resolve static method for background call '%s'", qualified_name);
+        return 0;
+    }
+
+    QoreListNode* arg_list = bgBuildArgList(args, nargs);
+    StaticMethodCallNode source(&loc_builtin, method, nullptr);
+    StaticMethodCallNode* call_node = new StaticMethodCallNode(source, arg_list);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
+    QoreValue(call_node).discard(xsink);
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_value_aot(
         uint64_t callee_bits, uint64_t* args, int nargs, ExceptionSink* xsink) {
     QoreValue callee = fromBits(callee_bits);
@@ -13659,6 +13834,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_dot_e
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     uint64_t result = qore_rt_background_dot_eval_name_call_aot(method_name, recv_bits,
         args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_background_static_method_name_call_aot_throwing(
+        const char* qualified_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_background_static_method_name_call_aot(qualified_name, args, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

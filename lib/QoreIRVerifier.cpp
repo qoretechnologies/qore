@@ -598,8 +598,11 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 auto* expr_inst = dynamic_cast<const QoreIRExprInstruction*>(inst.get());
                 auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get());
                 if (bg_inst) {
-                    if (bg_inst->kind != QoreIRBackgroundKind::DotEval || bg_inst->name.empty()
-                            || bg_inst->operands.empty()) {
+                    if ((bg_inst->kind != QoreIRBackgroundKind::DotEval
+                                && bg_inst->kind != QoreIRBackgroundKind::StaticMethod)
+                            || bg_inst->name.empty()
+                            || (bg_inst->kind == QoreIRBackgroundKind::DotEval
+                                && bg_inst->operands.empty())) {
                         error = "background instruction missing native metadata";
                         return false;
                     }

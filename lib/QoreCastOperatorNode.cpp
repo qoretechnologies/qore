@@ -36,6 +36,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/ParseNode.h"
 
 QoreString QoreParseCastOperatorNode::cast_str("cast operator expression");
@@ -70,6 +71,26 @@ static bool qore_cast_is_misleading_auto_container_cast(const QoreParseTypeInfo*
     }
 
     return false;
+}
+
+static std::string qore_cast_aot_deferred_hashdecl_name(const QoreTypeInfo* typeInfo) {
+    if (!qore_type_info_is_aot_deferred(typeInfo)
+            || QoreTypeInfo::parseReturns(typeInfo, NT_HASH) == QTI_NOT_EQUAL) {
+        return std::string();
+    }
+
+    std::string path = qore_get_aot_serializable_type_path(typeInfo);
+    const char* start = nullptr;
+    if (path.rfind("hash<", 0) == 0) {
+        start = path.c_str() + 5;
+    } else if (path.rfind("*hash<", 0) == 0) {
+        start = path.c_str() + 6;
+    }
+    if (!start) {
+        return std::string();
+    }
+    const char* end = strrchr(start, '>');
+    return end && end > start ? std::string(start, end - start) : std::string();
 }
 
 static const QoreTypeInfo* qore_cast_get_complex_softlist_value_type(const QoreTypeInfo* type_info) {
@@ -222,7 +243,8 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             parse_context.typeInfo = autoHashTypeInfo;
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreHashDeclCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
+                val = new QoreHashDeclCastOperatorNode(loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
+                    or_nothing);
             }
             set_cast_analysis();
             // parse exception already raised; current expression invalid
@@ -280,7 +302,11 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             }
             if (exp) {
                 ReferenceHolder<> holder(this, nullptr);
-                val = new QoreHashDeclCastOperatorNode(loc, nullptr, takeExp(), or_nothing);
+                std::string hashdecl_name = qore_cast_aot_deferred_hashdecl_name(parse_context.typeInfo);
+                val = hashdecl_name.empty()
+                    ? new QoreHashDeclCastOperatorNode(loc, static_cast<const TypedHashDecl*>(nullptr), takeExp(),
+                        or_nothing)
+                    : new QoreHashDeclCastOperatorNode(loc, hashdecl_name.c_str(), takeExp(), or_nothing);
             }
             set_cast_analysis();
             return err;
@@ -662,6 +688,21 @@ QoreValue QoreClassCastOperatorNode::castValue(QoreValue inner, ExceptionSink* x
     return inner.hasNode() ? inner.refSelf() : inner;
 }
 
+static const TypedHashDecl* qore_hashdecl_cast_get_runtime_hashdecl(const QoreHashDeclCastOperatorNode& node,
+        ExceptionSink* xsink) {
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(node.getCastTypeInfo());
+    if (hd || !node.isDynamicHashDeclCast()) {
+        return hd;
+    }
+
+    hd = qore_aot_resolve_hashdecl_path(getProgram(), node.getDynamicHashDeclName().c_str());
+    if (!hd && xsink) {
+        xsink->raiseException("RUNTIME-CAST-ERROR", "cannot resolve hashdecl '%s' for cast",
+            node.getDynamicHashDeclName().c_str());
+    }
+    return hd;
+}
+
 // checks if the value matches the expected type
 int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
     // issue #3331: ignore nothing if it's an "or nothing" cast, or if broken-cast is in effect
@@ -670,9 +711,9 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
     }
 
     if (val.getType() != NT_HASH) {
-        if (hd) {
+        if (hd || isDynamicHashDeclCast()) {
             xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to hashdecl '%s'",
-                val.getTypeName(), hd->getName());
+                val.getTypeName(), hd ? hd->getName() : dynamic_hashdecl_name.c_str());
         } else {
             xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to 'hash'", val.getTypeName());
         }
@@ -680,11 +721,17 @@ int QoreHashDeclCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreVal
     }
 
     if (lvalue) {
+        const TypedHashDecl* target_hd = qore_hashdecl_cast_get_runtime_hashdecl(*this, xsink);
+        if (xsink && *xsink) {
+            return -1;
+        }
         const QoreHashNode* h = val.get<const QoreHashNode>();
         const TypedHashDecl* vhd = h->getHashDecl();
 
-        if ((!hd && (vhd || h->getValueTypeInfo()))
-            || (hd && (!vhd || !typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*hd))))) {
+        if ((!target_hd && (vhd || h->getValueTypeInfo()))
+            || (target_hd
+                && (!vhd || !typed_hash_decl_private::get(*vhd)->equal(
+                    *typed_hash_decl_private::get(*target_hd))))) {
             xsink->raiseException("RUNTIME-CAST-ERROR", "cannot modify lvalue type in assignment with the cast<> "
                 "operator");
             return -1;
@@ -711,8 +758,12 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
 
     const QoreHashNode* h = rv->get<const QoreHashNode>();
     const TypedHashDecl* vhd = h->getHashDecl();
+    const TypedHashDecl* target_hd = qore_hashdecl_cast_get_runtime_hashdecl(*this, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
 
-    if (!hd) {
+    if (!target_hd) {
         if (!vhd && !h->getValueTypeInfo())
             return rv.takeValue(needs_deref);
         needs_deref = true;
@@ -720,11 +771,11 @@ QoreValue QoreHashDeclCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSin
     }
 
     // if we already have the expected type, then there's nothing more to do
-    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*hd)))
+    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*target_hd)))
         return rv.takeValue(needs_deref);
 
     // do the runtime cast
-    QoreValue result = typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
+    QoreValue result = typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
     return result;
 }
 
@@ -740,8 +791,12 @@ QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink
 
     const QoreHashNode* h = inner.get<const QoreHashNode>();
     const TypedHashDecl* vhd = h->getHashDecl();
+    const TypedHashDecl* target_hd = qore_hashdecl_cast_get_runtime_hashdecl(*this, xsink);
+    if (xsink && *xsink) {
+        return QoreValue();
+    }
 
-    if (!hd) {
+    if (!target_hd) {
         if (!vhd && !h->getValueTypeInfo()) {
             return inner.hasNode() ? inner.refSelf() : inner;
         }
@@ -749,12 +804,12 @@ QoreValue QoreHashDeclCastOperatorNode::castValue(QoreValue inner, ExceptionSink
     }
 
     // if we already have the expected type, then there's nothing more to do
-    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*hd))) {
+    if (vhd && typed_hash_decl_private::get(*vhd)->equal(*typed_hash_decl_private::get(*target_hd))) {
         return inner.hasNode() ? inner.refSelf() : inner;
     }
 
     // do the runtime cast
-    return typed_hash_decl_private::get(*hd)->newHash(h, true, xsink);
+    return typed_hash_decl_private::get(*target_hd)->newHash(h, true, xsink);
 }
 
 // checks if the value matches the expected type

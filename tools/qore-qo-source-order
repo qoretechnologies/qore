@@ -33,7 +33,11 @@ HASHDECL_RE = re.compile(rf"\bhashdecl\s+({IDENT})\b")
 SUB_RE = re.compile(rf"\b(?:[\w:*<>]+\s+)*sub\s+({IDENT})\s*\(")
 CONST_RE = re.compile(rf"\bconst\s+({IDENT})\b")
 CONST_INIT_RE = re.compile(rf"\bconst\s+{IDENT}\s*=\s*(.*?);", re.S)
-OUR_RE = re.compile(rf"\b(?:our|thread_local)\s+(?:[\w:*<>]+\s+)+({IDENT})\b")
+GLOBAL_TYPE_FRAGMENT = rf"\*?{TYPE_EXPR}"
+GLOBAL_KEYWORD = r"(?<![-A-Za-z0-9_])(?:our|thread_local)\b"
+GLOBAL_SCALAR_RE = re.compile(rf"{GLOBAL_KEYWORD}\s+(?!\()(?:(?:{GLOBAL_TYPE_FRAGMENT})\s+)+\*?({IDENT})\b")
+GLOBAL_GROUP_RE = re.compile(rf"{GLOBAL_KEYWORD}\s*\(")
+NAMESPACE_EVENT_RE = re.compile(rf"\b(?:public\s+|private\s+|internal\s+)*namespace\s+({QUAL_IDENT})\s*\{{|[{{}}]")
 INCLUDE_RE = re.compile(r"^[ \t]*%include[ \t]+([^ \t\r\n#]+)", re.M)
 PARSE_DEFINE_RE = re.compile(rf"^[ \t]*%define[ \t]+({IDENT})\b", re.M)
 PARSE_DEFINE_CONSUMER_RE = re.compile(rf"^[ \t]*%ifn?def[ \t]+({IDENT})\b", re.M)
@@ -56,7 +60,7 @@ CONSTRUCTED_DECL_TYPE_RE = re.compile(
 PARAM_TYPE_RE = re.compile(rf"[(,][ \t]*\*?[ \t]*({TYPE_TOKEN})[ \t]+{IDENT}\b")
 QUALIFIED_REF_RE = re.compile(rf"\b{IDENT}(?:::{IDENT})+\b")
 DECL_LINE_CHARS = frozenset("(;=")
-CACHE_VERSION = 30
+CACHE_VERSION = 32
 KNOWN_TRUE_PARSE_DEFINES = {"QoreStandaloneQo", "QorusStandaloneQo"}
 
 
@@ -228,10 +232,125 @@ def simple_name(path: str) -> str:
     return path.rsplit("::", 1)[-1]
 
 
+def split_top_level(text: str, sep: str = ",") -> list[str]:
+    parts: list[str] = []
+    start = 0
+    angle = 0
+    paren = 0
+    bracket = 0
+    brace = 0
+    for pos, ch in enumerate(text):
+        if ch == "<":
+            angle += 1
+        elif ch == ">" and angle:
+            angle -= 1
+        elif ch == "(":
+            paren += 1
+        elif ch == ")" and paren:
+            paren -= 1
+        elif ch == "[":
+            bracket += 1
+        elif ch == "]" and bracket:
+            bracket -= 1
+        elif ch == "{":
+            brace += 1
+        elif ch == "}" and brace:
+            brace -= 1
+        elif ch == sep and not angle and not paren and not bracket and not brace:
+            parts.append(text[start:pos])
+            start = pos + 1
+    parts.append(text[start:])
+    return parts
+
+
+def find_balanced_close(code: str, open_pos: int, open_ch: str = "(", close_ch: str = ")") -> int:
+    depth = 0
+    pos = open_pos
+    while pos < len(code):
+        ch = code[pos]
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return pos
+        pos += 1
+    return -1
+
+
+def iter_global_names(code: str):
+    consumed_ranges: list[tuple[int, int]] = []
+    for m in GLOBAL_GROUP_RE.finditer(code):
+        open_pos = code.find("(", m.start(), m.end())
+        if open_pos < 0:
+            continue
+        close_pos = find_balanced_close(code, open_pos)
+        if close_pos < 0:
+            continue
+        consumed_ranges.append((m.start(), close_pos + 1))
+        body = code[open_pos + 1:close_pos]
+        for entry in split_top_level(body):
+            candidate = entry.strip()
+            if not candidate:
+                continue
+            candidate = candidate.split("=", 1)[0].strip()
+            m_name = re.search(rf"\*?({IDENT})\s*$", candidate)
+            if m_name:
+                yield m_name.group(1)
+
+    def in_consumed_range(pos: int) -> bool:
+        return any(start <= pos < end for start, end in consumed_ranges)
+
+    for m in GLOBAL_SCALAR_RE.finditer(code):
+        if not in_consumed_range(m.start()):
+            yield m.group(1)
+
+
+def qualify_symbol(namespace: str, name: str) -> str:
+    return f"{namespace}::{name}" if namespace else name
+
+
+def namespace_child_path(parent: str, child: str) -> str:
+    child = child[2:] if child.startswith("::") else child
+    if not parent or "::" in child:
+        return child
+    return f"{parent}::{child}"
+
+
+def iter_namespace_segments(code: str):
+    frames: list[tuple[int, str]] = []
+    brace_depth = 0
+    last = 0
+
+    def current_namespace() -> str:
+        return frames[-1][1] if frames else ""
+
+    for m in NAMESPACE_EVENT_RE.finditer(code):
+        if m.start() > last:
+            yield code[last:m.start()], current_namespace()
+
+        namespace_name = m.group(1)
+        if namespace_name:
+            brace_depth += 1
+            frames.append((brace_depth, namespace_child_path(current_namespace(), namespace_name)))
+        elif m.group(0) == "{":
+            brace_depth += 1
+        elif brace_depth:
+            brace_depth -= 1
+            while frames and frames[-1][0] > brace_depth:
+                frames.pop()
+
+        last = m.end()
+
+    if last < len(code):
+        yield code[last:], current_namespace()
+
+
 def collect_provides(code: str) -> set[str]:
     provides: set[str] = set()
-    for regex in (CLASS_RE, ENUM_RE, HASHDECL_RE, SUB_RE, CONST_RE, OUR_RE):
+    for regex in (CLASS_RE, ENUM_RE, HASHDECL_RE, SUB_RE, CONST_RE):
         provides.update(m.group(1) for m in regex.finditer(code))
+    provides.update(iter_global_names(code))
     return provides
 
 
@@ -247,14 +366,15 @@ def collect_source_symbol_providers(inputs: list[str],
     for source in inputs:
         source_path = os.path.realpath(os.path.abspath(source))
         code = read_masked(source, true_parse_defines)
-        for m in CLASS_RE.finditer(code):
-            providers["class"][m.group(1)].add(source_path)
-        for m in HASHDECL_RE.finditer(code):
-            providers["hashdecl"][m.group(1)].add(source_path)
-        for m in SUB_RE.finditer(code):
-            providers["function"][m.group(1)].add(source_path)
-        for m in OUR_RE.finditer(code):
-            providers["global"][m.group(1)].add(source_path)
+        for segment, namespace in iter_namespace_segments(code):
+            for m in CLASS_RE.finditer(segment):
+                providers["class"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for m in HASHDECL_RE.finditer(segment):
+                providers["hashdecl"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for m in SUB_RE.finditer(segment):
+                providers["function"][qualify_symbol(namespace, m.group(1))].add(source_path)
+            for name in iter_global_names(segment):
+                providers["global"][qualify_symbol(namespace, name)].add(source_path)
     return providers
 
 
@@ -587,7 +707,13 @@ def build_hard_graph(inputs: list[str],
                 continue
             add_edge(provider, consumer, required=True)
 
-        mentions = collect_hard_mentions(code) & provider_symbols
+        for symbol in collect_hard_mentions(code) & provider_symbols:
+            provider = unique_provider[symbol]
+            if provider == consumer or symbol in provides_by_source[consumer]:
+                continue
+            add_edge(provider, consumer, required=True)
+
+        mentions = set()
         mentions.update(collect_decl_type_mentions(code) & (unique_class_symbols | unique_hashdecl_symbols))
         mentions.update(collect_hash_type_mentions(code) & unique_hashdecl_symbols)
         for symbol in collect_enum_type_mentions(code) & unique_enum_symbols:
@@ -611,16 +737,6 @@ def build_hard_graph(inputs: list[str],
             if symbol in provides_by_source[consumer]:
                 continue
             add_edge(provider, consumer)
-        for symbol in collect_const_init_static_call_mentions(code) & unique_class_symbols:
-            provider = unique_provider[symbol]
-            if symbol in provides_by_source[consumer]:
-                continue
-            # Constant initializers are evaluated during parse/commit today.
-            # Static method calls inside them therefore require the provider
-            # .qo to be loaded before the consumer compiles.  Static constant
-            # and var references stay linkable to preserve cycles such as
-            # mutually-referenced class-constant tables.
-            add_edge(provider, consumer, required=True)
         mentions.update(collect_constructed_decl_type_mentions(code)
             & (unique_class_symbols | unique_hashdecl_symbols))
         mentions.update(collect_new_hash_type_mentions(code) & unique_hashdecl_symbols)

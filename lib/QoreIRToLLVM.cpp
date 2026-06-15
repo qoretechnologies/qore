@@ -181,6 +181,18 @@ static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }
 
+static std::string qore_ir_get_cast_type_path(QoreIROpcode opcode, const QoreCastOperatorNode* cast_node,
+        const QoreTypeInfo* ti) {
+    if (opcode == QoreIROpcode::CastHash) {
+        if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(cast_node)) {
+            if (hdc->isDynamicHashDeclCast()) {
+                return std::string("hash<") + hdc->getDynamicHashDeclName() + ">";
+            }
+        }
+    }
+    return ti ? qore_ir_get_type_path(ti) : (opcode == QoreIROpcode::CastList ? "list" : "");
+}
+
 llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
     ti = specializeType(ti);
     return builder->CreateGlobalStringPtr(qore_ir_get_type_path(ti));
@@ -3528,7 +3540,7 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
         llvm::Module& module, llvm::Function* llvm_func,
         bool throwing_ok,
         llvm::Value** result_out) {
-    if (!bg_inst || bg_inst->operands.empty()) {
+    if (!bg_inst) {
         return false;
     }
 
@@ -3556,6 +3568,9 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
     };
 
     if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+        if (bg_inst->operands.empty()) {
+            return false;
+        }
         auto* recv_val = getVal(bg_inst->operands[0].id, error_dummy);
         if (!recv_val) {
             return false;
@@ -3566,7 +3581,7 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
             return false;
         }
         llvm::Value* name_ptr = builder->CreateGlobalStringPtr(bg_inst->name);
-        int nargs = (int)bg_inst->operands.size() - 1;
+        int nargs = static_cast<int>(bg_inst->operands.size()) - 1;
         auto ft = llvm::FunctionType::get(i64_type,
             {ptr_type, i64_type, ptr_type, i32_type, ptr_type}, false);
         auto helper = module.getOrInsertFunction(
@@ -3581,6 +3596,32 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
         } else {
             *result_out = builder->CreateCall(helper,
                 {name_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    }
+
+    if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
+        llvm::Value* args_array = build_args_array(0, bg_inst->operands.size());
+        if (build_args_failed) {
+            return false;
+        }
+        llvm::Value* name_ptr = builder->CreateGlobalStringPtr(bg_inst->name);
+        int nargs = static_cast<int>(bg_inst->operands.size());
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_background_static_method_name_call_aot", ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(
+                "qore_rt_background_static_method_name_call_aot_throwing", ft);
+            *result_out = emitMaybeInvoke(helper, helper_throwing,
+                {name_ptr, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, bg_inst);
+        } else {
+            *result_out = builder->CreateCall(helper,
+                {name_ptr, args_array,
                  llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
         }
         return true;
@@ -8530,16 +8571,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* var_name = builder->CreateGlobalStringPtr(
                             member_name, "static_var_name");
                     auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type}, false);
+                            {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                     const bool for_call = dot_eval_only_bases.count(inst->result.id);
                     auto helper = module.getOrInsertFunction(for_call
-                            ? "qore_rt_load_static_var_by_path_for_call"
-                            : "qore_rt_load_static_var_by_path", ft);
+                            ? "qore_rt_load_static_var_by_path_for_call_aot"
+                            : "qore_rt_load_static_var_by_path_aot", ft);
                     auto helper_throwing = module.getOrInsertFunction(for_call
-                            ? "qore_rt_load_static_var_by_path_for_call_throwing"
-                            : "qore_rt_load_static_var_by_path_throwing", ft);
+                            ? "qore_rt_load_static_var_by_path_for_call_aot_throwing"
+                            : "qore_rt_load_static_var_by_path_aot_throwing", ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {class_path, var_name, xsink_arg}, module, llvm_func, inst);
+                            {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
                 } else {
                     const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
                             inv->expr.getInternalNode());
@@ -9188,11 +9229,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // AOT: extract type path at compile time, resolve at runtime
                     auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
                         inv->expr.getInternalNode());
-                    if (cast_node) {
-                        const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
-                        std::string type_path = ti ? qore_ir_get_type_path(ti)
-                            : (inv->invoke_opcode == QoreIROpcode::CastList ? "list" : "");
-                        llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                if (cast_node) {
+                    const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
+                    std::string type_path = qore_ir_get_cast_type_path(inv->invoke_opcode, cast_node, ti);
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                                 cast_node->isOrNothing() ? 1 : 0);
                         auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path_aot",
@@ -12408,16 +12448,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* var_name = builder->CreateGlobalStringPtr(
                         member_name, "static_var_name");
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, ptr_type}, false);
+                        {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                 const bool for_call = dot_eval_only_bases.count(inst->result.id);
                 auto helper = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_by_path_for_call"
-                        : "qore_rt_load_static_var_by_path", lsv_ft);
+                        ? "qore_rt_load_static_var_by_path_for_call_aot"
+                        : "qore_rt_load_static_var_by_path_aot", lsv_ft);
                 auto helper_throwing = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_by_path_for_call_throwing"
-                        : "qore_rt_load_static_var_by_path_throwing", lsv_ft);
+                        ? "qore_rt_load_static_var_by_path_for_call_aot_throwing"
+                        : "qore_rt_load_static_var_by_path_aot_throwing", lsv_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
-                        {class_path, var_name, xsink_arg}, module, llvm_func, inst);
+                        {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
             } else {
                 // JIT: pass QoreVarInfo* and var_name directly
                 llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
@@ -15123,8 +15163,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     expr_inst->expr.getInternalNode());
                 if (cast_node) {
                     const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
-                    std::string type_path = ti ? qore_ir_get_type_path(ti)
-                        : (inst->opcode == QoreIROpcode::CastList ? "list" : "");
+                    std::string type_path = qore_ir_get_cast_type_path(inst->opcode, cast_node, ti);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                             cast_node->isOrNothing() ? 1 : 0);

@@ -189,6 +189,7 @@
 
 #include <cassert>
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <string>
 #include <deque>
@@ -210,6 +211,13 @@ extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVar
 static std::string describeAOTClassRef(const char* class_ref);
 static std::string normalizeTypePaths(const std::string& sig);
 static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* method_name);
+static const QoreMethod* findAOTInstanceMethod(const QoreClass* qc, const char* method_name,
+        const qore_class_private* class_ctx);
+static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
+        QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref,
+        bool pseudo);
+static qore_class_private* getAOTVariantClassContext(const UserVariantBase* uvb);
+static std::string makeAOTQualifiedMethodName(const char* class_path, const char* method_name);
 
 static void makeRuntimeDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
     static std::atomic<uint64_t> closure_ir_counter{0};
@@ -374,6 +382,23 @@ static const QoreMethod* resolveAOTSelfMethod(const QoreClass* qc, const char* m
     return m;
 }
 
+static qore_class_private* getAOTVariantClassContext(const UserVariantBase* uvb) {
+    if (!uvb) {
+        return nullptr;
+    }
+
+    if (const MethodVariantBase* mvb = dynamic_cast<const MethodVariantBase*>(uvb)) {
+        if (const QoreClass* method_class = mvb->getClass()) {
+            return qore_class_private::get(*const_cast<QoreClass*>(method_class));
+        }
+    }
+
+    LocalVar* selfid = uvb->getUserSignature() ? uvb->getUserSignature()->getSelfId() : nullptr;
+    const QoreTypeInfo* self_type_info = selfid ? selfid->getTypeInfo() : nullptr;
+    const QoreClass* self_class = self_type_info ? QoreTypeInfo::getUniqueReturnClass(self_type_info) : nullptr;
+    return self_class ? qore_class_private::get(*const_cast<QoreClass*>(self_class)) : nullptr;
+}
+
 static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -404,6 +429,34 @@ static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* me
     }
 
     return nullptr;
+}
+
+static const QoreMethod* findAOTInstanceMethod(const QoreClass* qc, const char* method_name,
+        const qore_class_private* class_ctx) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+
+    ClassAccess access = Public;
+    return qore_class_private::get(*const_cast<QoreClass*>(qc))->runtimeFindCommittedMethod(method_name,
+        access, class_ctx);
+}
+
+static QoreParseListNode* makeAOTParseArgsFromList(QoreListNode*& call_args) {
+    if (!call_args) {
+        return nullptr;
+    }
+
+    QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+    ConstListIterator li(call_args);
+    while (li.next()) {
+        QoreValue v = li.getValue();
+        v.refSelf();
+        pln->add(v, &loc_builtin);
+    }
+    call_args->deref(nullptr);
+    call_args = nullptr;
+    return pln;
 }
 
 static std::string makeAOTVariantSignature(const AbstractQoreFunctionVariant* v) {
@@ -474,13 +527,303 @@ static std::vector<std::string> splitAOTSignatureParams(const std::string& sig) 
     return out;
 }
 
-static bool isAOTAutoSignatureParam(const std::string& param) {
+static std::string stripAOTLeadingColons(std::string path) {
+    while (path.rfind("::", 0) == 0) {
+        path.erase(0, 2);
+    }
+    return path;
+}
+
+static bool decodeAOTModuleClassRefForMatch(const std::string& class_ref,
+        bool& module_qualified, std::string& class_path) {
+    static constexpr const char module_prefix[] = "@qore-module:";
+    static constexpr size_t module_prefix_len = sizeof(module_prefix) - 1;
+
+    module_qualified = false;
+    if (class_ref.rfind(module_prefix, 0) == 0) {
+        size_t sep = class_ref.find('\n', module_prefix_len);
+        if (sep == std::string::npos) {
+            return false;
+        }
+        module_qualified = true;
+        class_path = class_ref.substr(sep + 1);
+    } else {
+        class_path = class_ref;
+    }
+    class_path = stripAOTLeadingColons(std::move(class_path));
+    return !class_path.empty();
+}
+
+static size_t findAOTMatchingTypeClose(const std::string& type_sig, size_t open_pos) {
+    assert(open_pos < type_sig.size() && type_sig[open_pos] == '<');
+
+    unsigned depth = 0;
+    for (size_t i = open_pos; i < type_sig.size(); ++i) {
+        if (type_sig[i] == '<') {
+            ++depth;
+        } else if (type_sig[i] == '>') {
+            assert(depth);
+            if (!--depth) {
+                return i;
+            }
+        }
+    }
+    return std::string::npos;
+}
+
+static std::string canonicalizeAOTObjectClassRefsForMatch(const std::string& type_sig) {
+    static constexpr const char object_prefix[] = "object<";
+    static constexpr const char object_or_nothing_prefix[] = "*object<";
+    static constexpr size_t object_prefix_len = sizeof(object_prefix) - 1;
+    static constexpr size_t object_or_nothing_prefix_len = sizeof(object_or_nothing_prefix) - 1;
+
+    std::string rv;
+    rv.reserve(type_sig.size());
+
+    for (size_t i = 0; i < type_sig.size();) {
+        size_t prefix_len = 0;
+        if (!type_sig.compare(i, object_or_nothing_prefix_len, object_or_nothing_prefix)) {
+            prefix_len = object_or_nothing_prefix_len;
+        } else if (!type_sig.compare(i, object_prefix_len, object_prefix)) {
+            prefix_len = object_prefix_len;
+        }
+
+        if (prefix_len) {
+            size_t open_pos = i + prefix_len - 1;
+            size_t close_pos = findAOTMatchingTypeClose(type_sig, open_pos);
+            if (close_pos != std::string::npos) {
+                bool module_qualified = false;
+                std::string class_path;
+                std::string class_ref = type_sig.substr(open_pos + 1, close_pos - open_pos - 1);
+                if (decodeAOTModuleClassRefForMatch(class_ref, module_qualified, class_path)) {
+                    rv.append(type_sig, i, prefix_len);
+                    rv += class_path;
+                    rv += '>';
+                    i = close_pos + 1;
+                    continue;
+                }
+            }
+        }
+
+        rv += type_sig[i++];
+    }
+    return rv;
+}
+
+static std::string canonicalizeAOTSignatureTypeForMatch(const std::string& type_sig) {
+    return canonicalizeAOTObjectClassRefsForMatch(normalizeTypePaths(type_sig));
+}
+
+static bool getAOTDirectObjectClassRefForMatch(const std::string& param, bool& or_nothing,
+        std::string& class_ref);
+
+static std::string getAOTClassPathTerminalName(const std::string& class_path) {
+    std::string stripped = stripAOTLeadingColons(class_path);
+    size_t sep = stripped.rfind("::");
+    return sep == std::string::npos ? stripped : stripped.substr(sep + 2);
+}
+
+static bool aotDirectObjectClassNameParamsCompatible(const std::string& left,
+        const std::string& right) {
+    bool left_or_nothing = false;
+    bool right_or_nothing = false;
+    std::string left_class_ref;
+    std::string right_class_ref;
+    if (!getAOTDirectObjectClassRefForMatch(left, left_or_nothing, left_class_ref)
+            || !getAOTDirectObjectClassRefForMatch(right, right_or_nothing, right_class_ref)
+            || left_or_nothing != right_or_nothing) {
+        return false;
+    }
+
+    bool left_module_qualified = false;
+    bool right_module_qualified = false;
+    std::string left_class_path;
+    std::string right_class_path;
+    if (!decodeAOTModuleClassRefForMatch(left_class_ref, left_module_qualified, left_class_path)
+            || !decodeAOTModuleClassRefForMatch(right_class_ref, right_module_qualified, right_class_path)) {
+        return false;
+    }
+    if (left_class_path == right_class_path) {
+        return true;
+    }
+
+    // Source-stripped AOT can have one side serialized with the canonical
+    // module namespace and the other with the source-visible imported name.
+    // Only accept the short-name form when one side is actually unqualified;
+    // two different qualified paths remain distinct and overload ambiguity is
+    // still handled by the caller.
+    bool left_bare = left_class_path.find("::") == std::string::npos;
+    bool right_bare = right_class_path.find("::") == std::string::npos;
+    return (left_bare || right_bare)
+        && getAOTClassPathTerminalName(left_class_path) == getAOTClassPathTerminalName(right_class_path);
+}
+
+static bool aotSignatureParamsCompatible(const std::string& left, const std::string& right) {
+    if (left == right) {
+        return true;
+    }
+
+    if (canonicalizeAOTSignatureTypeForMatch(left) == canonicalizeAOTSignatureTypeForMatch(right)) {
+        return true;
+    }
+
+    return aotDirectObjectClassNameParamsCompatible(left, right);
+}
+
+static bool aotSignatureStringsCompatible(const std::string& left_sig, const std::string& right_sig) {
+    std::string normalized_left = canonicalizeAOTSignatureTypeForMatch(left_sig);
+    std::string normalized_right = canonicalizeAOTSignatureTypeForMatch(right_sig);
+    if (normalized_left == normalized_right) {
+        return true;
+    }
+
+    std::vector<std::string> left_params = splitAOTSignatureParams(normalized_left);
+    std::vector<std::string> right_params = splitAOTSignatureParams(normalized_right);
+    if (left_params.size() != right_params.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < left_params.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT signature string compatibility matching")) {
+            return false;
+        }
+        if (!aotSignatureParamsCompatible(left_params[i], right_params[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool getAOTDirectObjectClassRefForMatch(const std::string& param, bool& or_nothing,
+        std::string& class_ref) {
+    static constexpr const char object_prefix[] = "object<";
+    static constexpr const char object_or_nothing_prefix[] = "*object<";
+    static constexpr size_t object_prefix_len = sizeof(object_prefix) - 1;
+    static constexpr size_t object_or_nothing_prefix_len = sizeof(object_or_nothing_prefix) - 1;
+
     std::string normalized = normalizeTypePaths(param);
-    return normalized == "auto";
+    size_t prefix_len = 0;
+    or_nothing = false;
+    if (!normalized.compare(0, object_or_nothing_prefix_len, object_or_nothing_prefix)) {
+        prefix_len = object_or_nothing_prefix_len;
+        or_nothing = true;
+    } else if (!normalized.compare(0, object_prefix_len, object_prefix)) {
+        prefix_len = object_prefix_len;
+    } else {
+        return false;
+    }
+
+    size_t open_pos = prefix_len - 1;
+    size_t close_pos = findAOTMatchingTypeClose(normalized, open_pos);
+    if (close_pos == std::string::npos || close_pos + 1 != normalized.size()) {
+        return false;
+    }
+
+    class_ref = normalized.substr(open_pos + 1, close_pos - open_pos - 1);
+    bool module_qualified = false;
+    std::string class_path;
+    return decodeAOTModuleClassRefForMatch(class_ref, module_qualified, class_path);
+}
+
+static bool aotDirectObjectClassParamMatchesVariant(const std::string& var_param,
+        const std::string& target_param, const QoreTypeInfo* variant_ti,
+        QoreAOTTypeResolver* type_resolver) {
+    if (!type_resolver) {
+        return false;
+    }
+
+    bool var_or_nothing = false;
+    bool target_or_nothing = false;
+    std::string var_class_ref;
+    std::string target_class_ref;
+    if (!getAOTDirectObjectClassRefForMatch(var_param, var_or_nothing, var_class_ref)
+            || !getAOTDirectObjectClassRefForMatch(target_param, target_or_nothing, target_class_ref)
+            || var_or_nothing != target_or_nothing) {
+        return false;
+    }
+
+    const QoreClass* variant_qc = QoreTypeInfo::getUniqueReturnClass(variant_ti);
+    if (!variant_qc) {
+        return false;
+    }
+
+    const QoreClass* target_qc = qore_aot_resolve_class_ref(type_resolver->getProgram(),
+        target_class_ref.c_str(), false);
+    return target_qc && target_qc == variant_qc;
+}
+
+static std::string getAOTFunctionKeyPrefix(const std::string& key) {
+    size_t paren = key.find('(');
+    return paren == std::string::npos ? key : key.substr(0, paren);
+}
+
+static bool isAOTScopedTypeBuiltin(const std::string& token) {
+    return token == "auto" || token == "any" || token == "binary" || token == "bool"
+        || token == "code" || token == "date" || token == "float" || token == "hash"
+        || token == "int" || token == "list" || token == "nothing" || token == "number"
+        || token == "object" || token == "reference" || token == "softbool"
+        || token == "softdate" || token == "softfloat" || token == "softint"
+        || token == "softlist" || token == "softnumber" || token == "softstring"
+        || token == "string" || token == "timeout" || token == "void";
+}
+
+static bool isAOTIdentifierChar(char c) {
+    unsigned char uc = static_cast<unsigned char>(c);
+    return std::isalnum(uc) || c == '_';
+}
+
+static std::string getAOTEnclosingNamespacePath(const std::string& path) {
+    std::string rv = path;
+    while (rv.rfind("::", 0) == 0) {
+        rv.erase(0, 2);
+    }
+    size_t sep = rv.rfind("::");
+    return sep == std::string::npos ? std::string() : rv.substr(0, sep);
+}
+
+static std::string getAOTVariantScopeNamespace(const AbstractQoreFunctionVariant* v) {
+    const MethodVariantBase* mvb = dynamic_cast<const MethodVariantBase*>(v);
+    const QoreClass* qc = mvb ? mvb->getClass() : nullptr;
+    if (!qc) {
+        return {};
+    }
+    return getAOTEnclosingNamespacePath(qc->getNamespacePath());
+}
+
+static std::string qualifyAOTTypePathInScope(const std::string& path, const std::string& ns_path) {
+    if (ns_path.empty()) {
+        return path;
+    }
+
+    std::string out;
+    out.reserve(path.size() + ns_path.size());
+    for (size_t i = 0; i < path.size();) {
+        char c = path[i];
+        if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
+            size_t start = i;
+            ++i;
+            while (i < path.size() && isAOTIdentifierChar(path[i])) {
+                ++i;
+            }
+
+            std::string token = path.substr(start, i - start);
+            bool qualified = i + 1 < path.size() && path[i] == ':' && path[i + 1] == ':';
+            bool maybe_type_name = !isAOTScopedTypeBuiltin(token) && !qualified;
+            if (maybe_type_name) {
+                out.append(ns_path);
+                out.append("::");
+            }
+            out.append(token);
+            continue;
+        }
+        out.push_back(c);
+        ++i;
+    }
+    return out;
 }
 
 static bool aotVariantSignatureMatches(const AbstractQoreFunctionVariant* v,
-        const std::string& target_sig, QoreAOTTypeResolver* type_resolver) {
+        const std::string& target_sig, QoreAOTTypeResolver* type_resolver,
+        const char* scope_path = nullptr) {
     std::string var_sig = normalizeTypePaths(makeAOTVariantSignature(v));
     std::string normalized_target_sig = normalizeTypePaths(target_sig);
     if (var_sig == normalized_target_sig) {
@@ -499,15 +842,35 @@ static bool aotVariantSignatureMatches(const AbstractQoreFunctionVariant* v,
         return target_params.empty();
     }
 
+    std::string scope_ns = scope_path ? getAOTEnclosingNamespacePath(scope_path) : std::string();
+    if (scope_ns.empty()) {
+        scope_ns = getAOTVariantScopeNamespace(v);
+    }
+
     for (size_t i = 0; i < target_params.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT variant signature semantic matching")) {
             return false;
         }
-        if (isAOTAutoSignatureParam(var_params[i]) || isAOTAutoSignatureParam(target_params[i])) {
+        if (aotSignatureParamsCompatible(var_params[i], target_params[i])) {
             continue;
         }
-        if (var_params[i] == target_params[i]) {
+        if (aotDirectObjectClassParamMatchesVariant(var_params[i], target_params[i],
+                (*types)[i], type_resolver)) {
             continue;
+        }
+        if (!scope_ns.empty()) {
+            std::string scoped_target = normalizeTypePaths(qualifyAOTTypePathInScope(target_params[i], scope_ns));
+            if (var_params[i] == scoped_target) {
+                continue;
+            }
+            if (type_resolver) {
+                std::string scoped_error;
+                const QoreTypeInfo* scoped_ti = type_resolver->resolve(scoped_target.c_str(), scoped_error);
+                if (scoped_ti && scoped_error.empty()
+                        && QoreTypeInfo::isInputIdentical((*types)[i], scoped_ti)) {
+                    continue;
+                }
+            }
         }
         if (!type_resolver) {
             return false;
@@ -723,34 +1086,93 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !ref2) {
                 return 0;
             }
+            QoreAOTStaticMethodRef method_ref(ref2);
+            const char* method_name = method_ref.method_name;
+            auto makeFunctionCallBits = [&](const FunctionEntry* fe) -> uint64_t {
+                if (!fe) {
+                    return 0;
+                }
+                FunctionCallNode* fcn = new FunctionCallNode(
+                    &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+                QoreFunction* func = fe->getFunction();
+                if (method_ref.sig_text) {
+                    if (const AbstractQoreFunctionVariant* v = func
+                            ? func->findVariantBySignatureText(method_ref.sig_text) : nullptr) {
+                        fcn->setVariant(v);
+                    }
+                } else if (method_ref.arg_type_sig) {
+                    QoreTypeParamInstantiation type_param_instantiation;
+                    std::string variant_error;
+                    if (const AbstractQoreFunctionVariant* v = qore_aot_resolve_variant_from_arg_type_signature(pgm,
+                            func, method_ref.arg_type_sig, nullptr, nullptr, &type_param_instantiation,
+                            variant_error)) {
+                        fcn->setVariant(v);
+                        fcn->setTypeParamInstantiation(std::move(type_param_instantiation));
+                    }
+                }
+                return toBitsNB(QoreValue(fcn));
+            };
+
             // Look up class, then find static method
             const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
+                if (const FunctionEntry* fe = qore_aot_resolve_function_entry_for_static_call_fallback(
+                        pgm, nullptr, ref1, method_name)) {
+                    return makeFunctionCallBits(fe);
+                }
                 std::string class_desc = describeAOTClassRef(ref1);
                 printd(0, "AOT v2: cannot resolve class '%s' for static method '%s'\n",
                     class_desc.c_str(), ref2);
                 return 0;
             }
-            std::string method_name_storage;
-            const char* method_name = ref2;
-            const char* sig_text = nullptr;
-            const char* sig_sep = strchr(ref2, '\n');
-            if (sig_sep) {
-                method_name_storage.assign(ref2, sig_sep - ref2);
-                method_name = method_name_storage.c_str();
-                sig_text = sig_sep + 1;
-            }
             const QoreMethod* m = findAOTStaticMethod(qc, method_name);
             if (!m) {
-                printd(0, "AOT v2: cannot find static method '%s::%s'\n", ref1, method_name);
+                m = findAOTInstanceMethod(qc, method_name, nullptr);
+            }
+            if (!m) {
+                if (const FunctionEntry* fe = qore_aot_resolve_function_entry_for_static_call_fallback(
+                        pgm, qc, ref1, method_name)) {
+                    return makeFunctionCallBits(fe);
+                }
+                printd(0, "AOT v2: cannot find class-qualified method '%s::%s'\n", ref1, method_name);
                 return 0;
+            }
+            const AbstractQoreFunctionVariant* resolved_variant = nullptr;
+            if (method_ref.sig_text) {
+                resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
+            }
+            if (!m->isStatic()) {
+                std::string qualified_method_name = makeAOTQualifiedMethodName(ref1, method_name);
+                SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin,
+                    strdup(qualified_method_name.c_str()), nullptr, m, qc,
+                    qore_class_private::get(*const_cast<QoreClass*>(qc)));
+                if (resolved_variant) {
+                    sfcn->setVariant(resolved_variant);
+                } else if (method_ref.arg_type_sig) {
+                    MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                    QoreTypeParamInstantiation type_param_instantiation;
+                    std::string variant_error;
+                    if (const AbstractQoreFunctionVariant* v = qore_aot_resolve_variant_from_arg_type_signature(pgm,
+                            mfb, method_ref.arg_type_sig, nullptr, nullptr, &type_param_instantiation,
+                            variant_error)) {
+                        sfcn->setVariant(v);
+                        sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
+                    }
+                }
+                return toBitsNB(QoreValue(sfcn));
             }
             // Create StaticMethodCallNode
             StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
-            if (sig_text) {
+            if (resolved_variant) {
+                smcn->setVariant(resolved_variant);
+            } else if (method_ref.arg_type_sig) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
-                if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb, sig_text)) {
+                QoreTypeParamInstantiation type_param_instantiation;
+                std::string variant_error;
+                if (const AbstractQoreFunctionVariant* v = qore_aot_resolve_variant_from_arg_type_signature(pgm, mfb,
+                        method_ref.arg_type_sig, nullptr, nullptr, &type_param_instantiation, variant_error)) {
                     smcn->setVariant(v);
+                    smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
             }
             return toBitsNB(QoreValue(smcn));
@@ -789,7 +1211,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 printd(2, "AOT SLOT: deferring self method '%s::%s' to name-based dispatch\n",
                     ref1 ? ref1 : "", method_name);
                 return toBitsNB(QoreValue(new SelfFunctionCallNode(
-                    &loc_builtin, strdup(ref2), nullptr, qc, false)));
+                    &loc_builtin, strdup(ref2), nullptr, qc, qcp)));
             }
             printd(5, "AOT SLOT: resolved self method '%s::%s' -> %p\n", ref1, method_name, m);
             if (m->isStatic()) {
@@ -1055,17 +1477,21 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     switch (kind) {
         case AOTExprKind::CAST_HASHDECL: {
             if (!strcmp(ref1, "hash")) {
-                auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
+                auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin,
+                    static_cast<const TypedHashDecl*>(nullptr), QoreValue(), or_nothing);
                 return toBitsNB(QoreValue(node));
             }
             const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
-            if (!hd) {
+            if (!hd && (!ref1 || !*ref1)) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
                 return 0;
             }
             // Use empty hash as inner expression (default for top-level slot resolution)
-            auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd,
-                QoreValue(new QoreHashNode(autoTypeInfo)), or_nothing);
+            auto* node = hd
+                ? new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(new QoreHashNode(autoTypeInfo)),
+                    or_nothing)
+                : new QoreHashDeclCastOperatorNode(&loc_builtin, ref1, QoreValue(new QoreHashNode(autoTypeInfo)),
+                    or_nothing);
             return toBitsNB(QoreValue(node));
         }
         case AOTExprKind::CAST_COMPLEX_HASH: {
@@ -1225,6 +1651,81 @@ static AOTClassRef decodeAOTClassRef(const char* class_ref) {
     return ref;
 }
 
+static bool isAOTBareClassIdentifier(const char* class_path) {
+    if (!class_path || !*class_path || !std::isalpha(static_cast<unsigned char>(*class_path))
+            && *class_path != '_') {
+        return false;
+    }
+    for (const char* p = class_path + 1; *p; ++p) {
+        if (!isAOTIdentifierChar(*p)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool isAOTNamespaceUnder(const qore_ns_private* ns, const qore_ns_private* root) {
+    for (const qore_ns_private* cur = ns; cur; cur = cur->parent) {
+        if (cur == root) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static const QoreClass* resolveAOTBareClassRefByNamespacePriority(QoreProgram* pgm, const char* class_name) {
+    if (!pgm || !isAOTBareClassIdentifier(class_name)) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_ns_private* root = qore_ns_private::get(*pp->RootNS);
+    qore_ns_private* qore_ns = nullptr;
+    if (QoreNamespace* qore_ns_obj = root->parseFindLocalNamespace("Qore")) {
+        qore_ns = qore_ns_private::get(*qore_ns_obj);
+    }
+
+    const QoreClass* best_qore = nullptr;
+    unsigned best_qore_depth = 0;
+    bool ambiguous_qore = false;
+    const QoreClass* best_other = nullptr;
+    unsigned best_other_depth = 0;
+    bool ambiguous_other = false;
+
+    QorePrivateNamespaceIterator nsi(root);
+    while (nsi.next()) {
+        qore_ns_private* ns = nsi.get();
+        const QoreClass* qc = ns->parseFindLocalClass(class_name);
+        if (!qc) {
+            continue;
+        }
+
+        if (qore_ns && isAOTNamespaceUnder(ns, qore_ns)) {
+            if (!best_qore || ns->depth < best_qore_depth) {
+                best_qore = qc;
+                best_qore_depth = ns->depth;
+                ambiguous_qore = false;
+            } else if (ns->depth == best_qore_depth && qc != best_qore) {
+                ambiguous_qore = true;
+            }
+            continue;
+        }
+
+        if (!best_other || ns->depth < best_other_depth) {
+            best_other = qc;
+            best_other_depth = ns->depth;
+            ambiguous_other = false;
+        } else if (ns->depth == best_other_depth && qc != best_other) {
+            ambiguous_other = true;
+        }
+    }
+
+    if (best_qore) {
+        return ambiguous_qore ? nullptr : best_qore;
+    }
+    return ambiguous_other ? nullptr : best_other;
+}
+
 static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         const char* class_path, bool pseudo) {
     if (!pgm || !class_path || !*class_path) {
@@ -1238,6 +1739,23 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
     if (!qc && class_path[0] == ':' && class_path[1] == ':') {
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS,
             class_path + 2, found_ns);
+    }
+    if (!qc && getProgram() == pgm) {
+        // AOT script batch registration runs in a runtime parse context.  The
+        // aggregate metadata has created parse/pending shells before native
+        // per-file slot maps are registered, so use the same class lookup path
+        // as source parsing before falling back to committed runtime maps.
+        const char* req_path = class_path;
+        if (req_path[0] == ':' && req_path[1] == ':') {
+            req_path += 2;
+        }
+        if (*req_path) {
+            NamedScope nscope(req_path);
+            qc = qore_root_ns_private::parseFindScopedClass(&loc_builtin, nscope, false);
+        }
+    }
+    if (!qc && !pseudo) {
+        qc = resolveAOTBareClassRefByNamespacePriority(pgm, class_path);
     }
     if (!qc && pseudo) {
         qc = findPseudoClassByPath(class_path);
@@ -1292,6 +1810,151 @@ static std::string describeAOTClassRef(const char* class_ref) {
     return rv;
 }
 
+static std::string makeAOTQualifiedMethodName(const char* class_path, const char* method_name) {
+    AOTClassRef ref = decodeAOTClassRef(class_path);
+    std::string rv(ref.path && *ref.path ? ref.path : (class_path ? class_path : ""));
+    if (!rv.empty()) {
+        rv += "::";
+    }
+    rv += method_name ? method_name : "";
+    return rv;
+}
+
+static void stripAOTLeadingScope(std::string& path) {
+    if (path.size() >= 2 && path[0] == ':' && path[1] == ':') {
+        path.erase(0, 2);
+    }
+}
+
+static void addAOTFunctionCandidate(std::vector<std::string>& candidates,
+        std::string ns_path, const char* method_name) {
+    if (!method_name || !*method_name) {
+        return;
+    }
+    stripAOTLeadingScope(ns_path);
+    if (ns_path.empty()) {
+        return;
+    }
+    ns_path += "::";
+    ns_path += method_name;
+    if (std::find(candidates.begin(), candidates.end(), ns_path) == candidates.end()) {
+        candidates.push_back(std::move(ns_path));
+    }
+}
+
+static bool aotFunctionPathMatchesSuffix(const std::string& full_path, const std::string& suffix) {
+    if (full_path == suffix) {
+        return true;
+    }
+    if (full_path.size() <= suffix.size()) {
+        return false;
+    }
+    size_t pos = full_path.size() - suffix.size();
+    return full_path.compare(pos, suffix.size(), suffix) == 0
+        && pos >= 2 && full_path[pos - 1] == ':' && full_path[pos - 2] == ':';
+}
+
+static const FunctionEntry* findUniqueAOTFunctionBySuffix(QoreProgram* pgm,
+        const char* terminal_name, const std::string& suffix) {
+    if (!pgm || !terminal_name || !*terminal_name || suffix.empty()) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    const FunctionEntry* match = nullptr;
+    unsigned matches = 0;
+    size_t visited = 0;
+    bool cancelled = false;
+
+    std::function<void(qore_ns_private*)> walk = [&](qore_ns_private* ns) {
+        if (!ns || cancelled || matches > 1) {
+            return;
+        }
+        if (++visited % 100 == 0 && qore_check_cancel(nullptr, "AOT function suffix lookup")) {
+            cancelled = true;
+            return;
+        }
+
+        if (FunctionEntry* fe = ns->func_list.findNode(terminal_name)) {
+            std::string full_path;
+            ns->getPath(full_path);
+            if (!full_path.empty()) {
+                full_path += "::";
+            }
+            full_path += terminal_name;
+            if (aotFunctionPathMatchesSuffix(full_path, suffix)) {
+                match = fe;
+                ++matches;
+                if (matches > 1) {
+                    return;
+                }
+            }
+        }
+
+        for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+            if (ni->second) {
+                walk(qore_ns_private::get(*ni->second));
+                if (cancelled || matches > 1) {
+                    return;
+                }
+            }
+        }
+    };
+
+    walk(root_ns);
+    return matches == 1 ? match : nullptr;
+}
+
+const FunctionEntry* qore_aot_resolve_function_entry_for_static_call_fallback(
+        QoreProgram* pgm, const QoreClass* qc, const char* class_ref, const char* method_name) {
+    if (!pgm || !method_name || !*method_name) {
+        return nullptr;
+    }
+
+    AOTClassRef ref = decodeAOTClassRef(class_ref);
+    std::vector<std::string> candidates;
+    addAOTFunctionCandidate(candidates, ref.path ? ref.path : "", method_name);
+
+    if (qc) {
+        qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+        if (qcp && qcp->ns) {
+            std::string ns_path;
+            qcp->ns->getPath(ns_path);
+            addAOTFunctionCandidate(candidates, std::move(ns_path), method_name);
+        }
+    }
+
+    for (const std::string& candidate : candidates) {
+        if (const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(pgm, candidate.c_str())) {
+            return fe;
+        }
+    }
+
+    if (ref.module && *ref.module) {
+        if (QoreProgram* module_pgm = MM.findUserModuleProgram(ref.module)) {
+            for (const std::string& candidate : candidates) {
+                if (const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(
+                        module_pgm, candidate.c_str())) {
+                    return fe;
+                }
+            }
+        }
+    }
+
+    std::string suffix(ref.path ? ref.path : "");
+    stripAOTLeadingScope(suffix);
+    if (!suffix.empty()) {
+        suffix += "::";
+        suffix += method_name;
+        if (const FunctionEntry* fe = findUniqueAOTFunctionBySuffix(pgm, method_name, suffix)) {
+            return fe;
+        }
+    }
+
+    return nullptr;
+}
+
 struct AOTEncodedMethodRef {
     const char* method_name = nullptr;
     const char* variant_class_path = nullptr;
@@ -1311,7 +1974,7 @@ struct AOTEncodedMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strchr(payload, '\n');
+        const char* second_sep = strrchr(payload, '\n');
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;
@@ -1328,6 +1991,39 @@ struct AOTEncodedMethodRef {
 
 static const QoreClass* findAOTClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
     return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
+}
+
+static bool isAOTUnqualifiedRelativeClassRef(const AOTClassRef& ref) {
+    return (!ref.module || !*ref.module) && ref.path && *ref.path
+        && !(ref.path[0] == ':' && ref.path[1] == ':') && !strstr(ref.path, "::");
+}
+
+static const QoreClass* findAOTClassByPathInContext(QoreProgram* pgm, const char* class_path,
+        const qore_class_private* class_ctx, bool pseudo) {
+    if (!pgm || !class_path || !*class_path) {
+        return nullptr;
+    }
+
+    AOTClassRef ref = decodeAOTClassRef(class_path);
+    if (class_ctx && class_ctx->ns && isAOTUnqualifiedRelativeClassRef(ref)) {
+        for (const qore_ns_private* ns = class_ctx->ns; ns; ns = ns->parent) {
+            if (qore_check_cancel(nullptr, "AOT contextual class lookup")) {
+                return nullptr;
+            }
+            std::string ns_path;
+            ns->getPath(ns_path);
+            if (ns_path.empty()) {
+                continue;
+            }
+            ns_path += "::";
+            ns_path += ref.path;
+            if (const QoreClass* qc = findAOTClassByPath(pgm, ns_path.c_str(), pseudo)) {
+                return qc;
+            }
+        }
+    }
+
+    return findAOTClassByPath(pgm, class_path, pseudo);
 }
 
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
@@ -1359,6 +2055,42 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
         *const_cast<QoreMethod*>(variant_method))->getFunction();
     const AbstractQoreFunctionVariant* variant = mfb
         ? mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+    if (variant) {
+        method = variant_method;
+    }
+    return variant;
+}
+
+static const QoreMethod* findAOTStaticCallMethodByName(const QoreClass* qc, const char* method_name) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    if (const QoreMethod* method = findAOTStaticMethod(qc, method_name)) {
+        return method;
+    }
+    return findAOTInstanceMethod(qc, method_name, nullptr);
+}
+
+static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
+        QoreProgram* pgm, const QoreMethod*& method, const QoreAOTStaticMethodRef& method_ref,
+        bool pseudo) {
+    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+        return nullptr;
+    }
+
+    const QoreMethod* variant_method = method;
+    if (method_ref.variant_class_path && *method_ref.variant_class_path) {
+        const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
+        if (variant_qc) {
+            if (const QoreMethod* m = findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)) {
+                variant_method = m;
+            }
+        }
+    }
+
+    MethodFunctionBase* mfb = qore_method_private::get(
+        *const_cast<QoreMethod*>(variant_method))->getFunction();
+    const AbstractQoreFunctionVariant* variant = findAOTVariantBySignatureText(mfb, method_ref.sig_text);
     if (variant) {
         method = variant_method;
     }
@@ -2075,7 +2807,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         QoreAOTTypeResolver* shared_type_resolver = nullptr,
         std::string* build_error = nullptr,
         std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
-        const uint8_t* slot_maps_start = nullptr) {
+        const uint8_t* slot_maps_start = nullptr,
+        const qore_class_private* variant_class_ctx = nullptr) {
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -2366,6 +3099,12 @@ static QoreAOTContext* buildContextFromSlotMap(
     };
     std::vector<DeferredExprTree> deferred_expr_trees;
     bool closure_ir_missing = false;
+    std::string closure_ir_error;
+    auto setClosureIRError = [&closure_ir_error](std::string msg) {
+        if (closure_ir_error.empty()) {
+            closure_ir_error = std::move(msg);
+        }
+    };
     struct ExprUnsupportedTraceGuard {
         bool enabled;
         const char* func_name;
@@ -3019,17 +3758,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
                     ref3 = reader.readStringRef(ptr);
                 }
-                std::string method_name_storage;
-                const char* method_name = ref2;
-                const char* sig_text = nullptr;
-                if (ref2) {
-                    const char* sig_sep = strchr(ref2, '\n');
-                    if (sig_sep) {
-                        method_name_storage.assign(ref2, sig_sep - ref2);
-                        method_name = method_name_storage.c_str();
-                        sig_text = sig_sep + 1;
-                    }
-                }
+                QoreAOTStaticMethodRef method_ref(ref2);
+                const char* method_name = method_ref.method_name;
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreListNode* call_args = nullptr;
                 if (num_args > 0) {
@@ -3056,13 +3786,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                     continue;
                 }
                 // Resolve class and method, create node with args
+                const QoreClass* qc = nullptr;
+                const qore_class_private* call_class_ctx = variant_class_ctx
+                    ? variant_class_ctx : getAOTVariantClassContext(uvb);
                 if (ref1 && method_name) {
-                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
+                    if (trace_slot_reg) {
+                        std::string ctx_ns_path;
+                        if (call_class_ctx && call_class_ctx->ns) {
+                            call_class_ctx->ns->getPath(ctx_ns_path, true);
+                        }
+                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL context class='%s' "
+                            "ns='%s' receiver='%s'\n", name, i,
+                            call_class_ctx ? call_class_ctx->path.c_str() : "",
+                            ctx_ns_path.c_str(), ref1 ? ref1 : "");
+                    }
+                    qc = findAOTClassByPathInContext(pgm, ref1, call_class_ctx, false);
                     if (qc) {
                         const QoreMethod* m = findAOTStaticMethod(qc, method_name);
+                        if (!m) {
+                            m = findAOTInstanceMethod(qc, method_name, call_class_ctx);
+                        }
                         if (m) {
-                            ctx->call_targets[i].method = m;
-                            ctx->call_targets[i].is_static_method = true;
                             const QoreTypeInfo* receiver_type_info = nullptr;
                             if (ref3 && *ref3) {
                                 QoreAOTTypeResolver type_resolver(pgm);
@@ -3081,43 +3825,110 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     continue;
                                 }
                             }
-                            ctx->call_targets[i].receiver_type_info = receiver_type_info;
-                            // Create StaticMethodCallNode with parse args + resolveParseArgs
-                            QoreParseListNode* pln = nullptr;
-                            if (call_args) {
-                                pln = new QoreParseListNode(&loc_builtin);
-                                ConstListIterator li(call_args);
-                                while (li.next()) {
-                                    QoreValue v = li.getValue();
-                                    v.refSelf();
-                                    pln->add(v, &loc_builtin);
-                                }
-                                call_args->deref(nullptr);
-                                call_args = nullptr;
+                            const AbstractQoreFunctionVariant* resolved_variant = nullptr;
+                            if (method_ref.sig_text) {
+                                resolved_variant = findAOTStaticMethodVariantByRef(pgm, m, method_ref, false);
                             }
-                            StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
-                            smcn->setReceiverTypeInfo(receiver_type_info);
-                            if (sig_text) {
+                            QoreParseListNode* pln = makeAOTParseArgsFromList(call_args);
+                            AbstractFunctionCallNode* call_node = nullptr;
+                            if (m->isStatic()) {
+                                ctx->call_targets[i].method = m;
+                                ctx->call_targets[i].is_static_method = true;
+                                ctx->call_targets[i].receiver_type_info = receiver_type_info;
+                                StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
+                                smcn->setReceiverTypeInfo(receiver_type_info);
+                                call_node = smcn;
+                            } else {
+                                std::string qualified_method_name = makeAOTQualifiedMethodName(ref1, method_name);
+                                SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin,
+                                    strdup(qualified_method_name.c_str()), pln, m, qc, call_class_ctx);
+                                call_node = sfcn;
+                            }
+                            if (resolved_variant) {
+                                ctx->call_targets[i].variant = resolved_variant;
+                                ctx->call_targets[i].uvb = resolved_variant->getUserVariantBase();
+                                call_node->setVariant(resolved_variant);
+                                if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL "
+                                        "matched signature '%s' -> '%s'\n", name, i, method_ref.sig_text,
+                                        makeAOTVariantSignature(resolved_variant).c_str());
+                                }
+                            } else if (method_ref.sig_text) {
+                                if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL "
+                                        "could not match signature '%s'\n", name, i, method_ref.sig_text);
+                                }
+                            } else if (method_ref.arg_type_sig) {
                                 MethodFunctionBase* mfb = qore_method_private::get(
                                     *const_cast<QoreMethod*>(m))->getFunction();
-                                if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb,
-                                        sig_text)) {
+                                QoreTypeParamInstantiation type_param_instantiation;
+                                std::string variant_error;
+                                if (const AbstractQoreFunctionVariant* v = qore_aot_resolve_variant_from_arg_type_signature(
+                                            pgm, mfb, method_ref.arg_type_sig, nullptr, receiver_type_info,
+                                            &type_param_instantiation, variant_error)) {
                                     ctx->call_targets[i].variant = v;
-                                    smcn->setVariant(v);
+                                    call_node->setVariant(v);
+                                    call_node->setTypeParamInstantiation(std::move(type_param_instantiation));
+                                    if (trace_slot_reg) {
+                                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL "
+                                            "matched arg types '%s' -> '%s'\n", name, i, method_ref.arg_type_sig,
+                                            makeAOTVariantSignature(v).c_str());
+                                    }
+                                } else if (trace_slot_reg) {
+                                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL "
+                                        "could not match arg types '%s': %s\n", name, i, method_ref.arg_type_sig,
+                                        variant_error.c_str());
                                 }
+                            } else if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL has no "
+                                    "serialized variant signature or arg types for '%s::%s'\n",
+                                    name, i, ref1 ? ref1 : "", method_name ? method_name : "");
                             }
                             if (pln) {
-                                smcn->resolveParseArgs();
+                                call_node->resolveParseArgs();
                             }
-                            ctx->exprs[i] = toBitsNB(QoreValue(smcn));
+                            ctx->exprs[i] = toBitsNB(QoreValue(call_node));
                             continue;
                         }
                     }
                 }
+                if (const FunctionEntry* fe = qore_aot_resolve_function_entry_for_static_call_fallback(
+                        pgm, qc, ref1, method_name)) {
+                    QoreParseListNode* pln = makeAOTParseArgsFromList(call_args);
+                    FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln);
+                    QoreFunction* func = fe->getFunction();
+                    ctx->call_targets[i].func = func;
+                    if (method_ref.sig_text) {
+                        if (const AbstractQoreFunctionVariant* v = func
+                                ? func->findVariantBySignatureText(method_ref.sig_text) : nullptr) {
+                            ctx->call_targets[i].variant = v;
+                            ctx->call_targets[i].uvb = v->getUserVariantBase();
+                            fcn->setVariant(v);
+                        }
+                    } else if (method_ref.arg_type_sig) {
+                        QoreTypeParamInstantiation type_param_instantiation;
+                        std::string variant_error;
+                        if (const AbstractQoreFunctionVariant* v = qore_aot_resolve_variant_from_arg_type_signature(
+                                pgm, func, method_ref.arg_type_sig, nullptr, nullptr,
+                                &type_param_instantiation, variant_error)) {
+                            ctx->call_targets[i].variant = v;
+                            ctx->call_targets[i].uvb = v->getUserVariantBase();
+                            fcn->setVariant(v);
+                            fcn->setTypeParamInstantiation(std::move(type_param_instantiation));
+                        }
+                    }
+                    if (pln) {
+                        fcn->resolveParseArgs();
+                    }
+                    ctx->exprs[i] = toBitsNB(QoreValue(fcn));
+                    continue;
+                }
                 if (trace_slot_reg) {
                     fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL cannot resolve "
-                        "class='%s' method='%s' signature='%s'\n",
-                        name, i, ref1 ? ref1 : "", method_name ? method_name : "", sig_text ? sig_text : "");
+                        "class='%s' method='%s' signature='%s' arg_types='%s'\n",
+                        name, i, ref1 ? ref1 : "", method_name ? method_name : "",
+                        method_ref.sig_text ? method_ref.sig_text : "",
+                        method_ref.arg_type_sig ? method_ref.arg_type_sig : "");
                 }
                 if (call_args) {
                     call_args->deref(nullptr);
@@ -4031,9 +4842,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                 uint8_t has_ir = QoreAOTBinaryReader::readU8(ptr);
                 if (!has_ir) {
                     // No IR: invalid for source-fallback-free AOT.
+                    std::string msg = "closure expression slot " + std::to_string(i)
+                        + " has no serialized IR";
+                    setClosureIRError(msg);
                     if (trace_slot_reg) {
-                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d has no serialized IR\n",
-                            name, i);
+                        fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
                     closure_ir_missing = true;
                     continue;
@@ -4167,11 +4980,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ptr = ir_end_ptr;  // Ensure we advance past IR data
 
                 if (!closure_ir) {
-                    printd(2, "AOT: closure IR deser failed for expr slot %d: %s\n",
-                        i, ir_error.c_str());
+                    std::string msg = "closure expression slot " + std::to_string(i)
+                        + " IR deserialization failed";
+                    if (!ir_error.empty()) {
+                        msg += ": ";
+                        msg += ir_error;
+                    }
+                    setClosureIRError(msg);
+                    printd(2, "AOT: %s for '%s'\n", msg.c_str(), name);
                     if (trace_slot_reg) {
-                        fprintf(stderr, "[aot-slot-reg] '%s': closure expr slot %d IR deser failed: %s\n",
-                            name, i, ir_error.c_str());
+                        fprintf(stderr, "[aot-slot-reg] '%s': %s\n", name, msg.c_str());
                     }
                     delete ucf;
                     closure_ir_missing = true;
@@ -5088,11 +5906,14 @@ static QoreAOTContext* buildContextFromSlotMap(
 
     // Closure IR errors are hard failures (Phase 2: no source fallback)
     if (closure_ir_missing) {
-        printd(2, "AOT buildCtx: '%s' failed (closure IR missing)\n", name);
+        printd(2, "AOT buildCtx: '%s' failed (%s)\n", name,
+            closure_ir_error.empty() ? "closure IR missing" : closure_ir_error.c_str());
         if (trace_slot_reg) {
-            fprintf(stderr, "[aot-slot-reg] SKIP '%s': closure IR missing\n", name);
+            fprintf(stderr, "[aot-slot-reg] SKIP '%s': %s\n", name,
+                closure_ir_error.empty() ? "closure IR missing" : closure_ir_error.c_str());
         }
-        setBuildError("closure IR missing; source fallback is disabled");
+        setBuildError((closure_ir_error.empty() ? std::string("closure IR missing") : closure_ir_error)
+            + "; source fallback is disabled");
         delete ctx;
         return nullptr;
     }
@@ -6838,7 +7659,7 @@ static void registerAOTFunctionsFromSlotMaps(
 
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
 
-    // Debug: count init functions in func_map
+    // Keep init-function registration diagnostics behind the slot-registration trace switch.
     if (init_func_contexts) {
         int init_count = 0;
         for (auto& kv : func_map) {
@@ -6894,7 +7715,7 @@ static void registerAOTFunctionsFromSlotMaps(
         const bool trace_slot_reg = trace_slot_reg_env
             && (!*trace_slot_reg_env || std::strstr(func_name, trace_slot_reg_env));
 
-        // Debug: print init function slot map entries
+        // Trace init-function slot-map entries when requested.
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
             printd(5, "  slot map entry: '%s' (in func_map: %s)\n",
@@ -6903,6 +7724,33 @@ static void registerAOTFunctionsFromSlotMaps(
 
         // Find matching AOT function
         auto it = func_map.find(func_name);
+        if (it == func_map.end()) {
+            const QoreAOTFunc* compatible_func = nullptr;
+            std::string compatible_func_name;
+            bool ambiguous_compatible_func = false;
+            std::string slot_key(func_name);
+            std::string slot_prefix = getAOTFunctionKeyPrefix(slot_key);
+            for (auto fi = func_map.begin(); fi != func_map.end(); ++fi) {
+                if (getAOTFunctionKeyPrefix(fi->first) != slot_prefix
+                        || !aotSignatureStringsCompatible(slot_key.substr(slot_prefix.size()),
+                            fi->first.substr(slot_prefix.size()))) {
+                    continue;
+                }
+                if (compatible_func && compatible_func != fi->second) {
+                    ambiguous_compatible_func = true;
+                    break;
+                }
+                compatible_func = fi->second;
+                compatible_func_name = fi->first;
+            }
+            if (compatible_func && !ambiguous_compatible_func) {
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] slot entry '%s' matched native table entry '%s'\n",
+                        func_name, compatible_func_name.c_str());
+                }
+                it = func_map.find(compatible_func_name);
+            }
+        }
         if (it == func_map.end()) {
             if (trace_slot_reg) {
                 fprintf(stderr, "[aot-slot-reg] slot entry '%s' has no native function table entry\n",
@@ -6915,11 +7763,13 @@ static void registerAOTFunctionsFromSlotMaps(
             continue;
         }
         const QoreAOTFunc* aot_func = it->second;
+        std::string native_func_name = it->first;
 
         // Find the UserVariantBase in the namespace tree
         // Function names can be "funcName(types)" or "ClassName::methodName(types)"
         // We need to extract just the function name for lookup
         UserVariantBase* uvb = nullptr;
+        const qore_class_private* variant_class_ctx = nullptr;
         std::string fname_str(func_name);
 
         // Strip signature suffix if present (e.g., "add(int,int)" -> "add")
@@ -6995,8 +7845,9 @@ static void registerAOTFunctionsFromSlotMaps(
                 // instance only if no static variant is present.
                 const QoreMethod* m = nullptr;
                 const QoreMethod* m_static = nullptr;
+                variant_class_ctx = qore_class_private::get(*const_cast<QoreClass*>(qc));
                 if (key_is_static) {
-                    qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+                    qcp = const_cast<qore_class_private*>(variant_class_ctx);
                     m = qcp->parseFindLocalStaticMethod(method_name.c_str());
                     if (!m) {
                         m = findAOTStaticMethod(qc, method_name.c_str());
@@ -7067,104 +7918,13 @@ static void registerAOTFunctionsFromSlotMaps(
                                 normalizeTypePaths(var_sig).c_str(), target_sig.c_str(),
                                 static_cast<const void*>(candidate));
                         }
-                        if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
+                        if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver, class_name.c_str())) {
                             uvb = candidate;
                             if (trace_slot_reg) {
                                 fprintf(stderr, "[aot-slot-reg] matched func='%s' variant[%d]\n",
                                     func_name, var_count);
                             }
                             break;
-                        }
-                    }
-                    // Fallback: type-resolution failures during variant deserialization
-                    // substitute `auto` for unresolvable types (see readAndSetupVariantSignature
-                    // in QoreAOTBinary.cpp — falls back to autoTypeInfo on resolver error).
-                    // The target_sig was serialized before the fallback, so it still carries
-                    // the original type paths.  Match variants parameter-by-parameter, treating
-                    // `auto` in the variant as a wildcard.  Without this, overloaded methods
-                    // with cross-module type references (e.g., RestClientPool::constructor
-                    // referencing Qore::Thread::ConnectionPoolOptions) fail to bind their
-                    // AOT function, leaving cached_aot_fn null and causing evalIntern to
-                    // silently no-op the constructor body.
-                    if (!uvb) {
-                        auto splitParams = [](const std::string& s) {
-                            std::vector<std::string> out;
-                            if (s.size() < 2 || s.front() != '(' || s.back() != ')') {
-                                return out;
-                            }
-                            int depth = 0;
-                            std::string cur;
-                            for (size_t i = 1; i + 1 < s.size(); ++i) {
-                                char c = s[i];
-                                if (c == '<' || c == '(') {
-                                    ++depth;
-                                    cur.push_back(c);
-                                } else if (c == '>' || c == ')') {
-                                    --depth;
-                                    cur.push_back(c);
-                                } else if (c == ',' && depth == 0) {
-                                    out.push_back(cur);
-                                    cur.clear();
-                                } else {
-                                    cur.push_back(c);
-                                }
-                            }
-                            if (!cur.empty()) {
-                                out.push_back(cur);
-                            }
-                            return out;
-                        };
-                        std::vector<std::string> target_params = splitParams(target_sig);
-                        QoreFunctionIterator vi2(*mfb);
-                        while (vi2.next()) {
-                            const AbstractQoreFunctionVariant* v = vi2.getVariant();
-                            auto* candidate = const_cast<UserVariantBase*>(
-                                dynamic_cast<const UserVariantBase*>(v));
-                            if (!candidate) {
-                                continue;
-                            }
-                            std::string var_sig("(");
-                            AbstractFunctionSignature* sig = v->getSignature();
-                            if (sig) {
-                                const type_vec_t& types = sig->getTypeList();
-                                for (size_t ti = 0; ti < types.size(); ++ti) {
-                                    if (ti > 0) {
-                                        var_sig.append(",");
-                                    }
-                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
-                                }
-                            }
-                            var_sig.append(")");
-                            std::vector<std::string> var_params = splitParams(normalizeTypePaths(var_sig));
-                            if (trace_slot_reg) {
-                                fprintf(stderr, "[aot-slot-reg] wildcard candidate func='%s' sig='%s' "
-                                    "normalized='%s' target='%s' candidate=%p\n",
-                                    func_name, var_sig.c_str(), normalizeTypePaths(var_sig).c_str(),
-                                    target_sig.c_str(), static_cast<const void*>(candidate));
-                            }
-                            if (var_params.size() != target_params.size()) {
-                                continue;
-                            }
-                            bool ok = true;
-                            for (size_t pi = 0; pi < target_params.size(); ++pi) {
-                                // `auto` in variant matches anything in target; otherwise
-                                // require exact match.
-                                if (var_params[pi] == "auto") {
-                                    continue;
-                                }
-                                if (var_params[pi] != target_params[pi]) {
-                                    ok = false;
-                                    break;
-                                }
-                            }
-                            if (ok) {
-                                uvb = candidate;
-                                if (trace_slot_reg) {
-                                    fprintf(stderr, "[aot-slot-reg] matched func='%s' with auto wildcard\n",
-                                        func_name);
-                                }
-                                break;
-                            }
                         }
                     }
                     // If no match found and there's a same-named static method, try that
@@ -7196,7 +7956,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                     func_name, var_sig.c_str(), normalizeTypePaths(var_sig).c_str(),
                                     target_sig.c_str(), static_cast<const void*>(candidate));
                             }
-                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
+                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver, class_name.c_str())) {
                                 uvb = candidate;
                                 if (trace_slot_reg) {
                                     fprintf(stderr, "[aot-slot-reg] matched func='%s' static variant\n",
@@ -7300,7 +8060,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                 }
                             }
                             var_sig.append(")");
-                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver)) {
+                            if (aotVariantSignatureMatches(v, target_sig, shared_type_resolver, fname_str.c_str())) {
                                 return candidate;
                             }
                         }
@@ -7364,7 +8124,7 @@ static void registerAOTFunctionsFromSlotMaps(
             if (ignored_unlinked_functions) {
                 ++*ignored_unlinked_functions;
             }
-            func_map.erase(func_name);
+            func_map.erase(native_func_name);
             printd(2, "AOT slot-reg: ignored unlinked native body '%s'\n", func_name);
             ptr = entry_end;
             continue;
@@ -7372,7 +8132,7 @@ static void registerAOTFunctionsFromSlotMaps(
 
         if (uvb && uvb->hasCachedFunction() && !is_init_func) {
             ++registered;
-            func_map.erase(func_name);
+            func_map.erase(native_func_name);
             printd(2, "AOT slot-reg: '%s' already registered (shared variant), skipping\n", func_name);
             ptr = entry_end;
             continue;
@@ -7385,8 +8145,8 @@ static void registerAOTFunctionsFromSlotMaps(
         std::string build_error;
         QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func,
             func_name, entry_end, shared_type_resolver, &build_error, debug_metadata,
-            slot_maps_start);
-        // Debug: trace init function context building
+            slot_maps_start, variant_class_ctx);
+        // Trace init-function context construction at high debug levels.
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
             printd(5, "  buildContextFromSlotMap('%s'): ctx=%p uvb=%p\n",
@@ -7396,7 +8156,7 @@ static void registerAOTFunctionsFromSlotMaps(
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
             // Remove from func_map so any registration gap is reported precisely.
-            func_map.erase(func_name);
+            func_map.erase(native_func_name);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
         } else if (ctx) {
             // Check if this is an init function (for constants/static vars)
@@ -7410,14 +8170,14 @@ static void registerAOTFunctionsFromSlotMaps(
                 info.name = func_name;
                 init_func_contexts->push_back(std::move(info));
                 ++registered;
-                func_map.erase(func_name);
+                func_map.erase(native_func_name);
                 printd(2, "AOT slot-reg: collected init function '%s' for execution\n", func_name);
             } else if (is_init_func) {
                 // Init function but no init_func_contexts — deferred to ns_init.
                 // Count as registered so the warning doesn't fire for these.
                 delete ctx;
                 ++registered;
-                func_map.erase(func_name);
+                func_map.erase(native_func_name);
                 printd(2, "AOT slot-reg: init function '%s' deferred to ns_init\n", func_name);
             } else {
                 // Toplevel or unresolved — handled separately
@@ -8522,7 +9282,7 @@ static void registerFallbackFunctionsOnMainVariants(
                                 }
                             }
                             var_sig.append(")");
-                            if (aotVariantSignatureMatches(mv, target_sig, &type_resolver)) {
+                            if (aotVariantSignatureMatches(mv, target_sig, &type_resolver, class_path)) {
                                 main_uvb = candidate;
                                 break;
                             }
@@ -11073,6 +11833,24 @@ static void executeInitFunctions(
     std::vector<std::string> last_error(descriptors.size());
     std::vector<std::string> last_desc(descriptors.size());
     std::vector<bool> last_error_pending(descriptors.size(), false);
+    std::vector<ConstantEntry*> initialized_constants;
+    auto remember_initialized_constant = [&initialized_constants](ConstantEntry* ce) {
+        if (ce) {
+            initialized_constants.push_back(ce);
+        }
+    };
+    auto materialize_initialized_constants = [&initialized_constants]() {
+        ExceptionSink mxs;
+        for (ConstantEntry* ce : initialized_constants) {
+            if (!ce) {
+                continue;
+            }
+            ce->materializeRuntimeRefs(&mxs);
+            if (mxs) {
+                mxs.clear();
+            }
+        }
+    };
     for (int pass = 0; pass < 2; ++pass) {
     const bool run_module_init = (pass == 1);
     // Between pass 0 (STATIC_VAR / NS_CONSTANT / CLASS_CONSTANT) and pass 1
@@ -11277,10 +12055,12 @@ static void executeInitFunctions(
                 // refSelf() each time because setRuntimeValue takes ownership.
                 if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
+                    remember_initialized_constant(target_ce);
                 }
                 if (shadow_ce && shadow_ce != target_ce
                         && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
+                    remember_initialized_constant(shadow_ce);
                 }
                 if (aotInitTraceEnabled() && xsink.isException()) {
                     QoreValue err_val = xsink.getExceptionErr();
@@ -11344,10 +12124,12 @@ static void executeInitFunctions(
                 // refSelf() each time because setRuntimeValue takes ownership.
                 if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
+                    remember_initialized_constant(target_ce);
                 }
                 if (shadow_ce && shadow_ce != target_ce
                         && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
+                    remember_initialized_constant(shadow_ce);
                 }
                 result.discard(&xsink);
                 ++executed;
@@ -11449,6 +12231,9 @@ static void executeInitFunctions(
                 break;
             }
         }
+    }
+    if (!run_module_init) {
+        materialize_initialized_constants();
     }
     // If no descriptor advanced this round, a real dep cycle or unresolvable
     // pending constant exists; stop retrying — the next round would do the

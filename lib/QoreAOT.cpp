@@ -78,6 +78,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/xxhash.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/CallReferenceCallNode.h"
@@ -190,6 +191,8 @@
 static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
 static thread_local bool aot_source_parse_active = false;
 static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
+static thread_local const std::unordered_set<std::string>* aot_preloaded_source_labels = nullptr;
+static thread_local bool aot_allow_preloaded_source_symbols = false;
 
 void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
     aot_dep_sink = sink;
@@ -209,6 +212,19 @@ const QoreAOTSourceSymbolManifest* qore_aot_set_source_symbol_manifest(
         const QoreAOTSourceSymbolManifest* manifest) {
     const QoreAOTSourceSymbolManifest* old = aot_source_symbol_manifest;
     aot_source_symbol_manifest = manifest;
+    return old;
+}
+
+static const std::unordered_set<std::string>* qore_aot_set_preloaded_source_labels(
+        const std::unordered_set<std::string>* labels) {
+    const std::unordered_set<std::string>* old = aot_preloaded_source_labels;
+    aot_preloaded_source_labels = labels;
+    return old;
+}
+
+bool qore_aot_set_allow_preloaded_source_symbols(bool allow) {
+    bool old = aot_allow_preloaded_source_symbols;
+    aot_allow_preloaded_source_symbols = allow;
     return old;
 }
 
@@ -258,6 +274,68 @@ static bool qore_aot_loc_is_symbol_provider(const QoreProgramLocation* loc,
     return rv;
 }
 
+static bool qore_aot_source_provider_is_preloaded(const std::unordered_set<std::string>& providers) {
+    if (!aot_preloaded_source_labels) {
+        return false;
+    }
+    for (const std::string& provider : providers) {
+        if (aot_preloaded_source_labels->count(provider)) {
+            return true;
+        }
+        char* rp = realpath(provider.c_str(), nullptr);
+        if (!rp) {
+            continue;
+        }
+        bool found = aot_preloaded_source_labels->count(rp) != 0;
+        free(rp);
+        if (found) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static const std::unordered_set<std::string>* qore_aot_find_source_symbol_providers(
+        const QoreAOTSourceSymbolMap& symbols, const std::string& path, QoreAOTSourceSymbolKind kind) {
+    auto i = symbols.find(path);
+    if (i != symbols.end()) {
+        return &i->second;
+    }
+
+    if (kind == QoreAOTSourceSymbolKind::Global) {
+        return nullptr;
+    }
+
+    size_t pos = path.rfind("::");
+    if (pos == std::string::npos) {
+        const std::unordered_set<std::string>* unique_providers = nullptr;
+        for (const auto& symbol : symbols) {
+            size_t symbol_pos = symbol.first.rfind("::");
+            const std::string& symbol_name = symbol_pos == std::string::npos
+                ? symbol.first : symbol.first.substr(symbol_pos + 2);
+            if (symbol_name != path) {
+                continue;
+            }
+            if (unique_providers) {
+                return nullptr;
+            }
+            unique_providers = &symbol.second;
+        }
+        return unique_providers;
+    }
+
+    if (kind != QoreAOTSourceSymbolKind::Class && kind != QoreAOTSourceSymbolKind::HashDecl
+            && kind != QoreAOTSourceSymbolKind::Function) {
+        return nullptr;
+    }
+
+    auto si = symbols.find(path.substr(pos + 2));
+    if (si == symbols.end() || si->second.size() != 1) {
+        return nullptr;
+    }
+    return &si->second;
+}
+
 bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
         const char* qore_path, QoreAOTSourceSymbolKind kind) {
     if (!aot_source_parse_active || !aot_source_symbol_manifest
@@ -271,11 +349,14 @@ bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc,
     }
 
     const QoreAOTSourceSymbolMap& symbols = qore_aot_source_symbol_map(kind);
-    auto i = symbols.find(path);
-    if (i == symbols.end()) {
+    const std::unordered_set<std::string>* providers = qore_aot_find_source_symbol_providers(symbols, path, kind);
+    if (!providers) {
         return false;
     }
-    return !qore_aot_loc_is_symbol_provider(loc, i->second);
+    if (aot_allow_preloaded_source_symbols && qore_aot_source_provider_is_preloaded(*providers)) {
+        return false;
+    }
+    return !qore_aot_loc_is_symbol_provider(loc, *providers);
 }
 
 void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
@@ -541,6 +622,7 @@ static std::string getLibqoreDir() {
 // compile sites (line ~1534, ~1840) can prepend the prefix to
 // `ir_func->name` before LLVM function lookup.
 static std::string aotSymbolPrefix(const char* compile_module);
+static std::string aotLLVMSymbolName(const char* compile_module, const std::string& logical_name);
 
 // Forward decl - implementation follows aotSymbolPrefix below.
 static bool isAOTCompilableMethodVariant(const QoreMethod* method,
@@ -2918,17 +3000,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
-                // LLVM symbol name = `_qaot_<mod>_` + variant_key.  The
-                // per-module prefix keeps the dynamic linker from
-                // interposing same-named symbols across `.qmod`s loaded
-                // with RTLD_GLOBAL (see `aotSymbolPrefix` for the full
-                // failure mode).  The namespace-qualified `variant_key`
-                // stays the AOT function-table entry's `name` field at
-                // line ~1729 below (`cf.name = variant_key;`) so the
-                // runtime's `registerAOTFunctionsFromSlotMaps`
-                // reconstruction via `getVariantKey(qualified_name,
-                // variant)` still matches.
-                ir_func->name = aotSymbolPrefix(compile_module) + variant_key;
+                // The LLVM symbol is sanitized for object/linker use; the
+                // namespace-qualified `variant_key` stays the AOT function
+                // table entry's `name` so runtime variant reconstruction via
+                // `getVariantKey(qualified_name, variant)` still matches.
+                ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
 
                 // Skip if another variant with the same LLVM function name was already compiled
                 llvm::Function* existing = module.getFunction(ir_func->name);
@@ -3237,13 +3313,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
-                    // Per-module prefix for method LLVM symbol names — see
-                    // the parallel function path above for the full rationale
-                    // (prevents cross-`.qmod` same-name symbol interposition
-                    // under RTLD_GLOBAL).  `cf.name = variant_key;` below
-                    // stays unqualified so the runtime slot-map register
-                    // path still matches.
-                    ir_func->name = aotSymbolPrefix(compile_module) + variant_key;
+                    // The LLVM symbol is sanitized for object/linker use; the
+                    // logical variant key remains in `cf.name` below for
+                    // runtime slot-map registration.
+                    ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
 
                     // Skip if another variant with the same LLVM function name was already compiled
                     llvm::Function* existing = module.getFunction(ir_func->name);
@@ -5692,6 +5765,12 @@ static std::string sanitizeCIdentifier(const std::string& name) {
     return out;
 }
 
+static std::string aotHex64(uint64_t value) {
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%016llx", static_cast<unsigned long long>(value));
+    return buf;
+}
+
 //! Per-module LLVM symbol name prefix so AOT-compiled same-named
 //! functions in different `.qmod`s don't collide under RTLD_GLOBAL.
 //! Keeps the AOT function-table entry's `name` field (`variant_key`)
@@ -5719,6 +5798,22 @@ static std::string aotSymbolPrefix(const char* compile_module) {
     // toolchain's symbol table.  The `_qaot_` marker is distinct
     // enough to survive nm/objdump searches for diagnostics.
     return std::string("_qaot_") + sanitizeCIdentifier(compile_module) + "_";
+}
+
+static std::string aotLLVMSymbolName(const char* compile_module, const std::string& logical_name) {
+    std::string rv = aotSymbolPrefix(compile_module);
+    std::string safe = sanitizeCIdentifier(logical_name);
+    constexpr size_t max_readable_tail = 160;
+    if (safe.size() > max_readable_tail) {
+        safe.resize(max_readable_tail);
+    }
+    rv += safe;
+    rv += "_h";
+    rv += aotHex64(XXH64(logical_name.data(), logical_name.size(), 0));
+    if (rv.empty() || (rv[0] >= '0' && rv[0] <= '9')) {
+        rv.insert(rv.begin(), '_');
+    }
+    return rv;
 }
 
 //! Returns true for user variants that should be compiled for this method.
@@ -8888,6 +8983,15 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         const QoreAOTSourceSymbolManifest* old;
     };
+    struct AOTPreloadedSourceGuard {
+        explicit AOTPreloadedSourceGuard(const std::unordered_set<std::string>* labels)
+                : old(qore_aot_set_preloaded_source_labels(labels)) {
+        }
+        ~AOTPreloadedSourceGuard() {
+            qore_aot_set_preloaded_source_labels(old);
+        }
+        const std::unordered_set<std::string>* old;
+    };
     const bool source_symbol_parse = source_symbols && !source_symbols->empty();
 
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
@@ -9074,6 +9178,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
+        AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
@@ -9097,6 +9202,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "failed to set parse context for sibling preload";
             return false;
         }
+        AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
+        AOTSourceSymbolGuard source_symbol_guard(source_symbols);
+        AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         std::string resolve_error;
         if (!sibling_mdes->resolveForSourceParse(resolve_error)) {
             error = "sibling .qo cross-resolution failed: " + resolve_error;
@@ -9108,6 +9216,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
+        AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -9124,6 +9233,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "failed to set parse context for sibling preload";
             return false;
         }
+        AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
+        AOTSourceSymbolGuard source_symbol_guard(source_symbols);
+        AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
         std::string resolve_error;
         if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
@@ -13813,13 +13925,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         } else {
             id.ref1 = call->getClassPath();
         }
-        id.ref2 = call->getName();
+        const AbstractQoreFunctionVariant* call_variant = call->getVariant();
+        id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
+            call_variant ? nullptr : &call->getParsedArgTypeInfo());
         id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());
-        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                id.ref2 += "\n";
-                id.ref2 += sig->getSignatureText();
-            }
+        if (const AbstractQoreFunctionVariant* v = call_variant) {
             if (method) {
                 id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), v);
             }
@@ -14630,9 +14740,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (cast_hd) {
+        if (cast_hd || hdc->isDynamicHashDeclCast()) {
             id.kind = AOTExprKind::CAST_HASHDECL;
-            id.ref1 = cast_hd->getNamespacePath();
+            id.ref1 = cast_hd ? cast_hd->getNamespacePath() : hdc->getDynamicHashDeclName();
             id.flags = hdc->isOrNothing() ? 1 : 0;
             return id;
         }

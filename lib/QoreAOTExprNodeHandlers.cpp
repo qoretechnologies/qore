@@ -442,6 +442,18 @@ static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     const QoreClass* qc = en_resolveClass(ctx.pgm, class_name);
     if (!qc) {
+        if (qore_aot_should_defer_source_symbol(&loc_builtin, class_name.c_str(), QoreAOTSourceSymbolKind::Class)) {
+            std::string scope_path(class_name);
+            scope_path += "::";
+            scope_path += method_name;
+            QoreParseListNode* args = pln.release();
+            StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin,
+                new NamedScope(strdup(scope_path.c_str())), args);
+            if (args) {
+                smcn->resolveParseArgs();
+            }
+            return QoreValue(smcn);
+        }
         printd(0, "AOT EXPR_TREE: cannot resolve class '%s' for static call '%s'\n",
             class_name.c_str(), method_name.c_str());
         ctx.failed = true;
@@ -1462,8 +1474,8 @@ static QoreValue read_node_EN_CAST(AOTExprNodeReadCtx& ctx) {
                 or_nothing != 0));
         }
         if (type_path == "hash") {
-            return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, operand,
-                or_nothing != 0));
+            return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin,
+                static_cast<const TypedHashDecl*>(nullptr), operand, or_nothing != 0));
         }
     }
     if (bt == NT_LIST) {
@@ -1481,6 +1493,15 @@ static QoreValue read_node_EN_CAST(AOTExprNodeReadCtx& ctx) {
     if (hd) {
         return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, hd, operand,
             or_nothing != 0));
+    }
+    if ((!strncmp(type_path.c_str(), "hash<", 5) || !strncmp(type_path.c_str(), "*hash<", 6))
+            && type_path.size() > (type_path[0] == '*' ? 7 : 6)) {
+        size_t start = type_path[0] == '*' ? 6 : 5;
+        size_t end = type_path.rfind('>');
+        if (end != std::string::npos && end > start) {
+            return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin,
+                type_path.substr(start, end - start).c_str(), operand, or_nothing != 0));
+        }
     }
     if (QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
         return QoreValue(new QoreScalarCastOperatorNode(&loc_builtin, ti, operand,

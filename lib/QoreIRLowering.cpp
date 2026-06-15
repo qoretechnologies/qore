@@ -9287,9 +9287,22 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         }
         // background Class::staticMethod(args)
         else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
-            if (smcn->getMethod()) {
+            std::string class_path = smcn->getClassPath();
+            if (smcn->getMethod() || !class_path.empty()) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(smcn->getParseArgs(), smcn->getArgs(), operands, error)) {
+                    if (!smcn->getMethod()) {
+                        std::string qualified_name = class_path;
+                        qualified_name += "::";
+                        qualified_name += smcn->getName();
+                        auto* inst = builder.createBackground(QoreIRBackgroundKind::StaticMethod,
+                            qualified_name, expr, operands, op->loc);
+                        if (!exception_stack.empty()) {
+                            inst->exception_target = exception_stack.back();
+                        }
+                        maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
+                        return inst->result;
+                    }
                     if (operands.empty()) {
                         operands.push_back(builder.createConstNothing(op->loc)->result);
                     }

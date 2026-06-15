@@ -57,7 +57,10 @@ class QoreIRFunction;
 class LocalVar;
 class Var;
 class UserVariantBase;
+class QoreFunction;
+class AbstractQoreFunctionVariant;
 class QoreParseListNode;
+struct QoreTypeParamInstantiation;
 class ExceptionSink;
 class RuntimeConstantRefNode;
 struct QoreProgramLocation;
@@ -82,6 +85,30 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
 
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
+
+//! Marker for method-ref payloads that carry deferred call argument type metadata.
+constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
+
+struct QoreAOTStaticMethodRef {
+    const char* method_name = nullptr;
+    const char* variant_class_path = nullptr;
+    const char* sig_text = nullptr;
+    const char* arg_type_sig = nullptr;
+    std::string method_name_storage;
+    std::string variant_class_storage;
+
+    QoreAOTStaticMethodRef(const char* encoded);
+};
+
+//! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
+std::string qore_aot_encode_static_method_ref(const char* method_name,
+    const AbstractQoreFunctionVariant* variant = nullptr, const type_vec_t* arg_types = nullptr);
+
+//! Resolves a static-call argument type signature and uses it to find a method variant.
+const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,
+    QoreFunction* func, const char* arg_type_sig, const qore_class_private* class_ctx,
+    const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_instantiation,
+    std::string& error);
 
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
@@ -895,6 +922,9 @@ public:
     //! Swap in a caller-owned cache (for cross-session sharing).
     //! The caller must keep the map alive for the resolver's lifetime.
     void setSharedCache(cache_t* shared) { cache_ptr = shared ? shared : &owned_cache; }
+
+    //! Returns the Program used for program-local type and class resolution.
+    QoreProgram* getProgram() const { return pgm; }
 
 private:
     const QoreTypeInfo* resolveBuiltin(const char* path);

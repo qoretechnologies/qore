@@ -1755,7 +1755,7 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
         bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
         std::string rv = or_nothing ? "*object<" : "object<";
-        rv += pti->getBaseClass() ? pti->getBaseClass()->getNamespacePath(true) : "";
+        rv += pti->getBaseClass() ? qore_aot_encode_class_ref(pti->getBaseClass()) : "";
         rv += "<";
         const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
         for (size_t i = 0; i < args.size(); ++i) {
@@ -1855,7 +1855,7 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         ? QoreTypeInfo::getUniqueReturnClass(ti)
         : (or_nothing ? QoreTypeInfo::getReturnClass(ti) : nullptr);
     if (qc) {
-        std::string class_path = qc->getNamespacePath(true);
+        std::string class_path = qore_aot_encode_class_ref(qc);
         if (!class_path.empty()) {
             return std::string(or_nothing ? "*object<" : "object<") + class_path + ">";
         }
@@ -1905,6 +1905,195 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
 
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow) {
     return getAOTSerializableTypePath(ti, no_narrow);
+}
+
+static std::string qore_aot_trim_signature_param(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return {};
+    }
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
+
+static bool qore_aot_split_type_signature(const char* sig, std::vector<std::string>& out, std::string& error) {
+    if (!sig || strlen(sig) < 2 || sig[0] != '(' || sig[strlen(sig) - 1] != ')') {
+        error = "invalid static-call argument type signature";
+        return false;
+    }
+
+    size_t len = strlen(sig);
+    if (len == 2) {
+        return true;
+    }
+
+    std::string cur;
+    int angle_depth = 0;
+    int paren_depth = 0;
+    for (size_t i = 1; i + 1 < len; ++i) {
+        char c = sig[i];
+        if (c == '<' && paren_depth == 0) {
+            ++angle_depth;
+        } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        }
+
+        if (c == ',' && angle_depth == 0 && paren_depth == 0) {
+            out.push_back(qore_aot_trim_signature_param(cur));
+            cur.clear();
+            continue;
+        }
+        cur.push_back(c);
+    }
+
+    out.push_back(qore_aot_trim_signature_param(cur));
+    return true;
+}
+
+QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_name(encoded) {
+    if (!encoded) {
+        return;
+    }
+
+    const char* first_sep = strchr(encoded, '\n');
+    if (!first_sep) {
+        return;
+    }
+
+    method_name_storage.assign(encoded, first_sep - encoded);
+    method_name = method_name_storage.c_str();
+
+    const char* payload = first_sep + 1;
+    size_t marker_len = strlen(QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER);
+    if (!strncmp(payload, QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER, marker_len)
+            && payload[marker_len] == '\n') {
+        arg_type_sig = payload + marker_len + 1;
+        return;
+    }
+
+    const char* second_sep = strrchr(payload, '\n');
+    if (!second_sep) {
+        sig_text = payload;
+        return;
+    }
+
+    variant_class_storage.assign(payload, second_sep - payload);
+    if (!variant_class_storage.empty()) {
+        variant_class_path = variant_class_storage.c_str();
+    }
+    sig_text = second_sep + 1;
+}
+
+static std::string qore_aot_encode_call_arg_type_signature(const type_vec_t& arg_types) {
+    std::string rv("(");
+    for (size_t i = 0, e = arg_types.size(); i < e; ++i) {
+        if (i) {
+            rv += ",";
+        }
+        std::string type_path = qore_get_aot_serializable_type_path(arg_types[i]);
+        rv += type_path.empty() ? "auto" : type_path;
+    }
+    rv += ")";
+    return rv;
+}
+
+std::string qore_aot_encode_static_method_ref(const char* method_name,
+        const AbstractQoreFunctionVariant* variant, const type_vec_t* arg_types) {
+    std::string rv(method_name ? method_name : "");
+    if (variant) {
+        if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature()) {
+            rv += "\n";
+            const QoreClass* variant_class = variant->getClass();
+            if (variant_class) {
+                rv += qore_aot_encode_class_ref(variant_class);
+            }
+            rv += "\n";
+            rv += sig->getSignatureText();
+        }
+        return rv;
+    }
+
+    if (arg_types && !arg_types->empty()) {
+        rv += "\n";
+        rv += QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER;
+        rv += "\n";
+        rv += qore_aot_encode_call_arg_type_signature(*arg_types);
+    }
+    return rv;
+}
+
+static bool qore_aot_type_signature_has_weak_arg_type(const type_vec_t& arg_types) {
+    for (const QoreTypeInfo* ti : arg_types) {
+        if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+            return true;
+        }
+    }
+    return false;
+}
+
+const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,
+        QoreFunction* func, const char* arg_type_sig, const qore_class_private* class_ctx,
+        const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_instantiation,
+        std::string& error) {
+    if (!func || !arg_type_sig || !*arg_type_sig) {
+        return nullptr;
+    }
+
+    std::vector<std::string> type_paths;
+    if (!qore_aot_split_type_signature(arg_type_sig, type_paths, error)) {
+        return nullptr;
+    }
+
+    QoreAOTTypeResolver resolver(pgm);
+    type_vec_t arg_types;
+    arg_types.reserve(type_paths.size());
+    for (const std::string& type_path : type_paths) {
+        std::string type_error;
+        const QoreTypeInfo* ti = resolver.resolve(type_path.empty() ? "auto" : type_path.c_str(), type_error);
+        if (!ti || !type_error.empty()) {
+            error = "cannot resolve static-call argument type '";
+            error += type_path;
+            error += "'";
+            if (!type_error.empty()) {
+                error += ": ";
+                error += type_error;
+            }
+            return nullptr;
+        }
+        arg_types.push_back(ti);
+    }
+
+    if (qore_aot_type_signature_has_weak_arg_type(arg_types)) {
+        error = "static-call argument type signature contains auto; runtime dispatch is required";
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = func->runtimeFindVariant(&xsink, arg_types, class_ctx,
+        receiver_type_info, type_param_instantiation);
+    if (xsink) {
+        xsink.clear();
+    }
+    if (variant) {
+        return variant;
+    }
+
+    // The serialized signature was captured from parse-time argument types.
+    // Runtime type-vector matching is intentionally stricter and can reject
+    // valid parse-time calls such as hashdecl values passed to optional
+    // hashdecl parameters.  Fall back to parse-equivalent matching without
+    // producing diagnostics.
+    QoreTypeParamInstantiation parse_type_param_instantiation;
+    variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
+        &parse_type_param_instantiation);
+    if (variant && type_param_instantiation) {
+        *type_param_instantiation = std::move(parse_type_param_instantiation);
+    }
+    return variant;
 }
 
 static bool extract_aot_type_args(const char* path, const char* type_name, bool& or_nothing,
@@ -4287,9 +4476,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
         const char* end = strrchr(start, '>');
         if (end && end > start) {
             std::string class_path(start, end - start);
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            // runtimeFindClass searches the namespace tree directly
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str());
+            const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, class_path.c_str());
             if (qc) {
                 return qc->getTypeInfo();
             }
@@ -4303,8 +4490,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
         const char* end = strrchr(start, '>');
         if (end && end > start) {
             std::string class_path(start, end - start);
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str());
+            const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, class_path.c_str());
             if (qc) {
                 return qc->getOrNothingTypeInfo();
             }
@@ -5820,7 +6006,14 @@ static bool aotAppendFunctionImportRecords(QoreProgram* pgm, std::vector<QoreAOT
             continue;
         }
 
-        std::string seen_key = rec.qore_path;
+        QoreAOTSymbolKind kind =
+            rec.kind == qore_program_private::source_parse_call_import_kind_t::Method
+                ? QoreAOTSymbolKind::METHOD
+                : QoreAOTSymbolKind::FUNCTION;
+
+        std::string seen_key = std::to_string(static_cast<unsigned>(kind));
+        seen_key += '\n';
+        seen_key += rec.qore_path;
         seen_key += '\n';
         seen_key += rec.source_file;
         if (!seen.insert(seen_key).second) {
@@ -5828,7 +6021,7 @@ static bool aotAppendFunctionImportRecords(QoreProgram* pgm, std::vector<QoreAOT
         }
 
         QoreAOTSymbolIndexRecord ir;
-        ir.kind = QoreAOTSymbolKind::FUNCTION;
+        ir.kind = kind;
         ir.dependency_class = QoreAOTDependencyClass::QORE_API;
         ir.qore_path = rec.qore_path;
         ir.consumer_source_file = rec.source_file;
@@ -8518,11 +8711,15 @@ bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreV
 //! Lower a closure variant to IR for serialization
 /** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
     @param variant the closure variant to lower
+    @param error_out optional detailed error destination
     @return heap-allocated IR function, or nullptr on failure (caller owns)
 */
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) {
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out) {
     StatementBlock* sb = const_cast<UserClosureVariant*>(variant)->getStatementBlock();
     if (!sb) {
+        if (error_out) {
+            *error_out = "closure has no statement block";
+        }
         return nullptr;
     }
 
@@ -8552,6 +8749,9 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
     std::string error;
     if (!lowering.lowerStatementBlock(sb, error)) {
         printd(2, "AOT: closure IR lowering failed: %s\n", error.c_str());
+        if (error_out) {
+            *error_out = "closure IR lowering failed: " + error;
+        }
         delete ir;
         return nullptr;
     }
@@ -8572,6 +8772,9 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
     std::string verify_error;
     if (!QoreIRVerifier::verify(*ir, verify_error)) {
         printd(2, "AOT: closure IR verification failed: %s\n", verify_error.c_str());
+        if (error_out) {
+            *error_out = "closure IR verification failed: " + verify_error;
+        }
         delete ir;
         return nullptr;
     }
@@ -8582,6 +8785,9 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
     std::string handler_error;
     if (lowering.compileAllHandlerIRs(handler_error) < 0) {
         printd(2, "AOT: closure handler IR compilation failed: %s\n", handler_error.c_str());
+        if (error_out) {
+            *error_out = "closure handler IR compilation failed: " + handler_error;
+        }
         delete ir;
         return nullptr;
     }
@@ -8936,7 +9142,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             std::string class_ref = call->getClassPath();
             writer.writeStringRef(class_ref.c_str());
         }
-        writer.writeStringRef(call->getName());
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
+        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
+            variant ? nullptr : &call->getParsedArgTypeInfo());
+        writer.writeStringRef(method_ref.c_str());
         if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
         }
@@ -9785,9 +9994,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreHashDeclCastOperatorNode: cast<StatInfo>(hash)
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
-        if (hd || hdc->getCastTypeInfo() == hashTypeInfo) {
+        if (hd || hdc->getCastTypeInfo() == hashTypeInfo || hdc->isDynamicHashDeclCast()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
-            writer.writeStringRef(hd ? hd->getNamespacePath().c_str() : "hash");
+            writer.writeStringRef(hd ? hd->getNamespacePath().c_str()
+                : (hdc->isDynamicHashDeclCast() ? hdc->getDynamicHashDeclName().c_str() : "hash"));
             writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             // Serialize the inner expression being cast
             return write_cast_inner(hdc->getExp());
@@ -9896,8 +10106,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
                 QoreIRFunction* owned_ir = nullptr;
                 if (!closure_ir) {
-                    owned_ir = ::lowerClosureForSerialization(variant);
+                    std::string closure_error;
+                    owned_ir = ::lowerClosureForSerialization(variant, &closure_error);
                     closure_ir = owned_ir;
+                    if (!closure_ir) {
+                        qoreAOTSetExprSerializationError("failed to lower closure for AOT serialization in "
+                            + qoreAOTDescribeExpr(expr) + ": "
+                            + (closure_error.empty() ? std::string("unknown error") : closure_error));
+                        return false;
+                    }
                 }
 
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
@@ -9909,55 +10126,51 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     return false;
                 }
 
-                if (closure_ir) {
-                    writer.writeU8(1);  // has_ir
-                    uint32_t size_pos = writer.position();
-                    writer.writeU32(0);  // placeholder
+                writer.writeU8(1);  // has_ir
+                uint32_t size_pos = writer.position();
+                writer.writeU32(0);  // placeholder
 
-                    // Expression trees inside serialized closure IR use the
-                    // same slot domain as the closure IR local slot table.
-                    // This keeps ParseReferenceNode lvalues and other embedded
-                    // VarRefNodes aligned with the LocalVar* objects resolved by
-                    // deserializeIRFunction().
-                    std::vector<AOTLocalSlotId> closure_locals;
-                    uint32_t max_slot = 0;
-                    bool has_slots = false;
+                // Expression trees inside serialized closure IR use the
+                // same slot domain as the closure IR local slot table.
+                // This keeps ParseReferenceNode lvalues and other embedded
+                // VarRefNodes aligned with the LocalVar* objects resolved by
+                // deserializeIRFunction().
+                std::vector<AOTLocalSlotId> closure_locals;
+                uint32_t max_slot = 0;
+                bool has_slots = false;
+                for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
+                    if (lv) {
+                        if (!has_slots || slot_id > max_slot) {
+                            max_slot = slot_id;
+                        }
+                        has_slots = true;
+                    }
+                }
+                if (has_slots) {
+                    closure_locals.resize(static_cast<size_t>(max_slot) + 1);
                     for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
                         if (lv) {
-                            if (!has_slots || slot_id > max_slot) {
-                                max_slot = slot_id;
-                            }
-                            has_slots = true;
+                            AOTLocalSlotId& slot = closure_locals[slot_id];
+                            slot.local_var_ptr = reinterpret_cast<const void*>(lv);
+                            slot.name = lv->getName() ? lv->getName() : "";
                         }
                     }
-                    if (has_slots) {
-                        closure_locals.resize(static_cast<size_t>(max_slot) + 1);
-                        for (const auto& [lv, slot_id] : closure_ir->local_var_slots) {
-                            if (lv) {
-                                AOTLocalSlotId& slot = closure_locals[slot_id];
-                                slot.local_var_ptr = reinterpret_cast<const void*>(lv);
-                                slot.name = lv->getName() ? lv->getName() : "";
-                            }
-                        }
-                    }
-
-                    auto writeExpr = [&closure_locals, &parent_globals, const_reverse_map](
-                            QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
-                        return classifyAndWriteExpr(w, e, closure_locals, parent_globals,
-                            const_reverse_map);
-                    };
-
-                    if (!::serializeIRFunction(writer, *closure_ir, writeExpr)) {
-                        qoreAOTSetExprSerializationError("failed to serialize closure IR for "
-                            + qoreAOTDescribeExpr(expr));
-                        delete owned_ir;
-                        return false;
-                    }
-                    uint32_t end_pos = writer.position();
-                    writer.patchU32(size_pos, end_pos - size_pos - 4);
-                } else {
-                    writer.writeU8(0);  // no IR
                 }
+
+                auto writeExpr = [&closure_locals, &parent_globals, const_reverse_map](
+                        QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
+                    return classifyAndWriteExpr(w, e, closure_locals, parent_globals,
+                        const_reverse_map);
+                };
+
+                if (!::serializeIRFunction(writer, *closure_ir, writeExpr)) {
+                    qoreAOTSetExprSerializationError("failed to serialize closure IR for "
+                        + qoreAOTDescribeExpr(expr));
+                    delete owned_ir;
+                    return false;
+                }
+                uint32_t end_pos = writer.position();
+                writer.patchU32(size_pos, end_pos - size_pos - 4);
                 delete owned_ir;
                 return true;
             }
@@ -14657,7 +14870,7 @@ static bool readAndSetupVariantSignature(
                 }
             }
             const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
-            if (!hd) {
+            if (!hd && (!hd_path || !*hd_path || !strcmp(hd_path, "hash"))) {
                 printd(0, "AOT deser: cannot resolve hashdecl '%s' for default value\n",
                     hd_path ? hd_path : "(null)");
                 inner.discard(nullptr);
@@ -14669,8 +14882,9 @@ static bool readAndSetupVariantSignature(
                 if (!inner.hasNode()) {
                     inner = QoreValue(new QoreHashNode(autoTypeInfo));
                 }
-                auto* nd = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner,
-                    or_nothing != 0);
+                auto* nd = hd
+                    ? new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0)
+                    : new QoreHashDeclCastOperatorNode(&loc_builtin, hd_path, inner, or_nothing != 0);
                 param_defaults[j] = QoreValue(nd);
             }
         }

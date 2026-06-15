@@ -672,9 +672,15 @@ public:
 
     std::vector<source_parse_type_import_t> source_parse_type_imports;
 
+    enum class source_parse_call_import_kind_t {
+        Function,
+        Method,
+    };
+
     struct source_parse_function_import_t {
         std::string source_file;
         std::string qore_path;
+        source_parse_call_import_kind_t kind = source_parse_call_import_kind_t::Function;
     };
 
     std::vector<source_parse_function_import_t> source_parse_function_imports;
@@ -2229,7 +2235,7 @@ public:
     }
 
     DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
-            source_parse_function_import_t& rec) {
+            source_parse_call_import_kind_t kind, source_parse_function_import_t& rec) {
         if (!loc || !qore_path || !*qore_path) {
             return false;
         }
@@ -2240,12 +2246,22 @@ public:
 
         rec.source_file = file;
         rec.qore_path = qore_path;
+        rec.kind = kind;
         return true;
     }
 
     DLLLOCAL void recordSourceParseFunctionImport(const QoreProgramLocation* loc, const char* qore_path) {
         source_parse_function_import_t rec;
-        if (buildSourceParseFunctionImportRecord(loc, qore_path, rec)) {
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Function, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL void recordSourceParseMethodImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Method, rec)) {
             source_parse_function_imports.push_back(std::move(rec));
         }
     }
@@ -2832,6 +2848,11 @@ public:
     DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
             const char* qore_path) {
         pgm->priv->recordSourceParseFunctionImport(loc, qore_path);
+    }
+
+    DLLLOCAL static void recordSourceParseMethodImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseMethodImport(loc, qore_path);
     }
 
     DLLLOCAL static const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords(

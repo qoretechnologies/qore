@@ -99,6 +99,8 @@ static_assert(QORE_IR_MAX_OPCODE == 383,
 
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
+extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
+        uint64_t* args, int nargs, ExceptionSink* xsink);
 
 static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
     return (obj && qore_closure_self_context(obj))
@@ -964,6 +966,17 @@ static std::pair<bool, QoreValue> runBackgroundMetadata(
             new QoreDotEvalOperatorNode(&loc_builtin, recv, new_m);
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
+        return {true, result};
+    }
+
+    if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
+        std::vector<uint64_t> args;
+        args.reserve(bg_inst->operands.size());
+        for (const QoreIRValue& operand : bg_inst->operands) {
+            args.push_back(toBits(getIRValue(values, operand)));
+        }
+        QoreValue result = fromBits(qore_rt_background_static_method_name_call_aot(
+            bg_inst->name.c_str(), args.empty() ? nullptr : args.data(), static_cast<int>(args.size()), xsink));
         return {true, result};
     }
 
@@ -11617,7 +11630,9 @@ lvalue_path_unary_done:
             case QoreIROpcode::CallStaticDirect: {
                 // Fast path: bypass AST for resolved static method calls with IR/JIT
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                if (static_inst->variant) {
+                const StaticMethodCallNode* static_call_expr = dynamic_cast<const StaticMethodCallNode*>(
+                    static_inst->expr.getInternalNode());
+                if (static_inst->variant && static_call_expr) {
                     int nargs = static_cast<int>(static_inst->operands.size());
                     if (hasLastUseCallArgSlots(values, static_inst->operands, 0,
                             value_use_counts)) {
@@ -11637,10 +11652,7 @@ lvalue_path_unary_done:
                             }
                             return returnAfterUnhandledException();
                         }
-                        const StaticMethodCallNode* call = dynamic_cast<const StaticMethodCallNode*>(
-                            static_inst->expr.getInternalNode());
-                        assert(call);
-                        StaticMethodCallNode clone(*call, arg_list);
+                        StaticMethodCallNode clone(*static_call_expr, arg_list);
                         QoreValue res = evalAndRef(&clone, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
@@ -11793,6 +11805,13 @@ lvalue_path_unary_done:
                         if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
+                            res = evalAndRef(&clone, xsink);
+                            used_operands = true;
+                        } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                                call_expr.getInternalNode())) {
+                            // AOT can load parser-equivalent namespace function fallbacks
+                            // from Class::name() syntax through CallStatic slots.
+                            FunctionCallNode clone(*call, arg_list);
                             res = evalAndRef(&clone, xsink);
                             used_operands = true;
                         }

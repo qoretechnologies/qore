@@ -573,6 +573,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             err = parse_args->initArgs(parse_context, argTypeInfo, args);
             arg_analysis = parse_context.analysis;
         }
+        parsed_arg_type_info = argTypeInfo;
         parse_args = nullptr;
 
     }
@@ -1394,8 +1395,7 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class for instantiation");
             return QoreValue();
         }
-        const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
-            xsink);
+        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
         if (!qc) {
             if (!*xsink) {
                 xsink->raiseException("AOT-PENDING-CLASS",
@@ -1627,7 +1627,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
                 if (defer_source_static_receiver) {
                     if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-                        qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
                     }
 
                     return parseArgs(parse_context, nullptr, nullptr);
@@ -1708,6 +1708,12 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
     if (!method) {
+        if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
+            xsink->raiseException("AOT-PENDING-FUNCTION",
+                "static method call '%s::%s()' is pending AOT source linking",
+                getClassPath().c_str(), getName());
+            return QoreValue();
+        }
         xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
             getClassPath().c_str(), getName());
         return QoreValue();
@@ -1721,7 +1727,7 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     }
     return variant
         ? qore_method_private::evalNormalVariant(*method, xsink, rc, nullptr,
-            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst)
+            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst, receiver_type_info)
         : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
             explicit_inst);
 }

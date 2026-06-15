@@ -3758,7 +3758,10 @@ static bool is_optional_qo_import(const QoreAOTSymbolIndexRecord& rec) {
 }
 
 static bool is_deferred_callable_qo_import(const QoreAOTSymbolIndexRecord& rec) {
-    return rec.kind == QoreAOTSymbolKind::FUNCTION
+    return (rec.kind == QoreAOTSymbolKind::FUNCTION
+            || rec.kind == QoreAOTSymbolKind::METHOD
+            || rec.kind == QoreAOTSymbolKind::STATIC_METHOD
+            || rec.kind == QoreAOTSymbolKind::CONSTRUCTOR)
         && rec.qore_path.find('(') == std::string::npos;
 }
 

@@ -197,6 +197,16 @@ QoreValue DeferredStaticClassMemberRefNode::evalImpl(bool& needs_deref, Exceptio
                 full_path.c_str(), found_ns)) {
             return ce->getReferencedValue();
         }
+
+        if (!class_path.empty()) {
+            found_ns = nullptr;
+            if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(*pp->RootNS, class_path.c_str(),
+                    found_ns)) {
+                if (const QoreEnumMember* member = ed->findMember(member_name.c_str())) {
+                    return QoreValue::makeEnum(member);
+                }
+            }
+        }
     }
 
     const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), class_path.c_str(), false);

@@ -36,6 +36,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 
 #include <cstdlib>
@@ -706,10 +707,10 @@ bool DeferredStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode
     return d && class_path == d->class_path && method_name == d->method_name;
 }
 
-StaticMethodCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(RuntimeConfig& rc,
+ResolvedCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(RuntimeConfig& rc,
         ExceptionSink* xsink) const {
     if (class_path.empty() || method_name.empty()) {
-        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve static method call reference '%s::%s()'",
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
             class_path.c_str(), method_name.c_str());
         return nullptr;
     }
@@ -717,34 +718,51 @@ StaticMethodCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(Ru
     QoreProgram* pgm = rc.getProgram() ? rc.getProgram() : getProgram();
     if (!pgm) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve static method call reference '%s::%s()': no program context",
+            "cannot resolve method call reference '%s::%s()': no program context",
             class_path.c_str(), method_name.c_str());
         return nullptr;
     }
 
-    const char* resolved_class_path = (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':')
-        ? class_path.c_str() + 2 : class_path.c_str();
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, resolved_class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(pgm, class_path.c_str(), false);
     if (!qc) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve class '%s' for static method call reference '%s()'",
+            "cannot resolve class '%s' for method call reference '%s()'",
             class_path.c_str(), method_name.c_str());
         return nullptr;
     }
 
-    const QoreMethod* method = qc->findStaticMethod(method_name.c_str());
+    ClassAccess access = Public;
+    const QoreMethod* method = qc->findStaticMethod(method_name.c_str(), access);
+    if (!method) {
+        method = qc->findMethod(method_name.c_str(), access);
+    }
     if (!method) {
         xsink->raiseException("CALL-REFERENCE-ERROR",
-            "cannot resolve static method call reference '%s::%s()'",
+            "cannot resolve method call reference '%s::%s()'",
             class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+    if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*qc)) {
+        xsink->raiseException("ILLEGAL-CALL-REFERENCE",
+            "cannot create a call reference to %s %s::%s() from outside the class",
+            privpub(access), class_path.c_str(), method_name.c_str());
         return nullptr;
     }
 
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
-    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+    if (method->isStatic()) {
+        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+    }
+
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    if (!obj) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot create instance method call reference '%s::%s()': no current object",
+            class_path.c_str(), method_name.c_str());
+        return nullptr;
+    }
+    return new RunTimeResolvedMethodReferenceNode(loc, obj, method, cls);
 }
 
 QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -760,7 +778,7 @@ QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, boo
 
 QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
-    StaticMethodCallReferenceNode* ref = resolve(rc, xsink);
+    ResolvedCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
     }
@@ -830,7 +848,7 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     }
     if (defer_source_static_receiver && !defer_source_function) {
         if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-            qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+            qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
         }
         val = new DeferredStaticMethodCallReferenceNode(loc, source_receiver_path.c_str(), scope->getIdentifier());
         deref();
@@ -849,7 +867,11 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         }
         if (qore_aot_source_parse_active() && scope->size() >= 2) {
             if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
-                qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                if (defer_source_function) {
+                    qore_program_private::recordSourceParseFunctionImport(pgm, loc, scope->ostr);
+                } else {
+                    qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                }
             }
             if (defer_source_function) {
                 val = new DeferredFunctionCallReferenceNode(loc, scope->ostr);

@@ -637,8 +637,7 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
             return qore_list_private::newComplexList(runtime_type_info, new_args, xsink);
 
         case VRN_DYNAMIC_OBJECT: {
-            const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
-                xsink);
+            const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
             if (!qc) {
                 if (!*xsink) {
                     xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",
@@ -715,8 +714,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
             break;
 
         case VRN_DYNAMIC_OBJECT: {
-            const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), dynamic_class_name.c_str(),
-                xsink);
+            const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
             if (!qc) {
                 if (!*xsink) {
                     xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",

@@ -3098,7 +3098,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //printd(5, "QoreFunction::runtimeFindVariant() pscore: %d score: %d score_len: %d np: %d v: %p\n", pscore,
             //    score, score_len, sig->numParams(), variant);
 
-            if (pscore > score || (pscore == score && (score_len == -1 || (sig->numParams() < (unsigned)score_len)))) {
+            if (pscore > score || (pscore == score
+                    && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))) {
                 score = pscore;
                 variant = *i;
                 if (type_param_inst) {
@@ -3680,7 +3681,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     if (omitted_defaultable == -1 || cb.omitted_defaultable < omitted_defaultable) {
                         better = true;
                     } else if (cb.omitted_defaultable == omitted_defaultable
-                            && (score_len == -1 || sig->numParams() < (unsigned)score_len)) {
+                            && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len))) {
                         better = true;
                     }
                 }
@@ -3884,6 +3885,221 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         if (type_param_inst) {
             *type_param_inst = std::move(best_type_param_inst);
         }
+    }
+
+    return variant;
+}
+
+const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
+        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst, const type_vec_t* explicit_type_args) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
+
+    int score_len = -1;
+    int score = -1;
+    int max_score = -1;
+    int pmatch = -1;
+    int nperfect = -1;
+    unsigned npv = 0;
+
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const AbstractQoreFunctionVariant* pvariant = nullptr;
+    QoreTypeParamInstantiation best_type_param_inst;
+    unsigned num_args = argTypeInfo.size();
+
+    QoreFunction* aqf = nullptr;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    QoreParseOptions po = parse_get_parse_options();
+    bool runtime_match = false;
+    bool has_possible_match = false;
+
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                continue;
+            }
+
+            AbstractFunctionSignature* sig = (*i)->getSignature();
+            int64 vflags = (*i)->getFlags();
+            bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+
+            bool uses_extra_args = (*i)->hasVarargs();
+
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst,
+                    explicit_type_args)) {
+                continue;
+            }
+
+            if (!num_args && !sig->numParams()) {
+                variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
+                break;
+            }
+
+            if ((int)(sig->numParams() * QTI_IDENT) >= score) {
+                int variant_pmatch = 0;
+                int pscore = 0;
+                int max_pscore = 0;
+                int variant_nperfect = 0;
+                bool variant_runtime_match = false;
+                bool variant_soft_match = false;
+                bool ok = true;
+                bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
+
+                for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+                    const QoreTypeInfo* t = needs_type_param_substitution
+                        ? qore_substitute_type_params_if_needed(sig->getParamTypeInfo(pi), receiver_type_info,
+                            &candidate_inst)
+                        : sig->getParamTypeInfo(pi);
+                    bool pos_has_arg = num_args && num_args > pi;
+                    const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
+                    if (pos_has_arg) {
+                        pos_has_arg = QoreTypeInfo::hasType(a);
+                    }
+
+                    qore_type_result_e rc = QTI_UNASSIGNED;
+                    qore_type_result_e max_rc = QTI_UNASSIGNED;
+                    if (QoreTypeInfo::hasType(t)) {
+                        if (sig->hasDefaultArg(pi)
+                                && (QoreTypeInfo::isType(a, NT_NOTHING)
+                                    || (QoreTypeInfo::isType(a, NT_NULL)
+                                        && qore_is_non_optional_soft_type(t)))) {
+                            rc = max_rc = QTI_IDENT;
+                        } else if (!QoreTypeInfo::hasType(a)) {
+                            if (pi < num_args) {
+                                variant_runtime_match = true;
+                                break;
+                            } else if (sig->hasDefaultArg(pi)) {
+                                rc = max_rc = QTI_IGNORE;
+                            } else {
+                                a = nothingTypeInfo;
+                            }
+                        }
+                    }
+
+                    if (rc == QTI_UNASSIGNED) {
+                        bool may_not_match = false;
+                        bool may_need_filter = false;
+                        rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                        if (may_not_match) {
+                            variant_soft_match = true;
+                            variant_runtime_match = true;
+                            if (rc == QTI_IDENT) {
+                                ++variant_nperfect;
+                            }
+                        } else if (rc == QTI_IDENT) {
+                            ++variant_nperfect;
+                        }
+                    }
+
+                    if (rc == QTI_NOT_EQUAL) {
+                        ok = false;
+                        break;
+                    }
+                    ++variant_pmatch;
+                    if (rc != QTI_IGNORE && pos_has_arg) {
+                        pscore += rc;
+                        if (max_rc == QTI_UNASSIGNED) {
+                            max_rc = rc;
+                        }
+                        max_pscore += max_rc;
+                    }
+                }
+
+                if (variant_runtime_match) {
+                    runtime_match = true;
+                    if (variant) {
+                        variant = nullptr;
+                    }
+                    break;
+                }
+
+                if (!ok) {
+                    continue;
+                }
+
+                if ((sig->numParams() < num_args) && !uses_extra_args && strict_args
+                        && check_extra_args(sig, argTypeInfo)) {
+                    continue;
+                }
+
+                if (!npv) {
+                    pvariant = variant;
+                } else {
+                    pvariant = nullptr;
+                }
+
+                ++npv;
+
+                if ((pscore > score && max_pscore >= max_score)
+                    || (pscore == score
+                        && (variant_nperfect > nperfect
+                            || (variant_nperfect == nperfect
+                                && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))))) {
+                    if (variant_pmatch < pmatch) {
+                        variant = nullptr;
+                        runtime_match = true;
+                        break;
+                    } else {
+                        pmatch = variant_pmatch;
+                        score = pscore;
+                        max_score = max_pscore;
+                        nperfect = variant_nperfect;
+                        score_len = sig->numParams();
+                        variant = *i;
+                        best_type_param_inst = candidate_inst;
+                        if (type_param_inst) {
+                            *type_param_inst = candidate_inst;
+                        }
+                    }
+                } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+                    if (variant_soft_match && variant) {
+                        has_possible_match = true;
+                    } else {
+                        variant = nullptr;
+                        pmatch = variant_pmatch;
+                        score_len = -1;
+                    }
+                }
+            }
+        }
+
+        if (runtime_match) {
+            assert(!variant);
+            break;
+        }
+        if (stop || variant) {
+            break;
+        }
+    }
+
+    assert(!(runtime_match && variant));
+
+    if (!variant && has_possible_match && !runtime_match) {
+        runtime_match = true;
+    }
+
+    if (!variant && pvariant) {
+        variant = pvariant;
+    }
+
+    if (variant && type_param_inst) {
+        *type_param_inst = best_type_param_inst;
     }
 
     return variant;
@@ -4119,7 +4335,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     || (pscore == score
                         && (variant_nperfect > nperfect
                             || (variant_nperfect == nperfect
-                                && (score_len == -1 || sig->numParams() < (unsigned)score_len))))) {
+                                && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))))) {
                     // if we could possibly match less than another variant
                     // then we have to match at runtime
                     printd(5, "QoreFunction::parseFindVariant() %s(%s) score better: pscore=%d score=%d max_pscore=%d "

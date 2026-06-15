@@ -102,7 +102,7 @@
 class UserClosureVariant;
 class UserSignature;
 class LVarSet;
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out = nullptr);
 bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
     const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals);
 void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,

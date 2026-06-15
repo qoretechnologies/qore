@@ -176,7 +176,7 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 private:
-    DLLLOCAL StaticMethodCallReferenceNode* resolve(RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL ResolvedCallReferenceNode* resolve(RuntimeConfig& rc, ExceptionSink* xsink) const;
 };
 
 //! a call reference to a user function resolved after AOT source linking

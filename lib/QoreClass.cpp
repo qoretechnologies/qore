@@ -57,10 +57,11 @@ AbstractQoreClassUserData::~AbstractQoreClassUserData() {
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, nullptr, nullptr, explicit_type_param_instantiation);
+        CT_UNUSED, false, nullptr, nullptr, receiver_type_info, explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
     return METHV_const(variant)->evalMethod(self, ceh, xsink);
@@ -6318,7 +6319,8 @@ void ConstructorMethodFunction::evalConstructor(const AbstractQoreFunctionVarian
         qore_class_private::get(thisclass));
     if (*xsink) {
         printd(5, "ConstructorMethodFunction::evalConstructor() %s variant=%p args=%p nargs=%d EXCEPTION in CEH\n",
-            thisclass.getName(), (void*)variant, (void*)args, args ? (int)args->size() : 0);
+            thisclass.getName(), static_cast<const void*>(variant), static_cast<const void*>(args),
+            args ? static_cast<int>(args->size()) : 0);
         return;
     }
 

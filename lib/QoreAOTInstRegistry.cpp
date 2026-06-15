@@ -168,7 +168,7 @@ struct InstRegistryMethodRef {
         method_name = method_name_storage.c_str();
 
         const char* payload = first_sep + 1;
-        const char* second_sep = strchr(payload, '\n');
+        const char* second_sep = strrchr(payload, '\n');
         if (!second_sep) {
             // Backward-compatible form: method_name + "\n" + signature.
             sig_text = payload;
@@ -283,7 +283,10 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         const QoreClass* qc = method ? method->getClass() : nullptr;
         std::string class_path = qc ? qc->getNamespacePath() : call->getClassPath();
         ctx.writer.writeStringRef(class_path.c_str());
-        ctx.writer.writeStringRef(call->getName() ? call->getName() : "");
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
+        std::string method_ref = qore_aot_encode_static_method_ref(call->getName(), variant,
+            variant ? nullptr : &call->getParsedArgTypeInfo());
+        ctx.writer.writeStringRef(method_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
             ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
         }
