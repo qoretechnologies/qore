@@ -52,13 +52,24 @@
 #include <QC_ClassConstant.h>
 #include <QC_Type.h>
 #include <QC_Namespace.h>
+#include <qore/intern/qore_aot_deps.h>
 
-QoreReflectionClass::QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm)
+QoreReflectionClass::QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm,
+        const QoreProgramLocation* loc)
         : AbstractReflectionObject(pgm) {
-    cls = pgm->findClass(name, xsink);
+    cls = qore_reflection_find_class(pgm, name, xsink, loc);
     if (!cls) {
         if (!*xsink) {
-            xsink->raiseException("UNKNOWN-CLASS", "Cannot resolve class '%s'", name);
+            if (qore_aot_source_parse_active()) {
+                std::string type_path = "object<";
+                type_path += name;
+                type_path += '>';
+                qore_aot_record_source_parse_type_import(pgm, loc, name, type_path.c_str(), false, false);
+                xsink->raiseException("AOT-PENDING-CLASS",
+                    "class '%s' is pending AOT source linking for reflection lookup", name);
+            } else {
+                xsink->raiseException("UNKNOWN-CLASS", "Cannot resolve class '%s'", name);
+            }
         }
         return;
     }

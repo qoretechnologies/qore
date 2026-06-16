@@ -42,6 +42,7 @@
 
 // dlopen() flags
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
+#define QORE_DLOPEN_NOW_FLAGS RTLD_NOW|RTLD_GLOBAL
 
 #ifdef HAVE_GLOB_H
 #include <glob.h>
@@ -2201,6 +2202,12 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     return setupUserModule(xsink, mi, qmd);
 }
 
+static qore_binary_module_desc_t get_binary_module_desc(void* ptr, const char* feature) {
+    QoreStringMaker sym("%s_qore_module_desc", feature);
+    sym.replaceAll("-", "_");
+    return (qore_binary_module_desc_t)dlsym(ptr, sym.c_str());
+}
+
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
         const char* feature, bool reexport, QoreProgram* mpgm, QoreProgram* path_pgm,
         unsigned load_opt, qore_binary_module_desc_t mod_desc) {
@@ -2232,9 +2239,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 
     if (!mod_desc) {
         // check for new-style module declaration; convert hyphens to underscores for valid C identifier
-        QoreStringMaker sym("%s_qore_module_desc", feature);
-        sym.replaceAll("-", "_");
-        mod_desc = reinterpret_cast<qore_binary_module_desc_t>(dlsym(ptr, sym.c_str()));
+        mod_desc = get_binary_module_desc(ptr, feature);
     }
 
     if (mod_desc) {
@@ -2251,12 +2256,47 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     return nullptr;
 }
 
+static int reopen_aot_binary_module_now(ExceptionSink& xsink, DLHelper& dlh, QoreModuleInfo& mod_info,
+        const char* path, const char* feature) {
+    // The initial dlopen must stay lazy so the module descriptor can be read before
+    // declared module dependencies are loaded. AOT qmods then run generated code from
+    // module init/ns_init, so reopen with RTLD_NOW after dependencies are available
+    // and before any generated module code can enter unresolved runtime helpers.
+    void* old_ptr = dlh.release();
+    assert(old_ptr);
+    dlclose(old_ptr);
+
+    void* ptr = dlopen(path, QORE_DLOPEN_NOW_FLAGS);
+    if (!ptr) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "error resolving symbols in qore "
+            "AOT module '%s': %s", path, dlerror());
+        return -1;
+    }
+    dlh.ptr = ptr;
+
+    qore_binary_module_desc_t mod_desc = get_binary_module_desc(ptr, feature);
+    if (!mod_desc) {
+        // construct a valid C identifier for the error message suggestion
+        QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
+        suggested_sym.replaceAll("-", "_");
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
+            "the API 2.0 module description function '%s'", path, suggested_sym.c_str());
+        return -1;
+    }
+
+    QoreModuleInfo reloaded_mod_info;
+    mod_desc(reloaded_mod_info);
+    mod_info = reloaded_mod_info;
+    return 0;
+}
+
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
         QoreModuleInfo& mod_info, const char* path, const char* feature, bool reexport,
         QoreProgram* mpgm, QoreProgram* path_pgm, unsigned load_opt) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // take info hash immediately, if any
     ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
+    mod_info.info = nullptr;
 
     // Save and restore the try-module count so that any parsing triggered by the
     // binary module's init function (e.g., AOT modules re-parsing embedded source)
@@ -2362,6 +2402,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
             }
         }
     }
+
+    if (dlh && mod_info.is_aot) {
+        if (reopen_aot_binary_module_now(xsink, *dlh, mod_info, path, feature)) {
+            return nullptr;
+        }
+        info = mod_info.info;
+        mod_info.info = nullptr;
+        name = mod_info.name.c_str();
+    }
+
     // see if a module with this name is already registered
     QoreAbstractModule* mi = findModuleUnlocked(name);
     if (mi) {

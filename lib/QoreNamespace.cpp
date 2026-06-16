@@ -39,11 +39,13 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/qore_aot_deps.h"
 
 // include files for default object classes
 #include "qore/intern/QC_Socket.h"
@@ -111,6 +113,29 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+
+namespace {
+class ParseCommitRuntimeInitFlagHelper {
+public:
+    ParseCommitRuntimeInitFlagHelper(QoreProgram* pgm)
+            : p(pgm ? qore_program_private::get(*pgm) : nullptr),
+            old(p ? p->parse_commit_runtime_init : false) {
+        if (p) {
+            p->parse_commit_runtime_init = true;
+        }
+    }
+
+    ~ParseCommitRuntimeInitFlagHelper() {
+        if (p) {
+            p->parse_commit_runtime_init = old;
+        }
+    }
+
+private:
+    qore_program_private* p;
+    bool old;
+};
+}
 
 DLLLOCAL QoreClass* initReadOnlyFileClass(QoreNamespace& ns);
 
@@ -1713,8 +1738,10 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
         }
     }
 
+    const bool defer_source_global = qore_aot_should_defer_source_symbol(loc, bword, QoreAOTSourceSymbolKind::Global);
+
     // try to resolve a global variable
-    if (abr) {
+    if (!defer_source_global && abr) {
         Var* v = parseFindGlobalVar(bword);
         if (v) {
             found = true;
@@ -1729,7 +1756,7 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
     qore_ns_private* nscx = parse_get_ns();
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() bword: %s nscx: %p ('%s' root: %d)\n", bword,
     //  nscx, nscx ? nscx->name.c_str() : "n/a", nscx ? nscx->root : false);
-    if (nscx) {
+    if (!defer_source_global && nscx) {
         rv = nscx->getConstantValue(bword, typeInfo, found);
         if (found) {
             //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() bword: %s nscx: %p (%s) got rv: %s\n",
@@ -1738,13 +1765,19 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
         }
     }
 
-    rv = parseFindOnlyConstantValueIntern(loc, bword, typeInfo, found);
-    if (found) {
-        return rv.refSelf();
+    if (!defer_source_global) {
+        rv = parseFindOnlyConstantValueIntern(loc, bword, typeInfo, found);
+        if (found) {
+            return rv.refSelf();
+        }
     }
 
     if (const char* hint = bareword_foreign_hint(bword)) {
         parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, hint);
+    } else if (abr && qore_aot_source_parse_active()) {
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc, "", bword);
     } else {
         // gather near-match candidates from the scopes that were just searched to suggest a likely fix
         QoreSuggestionList sl(bword);
@@ -1798,8 +1831,18 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     QoreValue rv{};
 
     bool abr = (bool)(parse_get_parse_options() & PO_ALLOW_BARE_REFS);
+    std::string source_class_path;
+    for (unsigned i = 0; i < (nscope.size() - 1); ++i) {
+        if (i) {
+            source_class_path += "::";
+        }
+        source_class_path += nscope[i];
+    }
+    std::string deferred_source_class_path = qore_aot_get_deferred_source_symbol_path(loc, source_class_path.c_str(),
+        QoreAOTSourceSymbolKind::Class);
+    const bool defer_source_class_member = !deferred_source_class_path.empty();
 
-    {
+    if (!defer_source_class_member) {
         // try to check in current namespace first
         qore_ns_private* nscx = parse_get_ns();
         printd(5, "qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(%s) ns: %p (%s)\n", nscope.ostr,
@@ -1818,7 +1861,7 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     }
 
     // iterate all namespaces with the initial name and look for the match
-    {
+    if (!defer_source_class_member) {
         NamespaceMapIterator nmi(nsmap, nscope[0]);
         while (nmi.next()) {
             printd(5, "qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(%s) ns: %p (%s)\n",
@@ -1833,7 +1876,7 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     }
 
     // now look for class constants if there is only a single namespace or class name in the beginning
-    if (nscope.size() == 2) {
+    if (!defer_source_class_member && nscope.size() == 2) {
         QoreClass* qc = parseFindClassIntern(nscope[0]);
         if (qc) {
             rv = parseResolveReferencedClassConstant(loc, qc, nscope.getIdentifier(), typeInfo, found);
@@ -1843,6 +1886,21 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
                 return rv;
             }
         }
+    }
+
+    if (qore_aot_source_parse_active() && nscope.size() == 1) {
+        const char* name = nscope.getIdentifier();
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc, "", name);
+    }
+
+    if (qore_aot_source_parse_active() && nscope.size() >= 2) {
+        typeInfo = autoTypeInfo;
+        found = true;
+        return new DeferredStaticClassMemberRefNode(loc,
+            defer_source_class_member ? deferred_source_class_path.c_str() : source_class_path.c_str(),
+            nscope.getIdentifier());
     }
 
     // raise parse exception
@@ -3143,6 +3201,7 @@ void qore_ns_private::parseCommitRuntimeInit(ExceptionSink* xsink) {
         return;
     }
     parseCommitRuntimeInitDone = true;
+    ParseCommitRuntimeInitFlagHelper pcrih(getProgram());
 
     classList.parseCommitRuntimeInit(xsink);
     constant.parseCommitRuntimeInit();

@@ -33,6 +33,7 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
@@ -52,9 +53,11 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <tuple>
 #include <vector>
 #include <getopt.h>
 #include <sys/stat.h>
+#include <utime.h>
 #include <unistd.h>
 #include <zlib.h>
 
@@ -103,6 +106,12 @@ static int64_t file_size(const std::string& path) {
         return st.st_size;
     }
     return -1;
+}
+
+//! True if a path is suitable as a Make depfile prerequisite.
+static bool depfile_dependency_exists(const std::string& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
 static const char* source_mode_suffix(bool include_source) {
@@ -319,6 +328,13 @@ static bool has_qo_extension(const char* path) {
     return has_extension(path, ".qo");
 }
 
+static bool qcc_check_cancel(const char* operation) {
+    // qcc deliberately performs manifest-current checks before qore_init() so
+    // no-op builds can skip without starting the Qore runtime.  The normal
+    // qore_check_cancel() path needs initialized thread-local Qore state.
+    return q_libqore_initalized() && qore_check_cancel(nullptr, operation);
+}
+
 // Write a Make-format dependency file at `path`.
 // Target (LHS) is `output`; deps are `source` plus, when `context` is
 // non-null, every `.qm`/`.qc`/`.ql` under it — the set the parser actually
@@ -327,7 +343,8 @@ static bool has_qo_extension(const char* path) {
 // file edits in split-module dirs retrigger the affected per-file `.qo`.
 // Only spaces and backslashes in paths are escaped — Make handles both.
 static bool write_depfile(const char* path, const std::string& output,
-                          const std::string& source, const char* context) {
+                          const std::string& source, const char* context,
+                          const std::vector<std::string>* extra_deps = nullptr) {
     // Canonicalize so the relative vs absolute spelling of the same file
     // (e.g. primary passed by qcc as realpath + same file re-emerging
     // from an opendir(context) scan with a relative prefix) dedupes
@@ -347,7 +364,10 @@ static bool write_depfile(const char* path, const std::string& output,
 
     std::vector<std::string> deps;
     if (!source.empty()) {
-        deps.push_back(canon(source));
+        std::string full = canon(source);
+        if (depfile_dependency_exists(full)) {
+            deps.push_back(std::move(full));
+        }
     }
 
     if (context) {
@@ -358,7 +378,15 @@ static bool write_depfile(const char* path, const std::string& output,
             return false;
         }
         struct dirent* ent;
+        size_t dep_i = 0;
         while ((ent = readdir(d)) != nullptr) {
+            if (dep_i && !(dep_i % 100)
+                    && qcc_check_cancel("qcc depfile context scan")) {
+                fprintf(stderr, "error: operation cancelled during qcc depfile context scan\n");
+                closedir(d);
+                return false;
+            }
+            ++dep_i;
             size_t len = strlen(ent->d_name);
             bool keep = false;
             if (len > 3) {
@@ -371,12 +399,35 @@ static bool write_depfile(const char* path, const std::string& output,
                 continue;
             }
             std::string full = canon(std::string(context) + "/" + ent->d_name);
-            if (std::find(deps.begin(), deps.end(), full) == deps.end()) {
+            if (depfile_dependency_exists(full)
+                    && std::find(deps.begin(), deps.end(), full) == deps.end()) {
                 deps.emplace_back(std::move(full));
             }
         }
         closedir(d);
         std::sort(deps.begin(), deps.end());
+    }
+
+    // merge any extra dependency files (e.g. the .qmod files of modules loaded
+    // for a compiled module's %requires closure), canonicalized and deduped
+    if (extra_deps) {
+        for (size_t i = 0; i < extra_deps->size(); ++i) {
+            if (i && !(i % 100)
+                    && qcc_check_cancel("qcc depfile extra dependency scan")) {
+                fprintf(stderr,
+                    "error: operation cancelled during qcc depfile extra dependency scan\n");
+                return false;
+            }
+            const std::string& d = (*extra_deps)[i];
+            if (d.empty()) {
+                continue;
+            }
+            std::string full = canon(d);
+            if (depfile_dependency_exists(full)
+                    && std::find(deps.begin(), deps.end(), full) == deps.end()) {
+                deps.emplace_back(std::move(full));
+            }
+        }
     }
 
     FILE* f = fopen(path, "w");
@@ -401,6 +452,61 @@ static bool write_depfile(const char* path, const std::string& output,
     fprintf(f, "%s:", escape(output).c_str());
     for (const auto& dep : deps) {
         fprintf(f, " \\\n    %s", escape(dep).c_str());
+    }
+    fputc('\n', f);
+    fclose(f);
+    return true;
+}
+
+// Write a Make-style depfile from an explicit, already-canonicalized
+// dependency list (used by script `-c -L` mode, where compileScriptFile
+// reports the exact set of source files it parsed — the target plus its
+// `%include` closure — so the build rebuilds the `.qo` when any of them
+// changes).
+static bool write_depfile_list(const char* path, const std::string& output,
+                               const std::vector<std::string>& deps) {
+    FILE* f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "error: --depfile: cannot open '%s' for writing: %s\n",
+            path, strerror(errno));
+        return false;
+    }
+    auto escape = [](const std::string& s) {
+        std::string out;
+        out.reserve(s.size());
+        for (char c : s) {
+            if (c == ' ' || c == '\\') {
+                out += '\\';
+            }
+            out += c;
+        }
+        return out;
+    };
+    auto canon = [](const std::string& s) -> std::string {
+        if (s.empty()) {
+            return s;
+        }
+        char* r = realpath(s.c_str(), nullptr);
+        if (!r) {
+            return s;
+        }
+        std::string out = r;
+        free(r);
+        return out;
+    };
+    fprintf(f, "%s:", escape(output).c_str());
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("qcc depfile emission")) {
+            fclose(f);
+            fprintf(stderr, "error: operation cancelled during qcc depfile emission\n");
+            return false;
+        }
+        const std::string& dep = deps[i];
+        std::string full = canon(dep);
+        if (!depfile_dependency_exists(full)) {
+            continue;
+        }
+        fprintf(f, " \\\n    %s", escape(full).c_str());
     }
     fputc('\n', f);
     fclose(f);
@@ -474,6 +580,14 @@ static std::vector<std::string> parse_option_flags;
 // with an `init_SYMBOL_qo(QoreProgram*)` registration entry.  It is linked
 // alongside the per-file `.qo` objects produced by batch script compilation.
 static const char* script_aggregate_symbol = nullptr;
+static bool script_aggregate_native_registers = false;
+// --link-qo emits an object-driven aggregate register object from existing
+// script-context `.qo` inputs, without reparsing the original sources.
+static bool link_qo = false;
+static bool strict_call_relocations = false;
+static bool allow_unresolved_qo_imports = false;
+static const char* link_aggregate_symbol = nullptr;
+static const char* qolink_map_path = nullptr;
 // --from-objects signals aggregator mode: the
 // positional inputs are per-file `.qo` objects (produced by
 // `qcc -c --context=DIR <file>`) that get linked together plus a
@@ -575,6 +689,68 @@ static bool big_fn_threshold_cli_explicit = false;
 // affected `.qo`.  GCC's `-MMD -MF <path>` pair maps onto this
 // single long option.
 static const char* depfile_path = nullptr;
+// --depfile-target=FILE overrides the Make depfile target.  This is useful
+// when build systems track a stamp output while the generated artifact is a
+// byproduct.
+static const char* depfile_target_path = nullptr;
+// --depfile-qo-input-content-stamps rewrites `.qo` entries in explicit depfile
+// input lists to the corresponding qcc content stamp.  This lets build systems
+// depend on semantic object changes while still passing the real `.qo` files to
+// qcc for linking and manifest verification.
+static bool depfile_qo_input_content_stamps = false;
+// --depfile-dir=DIR emits one Make-format depfile per generated `.qo`
+// in batch `-c --output-dir=DIR` mode.  Each depfile basename matches
+// the generated object basename with `.d` appended.
+static const char* depfile_dir = nullptr;
+// --write-index-json=FILE writes the same build-consumable symbol index JSON as
+// --dump-index-json, but as a sidecar next to a generated artifact.
+static const char* write_index_json_path = nullptr;
+// --write-manifest=FILE writes a deterministic content manifest for generated
+// artifacts.  --skip-if-manifest-current uses the same manifest content to
+// decide whether qcc can skip a compile/link command without touching outputs.
+static const char* write_manifest_path = nullptr;
+static bool skip_if_manifest_current = false;
+// --write-status-json=FILE writes deterministic build-result metadata for build
+// system diagnostics.  --success-stamp=FILE is touched on every successful
+// command, including manifest-current skips.  --content-stamp=FILE is created on
+// first successful output verification, then touched only when the generated
+// output's bytes differ from the previous output.
+static const char* write_status_json_path = nullptr;
+static const char* success_stamp_path = nullptr;
+static const char* content_stamp_path = nullptr;
+// Extra content dependencies that affect the generated artifact but are not
+// necessarily visible to qcc as positional inputs (build context files, generated
+// stubs, external tool configuration, etc.).
+static std::vector<std::string> manifest_inputs;
+// In script `-c -L DIR` mode qcc normally records every preloaded `.qo` from
+// `DIR` in the manifest.  Some build systems provide a larger transitive
+// preload closure for parse-time declaration loading, while only a smaller
+// direct `.qo` set should invalidate the target.  This flag lets such callers
+// provide the exact manifest dependencies with --manifest-input.
+static bool manifest_skip_qo_library_inputs = false;
+// Build-group source-symbol manifest used by script `-c -L DIR` compiles to
+// defer local project symbols instead of binding same-name loaded module/stub
+// declarations.
+static const char* source_symbol_manifest_path = nullptr;
+
+static std::vector<std::string> qcc_depfile_explicit_inputs(
+        const std::vector<std::string>& deps) {
+    if (!depfile_qo_input_content_stamps) {
+        return deps;
+    }
+
+    std::vector<std::string> rv;
+    rv.reserve(deps.size());
+    for (const std::string& dep : deps) {
+        if (has_qo_extension(dep.c_str())) {
+            rv.push_back(dep + ".content.stamp");
+        } else {
+            rv.push_back(dep);
+        }
+    }
+    return rv;
+}
+
 // Preserve temporary .qo/glue files generated by one-shot multi-source
 // executable mode.  Off by default so failed builds do not leave artifacts
 // unless explicitly requested for diagnostics.
@@ -585,6 +761,10 @@ static bool save_temps = false;
 // multi-source executable mode.  Defaults to "main" — hosts that use a
 // different convention override via `-e <fn>`.
 static const char* entry_fn = "main";
+
+static std::string qcc_depfile_target(const std::string& output) {
+    return depfile_target_path ? std::string(depfile_target_path) : output;
+}
 
 static void print_usage(const char* prog) {
     printf("Qore Code Compiler (qcc) v%s\n", QCC_VERSION);
@@ -644,13 +824,79 @@ static void print_usage(const char* prog) {
            "                         plus, in `--context=DIR` mode, all sibling .qm/.qc/.ql).\n"
            "                         Equivalent to GCC's `-MMD -MF FILE`.  Intended for\n"
            "                         cmake's `add_custom_command(... DEPFILE ...)` so\n"
-           "                         incremental builds retrigger on sibling-file edits.\n");
+           "                         incremental builds retrigger on sibling-file edits.\n"
+           "                         With --link-qo and --script-aggregate, lists the\n"
+           "                         aggregate object's direct input files.\n");
+    printf("      --depfile-target=FILE\n"
+           "                         Override the Make depfile target written before the\n"
+           "                         colon.  Requires --depfile=FILE and is intended\n"
+           "                         for stamp-output custom commands whose generated\n"
+           "                         artifact is a byproduct.\n");
+    printf("      --depfile-qo-input-content-stamps\n"
+           "                         In explicit depfile input lists, record each .qo\n"
+           "                         dependency as .qo.content.stamp.  Intended for\n"
+           "                         qo-link build rules that already depend on qcc\n"
+           "                         content stamps to avoid mtime-only relinks.\n");
+    printf("      --depfile-dir=DIR  Batch `-c --output-dir` mode only: emit one\n"
+           "                         Make-format dependency file per generated `.qo` into\n"
+           "                         DIR.  Each depfile is named `<object>.qo.d`.\n");
+    printf("      --write-index-json=FILE\n"
+           "                         Write build-consumable AOT symbol-index JSON for\n"
+           "                         the generated artifact to FILE\n");
+    printf("      --write-manifest=FILE\n"
+           "                         Write a deterministic content manifest for the\n"
+           "                         generated artifact to FILE\n");
+    printf("      --manifest-input=FILE\n"
+           "                         Add FILE as an extra manifest dependency; may repeat\n");
+    printf("      --manifest-skip-qo-library-inputs\n"
+           "                         Do not auto-record .qo files found through -L\n"
+           "                         preload dirs in the manifest; use --manifest-input\n"
+           "                         for the exact content dependencies instead\n");
+    printf("      --source-symbol-manifest=FILE\n"
+           "                         Script -c mode: defer build-group source symbols\n"
+           "                         listed in FILE instead of binding same-name loaded\n"
+           "                         module or stub declarations\n");
+    printf("      --skip-if-manifest-current\n"
+           "                         If --write-manifest matches existing output/input\n"
+           "                         content, exit successfully without rebuilding\n");
+    printf("      --write-status-json=FILE\n"
+           "                         Write deterministic build-result JSON to FILE\n");
+    printf("      --success-stamp=FILE\n"
+           "                         Touch FILE after a successful compile/link or\n"
+           "                         manifest-current skip\n");
+    printf("      --content-stamp=FILE\n"
+           "                         Create FILE after successful output verification;\n"
+           "                         after that, touch it only when output bytes change\n");
     printf("      --save-temps       Keep temporary .qo and glue files generated by\n"
            "                         one-shot multi-source executable mode\n");
     printf("      --script-aggregate=SYM\n"
            "                         Emit one metadata-only script aggregate .qo\n"
            "                         exposing init_SYM_qo(); link it with the\n"
            "                         per-file .qo objects from batch script mode\n");
+    printf("      --script-aggregate-native-registers\n"
+           "                         With --script-aggregate, emit calls to linked\n"
+           "                         per-file *_script_native_register() entries so\n"
+           "                         native bodies are bound from per-file slot maps\n");
+    printf("      --link-qo          Link existing script-context .qo objects into\n"
+           "                         one aggregate register object without reparsing\n"
+           "                         original sources; requires -o and\n"
+           "                         --aggregate-symbol=SYM\n");
+    printf("      --aggregate-symbol=SYM\n"
+           "                         Aggregate symbol tail for --link-qo; emits\n"
+           "                         init_SYM_qo(QoreProgram*)\n");
+    printf("      --qolink-map=FILE  Write --link-qo map JSON to FILE (default:\n"
+           "                         <output>.qolink.json)\n");
+    printf("      --strict-call-relocations\n"
+           "                         With --link-qo, fail if any call relocation is\n"
+           "                         unresolved, ambiguous, or hash-mismatched.\n"
+           "                         Useful for complete closed-world test links;\n"
+           "                         production links can keep optional runtime fallback.\n");
+    printf("      --allow-unresolved-imports\n"
+           "                         With --link-qo, permit required symbol imports to\n"
+           "                         remain unresolved in this aggregate and record them\n"
+           "                         in the link map. Intended only for intermediate\n"
+           "                         partial aggregates that are checked later by a\n"
+           "                         complete strict link.\n");
     printf("      --from-objects     Aggregate mode: positional args are per-file .qo\n"
            "                         inputs; requires -m and --context=DIR; produces a\n"
            "                         standard .qmod by linking the .qo's + fresh glue\n");
@@ -751,6 +997,25 @@ static struct option long_options[] = {
     {"save-temps",        no_argument,       nullptr, 0x108},
     {"aot-metadata-compression", required_argument, nullptr, 0x109},
     {"script-aggregate",  required_argument, nullptr, 0x10a},
+    {"depfile-dir",       required_argument, nullptr, 0x10b},
+    {"dump-index-json",   no_argument,       nullptr, 0x10c},
+    {"link-qo",           no_argument,       nullptr, 0x10d},
+    {"aggregate-symbol",  required_argument, nullptr, 0x10e},
+    {"qolink-map",        required_argument, nullptr, 0x10f},
+    {"strict-call-relocations", no_argument, nullptr, 0x110},
+    {"script-aggregate-native-registers", no_argument, nullptr, 0x111},
+    {"allow-unresolved-imports", no_argument, nullptr, 0x112},
+    {"write-index-json",  required_argument, nullptr, 0x113},
+    {"write-manifest",    required_argument, nullptr, 0x114},
+    {"skip-if-manifest-current", no_argument, nullptr, 0x115},
+    {"manifest-input",    required_argument, nullptr, 0x116},
+    {"write-status-json", required_argument, nullptr, 0x117},
+    {"success-stamp",     required_argument, nullptr, 0x118},
+    {"content-stamp",     required_argument, nullptr, 0x119},
+    {"manifest-skip-qo-library-inputs", no_argument, nullptr, 0x11a},
+    {"depfile-target",    required_argument, nullptr, 0x11b},
+    {"depfile-qo-input-content-stamps", no_argument, nullptr, 0x11c},
+    {"source-symbol-manifest", required_argument, nullptr, 0x11d},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -834,6 +1099,12 @@ static int parse_options_cmdline(int argc, char** argv) {
             case 0x102:  // --depfile
                 depfile_path = optarg;
                 break;
+            case 0x11b:  // --depfile-target
+                depfile_target_path = optarg;
+                break;
+            case 0x10b:  // --depfile-dir
+                depfile_dir = optarg;
+                break;
             case 0x103:  // --define
                 parse_defines.emplace_back(optarg);
                 break;
@@ -865,6 +1136,55 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x10a:  // --script-aggregate
                 script_aggregate_symbol = optarg;
+                break;
+            case 0x10d:  // --link-qo
+                link_qo = true;
+                break;
+            case 0x10e:  // --aggregate-symbol
+                link_aggregate_symbol = optarg;
+                break;
+            case 0x10f:  // --qolink-map
+                qolink_map_path = optarg;
+                break;
+            case 0x110:  // --strict-call-relocations
+                strict_call_relocations = true;
+                break;
+            case 0x111:  // --script-aggregate-native-registers
+                script_aggregate_native_registers = true;
+                break;
+            case 0x112:  // --allow-unresolved-imports
+                allow_unresolved_qo_imports = true;
+                break;
+            case 0x113:  // --write-index-json
+                write_index_json_path = optarg;
+                break;
+            case 0x114:  // --write-manifest
+                write_manifest_path = optarg;
+                break;
+            case 0x115:  // --skip-if-manifest-current
+                skip_if_manifest_current = true;
+                break;
+            case 0x116:  // --manifest-input
+                manifest_inputs.emplace_back(optarg);
+                break;
+            case 0x117:  // --write-status-json
+                write_status_json_path = optarg;
+                break;
+            case 0x118:  // --success-stamp
+                success_stamp_path = optarg;
+                break;
+            case 0x119:  // --content-stamp
+                content_stamp_path = optarg;
+                break;
+            case 0x11a:  // --manifest-skip-qo-library-inputs
+                manifest_skip_qo_library_inputs = true;
+                break;
+            case 0x11c:  // --depfile-qo-input-content-stamps
+                depfile_qo_input_content_stamps = true;
+                break;
+            case 0x11d:  // --source-symbol-manifest
+                source_symbol_manifest_path = optarg;
+                manifest_inputs.emplace_back(optarg);
                 break;
             case 'F':
                 from_objects = true;
@@ -1085,6 +1405,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::PLUGIN_IMPORTS: return "PLUGIN_IMPORTS";
         case QoreAOTSectionType::PLUGIN_HELPER_REFS: return "PLUGIN_HELPER_REFS";
         case QoreAOTSectionType::SYMBOL_INDEX: return "SYMBOL_INDEX";
+        case QoreAOTSectionType::CALL_RELOCATIONS: return "CALL_RELOCATIONS";
     }
     return "UNKNOWN";
 }
@@ -1379,6 +1700,8 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_CONST_METHODS, "const-methods"},
         {QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS, "call-closure-ref-args"},
         {QORE_AOT_FEAT_TYPED_PHI, "typed-phi"},
+        {QORE_AOT_FEAT_CALL_RELOCATIONS, "call-relocations"},
+        {QORE_AOT_FEAT_HASH_DEREF_TYPEINFO, "hash-deref-typeinfo"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1658,17 +1981,26 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::STATIC_METHOD_CALL: {
             uint8_t nargs = 0;
-            return dump_skip_string_ref(reader, p, end)
-                && dump_skip_string_ref(reader, p, end)
-                && dump_read_u8(p, end, nargs)
-                && skip_n_args(nargs);
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            return dump_read_u8(p, end, nargs) && skip_n_args(nargs);
         }
 
         case AOTExprKind::NEW_OBJECT:
         case AOTExprKind::SCOPED_NEW_OBJECT:
             if (slot_form) {
-                return dump_skip_string_ref(reader, p, end)
-                    && dump_skip_string_ref(reader, p, end);
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+                return (reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) == 0
+                    || dump_skip_string_ref(reader, p, end);
             } else {
                 uint8_t nargs = 0;
                 return dump_skip_string_ref(reader, p, end)
@@ -1822,12 +2154,37 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::HASHDECL_NEW:
-        case AOTExprKind::COMPLEX_HASH_NEW:
-        case AOTExprKind::COMPLEX_LIST_NEW: {
+        case AOTExprKind::COMPLEX_HASH_NEW: {
             uint8_t nargs = 0;
             return dump_skip_string_ref(reader, p, end)
                 && dump_read_u8(p, end, nargs)
                 && skip_n_args(nargs);
+        }
+
+        case AOTExprKind::COMPLEX_LIST_NEW: {
+            uint8_t has_arg = 0;
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_read_u8(p, end, has_arg)) {
+                return false;
+            }
+            return !has_arg
+                || dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+        }
+
+        case AOTExprKind::COMPLEX_BUFFER_NEW: {
+            uint8_t has_arg = 0;
+            if (!dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) != 0
+                    && !dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            if (!dump_read_u8(p, end, has_arg)) {
+                return false;
+            }
+            return !has_arg
+                || dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
         }
 
         case AOTExprKind::HASH_LITERAL: {
@@ -1866,6 +2223,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         }
 
         case AOTExprKind::HASH_DEREF:
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2066,6 +2427,8 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         const size_t local_slot_extra_bytes =
             (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0 ? 7 : 3;
+        const size_t global_slot_extra_bytes =
+            (reader.getHeader().feature_flags & QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS) != 0 ? 2 : 1;
         bool malformed = false;
         for (uint16_t i = 0; i < num_locals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)
@@ -2075,7 +2438,7 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
         for (uint16_t i = 0; i < num_globals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_string_ref(reader, p, entry_end)
-                || !dump_skip_bytes(p, entry_end, 1);
+                || !dump_skip_bytes(p, entry_end, global_slot_extra_bytes);
         }
         for (uint16_t i = 0; i < num_exprs && !malformed; ++i) {
             uint8_t kind = 0;
@@ -2213,6 +2576,8 @@ static const char* dump_aot_value_tag_name(uint8_t tag) {
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: return "NEW_COMPLEX_DEFAULT";
         case QoreAOTValueTag::VT_EXPR_TREE: return "EXPR_TREE";
         case QoreAOTValueTag::VT_EXPR_NATIVE: return "EXPR_NATIVE";
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: return "PLUGIN_INSTANCE";
+        case QoreAOTValueTag::VT_CHAR: return "CHAR";
     }
     return "UNKNOWN";
 }
@@ -2293,6 +2658,9 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_BOOL:
             return dump_skip_bytes(p, end, 1) || fail("truncated bool value");
 
+        case QoreAOTValueTag::VT_CHAR:
+            return dump_skip_bytes(p, end, 4) || fail("truncated char value");
+
         case QoreAOTValueTag::VT_INT64:
         case QoreAOTValueTag::VT_FLOAT64:
             return dump_skip_bytes(p, end, 8) || fail("truncated 64-bit value");
@@ -2317,6 +2685,16 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
             uint32_t size = 0;
             return (dump_read_u32(p, end, size) && dump_skip_bytes(p, end, size))
                 || fail("truncated binary value");
+        }
+
+        case QoreAOTValueTag::VT_PLUGIN_INSTANCE: {
+            if (!dump_skip_bytes(p, end, 8)) {
+                return fail("truncated plugin value instance header");
+            }
+            uint32_t payload_size = 0;
+            return (dump_read_u32(p, end, payload_size)
+                    && dump_skip_bytes(p, end, payload_size))
+                || fail("truncated plugin value payload");
         }
 
         case QoreAOTValueTag::VT_LIST: {
@@ -2359,7 +2737,11 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
 
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
             uint32_t nargs = 0;
-            return dump_skip_bytes(p, end, 1)
+            uint8_t kind = 0;
+            return dump_read_u8(p, end, kind)
+                && (kind != 3
+                    || (reader.getHeader().feature_flags & QORE_AOT_FEAT_COMPLEX_BUFFER_INIT_KIND) == 0
+                    || dump_skip_bytes(p, end, 1))
                 && dump_skip_len_string_ref(reader, p, end)
                 && dump_read_u32(p, end, nargs)
                 && dump_skip_serialized_value_args(reader, p, end, nargs, summary, error);
@@ -2456,6 +2838,12 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
     const bool has_class_type_params =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
+    const bool has_type_param_defaults =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+    const bool has_type_param_bounds =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
+    const bool has_class_param_bases =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2482,13 +2870,29 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t j = 0; j < type_param_count; ++j) {
-                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT class type parameter dump")) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT class type parameter dump")) {
                     error = "operation cancelled during AOT class type parameter dump";
                     return false;
                 }
                 if (!dump_skip_string_ref(reader, p, end)) {
                     error = "truncated class type parameter entry";
                     return false;
+                }
+                if (has_type_param_defaults) {
+                    uint8_t has_default = 0;
+                    if (!dump_read_u8(p, end, has_default)
+                            || (has_default && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated class type parameter default";
+                        return false;
+                    }
+                }
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = 0;
+                    if (!dump_read_u8(p, end, has_bound)
+                            || (has_bound && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated class type parameter bound";
+                        return false;
+                    }
                 }
             }
         }
@@ -2501,6 +2905,10 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         for (uint32_t j = 0; j < num_bases; ++j) {
             if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 2)) {
                 error = "truncated class base entry";
+                return false;
+            }
+            if (has_class_param_bases && !dump_skip_string_ref(reader, p, end)) {
+                error = "truncated class parameterized base type";
                 return false;
             }
         }
@@ -2586,6 +2994,12 @@ static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
         error = "truncated HASHDECLS header";
         return false;
     }
+    const bool has_hashdecl_type_params =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0;
+    const bool has_type_param_defaults =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+    const bool has_type_param_bounds =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2598,6 +3012,40 @@ static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
             return false;
         }
         std::string owner = dump_owner_name(path, name);
+
+        if (has_hashdecl_type_params) {
+            uint16_t type_param_count = 0;
+            if (!dump_read_u16(p, end, type_param_count)) {
+                error = "truncated hashdecl type parameter count";
+                return false;
+            }
+            for (uint16_t j = 0; j < type_param_count; ++j) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT hashdecl type parameter dump")) {
+                    error = "operation cancelled during AOT hashdecl type parameter dump";
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    error = "truncated hashdecl type parameter entry";
+                    return false;
+                }
+                if (has_type_param_defaults) {
+                    uint8_t has_default = 0;
+                    if (!dump_read_u8(p, end, has_default)
+                            || (has_default && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated hashdecl type parameter default";
+                        return false;
+                    }
+                }
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = 0;
+                    if (!dump_read_u8(p, end, has_bound)
+                            || (has_bound && !dump_skip_string_ref(reader, p, end))) {
+                        error = "truncated hashdecl type parameter bound";
+                        return false;
+                    }
+                }
+            }
+        }
 
         uint32_t num_members = 0;
         if (!dump_read_u32(p, end, num_members)) {
@@ -2765,7 +3213,7 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
 }
 
 static bool dump_aot_symbol_index_check_cancel(size_t ordinal, const char* operation) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         printf("      cancelled during %s\n", operation ? operation : "AOT symbol-index dump");
         return false;
     }
@@ -2824,6 +3272,59 @@ static void print_aot_symbol_index(const QoreAOTBinaryReader& reader) {
             return;
         }
         print_aot_symbol_record(index.native[i], true);
+    }
+}
+
+static bool dump_aot_call_relocations_check_cancel(size_t ordinal, const char* operation) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
+        printf("      cancelled during %s\n", operation ? operation : "AOT call-relocation dump");
+        return false;
+    }
+    return true;
+}
+
+static void print_aot_call_relocations(const QoreAOTBinaryReader& reader) {
+    QoreAOTCallRelocations relocs;
+    std::string error;
+    if (!readCallRelocations(reader, relocs, error)) {
+        printf("    call relocations: error: %s\n", error.c_str());
+        return;
+    }
+
+    if (!relocs.version) {
+        printf("    call relocations: not present\n");
+        return;
+    }
+
+    printf("    call relocations: version=%u records=%zu\n",
+        relocs.version, relocs.records.size());
+    if (!dump_symbols) {
+        return;
+    }
+
+    for (size_t i = 0; i < relocs.records.size(); ++i) {
+        if (!dump_aot_call_relocations_check_cancel(i, "AOT call-relocation dump")) {
+            return;
+        }
+        const QoreAOTCallRelocationRecord& rec = relocs.records[i];
+        printf("      %-13s %s func=%s slot=%u strict=%s",
+            qoreAOTCallRelocationTargetKindName(rec.target_kind),
+            rec.qore_path.empty() ? "(none)" : rec.qore_path.c_str(),
+            rec.function_name.c_str(), rec.expr_slot,
+            rec.strictness == QoreAOTCallRelocationStrictness::REQUIRED ? "required" : "optional");
+        if (!rec.native_symbol.empty()) {
+            printf(" native=%s", rec.native_symbol.c_str());
+        }
+        if (!rec.signature_hash.empty()) {
+            printf(" sig=%s", rec.signature_hash.c_str());
+        }
+        if (!rec.declaration_hash.empty()) {
+            printf(" decl=%s", rec.declaration_hash.c_str());
+        }
+        if (!rec.fallback_descriptor.empty()) {
+            printf(" fallback=%s", rec.fallback_descriptor.c_str());
+        }
+        printf("\n");
     }
 }
 
@@ -2916,6 +3417,7 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     print_aot_slot_map_summary(reader);
     print_aot_default_summary(reader);
     print_aot_symbol_index(reader);
+    print_aot_call_relocations(reader);
 
     printf("    sections: %u\n", reader.getSectionCount());
     if (dump_sections) {
@@ -2938,6 +3440,8 @@ struct AOTDumpSymbolRow {
     char kind = '?';
     bool qore_relevant = false;
 };
+
+static std::string hex64_string(uint64_t value);
 
 static std::vector<AOTDumpSymbolRow> collect_symbol_rows(const llvm::object::ObjectFile& obj) {
     std::map<std::string, uint64_t> size_by_key;
@@ -2965,6 +3469,1209 @@ static std::vector<AOTDumpSymbolRow> collect_symbol_rows(const llvm::object::Obj
         rows.push_back(std::move(row));
     }
     return rows;
+}
+
+static bool string_has_suffix(const std::string& s, const char* suffix) {
+    size_t n = s.size();
+    size_t e = std::strlen(suffix);
+    return n >= e && std::strcmp(s.c_str() + n - e, suffix) == 0;
+}
+
+static bool string_has_prefix(const std::string& s, const char* prefix) {
+    size_t n = std::strlen(prefix);
+    return s.size() >= n && std::memcmp(s.data(), prefix, n) == 0;
+}
+
+struct QOLinkInputInfo {
+    std::string path;
+    std::string object_hash;
+    uint64_t object_size = 0;
+    std::vector<std::string> source_text;
+    std::string register_symbol;
+    QoreAOTSymbolIndex index;
+    std::vector<std::string> dependencies;
+    std::vector<std::string> module_path_prepend;
+    std::vector<std::string> module_path_append;
+    std::vector<AOTModuleCommand> module_commands;
+    std::vector<std::string> native_symbols;
+    std::vector<QoreAOTCallRelocationRecord> call_relocations;
+};
+
+struct QOLinkIssue {
+    std::string consumer;
+    std::string path;
+    std::string dependency_class;
+    std::string expected;
+    std::vector<std::string> providers;
+};
+
+struct QOLinkCallRelocation {
+    std::string consumer;
+    std::string function_name;
+    uint32_t expr_slot = UINT32_MAX;
+    std::string target_kind;
+    std::string path;
+    std::string path_scope;
+    std::string dependency_class;
+    std::string resolution;
+    std::string reason;
+    std::string expected;
+    std::string provider_kind;
+    std::string provider_source;
+    std::string native_symbol;
+    std::string fallback_descriptor;
+    std::vector<std::string> providers;
+};
+
+struct QOLinkPlan {
+    std::vector<std::string> provided_qore_symbols;
+    std::vector<std::string> native_symbols;
+    std::vector<std::string> external_dependencies;
+    std::vector<std::string> module_path_prepend;
+    std::vector<std::string> module_path_append;
+    std::vector<AOTModuleCommand> module_commands;
+    std::vector<QOLinkIssue> resolved_imports;
+    std::vector<QOLinkIssue> unresolved_imports;
+    std::vector<QOLinkIssue> ambiguous_imports;
+    std::vector<QOLinkIssue> hash_mismatches;
+    std::vector<QOLinkCallRelocation> resolved_call_relocations;
+    std::vector<QOLinkCallRelocation> unresolved_call_relocations;
+    std::vector<QOLinkCallRelocation> ambiguous_call_relocations;
+    std::vector<QOLinkCallRelocation> call_relocation_hash_mismatches;
+};
+
+using QOLinkProviderMap = std::map<std::string, std::vector<const QoreAOTSymbolIndexRecord*>>;
+
+struct QOLinkProviderIndex {
+    QOLinkProviderMap exact;
+    QOLinkProviderMap raw_suffix;
+    QOLinkProviderMap callable_suffix;
+    QOLinkProviderMap callable_base_exact;
+};
+
+static void add_unique_string(std::vector<std::string>& out, std::set<std::string>& seen,
+        const std::string& value) {
+    if (!value.empty() && seen.insert(value).second) {
+        out.push_back(value);
+    }
+}
+
+static bool qo_link_check_cancel(size_t ordinal, const char* operation, std::string& error) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
+        error = "operation cancelled during ";
+        error += operation ? operation : "AOT qo-link processing";
+        return false;
+    }
+    return true;
+}
+
+static bool collect_qo_register_symbols(const llvm::object::ObjectFile& obj,
+        std::vector<std::string>& register_symbols, std::string& error) {
+    size_t i = 0;
+    for (const llvm::object::SymbolRef& sym : obj.symbols()) {
+        if (!qo_link_check_cancel(i++, "AOT qo-link register-symbol scan", error)) {
+            return false;
+        }
+        auto name_or = sym.getName();
+        if (!name_or) {
+            llvm::consumeError(name_or.takeError());
+            continue;
+        }
+        std::string name = name_or->str();
+        if (string_has_suffix(name, "_script_register") && symbol_kind(sym) != 'U') {
+            register_symbols.push_back(std::move(name));
+        }
+    }
+    return true;
+}
+
+static bool collect_qo_link_input(const char* path, QOLinkInputInfo& input,
+        std::string& error) {
+    input = QOLinkInputInfo();
+    input.path = path;
+
+    std::string contents;
+    if (!read_file(path, contents)) {
+        error = std::string("cannot read input object: ") + path;
+        return false;
+    }
+    input.object_size = contents.size();
+    input.object_hash = "xxh64:" + hex64_string(XXH64(contents.data(), contents.size(), 0));
+
+    auto binary_or = llvm::object::createBinary(path);
+    if (!binary_or) {
+        error = "cannot read object file '" + std::string(path) + "': "
+            + llvm::toString(binary_or.takeError());
+        return false;
+    }
+    llvm::object::Binary* binary = binary_or->getBinary();
+    auto* obj = llvm::dyn_cast<llvm::object::ObjectFile>(binary);
+    if (!obj) {
+        error = "input is not a relocatable object file: " + std::string(path);
+        return false;
+    }
+
+    std::vector<std::string> register_symbols;
+    if (!collect_qo_register_symbols(*obj, register_symbols, error)) {
+        return false;
+    }
+    if (register_symbols.empty()) {
+        error = "input has no exported *_script_register symbol: " + std::string(path);
+        return false;
+    }
+    if (register_symbols.size() > 1) {
+        error = "input has multiple exported *_script_register symbols: " + std::string(path);
+        for (const std::string& sym : register_symbols) {
+            error += " " + sym;
+        }
+        return false;
+    }
+    input.register_symbol = register_symbols.front();
+
+    std::vector<AOTDumpMetadataBlob> blobs;
+    std::set<std::string> seen_blobs;
+    extract_aot_metadata_from_object(*obj, blobs, seen_blobs);
+    scan_aot_metadata_blobs(contents, blobs, seen_blobs);
+    if (blobs.empty()) {
+        error = "input has no AOT metadata blob: " + std::string(path);
+        return false;
+    }
+
+    bool have_index = false;
+    std::set<std::string> source_seen;
+    std::set<std::string> dep_seen;
+    std::set<std::string> prepend_seen;
+    std::set<std::string> append_seen;
+    std::set<std::string> module_cmd_seen;
+    std::set<std::string> native_seen;
+    input.index.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+
+    for (size_t i = 0; i < blobs.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link metadata scan")) {
+            error = "operation cancelled during AOT qo-link metadata scan";
+            return false;
+        }
+        QoreAOTBinaryReader reader;
+        std::string read_error;
+        if (!reader.open(blobs[i].bytes.data(), static_cast<uint32_t>(blobs[i].bytes.size()), read_error)) {
+            error = "invalid AOT metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        const char* label = reader.getLabel();
+        if (label && *label) {
+            add_unique_string(input.source_text, source_seen, label);
+        }
+
+        QoreAOTSymbolIndex index;
+        if (!readSymbolIndex(reader, index, read_error)) {
+            error = "invalid SYMBOL_INDEX in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        if (index.version) {
+            have_index = true;
+            input.index.context.insert(input.index.context.end(), index.context.begin(), index.context.end());
+            input.index.defined.insert(input.index.defined.end(), index.defined.begin(), index.defined.end());
+            input.index.imported.insert(input.index.imported.end(), index.imported.begin(), index.imported.end());
+            input.index.native.insert(input.index.native.end(), index.native.begin(), index.native.end());
+            for (size_t j = 0; j < index.native.size(); ++j) {
+                if (!qo_link_check_cancel(j, "AOT qo-link native symbol collection", error)) {
+                    return false;
+                }
+                const QoreAOTSymbolIndexRecord& rec = index.native[j];
+                if (!rec.native_symbol.empty()) {
+                    add_unique_string(input.native_symbols, native_seen, rec.native_symbol);
+                }
+            }
+        }
+
+        QoreAOTCallRelocations relocs;
+        if (!readCallRelocations(reader, relocs, read_error)) {
+            error = "invalid CALL_RELOCATIONS in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        if (relocs.version) {
+            input.call_relocations.insert(input.call_relocations.end(),
+                relocs.records.begin(), relocs.records.end());
+        }
+
+        std::vector<std::string> deps;
+        if (!readDependencies(reader, deps, read_error)) {
+            error = "invalid dependency metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < deps.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link dependency collection", error)) {
+                return false;
+            }
+            add_unique_string(input.dependencies, dep_seen, deps[j]);
+        }
+
+        std::vector<std::string> prepended;
+        std::vector<std::string> appended;
+        if (!readModulePathLists(reader, prepended, appended, read_error)) {
+            error = "invalid module path metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < prepended.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path collection", error)) {
+                return false;
+            }
+            add_unique_string(input.module_path_prepend, prepend_seen, prepended[j]);
+        }
+        for (size_t j = 0; j < appended.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path collection", error)) {
+                return false;
+            }
+            add_unique_string(input.module_path_append, append_seen, appended[j]);
+        }
+
+        std::vector<AOTModuleCommand> commands;
+        if (!readModuleCommands(reader, commands, read_error)) {
+            error = "invalid module command metadata in '" + std::string(path) + "': " + read_error;
+            return false;
+        }
+        for (size_t j = 0; j < commands.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module command collection", error)) {
+                return false;
+            }
+            const AOTModuleCommand& cmd = commands[j];
+            std::string key = cmd.module + "\n" + cmd.command;
+            if (module_cmd_seen.insert(key).second) {
+                input.module_commands.push_back(cmd);
+            }
+        }
+    }
+
+    if (!have_index) {
+        error = "input has no SYMBOL_INDEX section: " + std::string(path);
+        return false;
+    }
+    return true;
+}
+
+static bool is_owned_qore_provider(const QoreAOTSymbolIndexRecord& rec) {
+    return !rec.qore_path.empty() && !rec.source_file.empty();
+}
+
+static bool is_optional_qo_import(const QoreAOTSymbolIndexRecord& rec) {
+    return (rec.flags & QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT) != 0;
+}
+
+static bool is_deferred_callable_qo_import(const QoreAOTSymbolIndexRecord& rec) {
+    return (rec.kind == QoreAOTSymbolKind::FUNCTION
+            || rec.kind == QoreAOTSymbolKind::METHOD
+            || rec.kind == QoreAOTSymbolKind::STATIC_METHOD
+            || rec.kind == QoreAOTSymbolKind::CONSTRUCTOR)
+        && rec.qore_path.find('(') == std::string::npos;
+}
+
+static std::string qo_link_strip_leading_colons(const std::string& path) {
+    return string_has_prefix(path, "::") ? path.substr(2) : path;
+}
+
+static void qo_link_add_provider_candidate(QOLinkProviderMap& providers,
+        const std::string& key, const QoreAOTSymbolIndexRecord* rec) {
+    if (!key.empty()) {
+        providers[key].push_back(rec);
+    }
+}
+
+static void qo_link_add_suffix_keys(std::set<std::string>& keys, const std::string& path) {
+    if (path.empty()) {
+        return;
+    }
+    keys.insert(path);
+    size_t pos = 0;
+    while ((pos = path.find("::", pos)) != std::string::npos) {
+        pos += 2;
+        if (pos < path.size()) {
+            keys.insert(path.substr(pos));
+        }
+    }
+}
+
+static void qo_link_index_raw_suffix(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    std::set<std::string> keys;
+    if (sig_pos == std::string::npos) {
+        qo_link_add_suffix_keys(keys, stripped);
+    } else {
+        std::string base = stripped.substr(0, sig_pos);
+        std::string signature = stripped.substr(sig_pos);
+        std::set<std::string> base_keys;
+        qo_link_add_suffix_keys(base_keys, base);
+        for (const std::string& key : base_keys) {
+            keys.insert(key + signature);
+        }
+    }
+    for (const std::string& key : keys) {
+        qo_link_add_provider_candidate(providers, key, rec);
+    }
+}
+
+static void qo_link_index_callable_suffix(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    if (sig_pos == std::string::npos) {
+        qo_link_index_raw_suffix(providers, rec);
+        return;
+    }
+
+    std::string base = stripped.substr(0, sig_pos);
+    std::string signature = stripped.substr(sig_pos);
+    std::set<std::string> base_keys;
+    qo_link_add_suffix_keys(base_keys, base);
+    for (const std::string& key : base_keys) {
+        qo_link_add_provider_candidate(providers, key, rec);
+        qo_link_add_provider_candidate(providers, key + signature, rec);
+    }
+}
+
+static void qo_link_index_callable_base_exact(QOLinkProviderMap& providers,
+        const QoreAOTSymbolIndexRecord* rec) {
+    std::string stripped = qo_link_strip_leading_colons(rec->qore_path);
+    size_t sig_pos = stripped.find('(');
+    if (sig_pos != std::string::npos) {
+        qo_link_add_provider_candidate(providers, stripped.substr(0, sig_pos), rec);
+    }
+}
+
+static void qo_link_index_provider(QOLinkProviderIndex& index,
+        const QoreAOTSymbolIndexRecord* rec) {
+    index.exact[rec->qore_path].push_back(rec);
+    qo_link_index_raw_suffix(index.raw_suffix, rec);
+    qo_link_index_callable_suffix(index.callable_suffix, rec);
+    qo_link_index_callable_base_exact(index.callable_base_exact, rec);
+}
+
+static void find_deferred_callable_qo_providers(
+        const QOLinkProviderMap& providers,
+        const std::string& name, std::vector<const QoreAOTSymbolIndexRecord*>& matches) {
+    std::string key = qo_link_strip_leading_colons(name);
+    auto it = providers.find(key);
+    if (it != providers.end()) {
+        matches.insert(matches.end(), it->second.begin(), it->second.end());
+    }
+}
+
+static std::string qo_link_callable_base_path(const std::string& path) {
+    size_t pos = path.find('(');
+    return pos == std::string::npos ? path : path.substr(0, pos);
+}
+
+static bool qo_link_path_is_bare_name(const std::string& path) {
+    std::string stripped = qo_link_strip_leading_colons(path);
+    return !stripped.empty()
+        && stripped.find("::") == std::string::npos
+        && stripped.find('(') == std::string::npos;
+}
+
+static size_t qo_link_path_namespace_depth(const std::string& path) {
+    std::string stripped = qo_link_strip_leading_colons(qo_link_callable_base_path(path));
+    size_t depth = 0;
+    size_t pos = 0;
+    while ((pos = stripped.find("::", pos)) != std::string::npos) {
+        ++depth;
+        pos += 2;
+    }
+    return depth;
+}
+
+static void find_suffix_qo_providers(
+        const QOLinkProviderIndex& providers,
+        const std::string& name, bool callable, std::vector<const QoreAOTSymbolIndexRecord*>& matches) {
+    std::string key = qo_link_strip_leading_colons(name);
+    const QOLinkProviderMap& suffix_providers = callable ? providers.callable_suffix : providers.raw_suffix;
+    auto it = suffix_providers.find(key);
+    if (it != suffix_providers.end()) {
+        matches.insert(matches.end(), it->second.begin(), it->second.end());
+    }
+}
+
+static bool qo_link_call_relocation_is_callable(const QoreAOTCallRelocationRecord& rec) {
+    return rec.target_kind == QoreAOTCallRelocationTargetKind::FUNCTION
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::METHOD
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::STATIC_METHOD
+        || rec.target_kind == QoreAOTCallRelocationTargetKind::CONSTRUCTOR;
+}
+
+static bool qo_link_provider_matches_hashes(const QoreAOTSymbolIndexRecord& rec,
+        const QoreAOTSymbolIndexRecord& provider) {
+    return (rec.signature_hash.empty() || rec.signature_hash == provider.signature_hash)
+        && (rec.declaration_hash.empty() || rec.declaration_hash == provider.declaration_hash)
+        && (rec.value_hash.empty() || rec.value_hash == provider.value_hash);
+}
+
+static bool qo_link_call_provider_matches_hashes(const QoreAOTCallRelocationRecord& rec,
+        const QoreAOTSymbolIndexRecord& provider) {
+    return (rec.signature_hash.empty() || rec.signature_hash == provider.signature_hash)
+        && (rec.declaration_hash.empty() || rec.declaration_hash == provider.declaration_hash);
+}
+
+static std::vector<const QoreAOTSymbolIndexRecord*> dedupe_qo_provider_candidates(
+        const QoreAOTSymbolIndexRecord& rec,
+        const std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    std::vector<const QoreAOTSymbolIndexRecord*> out;
+    std::map<std::string, size_t> by_source;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        std::string key = candidate->source_file;
+        auto [it, inserted] = by_source.emplace(key, out.size());
+        if (inserted) {
+            out.push_back(candidate);
+            continue;
+        }
+        const QoreAOTSymbolIndexRecord* current = out[it->second];
+        if (!qo_link_provider_matches_hashes(rec, *current)
+                && qo_link_provider_matches_hashes(rec, *candidate)) {
+            out[it->second] = candidate;
+        }
+    }
+    return out;
+}
+
+static void qo_link_prefer_shallowest_provider_for_bare_import(const QoreAOTSymbolIndexRecord& rec,
+        std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    if (!qo_link_path_is_bare_name(rec.qore_path) || is_deferred_callable_qo_import(rec) || candidates.size() <= 1) {
+        return;
+    }
+
+    size_t best_depth = std::numeric_limits<size_t>::max();
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        best_depth = std::min(best_depth, qo_link_path_namespace_depth(candidate->qore_path));
+    }
+
+    std::vector<const QoreAOTSymbolIndexRecord*> filtered;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        if (qo_link_path_namespace_depth(candidate->qore_path) == best_depth) {
+            filtered.push_back(candidate);
+        }
+    }
+    candidates.swap(filtered);
+}
+
+static std::vector<const QoreAOTSymbolIndexRecord*> dedupe_qo_call_provider_candidates(
+        const QoreAOTCallRelocationRecord& rec,
+        const std::vector<const QoreAOTSymbolIndexRecord*>& candidates) {
+    std::vector<const QoreAOTSymbolIndexRecord*> out;
+    std::map<std::string, size_t> by_source;
+    for (const QoreAOTSymbolIndexRecord* candidate : candidates) {
+        std::string key = candidate->source_file;
+        auto [it, inserted] = by_source.emplace(key, out.size());
+        if (inserted) {
+            out.push_back(candidate);
+            continue;
+        }
+        const QoreAOTSymbolIndexRecord* current = out[it->second];
+        if (!qo_link_call_provider_matches_hashes(rec, *current)
+                && qo_link_call_provider_matches_hashes(rec, *candidate)) {
+            out[it->second] = candidate;
+        }
+    }
+    return out;
+}
+
+static const char* qo_link_call_path_scope(const std::string& path) {
+    if (path.empty()) {
+        return "unknown";
+    }
+    if (string_has_prefix(path, "Qore::")) {
+        return "qore_runtime";
+    }
+    if (string_has_prefix(path, "Qorus::") || string_has_prefix(path, "OMQ::")) {
+        return "local";
+    }
+    if (path.find("::") == std::string::npos) {
+        return "global";
+    }
+    return "external_namespace";
+}
+
+static const char* qo_link_unresolved_call_reason(const QOLinkCallRelocation& reloc) {
+    if (reloc.path_scope == "qore_runtime") {
+        return "qore_runtime_provider";
+    }
+    if (reloc.dependency_class == "module_api") {
+        return "external_module_api";
+    }
+    if (reloc.dependency_class == "module_runtime") {
+        return "external_module_runtime";
+    }
+    if (reloc.dependency_class == "native_body") {
+        return "external_native_body";
+    }
+    if (reloc.dependency_class == "dynamic") {
+        return "dynamic_dispatch";
+    }
+    if (reloc.path_scope == "external_namespace") {
+        return "external_namespace_provider";
+    }
+    if (reloc.path_scope == "global") {
+        return "external_global_provider";
+    }
+    if (reloc.path_scope == "local") {
+        return "local_provider_not_in_aggregate";
+    }
+    return "provider_not_found";
+}
+
+static bool validate_qo_link_inputs(const std::vector<QOLinkInputInfo>& inputs,
+        QOLinkPlan& plan, std::string& error) {
+    QOLinkProviderIndex providers;
+    std::map<std::string, QoreAOTDependencyClass> import_classes;
+    std::set<std::string> provided_seen;
+    std::set<std::string> native_seen;
+    std::set<std::string> dep_seen;
+    std::set<std::string> prepend_seen;
+    std::set<std::string> append_seen;
+    std::set<std::string> module_cmd_seen;
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link provider collection")) {
+            error = "operation cancelled during AOT qo-link provider collection";
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        for (size_t j = 0; j < input.index.imported.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link import-class collection", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.imported[j];
+            if (!rec.qore_path.empty() && rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
+                auto [it, inserted] = import_classes.emplace(rec.qore_path, rec.dependency_class);
+                if (!inserted && it->second == QoreAOTDependencyClass::UNKNOWN) {
+                    it->second = rec.dependency_class;
+                }
+            }
+        }
+        for (size_t j = 0; j < input.index.defined.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link provider collection", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.defined[j];
+            if (is_owned_qore_provider(rec)) {
+                qo_link_index_provider(providers, &rec);
+                add_unique_string(plan.provided_qore_symbols, provided_seen, rec.qore_path);
+            }
+        }
+        for (size_t j = 0; j < input.native_symbols.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link native symbol plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.native_symbols, native_seen, input.native_symbols[j]);
+        }
+        for (size_t j = 0; j < input.dependencies.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link dependency plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.external_dependencies, dep_seen, input.dependencies[j]);
+        }
+        for (size_t j = 0; j < input.module_path_prepend.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.module_path_prepend, prepend_seen, input.module_path_prepend[j]);
+        }
+        for (size_t j = 0; j < input.module_path_append.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module path plan", error)) {
+                return false;
+            }
+            add_unique_string(plan.module_path_append, append_seen, input.module_path_append[j]);
+        }
+        for (size_t j = 0; j < input.module_commands.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link module command plan", error)) {
+                return false;
+            }
+            const AOTModuleCommand& cmd = input.module_commands[j];
+            std::string key = cmd.module + "\n" + cmd.command;
+            if (module_cmd_seen.insert(key).second) {
+                plan.module_commands.push_back(cmd);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link import validation", error)) {
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        for (size_t j = 0; j < input.index.imported.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link import validation", error)) {
+                return false;
+            }
+            const QoreAOTSymbolIndexRecord& rec = input.index.imported[j];
+            if (rec.qore_path.empty()) {
+                continue;
+            }
+            QoreAOTDependencyClass dep_class = rec.dependency_class;
+            if (dep_class == QoreAOTDependencyClass::MODULE_API
+                    || dep_class == QoreAOTDependencyClass::MODULE_RUNTIME
+                    || dep_class == QoreAOTDependencyClass::NATIVE_BODY
+                    || dep_class == QoreAOTDependencyClass::DYNAMIC) {
+                continue;
+            }
+            bool optional_import = is_optional_qo_import(rec);
+
+            QOLinkIssue issue;
+            issue.consumer = input.path;
+            issue.path = rec.qore_path;
+            issue.dependency_class = qoreAOTDependencyClassName(dep_class);
+            auto provider_it = providers.exact.find(rec.qore_path);
+            std::vector<const QoreAOTSymbolIndexRecord*> deferred_callable_candidates;
+            std::vector<const QoreAOTSymbolIndexRecord*> suffix_candidates;
+            const std::vector<const QoreAOTSymbolIndexRecord*>* candidates_ptr =
+                provider_it == providers.exact.end() ? nullptr : &provider_it->second;
+            if (!candidates_ptr && is_deferred_callable_qo_import(rec)) {
+                find_deferred_callable_qo_providers(providers.callable_base_exact, rec.qore_path,
+                    deferred_callable_candidates);
+                if (!deferred_callable_candidates.empty()) {
+                    candidates_ptr = &deferred_callable_candidates;
+                }
+            }
+            if (!candidates_ptr) {
+                find_suffix_qo_providers(providers, rec.qore_path, is_deferred_callable_qo_import(rec),
+                    suffix_candidates);
+                if (!suffix_candidates.empty()) {
+                    candidates_ptr = &suffix_candidates;
+                }
+            }
+            if (!candidates_ptr) {
+                if (!optional_import) {
+                    plan.unresolved_imports.push_back(std::move(issue));
+                }
+                continue;
+            }
+
+            std::vector<const QoreAOTSymbolIndexRecord*> candidates =
+                dedupe_qo_provider_candidates(rec, *candidates_ptr);
+            qo_link_prefer_shallowest_provider_for_bare_import(rec, candidates);
+            for (size_t k = 0; k < candidates.size(); ++k) {
+                if (!qo_link_check_cancel(k, "AOT qo-link provider validation", error)) {
+                    return false;
+                }
+                issue.providers.push_back(candidates[k]->source_file);
+            }
+            if (candidates.size() > 1) {
+                if (!optional_import) {
+                    plan.ambiguous_imports.push_back(std::move(issue));
+                }
+                continue;
+            }
+
+            const QoreAOTSymbolIndexRecord* provider = candidates.front();
+            bool mismatch = false;
+            if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
+                issue.expected = "signature=" + rec.signature_hash
+                    + " actual=" + provider->signature_hash;
+                mismatch = true;
+            } else if (!rec.declaration_hash.empty() && rec.declaration_hash != provider->declaration_hash) {
+                issue.expected = "declaration=" + rec.declaration_hash
+                    + " actual=" + provider->declaration_hash;
+                mismatch = true;
+            } else if (!rec.value_hash.empty() && rec.value_hash != provider->value_hash) {
+                issue.expected = "value=" + rec.value_hash + " actual=" + provider->value_hash;
+                mismatch = true;
+            }
+            if (mismatch) {
+                if (!optional_import) {
+                    plan.hash_mismatches.push_back(std::move(issue));
+                }
+            } else {
+                plan.resolved_imports.push_back(std::move(issue));
+            }
+        }
+
+        for (size_t j = 0; j < input.call_relocations.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link call-relocation validation", error)) {
+                return false;
+            }
+            const QoreAOTCallRelocationRecord& rec = input.call_relocations[j];
+            if (rec.qore_path.empty()) {
+                continue;
+            }
+            QOLinkCallRelocation reloc;
+            reloc.consumer = input.path;
+            reloc.function_name = rec.function_name;
+            reloc.expr_slot = rec.expr_slot;
+            reloc.target_kind = qoreAOTCallRelocationTargetKindName(rec.target_kind);
+            reloc.path = rec.qore_path;
+            reloc.path_scope = qo_link_call_path_scope(rec.qore_path);
+            auto import_it = import_classes.find(rec.qore_path);
+            if (import_it != import_classes.end()) {
+                reloc.dependency_class = qoreAOTDependencyClassName(import_it->second);
+            }
+            reloc.fallback_descriptor = rec.fallback_descriptor;
+            auto provider_it = providers.exact.find(rec.qore_path);
+            std::vector<const QoreAOTSymbolIndexRecord*> suffix_candidates;
+            const std::vector<const QoreAOTSymbolIndexRecord*>* candidates_ptr =
+                provider_it == providers.exact.end() ? nullptr : &provider_it->second;
+            if (!candidates_ptr) {
+                find_suffix_qo_providers(providers, rec.qore_path, qo_link_call_relocation_is_callable(rec),
+                    suffix_candidates);
+                if (!suffix_candidates.empty()) {
+                    candidates_ptr = &suffix_candidates;
+                }
+            }
+            if (!candidates_ptr) {
+                reloc.resolution = "unresolved";
+                reloc.reason = qo_link_unresolved_call_reason(reloc);
+                plan.unresolved_call_relocations.push_back(std::move(reloc));
+                continue;
+            }
+
+            std::vector<const QoreAOTSymbolIndexRecord*> candidates =
+                dedupe_qo_call_provider_candidates(rec, *candidates_ptr);
+            for (size_t k = 0; k < candidates.size(); ++k) {
+                if (!qo_link_check_cancel(k, "AOT qo-link call-relocation provider validation", error)) {
+                    return false;
+                }
+                reloc.providers.push_back(candidates[k]->source_file);
+            }
+            if (candidates.size() > 1) {
+                reloc.resolution = "ambiguous";
+                reloc.reason = "ambiguous_provider";
+                plan.ambiguous_call_relocations.push_back(std::move(reloc));
+                continue;
+            }
+
+            const QoreAOTSymbolIndexRecord* provider = candidates.front();
+            reloc.resolution = "resolved";
+            reloc.reason = "resolved";
+            reloc.dependency_class = qoreAOTDependencyClassName(provider->dependency_class);
+            reloc.provider_kind = qoreAOTSymbolKindName(provider->kind);
+            reloc.provider_source = provider->source_file;
+            bool mismatch = false;
+            if (!rec.signature_hash.empty() && rec.signature_hash != provider->signature_hash) {
+                reloc.expected = "signature=" + rec.signature_hash
+                    + " actual=" + provider->signature_hash;
+                reloc.resolution = "hash_mismatch";
+                reloc.reason = "signature_hash_mismatch";
+                mismatch = true;
+            } else if (!rec.declaration_hash.empty() && rec.declaration_hash != provider->declaration_hash) {
+                reloc.expected = "declaration=" + rec.declaration_hash
+                    + " actual=" + provider->declaration_hash;
+                reloc.resolution = "hash_mismatch";
+                reloc.reason = "declaration_hash_mismatch";
+                mismatch = true;
+            }
+            reloc.native_symbol = provider->native_symbol;
+            if (mismatch) {
+                plan.call_relocation_hash_mismatches.push_back(std::move(reloc));
+            } else {
+                plan.resolved_call_relocations.push_back(std::move(reloc));
+            }
+        }
+    }
+
+    std::sort(plan.provided_qore_symbols.begin(), plan.provided_qore_symbols.end());
+    std::sort(plan.native_symbols.begin(), plan.native_symbols.end());
+    std::sort(plan.external_dependencies.begin(), plan.external_dependencies.end());
+    std::sort(plan.module_path_prepend.begin(), plan.module_path_prepend.end());
+    std::sort(plan.module_path_append.begin(), plan.module_path_append.end());
+    std::sort(plan.module_commands.begin(), plan.module_commands.end(),
+        [](const AOTModuleCommand& a, const AOTModuleCommand& b) {
+            return std::tie(a.module, a.command) < std::tie(b.module, b.command);
+        });
+    auto call_reloc_less = [](const QOLinkCallRelocation& a, const QOLinkCallRelocation& b) {
+        return std::tie(a.consumer, a.function_name, a.expr_slot, a.target_kind, a.path)
+            < std::tie(b.consumer, b.function_name, b.expr_slot, b.target_kind, b.path);
+    };
+    std::sort(plan.resolved_call_relocations.begin(), plan.resolved_call_relocations.end(), call_reloc_less);
+    std::sort(plan.unresolved_call_relocations.begin(), plan.unresolved_call_relocations.end(), call_reloc_less);
+    std::sort(plan.ambiguous_call_relocations.begin(), plan.ambiguous_call_relocations.end(), call_reloc_less);
+    std::sort(plan.call_relocation_hash_mismatches.begin(), plan.call_relocation_hash_mismatches.end(),
+        call_reloc_less);
+    return true;
+}
+
+static void json_file_string(FILE* f, const std::string& value) {
+    fputc('"', f);
+    for (unsigned char c : value) {
+        switch (c) {
+            case '"': fputs("\\\"", f); break;
+            case '\\': fputs("\\\\", f); break;
+            case '\b': fputs("\\b", f); break;
+            case '\f': fputs("\\f", f); break;
+            case '\n': fputs("\\n", f); break;
+            case '\r': fputs("\\r", f); break;
+            case '\t': fputs("\\t", f); break;
+            default:
+                if (c < 0x20) {
+                    fprintf(f, "\\u%04x", c);
+                } else {
+                    fputc(c, f);
+                }
+                break;
+        }
+    }
+    fputc('"', f);
+}
+
+static bool json_file_string_array(FILE* f, const char* key,
+        const std::vector<std::string>& values, std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map string array write", error)) {
+            return false;
+        }
+        if (i) {
+            fputc(',', f);
+        }
+        fputc('\n', f);
+        fputs("    ", f);
+        json_file_string(f, values[i]);
+    }
+    if (!values.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_issue_array(FILE* f, const char* key,
+        const std::vector<QOLinkIssue>& issues, std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < issues.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map issue write", error)) {
+            return false;
+        }
+        const QOLinkIssue& issue = issues[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"consumer\": ", f);
+        json_file_string(f, issue.consumer);
+        fputs(", \"path\": ", f);
+        json_file_string(f, issue.path);
+        fputs(", \"dependency_class\": ", f);
+        json_file_string(f, issue.dependency_class);
+        fputs(", \"expected\": ", f);
+        json_file_string(f, issue.expected);
+        fputs(", \"providers\": [", f);
+        for (size_t j = 0; j < issue.providers.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map issue provider write", error)) {
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, issue.providers[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!issues.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_call_relocation_array(FILE* f, const char* key,
+        const std::vector<QOLinkCallRelocation>& relocs, std::string& error,
+        const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map call-relocation write", error)) {
+            return false;
+        }
+        const QOLinkCallRelocation& reloc = relocs[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"consumer\": ", f);
+        json_file_string(f, reloc.consumer);
+        fputs(", \"function\": ", f);
+        json_file_string(f, reloc.function_name);
+        fprintf(f, ", \"expr_slot\": %u", reloc.expr_slot);
+        fputs(", \"target_kind\": ", f);
+        json_file_string(f, reloc.target_kind);
+        fputs(", \"path\": ", f);
+        json_file_string(f, reloc.path);
+        fputs(", \"path_scope\": ", f);
+        json_file_string(f, reloc.path_scope);
+        fputs(", \"dependency_class\": ", f);
+        json_file_string(f, reloc.dependency_class);
+        fputs(", \"resolution\": ", f);
+        json_file_string(f, reloc.resolution);
+        fputs(", \"reason\": ", f);
+        json_file_string(f, reloc.reason);
+        fputs(", \"expected\": ", f);
+        json_file_string(f, reloc.expected);
+        fputs(", \"provider_kind\": ", f);
+        json_file_string(f, reloc.provider_kind);
+        fputs(", \"provider_source\": ", f);
+        json_file_string(f, reloc.provider_source);
+        fputs(", \"native_symbol\": ", f);
+        json_file_string(f, reloc.native_symbol);
+        fputs(", \"fallback_descriptor\": ", f);
+        json_file_string(f, reloc.fallback_descriptor);
+        fputs(", \"providers\": [", f);
+        for (size_t j = 0; j < reloc.providers.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map call-relocation provider write", error)) {
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, reloc.providers[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!relocs.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool add_qo_link_call_relocation_reason_counts(
+        std::map<std::string, size_t>& reasons,
+        const std::vector<QOLinkCallRelocation>& relocs,
+        const char* operation,
+        std::string& error) {
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (!qo_link_check_cancel(i, operation, error)) {
+            return false;
+        }
+        const std::string& reason = relocs[i].reason.empty() ? relocs[i].resolution : relocs[i].reason;
+        ++reasons[reason.empty() ? "unknown" : reason];
+    }
+    return true;
+}
+
+static bool json_file_call_relocation_summary(FILE* f, const QOLinkPlan& plan,
+        std::string& error, const char* comma = ",") {
+    std::map<std::string, size_t> reasons;
+    if (!add_qo_link_call_relocation_reason_counts(reasons, plan.resolved_call_relocations,
+            "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.unresolved_call_relocations,
+                "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.ambiguous_call_relocations,
+                "AOT qo-link map call-relocation summary write", error)
+            || !add_qo_link_call_relocation_reason_counts(reasons, plan.call_relocation_hash_mismatches,
+                "AOT qo-link map call-relocation summary write", error)) {
+        return false;
+    }
+
+    const size_t resolved = plan.resolved_call_relocations.size();
+    const size_t unresolved = plan.unresolved_call_relocations.size();
+    const size_t ambiguous = plan.ambiguous_call_relocations.size();
+    const size_t hash_mismatches = plan.call_relocation_hash_mismatches.size();
+    const size_t total = resolved + unresolved + ambiguous + hash_mismatches;
+    fprintf(f,
+        "  \"call_relocation_summary\": {\n"
+        "    \"total\": %llu,\n"
+        "    \"resolved\": %llu,\n"
+        "    \"unresolved\": %llu,\n"
+        "    \"ambiguous\": %llu,\n"
+        "    \"hash_mismatches\": %llu,\n"
+        "    \"reasons\": [",
+        static_cast<unsigned long long>(total),
+        static_cast<unsigned long long>(resolved),
+        static_cast<unsigned long long>(unresolved),
+        static_cast<unsigned long long>(ambiguous),
+        static_cast<unsigned long long>(hash_mismatches));
+    size_t i = 0;
+    for (const auto& entry : reasons) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map call-relocation reason write", error)) {
+            return false;
+        }
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n      {\"reason\": ", f);
+        json_file_string(f, entry.first);
+        fprintf(f, ", \"count\": %llu}", static_cast<unsigned long long>(entry.second));
+        ++i;
+    }
+    if (!reasons.empty()) {
+        fputc('\n', f);
+        fputs("    ", f);
+    }
+    fprintf(f, "]\n  }%s\n", comma);
+    return true;
+}
+
+static bool write_qo_link_map(const std::string& path, const std::string& output,
+        const std::string& aggregate_symbol, const std::vector<QOLinkInputInfo>& inputs,
+        const QOLinkPlan& plan, std::string& error) {
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) {
+        error = "cannot open qo link map '" + path + "': " + strerror(errno);
+        return false;
+    }
+
+    fprintf(f, "{\n");
+    fputs("  \"format\": 1,\n", f);
+    fputs("  \"output\": ", f);
+    json_file_string(f, output);
+    fputs(",\n  \"aggregate_symbol\": ", f);
+    json_file_string(f, aggregate_symbol);
+    fprintf(f, ",\n  \"allow_unresolved_imports\": %s",
+        allow_unresolved_qo_imports ? "true" : "false");
+    fputs(",\n  \"inputs\": [", f);
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map input write", error)) {
+            fclose(f);
+            return false;
+        }
+        const QOLinkInputInfo& input = inputs[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"path\": ", f);
+        json_file_string(f, input.path);
+        fputs(", \"object_hash\": ", f);
+        json_file_string(f, input.object_hash);
+        fprintf(f, ", \"object_size\": %llu, \"register_symbol\": ",
+            static_cast<unsigned long long>(input.object_size));
+        json_file_string(f, input.register_symbol);
+        fputs(", \"source_text\": [", f);
+        for (size_t j = 0; j < input.source_text.size(); ++j) {
+            if (!qo_link_check_cancel(j, "AOT qo-link map source-text write", error)) {
+                fclose(f);
+                return false;
+            }
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, input.source_text[j]);
+        }
+        fputs("]}", f);
+    }
+    if (!inputs.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fputs("],\n", f);
+
+    std::vector<std::string> register_symbols;
+    register_symbols.reserve(inputs.size());
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map register-symbol collection", error)) {
+            fclose(f);
+            return false;
+        }
+        register_symbols.push_back(inputs[i].register_symbol);
+    }
+    if (!json_file_string_array(f, "register_symbols", register_symbols, error)
+            || !json_file_string_array(f, "provided_qore_symbols", plan.provided_qore_symbols, error)
+            || !json_file_string_array(f, "native_symbols", plan.native_symbols, error)
+            || !json_file_string_array(f, "external_dependencies", plan.external_dependencies, error)
+            || !json_file_string_array(f, "module_path_prepend", plan.module_path_prepend, error)
+            || !json_file_string_array(f, "module_path_append", plan.module_path_append, error)) {
+        fclose(f);
+        return false;
+    }
+
+    fputs("  \"module_commands\": [", f);
+    for (size_t i = 0; i < plan.module_commands.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT qo-link map module-command write", error)) {
+            fclose(f);
+            return false;
+        }
+        const AOTModuleCommand& cmd = plan.module_commands[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"module\": ", f);
+        json_file_string(f, cmd.module);
+        fputs(", \"command\": ", f);
+        json_file_string(f, cmd.command);
+        fputs("}", f);
+    }
+    if (!plan.module_commands.empty()) {
+        fputc('\n', f);
+        fputs("  ", f);
+    }
+    fputs("],\n", f);
+
+    if (!json_file_issue_array(f, "resolved_imports", plan.resolved_imports, error)
+            || !json_file_issue_array(f, "unresolved_imports", plan.unresolved_imports, error)
+            || !json_file_issue_array(f, "ambiguous_imports", plan.ambiguous_imports, error)
+            || !json_file_issue_array(f, "hash_mismatches", plan.hash_mismatches, error)
+            || !json_file_call_relocation_summary(f, plan, error)
+            || !json_file_call_relocation_array(f, "resolved_call_relocations",
+                plan.resolved_call_relocations, error)
+            || !json_file_call_relocation_array(f, "unresolved_call_relocations",
+                plan.unresolved_call_relocations, error)
+            || !json_file_call_relocation_array(f, "ambiguous_call_relocations",
+                plan.ambiguous_call_relocations, error)
+            || !json_file_call_relocation_array(f, "call_relocation_hash_mismatches",
+                plan.call_relocation_hash_mismatches, error, "")) {
+        fclose(f);
+        return false;
+    }
+    fputs("}\n", f);
+
+    if (fclose(f) != 0) {
+        error = "cannot close qo link map '" + path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+static void print_qo_link_issues(const char* label, const std::vector<QOLinkIssue>& issues) {
+    for (size_t i = 0; i < issues.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link issue reporting")) {
+            fprintf(stderr, "error: operation cancelled during AOT qo-link issue reporting\n");
+            return;
+        }
+        const QOLinkIssue& issue = issues[i];
+        fprintf(stderr, "error: qo-link %s: consumer='%s' symbol='%s' class='%s'",
+            label, issue.consumer.c_str(), issue.path.c_str(), issue.dependency_class.c_str());
+        if (!issue.expected.empty()) {
+            fprintf(stderr, " %s", issue.expected.c_str());
+        }
+        if (!issue.providers.empty()) {
+            fprintf(stderr, " providers=");
+            for (size_t j = 0; j < issue.providers.size(); ++j) {
+                if (j && !(j % 100) && qcc_check_cancel("AOT qo-link issue provider reporting")) {
+                    fprintf(stderr, "\nerror: operation cancelled during AOT qo-link issue provider reporting\n");
+                    return;
+                }
+                fprintf(stderr, "%s%s", j ? "," : "", issue.providers[j].c_str());
+            }
+        }
+        fputc('\n', stderr);
+    }
+}
+
+static void print_qo_link_call_relocation_issues(const char* label,
+        const std::vector<QOLinkCallRelocation>& relocs) {
+    for (size_t i = 0; i < relocs.size(); ++i) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT qo-link call-relocation issue reporting")) {
+            fprintf(stderr, "error: operation cancelled during AOT qo-link call-relocation issue reporting\n");
+            return;
+        }
+        const QOLinkCallRelocation& reloc = relocs[i];
+        fprintf(stderr, "error: qo-link %s call relocation: consumer='%s' function='%s' slot=%u "
+            "target='%s' symbol='%s' reason='%s'",
+            label, reloc.consumer.c_str(), reloc.function_name.c_str(), reloc.expr_slot,
+            reloc.target_kind.c_str(), reloc.path.c_str(),
+            reloc.reason.empty() ? reloc.resolution.c_str() : reloc.reason.c_str());
+        if (!reloc.expected.empty()) {
+            fprintf(stderr, " %s", reloc.expected.c_str());
+        }
+        if (!reloc.providers.empty()) {
+            fprintf(stderr, " providers=");
+            for (size_t j = 0; j < reloc.providers.size(); ++j) {
+                if (j && !(j % 100)
+                        && qcc_check_cancel("AOT qo-link call-relocation provider reporting")) {
+                    fprintf(stderr,
+                        "\nerror: operation cancelled during AOT qo-link call-relocation provider reporting\n");
+                    return;
+                }
+                fprintf(stderr, "%s%s", j ? "," : "", reloc.providers[j].c_str());
+            }
+        }
+        fputc('\n', stderr);
+    }
 }
 
 static void dump_object_sections(const llvm::object::ObjectFile& obj) {
@@ -3081,7 +4788,7 @@ static void json_print_string(const std::string& value) {
     putchar('"');
     size_t i = 0;
     for (unsigned char c : value) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON string dump")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT symbol-index JSON string dump")) {
             fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON string dump\n");
             json_output_cancelled = true;
             return;
@@ -3141,7 +4848,7 @@ static void json_print_u64_field(const char* key, uint64_t value,
 }
 
 static bool json_dump_check_cancel(size_t ordinal, const char* operation) {
-    if (ordinal && !(ordinal % 100) && qore_check_cancel(nullptr, operation)) {
+    if (ordinal && !(ordinal % 100) && qcc_check_cancel(operation)) {
         fprintf(stderr, "error: operation cancelled during %s\n",
             operation ? operation : "AOT symbol-index JSON dump");
         return false;
@@ -3192,6 +4899,19 @@ static bool json_print_context_array(const char* key,
         printf("\n%*s", static_cast<int>(indent), "");
     }
     printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
+static bool json_collect_context_values(const std::vector<std::pair<std::string, std::string>>& values,
+        const char* key, std::vector<std::string>& out) {
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON context value collection")) {
+            return false;
+        }
+        if (values[i].first == key) {
+            out.push_back(values[i].second);
+        }
+    }
     return true;
 }
 
@@ -3278,6 +4998,71 @@ static bool json_print_symbol_array(const char* key,
     return true;
 }
 
+static void json_print_call_relocation_record(const QoreAOTCallRelocationRecord& rec,
+        unsigned indent) {
+    printf("%*s{", static_cast<int>(indent), "");
+    json_print_string("function");
+    printf(": ");
+    json_print_string(rec.function_name);
+    printf(", ");
+    json_print_string("expr_slot");
+    printf(": %u, ", rec.expr_slot);
+    json_print_string("target_kind");
+    printf(": ");
+    json_print_string(qoreAOTCallRelocationTargetKindName(rec.target_kind));
+    printf(", ");
+    json_print_string("strictness");
+    printf(": ");
+    json_print_string(rec.strictness == QoreAOTCallRelocationStrictness::REQUIRED ? "required" : "optional");
+    printf(", ");
+    json_print_string("qore_path");
+    printf(": ");
+    json_print_string(rec.qore_path);
+    printf(", ");
+    json_print_string("path");
+    printf(": ");
+    json_print_string(rec.qore_path);
+    printf(", ");
+    json_print_string("signature_hash");
+    printf(": ");
+    json_print_string(rec.signature_hash);
+    printf(", ");
+    json_print_string("declaration_hash");
+    printf(": ");
+    json_print_string(rec.declaration_hash);
+    printf(", ");
+    json_print_string("native_symbol");
+    printf(": ");
+    json_print_string(rec.native_symbol);
+    printf(", ");
+    json_print_string("fallback_descriptor");
+    printf(": ");
+    json_print_string(rec.fallback_descriptor);
+    printf("}");
+}
+
+static bool json_print_call_relocation_array(const char* key,
+        const std::vector<QoreAOTCallRelocationRecord>& records,
+        unsigned indent, bool comma = true) {
+    json_print_key(key, indent);
+    printf("[");
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT call-relocation JSON record dump")) {
+            return false;
+        }
+        if (i) {
+            printf(",");
+        }
+        printf("\n");
+        json_print_call_relocation_record(records[i], indent + 2);
+    }
+    if (!records.empty()) {
+        printf("\n%*s", static_cast<int>(indent), "");
+    }
+    printf("]%s\n", comma ? "," : "");
+    return true;
+}
+
 static int dump_aot_index_json_for_file(const char* path) {
     json_output_cancelled = false;
     std::vector<AOTDumpMetadataBlob> blobs;
@@ -3292,10 +5077,11 @@ static int dump_aot_index_json_for_file(const char* path) {
 
     QoreAOTSymbolIndex combined;
     combined.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+    std::vector<QoreAOTCallRelocationRecord> call_relocations;
     std::vector<std::string> source_text;
     std::set<std::string> source_seen;
     for (size_t i = 0; i < blobs.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT symbol-index JSON dump")) {
+        if (i && !(i % 100) && qcc_check_cancel("AOT symbol-index JSON dump")) {
             fprintf(stderr, "error: operation cancelled during AOT symbol-index JSON dump\n");
             return 1;
         }
@@ -3308,6 +5094,14 @@ static int dump_aot_index_json_for_file(const char* path) {
         const char* label = reader.getLabel();
         if (label && source_seen.insert(label).second) {
             source_text.emplace_back(label);
+        }
+        QoreAOTCallRelocations relocs;
+        if (!readCallRelocations(reader, relocs, error)) {
+            fprintf(stderr, "error: invalid CALL_RELOCATIONS in '%s': %s\n", path, error.c_str());
+            return 1;
+        }
+        if (relocs.version) {
+            call_relocations.insert(call_relocations.end(), relocs.records.begin(), relocs.records.end());
         }
         QoreAOTSymbolIndex index;
         if (!readSymbolIndex(reader, index, error)) {
@@ -3325,6 +5119,10 @@ static int dump_aot_index_json_for_file(const char* path) {
 
     uint64_t object_hash = XXH64(contents.data(), contents.size(), 0);
     std::string hash = "xxh64:" + hex64_string(object_hash);
+    std::vector<std::string> source_parse_defines;
+    if (!json_collect_context_values(combined.context, "source_parse_define", source_parse_defines)) {
+        return 1;
+    }
 
     printf("{\n");
     json_print_u64_field("format", 1, 2);
@@ -3333,11 +5131,13 @@ static int dump_aot_index_json_for_file(const char* path) {
     json_print_u64_field("object_size", contents.size(), 2);
     json_print_string_field("source", source_text.empty() ? "" : source_text.front(), 2);
     if (!json_print_string_array("source_text", source_text, 2)
+            || !json_print_string_array("source_parse_defines", source_parse_defines, 2)
             || !json_print_context_array("context", combined.context, 2)
             || !json_print_symbol_array("defines", combined.defined, 2)
             || !json_print_symbol_array("provides", combined.defined, 2)
             || !json_print_symbol_array("requires", combined.imported, 2)
-            || !json_print_symbol_array("native", combined.native, 2)) {
+            || !json_print_symbol_array("native", combined.native, 2)
+            || !json_print_call_relocation_array("call_relocations", call_relocations, 2)) {
         return 1;
     }
     json_print_string_field("native_body_hash", hash, 2, false);
@@ -3346,6 +5146,931 @@ static int dump_aot_index_json_for_file(const char* path) {
     }
     printf("}\n");
     return blobs.empty() ? 1 : 0;
+}
+
+static bool write_generated_file_if_changed(const std::string& path,
+        const std::string& content, std::string& error) {
+    std::string old;
+    if (is_file(path) && read_file(path.c_str(), old) && old == content) {
+        return true;
+    }
+
+    std::string dir = dirname_of(path);
+    if (dir.empty()) {
+        dir = ".";
+    }
+    std::string pattern = dir + "/." + basename_no_ext(path) + ".tmp.XXXXXX";
+    std::vector<char> tmp(pattern.begin(), pattern.end());
+    tmp.push_back('\0');
+    int fd = mkstemp(tmp.data());
+    if (fd < 0) {
+        error = "cannot create temporary file for '" + path + "': " + strerror(errno);
+        return false;
+    }
+    FILE* f = fdopen(fd, "wb");
+    if (!f) {
+        int e = errno;
+        close(fd);
+        unlink(tmp.data());
+        error = "cannot open temporary file for '" + path + "': " + strerror(e);
+        return false;
+    }
+    if (!content.empty()
+            && fwrite(content.data(), 1, content.size(), f) != content.size()) {
+        int e = errno;
+        fclose(f);
+        unlink(tmp.data());
+        error = "cannot write temporary file for '" + path + "': " + strerror(e);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        int e = errno;
+        unlink(tmp.data());
+        error = "cannot close temporary file for '" + path + "': " + strerror(e);
+        return false;
+    }
+    if (rename(tmp.data(), path.c_str()) != 0) {
+        int e = errno;
+        unlink(tmp.data());
+        error = "cannot replace '" + path + "': " + strerror(e);
+        return false;
+    }
+    return true;
+}
+
+static bool read_file_required(const std::string& path, std::string& content,
+        std::string& error) {
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        error = "cannot open '" + path + "': " + strerror(errno);
+        return false;
+    }
+    if (fseek(f, 0, SEEK_END) != 0) {
+        error = "cannot seek '" + path + "': " + strerror(errno);
+        fclose(f);
+        return false;
+    }
+    long fsize = ftell(f);
+    if (fsize < 0) {
+        error = "cannot get size of '" + path + "': " + strerror(errno);
+        fclose(f);
+        return false;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        error = "cannot seek '" + path + "': " + strerror(errno);
+        fclose(f);
+        return false;
+    }
+    content.resize(static_cast<size_t>(fsize));
+    if (fsize > 0
+            && fread(&content[0], 1, static_cast<size_t>(fsize), f) != static_cast<size_t>(fsize)) {
+        error = "cannot read '" + path + "': " + strerror(errno);
+        fclose(f);
+        content.clear();
+        return false;
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close '" + path + "': " + strerror(errno);
+        content.clear();
+        return false;
+    }
+    return true;
+}
+
+static std::string canonical_existing_path(const std::string& path) {
+    char* resolved = realpath(path.c_str(), nullptr);
+    if (!resolved) {
+        return path;
+    }
+    std::string rv = resolved;
+    free(resolved);
+    return rv;
+}
+
+static QoreAOTSourceSymbolMap* source_symbol_map_for_kind(QoreAOTSourceSymbolManifest& manifest,
+        const std::string& kind) {
+    if (kind == "class") {
+        return &manifest.classes;
+    }
+    if (kind == "hashdecl") {
+        return &manifest.hashdecls;
+    }
+    if (kind == "function") {
+        return &manifest.functions;
+    }
+    if (kind == "global") {
+        return &manifest.globals;
+    }
+    return nullptr;
+}
+
+static bool read_source_symbol_manifest(const char* path, QoreAOTSourceSymbolManifest& manifest,
+        std::string& error) {
+    if (!path || !*path) {
+        return true;
+    }
+    std::string contents;
+    if (!read_file(path, contents)) {
+        error = std::string("cannot read source-symbol manifest: ") + path;
+        return false;
+    }
+
+    size_t line_no = 0;
+    size_t pos = 0;
+    bool saw_format = false;
+    while (pos <= contents.size()) {
+        size_t end = contents.find('\n', pos);
+        std::string line = end == std::string::npos
+            ? contents.substr(pos)
+            : contents.substr(pos, end - pos);
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        ++line_no;
+        if (!(line_no % 100) && qore_check_cancel(nullptr, "qcc source-symbol manifest read")) {
+            error = "operation cancelled during qcc source-symbol manifest read";
+            return false;
+        }
+        pos = end == std::string::npos ? contents.size() + 1 : end + 1;
+
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        if (!saw_format) {
+            if (line != "format=1") {
+                error = "invalid source-symbol manifest '" + std::string(path)
+                    + "': expected format=1 on line " + std::to_string(line_no);
+                return false;
+            }
+            saw_format = true;
+            continue;
+        }
+
+        size_t tab1 = line.find('\t');
+        size_t tab2 = tab1 == std::string::npos ? std::string::npos : line.find('\t', tab1 + 1);
+        if (tab1 == std::string::npos || tab2 == std::string::npos || tab2 + 1 >= line.size()) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': malformed line " + std::to_string(line_no);
+            return false;
+        }
+        std::string kind = line.substr(0, tab1);
+        std::string symbol = line.substr(tab1 + 1, tab2 - tab1 - 1);
+        std::string source = line.substr(tab2 + 1);
+        if (symbol.empty() || source.empty()) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': empty symbol or source on line " + std::to_string(line_no);
+            return false;
+        }
+        QoreAOTSourceSymbolMap* map = source_symbol_map_for_kind(manifest, kind);
+        if (!map) {
+            error = "invalid source-symbol manifest '" + std::string(path)
+                + "': unknown symbol kind '" + kind + "' on line " + std::to_string(line_no);
+            return false;
+        }
+        (*map)[symbol].insert(canonical_existing_path(source));
+    }
+    if (!saw_format) {
+        error = "invalid source-symbol manifest '" + std::string(path) + "': missing format=1";
+        return false;
+    }
+    return true;
+}
+
+static bool write_json_file_string_field(FILE* f, const char* key,
+        const std::string& value, unsigned indent, const char* comma = ",") {
+    fprintf(f, "%*s", static_cast<int>(indent), "");
+    json_file_string(f, key ? key : "");
+    fputs(": ", f);
+    json_file_string(f, value);
+    fprintf(f, "%s\n", comma);
+    return true;
+}
+
+static bool write_json_file_u64_field(FILE* f, const char* key, uint64_t value,
+        unsigned indent, const char* comma = ",") {
+    fprintf(f, "%*s", static_cast<int>(indent), "");
+    json_file_string(f, key ? key : "");
+    fprintf(f, ": %llu%s\n", static_cast<unsigned long long>(value), comma);
+    return true;
+}
+
+static bool write_json_file_bool_field(FILE* f, const char* key, bool value,
+        unsigned indent, const char* comma = ",") {
+    fprintf(f, "%*s", static_cast<int>(indent), "");
+    json_file_string(f, key ? key : "");
+    fprintf(f, ": %s%s\n", value ? "true" : "false", comma);
+    return true;
+}
+
+static bool write_json_file_record(FILE* f, const char* key, const std::string& path,
+        unsigned indent, std::string& error, const char* comma = ",") {
+    std::string contents;
+    if (!read_file_required(path, contents, error)) {
+        return false;
+    }
+    uint64_t hash = XXH64(contents.data(), contents.size(), 0);
+    fprintf(f, "%*s", static_cast<int>(indent), "");
+    json_file_string(f, key ? key : "");
+    fputs(": {\"path\": ", f);
+    json_file_string(f, canonical_existing_path(path));
+    fprintf(f, ", \"size\": %llu, \"hash\": ",
+        static_cast<unsigned long long>(contents.size()));
+    json_file_string(f, "xxh64:" + hex64_string(hash));
+    fprintf(f, "}%s\n", comma);
+    return true;
+}
+
+static bool write_json_file_record_array(FILE* f, const char* key,
+        const std::vector<std::string>& paths, unsigned indent, std::string& error,
+        const char* comma = ",") {
+    fprintf(f, "%*s", static_cast<int>(indent), "");
+    json_file_string(f, key ? key : "");
+    fputs(": [", f);
+    std::set<std::string> seen;
+    std::vector<std::string> canonical_paths;
+    for (size_t i = 0; i < paths.size(); ++i) {
+        if (!json_dump_check_cancel(i, "qcc manifest input write")) {
+            error = "operation cancelled during qcc manifest input write";
+            return false;
+        }
+        if (paths[i].empty() || !is_file(paths[i])) {
+            continue;
+        }
+        std::string canon = canonical_existing_path(paths[i]);
+        if (!seen.insert(canon).second) {
+            continue;
+        }
+        canonical_paths.push_back(std::move(canon));
+    }
+    std::sort(canonical_paths.begin(), canonical_paths.end());
+    size_t written = 0;
+    for (size_t i = 0; i < canonical_paths.size(); ++i) {
+        if (!json_dump_check_cancel(i, "qcc manifest canonical input write")) {
+            error = "operation cancelled during qcc manifest canonical input write";
+            return false;
+        }
+        std::string contents;
+        if (!read_file_required(canonical_paths[i], contents, error)) {
+            return false;
+        }
+        uint64_t hash = XXH64(contents.data(), contents.size(), 0);
+        if (written++) {
+            fputc(',', f);
+        }
+        fprintf(f, "\n%*s{\"path\": ", static_cast<int>(indent + 2), "");
+        json_file_string(f, canonical_paths[i]);
+        fprintf(f, ", \"size\": %llu, \"hash\": ",
+            static_cast<unsigned long long>(contents.size()));
+        json_file_string(f, "xxh64:" + hex64_string(hash));
+        fputc('}', f);
+    }
+    if (written) {
+        fprintf(f, "\n%*s", static_cast<int>(indent), "");
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_context_array_for_index(FILE* f, const char* key,
+        const std::vector<std::pair<std::string, std::string>>& values,
+        std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON context write")) {
+            error = "operation cancelled during AOT symbol-index JSON context write";
+            return false;
+        }
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"key\": ", f);
+        json_file_string(f, values[i].first);
+        fputs(", \"value\": ", f);
+        json_file_string(f, values[i].second);
+        fputc('}', f);
+    }
+    if (!values.empty()) {
+        fputs("\n  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_symbol_array_for_index(FILE* f, const char* key,
+        const std::vector<QoreAOTSymbolIndexRecord>& records,
+        std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON record write")) {
+            error = "operation cancelled during AOT symbol-index JSON record write";
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = records[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"kind\": ", f);
+        json_file_string(f, qoreAOTSymbolKindName(rec.kind));
+        fputs(", \"dependency_class\": ", f);
+        json_file_string(f, qoreAOTDependencyClassName(rec.dependency_class));
+        fprintf(f, ", \"flags\": %u, \"metadata_slot\": ", rec.flags);
+        if (rec.metadata_slot == UINT32_MAX) {
+            fputs("null", f);
+        } else {
+            fprintf(f, "%u", rec.metadata_slot);
+        }
+        fputs(", \"qore_path\": ", f);
+        json_file_string(f, rec.qore_path);
+        fputs(", \"source_file\": ", f);
+        json_file_string(f, rec.source_file);
+        fputs(", \"visibility\": ", f);
+        json_file_string(f, rec.visibility);
+        fputs(", \"signature_hash\": ", f);
+        json_file_string(f, rec.signature_hash);
+        fputs(", \"declaration_hash\": ", f);
+        json_file_string(f, rec.declaration_hash);
+        fputs(", \"value_hash\": ", f);
+        json_file_string(f, rec.value_hash);
+        fputs(", \"native_symbol\": ", f);
+        json_file_string(f, rec.native_symbol);
+        fputs(", \"abi_kind\": ", f);
+        json_file_string(f, rec.abi_kind);
+        fputs(", \"consumer_source_file\": ", f);
+        json_file_string(f, rec.consumer_source_file);
+        fputs(", \"provider_source_file\": ", f);
+        json_file_string(f, rec.provider_source_file);
+        fputc('}', f);
+    }
+    if (!records.empty()) {
+        fputs("\n  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool json_file_call_relocations_for_index(FILE* f, const char* key,
+        const std::vector<QoreAOTCallRelocationRecord>& records,
+        std::string& error, const char* comma = ",") {
+    fprintf(f, "  \"%s\": [", key);
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT call-relocation JSON record write")) {
+            error = "operation cancelled during AOT call-relocation JSON record write";
+            return false;
+        }
+        const QoreAOTCallRelocationRecord& rec = records[i];
+        if (i) {
+            fputc(',', f);
+        }
+        fputs("\n    {\"function\": ", f);
+        json_file_string(f, rec.function_name);
+        fprintf(f, ", \"expr_slot\": %u, \"target_kind\": ", rec.expr_slot);
+        json_file_string(f, qoreAOTCallRelocationTargetKindName(rec.target_kind));
+        fputs(", \"strictness\": ", f);
+        json_file_string(f, rec.strictness == QoreAOTCallRelocationStrictness::REQUIRED
+            ? "required" : "optional");
+        fputs(", \"qore_path\": ", f);
+        json_file_string(f, rec.qore_path);
+        fputs(", \"path\": ", f);
+        json_file_string(f, rec.qore_path);
+        fputs(", \"signature_hash\": ", f);
+        json_file_string(f, rec.signature_hash);
+        fputs(", \"declaration_hash\": ", f);
+        json_file_string(f, rec.declaration_hash);
+        fputs(", \"native_symbol\": ", f);
+        json_file_string(f, rec.native_symbol);
+        fputs(", \"fallback_descriptor\": ", f);
+        json_file_string(f, rec.fallback_descriptor);
+        fputc('}', f);
+    }
+    if (!records.empty()) {
+        fputs("\n  ", f);
+    }
+    fprintf(f, "]%s\n", comma);
+    return true;
+}
+
+static bool write_aot_index_json_stream(FILE* f, const char* path,
+        bool allow_empty_metadata, std::string& error) {
+    std::vector<AOTDumpMetadataBlob> blobs;
+    std::set<std::string> seen;
+    collect_object_metadata_quiet(path, blobs, seen);
+
+    std::string contents;
+    if (!read_file_required(path, contents, error)) {
+        return false;
+    }
+    scan_aot_metadata_blobs(contents, blobs, seen);
+
+    QoreAOTSymbolIndex combined;
+    combined.version = QORE_AOT_SYMBOL_INDEX_VERSION;
+    std::vector<QoreAOTCallRelocationRecord> call_relocations;
+    std::vector<std::string> source_text;
+    std::set<std::string> source_seen;
+    for (size_t i = 0; i < blobs.size(); ++i) {
+        if (!json_dump_check_cancel(i, "AOT symbol-index JSON write")) {
+            error = "operation cancelled during AOT symbol-index JSON write";
+            return false;
+        }
+        QoreAOTBinaryReader reader;
+        if (!reader.open(blobs[i].bytes.data(), static_cast<uint32_t>(blobs[i].bytes.size()), error)) {
+            error = "invalid AOT metadata in '" + std::string(path) + "': " + error;
+            return false;
+        }
+        const char* label = reader.getLabel();
+        if (label && source_seen.insert(label).second) {
+            source_text.emplace_back(label);
+        }
+        QoreAOTCallRelocations relocs;
+        if (!readCallRelocations(reader, relocs, error)) {
+            error = "invalid CALL_RELOCATIONS in '" + std::string(path) + "': " + error;
+            return false;
+        }
+        if (relocs.version) {
+            call_relocations.insert(call_relocations.end(), relocs.records.begin(), relocs.records.end());
+        }
+        QoreAOTSymbolIndex index;
+        if (!readSymbolIndex(reader, index, error)) {
+            error = "invalid SYMBOL_INDEX in '" + std::string(path) + "': " + error;
+            return false;
+        }
+        if (!index.version) {
+            continue;
+        }
+        combined.context.insert(combined.context.end(), index.context.begin(), index.context.end());
+        combined.defined.insert(combined.defined.end(), index.defined.begin(), index.defined.end());
+        combined.imported.insert(combined.imported.end(), index.imported.begin(), index.imported.end());
+        combined.native.insert(combined.native.end(), index.native.begin(), index.native.end());
+    }
+
+    uint64_t object_hash = XXH64(contents.data(), contents.size(), 0);
+    std::string hash = "xxh64:" + hex64_string(object_hash);
+    std::vector<std::string> source_parse_defines;
+    if (!json_collect_context_values(combined.context, "source_parse_define", source_parse_defines)) {
+        error = "operation cancelled during AOT symbol-index parse-define collection";
+        return false;
+    }
+
+    fputs("{\n", f);
+    write_json_file_u64_field(f, "format", 1, 2);
+    write_json_file_string_field(f, "output", path, 2);
+    write_json_file_string_field(f, "object_hash", hash, 2);
+    write_json_file_u64_field(f, "object_size", contents.size(), 2);
+    write_json_file_string_field(f, "source", source_text.empty() ? "" : source_text.front(), 2);
+    if (!json_file_string_array(f, "source_text", source_text, error)
+            || !json_file_string_array(f, "source_parse_defines", source_parse_defines, error)
+            || !json_file_context_array_for_index(f, "context", combined.context, error)
+            || !json_file_symbol_array_for_index(f, "defines", combined.defined, error)
+            || !json_file_symbol_array_for_index(f, "provides", combined.defined, error)
+            || !json_file_symbol_array_for_index(f, "requires", combined.imported, error)
+            || !json_file_symbol_array_for_index(f, "native", combined.native, error)
+            || !json_file_call_relocations_for_index(f, "call_relocations", call_relocations, error)) {
+        return false;
+    }
+    write_json_file_string_field(f, "native_body_hash", hash, 2, "");
+    fputs("}\n", f);
+    if (json_output_cancelled) {
+        error = "operation cancelled during AOT symbol-index JSON write";
+        return false;
+    }
+    if (blobs.empty() && !allow_empty_metadata) {
+        error = "no AOT metadata found in '" + std::string(path) + "'";
+        return false;
+    }
+    return true;
+}
+
+static bool write_aot_index_json_file(const char* index_path, const char* object_path,
+        bool allow_empty_metadata, std::string& error) {
+    json_output_cancelled = false;
+    char* buf = nullptr;
+    size_t size = 0;
+    FILE* f = open_memstream(&buf, &size);
+    if (!f) {
+        error = "cannot allocate AOT index JSON buffer: " + std::string(strerror(errno));
+        return false;
+    }
+    bool ok = write_aot_index_json_stream(f, object_path, allow_empty_metadata, error);
+    if (fclose(f) != 0 && ok) {
+        error = "cannot close AOT index JSON buffer: " + std::string(strerror(errno));
+        ok = false;
+    }
+    std::string content;
+    if (ok) {
+        content.assign(buf, size);
+    }
+    free(buf);
+    return ok && write_generated_file_if_changed(index_path, content, error);
+}
+
+static void read_make_depfile_inputs(const std::string& depfile,
+        std::vector<std::string>& out) {
+    std::string text;
+    if (!is_file(depfile) || !read_file(depfile.c_str(), text)) {
+        return;
+    }
+    size_t pos = text.find(':');
+    if (pos == std::string::npos) {
+        return;
+    }
+    ++pos;
+    std::string token;
+    bool escaped = false;
+    for (; pos < text.size(); ++pos) {
+        char c = text[pos];
+        if (escaped) {
+            if (c != '\n') {
+                token.push_back(c);
+            }
+            escaped = false;
+            continue;
+        }
+        if (c == '\\') {
+            escaped = true;
+            continue;
+        }
+        if (std::isspace(static_cast<unsigned char>(c))) {
+            if (!token.empty()) {
+                out.push_back(token);
+                token.clear();
+            }
+            continue;
+        }
+        token.push_back(c);
+    }
+    if (!token.empty()) {
+        out.push_back(token);
+    }
+}
+
+static void collect_qo_library_inputs(std::vector<std::string>& out,
+        const std::vector<std::string>& dirs, const std::string& output) {
+    std::string output_canon = output.empty() ? "" : canonical_existing_path(output);
+    for (const std::string& dir_path : dirs) {
+        DIR* d = opendir(dir_path.c_str());
+        if (!d) {
+            continue;
+        }
+        struct dirent* ent;
+        while ((ent = readdir(d)) != nullptr) {
+            if (!has_qo_extension(ent->d_name)) {
+                continue;
+            }
+            std::string path = dir_path + "/" + ent->d_name;
+            std::string canon = canonical_existing_path(path);
+            if (!output_canon.empty() && canon == output_canon) {
+                continue;
+            }
+            out.push_back(canon);
+        }
+        closedir(d);
+    }
+}
+
+static std::string resolve_command_path(const char* argv0) {
+    if (!argv0 || !*argv0) {
+        return "";
+    }
+    if (strchr(argv0, '/')) {
+        return canonical_existing_path(argv0);
+    }
+    const char* path_env = getenv("PATH");
+    if (!path_env) {
+        return argv0;
+    }
+    const char* start = path_env;
+    for (const char* p = path_env; ; ++p) {
+        if (*p == ':' || *p == '\0') {
+            std::string dir(start, p - start);
+            std::string candidate = (dir.empty() ? "." : dir) + "/" + argv0;
+            if (access(candidate.c_str(), X_OK) == 0) {
+                return canonical_existing_path(candidate);
+            }
+            if (*p == '\0') {
+                break;
+            }
+            start = p + 1;
+        }
+    }
+    return argv0;
+}
+
+struct QCCBuildManifest {
+    std::string kind;
+    std::string output;
+    std::string index_json;
+    std::string depfile;
+    std::string link_map;
+    std::string aggregate_symbol;
+    std::vector<std::string> inputs;
+    std::vector<std::string> extra_inputs;
+};
+
+struct QCCFileFingerprint {
+    bool exists = false;
+    uint64_t size = 0;
+    uint64_t hash = 0;
+};
+
+static QCCFileFingerprint qcc_file_fingerprint(const std::string& path) {
+    QCCFileFingerprint rv;
+    if (path.empty() || !is_file(path)) {
+        return rv;
+    }
+
+    std::string contents;
+    std::string error;
+    if (!read_file_required(path, contents, error)) {
+        return rv;
+    }
+    rv.exists = true;
+    rv.size = contents.size();
+    rv.hash = XXH64(contents.data(), contents.size(), 0);
+    return rv;
+}
+
+static bool qcc_file_fingerprint_equal(const QCCFileFingerprint& a,
+        const QCCFileFingerprint& b) {
+    return a.exists == b.exists && a.size == b.size && a.hash == b.hash;
+}
+
+static std::string qcc_fingerprint_hash_string(const QCCFileFingerprint& fp) {
+    return fp.exists ? "xxh64:" + hex64_string(fp.hash) : "";
+}
+
+static bool touch_qcc_file(const char* path, std::string& error) {
+    if (!path || !*path) {
+        return true;
+    }
+
+    FILE* f = fopen(path, "ab");
+    if (!f) {
+        error = "cannot open stamp '" + std::string(path) + "': " + strerror(errno);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close stamp '" + std::string(path) + "': " + strerror(errno);
+        return false;
+    }
+    if (utime(path, nullptr) != 0) {
+        error = "cannot touch stamp '" + std::string(path) + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+static bool write_qcc_status_json_file(const QCCBuildManifest& manifest,
+        bool built, bool skipped, bool output_changed,
+        const QCCFileFingerprint& output_fp, std::string& error) {
+    if (!write_status_json_path) {
+        return true;
+    }
+
+    char* buf = nullptr;
+    size_t size = 0;
+    FILE* f = open_memstream(&buf, &size);
+    if (!f) {
+        error = "cannot allocate qcc status JSON buffer: " + std::string(strerror(errno));
+        return false;
+    }
+
+    fputs("{\n", f);
+    write_json_file_u64_field(f, "format", 1, 2);
+    write_json_file_string_field(f, "tool", "qcc", 2);
+    write_json_file_string_field(f, "kind", manifest.kind, 2);
+    write_json_file_string_field(f, "output", manifest.output, 2);
+    write_json_file_bool_field(f, "built", built, 2);
+    write_json_file_bool_field(f, "skipped", skipped, 2);
+    write_json_file_bool_field(f, "manifest_current", skipped, 2);
+    write_json_file_bool_field(f, "output_changed", output_changed, 2);
+    write_json_file_u64_field(f, "output_size", output_fp.size, 2);
+    write_json_file_string_field(f, "output_hash", qcc_fingerprint_hash_string(output_fp), 2);
+    fprintf(f, "  \"sidecars\": {\n");
+    write_json_file_string_field(f, "status_json", write_status_json_path ? write_status_json_path : "", 4);
+    write_json_file_string_field(f, "index_json", manifest.index_json, 4);
+    write_json_file_string_field(f, "manifest", write_manifest_path ? write_manifest_path : "", 4);
+    write_json_file_string_field(f, "depfile", manifest.depfile, 4);
+    write_json_file_string_field(f, "link_map", manifest.link_map, 4);
+    write_json_file_string_field(f, "success_stamp", success_stamp_path ? success_stamp_path : "", 4);
+    write_json_file_string_field(f, "content_stamp", content_stamp_path ? content_stamp_path : "", 4, "");
+    fputs("  }\n", f);
+    fputs("}\n", f);
+
+    bool ok = true;
+    if (fclose(f) != 0) {
+        error = "cannot close qcc status JSON buffer: " + std::string(strerror(errno));
+        ok = false;
+    }
+    std::string content;
+    if (ok) {
+        content.assign(buf, size);
+    }
+    free(buf);
+    return ok && write_generated_file_if_changed(write_status_json_path, content, error);
+}
+
+static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
+        const char* argv0, std::string& content, std::string& error) {
+    if (manifest.output.empty() || !is_file(manifest.output)) {
+        return false;
+    }
+
+    char* buf = nullptr;
+    size_t size = 0;
+    FILE* f = open_memstream(&buf, &size);
+    if (!f) {
+        error = "cannot allocate qcc manifest buffer: " + std::string(strerror(errno));
+        return false;
+    }
+
+    fputs("{\n", f);
+    write_json_file_u64_field(f, "format", 1, 2);
+    write_json_file_string_field(f, "tool", "qcc", 2);
+    write_json_file_string_field(f, "manifest_version", "2026-06-14-qcc-build-v1", 2);
+    write_json_file_string_field(f, "kind", manifest.kind, 2);
+    std::string qcc_path = resolve_command_path(argv0);
+    if (is_file(qcc_path)) {
+        if (!write_json_file_record(f, "qcc", qcc_path, 2, error)) {
+            fclose(f);
+            free(buf);
+            return false;
+        }
+    } else {
+        write_json_file_string_field(f, "qcc", qcc_path, 2);
+    }
+    if (!write_json_file_record(f, "output", manifest.output, 2, error)) {
+        fclose(f);
+        free(buf);
+        return false;
+    }
+
+    fprintf(f, "  \"sidecars\": {\n");
+    write_json_file_string_field(f, "index_json", manifest.index_json, 4);
+    write_json_file_string_field(f, "depfile", manifest.depfile, 4);
+    write_json_file_string_field(f, "link_map", manifest.link_map, 4, "");
+    fputs("  },\n", f);
+
+    fprintf(f, "  \"options\": {\n");
+    write_json_file_u64_field(f, "opt_level", opt_level, 4);
+    write_json_file_string_field(f, "target_triple", target_triple ? target_triple : "", 4);
+    write_json_file_bool_field(f, "include_source", include_source, 4);
+    write_json_file_bool_field(f, "strip_debug_info", strip_debug_info, 4);
+    write_json_file_bool_field(f, "warnings_are_errors", warnings_are_errors, 4);
+    write_json_file_bool_field(f, "allow_unresolved_imports", allow_unresolved_qo_imports, 4);
+    write_json_file_bool_field(f, "strict_call_relocations", strict_call_relocations, 4);
+    write_json_file_bool_field(f, "script_aggregate_native_registers",
+        script_aggregate_native_registers, 4);
+    write_json_file_bool_field(f, "depfile_qo_input_content_stamps",
+        depfile_qo_input_content_stamps, 4);
+    write_json_file_string_field(f, "aggregate_symbol", manifest.aggregate_symbol, 4, "");
+    fputs("  },\n", f);
+
+    fprintf(f, "  \"environment\": {\n");
+    const char* qore_include_dir = getenv("QORE_INCLUDE_DIR");
+    const char* qore_module_dir = getenv("QORE_MODULE_DIR");
+    const char* qore_big_fn_threshold = getenv("QORE_AOT_BIG_FN_THRESHOLD");
+    const char* qore_metadata_compression = getenv("QORE_AOT_METADATA_COMPRESSION");
+    write_json_file_string_field(f, "QORE_INCLUDE_DIR", qore_include_dir ? qore_include_dir : "", 4);
+    write_json_file_string_field(f, "QORE_MODULE_DIR", qore_module_dir ? qore_module_dir : "", 4);
+    write_json_file_string_field(f, "QORE_AOT_BIG_FN_THRESHOLD",
+        qore_big_fn_threshold ? qore_big_fn_threshold : "", 4);
+    write_json_file_string_field(f, "QORE_AOT_METADATA_COMPRESSION",
+        qore_metadata_compression ? qore_metadata_compression : "", 4, "");
+    fputs("  },\n", f);
+
+    std::vector<std::string> all_inputs = manifest.inputs;
+    for (const std::string& stub : stub_files) {
+        all_inputs.push_back(stub);
+    }
+    all_inputs.insert(all_inputs.end(), manifest.extra_inputs.begin(), manifest.extra_inputs.end());
+    all_inputs.insert(all_inputs.end(), manifest_inputs.begin(), manifest_inputs.end());
+    if (!manifest.depfile.empty() && is_file(manifest.depfile)) {
+        all_inputs.push_back(manifest.depfile);
+        read_make_depfile_inputs(manifest.depfile, all_inputs);
+    }
+    if (!manifest.link_map.empty() && is_file(manifest.link_map)) {
+        all_inputs.push_back(manifest.link_map);
+    }
+    if (!manifest.index_json.empty() && is_file(manifest.index_json)) {
+        all_inputs.push_back(manifest.index_json);
+    }
+    if (!write_json_file_record_array(f, "inputs", all_inputs, 2, error)) {
+        fclose(f);
+        free(buf);
+        return false;
+    }
+
+    fprintf(f, "  \"parse_defines\": [");
+    for (size_t i = 0; i < parse_defines.size(); ++i) {
+        if (i) {
+            fputs(", ", f);
+        }
+        json_file_string(f, parse_defines[i]);
+    }
+    fputs("],\n", f);
+    fprintf(f, "  \"parse_options\": [");
+    for (size_t i = 0; i < parse_option_flags.size(); ++i) {
+        if (i) {
+            fputs(", ", f);
+        }
+        json_file_string(f, parse_option_flags[i]);
+    }
+    fputs("],\n", f);
+    fprintf(f, "  \"load_modules\": [");
+    for (size_t i = 0; i < load_modules.size(); ++i) {
+        if (i) {
+            fputs(", ", f);
+        }
+        json_file_string(f, load_modules[i]);
+    }
+    fputs("]\n", f);
+    fputs("}\n", f);
+
+    if (fclose(f) != 0) {
+        error = "cannot close qcc manifest buffer: " + std::string(strerror(errno));
+        free(buf);
+        return false;
+    }
+    content.assign(buf, size);
+    free(buf);
+    return true;
+}
+
+static bool qcc_manifest_current(const QCCBuildManifest& manifest, const char* argv0) {
+    if (!write_manifest_path || !is_file(write_manifest_path)) {
+        return false;
+    }
+    std::string expected;
+    std::string error;
+    if (!build_qcc_manifest_content(manifest, argv0, expected, error)) {
+        return false;
+    }
+    std::string old;
+    return read_file(write_manifest_path, old) && old == expected;
+}
+
+static bool write_qcc_manifest_file(const QCCBuildManifest& manifest,
+        const char* argv0, std::string& error) {
+    if (!write_manifest_path) {
+        return true;
+    }
+    std::string content;
+    if (!build_qcc_manifest_content(manifest, argv0, content, error)) {
+        if (error.empty()) {
+            error = "cannot build qcc manifest for '" + manifest.output + "'";
+        }
+        return false;
+    }
+    return write_generated_file_if_changed(write_manifest_path, content, error);
+}
+
+static bool write_requested_sidecars(const QCCBuildManifest& manifest,
+        const char* argv0, bool allow_empty_index, std::string& error) {
+    if (write_index_json_path
+            && !write_aot_index_json_file(write_index_json_path, manifest.output.c_str(),
+                allow_empty_index, error)) {
+        return false;
+    }
+    return write_qcc_manifest_file(manifest, argv0, error);
+}
+
+static bool finish_qcc_build(const QCCBuildManifest& manifest, const char* argv0,
+        const QCCFileFingerprint& before, bool built, bool skipped,
+        bool allow_empty_index, std::string& error) {
+    if (built && !write_requested_sidecars(manifest, argv0, allow_empty_index, error)) {
+        return false;
+    }
+
+    QCCFileFingerprint after = qcc_file_fingerprint(manifest.output);
+    if (!after.exists) {
+        error = "generated output missing after successful qcc command: '" + manifest.output + "'";
+        return false;
+    }
+
+    bool output_changed = built && !qcc_file_fingerprint_equal(before, after);
+    if (!write_qcc_status_json_file(manifest, built, skipped, output_changed, after, error)) {
+        return false;
+    }
+    bool content_stamp_missing = content_stamp_path && !is_file(content_stamp_path);
+    if (content_stamp_path && (output_changed || ((built || skipped) && content_stamp_missing))
+            && !touch_qcc_file(content_stamp_path, error)) {
+        return false;
+    }
+    if (success_stamp_path && !touch_qcc_file(success_stamp_path, error)) {
+        return false;
+    }
+    return true;
+}
+
+static bool qcc_single_output_sidecars_requested() {
+    return write_index_json_path || write_manifest_path || skip_if_manifest_current
+        || write_status_json_path || success_stamp_path || content_stamp_path;
+}
+
+static void add_existing_qo_inputs_from_args(std::vector<std::string>& inputs,
+        int begin, int argc, char** argv) {
+    for (int i = begin; i < argc; ++i) {
+        inputs.push_back(canonical_existing_path(argv[i]));
+    }
 }
 
 static int dump_aot_info_for_file(const char* path) {
@@ -3659,6 +6384,33 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    if (depfile_path && depfile_dir) {
+        fprintf(stderr,
+            "error: --depfile and --depfile-dir are mutually exclusive\n");
+        return 1;
+    }
+    if (depfile_target_path && !depfile_path) {
+        fprintf(stderr,
+            "error: --depfile-target requires --depfile=FILE\n");
+        return 1;
+    }
+    if (skip_if_manifest_current && !write_manifest_path) {
+        fprintf(stderr,
+            "error: --skip-if-manifest-current requires --write-manifest=FILE\n");
+        return 1;
+    }
+
+    if (dump_index_json) {
+        if (optind + 1 != argc) {
+            fprintf(stderr, "error: --dump-index-json requires exactly one binary/object path\n");
+            return 1;
+        }
+        qore_init(QL_GPL, "UTF-8", true);
+        int rc = dump_aot_index_json_for_file(argv[optind]);
+        qore_cleanup();
+        return rc;
+    }
+
     if (dump_symbols || dump_sections) {
         dump_info = true;
     }
@@ -3676,6 +6428,169 @@ int main(int argc, char** argv) {
         }
         qore_cleanup();
         return rc;
+    }
+
+    if ((link_aggregate_symbol || qolink_map_path) && !link_qo) {
+        fprintf(stderr,
+            "error: --aggregate-symbol and --qolink-map are only valid with --link-qo\n");
+        return 1;
+    }
+    if ((strict_call_relocations || allow_unresolved_qo_imports) && !link_qo) {
+        fprintf(stderr,
+            "error: --strict-call-relocations and --allow-unresolved-imports are only valid with --link-qo\n");
+        return 1;
+    }
+    if (script_aggregate_native_registers && !script_aggregate_symbol) {
+        fprintf(stderr,
+            "error: --script-aggregate-native-registers is only valid with --script-aggregate\n");
+        return 1;
+    }
+
+    if (link_qo) {
+        if (compile_only || module_mode || archive_mode || from_objects || context_dir
+                || batch_output_dir || script_aggregate_symbol) {
+            fprintf(stderr,
+                "error: --link-qo cannot be combined with compile/module/archive/source aggregate modes\n");
+            return 1;
+        }
+        if (!output_path) {
+            fprintf(stderr, "error: --link-qo requires -o/--output\n");
+            return 1;
+        }
+        if (!link_aggregate_symbol || !*link_aggregate_symbol) {
+            fprintf(stderr, "error: --link-qo requires --aggregate-symbol=SYM\n");
+            return 1;
+        }
+        if (optind >= argc) {
+            fprintf(stderr, "error: --link-qo requires at least one .qo input\n");
+            return 1;
+        }
+
+        std::string map_path = qolink_map_path ? qolink_map_path
+            : std::string(output_path) + ".qolink.json";
+        QCCBuildManifest manifest;
+        manifest.kind = "link-qo";
+        manifest.output = output_path;
+        manifest.index_json = write_index_json_path ? write_index_json_path : "";
+        manifest.depfile = depfile_path ? depfile_path : "";
+        manifest.link_map = map_path;
+        manifest.aggregate_symbol = link_aggregate_symbol;
+        add_existing_qo_inputs_from_args(manifest.inputs, optind, argc, argv);
+        QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
+        if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
+            if (qcc_output_verbose()) {
+                printf("qcc: manifest current, skipped qo link aggregate: %s\n", output_path);
+            }
+            std::string error;
+            if (!finish_qcc_build(manifest, argv[0], output_before, false, true, true, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                return 1;
+            }
+            return 0;
+        }
+
+        std::vector<QOLinkInputInfo> inputs;
+        inputs.reserve(argc - optind);
+        qore_init(QL_GPL, "UTF-8", true);
+        for (int i = optind; i < argc; ++i) {
+            std::string error;
+            if (!qo_link_check_cancel(static_cast<size_t>(i - optind),
+                    "AOT qo-link input collection", error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            if (!has_qo_extension(argv[i])) {
+                fprintf(stderr, "error: --link-qo input '%s' must end in .qo\n", argv[i]);
+                qore_cleanup();
+                return 1;
+            }
+            char* resolved = realpath(argv[i], nullptr);
+            if (!resolved) {
+                fprintf(stderr, "error: cannot resolve '%s': %s\n", argv[i], strerror(errno));
+                qore_cleanup();
+                return 1;
+            }
+            QOLinkInputInfo input;
+            bool ok = collect_qo_link_input(resolved, input, error);
+            free(resolved);
+            if (!ok) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            inputs.push_back(std::move(input));
+        }
+
+        QOLinkPlan plan;
+        std::string error;
+        if (!validate_qo_link_inputs(inputs, plan, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        if ((!allow_unresolved_qo_imports && !plan.unresolved_imports.empty())
+                || !plan.ambiguous_imports.empty() || !plan.hash_mismatches.empty()) {
+            print_qo_link_issues("unresolved import", plan.unresolved_imports);
+            print_qo_link_issues("ambiguous import", plan.ambiguous_imports);
+            print_qo_link_issues("hash mismatch", plan.hash_mismatches);
+            qore_cleanup();
+            return 1;
+        }
+        if (strict_call_relocations
+                && (!plan.unresolved_call_relocations.empty()
+                    || !plan.ambiguous_call_relocations.empty()
+                    || !plan.call_relocation_hash_mismatches.empty())) {
+            print_qo_link_call_relocation_issues("unresolved", plan.unresolved_call_relocations);
+            print_qo_link_call_relocation_issues("ambiguous", plan.ambiguous_call_relocations);
+            print_qo_link_call_relocation_issues("hash mismatch", plan.call_relocation_hash_mismatches);
+            qore_cleanup();
+            return 1;
+        }
+
+        std::vector<std::string> register_symbols;
+        register_symbols.reserve(inputs.size());
+        for (size_t i = 0; i < inputs.size(); ++i) {
+            if (!qo_link_check_cancel(i, "AOT qo-link register-symbol collection", error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            register_symbols.push_back(inputs[i].register_symbol);
+        }
+
+        if (!QoreAOT::compileScriptRegisterAggregate(register_symbols, output_path,
+                link_aggregate_symbol, error, opt_level, target_triple)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+
+        if (!write_qo_link_map(map_path, output_path, link_aggregate_symbol,
+                inputs, plan, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+        std::vector<std::string> depfile_inputs = qcc_depfile_explicit_inputs(manifest.inputs);
+        if (depfile_path && !write_depfile_list(depfile_path,
+                qcc_depfile_target(output_path), depfile_inputs)) {
+            qore_cleanup();
+            return 1;
+        }
+        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, true, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
+        }
+
+        if (qcc_output_verbose()) {
+            printf("qcc: linked qo aggregate from %zu .qo input%s (-O%d): %s\n",
+                inputs.size(), inputs.size() == 1 ? "" : "s", opt_level, output_path);
+            printf("qcc: wrote qo link map: %s\n", map_path.c_str());
+        }
+        qore_cleanup();
+        return 0;
     }
 
     // Phase C Item 2: link-mode — `qcc -o <binary> *.qo` emits a
@@ -3761,6 +6676,12 @@ int main(int argc, char** argv) {
         if (depfile_path) {
             fprintf(stderr,
                 "error: --depfile is not supported in one-shot multi-source "
+                "executable mode; use -c --output-dir for build-system integration\n");
+            return 1;
+        }
+        if (depfile_dir) {
+            fprintf(stderr,
+                "error: --depfile-dir is not supported in one-shot multi-source "
                 "executable mode; use -c --output-dir for build-system integration\n");
             return 1;
         }
@@ -4020,7 +6941,8 @@ int main(int argc, char** argv) {
         // without a matching `qcc -c` rule would be invisible without
         // this fallback.  Write empty-source + context depfile.
         if (depfile_path
-                && !write_depfile(depfile_path, output, std::string(), context_dir)) {
+                && !write_depfile(depfile_path, qcc_depfile_target(output),
+                    std::string(), context_dir)) {
             qore_cleanup();
             return 1;
         }
@@ -4058,11 +6980,6 @@ int main(int argc, char** argv) {
                 "--script-aggregate parses all sources in one program\n");
             return 1;
         }
-        if (depfile_path) {
-            fprintf(stderr,
-                "error: --depfile is not supported with --script-aggregate\n");
-            return 1;
-        }
         if (optind >= argc) {
             fprintf(stderr,
                 "error: --script-aggregate requires at least one source file\n");
@@ -4094,6 +7011,26 @@ int main(int argc, char** argv) {
             target_files.emplace_back(argv[i]);
         }
 
+        QCCBuildManifest manifest;
+        manifest.kind = "script-aggregate";
+        manifest.output = output_path;
+        manifest.index_json = write_index_json_path ? write_index_json_path : "";
+        manifest.depfile = depfile_path ? depfile_path : "";
+        manifest.aggregate_symbol = script_aggregate_symbol;
+        manifest.inputs = target_files;
+        QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
+        if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
+            if (qcc_output_verbose()) {
+                printf("qcc: manifest current, skipped script aggregate .qo: %s\n", output_path);
+            }
+            std::string error;
+            if (!finish_qcc_build(manifest, argv[0], output_before, false, true, false, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                return 1;
+            }
+            return 0;
+        }
+
         qore_init(QL_GPL, "UTF-8", true);
         std::string error;
         int compiled_count = 0;
@@ -4101,7 +7038,7 @@ int main(int argc, char** argv) {
             target_files, output_path, script_aggregate_symbol, PO_DEFAULT,
             error, opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines, parse_option_flags,
-            &compiled_count);
+            &compiled_count, script_aggregate_native_registers);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
@@ -4111,6 +7048,16 @@ int main(int argc, char** argv) {
             printf("qcc: compiled script aggregate .qo (-O%d, %d variants%s): %s\n",
                 opt_level, compiled_count, source_mode_suffix(include_source),
                 output_path);
+        }
+        if (depfile_path && !write_depfile_list(depfile_path,
+                qcc_depfile_target(output_path), target_files)) {
+            qore_cleanup();
+            return 1;
+        }
+        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, false, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            qore_cleanup();
+            return 1;
         }
         qore_cleanup();
         return 0;
@@ -4147,6 +7094,18 @@ int main(int argc, char** argv) {
                 "not needed in batch mode (sources share one parse)\n");
             return 1;
         }
+        if (depfile_path) {
+            fprintf(stderr,
+                "error: --depfile is single-output only; use --depfile-dir "
+                "with batch -c --output-dir mode\n");
+            return 1;
+        }
+        if (qcc_single_output_sidecars_requested()) {
+            fprintf(stderr,
+                "error: qcc build sidecars are single-output only; use one qcc "
+                "invocation per output when qcc build sidecars or stamps are used\n");
+            return 1;
+        }
 
         std::vector<std::string> batch_sources;
         for (int i = optind; i < argc; ++i) {
@@ -4159,11 +7118,17 @@ int main(int argc, char** argv) {
 
         qore_init(QL_GPL, "UTF-8", true);
         std::string error;
+        std::string depfile_dir_arg;
+        const std::string* depfile_dir_ptr = nullptr;
+        if (depfile_dir) {
+            depfile_dir_arg = depfile_dir;
+            depfile_dir_ptr = &depfile_dir_arg;
+        }
         bool ok = QoreAOT::compileScriptFilesBatch(
             batch_sources, batch_output_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines,
-            parse_option_flags);
+            parse_option_flags, nullptr, true, depfile_dir_ptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             qore_cleanup();
@@ -4174,6 +7139,13 @@ int main(int argc, char** argv) {
     }
 
     const char* source_file = argv[optind];
+
+    if (depfile_dir) {
+        fprintf(stderr,
+            "error: --depfile-dir is only valid with batch -c --output-dir "
+            "mode and multiple source files\n");
+        return 1;
+    }
 
     // Resolve to absolute path so compiled executables can resolve relative %requires
     // paths even when run from a different working directory
@@ -4380,6 +7352,46 @@ int main(int argc, char** argv) {
         }
     }
 
+    QCCBuildManifest manifest;
+    manifest.output = output;
+    manifest.index_json = write_index_json_path ? write_index_json_path : "";
+    manifest.depfile = depfile_path ? depfile_path : "";
+    if (script_mode) {
+        manifest.kind = "script-file";
+        manifest.inputs.push_back(source_file);
+        if (!manifest_skip_qo_library_inputs) {
+            collect_qo_library_inputs(manifest.extra_inputs, script_lib_dirs, output);
+        }
+    } else if (per_file_mode) {
+        manifest.kind = "module-file";
+        manifest.inputs.push_back(source_file);
+        if (context_dir) {
+            manifest.extra_inputs.push_back(context_dir);
+        }
+    } else if (is_split_module) {
+        manifest.kind = compile_only ? "split-module-qo" : "split-module";
+        manifest.inputs.push_back(source_file);
+    } else if (module_mode) {
+        manifest.kind = compile_only ? "module-qo" : "module";
+        manifest.inputs.push_back(source_file);
+    } else {
+        manifest.kind = "executable";
+        manifest.inputs.push_back(source_file);
+    }
+    QCCFileFingerprint output_before = qcc_file_fingerprint(manifest.output);
+    if (skip_if_manifest_current && qcc_manifest_current(manifest, argv[0])) {
+        if (qcc_output_verbose()) {
+            printf("qcc: manifest current, skipped %s: %s\n",
+                manifest.kind.c_str(), output.c_str());
+        }
+        std::string error;
+        if (!finish_qcc_build(manifest, argv[0], output_before, false, true, false, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            return 1;
+        }
+        return 0;
+    }
+
     // Initialize Qore library
     qore_init(QL_GPL, "UTF-8", true);
 
@@ -4395,6 +7407,19 @@ int main(int argc, char** argv) {
     if (script_mode) {
         // Compile a single script-style source with
         // optional sibling-.qo decl preload.
+        std::vector<std::string> parsed_files;
+        QoreAOTSourceSymbolManifest source_symbols;
+        const QoreAOTSourceSymbolManifest* source_symbol_arg = nullptr;
+        if (source_symbol_manifest_path) {
+            if (!read_source_symbol_manifest(source_symbol_manifest_path, source_symbols, error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                qore_cleanup();
+                return 1;
+            }
+            if (!source_symbols.empty()) {
+                source_symbol_arg = &source_symbols;
+            }
+        }
         if (!QoreAOT::compileScriptFile(
                 source_file,
                 script_lib_dirs,
@@ -4406,7 +7431,9 @@ int main(int argc, char** argv) {
                 include_source,
                 load_modules,
                 stub_files,
-                parse_defines)) {
+                parse_defines,
+                depfile_path ? &parsed_files : nullptr,
+                source_symbol_arg)) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -4416,10 +7443,12 @@ int main(int argc, char** argv) {
                     script_lib_dirs.size() == 1 ? "" : "s",
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = target source only (script mode has no
-            // --context dir; -L preload is a linker-style decl path,
-            // not a parser-opened source set).  Not yet wired in cmake.
-            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+            // deps = the target source plus its `%include` closure, as
+            // reported by compileScriptFile (the same set it used to filter
+            // the `-L` preload).  This lets the build rebuild the `.qo` when
+            // any `%include`d file changes — not just the target itself.
+            if (depfile_path && !write_depfile_list(depfile_path,
+                    qcc_depfile_target(output), parsed_files)) {
                 rc = 1;
             }
         }
@@ -4427,7 +7456,9 @@ int main(int argc, char** argv) {
         // Compile a single file from a split module
         // directory.  The directory is the parse context; the file is the
         // sole source of emitted metadata and native functions.
-        if (!QoreAOT::compileSeparatedModuleFile(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileSeparatedModuleFile(
                 context_dir,
                 source_file,
                 output,
@@ -4435,7 +7466,9 @@ int main(int argc, char** argv) {
                 error,
                 opt_level,
                 target_triple,
-                include_source)) {
+                include_source);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -4443,16 +7476,21 @@ int main(int argc, char** argv) {
                 printf("qcc: compiled per-file .qo (-O%d%s): %s\n", opt_level,
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = target source + every sibling .qm/.qc/.ql
-            // in --context=DIR (matches compileSeparatedModuleFile's dir scan).
+            // deps = target source + every sibling .qm/.qc/.ql in --context=DIR
+            // (matches compileSeparatedModuleFile's dir scan) + the .qmod files
+            // of modules loaded for the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, source_file, context_dir)) {
+                    && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                      source_file, context_dir,
+                                      &dep_module_files)) {
                 rc = 1;
             }
         }
     } else if (is_split_module) {
         // Compile split module directory
-        if (!QoreAOT::compileSeparatedModule(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
                 compile_po,
@@ -4460,7 +7498,9 @@ int main(int argc, char** argv) {
                 opt_level,
                 target_triple,
                 include_source,
-                compile_only)) {
+                compile_only);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -4472,14 +7512,19 @@ int main(int argc, char** argv) {
             // source_file is the split-module directory itself;
             // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
             // Leave `source` empty so the target dir is not double-listed.
+            // dep_module_files adds the .qmod files of the %requires closure.
             if (depfile_path
-                    && !write_depfile(depfile_path, output, std::string(), source_file)) {
+                    && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                      std::string(), source_file,
+                                      &dep_module_files)) {
                 rc = 1;
             }
         }
     } else if (module_mode) {
         // Compile single-file module
-        if (!QoreAOT::compileModule(
+        std::vector<std::string> dep_module_files;
+        qore_aot_set_module_dep_sink(&dep_module_files);
+        bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
                 output,
@@ -4488,7 +7533,9 @@ int main(int argc, char** argv) {
                 opt_level,
                 target_triple,
                 include_source,
-                compile_only)) {
+                compile_only);
+        qore_aot_set_module_dep_sink(nullptr);
+        if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
@@ -4497,8 +7544,10 @@ int main(int argc, char** argv) {
                     compile_only ? ", relocatable .qo" : "",
                     source_mode_suffix(include_source), output.c_str());
             }
-            // deps = just the .qm file
-            if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
+            // deps = the .qm file + the .qmod files of the %requires closure
+            if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
+                                               source_file, nullptr,
+                                               &dep_module_files)) {
                 rc = 1;
             }
         }
@@ -4542,6 +7591,13 @@ int main(int argc, char** argv) {
         }
 
         qpgm->waitForTerminationAndDeref(&xsink);
+    }
+
+    if (!rc) {
+        if (!finish_qcc_build(manifest, argv[0], output_before, true, false, false, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        }
     }
 
     // Cleanup

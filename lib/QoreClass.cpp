@@ -70,7 +70,8 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgra
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
         CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), nullptr,
@@ -4128,7 +4129,7 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
     //printd(5, "qore_class_private::getMethodForEval() %s::%s() class_ctx: %p %s\n", name.c_str(), nme, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
     {
-        QoreProgram* lookup_pgm = ns ? ns->getProgram() : pgm;
+        QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
         ProgramRuntimeParseContextHelper pch(xsink, lookup_pgm);
         if (*xsink) {
             return nullptr;

@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class AotBinarySymbolResolutionTest
+
+class AotBinarySymbolResolutionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOT binary symbol resolution test", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT qmods resolve PLT symbols before module init",
+            \testAotQmodSymbolsAreResolvedBeforeInit());
+        set_return_value(main());
+    }
+
+    testAotQmodSymbolsAreResolvedBeforeInit() {
+        string cxx = ENV.CXX ?? backquote("command -v c++ 2>/dev/null || command -v g++ 2>/dev/null || true");
+        trim cxx;
+        if (!cxx) {
+            testSkip("no C++ compiler found");
+            return;
+        }
+
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string src_root = realpath(get_script_dir() + "/../../../../..");
+        string cpp_path = tmp_dir + "/LazyAotResolveFail.cpp";
+        string qmod_path = tmp_dir + "/LazyAotResolveFail.qmod";
+
+        File f();
+        f.open2(cpp_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("#include <qore/Qore.h>
+
+extern \"C\" void qore_missing_lazy_symbol_for_aot_loader_test();
+
+extern \"C\" DLLEXPORT void LazyAotResolveFail_call_missing() {
+    qore_missing_lazy_symbol_for_aot_loader_test();
+}
+
+static void lazyAotResolveFailInit(QoreModuleInitContext&, ExceptionSink&) {
+}
+
+static void lazyAotResolveFailNsInit(QoreNamespace*, QoreNamespace*, ExceptionSink&) {
+}
+
+static void lazyAotResolveFailDelete() {
+}
+
+extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = \"LazyAotResolveFail\";
+    mod_info.version = \"1.0\";
+    mod_info.desc = \"AOT lazy symbol resolution regression module\";
+    mod_info.author = \"Qore Technologies, s.r.o.\";
+    mod_info.url = \"https://qore.org\";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = lazyAotResolveFailInit;
+    mod_info.ns_init = lazyAotResolveFailNsInit;
+    mod_info.del = lazyAotResolveFailDelete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = \"MIT\";
+    mod_info.is_aot = true;
+}
+");
+        f.close();
+
+        # the macOS linker rejects undefined symbols in shared libraries by default; allow them to be
+        # left for runtime resolution (which the RTLD_NOW reopen then rejects, which is what we test).
+        # GNU/musl linkers permit undefined symbols in shared objects by default, so no flag is needed.
+        string undefined_flag = PlatformOS == "Darwin" ? " -Wl,-undefined,dynamic_lookup" : "";
+
+        string build_out = backquote(sprintf(
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore%s 2>&1",
+            shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir), undefined_flag));
+        assertTrue(is_file(qmod_path), "compiled unresolved-symbol qmod: " + build_out);
+
+        # different dynamic linkers report the unresolved symbol differently: glibc -> "undefined symbol:
+        # <sym>", musl -> "<sym>: symbol not found", macOS dyld -> "symbol not found ... _<sym>"
+        assertThrows("LOAD-MODULE-ERROR",
+            "undefined symbol.*qore_missing_lazy_symbol_for_aot_loader_test"
+            "|qore_missing_lazy_symbol_for_aot_loader_test.*not found"
+            "|not found.*qore_missing_lazy_symbol_for_aot_loader_test",
+            sub () {
+                Program p(PO_NEW_STYLE);
+                p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+                p.loadModule(qmod_path, WARN_MODULES);
+            });
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

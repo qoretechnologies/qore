@@ -88,7 +88,9 @@ Constant::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionNamespaceConstant> con(new QoreReflectionNamespaceConstant(npath->c_str(), xsink), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionNamespaceConstant> con(
+        new QoreReflectionNamespaceConstant(lookup_pgm, npath->c_str(), xsink), xsink);
     if (*xsink) {
         return;
     }
@@ -128,12 +130,14 @@ static Constant Constant::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionNamespaceConstant> cls(new QoreReflectionNamespaceConstant(npath->c_str(), xsink), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionNamespaceConstant> cls(
+        new QoreReflectionNamespaceConstant(lookup_pgm, npath->c_str(), xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return new QoreObject(QC_CONSTANT, getProgram(), cls.release());
+    return new QoreObject(QC_CONSTANT, lookup_pgm, cls.release());
 }
 
 //! Returns a %Constant object from the constant name or namespace-justified path as a string
@@ -181,7 +185,8 @@ list<Constant> l = Constant::findAllRegex("^T");
     @note searches namespace constants only; does not search class constants
 */
 static list<Constant> Constant::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_constants(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_constants(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of constants matching the regular expression pattern argument or an empty list if no namespace constants match

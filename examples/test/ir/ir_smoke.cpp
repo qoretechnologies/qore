@@ -2002,7 +2002,8 @@ static bool runExprInterpreterSmoke() {
     }
     {
         ExceptionSink bad_cast_xsink;
-        ValueHolder bad_cast_holder(QoreValue(new QoreHashDeclCastOperatorNode(nullptr, nullptr, QoreValue(1), false)),
+        ValueHolder bad_cast_holder(QoreValue(new QoreHashDeclCastOperatorNode(nullptr,
+            static_cast<const TypedHashDecl*>(nullptr), QoreValue(1), false)),
             &bad_cast_xsink);
         QoreIRInterpreter::evalExpr(QoreIROpcode::CastAny, *bad_cast_holder, &bad_cast_xsink);
         if (!bad_cast_xsink) {

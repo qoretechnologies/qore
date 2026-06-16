@@ -54,7 +54,7 @@ QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* clas
         return QoreValue();
     }
 
-    const QoreMethod* m = cls->findLocalStaticMethod(method_name->c_str());
+    const QoreMethod* m = cls->findStaticMethod(method_name->c_str());
     if (!m) {
         xsink->raiseException("UNKNOWN-METHOD", "cannot resolve static method '%s::%s()'",
             cls_path->c_str(), method_name->c_str());

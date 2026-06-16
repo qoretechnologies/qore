@@ -2487,6 +2487,15 @@ public:
         return fe ? fe->getFunction() : nullptr;
     }
 
+    DLLLOCAL static const FunctionEntry* parseFindFunctionEntry(const char* fname) {
+        return getRootNS()->rpriv->parseFindFunctionEntryIntern(fname);
+    }
+
+    DLLLOCAL static void parseMaybeWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
+            const FunctionEntry* resolved) {
+        getRootNS()->rpriv->parseWarnAmbiguousFunctionCall(loc, fname, resolved);
+    }
+
     DLLLOCAL static const FunctionEntry* parseResolveFunctionEntry(const QoreProgramLocation* loc, const char* fname) {
         return getRootNS()->rpriv->parseResolveFunctionEntryIntern(loc, fname);
     }
@@ -2502,6 +2511,31 @@ public:
 
     DLLLOCAL static void parseCommit(RootQoreNamespace& rns) {
         rns.rpriv->parseCommit();
+    }
+
+    DLLLOCAL static QoreClass* parseFindClass(RootQoreNamespace& rns, const QoreProgramLocation* loc,
+            const char* name) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->parseFindScopedClassIntern(loc, nscope, false);
+        }
+        return rns.rpriv->parseFindClassIntern(name);
+    }
+
+    DLLLOCAL static TypedHashDecl* parseFindHashDecl(RootQoreNamespace& rns, const char* name,
+            const QoreNamespace*& ns) {
+        TypedHashDecl* th = nullptr;
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            unsigned matched = 0;
+            th = rns.rpriv->parseFindScopedHashDeclIntern(nscope, matched);
+        } else {
+            th = rns.rpriv->parseFindHashDeclIntern(name);
+        }
+        if (th) {
+            ns = th->getNamespace();
+        }
+        return th;
     }
 
     DLLLOCAL static QoreValue parseFindConstantValue(const QoreProgramLocation* loc, const char* name,

@@ -181,6 +181,18 @@ static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }
 
+static std::string qore_ir_get_cast_type_path(QoreIROpcode opcode, const QoreCastOperatorNode* cast_node,
+        const QoreTypeInfo* ti) {
+    if (opcode == QoreIROpcode::CastHash) {
+        if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(cast_node)) {
+            if (hdc->isDynamicHashDeclCast()) {
+                return std::string("hash<") + hdc->getDynamicHashDeclName() + ">";
+            }
+        }
+    }
+    return ti ? qore_ir_get_type_path(ti) : (opcode == QoreIROpcode::CastList ? "list" : "");
+}
+
 llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
     ti = specializeType(ti);
     return builder->CreateGlobalStringPtr(qore_ir_get_type_path(ti));
@@ -3528,7 +3540,7 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
         llvm::Module& module, llvm::Function* llvm_func,
         bool throwing_ok,
         llvm::Value** result_out) {
-    if (!bg_inst || bg_inst->operands.empty()) {
+    if (!bg_inst) {
         return false;
     }
 
@@ -3556,6 +3568,9 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
     };
 
     if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
+        if (bg_inst->operands.empty()) {
+            return false;
+        }
         auto* recv_val = getVal(bg_inst->operands[0].id, error_dummy);
         if (!recv_val) {
             return false;
@@ -3581,6 +3596,32 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
         } else {
             *result_out = builder->CreateCall(helper,
                 {name_ptr, recv_boxed, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+        }
+        return true;
+    }
+
+    if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
+        llvm::Value* args_array = build_args_array(0, bg_inst->operands.size());
+        if (build_args_failed) {
+            return false;
+        }
+        llvm::Value* name_ptr = builder->CreateGlobalStringPtr(bg_inst->name);
+        int nargs = static_cast<int>(bg_inst->operands.size());
+        auto ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_background_static_method_name_call_aot", ft);
+        if (throwing_ok) {
+            auto helper_throwing = module.getOrInsertFunction(
+                "qore_rt_background_static_method_name_call_aot_throwing", ft);
+            *result_out = emitMaybeInvoke(helper, helper_throwing,
+                {name_ptr, args_array,
+                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                module, llvm_func, bg_inst);
+        } else {
+            *result_out = builder->CreateCall(helper,
+                {name_ptr, args_array,
                  llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
         }
         return true;
@@ -8464,6 +8505,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreClass* qc = nullptr;
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     const QoreTypeInfo* object_type_info = nullptr;
+                    std::string dynamic_class_path;
                     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(
                             inv->expr.getInternalNode())) {
                         qc = new_obj->getClass();
@@ -8474,6 +8516,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         qc = scoped_obj->oc;
                         variant = scoped_obj->getVariant();
                         object_type_info = scoped_obj->getObjectTypeInfo();
+                        if (!qc && scoped_obj->isDynamicObjectConstruct()) {
+                            dynamic_class_path = scoped_obj->getDynamicClassName();
+                        }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                             inv->expr.getInternalNode())) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
@@ -8481,30 +8526,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         object_type_info = vrn->getTypeInfo();
                     }
                     object_type_info = specializeType(object_type_info);
-                    assert(qc);
-                    llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(qc));
-                    llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
-                    llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(variant));
-                    llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(object_type_info));
-                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
-                    if (has_arg_cleanups) {
-                        auto helper = module.getOrInsertFunction(
-                                "qore_rt_new_object_nb_consume_args",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                        result = builder->CreateCall(helper,
-                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
-                                 nargs_val, xsink_arg});
+                    if (!qc && !dynamic_class_path.empty()) {
+                        llvm::Value* class_path = builder->CreateGlobalStringPtr(dynamic_class_path);
+                        llvm::Value* variant_sig = builder->CreateGlobalStringPtr("");
+                        llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(object_type_info));
+                        llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                        if (has_arg_cleanups) {
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_new_object_by_path_nb_consume_args",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper,
+                                    {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                     nargs_val, xsink_arg});
+                        } else {
+                            auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                    {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        }
                     } else {
-                        auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
-                                llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                        result = builder->CreateCall(helper,
-                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        assert(qc);
+                        llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(qc));
+                        llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
+                        llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(variant));
+                        llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
+                        llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(object_type_info));
+                        llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                        if (has_arg_cleanups) {
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_new_object_nb_consume_args",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                        false));
+                            result = builder->CreateCall(helper,
+                                    {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
+                                     nargs_val, xsink_arg});
+                        } else {
+                            auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                    {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                        }
                     }
                 }
                 // Constructor can modify locals through side effects
@@ -8513,27 +8583,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (inv->invoke_opcode == QoreIROpcode::LoadStaticVar) {
                 // LoadStaticVar invoke: resolve by class path/name in AOT, direct pointer in JIT
                 if (aot_mode) {
-                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                            inv->expr.getInternalNode());
-                    if (!static_var) {
-                        error = "AOT LoadStaticVar requires StaticClassVarRefNode metadata";
+                    const AbstractQoreNode* node = inv->expr.getInternalNode();
+                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+                    const auto* deferred_static = static_var
+                        ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                    if (!static_var && !deferred_static) {
+                        error = "AOT LoadStaticVar requires static member metadata";
                         return false;
                     }
+                    std::string class_name = static_var
+                        ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                    std::string member_name = static_var
+                        ? static_var->str : deferred_static->member_name;
                     llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                            static_var->qc.getNamespacePath(), "static_var_class_path");
+                            class_name, "static_var_class_path");
                     llvm::Value* var_name = builder->CreateGlobalStringPtr(
-                            static_var->str, "static_var_name");
+                            member_name, "static_var_name");
                     auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type}, false);
+                            {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                     const bool for_call = dot_eval_only_bases.count(inst->result.id);
                     auto helper = module.getOrInsertFunction(for_call
-                            ? "qore_rt_load_static_var_by_path_for_call"
-                            : "qore_rt_load_static_var_by_path", ft);
+                            ? "qore_rt_load_static_var_by_path_for_call_aot"
+                            : "qore_rt_load_static_var_by_path_aot", ft);
                     auto helper_throwing = module.getOrInsertFunction(for_call
-                            ? "qore_rt_load_static_var_by_path_for_call_throwing"
-                            : "qore_rt_load_static_var_by_path_throwing", ft);
+                            ? "qore_rt_load_static_var_by_path_for_call_aot_throwing"
+                            : "qore_rt_load_static_var_by_path_aot_throwing", ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {class_path, var_name, xsink_arg}, module, llvm_func, inst);
+                            {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
                 } else {
                     const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
                             inv->expr.getInternalNode());
@@ -8644,6 +8720,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                             result = emitMaybeInvoke(helper, helper_throwing,
                                     {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                        } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+                            llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                    dcr->getClassPath(), "deferred_static_call_ref_class_path");
+                            llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                    dcr->getMethodName(), "deferred_static_call_ref_method_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                        } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+                            llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                    dfcr->getFunctionName(), "deferred_function_call_ref_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {function_name, xsink_arg}, module, llvm_func, inst);
                         } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                             QoreFunction* func = fcr->getFunction();
                             if (!func) {
@@ -9041,6 +9141,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Hashdecl construction from pre-lowered hash operand
                 // Extract TypedHashDecl and runtime_check from the typed construction expression.
                 const TypedHashDecl* hd = nullptr;
+                std::string hd_path;
                 bool runtime_check = false;
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
@@ -9048,10 +9149,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(
                         inv->expr.getInternalNode())) {
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(nhd->hd->getTypeInfo()));
+                    if (nhd->hd) {
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(nhd->hd->getTypeInfo()));
+                    } else if (nhd->isDynamicHashDeclConstruct()) {
+                        hd_path = nhd->getDynamicHashDeclName();
+                    }
                     runtime_check = nhd->runtime_check;
                 }
-                if (!hd) {
+                if (!hd && hd_path.empty()) {
                     error = "NewHashDeclFromHash invoke is missing hashdecl metadata";
                     return false;
                 }
@@ -9062,7 +9167,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         runtime_check ? 1 : 0);
                 if (aot_mode) {
                     // AOT: resolve hashdecl by namespace path at runtime
-                    std::string hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
+                    if (hd_path.empty()) {
+                        hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
+                    }
                     llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                     auto helper = module.getOrInsertFunction(
                             "qore_rt_new_hash_decl_from_hash_by_path_cached",
@@ -9072,6 +9179,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg});
                 } else {
                     // JIT: direct pointer is valid within the same process
+                    if (!hd) {
+                        error = "NewHashDeclFromHash JIT invoke cannot resolve deferred hashdecl metadata";
+                        return false;
+                    }
                     llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(hd));
                     llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);
@@ -9147,11 +9258,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // AOT: extract type path at compile time, resolve at runtime
                     auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
                         inv->expr.getInternalNode());
-                    if (cast_node) {
-                        const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
-                        std::string type_path = ti ? qore_ir_get_type_path(ti)
-                            : (inv->invoke_opcode == QoreIROpcode::CastList ? "list" : "");
-                        llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                if (cast_node) {
+                    const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
+                    std::string type_path = qore_ir_get_cast_type_path(inv->invoke_opcode, cast_node, ti);
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                                 cast_node->isOrNothing() ? 1 : 0);
                         auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path_aot",
@@ -12313,29 +12423,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             } else {
                 // JIT mode: bake qc/variant as constants (valid within the same program).
-                llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->qc));
-                llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
-                llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->variant));
-                llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->object_type_info));
-                llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
-                if (has_arg_cleanups) {
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_new_object_nb_consume_args",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
-                             nargs_val, xsink_arg});
+                if (!noinst->qc && !noinst->class_path.empty()) {
+                    llvm::Value* class_path = builder->CreateGlobalStringPtr(noinst->class_path);
+                    llvm::Value* variant_sig = builder->CreateGlobalStringPtr(noinst->variant_sig);
+                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->object_type_info));
+                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                    if (has_arg_cleanups) {
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_object_by_path_nb_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        result = builder->CreateCall(helper,
+                                {class_path, variant_sig, object_type_as_ptr, args_array, arg_cleanups,
+                                 nargs_val, xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_new_object_by_path_nb",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {class_path, variant_sig, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    }
                 } else {
-                    auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper,
-                            {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->qc));
+                    llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
+                    llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->variant));
+                    llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
+                    llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(noinst->object_type_info));
+                    llvm::Value* object_type_as_ptr = builder->CreateIntToPtr(object_type_ptr, ptr_type);
+                    if (has_arg_cleanups) {
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_new_object_nb_consume_args",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, arg_cleanups,
+                                 nargs_val, xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {qc_as_ptr, variant_as_ptr, object_type_as_ptr, args_array, nargs_val, xsink_arg});
+                    }
                 }
             }
             // Constructor runs constructor body; can modify locals through ref params
@@ -12350,27 +12484,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* svinst = static_cast<const QoreIRStaticVarInstruction*>(inst);
             llvm::Value* result;
             if (aot_mode) {
-                const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                        svinst->expr.getInternalNode());
-                if (!static_var) {
-                    error = "AOT LoadStaticVar requires StaticClassVarRefNode metadata";
+                const AbstractQoreNode* node = svinst->expr.getInternalNode();
+                const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+                const auto* deferred_static = static_var
+                    ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                if (!static_var && !deferred_static) {
+                    error = "AOT LoadStaticVar requires static member metadata";
                     return false;
                 }
+                std::string class_name = static_var
+                    ? static_var->qc.getNamespacePath() : deferred_static->class_path;
+                std::string member_name = static_var
+                    ? static_var->str : deferred_static->member_name;
                 llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                        static_var->qc.getNamespacePath(), "static_var_class_path");
+                        class_name, "static_var_class_path");
                 llvm::Value* var_name = builder->CreateGlobalStringPtr(
-                        static_var->str, "static_var_name");
+                        member_name, "static_var_name");
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
-                        {ptr_type, ptr_type, ptr_type}, false);
+                        {ptr_type, ptr_type, ptr_type, ptr_type}, false);
                 const bool for_call = dot_eval_only_bases.count(inst->result.id);
                 auto helper = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_by_path_for_call"
-                        : "qore_rt_load_static_var_by_path", lsv_ft);
+                        ? "qore_rt_load_static_var_by_path_for_call_aot"
+                        : "qore_rt_load_static_var_by_path_aot", lsv_ft);
                 auto helper_throwing = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_by_path_for_call_throwing"
-                        : "qore_rt_load_static_var_by_path_throwing", lsv_ft);
+                        ? "qore_rt_load_static_var_by_path_for_call_aot_throwing"
+                        : "qore_rt_load_static_var_by_path_aot_throwing", lsv_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
-                        {class_path, var_name, xsink_arg}, module, llvm_func, inst);
+                        {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
             } else {
                 // JIT: pass QoreVarInfo* and var_name directly
                 llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
@@ -12512,6 +12652,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
                                 {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                    } else if (auto* dcr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+                        llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                dcr->getClassPath(), "deferred_static_call_ref_class_path");
+                        llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                dcr->getMethodName(), "deferred_static_call_ref_method_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                    } else if (auto* dfcr = dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)) {
+                        llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                dfcr->getFunctionName(), "deferred_function_call_ref_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {function_name, xsink_arg}, module, llvm_func, inst);
                     } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
                         QoreFunction* func = fcr->getFunction();
                         if (!func) {
@@ -15052,8 +15216,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     expr_inst->expr.getInternalNode());
                 if (cast_node) {
                     const QoreTypeInfo* ti = specializeType(cast_node->getCastTypeInfo());
-                    std::string type_path = ti ? qore_ir_get_type_path(ti)
-                        : (inst->opcode == QoreIROpcode::CastList ? "list" : "");
+                    std::string type_path = qore_ir_get_cast_type_path(inst->opcode, cast_node, ti);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                             cast_node->isOrNothing() ? 1 : 0);

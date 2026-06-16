@@ -528,6 +528,7 @@ public:
         requires_exception : 1,
         parsing_done : 1,
         parsing_in_progress : 1,
+        parse_commit_runtime_init : 1,
         ns_const : 1,
         ns_vars : 1,
         expression_mode : 1,
@@ -655,6 +656,36 @@ public:
     // define map
     dmap_t dmap;
 
+    struct source_parse_define_t {
+        std::string source_file;
+        std::string define;
+    };
+
+    std::vector<source_parse_define_t> source_parse_defines;
+
+    struct source_parse_type_import_t {
+        std::string source_file;
+        std::string qore_path;
+        std::string type_path;
+        bool hashdecl = false;
+        bool or_nothing = false;
+    };
+
+    std::vector<source_parse_type_import_t> source_parse_type_imports;
+
+    enum class source_parse_call_import_kind_t {
+        Function,
+        Method,
+    };
+
+    struct source_parse_function_import_t {
+        std::string source_file;
+        std::string qore_path;
+        source_parse_call_import_kind_t kind = source_parse_call_import_kind_t::Function;
+    };
+
+    std::vector<source_parse_function_import_t> source_parse_function_imports;
+
     // pushed parse option map
     ppo_t ppo;
 
@@ -682,6 +713,7 @@ public:
             requires_exception(false),
             parsing_done(false),
             parsing_in_progress(false),
+            parse_commit_runtime_init(false),
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
@@ -2136,6 +2168,110 @@ public:
         return false;
     }
 
+    DLLLOCAL bool buildSourceParseDefineRecord(const QoreProgramLocation* loc, const char* name, QoreValue val,
+            source_parse_define_t& rec) {
+        if (!loc || !name || !*name) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.define = name;
+        if (val.isNothing()) {
+            return true;
+        }
+
+        ExceptionSink xsink;
+        QoreString str(QCS_UTF8);
+        if (val.getAsString(str, FMT_NORMAL, &xsink) || xsink) {
+            xsink.clear();
+            return false;
+        }
+        rec.define += '=';
+        rec.define += str.c_str();
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseDefine(const QoreProgramLocation* loc, const char* name, QoreValue val) {
+        source_parse_define_t rec;
+        if (buildSourceParseDefineRecord(loc, name, val, rec)) {
+            source_parse_defines.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_define_t>& getSourceParseDefineRecords() const {
+        return source_parse_defines;
+    }
+
+    DLLLOCAL bool buildSourceParseTypeImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing, source_parse_type_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path || !type_path || !*type_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        rec.type_path = type_path;
+        rec.hashdecl = hashdecl;
+        rec.or_nothing = or_nothing;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseTypeImport(const QoreProgramLocation* loc, const char* qore_path,
+            const char* type_path, bool hashdecl, bool or_nothing) {
+        source_parse_type_import_t rec;
+        if (buildSourceParseTypeImportRecord(loc, qore_path, type_path, hashdecl, or_nothing, rec)) {
+            source_parse_type_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords() const {
+        return source_parse_type_imports;
+    }
+
+    DLLLOCAL bool buildSourceParseFunctionImportRecord(const QoreProgramLocation* loc, const char* qore_path,
+            source_parse_call_import_kind_t kind, source_parse_function_import_t& rec) {
+        if (!loc || !qore_path || !*qore_path) {
+            return false;
+        }
+        const char* file = loc->getFile();
+        if (!file || !*file || *file == '<') {
+            return false;
+        }
+
+        rec.source_file = file;
+        rec.qore_path = qore_path;
+        rec.kind = kind;
+        return true;
+    }
+
+    DLLLOCAL void recordSourceParseFunctionImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Function, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL void recordSourceParseMethodImport(const QoreProgramLocation* loc, const char* qore_path) {
+        source_parse_function_import_t rec;
+        if (buildSourceParseFunctionImportRecord(loc, qore_path,
+                source_parse_call_import_kind_t::Method, rec)) {
+            source_parse_function_imports.push_back(std::move(rec));
+        }
+    }
+
+    DLLLOCAL const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords() const {
+        return source_parse_function_imports;
+    }
+
     // internal method - does not bother with the parse lock
     DLLLOCAL const QoreValue getDefine(const char* name, bool& is_defined) {
         dmap_t::iterator i = dmap.find(name);
@@ -2211,6 +2347,7 @@ public:
         if (checkDefine(loc, str, parseSink))
             return;
 
+        recordSourceParseDefine(loc, str, val);
         setDefine(str, val, parseSink);
     }
 
@@ -2694,6 +2831,35 @@ public:
     DLLLOCAL static void parseDefine(QoreProgram* pgm, const QoreProgramLocation* loc, const char* str,
             QoreValue val) {
         pgm->priv->parseDefine(loc, str, val);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_define_t>& getSourceParseDefineRecords(QoreProgram* pgm) {
+        return pgm->priv->getSourceParseDefineRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseTypeImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path, const char* type_path, bool hashdecl, bool or_nothing) {
+        pgm->priv->recordSourceParseTypeImport(loc, qore_path, type_path, hashdecl, or_nothing);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_type_import_t>& getSourceParseTypeImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseTypeImportRecords();
+    }
+
+    DLLLOCAL static void recordSourceParseFunctionImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseFunctionImport(loc, qore_path);
+    }
+
+    DLLLOCAL static void recordSourceParseMethodImport(QoreProgram* pgm, const QoreProgramLocation* loc,
+            const char* qore_path) {
+        pgm->priv->recordSourceParseMethodImport(loc, qore_path);
+    }
+
+    DLLLOCAL static const std::vector<source_parse_function_import_t>& getSourceParseFunctionImportRecords(
+            QoreProgram* pgm) {
+        return pgm->priv->getSourceParseFunctionImportRecords();
     }
 
     //! Copies all defines from `parent` into `child`.

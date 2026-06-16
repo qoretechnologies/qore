@@ -1,0 +1,295 @@
+#!/bin/sh
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Incremental driver for one AOT `.qo` artifact.
+#
+# Invoked by the build as the recipe for OUTPUT (a `.qo`).  It compiles SOURCE
+# standalone against sibling `.qo` metadata via SINGLE_SCRIPT
+# (`qcc -c -L <group-dir> --depfile=OUTPUT.d ...`).  qcc writes OUTPUT,
+# OUTPUT.d, OUTPUT.idx.json, status JSON, and success/content stamps. OUTPUT.d
+# lists the source's build dependencies: its `%include` closure plus any sibling
+# whose compile-time constant/enum it folds.  Cross-unit callable references are
+# resolved by name at link/load time through the `.qo` symbol index.
+#
+# Clean parallel builds can ask for sources in any order.  This wrapper compiles
+# only the requested OUTPUT; it never recursively builds sibling `.qo` files.
+# Cross-unit callable references, static constants, and static variables must be
+# resolved by `.qo` indexes/linking, and any true build-order requirement must be
+# represented in the build graph rather than hidden behind recipe recursion.
+
+set -eu
+
+# Preserve qcc crash artifacts for AOT/linker debugging when the host core
+# pattern permits it.
+ulimit -c unlimited 2>/dev/null || true
+
+if [ "$#" -lt 3 ]; then
+    echo "usage: $0 OUTPUT SOURCE SINGLE_SCRIPT [PRELOAD_QO ...]" >&2
+    exit 2
+fi
+
+canonical_path() {
+    path=$1
+    dir=$(dirname "$path")
+    base=$(basename "$path")
+    if [ -d "$dir" ]; then
+        printf '%s/%s\n' "$(CDPATH= cd "$dir" && pwd -P)" "$base"
+    else
+        printf '%s\n' "$path"
+    fi
+}
+
+output=$(canonical_path "$1")
+source=$(canonical_path "$2")
+single_script=$(canonical_path "$3")
+shift 3
+this_script=$0
+qo_dir=$(dirname "$output")
+depfile="$output.d"
+idxfile="$output.idx.json"
+script_dir=$(CDPATH= cd "$(dirname "$(canonical_path "$this_script")")" && pwd -P)
+single_script_dir=$(CDPATH= cd "$(dirname "$single_script")" && pwd -P)
+context_file="$single_script_dir/.qcc-context"
+if [ ! -f "$context_file" ] && [ -f "$qo_dir/.qcc-context" ]; then
+    context_file="$qo_dir/.qcc-context"
+fi
+source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-order}"
+
+cleanup_stage_dir() {
+    stage_dir=${1:-}
+    if [ -n "$stage_dir" ] && [ -d "$stage_dir" ]; then
+        rm -rf "$stage_dir"
+    fi
+}
+
+prepare_preload_dir() {
+    preload_dir=$1
+    preload_file=$2
+
+    target_name=$(basename "$output")
+    mkdir -p "$preload_dir"
+    while IFS= read -r preload_qo; do
+        [ -n "$preload_qo" ] || continue
+        [ -f "$preload_qo" ] || continue
+        preload_name=$(basename "$preload_qo")
+        [ "$preload_name" = "$target_name" ] && continue
+        [ -e "$preload_dir/$preload_name" ] && continue
+        ln -s "$preload_qo" "$preload_dir/$preload_name"
+    done < "$preload_file"
+}
+
+collect_source_parse_defines() {
+    define_file=$1
+    preload_file=$2
+
+    : > "$define_file"
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    python3 - "$output" "$preload_file" > "$define_file" <<'PY'
+import json
+import os
+import sys
+
+target = os.path.realpath(os.path.abspath(sys.argv[1]))
+preload_file = sys.argv[2]
+paths = []
+seen_paths = set()
+
+
+def add_path(path):
+    if not path or path in seen_paths:
+        return
+    seen_paths.add(path)
+    paths.append(path)
+
+
+if preload_file and os.path.isfile(preload_file):
+    with open(preload_file, "r", encoding="utf-8") as f:
+        for line in f:
+            add_path(line.rstrip("\n"))
+
+seen_defines = set()
+for qo in paths:
+    if os.path.realpath(os.path.abspath(qo)) == target:
+        continue
+    idx = qo + ".idx.json"
+    if not os.path.isfile(idx):
+        continue
+    try:
+        with open(idx, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        continue
+    values = data.get("source_parse_defines")
+    if not isinstance(values, list):
+        continue
+    for value in values:
+        if isinstance(value, str) and value and value not in seen_defines:
+            seen_defines.add(value)
+            print(value)
+PY
+}
+
+select_preload_outputs() {
+    resolved_file=$1
+    shift
+    requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-requested.XXXXXX")
+    : > "$resolved_file"
+
+    if [ -x "$source_order_tool" ] && [ -f "$context_file" ] \
+            && command -v python3 >/dev/null 2>&1; then
+        if ! "$source_order_tool" "$context_file" "$output" > "$requested_file"; then
+            rm -f "$requested_file"
+            return 1
+        fi
+    else
+        for preload_qo in "$@"; do
+            printf '%s\n' "$preload_qo" >> "$requested_file"
+        done
+    fi
+
+    while IFS= read -r preload_qo; do
+        [ -n "$preload_qo" ] || continue
+        [ "$preload_qo" = "$output" ] && continue
+        if [ -f "$preload_qo" ]; then
+            printf '%s\n' "$preload_qo" >> "$resolved_file"
+        fi
+    done < "$requested_file"
+    rm -f "$requested_file"
+}
+
+select_manifest_inputs() {
+    resolved_file=$1
+    requested_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-direct.XXXXXX")
+    : > "$resolved_file"
+
+    if [ -x "$source_order_tool" ] && [ -f "$context_file" ] \
+            && command -v python3 >/dev/null 2>&1; then
+        if ! "$source_order_tool" --direct "$context_file" "$output" > "$requested_file"; then
+            rm -f "$requested_file"
+            return 1
+        fi
+    else
+        : > "$requested_file"
+    fi
+
+    while IFS= read -r preload_qo; do
+        [ -n "$preload_qo" ] || continue
+        [ "$preload_qo" = "$output" ] && continue
+        if [ -f "$preload_qo" ]; then
+            printf '%s\n' "$preload_qo" >> "$resolved_file"
+        fi
+    done < "$requested_file"
+    rm -f "$requested_file"
+}
+
+compile_current_source() {
+    selected_preload_file=$1
+    manifest_input_file=$2
+    single_log=
+    single_preload=
+    extra_define_file=
+
+    if [ ! -f "$single_script" ]; then
+        echo "$0: missing single compile script: $single_script" >&2
+        return 1
+    fi
+
+    # Recompile only this source against the selected sibling `.qo` preload.
+    # qcc-single.sh writes OUTPUT, OUTPUT.d, OUTPUT.idx.json, status JSON, the
+    # source manifest, and success/content stamps. qcc itself decides whether
+    # the manifest is current and can skip before Qore initialization when
+    # nothing affecting the output changed.
+    single_preload=$(mktemp -d "$qo_dir/.qcc-preload.$(basename "$output").XXXXXX")
+    extra_define_file=$output.source-parse-defines
+    single_log=$(mktemp "${TMPDIR:-/tmp}/qore-qo-single.XXXXXX")
+
+    if ! prepare_preload_dir "$single_preload" "$selected_preload_file" > "$single_log" 2>&1; then
+        cat "$single_log" >&2
+        rm -f "$single_log"
+        cleanup_stage_dir "$single_preload"
+        return 1
+    fi
+
+    if ! collect_source_parse_defines "$extra_define_file" "$selected_preload_file" >> "$single_log" 2>&1; then
+        cat "$single_log" >&2
+        rm -f "$single_log"
+        cleanup_stage_dir "$single_preload"
+        return 1
+    fi
+
+    if ! QORE_QCC_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+            QORE_QCC_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+            QORUS_QO_SOURCE_PARSE_DEFINE_FILE=$extra_define_file \
+            QORUS_QO_SOURCE_MANIFEST_INPUT_FILE=$manifest_input_file \
+            sh "$single_script" "$source" "$output" "$single_preload" > "$single_log" 2>&1; then
+        cat "$single_log" >&2
+        rm -f "$single_log"
+        cleanup_stage_dir "$single_preload"
+        return 1
+    fi
+
+    cat "$single_log"
+    rm -f "$single_log"
+    if [ ! -f "$idxfile" ]; then
+        cleanup_stage_dir "$single_preload"
+        echo "$0: single compile succeeded but did not create $idxfile" >&2
+        return 1
+    fi
+
+    cleanup_stage_dir "$single_preload"
+    return 0
+}
+
+compile_or_skip_current() {
+    selected_preload_file=$1
+    manifest_input_file=$2
+
+    compile_current_source "$selected_preload_file" "$manifest_input_file"
+}
+
+with_output_lock() {
+    selected_preload_file=$1
+    manifest_input_file=$2
+
+    if command -v flock >/dev/null 2>&1; then
+        lock_file="$output.lock"
+        (
+            flock 9
+            compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
+        ) 9>"$lock_file"
+    else
+        compile_or_skip_current "$selected_preload_file" "$manifest_input_file"
+    fi
+}
+
+run_main() {
+    selected_preload_file=
+    manifest_input_file=
+    rc=0
+
+    selected_preload_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-selected.XXXXXX")
+    if ! select_preload_outputs "$selected_preload_file" "$@"; then
+        rm -f "$selected_preload_file"
+        exit 1
+    fi
+
+    manifest_input_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-manifest.XXXXXX")
+    if ! select_manifest_inputs "$manifest_input_file"; then
+        rm -f "$selected_preload_file" "$manifest_input_file"
+        exit 1
+    fi
+
+    if with_output_lock "$selected_preload_file" "$manifest_input_file"; then
+        rc=0
+    else
+        rc=$?
+    fi
+    rm -f "$selected_preload_file" "$manifest_input_file"
+    exit "$rc"
+}
+
+run_main "$@"

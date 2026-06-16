@@ -175,7 +175,18 @@ int typed_hash_decl_private::resolveParseParent() {
     int err = 0;
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
-        const QoreTypeInfo* parent_type = QoreParseTypeInfo::resolveAny(parse_parent, loc, err);
+        qore_root_ns_private* rns = qore_root_ns_private::get(*getRootNS());
+        const bool known_parent_name = rns->parseTryFindHashDecl(*parse_parent->cscope)
+            || qore_root_ns_private::parseFindScopedClass(loc, *parse_parent->cscope, false)
+            || qore_root_ns_private::parseFindTypedef(*parse_parent->cscope)
+            || rns->parseTryFindEnum(*parse_parent->cscope);
+        const QoreTypeInfo* parent_type = nullptr;
+        if (known_parent_name) {
+            parent_type = QoreParseTypeInfo::resolveAny(parse_parent, loc, err);
+        } else {
+            rns->parseFindHashDecl(loc, *parse_parent->cscope);
+            err = -1;
+        }
         if (!err) {
             const TypedHashDecl* parent = QoreTypeInfo::getUniqueReturnHashDecl(parent_type);
             if (parent) {

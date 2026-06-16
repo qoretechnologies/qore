@@ -480,6 +480,26 @@ public:
         return vrn_type == VRN_COMPLEXLIST;
     }
 
+    //! Returns true if this is an AOT-deferred object construction
+    DLLLOCAL bool isDynamicObjectConstruct() const {
+        return vrn_type == VRN_DYNAMIC_OBJECT;
+    }
+
+    //! Returns the class path for an AOT-deferred object construction
+    DLLLOCAL const std::string& getDynamicClassName() const {
+        return dynamic_class_name;
+    }
+
+    //! Returns true if this is an AOT-deferred hashdecl construction
+    DLLLOCAL bool isDynamicHashDeclConstruct() const {
+        return vrn_type == VRN_DYNAMIC_HASHDECL;
+    }
+
+    //! Returns the hashdecl path for an AOT-deferred hashdecl construction
+    DLLLOCAL const std::string& getDynamicHashDeclName() const {
+        return dynamic_hashdecl_name;
+    }
+
     //! Returns whether runtime key checking is required for hashdecl construction
     DLLLOCAL bool getRuntimeCheck() const {
         return runtime_check;
@@ -497,8 +517,12 @@ protected:
         VRN_HASHDECL = 2,
         VRN_COMPLEXHASH = 3,
         VRN_COMPLEXLIST = 4,
+        VRN_DYNAMIC_OBJECT = 5,
+        VRN_DYNAMIC_HASHDECL = 6,
     } vrn_type = VRN_NONE;
     QoreValue new_args{};
+    std::string dynamic_class_name;
+    std::string dynamic_hashdecl_name;
     bool runtime_check = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

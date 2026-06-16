@@ -21,6 +21,8 @@ class ImportedMethodContextProbe {
 class ImportedMethodContextTest inherits QUnit::Test {
     constructor() : QUnit::Test("Imported Method Context Test", "1.0") {
         addTestCase("imported class methods use source program context", \importedClassMethodsUseSourceProgram());
+        addTestCase("imported class runtime init uses source program context",
+            \importedClassRuntimeInitUsesSourceProgram());
         set_return_value(main());
     }
 
@@ -47,5 +49,19 @@ class ImportedMethodContextTest inherits QUnit::Test {
 
         object probe = p.callFunction("make_probe");
         assertEq(source_expected, probe.mask());
+    }
+
+    importedClassRuntimeInitUsesSourceProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL | PO_NO_INHERIT_USER_CLASSES);
+        p.importClass("ImportedMethodContextProbe");
+        p.parse("const int OBJECT_MASK = new ImportedMethodContextProbe().mask();\n"
+            "const int STATIC_MASK = ImportedMethodContextProbe::staticMask();\n"
+            "int sub object_mask_const() { return OBJECT_MASK; }\n"
+            "int sub static_mask_const() { return STATIC_MASK; }\n",
+            "imported-method-runtime-init-context");
+
+        int source_expected = Program::getCapabilityMask();
+        assertEq(source_expected, p.callFunction("object_mask_const"));
+        assertEq(source_expected, p.callFunction("static_mask_const"));
     }
 }

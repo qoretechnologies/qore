@@ -2625,6 +2625,7 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
+add_dependencies(qcc qcc-format-version)
 
 set(QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP ${CMAKE_BINARY_DIR}/qcc-format-source-qmod-clean.stamp)
 add_custom_command(
@@ -2675,10 +2676,16 @@ install(TARGETS qore qcc qpp libqore
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
             COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+install(FILES ${QCC_FORMAT_STAMP}
+        DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake
+        DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
+        COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
+install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc

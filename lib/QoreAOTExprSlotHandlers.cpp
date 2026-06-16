@@ -88,13 +88,17 @@ static bool write_slot_args_prefer_call(AOTExprSlotWriteCtx& ctx) {
 //! NEW_OBJECT and SCOPED_NEW_OBJECT
 //! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ),
 //! ref3 = instantiated object type path when QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO is set.
-//! No inline args — constructor args are computed by separate IR instructions
-//! that feed the NewObject's operand values at runtime.
+//! Normal constructor args are computed by separate IR instructions. The
+//! deferred create_object sentinel is used for VarRefNewObjectNode implied
+//! constructors, whose args live only in the expression slot.
 static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
         ctx.writer.writeStringRef(ctx.expr.ref3.c_str());
+    }
+    if (ctx.expr.ref2 == QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT) {
+        return write_slot_args_prefer_call(ctx);
     }
     return true;
 }
@@ -917,6 +921,9 @@ static bool write_slot_HASH_DEREF(AOTExprSlotWriteCtx& ctx) {
     auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
     if (!hd) {
         return false;
+    }
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_HASH_DEREF_TYPEINFO) != 0) {
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(hd->getTypeInfo()).c_str());
     }
     return classifyAndWriteExpr(ctx.writer, hd->getLeft(),
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)

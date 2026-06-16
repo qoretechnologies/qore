@@ -39,10 +39,11 @@
 #include "QC_GlobalVar.h"
 #include "QC_TypedHash.h"
 #include "QC_FunctionVariant.h"
+#include "qore/intern/qore_aot_deps.h"
 
 QoreReflectionTypedHash::QoreReflectionTypedHash(ExceptionSink* xsink, const char* path, QoreProgram* pgm)
     : AbstractReflectionObject(pgm) {
-    th = pgm->findHashDecl(path, ns);
+    th = qore_reflection_find_hashdecl(pgm, path, ns);
 
     if (!th) {
         xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", path);
@@ -89,7 +90,9 @@ TypedHash::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return;
     }
@@ -581,7 +584,9 @@ static TypedHash TypedHash::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
+        xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -633,7 +638,8 @@ list<TypedHash> l = TypedHash::findAllRegex("^S");
     @return a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match
 */
 static list<TypedHash> TypedHash::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
-    return find_all_typedhashes(*pattern, re_opts, getProgram(), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    return find_all_typedhashes(*pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match

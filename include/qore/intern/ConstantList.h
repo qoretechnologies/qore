@@ -41,6 +41,7 @@
 #include <qore/common.h>
 #include "qore/intern/ParseNode.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <string>
 
@@ -153,6 +154,14 @@ public:
             && (saved_val_set || (init && val.getType() != NT_RTCONSTREF));
     }
 
+    DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
+        if (qore_aot_source_parse_active() && typeInfo == nothingTypeInfo
+                && (aot_shell_pending || external_stub || external_stub_dependent || val.hasNode())) {
+            return autoTypeInfo;
+        }
+        return QoreTypeInfo::hasType(typeInfo) ? typeInfo : autoTypeInfo;
+    }
+
     //! Sets the runtime value (val + saved_val) for AOT init functions
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
     DLLLOCAL void materializeRuntimeRefs(ExceptionSink* xsink);
@@ -178,7 +187,13 @@ public:
             return QoreValue();
         }
 
-        constantTypeInfo = typeInfo;
+        // AOT incremental dependency: record this constant's source file so a
+        // `qcc -c -L` compile that folds the value still rebuilds when the
+        // defining file changes (the folded literal leaves no trace in the
+        // emitted `.qo`).  No-op unless an AOT dependency sink is active.
+        qore_aot_note_referenced_decl(this->loc);
+
+        constantTypeInfo = getParseTypeInfo();
         return val;
     }
 
@@ -492,7 +507,7 @@ protected:
     ConstantEntry* ce;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        parse_context.typeInfo = ce->typeInfo;
+        parse_context.typeInfo = ce->getParseTypeInfo();
         if (ce->external_stub) {
             parse_context.external_stub_constant_ref = true;
         }
@@ -500,7 +515,7 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return ce->typeInfo;
+        return ce->getParseTypeInfo();
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -609,7 +624,7 @@ public:
             return ce->saved_val.getTypeName();
         }
         if (ce->external_stub || ce->aot_shell_pending || !ce->hasValue()) {
-            return QoreTypeInfo::getName(ce->typeInfo);
+            return QoreTypeInfo::getName(ce->getParseTypeInfo());
         }
         return ce->val.getTypeName();
     }

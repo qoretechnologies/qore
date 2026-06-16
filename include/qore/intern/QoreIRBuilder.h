@@ -166,6 +166,9 @@ public:
     // Hashdecl construction from pre-lowered hash operand
     QoreIRNewHashDeclFromHashInstruction* createNewHashDeclFromHash(const TypedHashDecl* hd,
         bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc = nullptr);
+    QoreIRNewHashDeclFromHashInstruction* createNewHashDeclFromHash(const char* hd_path,
+        const TypedHashDecl* hd, bool runtime_check, QoreIRValue hash_val,
+        const QoreProgramLocation* loc = nullptr);
     // Hash building (for hash map loops)
     QoreIRInstruction* createHashSetKeyValue(QoreIRValue hash, QoreIRValue key, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);

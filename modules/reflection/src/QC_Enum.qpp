@@ -69,7 +69,8 @@ Enum::constructor(string path) {
         return;
     }
 
-    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), lookup_pgm), xsink);
     if (*xsink) {
         return;
     }
@@ -423,7 +424,8 @@ static Enum Enum::forName(string path) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
 
-    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str()), xsink);
+    QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    ReferenceHolder<QoreReflectionEnum> en(new QoreReflectionEnum(xsink, npath->c_str(), lookup_pgm), xsink);
     if (*xsink) {
         return QoreValue();
     }

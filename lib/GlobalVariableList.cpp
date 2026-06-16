@@ -118,6 +118,16 @@ Var* GlobalVariableList::parseCreatePendingVar(const QoreProgramLocation* loc, c
     return var;
 }
 
+Var* GlobalVariableList::parseCreateAOTImportVar(const QoreProgramLocation* loc, const char* name) {
+    assert(!parseFindVar(name));
+
+    Var* var = new Var(loc, name, autoTypeInfo);
+    var->setAOTImport();
+    vmap[var->getName()] = var;
+
+    return var;
+}
+
 Var* GlobalVariableList::parseFindVar(const char* name) {
     map_var_t::iterator i = vmap.find(name);
     if (i != vmap.end())

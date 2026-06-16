@@ -58,6 +58,10 @@ May be repeated.
 Write compile-only output to \fIdir\fP.
 Required for batch mode with multiple sources and mutually exclusive with
 \fB\-o\fP.
+Each \fB.qo\fP object is written atomically by compiling to a temporary file
+and renaming it into place, so independent per-file \fB\-c\fP jobs writing into
+the same directory may run in parallel (for example under \fBmake \-j\fP) and a
+concurrent \fB\-L\fP sibling scan never observes a half-written object.
 .TP
 .B \-\-from\-objects
 Aggregate mode.
@@ -90,6 +94,36 @@ May be repeated.
 .TP
 .B \-\-depfile =\fIfile\fP
 Emit a Make-format dependency file after a successful compile.
+For single-source compile modes this records the source parse dependency set.
+For \fB\-\-link\-qo\fP and \fB\-\-script\-aggregate\fP it records the explicit
+object or source inputs used to create the aggregate output.
+.TP
+.B \-\-depfile\-dir =\fIdir\fP
+Batch \fB\-c \-\-output\-dir\fP mode only.
+Emit one Make-format depfile per generated \fB.qo\fP in \fIdir\fP.
+Each depfile basename matches the corresponding object basename.
+.TP
+.B \-\-write\-index\-json =\fIfile\fP
+After a successful single-output build, write build-consumable AOT symbol-index
+JSON for the generated artifact to \fIfile\fP.
+The JSON has the same shape as \fB\-\-dump\-index\-json\fP output.
+.TP
+.B \-\-write\-manifest =\fIfile\fP
+After a successful single-output build, write a deterministic content manifest
+to \fIfile\fP.
+The manifest records qcc options, relevant environment, output hashes, sidecar
+paths, and input hashes.
+.TP
+.B \-\-manifest\-input =\fIfile\fP
+Add an extra file to the manifest input set.
+This is intended for build-system stamps or generated response files that are
+not otherwise visible through the qcc command line.
+May be repeated.
+.TP
+.B \-\-skip\-if\-manifest\-current
+If the requested manifest already matches the current output and input state,
+skip compilation and exit successfully.
+Requires \fB\-\-write\-manifest\fP.
 .TP
 .B \-\-save\-temps
 Keep temporary \fB.qo\fP objects and generated C++ glue from one-shot
@@ -184,6 +218,13 @@ specified.
 .B QORE_AOT_NO_DEBUG_INFO
 If set to 1, disables AOT debug information unless overridden by command-line
 options.
+.TP
+.B QORE_AOT_BATCH_JOBS
+Number of worker threads used to emit \fB.qo\fP objects in batch
+(\fB\-\-output\-dir\fP) mode.
+The sources are parsed once on a single thread, then each object's code
+generation runs on the pool, parallelizing the dominant \fB\-O3\fP backend.
+Defaults to the number of hardware threads; set to 1 to emit serially.
 .SH EXAMPLES
 Compile a script to a native executable:
 .RS

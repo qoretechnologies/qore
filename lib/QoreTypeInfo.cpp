@@ -48,13 +48,16 @@
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/AbstractIteratorHelper.h"
 #include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
@@ -295,6 +298,159 @@ typedef std::map<const QoreTypeInfo*, const QoreTypeInfo*> typeinfo_map_t;
 static typeinfo_map_t typeinfo_map, typeinfo_or_nothing_map;
 
 static QoreThreadLock ctl; // complex type lock
+
+namespace {
+class QoreAOTDeferredTypeInfo : public QoreTypeInfo {
+public:
+    QoreAOTDeferredTypeInfo(std::string qore_path, std::string type_path, bool hashdecl,
+            bool or_nothing)
+            : QoreTypeInfo(type_path.c_str(), makeAcceptVec(hashdecl, or_nothing),
+                makeReturnVec(hashdecl, or_nothing)),
+            qore_path(std::move(qore_path)), type_path(std::move(type_path)), hashdecl(hashdecl),
+            or_nothing(or_nothing) {
+    }
+
+    bool samePlaceholder(const QoreAOTDeferredTypeInfo& other) const {
+        return hashdecl == other.hashdecl
+            && or_nothing == other.or_nothing
+            && qore_path == other.qore_path
+            && type_path == other.type_path;
+    }
+
+    bool matchesResolvedType(const QoreTypeInfo* ti) const {
+        if (!ti) {
+            return false;
+        }
+        const char* path = QoreTypeInfo::getPath(ti);
+        return path && type_path == path;
+    }
+
+protected:
+    std::string qore_path;
+    std::string type_path;
+    bool hashdecl;
+    bool or_nothing;
+
+    static q_accept_vec_t makeAcceptVec(bool hashdecl, bool or_nothing) {
+        q_accept_vec_t rv;
+        rv.emplace_back(QoreTypeSpec(hashdecl ? NT_HASH : NT_OBJECT), nullptr, !or_nothing);
+        if (or_nothing) {
+            rv.emplace_back(QoreTypeSpec(NT_NOTHING), nullptr);
+            rv.emplace_back(QoreTypeSpec(NT_NULL),
+                [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); });
+        }
+        return rv;
+    }
+
+    static q_return_vec_t makeReturnVec(bool hashdecl, bool or_nothing) {
+        q_return_vec_t rv;
+        rv.emplace_back(QoreTypeSpec(hashdecl ? NT_HASH : NT_OBJECT), !or_nothing);
+        if (or_nothing) {
+            rv.emplace_back(QoreTypeSpec(NT_NOTHING));
+        }
+        return rv;
+    }
+
+    virtual void getThisTypeImpl(QoreString& str) const {
+        qore_string_private::get(str)->concat(&tname);
+    }
+
+    virtual const char* getPathImpl() const {
+        return type_path.c_str();
+    }
+
+    virtual bool hasDefaultValueImpl() const {
+        return hashdecl && !or_nothing;
+    }
+
+    virtual QoreValue getDefaultQoreValueImpl() const {
+        return hashdecl && !or_nothing ? emptyHash->hashRefSelf() : QoreValue();
+    }
+
+    virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+};
+
+static std::mutex aot_deferred_type_info_mutex;
+static std::unordered_map<std::string, std::unique_ptr<QoreAOTDeferredTypeInfo>> aot_deferred_type_info_map;
+
+static std::string aotDeferredTypeQorePath(const char* qore_path) {
+    if (!qore_path) {
+        return std::string();
+    }
+    while (qore_path[0] == ':' && qore_path[1] == ':') {
+        qore_path += 2;
+    }
+    return qore_path;
+}
+
+static std::string aotDeferredTypePath(const std::string& qore_path, bool hashdecl, bool or_nothing) {
+    std::string rv;
+    if (or_nothing) {
+        rv += '*';
+    }
+    rv += hashdecl ? "hash<" : "object<";
+    if (!hashdecl) {
+        rv += "::";
+    }
+    rv += qore_path;
+    rv += '>';
+    return rv;
+}
+} // namespace
+
+const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLocation* loc, const char* qore_path,
+        bool or_nothing, bool hashdecl) {
+    std::string deferred_path = qore_aot_get_deferred_source_symbol_path(loc, qore_path,
+        hashdecl ? QoreAOTSourceSymbolKind::HashDecl : QoreAOTSourceSymbolKind::Class);
+    std::string clean_path = aotDeferredTypeQorePath(deferred_path.empty() ? qore_path : deferred_path.c_str());
+    if (clean_path.empty()) {
+        return hashdecl
+            ? (or_nothing ? hashOrNothingTypeInfo : hashTypeInfo)
+            : (or_nothing ? objectOrNothingTypeInfo : objectTypeInfo);
+    }
+
+    std::string type_path = aotDeferredTypePath(clean_path, hashdecl, or_nothing);
+    if (qore_aot_source_parse_active()) {
+        if (QoreProgram* pgm = getProgram()) {
+            qore_program_private::recordSourceParseTypeImport(pgm, loc, clean_path.c_str(), type_path.c_str(),
+                hashdecl, or_nothing);
+        }
+    }
+
+    std::string key = hashdecl ? "hashdecl:" : "class:";
+    key += or_nothing ? "ornothing:" : "required:";
+    key += clean_path;
+
+    std::lock_guard<std::mutex> lock(aot_deferred_type_info_mutex);
+    auto i = aot_deferred_type_info_map.find(key);
+    if (i != aot_deferred_type_info_map.end()) {
+        return i->second.get();
+    }
+
+    auto inserted = aot_deferred_type_info_map.emplace(key, std::make_unique<QoreAOTDeferredTypeInfo>(
+        std::move(clean_path), std::move(type_path), hashdecl, or_nothing));
+    return inserted.first->second.get();
+}
+
+bool qore_type_info_is_aot_deferred(const QoreTypeInfo* ti) {
+    return dynamic_cast<const QoreAOTDeferredTypeInfo*>(ti);
+}
+
+bool qore_type_info_aot_deferred_compare(const QoreTypeInfo* a, const QoreTypeInfo* b, bool& result) {
+    const QoreAOTDeferredTypeInfo* da = dynamic_cast<const QoreAOTDeferredTypeInfo*>(a);
+    const QoreAOTDeferredTypeInfo* db = dynamic_cast<const QoreAOTDeferredTypeInfo*>(b);
+    if (!da && !db) {
+        return false;
+    }
+    if (da && db) {
+        result = da->samePlaceholder(*db);
+        return true;
+    }
+    result = da ? da->matchesResolvedType(b) : db->matchesResolvedType(a);
+    return true;
+}
 
 // True if ti is auto or auto! - both behave identically for runtime acceptance and
 // parse-time match logic; auto! is only distinct as a parse-time narrowing marker.
@@ -4263,9 +4419,16 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
+            if (qore_aot_should_defer_source_symbol(loc, subtypes[0]->cscope->ostr,
+                    QoreAOTSourceSymbolKind::HashDecl)) {
+                return qore_get_aot_deferred_type_info(loc, subtypes[0]->cscope->ostr, or_nothing, true);
+            }
             const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*subtypes[0], loc, err);
             if (hd) {
                 return hd->getTypeInfo(or_nothing);
+            }
+            if (qore_aot_source_parse_active()) {
+                return qore_get_aot_deferred_type_info(loc, subtypes[0]->cscope->ostr, or_nothing, true);
             }
             // Unknown hashdecl - raise parse error with a near-match suggestion if available
             {
@@ -4682,6 +4845,13 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
         return type_param;
     }
 
+    if (qore_aot_should_defer_source_symbol(loc, cscope.ostr, QoreAOTSourceSymbolKind::Class)) {
+        return qore_get_aot_deferred_type_info(loc, cscope.ostr, or_nothing, false);
+    }
+    if (qore_aot_should_defer_source_symbol(loc, cscope.ostr, QoreAOTSourceSymbolKind::HashDecl)) {
+        return qore_get_aot_deferred_type_info(loc, cscope.ostr, or_nothing, true);
+    }
+
     // check for typedef first (both simple names and scoped names)
     TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
     if (td) {
@@ -4740,7 +4910,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     }
 
     // check for hashdecl (must be checked after class/enum lookup)
-    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, cscope);
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseTryFindHashDecl(cscope);
     if (hd) {
         if (typed_hash_decl_private::get(*hd)->hasTypeParams()) {
             parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve generic hashdecl '%s' without explicit type "
@@ -4749,6 +4919,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
             return autoTypeInfo;
         }
         return hd->getTypeInfo(or_nothing);
+    }
+
+    if (qore_aot_source_parse_active()) {
+        return qore_get_aot_deferred_type_info(loc, cscope.ostr, or_nothing, false);
     }
 
     // type not found - raise error with a near-match suggestion from known type names
@@ -5449,6 +5623,13 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
         max_result = QTI_WILDCARD;
         return QTI_WILDCARD;
     }
+    bool aot_deferred_result = false;
+    if (qore_type_info_aot_deferred_compare(first, second, aot_deferred_result) && aot_deferred_result) {
+        may_not_match = false;
+        may_need_filter = false;
+        max_result = QTI_IDENT;
+        return QTI_IDENT;
+    }
     if (!hasType(first)) {
         if (!may_need_filter && isComplex(second))
             may_need_filter = true;
@@ -5520,6 +5701,11 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
 
 qore_type_result_e QoreTypeInfo::runtimeTypeMatch(const QoreTypeInfo* typeInfo) const {
     //printd(5, "QoreTypeInfo::runtimeTypeMatch() '%s' <=> '%s'\n", tname.c_str(), typeInfo->tname.c_str());
+    bool aot_deferred_result = false;
+    if (qore_type_info_aot_deferred_compare(this, typeInfo, aot_deferred_result) && aot_deferred_result) {
+        return QTI_IDENT;
+    }
+
     if (typeInfo->return_vec.size() != return_vec.size() || typeInfo->getAcceptVecSize() != getAcceptVecSize()) {
         return QTI_NOT_EQUAL;
     }

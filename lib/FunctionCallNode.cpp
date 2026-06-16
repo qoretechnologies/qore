@@ -36,6 +36,8 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseTypeInfo.h"
 #include "qore/intern/NewComplexTypeNode.h"
+#include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <string>
 #include <vector>
@@ -63,6 +65,36 @@ static std::string get_static_scope_receiver_type_path(const NamedScope& scope) 
     return rv;
 }
 
+static void record_source_parse_reflection_class_for_name_import(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const QoreMethod* method, const QoreParseListNode* parse_args) {
+    if (!qore_aot_source_parse_active() || !pgm || !method || strcmp(method->getName(), "forName") || !parse_args
+            || parse_args->size() != 1) {
+        return;
+    }
+
+    const QoreClass* qc = method->getClass();
+    if (!qc || qc->getNamespacePath(false) != "Qore::Reflection::Class") {
+        return;
+    }
+
+    QoreValue arg = parse_args->get(0);
+    if (arg.getType() != NT_STRING) {
+        return;
+    }
+
+    const QoreStringNode* class_name = arg.get<const QoreStringNode>();
+    if (!class_name || !class_name->size()) {
+        return;
+    }
+
+    std::string type_path = "object<";
+    type_path += class_name->c_str();
+    type_path += '>';
+    const QoreProgramLocation* arg_loc = parse_args->getLocation(0);
+    qore_program_private::recordSourceParseTypeImport(pgm, arg_loc ? arg_loc : loc, class_name->c_str(),
+        type_path.c_str(), false, false);
+}
+
 static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
         int& err) {
     std::string type_path = get_static_scope_receiver_type_path(scope);
@@ -85,6 +117,19 @@ static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramL
             "'buffer<T>::sized()/filled()' for dense buffer factories", type_path.c_str());
         err = -1;
         return autoTypeInfo;
+    }
+    return rv;
+}
+
+static std::string get_static_scope_class_path(const NamedScope& scope) {
+    std::string rv;
+    unsigned count = scope.size();
+    assert(count >= 2);
+    for (unsigned i = 0; i + 1 < count; ++i) {
+        if (i) {
+            rv += "::";
+        }
+        rv += scope[i];
     }
     return rv;
 }
@@ -529,6 +574,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             err = parse_args->initArgs(parse_context, argTypeInfo, args);
             arg_analysis = parse_context.analysis;
         }
+        parsed_arg_type_info = argTypeInfo;
         parse_args = nullptr;
 
     }
@@ -1089,9 +1135,12 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
     QoreValue n{};  // value-initialized to NOTHING (bits=0)
+    std::string deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, c_str,
+        QoreAOTSourceSymbolKind::Function);
+    const bool defer_source_function = !deferred_source_function_path.empty();
 
     // try to resolve a global var
-    if (abr) {
+    if (!defer_source_function && abr) {
         Var* v = qore_root_ns_private::parseFindGlobalVar(c_str);
         if (v) {
             n = new GlobalVarRefNode(loc, takeName(), v);
@@ -1101,7 +1150,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     bool found = !n.isNothing();
 
     // see if a constant can be resolved
-    if (!found) {
+    if (!found && !defer_source_function) {
         n = qore_root_ns_private::parseFindConstantValue(loc, c_str, parse_context.typeInfo, found, false);
         if (found) {
             n.ref();
@@ -1115,7 +1164,49 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     }
 
     // resolves the function
-    fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
+    if (!defer_source_function) {
+        fe = qore_root_ns_private::parseFindFunctionEntry(c_str);
+        if (fe && parse_check_parse_option(PO_REQUIRE_TYPES)) {
+            qore_root_ns_private::parseMaybeWarnAmbiguousFunctionCall(loc, c_str, fe);
+        }
+    }
+    if (!fe && qore_aot_source_parse_active()) {
+        if (has_explicit_type_args) {
+            parse_error(*loc, "cannot defer unresolved function call '%s()' with explicit type arguments", c_str);
+            return -1;
+        }
+
+        if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+            qore_program_private::recordSourceParseFunctionImport(pgm, loc,
+                defer_source_function ? deferred_source_function_path.c_str() : c_str);
+        }
+
+        const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+            "call_function");
+        if (!call_function_fe) {
+            return -1;
+        }
+
+        QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+        dynamic_args->add(new QoreStringNode(defer_source_function ? deferred_source_function_path.c_str() : c_str),
+            loc);
+        QoreParseListNode* old_args = takeParseArgs();
+        if (old_args) {
+            dynamic_args->appendFrom(old_args);
+            old_args->deref();
+        }
+
+        FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+        val = dynamic_call;
+        free(c_str);
+        c_str = nullptr;
+        deref();
+        return dynamic_call->parseInitFinalizedCall(val, parse_context);
+    }
+
+    if (!fe && !defer_source_function) {
+        fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
+    }
     free(c_str);
     c_str = nullptr;
 
@@ -1197,7 +1288,10 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     if (name) {
         assert(!oc);
         // find object class
-        if ((oc = qore_root_ns_private::parseFindScopedClass(loc, *name))) {
+        std::string deferred_source_class_path = qore_aot_get_deferred_source_symbol_path(loc, name->ostr,
+            QoreAOTSourceSymbolKind::Class);
+        bool defer_source_class = !deferred_source_class_path.empty();
+        if (!defer_source_class && (oc = qore_root_ns_private::parseFindScopedClass(loc, *name, false))) {
             // check if parse options allow access to this class
             int64 cflags = oc->getDomain();
             if (cflags && qore_program_private::parseAddDomain(parse_context.pgm, cflags)) {
@@ -1205,6 +1299,22 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     "class", oc->getName());
                 err = -1;
             }
+        } else if (qore_aot_source_parse_active()) {
+            const char* class_path = defer_source_class ? deferred_source_class_path.c_str() : name->ostr;
+            if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                std::string type_path = "object<";
+                type_path += class_path;
+                type_path += '>';
+                qore_program_private::recordSourceParseTypeImport(pgm, loc, class_path, type_path.c_str(), false,
+                    false);
+            }
+
+            dynamic_class_name = class_path;
+            delete name;
+            name = nullptr;
+        } else {
+            qore_root_ns_private::parseFindScopedClass(loc, *name, true);
+            err = -1;
         }
         delete name;
         name = nullptr;
@@ -1242,6 +1352,10 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
         parse_context.analysis.known_type = parse_context.typeInfo;
         desc.sprintf("new %s", oc->getName());
+    } else if (!dynamic_class_name.empty()) {
+        parse_context.typeInfo = objectTypeInfo;
+        parse_context.analysis.clear();
+        desc.sprintf("new %s", dynamic_class_name.c_str());
     } else {
         parse_context.typeInfo = nullptr;
         parse_context.analysis.clear();
@@ -1282,6 +1396,30 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
+    if (!oc) {
+        if (dynamic_class_name.empty()) {
+            xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class for instantiation");
+            return QoreValue();
+        }
+        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
+        if (!qc) {
+            if (!*xsink) {
+                xsink->raiseException("AOT-PENDING-CLASS",
+                    "class '%s' is pending AOT source linking for instantiation", dynamic_class_name.c_str());
+            }
+            return QoreValue();
+        }
+        if (getProgram()->getParseOptions() & qc->getDomain()) {
+            xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
+                "access to the '%s' class", qc->getName());
+            return QoreValue();
+        }
+        if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            return QoreValue();
+        }
+        const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
+        return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
+    }
     const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
     return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
 }
@@ -1316,6 +1454,13 @@ AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
    return rv;
 }
 
+std::string StaticMethodCallNode::getClassPath() const {
+    if (method) {
+        return method->getClass()->getNamespacePath();
+    }
+    return scope && scope->size() >= 2 ? get_static_scope_class_path(*scope) : std::string();
+}
+
 int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     int err = 0;
     if (!method) {
@@ -1323,6 +1468,11 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
         bool parameterized_receiver = static_scope_has_parameterized_receiver(*scope);
+        bool defer_source_static_receiver = false;
+        bool defer_source_function = false;
+        std::string source_receiver_path;
+        std::string deferred_source_receiver_path;
+        std::string deferred_source_function_path;
         QoreClass* qc = nullptr;
         if (parameterized_receiver) {
             receiver_type_info = resolve_static_scope_receiver_type(loc, *scope, err);
@@ -1345,7 +1495,25 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             assert(pcti);
             qc = const_cast<QoreClass*>(pcti->getBaseClass());
         } else {
-            qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+            source_receiver_path = get_static_scope_class_path(*scope);
+            deferred_source_receiver_path = qore_aot_get_deferred_source_symbol_path(loc,
+                source_receiver_path.c_str(),
+                QoreAOTSourceSymbolKind::Class);
+            defer_source_static_receiver = !deferred_source_receiver_path.empty();
+            if (scope->size() >= 2) {
+                deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc, scope->ostr,
+                    QoreAOTSourceSymbolKind::Function);
+                defer_source_function = !deferred_source_function_path.empty();
+                if (!defer_source_function && !defer_source_static_receiver) {
+                    deferred_source_function_path = qore_aot_get_deferred_source_symbol_path(loc,
+                        scope->getIdentifier(),
+                        QoreAOTSourceSymbolKind::Function);
+                    defer_source_function = !deferred_source_function_path.empty();
+                }
+            }
+            if (!defer_source_static_receiver) {
+                qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+            }
         }
 
         const QoreClass* pc = parse_context.oflag
@@ -1403,7 +1571,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     "method named '%s'", scope->ostr, qc ? qc->getName() : "(unknown)", scope->getIdentifier());
                 return -1;
             }
-            {
+            if (!defer_source_static_receiver) {
                 // see if this is a function call to a function defined in a namespace
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
                 if (f) {
@@ -1430,8 +1598,10 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             */
 
             bool found = false;
-            QoreValue n = qore_root_ns_private::parseFindReferencedConstantValue(loc, *scope, parse_context.typeInfo,
-                found, false);
+            QoreValue n = defer_source_static_receiver
+                ? QoreValue()
+                : qore_root_ns_private::parseFindReferencedConstantValue(loc, *scope, parse_context.typeInfo,
+                    found, false);
 
             if (found) {
                 val = new CallReferenceCallNode(loc, n, takeParseArgs());
@@ -1439,6 +1609,52 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 return parse_init_value(val, parse_context);
             } else {
                 assert(!n);
+            }
+
+            if (qore_aot_source_parse_active() && scope->size() >= 2) {
+                if (defer_source_function) {
+                    const char* function_path = deferred_source_function_path.empty()
+                        ? scope->ostr : deferred_source_function_path.c_str();
+                    if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                        qore_program_private::recordSourceParseFunctionImport(pgm, loc, function_path);
+                    }
+
+                    const FunctionEntry* call_function_fe = qore_root_ns_private::parseResolveFunctionEntry(loc,
+                        "call_function");
+                    if (!call_function_fe) {
+                        return -1;
+                    }
+
+                    QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
+                    dynamic_args->add(new QoreStringNode(function_path), loc);
+                    QoreParseListNode* old_args = takeParseArgs();
+                    if (old_args) {
+                        dynamic_args->appendFrom(old_args);
+                        old_args->deref();
+                    }
+
+                    FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+                    val = dynamic_call;
+                    delete scope;
+                    scope = nullptr;
+                    deref();
+                    return dynamic_call->parseInitFinalizedCall(val, parse_context);
+                }
+
+                {
+                    if (defer_source_static_receiver && deferred_source_receiver_path != source_receiver_path) {
+                        std::string method_path = deferred_source_receiver_path;
+                        method_path += "::";
+                        method_path += scope->getIdentifier();
+                        delete scope;
+                        scope = new NamedScope(strdup(method_path.c_str()));
+                    }
+                    if (QoreProgram* pgm = parse_context.pgm ? parse_context.pgm : getProgram()) {
+                        qore_program_private::recordSourceParseMethodImport(pgm, loc, scope->ostr);
+                    }
+
+                    return parseArgs(parse_context, nullptr, nullptr);
+                }
             }
 
             {
@@ -1492,6 +1708,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     receiver_inference_call_desc += "::";
     receiver_inference_call_desc += method->getName();
     receiver_inference_call_desc += "()'";
+    record_source_parse_reflection_class_for_name_import(parse_context.pgm, loc, method, parse_args);
     if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
             receiver_inference_call_desc.c_str()) && !err) {
         err = -1;
@@ -1513,13 +1730,29 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
+    if (!method) {
+        if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
+            xsink->raiseException("AOT-PENDING-FUNCTION",
+                "static method call '%s::%s()' is pending AOT source linking",
+                getClassPath().c_str(), getName());
+            return QoreValue();
+        }
+        xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
+            getClassPath().c_str(), getName());
+        return QoreValue();
+    }
     // Pass the class context so that private static methods called from within the same class are visible
-    const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
-    return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
-            getExplicitTypeParamInstantiation())
+    const qore_class_private* cctx = qore_class_private::get(*qore_method_private::get(*method)->parent_class);
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (tmp_args) {
+        return qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
+            explicit_inst);
+    }
+    return variant
+        ? qore_method_private::evalNormalVariant(*method, xsink, rc, nullptr,
+            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst, receiver_type_info)
         : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
-            getExplicitTypeParamInstantiation());
+            explicit_inst);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
