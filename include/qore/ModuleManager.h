@@ -129,9 +129,6 @@ struct QoreModuleInfo {
 
     //! extra information to appear in the module info hash
     QoreHashNode* info = nullptr;
-
-    //! true if this is an AOT-compiled Qore module loaded as a binary module
-    bool is_aot = false;
 };
 
 //! Module description function

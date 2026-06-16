@@ -46,7 +46,6 @@ protected:
     QoreTypeParamInstantiation type_param_instantiation;
     ptype_vec_t explicit_parse_type_args;
     type_vec_t explicit_type_args;
-    type_vec_t parsed_arg_type_info;
     QoreTypeParamInstantiation explicit_runtime_type_param_instantiation;
     bool has_explicit_type_args = false;
 
@@ -62,7 +61,6 @@ public:
         receiver_type_info(old.receiver_type_info),
         type_param_instantiation(old.type_param_instantiation),
         explicit_type_args(old.explicit_type_args),
-        parsed_arg_type_info(old.parsed_arg_type_info),
         explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
         has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
@@ -75,7 +73,6 @@ public:
             variant(old.variant), receiver_type_info(old.receiver_type_info),
             type_param_instantiation(old.type_param_instantiation),
             explicit_type_args(old.explicit_type_args),
-            parsed_arg_type_info(old.parsed_arg_type_info),
             explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
             has_explicit_type_args(old.has_explicit_type_args) {
         explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
@@ -109,10 +106,6 @@ public:
 
     DLLLOCAL const QoreTypeInfo* getReceiverTypeInfo() const {
         return receiver_type_info;
-    }
-
-    DLLLOCAL const type_vec_t& getParsedArgTypeInfo() const {
-        return parsed_arg_type_info;
     }
 
     DLLLOCAL const QoreTypeParamInstantiation* getTypeParamInstantiation() const {
@@ -160,10 +153,6 @@ public:
 
     DLLLOCAL void setReceiverTypeInfo(const QoreTypeInfo* typeInfo) {
         receiver_type_info = typeInfo;
-    }
-
-    DLLLOCAL void setTypeParamInstantiation(QoreTypeParamInstantiation&& type_param_inst) {
-        type_param_instantiation = std::move(type_param_inst);
     }
 
     //! Resolves parse_args into evaluated args for AOT-deserialized nodes
@@ -611,12 +600,6 @@ public:
             : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n), is_copy(n_is_copy) {
     }
 
-    DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
-            const QoreClass* n_qc, const qore_class_private* n_class_ctx, bool n_is_copy = false)
-            : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n),
-              class_ctx(n_class_ctx), is_copy(n_is_copy) {
-    }
-
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, NamedScope* n_ns, QoreParseListNode* n_args)
             : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, parse_get_class()), ns(n_ns), is_copy(false) {
     }
@@ -734,11 +717,8 @@ public:
         return method;
     }
 
-    DLLLOCAL std::string getClassPath() const;
-
     DLLLOCAL virtual int getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
-        std::string class_path = getClassPath();
-        str.sprintf("static method call %s::%s() (%p)", class_path.c_str(), getName(), this);
+        str.sprintf("static method call %s::%s() (%p)", method->getClass()->getName(), method->getName(), this);
         return 0;
     }
 
@@ -750,7 +730,7 @@ public:
     }
 
     DLLLOCAL virtual const char* getName() const {
-        return method ? method->getName() : (scope ? scope->getIdentifier() : "");
+        return method->getName();
     }
 
     // returns the type name as a c string

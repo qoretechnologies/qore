@@ -419,7 +419,6 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MakeHashConstKeys: return "make.hash.const.keys";
         case QoreIROpcode::ToString: return "to.string";
         case QoreIROpcode::Sprintf: return "sprintf";
-        case QoreIROpcode::RefSelf: return "ref.self";
         case QoreIROpcode::DebugBlock: return "debug.block";
         case QoreIROpcode::CheckException: return "check.exception";
         case QoreIROpcode::PluginUnary: return "plugin.unary";
@@ -646,13 +645,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     }
                 }
             } else if (auto* bg_inst = dynamic_cast<const QoreIRBackgroundInstruction*>(inst.get())) {
-                const char* kind = "unknown";
-                if (bg_inst->kind == QoreIRBackgroundKind::DotEval) {
-                    kind = "dot-eval";
-                } else if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
-                    kind = "static-method";
-                }
-                out << " " << kind << " " << bg_inst->name;
+                out << " " << (bg_inst->kind == QoreIRBackgroundKind::DotEval ? "dot-eval" : "unknown")
+                    << " " << bg_inst->name;
             } else if (inst->opcode == QoreIROpcode::Call
                     || inst->opcode == QoreIROpcode::CallIndirect
                     || inst->opcode == QoreIROpcode::CallMethod

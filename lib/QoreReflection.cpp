@@ -370,7 +370,7 @@ bool QoreExternalConstant::isBuiltin() const {
 }
 
 const QoreTypeInfo* QoreExternalConstant::getTypeInfo() const {
-    return reinterpret_cast<const ConstantEntry*>(this)->getParseTypeInfo();
+    return reinterpret_cast<const ConstantEntry*>(this)->typeInfo;
 }
 
 QoreValue QoreExternalConstant::getReferencedValue() const {

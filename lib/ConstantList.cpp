@@ -34,42 +34,11 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
-#include "qore/intern/qore_aot_deps.h"
 
 #include <cstdlib>
 #include <cstring>
 
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
-
-static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value) {
-    if (!typeInfo || value.isNothing()) {
-        return;
-    }
-
-    ExceptionSink type_xsink;
-    QoreTypeInfo::retypeValue(value, typeInfo, &type_xsink);
-    if (type_xsink) {
-        type_xsink.clear();
-    }
-    QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", value, &type_xsink);
-    if (type_xsink) {
-        type_xsink.clear();
-    }
-}
-
-class AOTPreloadedSourceSymbolResolutionHelper {
-public:
-    DLLLOCAL AOTPreloadedSourceSymbolResolutionHelper()
-            : old(qore_aot_set_allow_preloaded_source_symbols(true)) {
-    }
-
-    DLLLOCAL ~AOTPreloadedSourceSymbolResolutionHelper() {
-        qore_aot_set_allow_preloaded_source_symbols(old);
-    }
-
-private:
-    bool old;
-};
 
 #ifdef DEBUG
 const char* ClassNs::getName() const {
@@ -165,10 +134,25 @@ void ConstantEntry::del(ExceptionSink* xsink) {
 }
 
 void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue ce=%p name=%s result=%s pending=%d has=%d\n",
+            static_cast<void*>(this), name.c_str(), result.getTypeName(), static_cast<int>(aot_shell_pending),
+            static_cast<int>(hasValue()));
+    }
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
-    reapplyConstantType(typeInfo, result);
+    if (typeInfo && !result.isNothing()) {
+        ExceptionSink type_xsink;
+        QoreTypeInfo::retypeValue(result, typeInfo, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", result, &type_xsink);
+        if (type_xsink) {
+            type_xsink.clear();
+        }
+    }
     saved_val.discard(xsink);
     if (val.getType() == NT_RTCONSTREF) {
         saved_val = result;
@@ -180,12 +164,16 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     saved_val_set = true;
     init = true;
     aot_shell_pending = false;
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
+            static_cast<void*>(this), name.c_str(), static_cast<int>(aot_shell_pending),
+            static_cast<int>(hasValue()), static_cast<int>(saved_val.hasNode()));
+    }
 }
 
 void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
-    QoreValue& target = saved_val_set ? saved_val : val;
     bool changed = false;
-    QoreValue resolved = resolveRtConstRefDeep(target, xsink, changed);
+    QoreValue resolved = resolveRtConstRefDeep(val, xsink, changed);
     if (xsink && *xsink) {
         resolved.discard(nullptr);
         return;
@@ -195,15 +183,11 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         return;
     }
 
-    reapplyConstantType(typeInfo, resolved);
-
-    target.discard(xsink);
-    target = resolved;
-    if (!saved_val_set) {
-        saved_val.discard(xsink);
-        saved_val = target.refSelf();
-        saved_val_set = true;
-    }
+    val.discard(xsink);
+    val = resolved;
+    saved_val.discard(xsink);
+    saved_val = resolved.refSelf();
+    saved_val_set = true;
 }
 
 void ConstantEntry::makeExternalStubDeclaration() {
@@ -266,7 +250,6 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //printd(5, "ConstantEntry::parseInit() this: %p '%s' about to init val: '%s' class: %p '%s'\n", this,
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
-        AOTPreloadedSourceSymbolResolutionHelper apssrh;
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
         // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
         // parse context pushed above is in scope, matching the behavior of type inference
@@ -396,18 +379,18 @@ int ConstantEntry::parseCommitRuntimeInit() {
                 // (EXTERNAL-STUB-CONSTANT) supplied by the runtime host, or an
                 // AOT-deserialized shell from a dependency object whose
                 // __const_init function has not run yet (AOT-PENDING-CONSTANT),
-                // or an AOT-deserialized sibling function body that is not
-                // executable during qcc -c -L source parse (AOT-PENDING-FUNCTION),
-                // or a reflection class lookup that resolves after sibling
-                // classes are linked (AOT-PENDING-CLASS).
-                // These cases are resolved identically: defer this constant to
-                // its own runtime __const_init (the preserved aot_init_expr),
-                // where normal link/load ordering makes the dependency
-                // executable.
+                // a sibling function/class that is linked later, or a reflected
+                // class/hashdecl lookup committed later in the same parse.
+                // These cases are resolved identically: defer this constant to its
+                // own runtime __const_init (the preserved aot_init_expr), where the
+                // register-time round-retry resolves the dependency ordering.
                 defer_runtime_init = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
                     || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
                     || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CLASS")
-                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION")
+                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-CLASS")
+                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-TYPE")
+                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-TYPED-HASH");
             }
             if (!defer_runtime_init) {
                 typeInfo = nothingTypeInfo;
@@ -710,13 +693,9 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
     cnemap_t::iterator i = cnemap.find(name);
     if (i != cnemap.end()) {
         if (!i->second->parseInit(ptr)) {
-            constantTypeInfo = i->second->getParseTypeInfo();
+            constantTypeInfo = i->second->typeInfo;
             access = i->second->getAccess();
             found = true;
-            // AOT incremental dependency: see ConstantEntry::get().  Records
-            // the defining source file so a folded cross-unit constant/enum
-            // reference still triggers a rebuild when that file changes.
-            qore_aot_note_referenced_decl(i->second->loc);
             return i->second->val;
         }
         constantTypeInfo = nothingTypeInfo;

@@ -99,55 +99,11 @@ static_assert(QORE_IR_MAX_OPCODE == 383,
 
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, int32_t string_index_char, ExceptionSink* xsink);
-extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
-        uint64_t* args, int nargs, ExceptionSink* xsink);
 
 static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
     return (obj && qore_closure_self_context(obj))
         ? qore_object_private::get(*obj)->checkClosureSelfValid(xsink)
         : 0;
-}
-
-static std::string qore_ir_make_aot_variant_signature(const AbstractQoreFunctionVariant* variant) {
-    if (!variant || !variant->getSignature()) {
-        return std::string();
-    }
-    std::string rv("(");
-    const type_vec_t& types = variant->getSignature()->getTypeList();
-    for (size_t i = 0; i < types.size(); ++i) {
-        if (i > 0) {
-            rv.append(",");
-        }
-        rv.append(qore_get_aot_serializable_type_path(types[i]));
-    }
-    rv.append(")");
-    return rv;
-}
-
-static const AbstractQoreFunctionVariant* qore_ir_find_constructor_variant_by_aot_signature(
-        const QoreClass* qc, const char* variant_sig) {
-    if (!qc || !variant_sig || !*variant_sig) {
-        return nullptr;
-    }
-    const QoreMethod* cons = qc->getConstructor();
-    if (!cons) {
-        return nullptr;
-    }
-    const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-    if (!cf) {
-        return nullptr;
-    }
-    if (const AbstractQoreFunctionVariant* v = cf->findVariantBySignatureText(variant_sig)) {
-        return v;
-    }
-    QoreFunctionIterator vi(*cf);
-    while (vi.next()) {
-        const AbstractQoreFunctionVariant* v = vi.getVariant();
-        if (qore_ir_make_aot_variant_signature(v) == variant_sig) {
-            return v;
-        }
-    }
-    return nullptr;
 }
 
 static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
@@ -1008,17 +964,6 @@ static std::pair<bool, QoreValue> runBackgroundMetadata(
             new QoreDotEvalOperatorNode(&loc_builtin, recv, new_m);
         QoreValue result = do_op_background(QoreValue(call_node), xsink);
         QoreValue(call_node).discard(xsink);
-        return {true, result};
-    }
-
-    if (bg_inst->kind == QoreIRBackgroundKind::StaticMethod) {
-        std::vector<uint64_t> args;
-        args.reserve(bg_inst->operands.size());
-        for (const QoreIRValue& operand : bg_inst->operands) {
-            args.push_back(toBits(getIRValue(values, operand)));
-        }
-        QoreValue result = fromBits(qore_rt_background_static_method_name_call_aot(
-            bg_inst->name.c_str(), args.empty() ? nullptr : args.data(), static_cast<int>(args.size()), xsink));
         return {true, result};
     }
 
@@ -3334,10 +3279,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     qc = scoped->oc;
                     variant = scoped->getVariant();
                     object_type_info = scoped->getObjectTypeInfo();
-                    if (!qc && scoped->isDynamicObjectConstruct()) {
-                        qc = qore_aot_resolve_class_ref(getProgram(),
-                            scoped->getDynamicClassName().c_str(), false);
-                    }
                 } else if (auto* nocn = dynamic_cast<const NewObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = nocn->getClass();
@@ -3415,7 +3356,6 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::NewHashDeclFromHash: {
             QoreValue hash_val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             const TypedHashDecl* hd = nullptr;
-            std::string hd_path;
             bool runtime_check = false;
             if (inv->expr.hasNode()) {
                 auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
@@ -3425,27 +3365,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
-                    if (nhd->hd) {
-                        const QoreTypeInfo* runtime_type_info
-                            = qore_substitute_type_params_if_needed(nhd->hd->getTypeInfo());
-                        hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
-                    } else if (nhd->isDynamicHashDeclConstruct()) {
-                        hd_path = nhd->getDynamicHashDeclName();
-                    }
+                    const QoreTypeInfo* runtime_type_info
+                        = qore_substitute_type_params_if_needed(nhd->hd->getTypeInfo());
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
                     runtime_check = nhd->runtime_check;
-                }
-            }
-            if (!hd && !hd_path.empty()) {
-                QoreProgram* pgm = getProgram();
-                if (pgm) {
-                    hd = qore_aot_resolve_hashdecl_path(pgm, hd_path.c_str());
-                    if (!hd) {
-                        std::string error;
-                        QoreAOTTypeResolver resolver(pgm);
-                        const QoreTypeInfo* ti = resolver.resolve(hd_path.c_str(), error);
-                        ti = qore_substitute_type_params_if_needed(ti);
-                        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-                    }
                 }
             }
             if (hd) {
@@ -3521,19 +3444,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         }
 
         case QoreIROpcode::LoadStaticVar: {
-            const AbstractQoreNode* node = inv->expr.getInternalNode();
-            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
+                    inv->expr.getInternalNode())) {
                 uint64_t result_bits = preserve_hash_key_weak_result
                     ? qore_rt_load_static_var_for_call(&static_var->vi, static_var->str.c_str(), xsink)
                     : qore_rt_load_static_var(&static_var->vi, static_var->str.c_str(), xsink);
-                return fromBits(result_bits);
-            }
-            if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
-                uint64_t result_bits = preserve_hash_key_weak_result
-                    ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
-                        deferred_static->member_name.c_str(), xsink)
-                    : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
-                        deferred_static->member_name.c_str(), xsink);
                 return fromBits(result_bits);
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -7620,37 +7535,10 @@ load_local_done:
             }
             case QoreIROpcode::LoadStaticVar: {
                 auto* sv_inst = static_cast<QoreIRStaticVarInstruction*>(inst);
-                const AbstractQoreNode* node = sv_inst->expr.getInternalNode();
-                if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
-                    uint64_t result_bits = isDotEvalOnlyBase(inst)
-                        ? qore_rt_load_static_var_by_path_for_call(deferred_static->class_path.c_str(),
-                            deferred_static->member_name.c_str(), xsink)
-                        : qore_rt_load_static_var_by_path(deferred_static->class_path.c_str(),
-                            deferred_static->member_name.c_str(), xsink);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    QoreValue out = fromBits(result_bits);
-                    setValueSlot(values, sv_inst->result.id, out, xsink);
-                    if (out.hasNode()) {
-                        cleanup.push_back(sv_inst->result.id);
-                    }
-                    ++ip;
-                    break;
-                }
                 // Resolve vi from expr if not set (AOT-deserialized handler IR)
                 if (!sv_inst->vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
-                    auto* static_var = dynamic_cast<StaticClassVarRefNode*>(const_cast<AbstractQoreNode*>(node));
-                    if (!static_var) {
-                        xsink->raiseException("IR-RUNTIME-ERROR",
-                            "LoadStaticVar instruction has invalid static member metadata");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    sv_inst->vi = &static_var->vi;
+                    sv_inst->vi = &(static_cast<StaticClassVarRefNode*>(
+                        sv_inst->expr.getInternalNode()))->vi;
                 }
                 // issue 3523: evaluate in case the value is a reference
                 ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
@@ -7694,9 +7582,6 @@ load_local_done:
                         qc = scoped->oc;
                         variant = scoped->getVariant();
                         no_inst->object_type_info = scoped->getObjectTypeInfo();
-                        if (!qc && scoped->isDynamicObjectConstruct()) {
-                            no_inst->class_path = scoped->getDynamicClassName();
-                        }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
@@ -7707,33 +7592,13 @@ load_local_done:
                         no_inst->variant = variant;
                     }
                 }
-                if (!qc && !no_inst->class_path.empty()) {
-                    qc = qore_aot_resolve_class_ref(getProgram(), no_inst->class_path.c_str(), false);
-                    if (qc) {
-                        no_inst->qc = qc;
-                    }
-                }
-                if (qc && !variant && !no_inst->variant_sig.empty()) {
-                    variant = qore_ir_find_constructor_variant_by_aot_signature(
-                        qc, no_inst->variant_sig.c_str());
-                    if (variant) {
-                        no_inst->variant = variant;
-                    }
-                }
                 if (!qc) {
-                    if (!no_inst->class_path.empty()) {
-                        xsink->raiseException("RUNTIME-ERROR",
-                            "cannot construct object: class '%s' not resolved",
-                            no_inst->class_path.c_str());
-                    } else {
-                        xsink->raiseException("RUNTIME-ERROR",
-                            "cannot construct object: class not resolved");
-                    }
+                    xsink->raiseException("RUNTIME-ERROR",
+                        "cannot construct object: class not resolved");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                no_inst->object_type_info = qore_substitute_type_params_if_needed(no_inst->object_type_info);
                 // Build NaN-boxed arg array from pre-computed IR operand values
                 int nargs = static_cast<int>(no_inst->operands.size());
                 constexpr int SMALL_BUF = 8;
@@ -11811,9 +11676,7 @@ lvalue_path_unary_done:
             case QoreIROpcode::CallStaticDirect: {
                 // Fast path: bypass AST for resolved static method calls with IR/JIT
                 auto* static_inst = static_cast<QoreIRCallStaticDirectInstruction*>(inst);
-                const StaticMethodCallNode* static_call_expr = dynamic_cast<const StaticMethodCallNode*>(
-                    static_inst->expr.getInternalNode());
-                if (static_inst->variant && static_call_expr) {
+                if (static_inst->variant) {
                     int nargs = static_cast<int>(static_inst->operands.size());
                     if (hasLastUseCallArgSlots(values, static_inst->operands, 0,
                             value_use_counts)) {
@@ -11833,7 +11696,10 @@ lvalue_path_unary_done:
                             }
                             return returnAfterUnhandledException();
                         }
-                        StaticMethodCallNode clone(*static_call_expr, arg_list);
+                        const StaticMethodCallNode* call = dynamic_cast<const StaticMethodCallNode*>(
+                            static_inst->expr.getInternalNode());
+                        assert(call);
+                        StaticMethodCallNode clone(*call, arg_list);
                         QoreValue res = evalAndRef(&clone, xsink);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
@@ -11986,13 +11852,6 @@ lvalue_path_unary_done:
                         if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
-                            res = evalAndRef(&clone, xsink);
-                            used_operands = true;
-                        } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
-                                call_expr.getInternalNode())) {
-                            // AOT can load parser-equivalent namespace function fallbacks
-                            // from Class::name() syntax through CallStatic slots.
-                            FunctionCallNode clone(*call, arg_list);
                             res = evalAndRef(&clone, xsink);
                             used_operands = true;
                         }

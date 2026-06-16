@@ -3957,8 +3957,7 @@ public:
 
     DLLLOCAL QoreValue evalNormalVariant(QoreObject* self, RuntimeConfig& rc, const QoreExternalMethodVariant* ev,
             const QoreListNode* args, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            const QoreTypeInfo* receiver_type_info = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // returns the lowest access code for all variants
     DLLLOCAL ClassAccess getAccess() const;
@@ -3971,10 +3970,8 @@ public:
     DLLLOCAL static QoreValue evalNormalVariant(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self,
             const QoreExternalMethodVariant* ev, const QoreListNode* args,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
-            const QoreTypeInfo* receiver_type_info = nullptr) {
-        return m.priv->evalNormalVariant(self, rc, ev, args, xsink, explicit_type_param_instantiation,
-            receiver_type_info);
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
+        return m.priv->evalNormalVariant(self, rc, ev, args, xsink, explicit_type_param_instantiation);
     }
 
     DLLLOCAL static QoreValue evalPseudoMethod(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,

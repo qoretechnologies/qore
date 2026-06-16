@@ -53,15 +53,12 @@ test -f "${TMP}/out/${BIN_ID}.qo"
 nm "${TMP}/out/${LIB_ID}.qo" | grep -q "qore_${LIB_ID}_${LIB_ID}_script_register"
 nm "${TMP}/out/${BIN_ID}.qo" | grep -q "qore_${BIN_ID}_${BIN_ID}_script_register"
 
-# Capture --dump-info output once, then grep it.  Piping `qcc --dump-info`
-# directly into `grep -q` is unsafe under `set -o pipefail`: `grep -q` exits
-# as soon as it matches (the label appears early in the dump), closing the
-# pipe while qcc is still writing, so qcc dies with SIGPIPE and pipefail
-# fails the line even though the label is present.
-DUMP_INFO="$(LD_LIBRARY_PATH=build "${QCC}" --dump-info \
-    "${TMP}/out/${LIB_ID}.qo" "${TMP}/out/${BIN_ID}.qo")"
-grep -q "label: ${TMP}/lib/qorus.ql" <<<"${DUMP_INFO}"
-grep -q "label: ${TMP}/bin/qorus.qr" <<<"${DUMP_INFO}"
+LD_LIBRARY_PATH=build "${QCC}" --dump-info \
+    "${TMP}/out/${LIB_ID}.qo" "${TMP}/out/${BIN_ID}.qo" \
+    | grep -q "label: ${TMP}/lib/qorus.ql"
+LD_LIBRARY_PATH=build "${QCC}" --dump-info \
+    "${TMP}/out/${LIB_ID}.qo" "${TMP}/out/${BIN_ID}.qo" \
+    | grep -q "label: ${TMP}/bin/qorus.qr"
 
 LD_LIBRARY_PATH=build "${QCC}" -o "${TMP}/app" -e verify \
     "${TMP}/out/${LIB_ID}.qo" "${TMP}/out/${BIN_ID}.qo" >/dev/null

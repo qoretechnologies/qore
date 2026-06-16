@@ -102,7 +102,7 @@
 class UserClosureVariant;
 class UserSignature;
 class LVarSet;
-QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant, std::string* error_out = nullptr);
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
 bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
     const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals);
 void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
@@ -454,9 +454,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"COMPLEX_BUFFER_NEW", 107, true, write_slot_COMPLEX_BUFFER_NEW, "Complex buffer construction"},
     {"ITERATE", 108, true, write_slot_ITERATE, "Iterate operator"},
     {"STREAMING", 109, true, write_slot_STREAMING, "Streaming operator"},
-    {"DEFERRED_STATIC_METHOD_REF", 110, true, write_slot_STATIC_METHOD_REF,
-        "Deferred static method reference"},
-    {"DEFERRED_FUNCTION_REF", 111, true, write_slot_FUNC_CALL_REF, "Deferred function call reference"},
+    {nullptr, 110, false, nullptr, nullptr},
+    {nullptr, 111, false, nullptr, nullptr},
     {nullptr, 112, false, nullptr, nullptr},
     {nullptr, 113, false, nullptr, nullptr},
     {nullptr, 114, false, nullptr, nullptr},

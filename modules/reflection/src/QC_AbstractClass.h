@@ -39,8 +39,7 @@ class QoreReflectionClass : public AbstractReflectionObject {
 public:
     const QoreClass* cls;
 
-    DLLLOCAL QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm = getProgram(),
-        const QoreProgramLocation* loc = nullptr);
+    DLLLOCAL QoreReflectionClass(ExceptionSink* xsink, const char* name, QoreProgram* pgm = getProgram());
 
     DLLLOCAL QoreReflectionClass(QoreProgram* pgm, const QoreClass* cls);
 };

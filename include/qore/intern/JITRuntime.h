@@ -190,14 +190,6 @@ uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint
 uint64_t qore_rt_background_dot_eval_name_call_aot_throwing(const char* method_name,
     uint64_t recv_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
-//! Native AOT background Class::method(args) call with pre-evaluated args.
-uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
-    uint64_t* args, int nargs, ExceptionSink* xsink);
-
-//! Throwing wrapper for EH paths.
-uint64_t qore_rt_background_static_method_name_call_aot_throwing(const char* qualified_name,
-    uint64_t* args, int nargs, ExceptionSink* xsink);
-
 //! Native AOT background call-reference/closure invocation with pre-evaluated args.
 uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* args,
     int nargs, ExceptionSink* xsink);
@@ -515,14 +507,6 @@ uint64_t qore_rt_load_static_var_by_path_throwing(const char* class_path, const 
         ExceptionSink* xsink);
 uint64_t qore_rt_load_static_var_by_path_for_call_throwing(const char* class_path, const char* var_name,
         ExceptionSink* xsink);
-uint64_t qore_rt_load_static_var_by_path_aot(QoreAOTContext* ctx, const char* class_path,
-        const char* var_name, ExceptionSink* xsink);
-uint64_t qore_rt_load_static_var_by_path_for_call_aot(QoreAOTContext* ctx, const char* class_path,
-        const char* var_name, ExceptionSink* xsink);
-uint64_t qore_rt_load_static_var_by_path_aot_throwing(QoreAOTContext* ctx, const char* class_path,
-        const char* var_name, ExceptionSink* xsink);
-uint64_t qore_rt_load_static_var_by_path_for_call_aot_throwing(QoreAOTContext* ctx, const char* class_path,
-        const char* var_name, ExceptionSink* xsink);
 
 // --- Closure creation helper ---
 
@@ -541,7 +525,7 @@ class ParseReferenceNode;
 //! Create a call reference (function/static method); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
-//! Create a class-qualified method call reference from serialized AOT metadata.
+//! Create a static method call reference from serialized AOT metadata.
 uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path, const char* method_name,
     ExceptionSink* xsink);
 uint64_t qore_rt_create_static_method_call_ref_aot_throwing(const char* class_path, const char* method_name,

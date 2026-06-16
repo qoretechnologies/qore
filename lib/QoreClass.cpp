@@ -70,11 +70,10 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgra
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
         const QoreExternalMethodVariant* ev, const QoreListNode* args, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
-        const QoreTypeInfo* receiver_type_info) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), receiver_type_info,
+        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), nullptr,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
@@ -6830,10 +6829,16 @@ static bool qore_is_deferred_static_init_exception(ExceptionSink* xsink) {
         return false;
     }
     QoreStringValueHelper ex_err_str(ex_err);
-    return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CLASS")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
+    const char* err = ex_err_str->c_str();
+    // Static var initializers can cache reflection objects whose declarations
+    // are committed later in the same parse; retry lazily on first access.
+    return !strcmp(err, "EXTERNAL-STUB-CONSTANT")
+        || !strcmp(err, "AOT-PENDING-CONSTANT")
+        || !strcmp(err, "AOT-PENDING-CLASS")
+        || !strcmp(err, "AOT-PENDING-FUNCTION")
+        || !strcmp(err, "UNKNOWN-CLASS")
+        || !strcmp(err, "UNKNOWN-TYPE")
+        || !strcmp(err, "UNKNOWN-TYPED-HASH");
 }
 
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {

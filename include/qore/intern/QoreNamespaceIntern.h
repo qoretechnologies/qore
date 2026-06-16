@@ -2487,15 +2487,6 @@ public:
         return fe ? fe->getFunction() : nullptr;
     }
 
-    DLLLOCAL static const FunctionEntry* parseFindFunctionEntry(const char* fname) {
-        return getRootNS()->rpriv->parseFindFunctionEntryIntern(fname);
-    }
-
-    DLLLOCAL static void parseMaybeWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
-            const FunctionEntry* resolved) {
-        getRootNS()->rpriv->parseWarnAmbiguousFunctionCall(loc, fname, resolved);
-    }
-
     DLLLOCAL static const FunctionEntry* parseResolveFunctionEntry(const QoreProgramLocation* loc, const char* fname) {
         return getRootNS()->rpriv->parseResolveFunctionEntryIntern(loc, fname);
     }

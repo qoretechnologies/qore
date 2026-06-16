@@ -36,8 +36,6 @@
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreParseListNode.h"
 
-#include <string>
-
 class RuntimeConfig;
 
 class ScopedObjectCallNode : public AbstractFunctionCallNode {
@@ -45,7 +43,6 @@ public:
     NamedScope* name;
     const QoreClass* oc;
     const QoreTypeInfo* object_type_info;
-    std::string dynamic_class_name;
     QoreString desc;
 
     DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, NamedScope* n, QoreParseListNode* a)
@@ -58,12 +55,6 @@ public:
             object_type_info(n_object_type_info) {
     }
 
-    DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, const char* n_dynamic_class_name,
-            QoreParseListNode* a, const QoreTypeInfo* n_object_type_info = nullptr)
-            : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(nullptr), oc(nullptr),
-            object_type_info(n_object_type_info), dynamic_class_name(n_dynamic_class_name ? n_dynamic_class_name : "") {
-    }
-
     DLLLOCAL virtual ~ScopedObjectCallNode() {
         delete name;
     }
@@ -74,25 +65,13 @@ public:
         return object_type_info;
     }
 
-    //! Returns true if this is an AOT-deferred object construction.
-    DLLLOCAL bool isDynamicObjectConstruct() const {
-        return !dynamic_class_name.empty();
-    }
-
-    //! Returns the class path for an AOT-deferred object construction.
-    DLLLOCAL const std::string& getDynamicClassName() const {
-        return dynamic_class_name;
-    }
-
     /* get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
         the ExceptionSink is only needed for QoreObject where a method may be executed
         use the QoreNodeAsStringHelper class (defined in QoreStringNode.h) instead of using these functions directly
         returns -1 for exception raised, 0 = OK
     */
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        str.sprintf("new operator expression (class '%s')", oc ? oc->getName()
-            : !dynamic_class_name.empty() ? dynamic_class_name.c_str()
-            : name ? name->ostr : "<null>", this);
+        str.sprintf("new operator expression (class '%s')", oc ? oc->getName() : name ? name->ostr : "<null>", this);
         return 0;
     }
 

@@ -44,11 +44,6 @@
 
 class UserSignature;
 class QoreComplexBufferTypeInfo;
-class QoreProgramLocation;
-class QoreTypeInfo;
-
-//! Returns true and sets @a result if either type is an AOT deferred type placeholder.
-DLLLOCAL bool qore_type_info_aot_deferred_compare(const QoreTypeInfo* a, const QoreTypeInfo* b, bool& result);
 
 enum class QoreWildcardKind : unsigned char {
     Unbounded,
@@ -570,10 +565,6 @@ public:
     DLLLOCAL static bool equal(const QoreTypeInfo* a, const QoreTypeInfo* b) {
         if (a == b)
             return true;
-        bool aot_deferred_result = false;
-        if (qore_type_info_aot_deferred_compare(a, b, aot_deferred_result)) {
-            return aot_deferred_result;
-        }
         bool hta = hasType(a);
         bool htb = hasType(b);
         if (hta && htb)
@@ -585,10 +576,6 @@ public:
     DLLLOCAL static bool isInputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
         if (a == b)
             return true;
-        bool aot_deferred_result = false;
-        if (qore_type_info_aot_deferred_compare(a, b, aot_deferred_result)) {
-            return aot_deferred_result;
-        }
         bool hta = hasType(a);
         bool htb = hasType(b);
         if (hta && htb)
@@ -600,10 +587,6 @@ public:
     DLLLOCAL static bool isOutputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
         if (a == b)
             return true;
-        bool aot_deferred_result = false;
-        if (qore_type_info_aot_deferred_compare(a, b, aot_deferred_result)) {
-            return aot_deferred_result;
-        }
         bool hta = hasType(a);
         bool htb = hasType(b);
         if (hta && htb)
@@ -4058,13 +4041,6 @@ protected:
 */
 DLLLOCAL const QoreTypeInfo* qore_get_complex_code_type_from_signature(const class AbstractFunctionSignature* sig,
     bool or_nothing = false);
-
-//! Returns a conservative type used only while standalone AOT source parsing defers an unresolved type import.
-DLLLOCAL const QoreTypeInfo* qore_get_aot_deferred_type_info(const QoreProgramLocation* loc, const char* qore_path,
-    bool or_nothing, bool hashdecl);
-
-//! Returns true if @a ti is an AOT deferred type import placeholder.
-DLLLOCAL bool qore_type_info_is_aot_deferred(const QoreTypeInfo* ti);
 
 #include "qore/intern/QoreParseTypeInfo.h"
 

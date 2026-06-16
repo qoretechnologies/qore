@@ -1488,12 +1488,6 @@ public:
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr) const;
 
-    //! Finds a variant using parse-time type-vector semantics without emitting parse diagnostics.
-    DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNoDiagnostics(const type_vec_t& argTypeInfo,
-            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
-            QoreTypeParamInstantiation* type_param_inst = nullptr,
-            const type_vec_t* explicit_type_args = nullptr) const;
-
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,

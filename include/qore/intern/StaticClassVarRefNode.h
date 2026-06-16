@@ -37,7 +37,6 @@
 
 class QoreVarInfo;
 class LValueHelper;
-class LValueRemoveHelper;
 
 class StaticClassVarRefNode : public ParseNode {
 public:
@@ -68,29 +67,6 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const;
-};
-
-class DeferredStaticClassMemberRefNode : public ParseNode {
-public:
-    std::string class_path;
-    std::string member_name;
-
-    DLLLOCAL DeferredStaticClassMemberRefNode(const QoreProgramLocation* loc, const char* n_class_path,
-            const char* n_member_name);
-
-    DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const;
-    DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const;
-    DLLLOCAL virtual const char* getTypeName() const;
-
-    DLLLOCAL const QoreTypeInfo* getTypeInfo() const;
-
-    DLLLOCAL int getLValue(LValueHelper& lvh) const;
-
-    DLLLOCAL void remove(LValueRemoveHelper& lvrh);
-
-protected:
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
-    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 };
 
 #endif

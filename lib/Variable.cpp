@@ -49,7 +49,6 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreLValue.h"
-#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -81,44 +80,27 @@ static bool split_static_lvalue_path(const std::string& full_name, std::string& 
     return !class_path.empty() && !var_name.empty();
 }
 
-static int resolve_runtime_static_lvalue_path(LValueHelper& lvh, const std::string& full_name) {
+static QoreVarInfo* resolve_runtime_static_lvalue_path(const std::string& full_name, std::string& error) {
     std::string class_path;
     std::string var_name;
     if (!split_static_lvalue_path(full_name, class_path, var_name)) {
-        lvh.vl.xsink->raiseException("LVALUE-ERROR", "invalid static variable lvalue path root '%s'",
-            full_name.c_str());
-        return -1;
+        error = "invalid static variable lvalue path root '" + full_name + "'";
+        return nullptr;
     }
 
     QoreProgram* pgm = getProgram();
     if (!pgm) {
-        lvh.vl.xsink->raiseException("LVALUE-ERROR",
-            "cannot resolve static variable lvalue path root '%s': no program context", full_name.c_str());
-        return -1;
+        error = "cannot resolve static variable lvalue path root '" + full_name + "': no program context";
+        return nullptr;
     }
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
-    if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, full_name.c_str(), found_ns)) {
-        if (const_cast<Var*>(var)->getLValue(lvh, false)) {
-            lvh.clearPtr();
-            return -1;
-        }
-        return 0;
-    }
-
-    found_ns = nullptr;
-    if (qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, full_name.c_str(), found_ns)) {
-        lvh.vl.xsink->raiseException("CONSTANT-ERROR", "cannot assign to constant '%s'", full_name.c_str());
-        return -1;
-    }
-
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
     if (!qc) {
-        lvh.vl.xsink->raiseException("LVALUE-ERROR",
-            "cannot resolve class '%s' for static variable lvalue path root '%s'",
-            class_path.c_str(), full_name.c_str());
-        return -1;
+        error = "cannot resolve class '" + class_path + "' for static variable lvalue path root '"
+            + full_name + "'";
+        return nullptr;
     }
 
     QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
@@ -133,21 +115,12 @@ static int resolve_runtime_static_lvalue_path(LValueHelper& lvh, const std::stri
     }
 
     if (!vi) {
-        if (qc->findConstant(var_name.c_str())) {
-            lvh.vl.xsink->raiseException("CONSTANT-ERROR", "cannot assign to constant '%s'", full_name.c_str());
-            return -1;
-        }
-        lvh.vl.xsink->raiseException("LVALUE-ERROR",
-            "cannot resolve static variable '%s' in class '%s' for static variable lvalue path root '%s'",
-            var_name.c_str(), class_path.c_str(), full_name.c_str());
-        return -1;
+        error = "cannot resolve static variable '" + var_name + "' in class '" + class_path
+            + "' for static variable lvalue path root '" + full_name + "'";
+        return nullptr;
     }
 
-    if (vi->getLValue(lvh, var_name.c_str())) {
-        lvh.clearPtr();
-        return -1;
-    }
-    return 0;
+    return vi;
 }
 
 void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
@@ -1110,17 +1083,7 @@ int LValueHelper::doLValue(const QoreValue& n, bool for_remove) {
         robj = qore_object_private::get(*obj);
         ocvec.push_back(ObjCountRec(obj));
     } else if (ntype == NT_CLASS_VARREF) {
-        const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
-        const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
-        if (!static_var && !deferred_static) {
-            vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
-            clearPtr();
-            return -1;
-        }
-        int rc = static_var ? static_var->getLValue(*this) : deferred_static->getLValue(*this);
-        if (rc) {
+        if (n.get<const StaticClassVarRefNode>()->getLValue(*this)) {
             assert(*vl.xsink);
             clearPtr();
             return -1;
@@ -1224,17 +1187,7 @@ int LValueHelper::doLValue(const QoreValue& n, RuntimeConfig& rc, bool for_remov
         robj = qore_object_private::get(*obj);
         ocvec.push_back(ObjCountRec(obj));
     } else if (ntype == NT_CLASS_VARREF) {
-        const AbstractQoreNode* node = n.getInternalNode();
-        const StaticClassVarRefNode* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
-        const DeferredStaticClassMemberRefNode* deferred_static =
-            static_var ? nullptr : dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
-        if (!static_var && !deferred_static) {
-            vl.xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
-            clearPtr();
-            return -1;
-        }
-        int rc = static_var ? static_var->getLValue(*this) : deferred_static->getLValue(*this);
-        if (rc) {
+        if (n.get<const StaticClassVarRefNode>()->getLValue(*this)) {
             assert(*vl.xsink);
             clearPtr();
             return -1;
@@ -1424,7 +1377,14 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
 
-            if (resolve_runtime_static_lvalue_path(*this, root.name)) {
+            std::string error;
+            QoreVarInfo* vi = resolve_runtime_static_lvalue_path(root.name, error);
+            if (!vi) {
+                vl.xsink->raiseException("LVALUE-ERROR", "%s", error.c_str());
+                return -1;
+            }
+            if (vi->getLValue(*this, root.name.c_str())) {
+                clearPtr();
                 return -1;
             }
             break;
@@ -2288,18 +2248,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     }
 
     if (t == NT_CLASS_VARREF) {
-        AbstractQoreNode* node = lvalue.getInternalNode();
-        if (StaticClassVarRefNode* static_var = dynamic_cast<StaticClassVarRefNode*>(node)) {
-            static_var->remove(*this);
-        } else {
-            DeferredStaticClassMemberRefNode* deferred_static =
-                dynamic_cast<DeferredStaticClassMemberRefNode*>(node);
-            if (deferred_static) {
-                deferred_static->remove(*this);
-            } else {
-                xsink->raiseException("REFERENCE-ERROR", "invalid static class variable reference node");
-            }
-        }
+        lvalue.get<StaticClassVarRefNode>()->remove(*this);
         return;
     }
 

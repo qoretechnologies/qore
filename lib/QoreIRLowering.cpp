@@ -3890,23 +3890,6 @@ static bool extractLValuePath(const QoreValue& expr,
         return true;
     }
 
-    if (auto* dsv = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
-        LVPathStep step;
-        if (dsv->class_path.empty()) {
-            // AOT source parsing uses DeferredStaticClassMemberRefNode for
-            // unresolved bare symbols.  In an lvalue root position, such a
-            // symbol can only be a deferred global/thread-local variable.
-            step.kind = LVPathStepKind::GlobalVar;
-            step.name = dsv->member_name;
-        } else {
-            step.kind = LVPathStepKind::StaticVar;
-            step.name = dsv->class_path + "::" + dsv->member_name;
-        }
-        step.ref_ptr = nullptr;
-        path.push_back(step);
-        return true;
-    }
-
     // Navigation: QoreSquareBracketsRangeOperatorNode (container[start..stop])
     if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
         if (!allow_slice) {
@@ -4543,22 +4526,6 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return builder.createLoadStaticVar(&static_var->vi, static_var->str.c_str(),
                 expr, static_var->loc)->result;
     }
-    if (auto* deferred_static = dynamic_cast<const DeferredStaticClassMemberRefNode*>(node)) {
-        if (!exception_stack.empty()) {
-            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-            if (!normal_block) {
-                error = "IR builder failed to create invoke continuation block";
-                return QoreIRValue();
-            }
-            QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, deferred_static->loc);
-            inst->invoke_opcode = QoreIROpcode::LoadStaticVar;
-            builder.setBlock(normal_block);
-            return inst->result;
-        }
-        return builder.createLoadStaticVar(nullptr, deferred_static->member_name.c_str(),
-                expr, deferred_static->loc)->result;
-    }
     if (auto* backquote = dynamic_cast<const BackquoteNode*>(node)) {
         auto* inst = builder.createBackquote(backquote->str, backquote->loc);
         if (!exception_stack.empty()) {
@@ -4630,14 +4597,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
                 ->result;
         }
-        const QoreTypeInfo* hd_type_info = new_hd->hd
-            ? qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo()) : nullptr;
+        const QoreTypeInfo* hd_type_info = qore_substitute_type_params_if_needed(new_hd->hd->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(hd_type_info);
-        const char* hd_path = nullptr;
-        if (!hd && new_hd->isDynamicHashDeclConstruct()) {
-            hd_path = new_hd->getDynamicHashDeclName().c_str();
-        }
-        if (!hd && (!hd_path || !*hd_path)) {
+        if (!hd) {
             error = "hashdecl construction target could not be resolved after generic type substitution";
             return QoreIRValue();
         }
@@ -4653,10 +4615,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return hd
-            ? builder.createNewHashDeclFromHash(hd, new_hd->runtime_check, hash_val, new_hd->loc)->result
-            : builder.createNewHashDeclFromHash(hd_path, nullptr, new_hd->runtime_check,
-                hash_val, new_hd->loc)->result;
+        return builder.createNewHashDeclFromHash(hd, new_hd->runtime_check, hash_val, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (!exception_stack.empty()) {
@@ -9287,22 +9246,9 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
         }
         // background Class::staticMethod(args)
         else if (auto* smcn = dynamic_cast<const StaticMethodCallNode*>(inner)) {
-            std::string class_path = smcn->getClassPath();
-            if (smcn->getMethod() || !class_path.empty()) {
+            if (smcn->getMethod()) {
                 std::vector<QoreIRValue> operands;
                 if (lowerCallArgs(smcn->getParseArgs(), smcn->getArgs(), operands, error)) {
-                    if (!smcn->getMethod()) {
-                        std::string qualified_name = class_path;
-                        qualified_name += "::";
-                        qualified_name += smcn->getName();
-                        auto* inst = builder.createBackground(QoreIRBackgroundKind::StaticMethod,
-                            qualified_name, expr, operands, op->loc);
-                        if (!exception_stack.empty()) {
-                            inst->exception_target = exception_stack.back();
-                        }
-                        maybeInsertNotNothingGuard(inst->result, &expr, op->loc, nullptr);
-                        return inst->result;
-                    }
                     if (operands.empty()) {
                         operands.push_back(builder.createConstNothing(op->loc)->result);
                     }

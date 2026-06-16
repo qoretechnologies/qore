@@ -30,34 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ReturnStatement.h"
-#include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/qore_program_private.h"
-#include "qore/intern/qore_aot_deps.h"
-
-static bool qore_return_expr_is_deferred_static_method_call(const QoreValue& exp) {
-    if (!qore_aot_source_parse_active() || !exp.hasNode()) {
-        return false;
-    }
-
-    if (const StaticMethodCallNode* call = dynamic_cast<const StaticMethodCallNode*>(exp.getInternalNode())) {
-        return !call->getMethod() && !call->getClassPath().empty();
-    }
-
-    const FunctionCallNode* call = dynamic_cast<const FunctionCallNode*>(exp.getInternalNode());
-    if (!call || strcmp(call->getName(), "call_static_method")) {
-        return false;
-    }
-
-    const QoreParseListNode* parse_args = call->getParseArgs();
-    if (parse_args && parse_args->size() >= 2) {
-        return parse_args->get(0).getType() == NT_STRING && parse_args->get(1).getType() == NT_STRING;
-    }
-
-    const QoreListNode* args = call->getArgs();
-    return args && args->size() >= 2
-        && args->retrieveEntry(0).getType() == NT_STRING
-        && args->retrieveEntry(1).getType() == NT_STRING;
-}
 
 int ReturnStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     //QORE_TRACE("ReturnStatement::execImpl()");
@@ -129,10 +102,6 @@ int ReturnStatement::parseInitImpl(QoreParseContext& parse_context) {
         }
     } else if (QoreTypeInfo::isType(returnTypeInfo, NT_NOTHING) && exp
         && (!QoreTypeInfo::hasType(argTypeInfo) || !QoreTypeInfo::isType(argTypeInfo, NT_NOTHING))) {
-        if (qore_return_expr_is_deferred_static_method_call(exp)) {
-            return err;
-        }
-
         const QoreClass* qc = parse_get_class();
         const char* fname = get_parse_code();
         if (!parse_check_parse_option(PO_REQUIRE_TYPES)) {

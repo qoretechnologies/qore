@@ -104,25 +104,16 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return hd ? hd->getTypeInfo() : (typeInfo ? typeInfo : hashTypeInfo);
+        return hd ? hd->getTypeInfo() : hashTypeInfo;
     }
 
 public:
     const TypedHashDecl* hd;
     QoreParseListNode* args;
-    const QoreTypeInfo* typeInfo = nullptr;
-    std::string dynamic_hashdecl_name;
     bool runtime_check;
 
     DLLLOCAL NewHashDeclNode(const QoreProgramLocation* loc, const TypedHashDecl* hd, QoreParseListNode* a,
-            bool runtime_check) : ParseNode(loc, NT_SCOPE_REF), hd(hd), args(a),
-            typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check) {
-    }
-
-    DLLLOCAL NewHashDeclNode(const QoreProgramLocation* loc, const char* dynamic_hashdecl_name,
-            const QoreTypeInfo* typeInfo, QoreParseListNode* a)
-            : ParseNode(loc, NT_SCOPE_REF), hd(nullptr), args(a), typeInfo(typeInfo),
-            dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""), runtime_check(false) {
+            bool runtime_check) : ParseNode(loc, NT_SCOPE_REF), hd(hd), args(a), runtime_check(runtime_check) {
     }
 
     DLLLOCAL virtual ~NewHashDeclNode() {
@@ -131,8 +122,7 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        str.sprintf("new hashdecl operator expression (hashdecl '%s')",
-            hd ? hd->getName() : dynamic_hashdecl_name.c_str());
+        str.sprintf("new hashdecl operator expression (hashdecl '%s')", hd->getName());
         return 0;
     }
 
@@ -146,14 +136,6 @@ public:
 
     DLLLOCAL virtual const char* getTypeName() const {
         return "new hashdecl operator expression";
-    }
-
-    DLLLOCAL bool isDynamicHashDeclConstruct() const {
-        return !hd && !dynamic_hashdecl_name.empty();
-    }
-
-    DLLLOCAL const std::string& getDynamicHashDeclName() const {
-        return dynamic_hashdecl_name;
     }
 };
 

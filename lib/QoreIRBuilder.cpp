@@ -31,92 +31,6 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRBuilder.h>
-#include <qore/intern/FunctionCallNode.h>
-#include <qore/intern/QoreAOTBinary.h>
-#include <qore/intern/QoreTypeInfo.h>
-#include <qore/intern/ScopedObjectCallNode.h>
-#include <qore/intern/VarRefNode.h>
-
-static std::string qore_ir_new_object_class_path(const QoreClass* qc) {
-    if (!qc) {
-        return std::string();
-    }
-    std::string rv = qc->getNamespacePath();
-    if (rv.size() >= 2 && rv[0] == ':' && rv[1] == ':') {
-        rv.erase(0, 2);
-    }
-    return rv;
-}
-
-static std::string qore_ir_new_object_variant_signature(const AbstractQoreFunctionVariant* variant) {
-    if (!variant || !variant->getSignature()) {
-        return std::string();
-    }
-    std::string rv("(");
-    const type_vec_t& types = variant->getSignature()->getTypeList();
-    for (size_t i = 0; i < types.size(); ++i) {
-        if (i > 0) {
-            rv.append(",");
-        }
-        rv.append(qore_get_aot_serializable_type_path(types[i]));
-    }
-    rv.append(")");
-    return rv;
-}
-
-static void qore_ir_populate_new_object_target(QoreIRNewObjectInstruction* inst) {
-    if (inst->class_path.empty()) {
-        inst->class_path = qore_ir_new_object_class_path(inst->qc);
-    }
-    if (inst->variant_sig.empty()) {
-        inst->variant_sig = qore_ir_new_object_variant_signature(inst->variant);
-    }
-    if (!inst->expr.hasNode()) {
-        return;
-    }
-
-    const AbstractQoreNode* node = inst->expr.getInternalNode();
-    const QoreClass* qc = nullptr;
-    const AbstractQoreFunctionVariant* variant = nullptr;
-    const QoreTypeInfo* object_type_info = nullptr;
-    std::string dynamic_class_path;
-
-    if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
-        qc = no->getClass();
-        variant = no->getVariant();
-        object_type_info = no->getObjectTypeInfo();
-    } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(node)) {
-        qc = scoped->oc;
-        variant = scoped->getVariant();
-        object_type_info = scoped->getObjectTypeInfo();
-        if (!qc && scoped->isDynamicObjectConstruct()) {
-            dynamic_class_path = scoped->getDynamicClassName();
-        }
-    } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
-        qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
-        variant = vrn->getVariant();
-        object_type_info = vrn->getTypeInfo();
-        if (!qc && vrn->isDynamicObjectConstruct()) {
-            dynamic_class_path = vrn->getDynamicClassName();
-        }
-    }
-
-    if (!inst->qc && qc) {
-        inst->qc = qc;
-    }
-    if (!inst->variant && variant) {
-        inst->variant = variant;
-    }
-    if (!inst->object_type_info && object_type_info) {
-        inst->object_type_info = object_type_info;
-    }
-    if (inst->class_path.empty()) {
-        inst->class_path = qc ? qore_ir_new_object_class_path(qc) : dynamic_class_path;
-    }
-    if (inst->variant_sig.empty()) {
-        inst->variant_sig = qore_ir_new_object_variant_signature(variant);
-    }
-}
 
 QoreIRSwitchRegexMatchInstruction::~QoreIRSwitchRegexMatchInstruction() {
     if (owns_regex_case) {
@@ -594,7 +508,6 @@ QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
-    qore_ir_populate_new_object_target(inst);
     return inst;
 }
 
@@ -682,15 +595,6 @@ QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNew
 QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(const TypedHashDecl* hd,
         bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRNewHashDeclFromHashInstruction>(hd, runtime_check);
-    inst->loc = loc;
-    inst->operands.push_back(hash_val);
-    inst->result = func->createValue();
-    return inst;
-}
-
-QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(const char* hd_path,
-        const TypedHashDecl* hd, bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewHashDeclFromHashInstruction>(hd_path, hd, runtime_check);
     inst->loc = loc;
     inst->operands.push_back(hash_val);
     inst->result = func->createValue();
