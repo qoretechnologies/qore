@@ -7542,7 +7542,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         try {
             return searchFirstRecord({});
         } catch (hash<ExceptionInfo> ex) {
-            error("EXAMPLE-RECORD-ERROR", "Failed to retrieve example row; returning generated data: %s",
+            # searchFirstRecord() is unsupported or failed (e.g. a provider
+            # without a record search implementation); log and fall back to
+            # generated example data from the record type.  This must NOT
+            # throw: error() raises an exception, which would make the
+            # fallback below unreachable and break callers that rely on
+            # example data always being available (e.g. design-time Qog/FSM
+            # simulation of exec-search states).
+            LoggerWrapper::debug("Failed to retrieve example row; returning generated data: %s",
                 get_exception_string(ex));
         }
         *hash<string, AbstractDataField> rec = getRecordTypeImpl();
