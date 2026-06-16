@@ -40,6 +40,8 @@
 
 enum class QoreBufferElementType : uint8_t;
 
+class QoreProgram;
+
 // global default values
 DLLEXPORT extern QoreListNode* emptyList;
 DLLEXPORT extern QoreHashNode* emptyHash;
@@ -260,6 +262,9 @@ DLLEXPORT const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& m
 
 // @since %Qore 0.9.4
 DLLEXPORT const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink);
+
+// @since %Qore 3.0
+DLLEXPORT const QoreTypeInfo* qore_get_type_from_string(const char* str, QoreProgram* pgm, ExceptionSink& xsink);
 
 // @since %Qore 1.0
 DLLEXPORT const QoreClass* type_info_get_return_class(const QoreTypeInfo* typeInfo);

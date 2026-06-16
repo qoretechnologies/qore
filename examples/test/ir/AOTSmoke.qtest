@@ -207,6 +207,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testAOTModuleDependencyPrependPath());
         addTestCase("AOT qmod try-module dependency metadata",
             \testAOTModuleTryModuleDependencyMetadata());
+        addTestCase("AOT qmod builtin features are not module dependencies",
+            \testAOTModuleBuiltinFeaturesNotDependencies());
         addTestCase("AOT ref foreach ParseNode pointer",
             \testRefForeachParseNode());
         addTestCase("AOT ref foreach narrowed element type",
@@ -5143,6 +5145,95 @@ printf(\"sum: %d\\n\", sum);
             "so_path": so_path,
             "compiled": is_file(so_path),
         };
+    }
+
+    testAOTModuleBuiltinFeaturesNotDependencies() {
+        string tmp_dir = sprintf("/tmp/aot_builtin_feature_deps_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string qm_path = tmp_dir + "/BuiltinFeatureDepTest.qm";
+        string qmod_path = tmp_dir + "/BuiltinFeatureDepTest.qmod";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+module BuiltinFeatureDepTest {
+    version = \"1.0\";
+    desc = \"Builtin feature dependency regression test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace BuiltinFeatureDepTest {
+    public int sub value() {
+        return 4817;
+    }
+}
+");
+            f.close();
+        }
+
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "builtin-feature-deps: module compiled: " + result.compile_out);
+
+        string dump_out = dumpQccInfo(qmod_path, False);
+        assertTrue(dump_out.regex("dependencies:\\s+\\(none\\)"),
+            "implicit Qore builtin features are not serialized as module dependencies: " + dump_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires BuiltinFeatureDepTest
+
+printf(\"%d\\n\", BuiltinFeatureDepTest::value());
+");
+            f.close();
+        }
+        string run_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("4817\n", run_out,
+            "qmod with only implicit builtin features loads without module dependencies");
+
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            string debug_qm_path = tmp_dir + "/ExplicitDebugFeatureDepTest.qm";
+            string debug_qmod_path = tmp_dir + "/ExplicitDebugFeatureDepTest.qmod";
+            {
+                File f();
+                f.open2(debug_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+                f.write("%modern
+%requires debug
+
+module ExplicitDebugFeatureDepTest {
+    version = \"1.0\";
+    desc = \"Explicit debug dependency regression test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace ExplicitDebugFeatureDepTest {
+    public int sub value() {
+        return 4818;
+    }
+}
+");
+                f.close();
+            }
+
+            hash<auto> debug_result = compileModuleFile(debug_qm_path, debug_qmod_path);
+            assertTrue(debug_result.compiled,
+                "explicit-debug-feature-deps: module compiled: " + debug_result.compile_out);
+
+            string debug_dump_out = dumpQccInfo(debug_qmod_path, False);
+            assertTrue(debug_dump_out.regex("dependencies:\\s+debug"),
+                "explicit %requires debug is serialized as a dependency: " + debug_dump_out);
+        }
     }
 
     testAOTModuleNestedNamespacePaths() {

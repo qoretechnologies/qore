@@ -1381,6 +1381,13 @@ protected:
             }
         }
 
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreClass* qc = nscx->parseFindLocalClass(name)) {
+                ns = nscx;
+                return qc;
+            }
+        }
+
         clmap_t::const_iterator i = clmap.find(name);
 
         if (i != clmap.end()) {
@@ -1402,6 +1409,13 @@ protected:
             }
         }
 
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (TypedHashDecl* hd = nscx->parseFindLocalHashDecl(name)) {
+                ns = nscx;
+                return hd;
+            }
+        }
+
         thdmap_t::iterator i = thdmap.find(name);
 
         if (i != thdmap.end()) {
@@ -1417,6 +1431,13 @@ protected:
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
+                return ed;
+            }
+        }
+
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreEnumDecl* ed = nscx->parseFindLocalEnum(name)) {
+                ns = nscx;
                 return ed;
             }
         }
@@ -1752,6 +1773,12 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
+                return qc;
+            }
+        }
+
+        if (qore_ns_private* nscx = parse_get_ns()) {
+            if (QoreClass* qc = nscx->parseFindLocalClass(name)) {
                 return qc;
             }
         }
@@ -2444,6 +2471,16 @@ public:
             return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
         }
         return rns.rpriv->runtimeFindHashDeclIntern(name, ns);
+    }
+
+    DLLLOCAL static TypedHashDecl* parseTryFindHashDecl(RootQoreNamespace& rns, const char* name) {
+        NamedScope nscope(name);
+        return rns.rpriv->parseTryFindHashDecl(nscope);
+    }
+
+    DLLLOCAL static const QoreEnumDecl* parseTryFindEnum(RootQoreNamespace& rns, const char* name) {
+        NamedScope nscope(name);
+        return rns.rpriv->parseTryFindEnum(nscope);
     }
 
     DLLLOCAL static const QoreEnumDecl* runtimeFindEnum(RootQoreNamespace& rns, const char* name,

@@ -2457,10 +2457,12 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         old_pgm ? old_pgm->getProgramId() : -1, pgm, pgm?pgm->getProgramId():-1, old_tlpd, old_ctx,
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
-    // ProgramRuntimeParseContextHelper locks the current program for parsing
-    // without creating tlpd.  In that state we only need a local frame; calling
+    // ProgramRuntimeParseContextHelper locks a program for parsing without
+    // creating tlpd. Nested cross-program calls can temporarily switch away
+    // from that program while module init is still running; re-entering the
+    // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
-    const bool skip_thread_count = pgm == old_pgm && pp->parsingLocked();
+    const bool skip_thread_count = pp->parsingLocked();
     if (!skip_thread_count) {
         // try to increment thread count
         if (pp->incThreadCount(xsink)) {

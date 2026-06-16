@@ -1339,8 +1339,15 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             parsing_in_progress = false;
             parsing_done = true;
 
-            // merge pending namespace additions
-            qore_root_ns_private::parseCommit(*RootNS);
+            // merge pending namespace additions and run namespace-level runtime init
+            parse_commit_in_progress = true;
+            try {
+                qore_root_ns_private::parseCommit(*RootNS);
+            } catch (...) {
+                parse_commit_in_progress = false;
+                throw;
+            }
+            parse_commit_in_progress = false;
 
             // commit pending statements
             sb.parseCommit(pgm);
@@ -3252,6 +3259,16 @@ const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
 }
 
 const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+    pns = nullptr;
+
+    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
+        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*priv->RootNS, path);
+        if (hd) {
+            pns = hd->getNamespace();
+            return hd;
+        }
+    }
+
     const qore_ns_private* pns_priv;
     const TypedHashDecl* th = qore_root_ns_private::runtimeFindHashDecl(*priv->RootNS, path, pns_priv);
     if (th) {
@@ -3261,6 +3278,16 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
 }
 
 const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    pns = nullptr;
+
+    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
+        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*priv->RootNS, path);
+        if (e) {
+            pns = e->getNamespace();
+            return e;
+        }
+    }
+
     const qore_ns_private* pns_priv;
     const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
     if (e) {

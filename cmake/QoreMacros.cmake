@@ -1031,7 +1031,8 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
         unset(_qore_qm_metadata_dep_found)
     endif()
     if (NOT DEFINED QORE_QM_METADATA_ENV)
-        set(_qore_external_module_path "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}")
+        set(_qore_external_module_path
+            "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}/qlib-qmod:${CMAKE_BINARY_DIR}")
         if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
                 AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
             set(_qore_external_module_path
@@ -1294,14 +1295,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # unset -- qcc then sees only the installed module path, which does not
     # yet contain the just-built sibling, and fails with LOAD-MODULE-ERROR.
     # Default the env here (mirroring the binary-module path) so in-tree
-    # siblings resolve via the source qlib dir, where QORE_AOT_LINK_SOURCE_MODULES
-    # drops <name>/<name>.qmod symlinks ahead of dependents (the qmod target
-    # dependency added in QORE_USER_MODULE guarantees the ordering).
+    # siblings resolve through the build qlib-qmod dir ahead of dependents
+    # (the qmod target dependency added in QORE_USER_MODULE guarantees the
+    # ordering).
     if (NOT DEFINED QORE_QM_METADATA_ENV)
         # qlib-qmod is where each sibling's AOT qmod is emitted
-        # (<dir>/<name>/<name>.qmod); the source qlib dir carries the
-        # QORE_AOT_LINK_SOURCE_MODULES symlinks.  Include both so resolution
-        # works whether or not source symlinks are enabled.
+        # (<dir>/<name>/<name>.qmod).  Include qlib-qmod explicitly so
+        # resolution does not depend on generated source-tree symlinks.
         set(_qore_user_module_path
             "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}/qlib-qmod:${CMAKE_BINARY_DIR}")
         if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
@@ -1330,7 +1330,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         endif()
     endif()
     if (NOT DEFINED QORE_AOT_LINK_SOURCE_MODULES)
-        set(QORE_AOT_LINK_SOURCE_MODULES ON)
+        set(QORE_AOT_LINK_SOURCE_MODULES OFF)
     endif()
     if (DEFINED QORE_AOT_MODULES_DIR)
         set(_qmod_install_dir ${QORE_AOT_MODULES_DIR})

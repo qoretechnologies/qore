@@ -1,0 +1,74 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+module ModuleInitReentryRegistry {
+    version = "1.0";
+    desc = "Test registry module for same-thread module init callbacks";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+public namespace ModuleInitReentryRegistry {
+    public hashdecl FactoryInfo {
+        string name;
+        string description;
+    }
+
+    public class FactoryBase {
+        string getName() {
+            return getInfoImpl().name;
+        }
+
+        string getDescription() {
+            return getInfoImpl().description;
+        }
+
+        abstract string getReflectedHashPath();
+
+        private abstract hash<FactoryInfo> getInfoImpl();
+    }
+
+    public class Registry {
+        private {
+            static hash<string, FactoryBase> factories;
+            static hash<string, string> descriptions;
+            static hash<string, string> reflected_hash_paths;
+        }
+
+        static registerFactory(FactoryBase factory) {
+            string name = factory.getName();
+            factories{name} = factory;
+            descriptions{name} = factory.getDescription();
+            reflected_hash_paths{name} = factory.getReflectedHashPath();
+        }
+
+        static list<string> getRegisteredFactories() {
+            return keys factories;
+        }
+
+        static string getDescription(string name) {
+            return descriptions{name};
+        }
+
+        static string getFactoryName(string name) {
+            return factories{name}.getName();
+        }
+
+        static string getReflectedHashPath(string name) {
+            return reflected_hash_paths{name};
+        }
+
+        static clear() {
+            factories = {};
+            descriptions = {};
+            reflected_hash_paths = {};
+        }
+    }
+}

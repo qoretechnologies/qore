@@ -11920,6 +11920,48 @@ static int executeInitFunctions(
     // well as the target program so later init functions see populated values.
     qore_program_private* shadow_pp = shadow_pgm ? qore_program_private::get(*shadow_pgm) : nullptr;
     qore_ns_private* shadow_root_ns = shadow_pp ? qore_ns_private::get(*shadow_pp->RootNS) : nullptr;
+    auto find_class = [](qore_program_private* class_pp, const std::string& class_path) -> QoreClass* {
+        if (!class_pp) {
+            return nullptr;
+        }
+        const qore_ns_private* found_ns = nullptr;
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+            *class_pp->RootNS, class_path.c_str(), found_ns);
+        return const_cast<QoreClass*>(qc);
+    };
+    auto make_parse_context = [&](const AOTInitFuncDescriptor& desc,
+            bool prefer_shadow) -> std::unique_ptr<QoreParseClassHelper> {
+        switch (desc.target_type) {
+            case AOTCompiledInitFunc::CLASS_CONSTANT:
+            case AOTCompiledInitFunc::STATIC_VAR: {
+                QoreClass* qc = prefer_shadow ? find_class(shadow_pp, desc.ns_path) : nullptr;
+                if (!qc) {
+                    qc = find_class(pp, desc.ns_path);
+                }
+                if (!qc && !prefer_shadow) {
+                    qc = find_class(shadow_pp, desc.ns_path);
+                }
+                return qc ? std::make_unique<QoreParseClassHelper>(qc) : nullptr;
+            }
+
+            case AOTCompiledInitFunc::NS_CONSTANT:
+            case AOTCompiledInitFunc::MODULE_INIT: {
+                qore_ns_private* ns = (prefer_shadow && shadow_root_ns)
+                    ? findNamespaceByPath(shadow_root_ns, desc.ns_path) : nullptr;
+                if (!ns) {
+                    ns = findNamespaceByPath(root_ns, desc.ns_path);
+                }
+                if (!ns && !prefer_shadow && shadow_root_ns) {
+                    ns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                }
+                return ns ? std::make_unique<QoreParseClassHelper>(nullptr, ns) : nullptr;
+            }
+
+            case AOTCompiledInitFunc::OUTLINED_HELPER:
+                return nullptr;
+        }
+        return nullptr;
+    };
 
     // Ensure thread-local program data is set for the current program.
     // When runTimeLoadModule uses ProgramRuntimeParseContextHelper, it sets
@@ -12039,6 +12081,7 @@ static int executeInitFunctions(
                     init_ctx_helper.reset();
                 }
             }
+            std::unique_ptr<QoreParseClassHelper> parse_ctx_helper = make_parse_context(desc, init_ctx_helper != nullptr);
             if (is_module_init) {
                 const char* init_mod_name = desc.ns_path.empty() ? mod_name : desc.ns_path.c_str();
                 const char* init_mod_path = desc.item_name.empty() ? mod_path : desc.item_name.c_str();
@@ -12086,8 +12129,7 @@ static int executeInitFunctions(
             QoreValue desc_val = xsink.getExceptionDesc();
             QoreStringValueHelper err_str(err_val);
             QoreStringValueHelper desc_str(desc_val);
-            const bool is_pending = (err_val.getType() == NT_STRING
-                && !strcmp(err_str->c_str(), "AOT-PENDING-CONSTANT"));
+            const bool is_pending = qore_is_deferred_runtime_init_exception(&xsink);
             const char* err_cstr = err_val.getType() == NT_STRING ? err_str->c_str() : "?";
             const char* desc_cstr = desc_val.getType() == NT_STRING ? desc_str->c_str() : "?";
             last_error[di] = err_cstr;

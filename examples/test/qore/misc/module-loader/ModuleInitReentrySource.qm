@@ -1,0 +1,52 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%new-style
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires reflection
+%requires ./ModuleInitReentryRegistry.qm
+
+module ModuleInitReentrySource {
+    version = "1.0";
+    desc = "Test module for same-thread module init callbacks";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ModuleInitReentryRegistry::Registry::clear();
+        ModuleInitReentryRegistry::Registry::registerFactory(ModuleInitReentrySource::FactoryInstance);
+    };
+}
+
+public namespace ModuleInitReentrySource {
+    public class Factory inherits ModuleInitReentryRegistry::FactoryBase {
+        private {
+            string reflected_hash_path;
+        }
+
+        constructor() {
+            reflected_hash_path = TypedHash::forName("ModuleInitReentrySource::FactoryExtraInfo").getPathName();
+        }
+
+        string getReflectedHashPath() {
+            return reflected_hash_path;
+        }
+
+        private hash<ModuleInitReentryRegistry::FactoryInfo> getInfoImpl() {
+            return <ModuleInitReentryRegistry::FactoryInfo>{
+                "name": "module-init-reentry",
+                "description": "registered during module initialization",
+            };
+        }
+    }
+
+    public const FactoryInstance = new Factory();
+
+    public hashdecl FactoryExtraInfo {
+        string label;
+    }
+}

@@ -41,4 +41,23 @@ DLLLOCAL extern const TypedHashDecl* hashdeclClassAccessInfo;
 //! MethodAccessInfo hashdecl
 DLLLOCAL extern const TypedHashDecl* hashdeclMethodAccessInfo;
 
+DLLLOCAL inline QoreProgram* qore_reflection_get_runtime_program(RuntimeConfig& runtime_cfg) {
+    QoreProgram* pgm = runtime_cfg.getProgram();
+    return pgm ? pgm : getProgram();
+}
+
+DLLLOCAL inline const QoreTypeInfo* qore_reflection_get_type_from_string(const char* typestr, QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    return qore_get_type_from_string(typestr, pgm, *xsink);
+}
+
+DLLLOCAL inline const QoreTypeInfo* qore_reflection_get_type_from_string(const char* typestr,
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreProgram** pgm = nullptr) {
+    QoreProgram* runtime_pgm = qore_reflection_get_runtime_program(runtime_cfg);
+    if (pgm) {
+        *pgm = runtime_pgm;
+    }
+    return qore_reflection_get_type_from_string(typestr, runtime_pgm, xsink);
+}
+
 #endif

@@ -1741,6 +1741,11 @@ void qore_class_private::parseCommitRuntimeInit(ExceptionSink* xsink) {
     }
     parseCommitRuntimeInitDone = true;
 
+    // Delayed constant and static variable init expressions have the same
+    // lexical class context as parseInit(); preserve it for unqualified class
+    // constants, class names, and private class access during runtime eval.
+    QoreParseClassHelper qpch(cls);
+
     // finalize constant initialization
     constlist.parseCommitRuntimeInit();
 
@@ -6821,27 +6826,6 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
-static bool qore_is_deferred_static_init_exception(ExceptionSink* xsink) {
-    if (!xsink || !xsink->isException()) {
-        return false;
-    }
-    QoreValue ex_err = xsink->getExceptionErr();
-    if (ex_err.getType() != NT_STRING) {
-        return false;
-    }
-    QoreStringValueHelper ex_err_str(ex_err);
-    const char* err = ex_err_str->c_str();
-    // Static var initializers can cache reflection objects whose declarations
-    // are committed later in the same parse; retry lazily on first access.
-    return !strcmp(err, "EXTERNAL-STUB-CONSTANT")
-        || !strcmp(err, "AOT-PENDING-CONSTANT")
-        || !strcmp(err, "AOT-PENDING-CLASS")
-        || !strcmp(err, "AOT-PENDING-FUNCTION")
-        || !strcmp(err, "UNKNOWN-CLASS")
-        || !strcmp(err, "UNKNOWN-TYPE")
-        || !strcmp(err, "UNKNOWN-TYPED-HASH");
-}
-
 int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
     printd(5, "QoreVarInfo::evalInit() %s committing %s var (exp: %s)\n", name, privpub(access), exp.getFullTypeName());
 
@@ -6854,7 +6838,7 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
         // evaluate expression
         ValueEvalOptimizedRefHolder val(exp, xsink);
         if (*xsink) {
-            if (qore_is_deferred_static_init_exception(xsink)) {
+            if (qore_is_deferred_runtime_init_exception(xsink)) {
                 xsink->clear();
                 eval_init = false;
                 return 0;
@@ -6865,7 +6849,7 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
             val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *val, xsink);
             if (*xsink) {
-                if (qore_is_deferred_static_init_exception(xsink)) {
+                if (qore_is_deferred_runtime_init_exception(xsink)) {
                     xsink->clear();
                     eval_init = false;
                     return 0;

@@ -87,6 +87,8 @@ struct ClassNs {
 
 class RuntimeConstantRefNode;
 
+DLLLOCAL bool qore_is_deferred_runtime_init_exception(ExceptionSink* xsink);
+
 class ConstantEntry : public QoreReferenceCounter {
     friend class ConstantEntryInitHelper;
     friend class RuntimeConstantRefNode;

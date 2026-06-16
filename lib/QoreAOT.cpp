@@ -608,7 +608,14 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
     std::unordered_map<std::string, std::string>* local_module_paths = nullptr,
     const char* source_label = nullptr);
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
-    qore_program_private* pp, const char* cancel_context, const char* skip_feature = nullptr);
+    qore_program_private* pp, const char* cancel_context, const char* skip_feature = nullptr,
+    const std::vector<std::string>* explicit_deps = nullptr);
+static void aotAddDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
+    const std::string& dep, const char* skip_feature = nullptr);
+static void aotAddFeatureDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
+    const std::string& feat, const char* skip_feature = nullptr);
+static void aotAddExplicitBuiltinDependency(std::vector<std::string>& deps,
+    std::unordered_set<std::string>& seen, const std::string& dep, const char* skip_feature = nullptr);
 static void filterLoadableLocalModules(std::unordered_set<std::string>& local_module_names,
     const std::unordered_map<std::string, std::string>& local_module_paths,
     const qore_program_private* pp);
@@ -4604,7 +4611,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     std::unordered_set<std::string> local_module_names;
     std::unordered_map<std::string, std::string> local_module_paths;
-    extractAllDependencies(source_text, source_len, nullptr, &local_module_names,
+    std::vector<std::string> explicit_deps = extractAllDependencies(source_text, source_len, nullptr, &local_module_names,
         &local_module_paths, label);
     filterLoadableLocalModules(local_module_names, local_module_paths, pp);
     collectEmbeddedUserModules(local_module_names, local_module_paths, pp);
@@ -4808,21 +4815,17 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // Script binaries can also embed relative-path user modules; private functions
         // from those modules may reference successful %try-module loads from the module's
         // own program, so include those feature lists as runtime dependencies too.
+        // Qore's implicit builtin features are a runtime/version contract, not module
+        // dependencies; only an explicit source-level "%requires debug" is serialized.
         std::vector<std::string> all_deps;
         std::unordered_set<std::string> dep_seen;
-        auto add_dep = [&](const std::string& feat) {
-            if (feat != "qore" && dep_seen.insert(feat).second) {
-                all_deps.push_back(feat);
-            }
-        };
         {
             qore_program_private* pp = qore_program_private::get(*pgm);
-            // featureList contains builtin module names, userFeatureList contains user module names
             for (const auto& feat : pp->featureList) {
-                add_dep(feat);
+                aotAddFeatureDependency(all_deps, dep_seen, feat);
             }
             for (const auto& feat : pp->userFeatureList) {
-                add_dep(feat);
+                aotAddDependency(all_deps, dep_seen, feat);
             }
             for (const std::string& module_name : local_module_names) {
                 QoreAbstractModule* mod = QMM.findModule(module_name.c_str());
@@ -4833,11 +4836,14 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 }
                 qore_program_private* mpp = qore_program_private::get(*user_mod->getProgram());
                 for (const auto& feat : mpp->featureList) {
-                    add_dep(feat);
+                    aotAddFeatureDependency(all_deps, dep_seen, feat);
                 }
                 for (const auto& feat : mpp->userFeatureList) {
-                    add_dep(feat);
+                    aotAddDependency(all_deps, dep_seen, feat);
                 }
+            }
+            for (const std::string& dep : explicit_deps) {
+                aotAddExplicitBuiltinDependency(all_deps, dep_seen, dep);
             }
         }
         serializeDependencies(writer, all_deps);
@@ -6842,9 +6848,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // runtime before deserializing the namespace tree. Failed %try-module
         // directives must not become hard AOT dependencies.
         std::vector<std::string> reexport_mods;
-        extractAllDependencies(source_text, source_len, &reexport_mods);
+        std::vector<std::string> explicit_deps = extractAllDependencies(source_text, source_len, &reexport_mods);
         if (!serializeProgramFeatureDependencies(writer, pp,
-                "AOT module dependency serialization", mod_info.name.c_str())) {
+                "AOT module dependency serialization", mod_info.name.c_str(), &explicit_deps)) {
             error = "operation cancelled during AOT module dependency serialization";
             return false;
         }
@@ -7302,10 +7308,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // Serialize successfully-loaded dependencies so failed %try-module
             // directives do not become hard AOT dependencies.
             std::vector<std::string> reexport_mods;
-            extractAllDependencies(combined_source.c_str(),
+            std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
                 static_cast<int>(combined_source.size()), &reexport_mods);
             if (!serializeProgramFeatureDependencies(writer, pp,
-                    "AOT split module dependency serialization", mod_info.name.c_str())) {
+                    "AOT split module dependency serialization", mod_info.name.c_str(), &explicit_deps)) {
                 error = "operation cancelled during AOT split module dependency serialization";
                 return false;
             }
@@ -7672,31 +7678,61 @@ static bool writeAOTMakeDepfile(const std::string& depfile_path,
     return true;
 }
 
+static bool aotIsImplicitQoreFeature(const std::string& feat) {
+    return qoreFeatureList.find(feat) != qoreFeatureList.end();
+}
+
+static void aotAddDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
+        const std::string& dep, const char* skip_feature) {
+    if (dep != "qore" && (!skip_feature || dep != skip_feature)
+            && seen.insert(dep).second) {
+        deps.push_back(dep);
+    }
+}
+
+static void aotAddFeatureDependency(std::vector<std::string>& deps, std::unordered_set<std::string>& seen,
+        const std::string& feat, const char* skip_feature) {
+    if (!aotIsImplicitQoreFeature(feat)) {
+        aotAddDependency(deps, seen, feat, skip_feature);
+    }
+}
+
+static void aotAddExplicitBuiltinDependency(std::vector<std::string>& deps,
+        std::unordered_set<std::string>& seen, const std::string& dep, const char* skip_feature) {
+    if (dep == "debug") {
+        aotAddDependency(deps, seen, dep, skip_feature);
+    }
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
-        qore_program_private* pp, const char* cancel_context, const char* skip_feature) {
+        qore_program_private* pp, const char* cancel_context, const char* skip_feature,
+        const std::vector<std::string>* explicit_deps) {
     std::vector<std::string> all_deps;
     std::unordered_set<std::string> dep_seen;
-    auto add_dep = [&](const std::string& feat) {
-        if (feat != "qore" && (!skip_feature || feat != skip_feature)
-                && dep_seen.insert(feat).second) {
-            all_deps.push_back(feat);
-        }
-    };
 
     size_t i = 0;
     for (const auto& feat : pp->featureList) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
             return false;
         }
-        add_dep(feat);
+        aotAddFeatureDependency(all_deps, dep_seen, feat, skip_feature);
         ++i;
     }
     for (const auto& feat : pp->userFeatureList) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
             return false;
         }
-        add_dep(feat);
+        aotAddDependency(all_deps, dep_seen, feat, skip_feature);
         ++i;
+    }
+    if (explicit_deps) {
+        for (const std::string& dep : *explicit_deps) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
+                return false;
+            }
+            aotAddExplicitBuiltinDependency(all_deps, dep_seen, dep, skip_feature);
+            ++i;
+        }
     }
     serializeDependencies(writer, all_deps);
     return true;
@@ -7805,8 +7841,10 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         // This is conservative but harmless: already-loaded modules are no-ops,
         // and per-fragment partitioning would require tracking which file's
         // parse actually loaded each module.
+        std::vector<std::string> explicit_deps = extractAllDependencies(source_text_for_fallback.c_str(),
+            static_cast<int>(source_text_for_fallback.size()));
         if (!serializeProgramFeatureDependencies(writer, pp,
-                "AOT batch script dependency serialization")) {
+                "AOT batch script dependency serialization", nullptr, &explicit_deps)) {
             error = "operation cancelled during AOT script dependency serialization";
             return false;
         }
@@ -8603,8 +8641,14 @@ bool QoreAOT::compileScriptAggregate(
         }
         appendBuildInfoSection(writer, "script-aggregate", target_triple, opt_level, include_source);
 
+        std::vector<std::string> explicit_deps;
+        for (const SrcEntry& e : entries) {
+            std::vector<std::string> entry_deps = extractAllDependencies(e.source.c_str(),
+                static_cast<int>(e.source.size()));
+            explicit_deps.insert(explicit_deps.end(), entry_deps.begin(), entry_deps.end());
+        }
         if (!serializeProgramFeatureDependencies(writer, pp,
-                "AOT script aggregate dependency serialization")) {
+                "AOT script aggregate dependency serialization", nullptr, &explicit_deps)) {
             error = "operation cancelled during AOT script aggregate dependency serialization";
             return false;
         }
@@ -9391,8 +9435,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         // This is conservative but harmless: already-loaded modules are no-ops,
         // and per-fragment partitioning would require tracking which file's
         // parse actually loaded each module.
+        std::vector<std::string> explicit_deps = extractAllDependencies(source_text.c_str(),
+            static_cast<int>(source_text.size()));
         if (!serializeProgramFeatureDependencies(writer, pp,
-                "AOT script dependency serialization")) {
+                "AOT script dependency serialization", nullptr, &explicit_deps)) {
             error = "operation cancelled during AOT script dependency serialization";
             return false;
         }
@@ -9936,10 +9982,11 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+            std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
+                (int)combined_source.size(),
                 &reexport_mods);
             if (!serializeProgramFeatureDependencies(writer, pp,
-                    "AOT module-fragment dependency serialization", mod_info.name.c_str())) {
+                    "AOT module-fragment dependency serialization", mod_info.name.c_str(), &explicit_deps)) {
                 error = "operation cancelled during AOT module-fragment dependency serialization";
                 return false;
             }
@@ -10390,10 +10437,11 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+            std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
+                (int)combined_source.size(),
                 &reexport_mods);
             if (!serializeProgramFeatureDependencies(writer, pp,
-                    "AOT aggregated-module dependency serialization", mod_info.name.c_str())) {
+                    "AOT aggregated-module dependency serialization", mod_info.name.c_str(), &explicit_deps)) {
                 error = "operation cancelled during AOT aggregated-module dependency serialization";
                 return false;
             }
@@ -10859,10 +10907,11 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
-            extractAllDependencies(combined_source.c_str(), (int)combined_source.size(),
+            std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
+                (int)combined_source.size(),
                 &reexport_mods);
             if (!serializeProgramFeatureDependencies(writer, pp,
-                    "AOT archive dependency serialization", mod_info.name.c_str())) {
+                    "AOT archive dependency serialization", mod_info.name.c_str(), &explicit_deps)) {
                 error = "operation cancelled during AOT archive dependency serialization";
                 return false;
             }
