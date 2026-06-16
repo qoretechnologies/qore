@@ -3169,8 +3169,7 @@ static nothing Program::issueModuleCmd(string module_name, string command) [dom=
     @since %Qore 2.0
 */
 static int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
-    QoreProgram* pgm = getProgram();
-    return pgm ? pgm->getParseOptions().getLo() : runtime_get_parse_options().getLo();
+    return runtime_get_parse_options().getLo();
 }
 
 //! Checks if a parse option is set in the current Program by name

@@ -414,7 +414,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         return QoreValue();
     }
     printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
-        class_name.c_str(), method_name.c_str(), static_cast<int>(num_children), m);
+        class_name.c_str(), method_name.c_str(), (int)num_children, m);
     if (m->isStatic()) {
         StaticMethodCallNode base(&loc_builtin, m, nullptr);
         return QoreValue(new StaticMethodCallNode(base, ql));
@@ -533,10 +533,10 @@ static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
     {
         const QoreMethod* cons = qc->getConstructor();
         printd(5, "AOT EXPR_TREE EN_NEW: class='%s' id=%d nargs=%d constructor=%p\n",
-            qc->getName(), qc->getID(), static_cast<int>(num_children), static_cast<const void*>(cons));
+            qc->getName(), qc->getID(), (int)num_children, (void*)cons);
         if (cons) {
             const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-            printd(5, "  constructor vlist=%d\n", static_cast<int>(cf->numVariants()));
+            printd(5, "  constructor vlist=%d\n", (int)cf->numVariants());
         }
     }
     NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release());

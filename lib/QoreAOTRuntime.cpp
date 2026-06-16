@@ -568,8 +568,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Create StaticMethodCallNode
-            StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m,
-                static_cast<QoreParseListNode*>(nullptr));
+            StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
             if (sig_text) {
                 MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
                 if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb, sig_text)) {
@@ -830,8 +829,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Create a NewHashDeclNode with no args (args handled by native code)
-            NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd,
-                static_cast<QoreParseListNode*>(nullptr), false);
+            NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, (QoreParseListNode*)nullptr, false);
             return toBitsNB(QoreValue(nhd));
         }
 
@@ -10903,7 +10901,7 @@ static void executeInitFunctions(
                     mod_name ? mod_name : "<none>", desc.name.c_str(),
                     err_val.getType() == NT_STRING ? err_str->c_str() : "?",
                     desc_val.getType() == NT_STRING ? desc_str->c_str() : "?",
-                    static_cast<int>(is_pending));
+                    (int)is_pending);
             }
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(),
@@ -11590,6 +11588,7 @@ extern "C" DLLEXPORT void qore_aot_fill_module_desc(QoreModuleInfo* mod_info,
     mod_info->init = reinterpret_cast<qore_module_init_t>(init_fn);
     mod_info->ns_init = reinterpret_cast<qore_module_ns_init_t>(ns_init_fn);
     mod_info->del = reinterpret_cast<qore_module_delete_t>(del_fn);
+    mod_info->is_aot = true;
     for (int i = 0; i < num_deps; ++i) {
         if (deps[i]) {
             mod_info->dependencies.push_back(deps[i]);

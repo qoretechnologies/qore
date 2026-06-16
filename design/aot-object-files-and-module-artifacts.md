@@ -145,6 +145,27 @@ body changes without parsing the human dump format.
 The dump path is for diagnostics only; runtimes ignore `BUILD_INFO` and do not
 require `SYMBOL_INDEX`.
 
+## Object Linking
+
+`qcc --link-qo -o <aggregate.qo> --aggregate-symbol=<SYM> input1.qo ...`
+links existing script-context `.qo` inputs into one aggregate register object
+without reparsing the original source files.  The linker reads each input
+object's `SYMBOL_INDEX`, validates static Qore imports that can be checked from
+the available index records, extracts exactly one exported `*_script_register`
+symbol from each input object, and emits `init_<SYM>_qo(QoreProgram*)`.
+
+The generated aggregate object calls the input register symbols in command-line
+order.  It is linked alongside the input `.qo` files; therefore missing native
+register symbols still fail in the normal native linker.  This first
+object-driven link mode preserves the per-file metadata registration semantics
+while removing source-list assumptions from the aggregate registration step.
+
+The command also writes `<aggregate.qo>.qolink.json` by default, or the path
+given with `--qolink-map`.  The link map records input object hashes, register
+symbols, provided Qore symbols, resolved/unresolved/ambiguous imports, hash
+mismatches, external dependencies, module path lists, module commands, and
+native symbols expected by the final link.
+
 ## Build-System Contract
 
 When `QORE_BUILD_AOT_MODULES=ON`, CMake builds standard user modules as `.qmod`

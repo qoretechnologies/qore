@@ -97,7 +97,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v6: added char value serialization tag
 //! v7: serialized Find instructions include the explicit find mode
 //! v8: serialized Phi instructions include the PHI value representation kind
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 8;
+//! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 9;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -165,8 +166,9 @@ constexpr uint64_t QORE_AOT_FEAT_READONLY_LOCALS = 1ULL << 54; //!< signatures a
 constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS variant flags preserve const-method receiver contracts
 constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
 constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
+constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x03FFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x07FFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -196,6 +198,7 @@ enum class QoreAOTSectionType : uint16_t {
     PLUGIN_IMPORTS       = 24,  //!< Required plugin modules and local type/operation ids
     PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
     SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
+    CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -259,6 +262,43 @@ struct QoreAOTSymbolIndex {
     std::vector<QoreAOTSymbolIndexRecord> imported;
     std::vector<QoreAOTSymbolIndexRecord> native;
     std::vector<std::pair<std::string, std::string>> context;
+};
+
+//! Direct-call target kind written to CALL_RELOCATIONS.
+enum class QoreAOTCallRelocationTargetKind : uint8_t {
+    NONE          = 0,
+    FUNCTION      = 1,
+    METHOD        = 2,
+    STATIC_METHOD = 3,
+    CONSTRUCTOR   = 4,
+};
+
+//! Whether a call relocation must resolve during link.
+enum class QoreAOTCallRelocationStrictness : uint8_t {
+    OPTIONAL = 0,
+    REQUIRED = 1,
+};
+
+//! Version of the optional CALL_RELOCATIONS section wire format.
+constexpr uint16_t QORE_AOT_CALL_RELOCATIONS_VERSION = 1;
+
+//! One direct-call relocation candidate in a compiled function.
+struct QoreAOTCallRelocationRecord {
+    std::string function_name;
+    uint32_t expr_slot = UINT32_MAX;
+    QoreAOTCallRelocationTargetKind target_kind = QoreAOTCallRelocationTargetKind::NONE;
+    QoreAOTCallRelocationStrictness strictness = QoreAOTCallRelocationStrictness::OPTIONAL;
+    std::string qore_path;
+    std::string signature_hash;
+    std::string declaration_hash;
+    std::string native_symbol;
+    std::string fallback_descriptor;
+};
+
+//! Parsed contents of the optional CALL_RELOCATIONS section.
+struct QoreAOTCallRelocations {
+    uint16_t version = 0;
+    std::vector<QoreAOTCallRelocationRecord> records;
 };
 
 //! Value type tags for serialized constant values
@@ -918,8 +958,15 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
 bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& index,
     std::string& error);
 
+//! Read the optional CALL_RELOCATIONS section.
+/** @return true on success or if the section is absent, false on corrupt data
+*/
+bool readCallRelocations(const QoreAOTBinaryReader& reader, QoreAOTCallRelocations& relocs,
+    std::string& error);
+
 const char* qoreAOTSymbolKindName(QoreAOTSymbolKind kind);
 const char* qoreAOTDependencyClassName(QoreAOTDependencyClass dependency_class);
+const char* qoreAOTCallRelocationTargetKindName(QoreAOTCallRelocationTargetKind kind);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded
@@ -944,6 +991,14 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
 bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
         std::string& error);
+
+//! Collect the set of source files that contributed user declarations to the
+//! program rooted at @p ns (used by the single-file `-L` preload to avoid
+//! re-registering declarations the target parse already produced).
+/** @param ns root namespace to walk recursively
+    @param files receives the (raw, parse-recorded) source file paths
+*/
+void collectDeclaredSourceFiles(qore_ns_private* ns, std::unordered_set<std::string>& files);
 
 //! Serialize reexported module names into the REEXPORT_MODULES binary section
 /** Writes the list of modules that should be reexported when this module is imported.
@@ -1379,6 +1434,8 @@ struct AOTExprSlotId {
     std::string ref2;        //!< kind-specific: method name (for method calls)
     std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
     uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
+    QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
+    std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation
     QoreValue child_expr;   //!< kind-specific child expression (e.g., OBJ_METHOD_REF_EXPR target)
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW

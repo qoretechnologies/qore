@@ -495,8 +495,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     // Create with evaluated args list directly via the copy constructor pattern
     // StaticMethodCallNode needs QoreParseListNode for its primary constructor,
     // so we create a minimal node and set the args list for evaluation
-    StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m,
-        static_cast<QoreParseListNode*>(nullptr));
+    StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
     smcn->setReceiverTypeInfo(receiver_type_info);
     if (args_list) {
         // Set the args as a member; since StaticMethodCallNode inherits FunctionCallBase,

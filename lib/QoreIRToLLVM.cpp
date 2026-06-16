@@ -3566,7 +3566,7 @@ bool QoreIRToLLVM::tryEmitBackgroundMetadata(const QoreIRBackgroundInstruction* 
             return false;
         }
         llvm::Value* name_ptr = builder->CreateGlobalStringPtr(bg_inst->name);
-        int nargs = static_cast<int>(bg_inst->operands.size()) - 1;
+        int nargs = (int)bg_inst->operands.size() - 1;
         auto ft = llvm::FunctionType::get(i64_type,
             {ptr_type, i64_type, ptr_type, i32_type, ptr_type}, false);
         auto helper = module.getOrInsertFunction(

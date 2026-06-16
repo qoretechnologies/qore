@@ -1976,7 +1976,6 @@ private:
 template <typename DirectCallInst>
 static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs, bool reject_copy_method) {
-    (void)caller_pgm;
     auto reject = [&]() -> int8_t {
         inst->inline_ir_state.store(-1, std::memory_order_release);
         return -1;
@@ -1997,7 +1996,7 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     }
 
     const UserVariantBase* uvb = inst->cached_uvb ? inst->cached_uvb : variant->getUserVariantBase();
-    if (!uvb || uvb->hasCachedFunction()
+    if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
             || !methodVariantFastCallEligibleForInterpreter(variant)) {
         return reject();
     }
@@ -2020,79 +2019,6 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
         && nargs >= static_cast<int>(sig->numParams()) ? 1 : 2;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
-}
-
-static QoreProgram* qore_ir_method_execution_program(const QoreMethod* method, const UserVariantBase* uvb) {
-    QoreProgram* pgm = nullptr;
-    if (method) {
-        const QoreClass* qc = method->getClass();
-        if (qc) {
-            pgm = qc->getSourceProgram();
-            if (!pgm) {
-                pgm = qc->getProgram();
-            }
-        }
-    }
-    return pgm ? pgm : (uvb ? uvb->pgm : nullptr);
-}
-
-class QoreIRInlineCallStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
-public:
-    DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, std::string call_name,
-            qore_call_t call_type)
-            : QoreProgramStackLocationHelper(this, stmt, pgm), loc(loc), call_name(std::move(call_name)),
-            call_type(call_type) {
-    }
-
-    DLLLOCAL const QoreProgramLocation& getLocation() const override {
-        return loc ? *loc : loc_builtin;
-    }
-
-    DLLLOCAL const std::string& getCallName() const override {
-        return call_name;
-    }
-
-    DLLLOCAL qore_call_t getCallType() const override {
-        return call_type;
-    }
-
-    DLLLOCAL QoreProgram* getProgram() const override {
-        return pgm;
-    }
-
-    DLLLOCAL const AbstractStatement* getStatement() const override {
-        return stmt;
-    }
-
-private:
-    const AbstractStatement* stmt;
-    QoreProgram* pgm;
-    const QoreProgramLocation* loc = nullptr;
-    std::string call_name;
-    qore_call_t call_type;
-};
-
-static const QoreProgramLocation* qore_ir_user_variant_location(const UserVariantBase* uvb) {
-    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    return sig ? sig->getParseLocation() : nullptr;
-}
-
-static std::string qore_ir_function_call_name(const QoreFunction* func) {
-    return func ? func->getName() : "<function>";
-}
-
-static std::string qore_ir_method_call_name(const QoreMethod* method) {
-    std::string rv;
-    if (method) {
-        if (const QoreClass* qc = method->getClass()) {
-            rv = qc->getName();
-            rv += "::";
-        }
-        rv += method->getName();
-    } else {
-        rv = "<method>";
-    }
-    return rv;
 }
 
 static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
@@ -2154,21 +2080,9 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         inst->inline_ir_state.store(-1, std::memory_order_release);
         return false;
     }
-    QoreProgram* exec_pgm = uvb->pgm;
-    if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
-        return false;
-    }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
-    if (xsink && *xsink) {
-        result = QoreValue();
-        return true;
-    }
 
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
-        qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     bool use_direct_params = inline_state == 1;
     if (!use_direct_params
@@ -2194,7 +2108,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -2230,21 +2144,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         return false;
     }
 
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
-    if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
-        return false;
-    }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
-    if (xsink && *xsink) {
-        result = QoreValue();
-        return true;
-    }
-
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
-        qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
@@ -2270,7 +2171,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }
@@ -2434,21 +2335,8 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         return false;
     }
 
-    QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
-    if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
-        return false;
-    }
-    ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
-    if (xsink && *xsink) {
-        result = QoreValue();
-        return true;
-    }
-
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
-    QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
-        qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
     bool use_direct_params = inline_state == 1;
@@ -2471,7 +2359,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     const IRDirectParams* direct_params = use_direct_params ? &dp : nullptr;
     bool ok = QoreIRInterpreter::execute(*callee_ir, ir_return_value, xsink,
         nullptr, nullptr, nullptr, callee_ir->cached_pre_instantiated,
-        nullptr, uvb->getStatementBlock(), exec_pgm, false, direct_params);
+        nullptr, uvb->getStatementBlock(), uvb->pgm, false, direct_params);
     if (param_scope) {
         param_scope->cleanup();
     }

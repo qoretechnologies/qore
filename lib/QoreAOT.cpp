@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
+#include "qore/intern/qore_aot_deps.h"
 #include <qore/QoreRegexInterface.h>
 #include <qore/QoreObject.h>
 #include <qore/Qore.h>
@@ -42,13 +43,16 @@
 
 #include <sys/stat.h>
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <mutex>
 #include <set>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <unistd.h>
@@ -178,6 +182,71 @@
 #include <qore/QoreNothingNode.h>
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
+
+// AOT incremental-dependency sink (see qore_aot_deps.h).  Thread-local so the
+// batch worker pool can run independent single-file compiles concurrently; null
+// for every normal program, so the resolution-path hooks are a single pointer
+// test off the hot path.
+static thread_local std::unordered_set<std::string>* aot_dep_sink = nullptr;
+static thread_local bool aot_source_parse_active = false;
+
+void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
+    aot_dep_sink = sink;
+}
+
+bool qore_aot_set_source_parse_active(bool active) {
+    bool old = aot_source_parse_active;
+    aot_source_parse_active = active;
+    return old;
+}
+
+bool qore_aot_source_parse_active() {
+    return aot_source_parse_active;
+}
+
+void qore_aot_note_referenced_decl(const QoreProgramLocation* loc) {
+    if (!aot_dep_sink || !loc) {
+        return;
+    }
+    const char* f = loc->getFile();
+    // Skip synthetic locations ("<builtin>", "<run-time>", …) — only real
+    // source files are build dependencies.
+    if (f && *f && *f != '<') {
+        aot_dep_sink->insert(f);
+    }
+}
+
+// thread-local sink for resolved file paths of dependency modules loaded during
+// an AOT module compile (see qore_aot_deps.h).  Inactive (nullptr) for every
+// normal program, so the record hook is a single pointer test.
+static thread_local std::vector<std::string>* aot_module_dep_sink = nullptr;
+
+void qore_aot_set_module_dep_sink(std::vector<std::string>* sink) {
+    aot_module_dep_sink = sink;
+}
+
+// Record the on-disk file of every module loaded into the compile program into
+// the active module-dep sink.  These are the module's direct %requires closure;
+// per-module transitivity makes recording direct deps sufficient for the build
+// to rebuild a dependent when any dependency .qmod it loaded changes.  No-op
+// when no sink is set.
+static void qore_aot_record_module_deps(QoreProgram* pgm) {
+    if (!aot_module_dep_sink || !pgm) {
+        return;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    for (const std::string& name : pp->parse_modules) {
+        QoreAbstractModule* m = QMM.findModule(name.c_str());
+        if (!m) {
+            continue;
+        }
+        const char* fn = m->getFileName();
+        // skip synthetic ("<builtin>") and empty paths
+        if (fn && *fn && *fn != '<') {
+            aot_module_dep_sink->push_back(fn);
+        }
+    }
+}
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -417,6 +486,24 @@ std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* v
     }
     key.append(")");
     return key;
+}
+
+static std::string aotRelocStripLeadingColons(const char* path) {
+    std::string out = path ? path : "";
+    while (out.size() >= 2 && out[0] == ':' && out[1] == ':') {
+        out.erase(0, 2);
+    }
+    return out;
+}
+
+static std::string aotRelocMethodDisplayKey(const QoreClass* qc, const char* method_name,
+        const AbstractQoreFunctionVariant* variant) {
+    std::string key = aotRelocStripLeadingColons(qc ? qc->getPath() : nullptr);
+    if (!key.empty()) {
+        key += "::";
+    }
+    key += method_name ? method_name : "";
+    return variant ? getVariantKey(key.c_str(), variant) : key;
 }
 
 
@@ -849,6 +936,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Phi instructions preserve whether the merged value is a QoreValue or a
     // native representation such as a loop counter.
     flags |= QORE_AOT_FEAT_TYPED_PHI;
+    // Direct-call slot identities are exposed as advisory call relocations for
+    // object-link diagnostics and guarded runtime prelink controls.
+    flags |= QORE_AOT_FEAT_CALL_RELOCATIONS;
     return flags;
 }
 
@@ -3876,52 +3966,75 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fflush(stderr);
     }
 
-    std::error_code EC;
-    llvm::raw_fd_ostream dest(path, EC, llvm::sys::fs::OF_None);
-    if (EC) {
-        error = "failed to open output file: " + EC.message();
-        delete tm;
-        return false;
-    }
-
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
-        fflush(stderr);
-    }
-
-    llvm::legacy::PassManager emit_pm;
-    if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-        error = "target machine cannot emit object files";
-        delete tm;
-        return false;
-    }
-
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Running code generation pass manager...\n");
-        fflush(stderr);
-    }
-
-    // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so the
-    // bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc +
-    // assembly emission) appears as a single coarse event in the Chrome trace.
-    // Sub-phases within the backend emit their own scopes if they call
-    // llvm::TimeTraceScope — legacy backend passes don't, but the total here
-    // gives us a clear picture of backend vs middle-end split.
+    // Emit to a temporary file in the same directory, then atomically
+    // rename it into place.  A concurrent `-L` sibling scan in another qcc
+    // process (the script-context preload in compileScriptFile) must never
+    // observe a half-written `.qo`: with the atomic rename, a reader sees
+    // either the previous complete object or the new one, so per-file `.qo`
+    // compilation can run in parallel without an external lock.  The temp
+    // name does not end in `.qo`, so a concurrent sibling scan (regex
+    // `.+\.qo$`) skips it.  Same idiom as linkSharedLib's atomic replace.
+    std::string tmp_path = path + ".tmp." + std::to_string(getpid());
     {
-        llvm::TimeTraceScope backend_scope("BackendCodegen",
-                module.getName().str());
-        emit_pm.run(module);
+        std::error_code EC;
+        llvm::raw_fd_ostream dest(tmp_path, EC, llvm::sys::fs::OF_None);
+        if (EC) {
+            error = "failed to open output file: " + EC.message();
+            delete tm;
+            return false;
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
+            fflush(stderr);
+        }
+
+        llvm::legacy::PassManager emit_pm;
+        if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+            error = "target machine cannot emit object files";
+            remove(tmp_path.c_str());
+            delete tm;
+            return false;
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Running code generation pass manager...\n");
+            fflush(stderr);
+        }
+
+        // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so
+        // the bulk of compile time (SelectionDAG + MachineInstr passes +
+        // RegAlloc + assembly emission) appears as a single coarse event in the
+        // Chrome trace.  Sub-phases within the backend emit their own scopes if
+        // they call llvm::TimeTraceScope — legacy backend passes don't, but the
+        // total here gives us a clear picture of backend vs middle-end split.
+        {
+            llvm::TimeTraceScope backend_scope("BackendCodegen",
+                    module.getName().str());
+            emit_pm.run(module);
+        }
+
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Code generation completed, flushing output\n");
+            fflush(stderr);
+        }
+
+        dest.flush();
+
+        if (dest.has_error()) {
+            error = "LLVM code generation failed writing to " + tmp_path;
+            remove(tmp_path.c_str());
+            delete tm;
+            return false;
+        }
+        // `dest` closes here (end of scope) so all bytes are on disk in the
+        // temp file before the rename below.
     }
 
-    if (debug_opt) {
-        fprintf(stderr, "AOT: Code generation completed, flushing output\n");
-        fflush(stderr);
-    }
-
-    dest.flush();
-
-    if (dest.has_error()) {
-        error = "LLVM code generation failed writing to " + path;
+    if (rename(tmp_path.c_str(), path.c_str()) != 0) {
+        error = "failed to replace output object '" + path + "' with temporary object '"
+            + tmp_path + "': " + strerror(errno);
+        remove(tmp_path.c_str());
         delete tm;
         return false;
     }
@@ -6286,6 +6399,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         return false;
     }
 
+    // record the dependency modules loaded for the %requires closure so qcc can
+    // list their .qmod files as Make depfile prerequisites
+    qore_aot_record_module_deps(*qpgm);
+
     // Step 3: Initialize LLVM and compile functions
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
@@ -6746,6 +6863,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
+        // record the dependency modules loaded for the %requires closure so qcc
+        // can list their .qmod files as Make depfile prerequisites
+        qore_aot_record_module_deps(*qpgm);
+
         // Step 9: Initialize LLVM and compile functions
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
@@ -7156,6 +7277,71 @@ static std::string stripIncludeDirectives(const std::string& src) {
     return out;
 }
 
+static std::string canonicalizeDepPath(const std::string& path) {
+    char* r = realpath(path.c_str(), nullptr);
+    if (!r) {
+        return path;
+    }
+    std::string out = r;
+    free(r);
+    return out;
+}
+
+static std::string escapeMakeDepPath(const std::string& path) {
+    std::string out;
+    out.reserve(path.size());
+    for (char c : path) {
+        if (c == ' ' || c == '\\') {
+            out.push_back('\\');
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+
+static bool writeAOTMakeDepfile(const std::string& depfile_path,
+        const std::string& output_path, const std::vector<std::string>& deps,
+        std::string& error, const char* cancel_context) {
+    FILE* f = fopen(depfile_path.c_str(), "w");
+    if (!f) {
+        error = "cannot open depfile '" + depfile_path + "' for writing: " + strerror(errno);
+        return false;
+    }
+
+    auto fail_write = [&](const char* op) {
+        int e = errno;
+        fclose(f);
+        error = std::string("cannot ") + op + " depfile '" + depfile_path + "'";
+        if (e) {
+            error += ": ";
+            error += strerror(e);
+        }
+        return false;
+    };
+
+    if (fprintf(f, "%s:", escapeMakeDepPath(canonicalizeDepPath(output_path)).c_str()) < 0) {
+        return fail_write("write");
+    }
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, cancel_context)) {
+            fclose(f);
+            error = "operation cancelled during AOT depfile emission";
+            return false;
+        }
+        if (fprintf(f, " \\\n    %s", escapeMakeDepPath(deps[i]).c_str()) < 0) {
+            return fail_write("write");
+        }
+    }
+    if (fputc('\n', f) == EOF) {
+        return fail_write("write");
+    }
+    if (fclose(f) != 0) {
+        error = "cannot close depfile '" + depfile_path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
         qore_program_private* pp, const char* cancel_context, const char* skip_feature) {
     std::vector<std::string> all_deps;
@@ -7207,9 +7393,15 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         size_t module_cmd_end = std::numeric_limits<size_t>::max(),
         int* compiled_count_out = nullptr,
         bool report_artifact = true) {
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    // Global LLVM target init is process-wide and not safe to call
+    // concurrently; run it exactly once so this emit can be invoked from a
+    // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
+    static std::once_flag llvm_native_init_once;
+    std::call_once(llvm_native_init_once, [] {
+        llvm::InitializeNativeTarget();
+        llvm::InitializeNativeTargetAsmPrinter();
+        llvm::InitializeNativeTargetAsmParser();
+    });
 
     llvm::LLVMContext ctx;
     std::string mod_name_san = scriptBatchSourceId(target_canon);
@@ -7577,7 +7769,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& parse_defines,
         const std::vector<std::string>& parse_option_flags,
         int* compiled_count_out,
-        bool report_artifacts) {
+        bool report_artifacts,
+        const std::string* depfile_dir) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -7599,17 +7792,42 @@ bool QoreAOT::compileScriptFilesBatch(
         }
     }
 
+    std::string dep_dir;
+    if (depfile_dir) {
+        dep_dir = *depfile_dir;
+        while (dep_dir.size() > 1 && dep_dir.back() == '/') {
+            dep_dir.pop_back();
+        }
+        if (dep_dir.empty()) {
+            dep_dir = ".";
+        }
+        struct stat st;
+        if (stat(dep_dir.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+            error = "depfile directory does not exist: " + dep_dir;
+            return false;
+        }
+    }
+
     // Canonicalize + read all target files.  Keep source text alive
     // so fallback serialization per-file has the right bytes.
     struct SrcEntry {
         std::string canon;
         std::string source;
         std::string out_path;
+        std::string depfile_path;
         size_t module_cmd_begin = 0;
         size_t module_cmd_end = 0;
     };
     std::vector<SrcEntry> entries;
     entries.reserve(target_files.size());
+    std::vector<std::string> batch_dep_sources;
+    std::unordered_set<std::string> batch_dep_seen;
+    auto add_batch_dep = [&](const std::string& path) {
+        std::string canon = canonicalizeDepPath(path);
+        if (batch_dep_seen.insert(canon).second) {
+            batch_dep_sources.push_back(std::move(canon));
+        }
+    };
     size_t input_i = 0;
     for (const std::string& f : target_files) {
         if (input_i && !(input_i % 100) && qore_check_cancel(nullptr, "AOT batch input collection")) {
@@ -7631,9 +7849,17 @@ bool QoreAOT::compileScriptFilesBatch(
         }
         e.source = stripIncludeDirectives(e.source);
         e.out_path = out_dir + "/" + scriptBatchSourceId(e.canon) + ".qo";
+        if (!dep_dir.empty()) {
+            e.depfile_path = dep_dir + "/" + fileBasenameKeepExt(e.out_path) + ".d";
+        }
+        add_batch_dep(e.canon);
         entries.push_back(std::move(e));
         ++input_i;
     }
+    for (const std::string& stub : stub_files) {
+        add_batch_dep(stub);
+    }
+    std::sort(batch_dep_sources.begin(), batch_dep_sources.end());
 
     // Single shared QoreProgram — parse every source into it.
     QoreParseOptions po = parse_options;
@@ -7716,34 +7942,125 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
-    // Now emit one .qo per target using the shared parsed program.
+    // Now emit one .qo per target using the shared parsed program.  Each
+    // emit is independent — its own LLVMContext/Module, file-filtered codegen
+    // (compile_file=e.canon), local result vectors, and a distinct output
+    // path written atomically (temp + rename) — and reads (does not mutate)
+    // the committed program.  So the emits run on a worker-thread pool to
+    // parallelize the otherwise single-threaded -O3 LLVM backend, which
+    // dominates clean-build time.  The shared parse/commit above stays
+    // single-threaded.  QORE_AOT_BATCH_JOBS overrides the worker count
+    // (default: hardware concurrency; 1 = serial, identical to the old path).
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
-    int total_compiled_count = 0;
-    for (auto& e : entries) {
-        if (trace_emit) {
-            fprintf(stderr, "[aot-trace] emit start: %s\n",
-                e.canon.c_str());
-            fflush(stderr);
+    unsigned jobs;
+    {
+        unsigned hw = std::thread::hardware_concurrency();
+        jobs = hw ? hw : 1;
+        if (const char* j = getenv("QORE_AOT_BATCH_JOBS")) {
+            long v = strtol(j, nullptr, 10);
+            jobs = v > 0 ? (unsigned)v : 1;
         }
-        std::string per_err;
-        int per_file_compiled_count = 0;
-        if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
-                e.out_path, opt_level, target_triple, include_source,
-                per_err, e.module_cmd_begin, e.module_cmd_end,
-                &per_file_compiled_count, report_artifacts)) {
-            error = per_err;
-            return false;
+        if (jobs > entries.size()) {
+            jobs = (unsigned)entries.size();
         }
-        total_compiled_count += per_file_compiled_count;
-        if (report_artifacts && qccAOTVerbose()) {
-            printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
-                QCC_LOG_PREFIX, opt_level,
-                include_source ? ", include-source" : "", e.out_path.c_str());
+        if (!jobs) {
+            jobs = 1;
         }
     }
 
+    std::atomic<size_t> next_index{0};
+    std::atomic<int> total_compiled_count{0};
+    std::atomic<bool> stop{false};
+    std::mutex err_mutex;   // guards first_error
+    std::mutex io_mutex;    // serializes diagnostic output across workers
+    std::string first_error;
+
+    auto worker = [&]() {
+        // A batch worker is a fresh OS thread; register it as a foreign Qore
+        // thread so it has the thread context Qore APIs touched during codegen
+        // expect.  (Run inline with jobs==1 on the main thread, which is
+        // already registered -> q_register returns QFT_REGISTERED, no-op.)
+        int reg = q_register_foreign_thread();
+        if (reg != QFT_OK && reg != QFT_REGISTERED) {
+            std::lock_guard<std::mutex> l(err_mutex);
+            if (first_error.empty()) {
+                first_error = "failed to register AOT batch worker thread";
+            }
+            stop.store(true);
+            return;
+        }
+        int local_compiled = 0;
+        for (;;) {
+            if (stop.load()) {
+                break;
+            }
+            size_t i = next_index.fetch_add(1);
+            if (i >= entries.size()) {
+                break;
+            }
+            auto& e = entries[i];
+            if (trace_emit) {
+                std::lock_guard<std::mutex> l(io_mutex);
+                fprintf(stderr, "[aot-trace] emit start: %s\n", e.canon.c_str());
+                fflush(stderr);
+            }
+            std::string per_err;
+            int per_file_compiled_count = 0;
+            if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
+                    e.out_path, opt_level, target_triple, include_source,
+                    per_err, e.module_cmd_begin, e.module_cmd_end,
+                    &per_file_compiled_count, report_artifacts)) {
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = per_err;
+                }
+                stop.store(true);
+                break;
+            }
+            if (!e.depfile_path.empty()
+                    && !writeAOTMakeDepfile(e.depfile_path, e.out_path,
+                        batch_dep_sources, per_err, "AOT batch depfile emission")) {
+                std::lock_guard<std::mutex> l(err_mutex);
+                if (first_error.empty()) {
+                    first_error = per_err;
+                }
+                stop.store(true);
+                break;
+            }
+            local_compiled += per_file_compiled_count;
+            if (report_artifacts && qccAOTVerbose()) {
+                std::lock_guard<std::mutex> l(io_mutex);
+                printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
+                    QCC_LOG_PREFIX, opt_level,
+                    include_source ? ", include-source" : "", e.out_path.c_str());
+            }
+        }
+        total_compiled_count.fetch_add(local_compiled);
+        if (reg == QFT_OK) {
+            q_deregister_foreign_thread();
+        }
+    };
+
+    if (jobs == 1) {
+        worker();
+    } else {
+        std::vector<std::thread> pool;
+        pool.reserve(jobs);
+        for (unsigned t = 0; t < jobs; ++t) {
+            pool.emplace_back(worker);
+        }
+        for (auto& th : pool) {
+            th.join();
+        }
+    }
+
+    if (!first_error.empty()) {
+        error = first_error;
+        return false;
+    }
+
     if (compiled_count_out) {
-        *compiled_count_out = total_compiled_count;
+        *compiled_count_out = total_compiled_count.load();
     }
 
     return true;
@@ -8113,6 +8430,84 @@ bool QoreAOT::compileScriptAggregate(
     return true;
 }
 
+bool QoreAOT::compileScriptRegisterAggregate(
+        const std::vector<std::string>& register_symbols,
+        const std::string& output_path,
+        const std::string& aggregate_symbol,
+        std::string& error,
+        int opt_level,
+        const char* target_triple) {
+    if (register_symbols.empty()) {
+        error = "compileScriptRegisterAggregate: register_symbols is empty";
+        return false;
+    }
+    if (output_path.empty()) {
+        error = "compileScriptRegisterAggregate: output_path is empty";
+        return false;
+    }
+    if (aggregate_symbol.empty()) {
+        error = "compileScriptRegisterAggregate: aggregate_symbol is empty";
+        return false;
+    }
+
+    std::string aggregate_san = sanitizeCIdentifier(aggregate_symbol);
+    if (aggregate_san.empty()) {
+        error = "compileScriptRegisterAggregate: aggregate_symbol is invalid";
+        return false;
+    }
+
+    llvm::InitializeNativeTarget();
+    llvm::InitializeNativeTargetAsmPrinter();
+    llvm::InitializeNativeTargetAsmParser();
+
+    llvm::LLVMContext ctx;
+    auto module = std::make_unique<llvm::Module>(
+        "qore_aot_qo_link_" + aggregate_san, ctx);
+
+    auto* ptr_type = llvm::PointerType::get(ctx, 0);
+    auto* void_type = llvm::Type::getVoidTy(ctx);
+    auto* register_fn_type = llvm::FunctionType::get(void_type, {ptr_type}, false);
+
+    std::string register_fn = "init_" + aggregate_san + "_qo";
+    auto* fn = llvm::Function::Create(register_fn_type, llvm::Function::ExternalLinkage,
+        register_fn, *module);
+    fn->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+    auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", fn);
+    llvm::IRBuilder<> builder(entry_bb);
+    llvm::Value* pgm_arg = &*fn->arg_begin();
+
+    for (size_t i = 0; i < register_symbols.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT qo-link register emission")) {
+            error = "operation cancelled during AOT qo-link register emission";
+            return false;
+        }
+        const std::string& symbol = register_symbols[i];
+        if (symbol.empty()) {
+            error = "compileScriptRegisterAggregate: empty register symbol";
+            return false;
+        }
+        auto callee = module->getOrInsertFunction(symbol, register_fn_type);
+        builder.CreateCall(callee, {pgm_arg});
+    }
+    builder.CreateRetVoid();
+
+    std::string verify_error;
+    llvm::raw_string_ostream verify_os(verify_error);
+    if (llvm::verifyModule(*module, &verify_os)) {
+        verify_os.flush();
+        error = "LLVM module verification failed for qo-link aggregate "
+            + aggregate_san + ": " + verify_error;
+        return false;
+    }
+
+    if (getenv("QORE_DUMP_LLVM_IR")) {
+        module->print(llvm::errs(), nullptr);
+    }
+
+    return emitObjectFile(*module, output_path, error, opt_level, target_triple);
+}
+
 // Phase 4 slice 10c: compile a single Qore source file in script
 // context mode (no module wrapper, no `.qm` required).  Sibling
 // `.qo`s found in @p library_paths are preloaded into the compile
@@ -8130,7 +8525,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 bool include_source,
                                 const std::vector<std::string>& require_modules,
                                 const std::vector<std::string>& stub_files,
-                                const std::vector<std::string>& parse_defines) {
+                                const std::vector<std::string>& parse_defines,
+                                std::vector<std::string>* parsed_files) {
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -8191,6 +8587,94 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         return false;
     }
 
+    // Compute the set of source files the target will declare into — the
+    // target itself plus every file it `%include`s — so that the `-L`
+    // preload below can SKIP sibling `.qo`s for those files.  When the
+    // real target parse runs (further down, after the preload), it
+    // re-declares everything in these files; if a sibling `.qo` for one
+    // of them had been preloaded, that parse would re-register the same
+    // hashdecl/class and abort with e.g. "hashdecl 'AppenderParams' is
+    // already defined in namespace '::'".  The target's own stale `.qo`
+    // (label == target_canon) is in this set too, so it never shadows the
+    // freshly parsed declarations.
+    //
+    // The set is computed with a THROWAWAY parse in a separate program:
+    // the real program must keep the original "shells first, parse
+    // second" ordering so that cross-unit barewords in NON-`%include`d
+    // siblings (an enum member, a `Class::CONST`, a static var) resolve
+    // at parse time against the preloaded shells — parsing the real
+    // program first would break that.  The `%include` graph (hence the
+    // declared-file set) is fixed by the scanner and the parse defines
+    // alone; it does not depend on the preloaded modules/stubs, so a
+    // minimal throwaway parse yields the same file set.
+    std::unordered_set<std::string> parsed_decl_files_canon;
+    parsed_decl_files_canon.insert(target_canon);
+    {
+        QoreParseOptions probe_po = parse_options;
+        ExceptionSink probe_xsink;
+        ExceptionSink probe_wsink;
+        QoreProgramHelper probe_pgm(probe_po, probe_xsink);
+        if (!probe_xsink.isException()) {
+            probe_pgm->setScriptPath(target_canon.c_str());
+            apply_parse_defines(*probe_pgm, parse_defines);
+            // Best-effort: collect whatever declarations were registered,
+            // even if the parse reports errors (an unresolved type, a
+            // missing `%include`, …).  The real compile below reports the
+            // authoritative error; here we only need the file set.
+            probe_pgm->parsePending(source_text.c_str(), target_canon.c_str(),
+                &probe_xsink, &probe_wsink, QP_WARN_NONE);
+            std::unordered_set<std::string> probe_files;
+            qore_program_private* pp_probe = qore_program_private::get(**probe_pgm);
+            collectDeclaredSourceFiles(qore_ns_private::get(*pp_probe->RootNS),
+                probe_files);
+            for (const std::string& f : probe_files) {
+                char* rp = realpath(f.c_str(), nullptr);
+                if (rp) {
+                    parsed_decl_files_canon.insert(rp);
+                    free(rp);
+                } else {
+                    parsed_decl_files_canon.insert(f);
+                }
+            }
+        }
+        // Discard any parse diagnostics from the throwaway program.
+        probe_wsink.clear();
+        probe_xsink.clear();
+    }
+
+    // Canonical source labels of the siblings actually preloaded below (filled
+    // by the `-L` scan).  Used to narrow the dependency sink to true siblings.
+    std::unordered_set<std::string> sibling_source_labels;
+
+    // AOT incremental dependency sink: collects the source file of every
+    // declaration the TARGET resolves while it is parsed and committed —
+    // including compile-time constants/enum members it folds, which leave no
+    // trace in the emitted `.qo`.  Only armed (around the target parse+commit
+    // below) when the caller wants a dependency list; the RAII guard clears the
+    // thread-local on every exit path.  It is deliberately NOT armed during the
+    // sibling preload/resolution phases, whose cross-references are not the
+    // target's dependencies.
+    std::unordered_set<std::string> aot_referenced_files;
+    std::unordered_set<std::string>* aot_dep_sink_arg =
+        parsed_files ? &aot_referenced_files : nullptr;
+
+    struct AOTDepSinkGuard {
+        explicit AOTDepSinkGuard(std::unordered_set<std::string>* sink) {
+            qore_aot_set_dep_sink(sink);
+        }
+        ~AOTDepSinkGuard() {
+            qore_aot_set_dep_sink(nullptr);
+        }
+    };
+    struct AOTSourceParseGuard {
+        explicit AOTSourceParseGuard(bool active) : old(qore_aot_set_source_parse_active(active)) {
+        }
+        ~AOTSourceParseGuard() {
+            qore_aot_set_source_parse_active(old);
+        }
+        bool old;
+    };
+
     // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
     // Each path is scanned for `*.qo` files (non-recursive).  For
     // every `.qo` whose `_fragment_blob` symbol we can read, the blob
@@ -8245,6 +8729,60 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                     return false;
                 }
             }
+        }
+
+        // Drop siblings whose source file the target parse already
+        // declared (the target plus its `%include`d files).  Their
+        // declarations already exist in the program from the parse
+        // above; preloading the corresponding `.qo` shells would
+        // re-register the same hashdecl/class and abort the parse.  The
+        // target's own bootstrap `.qo` is dropped here too (its label is
+        // target_canon), so a stale self-`.qo` in the `-L` dir cannot
+        // shadow the freshly parsed declarations.
+        if (!extracted_frags.empty()) {
+            std::vector<QoreAOTExtractedFragment> kept;
+            kept.reserve(extracted_frags.size());
+            size_t frag_i = 0;
+            for (auto& frag : extracted_frags) {
+                if (frag_i && !(frag_i % 100)
+                        && qore_check_cancel(nullptr, "AOT sibling label collection")) {
+                    error = "operation cancelled during AOT sibling label collection";
+                    return false;
+                }
+                std::string label;
+                {
+                    QoreAOTBinaryReader lbl_reader;
+                    std::string lbl_err;
+                    if (lbl_reader.open(frag.bytes.data(),
+                            static_cast<uint32_t>(frag.bytes.size()), lbl_err)) {
+                        const char* l = lbl_reader.getLabel();
+                        if (l) {
+                            label = l;
+                        }
+                    }
+                }
+                bool skip = false;
+                if (!label.empty()) {
+                    char* rp = realpath(label.c_str(), nullptr);
+                    const std::string key = rp ? std::string(rp) : label;
+                    if (rp) {
+                        free(rp);
+                    }
+                    skip = parsed_decl_files_canon.count(key) != 0;
+                    if (!skip) {
+                        // Remember the canonical source label of every PRELOADED
+                        // sibling so the dependency sink (which records the
+                        // source file of every declaration the target resolves)
+                        // can be narrowed to just these siblings for the depfile.
+                        sibling_source_labels.insert(key);
+                    }
+                }
+                if (!skip) {
+                    kept.push_back(std::move(frag));
+                }
+                ++frag_i;
+            }
+            extracted_frags = std::move(kept);
         }
 
         // Phase 1 via multi-deserializer.  Only create sibling shells here.
@@ -8311,11 +8849,17 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    // Parse + commit the target source.  With siblings preloaded,
-    // `class Foo inherits Bar` (where Bar is in a sibling `.qo`)
-    // resolves via parseFindClassIntern's namespace-tree walk.
-    qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
-        &wsink, QP_WARN_DEFAULT);
+    // Parse the target source.  With siblings preloaded (minus the ones
+    // for the target's own `%include`d files, which were filtered out of
+    // the preload set above), `class Foo inherits Bar` and cross-unit
+    // barewords (`SomeEnum::Member`, `SomeClass::CONST`) resolve at parse
+    // time via parseFindClassIntern's namespace-tree walk over the shells.
+    {
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
+        qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
+            &wsink, QP_WARN_DEFAULT);
+    }
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse error in target file: " + target_canon;
@@ -8343,7 +8887,11 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    {
+        AOTDepSinkGuard dep_guard(aot_dep_sink_arg);
+        AOTSourceParseGuard source_guard(sibling_mdes != nullptr);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    }
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse commit failed: " + target_canon;
@@ -8605,6 +9153,44 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     reportAOTArtifactStats("script-context .qo", opt_level, include_source,
         compiled_count, total_funcs, failed_count, target_triple, output_path);
 
+    // Hand back the source files this compile depends on so the caller can emit
+    // a build dependency file:
+    //   1. the target + its `%include` closure (parsed_decl_files_canon), and
+    //   2. preloaded sibling sources whose declarations the target actually
+    //      referenced — captured by the dependency sink during parse+commit and
+    //      narrowed to the real sibling set.  (2) is what closes the silent-
+    //      staleness hole: a folded cross-unit `Sibling::CONST`/enum member
+    //      leaves no trace in the `.qo`, so without this a change to that
+    //      sibling would not rebuild this `.qo`.
+    if (parsed_files) {
+        std::unordered_set<std::string> deps = parsed_decl_files_canon;
+        // Add the preloaded siblings whose compile-time constants/enum members
+        // the target folded (captured by the dependency sink during
+        // parse+commit).  Folded values are baked into this `.qo` with no trace,
+        // so without these the `.qo` would silently keep a stale value when the
+        // sibling changes.  This is the ONLY cross-`-L` reference that requires a
+        // dependency: empirically, every other cross-unit reference (calls,
+        // inherited methods/members, base-class structure) is resolved by name
+        // at load/register time, so a stale dependent picks up the new sibling
+        // automatically, and incompatible changes surface as loud load/runtime
+        // errors rather than silent corruption.
+        for (const std::string& f : aot_referenced_files) {
+            std::string key = f;
+            char* rp = realpath(f.c_str(), nullptr);
+            if (rp) {
+                key = rp;
+                free(rp);
+            }
+            // Keep only real preloaded siblings (drops modules, builtins, and the
+            // target's own `%include` closure, which is already in `deps`).
+            if (sibling_source_labels.count(key)) {
+                deps.insert(key);
+            }
+        }
+        parsed_files->assign(deps.begin(), deps.end());
+        std::sort(parsed_files->begin(), parsed_files->end());
+    }
+
     return true;
 }
 
@@ -8854,6 +9440,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         if (qoreAotHandleWarnings(wsink, error, "per-file split module parsing")) {
             return false;
         }
+
+        // record the dependency modules loaded for the %requires closure so qcc
+        // can list their .qmod files as Make depfile prerequisites
+        qore_aot_record_module_deps(*qpgm);
 
         llvm::InitializeNativeTarget();
         llvm::InitializeNativeTargetAsmPrinter();
@@ -10228,6 +10818,10 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
         slots.getExprSlot(bits, makeInvokeOpcodeSource(opcode, invoke_opcode));
     };
 
+    auto recordCallRelocation = [&slots](uint64_t bits, QoreAOTCallRelocationTargetKind kind) {
+        slots.call_relocation_kinds.emplace(bits, kind);
+    };
+
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
     // inherits parent locals by IR slot ID, and AOT handler deserialization uses
     // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
@@ -10291,6 +10885,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     recordInvokeExprSlot(bits, inst->opcode, ii->invoke_opcode);
+                    if (ii->invoke_opcode == QoreIROpcode::CallDirect) {
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::FUNCTION);
+                    } else if (ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::STATIC_METHOD);
+                    }
                     if (ii->invoke_opcode == QoreIROpcode::CallStatic
                             || ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
                         slots.static_call_pre_evaluated_bits.insert(bits);
@@ -10328,6 +10927,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &di->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::FUNCTION);
                     break;
                 }
                 case QoreIROpcode::CallMethodDirect: {
@@ -10336,6 +10936,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                         uint64_t bits;
                         memcpy(&bits, &cmdi->expr, sizeof(bits));
                         recordExprSlot(bits, inst->opcode);
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::METHOD);
                     }
                     break;
                 }
@@ -10345,6 +10946,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                         uint64_t bits;
                         memcpy(&bits, &imdi->expr, sizeof(bits));
                         recordExprSlot(bits, inst->opcode);
+                        recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::METHOD);
                     }
                     break;
                 }
@@ -10573,6 +11175,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     uint64_t bits;
                     memcpy(&bits, &csdi->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
+                    recordCallRelocation(bits, QoreAOTCallRelocationTargetKind::STATIC_METHOD);
                     slots.static_call_pre_evaluated_bits.insert(bits);
                     break;
                 }
@@ -12876,6 +13479,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 = "sig:";
                 id.ref2 += sig->getSignatureText();
             }
+            id.reloc_qore_path = getVariantKey(id.ref1.c_str(), v);
         }
         return id;
     }
@@ -12895,6 +13499,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
         // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
         id.ref2 = call->getName();
+        if (method && call->getVariant()) {
+            id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
+        }
         return id;
     }
 
@@ -12914,6 +13521,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
                 id.ref2 += "\n";
                 id.ref2 += sig->getSignatureText();
+            }
+            if (method) {
+                id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), v);
             }
         }
         if (!slots.static_call_pre_evaluated_bits.count(bits)) {
@@ -14011,49 +14621,53 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             break;
         }
         for (auto& [bits, slot] : expr_snapshot) {
-        // Grow the output on demand: classifyExpression may run an
-        // ExprTreeSerializer dry-run that calls getExprSlot() and
-        // registers additional expr slots mid-iteration.  The resize
-        // we did before the loop was based on the snapshot max; any
-        // new slot ids introduced by classifyExpression itself can
-        // exceed that bound, so bump the output vector as needed.
-        if (static_cast<size_t>(slot) >= out.exprs.size()) {
-            out.exprs.resize(static_cast<size_t>(slot) + 1);
-        }
-        out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
-        if (isRejectedAOTExprKind(out.exprs[slot].kind)) {
-            out.has_unsupported_exprs = true;
-            std::string detail = "slot ";
-            detail += std::to_string(slot);
-            auto source_it = slots.expr_slot_sources.find(bits);
-            if (source_it != slots.expr_slot_sources.end()) {
-                detail += " from ";
-                detail += source_it->second;
+            // Grow the output on demand: classifyExpression may run an
+            // ExprTreeSerializer dry-run that calls getExprSlot() and
+            // registers additional expr slots mid-iteration.  The resize
+            // we did before the loop was based on the snapshot max; any
+            // new slot ids introduced by classifyExpression itself can
+            // exceed that bound, so bump the output vector as needed.
+            if (static_cast<size_t>(slot) >= out.exprs.size()) {
+                out.exprs.resize(static_cast<size_t>(slot) + 1);
             }
-            if (!out.exprs[slot].ref1.empty()) {
-                detail += ": ";
-                detail += out.exprs[slot].ref1;
-            } else {
-                detail += ": unsupported expression";
+            out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
+            auto reloc_it = slots.call_relocation_kinds.find(bits);
+            if (reloc_it != slots.call_relocation_kinds.end()) {
+                out.exprs[slot].call_relocation_kind = reloc_it->second;
             }
-            out.unsupported_expr_details.push_back(std::move(detail));
-            if (getenv("QORE_AOT_DEBUG")) {
-                QoreValue dbg_v;
-                memcpy(&dbg_v, &bits, sizeof(dbg_v));
-                if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
-                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: '%s' (type %d)\n",
-                        func.name.c_str(), slot,
-                        dbg_v.getInternalNode()->getTypeName(),
-                        dbg_v.getInternalNode()->getType());
-                } else {
-                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: "
-                        "non-node value (type=%d)\n",
-                        func.name.c_str(), slot, static_cast<int>(dbg_v.getType()));
+            if (isRejectedAOTExprKind(out.exprs[slot].kind)) {
+                out.has_unsupported_exprs = true;
+                std::string detail = "slot ";
+                detail += std::to_string(slot);
+                auto source_it = slots.expr_slot_sources.find(bits);
+                if (source_it != slots.expr_slot_sources.end()) {
+                    detail += " from ";
+                    detail += source_it->second;
                 }
+                if (!out.exprs[slot].ref1.empty()) {
+                    detail += ": ";
+                    detail += out.exprs[slot].ref1;
+                } else {
+                    detail += ": unsupported expression";
+                }
+                out.unsupported_expr_details.push_back(std::move(detail));
+                if (getenv("QORE_AOT_DEBUG")) {
+                    QoreValue dbg_v;
+                    memcpy(&dbg_v, &bits, sizeof(dbg_v));
+                    if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
+                        fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: '%s' (type %d)\n",
+                            func.name.c_str(), slot,
+                            dbg_v.getInternalNode()->getTypeName(),
+                            dbg_v.getInternalNode()->getType());
+                    } else {
+                        fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: "
+                            "non-node value (type=%d)\n",
+                            func.name.c_str(), slot, (int)dbg_v.getType());
+                    }
+                }
+            } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
+                out.has_closure_exprs = true;
             }
-        } else if (out.exprs[slot].kind == AOTExprKind::CLOSURE_CREATE) {
-            out.has_closure_exprs = true;
-        }
         }
     }
 

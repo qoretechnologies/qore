@@ -267,6 +267,7 @@ struct AOTSlotMap {
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
     std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
+    std::unordered_map<uint64_t, QoreAOTCallRelocationTargetKind> call_relocation_kinds; //!< expr bits -> direct call relocation target kind
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
@@ -744,6 +745,8 @@ public:
                 emitted Qore code variants
         @param report_artifacts true to report each `.qo` as a user-visible
                 qcc artifact; false when the objects are temporary
+        @param depfile_dir optional directory for one Make depfile per output
+                `.qo`; each depfile is named `<output-basename>.d`
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -759,7 +762,8 @@ public:
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
             int* compiled_count_out = nullptr,
-            bool report_artifacts = true);
+            bool report_artifacts = true,
+            const std::string* depfile_dir = nullptr);
 
     //! Compile aggregate script metadata for a list of already-compiled
     //! script-context `.qo` objects.
@@ -811,6 +815,36 @@ public:
             const std::vector<std::string>& parse_defines = {},
             const std::vector<std::string>& parse_option_flags = {},
             int* compiled_count_out = nullptr);
+
+    //! Compile an object-driven script register aggregate for existing `.qo` inputs.
+    /**
+        Emits one relocatable object at @p output_path containing an exported
+        `init_<aggregate_symbol>_qo(QoreProgram*)` function.  The function calls
+        each symbol in @p register_symbols in order.  The generated object is
+        linked alongside the input `.qo` files, so the native linker validates
+        that every per-file register symbol exists.
+
+        This is the first object/index-driven `--link-qo` aggregation form: it
+        avoids reparsing original sources and keeps the per-file metadata
+        registration semantics unchanged.
+
+        @param register_symbols exported `*_script_register` symbols to call
+        @param output_path path for the aggregate relocatable object
+        @param aggregate_symbol C-identifier tail used in
+                `init_<aggregate_symbol>_qo`
+        @param error error message on failure
+        @param opt_level LLVM optimization level 0-3
+        @param target_triple target triple for cross-compilation
+                (nullptr = native)
+        @return true on success, false on failure
+    */
+    static bool compileScriptRegisterAggregate(
+            const std::vector<std::string>& register_symbols,
+            const std::string& output_path,
+            const std::string& aggregate_symbol,
+            std::string& error,
+            int opt_level = 2,
+            const char* target_triple = nullptr);
 
     //! Compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).
@@ -866,7 +900,8 @@ public:
                                   bool include_source = false,
                                   const std::vector<std::string>& require_modules = {},
                                   const std::vector<std::string>& stub_files = {},
-                                  const std::vector<std::string>& parse_defines = {});
+                                  const std::vector<std::string>& parse_defines = {},
+                                  std::vector<std::string>* parsed_files = nullptr);
 
     //! Package a set of per-file `.qo` files into a
     //! `.qoa` static archive with a single `qore_qoa_register_all()`

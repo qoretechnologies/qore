@@ -184,7 +184,7 @@ public class GraphQLLexer {
                 case " ":
                 case "\t":
                 case ",":
-                case "\u{feff}":
+                case "\x{feff}":
                     ++pos;
                     break;
                 case "#":

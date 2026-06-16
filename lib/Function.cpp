@@ -59,6 +59,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -1050,18 +1051,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
 #endif
 
     // set the program context if necessary
-    QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
+    QoreProgram* old_pgm = pgm_ctx ? getProgram() : nullptr;
     if (pgm_ctx) {
         set(xsink, pgm_ctx, true);
         if (*xsink) {
             return;
         }
-        exec_pgm = pgm_ctx;
-        QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
-        if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+        if (pgm_ctx != old_pgm) {
             old_rc_po = rc.getParseOptions();
-            rc.setParseOptions(pgm_po);
-            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+            rc.setParseOptions(pgm_ctx->getParseOptions());
+            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_ctx->getParseOptions(),
                 old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
             restore_runtime_ctx = true;
             if (*xsink) {
@@ -1156,12 +1155,6 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
     } else {
         stack_loc = update_get_runtime_stack_location(this, stmt, pgm);
-    }
-    if (pgm_ctx && old_pgm) {
-        // Cross-program calls execute with the target/source Program's TLPD,
-        // but caller-sensitive APIs walk stack frame Programs. Preserve the
-        // caller Program on the visible stack frame.
-        pgm = old_pgm;
     }
     restore_stack = true;
 }
@@ -1347,8 +1340,7 @@ int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFun
         const UserVariantBase* uvb = variant->getUserVariantBase();
         QoreParseOptions po;
         if (uvb) {
-            QoreProgram* exec_pgm = getExecutionProgram();
-            po = uvb->getParseOptions((exec_pgm ? exec_pgm : uvb->pgm)->getParseOptions());
+            po = uvb->getParseOptions(uvb->pgm->getParseOptions());
         } else {
             po = runtime_get_parse_options();
         }
@@ -3106,9 +3098,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //printd(5, "QoreFunction::runtimeFindVariant() pscore: %d score: %d score_len: %d np: %d v: %p\n", pscore,
             //    score, score_len, sig->numParams(), variant);
 
-            if (pscore > score
-                    || (pscore == score
-                        && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len)))) {
+            if (pscore > score || (pscore == score && (score_len == -1 || (sig->numParams() < (unsigned)score_len)))) {
                 score = pscore;
                 variant = *i;
                 if (type_param_inst) {
@@ -3690,7 +3680,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     if (omitted_defaultable == -1 || cb.omitted_defaultable < omitted_defaultable) {
                         better = true;
                     } else if (cb.omitted_defaultable == omitted_defaultable
-                            && (score_len == -1 || sig->numParams() < static_cast<unsigned>(score_len))) {
+                            && (score_len == -1 || sig->numParams() < (unsigned)score_len)) {
                         better = true;
                     }
                 }
@@ -4129,8 +4119,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     || (pscore == score
                         && (variant_nperfect > nperfect
                             || (variant_nperfect == nperfect
-                                && (score_len == -1
-                                    || sig->numParams() < static_cast<unsigned>(score_len)))))) {
+                                && (score_len == -1 || sig->numParams() < (unsigned)score_len))))) {
                     // if we could possibly match less than another variant
                     // then we have to match at runtime
                     printd(5, "QoreFunction::parseFindVariant() %s(%s) score better: pscore=%d score=%d max_pscore=%d "
@@ -4332,13 +4321,13 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
         return QoreValue();
     }
 
-    // issue #3024: make the caller's call context available
-    ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation);
+        nullptr, nullptr, explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
     }
+    // issue #3024: make the caller's call context available
+    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4348,13 +4337,13 @@ QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* v
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
     const char* fname = getName();
-    // issue #3024: make the caller's call context available
-    ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation);
+        nullptr, nullptr, explicit_type_param_instantiation);
     if (*xsink) {
         return QoreValue();
     }
+    // issue #3024: make the caller's call context available
+    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4374,11 +4363,11 @@ QoreValue QoreFunction::evalDynamicTmpArgs(QoreListNode* args, QoreProgram* pgm,
         ExceptionSink* xsink) const {
     const char* fname = getName();
     const AbstractQoreFunctionVariant* variant = nullptr;
-    ProgramCallContextHelper pcch(pgm);
-    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr, pgm);
+    CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args);
     if (*xsink) {
         return QoreValue();
     }
+    ProgramCallContextHelper pcch(pgm);
     return variant->evalFunction(xsink, ceh);
 }
 
@@ -4435,16 +4424,6 @@ UserVariantExecHelper::~UserVariantExecHelper() {
         //    sig->lv[i]->getValueTypeName());
         sig->lv[i]->uninstantiate(xsink);
     }
-}
-
-QoreProgram* UserVariantExecHelper::getExecutionProgram(const UserVariantBase* uvb, CodeEvaluationHelper* ceh) {
-    QoreProgram* pgm = ceh ? ceh->getExecutionProgram() : nullptr;
-    return pgm ? pgm : uvb->pgm;
-}
-
-static QoreParseOptions get_user_variant_runtime_po_override_mask() {
-    return QoreParseOptions(PO_LOCKDOWN | PO_NO_EMBEDDED_LOGIC | PO_NO_LOCALE_CONTROL | PO_NO_DEBUGGING
-        | PO_ALLOW_INJECTION | PO_ALLOW_DEBUGGER);
 }
 
 // Thread-local stack-top pointer for the "current builtin source location"
@@ -6234,6 +6213,13 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         // self uninstantiation now handled by SelfInstantiationHelper RAII above
     } else {
         argv = nullptr; // dereference argv now
+        if (qore_aot_source_parse_active()) {
+            xsink->raiseException("AOT-PENDING-FUNCTION",
+                "cannot execute AOT-deserialized function '%s' while sibling "
+                "source parse is still resolving executable metadata",
+                name ? name : "<unknown>");
+            return val;
+        }
     }
 
     // if return value is NOTHING; make sure it's valid; maybe there wasn't a return statement
@@ -6266,10 +6252,6 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    RuntimeParseOptionsOverrideHelper po_override(exec_pgm && exec_pgm != pgm
-        ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
-        exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions());
 
     // This is a normal function/method call, not a closure invocation.  If the
     // caller is a closure body, do not let its captured LocalVar* map shadow this
@@ -6290,10 +6272,6 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     if (!uveh) {
         return QoreValue();
     }
-    QoreProgram* exec_pgm = uveh.getProgram();
-    RuntimeParseOptionsOverrideHelper po_override(exec_pgm && exec_pgm != pgm
-        ? get_user_variant_runtime_po_override_mask() : QoreParseOptions(),
-        exec_pgm ? exec_pgm->getParseOptions() : QoreParseOptions());
 
     CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
 

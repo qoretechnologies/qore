@@ -4841,6 +4841,17 @@ const char* qoreAOTDependencyClassName(QoreAOTDependencyClass dependency_class) 
     return "unknown";
 }
 
+const char* qoreAOTCallRelocationTargetKindName(QoreAOTCallRelocationTargetKind kind) {
+    switch (kind) {
+        case QoreAOTCallRelocationTargetKind::NONE: return "none";
+        case QoreAOTCallRelocationTargetKind::FUNCTION: return "function";
+        case QoreAOTCallRelocationTargetKind::METHOD: return "method";
+        case QoreAOTCallRelocationTargetKind::STATIC_METHOD: return "static_method";
+        case QoreAOTCallRelocationTargetKind::CONSTRUCTOR: return "constructor";
+    }
+    return "unknown";
+}
+
 static std::string aotStripLeadingColons(std::string path) {
     while (path.size() >= 2 && path[0] == ':' && path[1] == ':') {
         path.erase(0, 2);
@@ -5859,6 +5870,117 @@ bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& inde
     }
     if (ptr != end) {
         error = "trailing bytes in SYMBOL_INDEX section";
+        return false;
+    }
+    return true;
+}
+
+static bool readCallRelocationString(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, std::string& out,
+        std::string& error, const char* field) {
+    if (ptr + 4 > end) {
+        error = "truncated CALL_RELOCATIONS string field '";
+        error += field ? field : "?";
+        error += "'";
+        return false;
+    }
+    const char* s = reader.readStringRef(ptr);
+    if (!s) {
+        error = "invalid CALL_RELOCATIONS string reference in field '";
+        error += field ? field : "?";
+        error += "'";
+        return false;
+    }
+    out = s;
+    return true;
+}
+
+static bool readCallRelocationRecord(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end,
+        QoreAOTCallRelocationRecord& rec, std::string& error) {
+    if (ptr + 12 > end) {
+        error = "truncated CALL_RELOCATIONS record header";
+        return false;
+    }
+    if (!readCallRelocationString(reader, ptr, end, rec.function_name, error, "function_name")) {
+        return false;
+    }
+    rec.expr_slot = QoreAOTBinaryReader::readU32(ptr);
+    uint8_t target_kind = QoreAOTBinaryReader::readU8(ptr);
+    uint8_t strictness = QoreAOTBinaryReader::readU8(ptr);
+    uint16_t reserved = QoreAOTBinaryReader::readU16(ptr);
+    if (reserved) {
+        error = "invalid CALL_RELOCATIONS record reserved field";
+        return false;
+    }
+    if (target_kind > static_cast<uint8_t>(QoreAOTCallRelocationTargetKind::CONSTRUCTOR)) {
+        error = "invalid CALL_RELOCATIONS target kind ";
+        error += std::to_string(target_kind);
+        return false;
+    }
+    if (strictness > static_cast<uint8_t>(QoreAOTCallRelocationStrictness::REQUIRED)) {
+        error = "invalid CALL_RELOCATIONS strictness ";
+        error += std::to_string(strictness);
+        return false;
+    }
+    rec.target_kind = static_cast<QoreAOTCallRelocationTargetKind>(target_kind);
+    rec.strictness = static_cast<QoreAOTCallRelocationStrictness>(strictness);
+    return readCallRelocationString(reader, ptr, end, rec.qore_path, error, "qore_path")
+        && readCallRelocationString(reader, ptr, end, rec.signature_hash, error, "signature_hash")
+        && readCallRelocationString(reader, ptr, end, rec.declaration_hash, error, "declaration_hash")
+        && readCallRelocationString(reader, ptr, end, rec.native_symbol, error, "native_symbol")
+        && readCallRelocationString(reader, ptr, end, rec.fallback_descriptor, error, "fallback_descriptor");
+}
+
+bool readCallRelocations(const QoreAOTBinaryReader& reader, QoreAOTCallRelocations& relocs,
+        std::string& error) {
+    relocs = QoreAOTCallRelocations();
+    error.clear();
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::CALL_RELOCATIONS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        error = "invalid CALL_RELOCATIONS section data";
+        return false;
+    }
+    const uint8_t* end = ptr + sec->size;
+    if (ptr + 8 > end) {
+        error = "truncated CALL_RELOCATIONS header";
+        return false;
+    }
+    relocs.version = QoreAOTBinaryReader::readU16(ptr);
+    uint16_t reserved = QoreAOTBinaryReader::readU16(ptr);
+    if (reserved) {
+        error = "invalid CALL_RELOCATIONS reserved field";
+        return false;
+    }
+    if (relocs.version != QORE_AOT_CALL_RELOCATIONS_VERSION) {
+        error = "unsupported CALL_RELOCATIONS version ";
+        error += std::to_string(relocs.version);
+        return false;
+    }
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > 1000000) {
+        error = "invalid CALL_RELOCATIONS record count";
+        return false;
+    }
+    relocs.records.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT call-relocation read")) {
+            error = "operation cancelled during AOT call-relocation read";
+            return false;
+        }
+        QoreAOTCallRelocationRecord rec;
+        if (!readCallRelocationRecord(reader, ptr, end, rec, error)) {
+            return false;
+        }
+        relocs.records.push_back(std::move(rec));
+    }
+    if (ptr != end) {
+        error = "trailing bytes in CALL_RELOCATIONS section";
         return false;
     }
     return true;
@@ -7398,6 +7520,111 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 }
 
 } // anonymous namespace
+
+//! Phase 4 slice 10c (single-file `-L` preload): collect the set of source
+//! files that contributed user declarations to the program rooted at @p ns.
+/** The single-file incremental compiler (`qcc -c -L <dir>`) parses the target
+    source — which textually pulls in its `%include`d files — BEFORE preloading
+    sibling `.qo`s.  Any sibling whose source file is in this set has already
+    been declared by that parse, so preloading its `.qo` shells would
+    re-register the same declarations and raise a duplicate-definition parse
+    error (e.g. "hashdecl 'AppenderParams' is already defined").  The caller
+    skips those siblings.
+
+    The per-item location accessors mirror collectItems() so the file
+    attribution matches exactly what each per-file `.qo` was emitted for (each
+    batch `.qo` carries only its own source file's declarations — see the
+    `compile_file` filter in collectItems). */
+void collectDeclaredSourceFiles(qore_ns_private* ns, std::unordered_set<std::string>& files) {
+    auto add_file = [&files](const QoreProgramLocation* loc) {
+        if (loc) {
+            const char* f = loc->getFile();
+            if (f && *f) {
+                files.insert(f);
+            }
+        }
+    };
+
+    // classes
+    {
+        ClassListIterator cli(ns->classList);
+        while (cli.next()) {
+            qore_class_private* priv = qore_class_private::get(*cli.get());
+            if (!priv->sys) {
+                add_file(priv->loc);
+            }
+        }
+    }
+    // hashdecls
+    {
+        HashDeclListIterator hdi(ns->hashDeclList);
+        while (hdi.next()) {
+            TypedHashDecl* hd = hdi.get();
+            if (!hd->isSystem()) {
+                add_file(typed_hash_decl_private::get(*hd)->getParseLocation());
+            }
+        }
+    }
+    // enums
+    {
+        EnumListIterator eli(ns->enumList);
+        while (eli.next()) {
+            QoreEnumDecl* ed = eli.get();
+            if (!ed->isSystem()) {
+                add_file(qore_enum_decl_private::get(*ed)->getParseLocation());
+            }
+        }
+    }
+    // typedefs
+    for (auto& ti : ns->typedefMap) {
+        if (ti.second->typeInfo) {
+            add_file(ti.second->loc);
+        }
+    }
+    // constants
+    {
+        ConstantListIterator cli(ns->constant);
+        while (cli.next()) {
+            ConstantEntry* ce = cli.getEntry();
+            if (!ce->isSystem() && !ce->isExternalStub()) {
+                add_file(ce->loc);
+            }
+        }
+    }
+    // global variables
+    for (auto& vi : ns->var_list.vmap) {
+        Var* var = vi.second;
+        if (!var->isImported() && !var->isBuiltin()) {
+            add_file(var->getParseLocation());
+        }
+    }
+    // functions (per user variant — overloads can legally live in different files)
+    for (auto fi = ns->func_list.begin(), fe = ns->func_list.end(); fi != fe; ++fi) {
+        FunctionEntry* entry = fi->second;
+        QoreFunction* func = entry->getFunction();
+        if (func && !entry->hasBuiltin()) {
+            QoreFunctionIterator vit(*func);
+            while (vit.next()) {
+                const AbstractQoreFunctionVariant* v = vit.getVariant();
+                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase();
+                if (!uvb) {
+                    continue;
+                }
+                const UserSignature* sig = uvb->getUserSignature();
+                if (sig) {
+                    add_file(sig->getParseLocation());
+                }
+            }
+        }
+    }
+    // recurse into child namespaces
+    for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
+        QoreNamespace* child_ns = ni->second;
+        if (child_ns) {
+            collectDeclaredSourceFiles(qore_ns_private::get(*child_ns), files);
+        }
+    }
+}
 
 bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreValue& v,
         const char* owner_kind, const char* owner_name, const char* param_name,
@@ -9020,6 +9247,108 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     return false;
 }
 
+static bool aotCallRelocationLess(const QoreAOTCallRelocationRecord& a,
+        const QoreAOTCallRelocationRecord& b) {
+    if (a.function_name != b.function_name) {
+        return a.function_name < b.function_name;
+    }
+    if (a.expr_slot != b.expr_slot) {
+        return a.expr_slot < b.expr_slot;
+    }
+    if (a.qore_path != b.qore_path) {
+        return a.qore_path < b.qore_path;
+    }
+    return static_cast<uint8_t>(a.target_kind) < static_cast<uint8_t>(b.target_kind);
+}
+
+static void writeCallRelocationRecord(QoreAOTBinaryWriter& writer,
+        const QoreAOTCallRelocationRecord& rec) {
+    writer.writeStringRef(rec.function_name.c_str());
+    writer.writeU32(rec.expr_slot);
+    writer.writeU8(static_cast<uint8_t>(rec.target_kind));
+    writer.writeU8(static_cast<uint8_t>(rec.strictness));
+    writer.writeU16(0);
+    writer.writeStringRef(rec.qore_path.c_str());
+    writer.writeStringRef(rec.signature_hash.c_str());
+    writer.writeStringRef(rec.declaration_hash.c_str());
+    writer.writeStringRef(rec.native_symbol.c_str());
+    writer.writeStringRef(rec.fallback_descriptor.c_str());
+}
+
+static std::string aotCallRelocationFallbackDescriptor(const AOTCompiledFuncWithSlots& func,
+        size_t expr_slot, const AOTExprSlotId& expr) {
+    std::string desc = func.name;
+    desc += "#expr";
+    desc += std::to_string(expr_slot);
+    desc += " kind=";
+    desc += qoreAOTCallRelocationTargetKindName(expr.call_relocation_kind);
+    if (!expr.ref1.empty()) {
+        desc += " ref1=";
+        desc += expr.ref1;
+    }
+    if (!expr.ref2.empty()) {
+        desc += " ref2=";
+        desc += expr.ref2;
+    }
+    return desc;
+}
+
+static bool serializeCallRelocations(QoreAOTBinaryWriter& writer,
+        const std::vector<AOTCompiledFuncWithSlots>& funcs, std::string& error) {
+    if ((writer.feature_flags & QORE_AOT_FEAT_CALL_RELOCATIONS) == 0) {
+        return true;
+    }
+
+    std::vector<QoreAOTCallRelocationRecord> records;
+    for (size_t i = 0; i < funcs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT call-relocation collection")) {
+            error = "operation cancelled during AOT call-relocation collection";
+            return false;
+        }
+        const AOTCompiledFuncWithSlots& func = funcs[i];
+        for (size_t j = 0; j < func.slot_ids.exprs.size(); ++j) {
+            if (!((j + 1) % 100) && qore_check_cancel(nullptr, "AOT call-relocation collection")) {
+                error = "operation cancelled during AOT call-relocation collection";
+                return false;
+            }
+            const AOTExprSlotId& expr = func.slot_ids.exprs[j];
+            if (expr.call_relocation_kind == QoreAOTCallRelocationTargetKind::NONE
+                    || expr.reloc_qore_path.empty()) {
+                continue;
+            }
+            QoreAOTCallRelocationRecord rec;
+            rec.function_name = func.name;
+            rec.expr_slot = static_cast<uint32_t>(j);
+            rec.target_kind = expr.call_relocation_kind;
+            rec.strictness = QoreAOTCallRelocationStrictness::OPTIONAL;
+            rec.qore_path = expr.reloc_qore_path;
+            rec.fallback_descriptor = aotCallRelocationFallbackDescriptor(func, j, expr);
+            records.push_back(std::move(rec));
+        }
+    }
+
+    if (records.size() > std::numeric_limits<uint32_t>::max()) {
+        error = "too many AOT call relocations for u32 wire format";
+        return false;
+    }
+    std::sort(records.begin(), records.end(), aotCallRelocationLess);
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::CALL_RELOCATIONS);
+    writer.writeU16(QORE_AOT_CALL_RELOCATIONS_VERSION);
+    writer.writeU16(0);
+    writer.writeU32(static_cast<uint32_t>(records.size()));
+    for (size_t i = 0; i < records.size(); ++i) {
+        if (!((i + 1) % 100) && qore_check_cancel(nullptr, "AOT call-relocation serialization")) {
+            writer.endSection(sec_idx);
+            error = "operation cancelled during AOT call-relocation serialization";
+            return false;
+        }
+        writeCallRelocationRecord(writer, records[i]);
+    }
+    writer.endSection(sec_idx);
+    return true;
+}
+
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error) {
     std::string registry_error;
@@ -9388,7 +9717,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     }
 
     writer.endSection(sec_idx);
-    return true;
+    return serializeCallRelocations(writer, funcs, error);
 }
 
 // ---- Init Functions Section ----

@@ -41,6 +41,7 @@
 #include <qore/common.h>
 #include "qore/intern/ParseNode.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/qore_aot_deps.h"
 
 #include <string>
 
@@ -177,6 +178,12 @@ public:
             constantTypeInfo = nothingTypeInfo;
             return QoreValue();
         }
+
+        // AOT incremental dependency: record this constant's source file so a
+        // `qcc -c -L` compile that folds the value still rebuilds when the
+        // defining file changes (the folded literal leaves no trace in the
+        // emitted `.qo`).  No-op unless an AOT dependency sink is active.
+        qore_aot_note_referenced_decl(this->loc);
 
         constantTypeInfo = typeInfo;
         return val;

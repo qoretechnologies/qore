@@ -136,8 +136,7 @@ void ConstantEntry::del(ExceptionSink* xsink) {
 void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     if (getenv("QORE_AOT_INIT_TRACE")) {
         fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue ce=%p name=%s result=%s pending=%d has=%d\n",
-            static_cast<void*>(this), name.c_str(), result.getTypeName(), static_cast<int>(aot_shell_pending),
-            static_cast<int>(hasValue()));
+            (void*)this, name.c_str(), result.getTypeName(), (int)aot_shell_pending, (int)hasValue());
     }
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
@@ -166,8 +165,7 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     aot_shell_pending = false;
     if (getenv("QORE_AOT_INIT_TRACE")) {
         fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
-            static_cast<void*>(this), name.c_str(), static_cast<int>(aot_shell_pending),
-            static_cast<int>(hasValue()), static_cast<int>(saved_val.hasNode()));
+            (void*)this, name.c_str(), (int)aot_shell_pending, (int)hasValue(), (int)saved_val.hasNode());
     }
 }
 
@@ -378,19 +376,12 @@ int ConstantEntry::parseCommitRuntimeInit() {
                 // available at compile time: either a qcc --stub constant
                 // (EXTERNAL-STUB-CONSTANT) supplied by the runtime host, or an
                 // AOT-deserialized shell from a dependency object whose
-                // __const_init function has not run yet (AOT-PENDING-CONSTANT),
-                // a sibling function/class that is linked later, or a reflected
-                // class/hashdecl lookup committed later in the same parse.
-                // These cases are resolved identically: defer this constant to its
+                // __const_init function has not run yet (AOT-PENDING-CONSTANT).
+                // Both cases are resolved identically: defer this constant to its
                 // own runtime __const_init (the preserved aot_init_expr), where the
                 // register-time round-retry resolves the dependency ordering.
                 defer_runtime_init = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
-                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
-                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CLASS")
-                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION")
-                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-CLASS")
-                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-TYPE")
-                    || !strcmp(ex_err_str->c_str(), "UNKNOWN-TYPED-HASH");
+                    || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT");
             }
             if (!defer_runtime_init) {
                 typeInfo = nothingTypeInfo;
@@ -696,6 +687,10 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             constantTypeInfo = i->second->typeInfo;
             access = i->second->getAccess();
             found = true;
+            // AOT incremental dependency: see ConstantEntry::get().  Records
+            // the defining source file so a folded cross-unit constant/enum
+            // reference still triggers a rebuild when that file changes.
+            qore_aot_note_referenced_decl(i->second->loc);
             return i->second->val;
         }
         constantTypeInfo = nothingTypeInfo;
