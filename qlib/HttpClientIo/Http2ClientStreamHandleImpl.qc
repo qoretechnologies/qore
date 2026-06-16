@@ -491,6 +491,10 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
     */
     installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
         int sid;
+        *data install_body = initial_body;
+        bool restore_pending_body = False;
+        *data restore_body;
+        bool restore_pending_end_stream = False;
         {
             AutoLock al(lock);
             if (!streaming) {
@@ -500,9 +504,28 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
                 throw "HTTPCLIENT-STATE-ERROR", "stream not yet established";
             }
             sid = stream_id;
+            if (exists pending_body) {
+                restore_pending_body = True;
+                restore_body = pending_body;
+                install_body = appendSseInitialBody(install_body, pending_body);
+                remove pending_body;
+            }
+            restore_pending_end_stream = pending_end_stream;
+            # After installation, stream completion is owned by the C++ SSE
+            # action; do not replay a readData()-synthesized end marker.
+            pending_end_stream = False;
         }
 
-        h2conn.installSseState(sid, queue, notifier, initial_body);
+        try {
+            h2conn.installSseState(sid, queue, notifier, install_body);
+        } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(lock);
+            if (restore_pending_body && !exists pending_body) {
+                pending_body = restore_body;
+            }
+            pending_end_stream = restore_pending_end_stream;
+            rethrow;
+        }
     }
 
 }
