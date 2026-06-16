@@ -45,6 +45,7 @@
 %requires ServerSentEventHandler
 %requires HttpClientIo
 %requires HttpClientStreamingIo
+%requires RestClientIo
 
 %exec-class SseAllProtocolsTest
 
@@ -548,6 +549,10 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2CallbackDrainedImmediateReadySse());
         addTestCase("H3 callback-drained SSE immediate ready completes",
             \testHttp3CallbackDrainedImmediateReadySse());
+        addTestCase("H2 RestClientIo SSE immediate ready completes",
+            \testHttp2RestClientIoImmediateReadySse());
+        addTestCase("H3 RestClientIo SSE immediate ready completes",
+            \testHttp3RestClientIoImmediateReadySse());
         set_return_value(main());
     }
 
@@ -963,6 +968,44 @@ l50Xb2GWQesIt9k5jF5IOw==
             label + ": stream closes after immediate ready");
     }
 
+    private runRestClientIoImmediateReadySseFlow(string label, string protocol,
+            string url) {
+        callback_handler.reset(1);
+        callback_handler.markReady();
+
+        RestClientIo rest({
+            "url": url,
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "request_timeout": 15s,
+            "connect_timeout": 5s,
+        });
+        on_exit rest.close();
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET",
+            "/callback", NOTHING, NOTHING, {
+                "serialization": "none",
+                "timeout": 15s,
+                "idle_timeout": 15s,
+            });
+        on_exit obs.stopEvents();
+
+        RecordingSseObserver observer();
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertEq(0, callback_handler.registered.waitForZero(SseTestTimeout),
+            label + ": callback stream should register");
+        assertTrue(observer.waitForDataEvent("ready", SseTestTimeout),
+            sprintf("%s: stream receives immediate terminal ready event; events=%s actions=%s",
+                label, observer.describeEvents(), callback_handler.describeActions()));
+        assertTrue(observer.waitForCount(3, SseTestTimeout),
+            label + ": stream receives closed event");
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED,
+            observer.events[observer.events.size() - 1].event_id,
+            label + ": stream closes after immediate ready");
+    }
+
     testHttp1Sse() {
         resetHandler();
         HttpClientIo::HttpClientConnectionManager mgr(
@@ -1227,6 +1270,16 @@ l50Xb2GWQesIt9k5jF5IOw==
             });
         on_exit delete mgr;
         runCallbackDrainedImmediateReadySseFlow("H3 callback-drained immediate ready", mgr,
+            sprintf("https://127.0.0.1:%d", h3_port));
+    }
+
+    testHttp2RestClientIoImmediateReadySse() {
+        runRestClientIoImmediateReadySseFlow("H2 RestClientIo immediate ready", "h2",
+            sprintf("https://127.0.0.1:%d", h2_port));
+    }
+
+    testHttp3RestClientIoImmediateReadySse() {
+        runRestClientIoImmediateReadySseFlow("H3 RestClientIo immediate ready", "h3",
             sprintf("https://127.0.0.1:%d", h3_port));
     }
 }

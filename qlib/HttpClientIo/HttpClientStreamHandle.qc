@@ -230,6 +230,28 @@ public class HttpClientStreamHandle {
         return NOTHING;
     }
 
+    #! Appends body bytes split out by @ref getCoalescedDeferredBody() to an
+    #! already-consumed initial SSE body.
+    /** If either side is binary, the result stays binary to avoid lossy string
+        conversion of arbitrary streamed bytes.
+
+        @param initial_body body already consumed by the caller, if any
+        @param deferred_body body held by the stream handle for the next
+               @ref readData() call
+
+        @return the body value to pass to @ref installSseState()
+    */
+    static *data appendSseInitialBody(*data initial_body, data deferred_body) {
+        if (!exists initial_body) {
+            return deferred_body;
+        }
+        if (initial_body.typeCode() == NT_BINARY
+                || deferred_body.typeCode() == NT_BINARY) {
+            return binary(initial_body) + binary(deferred_body);
+        }
+        return initial_body + deferred_body;
+    }
+
     #! Returns True if a request has been submitted on this stream
     bool isSubmitted() {
         return exists stream_id;
