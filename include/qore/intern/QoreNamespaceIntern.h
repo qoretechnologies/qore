@@ -48,6 +48,7 @@
 
 class qore_root_ns_private;
 class qore_ns_private;
+class qore_class_private;
 class QoreModuleContext;
 
 typedef std::list<const qore_ns_private*> nslist_t;
@@ -1733,6 +1734,8 @@ protected:
     DLLLOCAL QoreClass* parseFindScopedClassWithMethodInternError(const QoreProgramLocation* loc,
             const NamedScope& name, bool error);
     DLLLOCAL QoreClass* parseFindScopedClassWithMethodIntern(const NamedScope& name, unsigned& matched);
+    DLLLOCAL QoreClass* parseFindClassWithStaticMethodIntern(const char* cname, const char* mname,
+            const qore_class_private* class_ctx, const QoreMethod** method);
 
     DLLLOCAL QoreClass* parseFindClassIntern(const char* cname) {
         assert(cname);
@@ -2616,6 +2619,11 @@ public:
     DLLLOCAL static QoreClass* parseFindScopedClassWithMethod(const QoreProgramLocation* loc, const NamedScope& name,
             bool error) {
         return getRootNS()->rpriv->parseFindScopedClassWithMethodInternError(loc, name, error);
+    }
+
+    DLLLOCAL static QoreClass* parseFindClassWithStaticMethod(const char* cname, const char* mname,
+            const qore_class_private* class_ctx, const QoreMethod** method = nullptr) {
+        return getRootNS()->rpriv->parseFindClassWithStaticMethodIntern(cname, mname, class_ctx, method);
     }
 
     DLLLOCAL static TypedefEntry* parseFindTypedef(const NamedScope& name) {

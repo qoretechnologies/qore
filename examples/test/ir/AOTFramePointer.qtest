@@ -113,9 +113,9 @@ class AOTFramePointerTest inherits QUnit::Test {
         list<string> lines = disas.split("\n");
         string body = "";
         bool in_fn = False;
-        # symbol header lines look like "<fname()>:" / "<fname>:" (objdump) or
-        # "_fname:" / "fname:" (otool); match the symbol name as a whole token
-        string header_pat = sprintf("(^|[<_ ])%s(\\(.*\\))?>?:[[:space:]]*$", fname);
+        # symbol header lines can be old unmangled names or current AOT native
+        # body names such as _qaot_...__fname_int__h<hash>.
+        string header_pat = sprintf("^[^:]*%s[^:]*>?:[[:space:]]*$", fname);
         foreach string line in (lines) {
             if (regex(line, header_pat)) {
                 in_fn = True;

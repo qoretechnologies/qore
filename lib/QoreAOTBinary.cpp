@@ -2028,7 +2028,8 @@ std::string qore_aot_encode_static_method_ref(const char* method_name,
 
 static bool qore_aot_type_signature_has_weak_arg_type(const type_vec_t& arg_types) {
     for (const QoreTypeInfo* ti : arg_types) {
-        if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo) {
+        if (!QoreTypeInfo::hasType(ti) || ti == autoTypeInfo
+                || QoreTypeInfo::parseReturns(ti, NT_NOTHING) != QTI_NOT_EQUAL) {
             return true;
         }
     }
@@ -2068,7 +2069,7 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     }
 
     if (qore_aot_type_signature_has_weak_arg_type(arg_types)) {
-        error = "static-call argument type signature contains auto; runtime dispatch is required";
+        error = "static-call argument type signature contains weak or nullable types; runtime dispatch is required";
         return nullptr;
     }
 
@@ -2087,6 +2088,13 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     // valid parse-time calls such as hashdecl values passed to optional
     // hashdecl parameters.  Fall back to parse-equivalent matching without
     // producing diagnostics.
+    ExceptionSink parse_xsink;
+    ProgramRuntimeParseContextHelper pch(&parse_xsink, pgm);
+    if (parse_xsink) {
+        parse_xsink.clear();
+        error = "failed to set parse context while resolving AOT argument type signature";
+        return nullptr;
+    }
     QoreTypeParamInstantiation parse_type_param_instantiation;
     variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
         &parse_type_param_instantiation);
@@ -15387,28 +15395,6 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     return true;
 }
 
-static void addAOTInheritedInternalMemberContexts(qore_class_private* priv) {
-    // AOT metadata serializes class members and methods, but not the
-    // transient private:internal context map built during source parsing.
-    // Recreate the derived-class -> declaring-class storage mapping for
-    // inherited private:internal members so synthesized/merged methods on
-    // this class can access the same internal member storage as AST mode.
-    for (auto& mi : priv->members.member_list) {
-        QoreMemberInfo* info = mi.second;
-        if (!info || info->local()) {
-            continue;
-        }
-        const qore_class_private* declaring_class = info->getClass();
-        if (!declaring_class || info->getClassContext(priv)) {
-            continue;
-        }
-        QoreMemberInfo* declaring_info = const_cast<qore_class_private*>(declaring_class)->members.find(mi.first);
-        if (declaring_info && declaring_info->isLocalInternal()) {
-            info->addContextAccessForClass(priv, declaring_class);
-        }
-    }
-}
-
 bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
     // Import inherited members from base classes into newly deserialized classes.
     // During normal parsing, BCNode::initializeMembers() calls parseImportMembers()
@@ -15426,7 +15412,6 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
         priv->initializeMembers();
-        addAOTInheritedInternalMemberContexts(priv);
         printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
     }
     return true;
@@ -15698,7 +15683,6 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
                 priv->parseAddAncestors(mi.second);
             }
         }
-        addAOTInheritedInternalMemberContexts(priv);
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.

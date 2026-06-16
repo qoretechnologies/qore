@@ -7386,15 +7386,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_direct_consume_args(const Qore
 static QoreValue qore_rt_eval_self_method_by_name(QoreObject* self, const char* name,
         QoreListNode* arg_list, const qore_class_private* class_ctx, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const qore_class_private* obj_priv = qore_class_private::get(*self->getClass());
-    const QoreMethod* resolved = obj_priv->getMethodForEval(name, self->getProgram(), class_ctx, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    if (resolved) {
-        return qore_method_private::evalTmpArgs(*resolved, xsink, rc, self, arg_list, class_ctx);
-    }
-    return obj_priv->evalMethod(self, name, arg_list, class_ctx, rc, xsink);
+    return qore_class_private::get(*self->getClass())->evalMethod(self, name, arg_list, class_ctx, rc, xsink);
 }
 
 static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& target,
@@ -12147,17 +12139,8 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
     if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
-    const qore_class_private* priv = qore_class_private::get(*o->getClass());
-    const QoreMethod* w = priv->getMethodForEval(method->getName(), o->getProgram(), class_ctx, xsink);
-    if (*xsink) {
-        return toBits(QoreValue());
-    }
-    if (w) {
-        return toBits(qore_method_private::evalTmpArgs(*w, xsink, rc_get_current_ref(), o, arg_list, class_ctx,
-            nullptr, nullptr, explicit_type_param_instantiation));
-    }
-    // Fall back to evalMethod for member gate, etc.
     RuntimeConfig& rc = rc_get_current_ref();
+    const qore_class_private* priv = qore_class_private::get(*o->getClass());
     return toBits(priv->evalMethod(o, method->getName(), arg_list, class_ctx, rc, xsink,
         explicit_type_param_instantiation));
 }
@@ -12444,17 +12427,8 @@ static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_n
         if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
             class_ctx = nullptr;
         }
-        const qore_class_private* priv = qore_class_private::get(*o->getClass());
-        const QoreMethod* w = priv->getMethodForEval(method_name, o->getProgram(), class_ctx, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
-        }
-        if (w) {
-            return toBits(qore_method_private::evalTmpArgs(*w, xsink, rc_get_current_ref(), o, *arg_list,
-                class_ctx, nullptr, nullptr, explicit_type_param_instantiation));
-        }
-        // Fall back to evalMethod for member gate, etc.
         RuntimeConfig& rc = rc_get_current_ref();
+        const qore_class_private* priv = qore_class_private::get(*o->getClass());
         return toBits(priv->evalMethod(o, method_name, *arg_list, class_ctx, rc, xsink,
             explicit_type_param_instantiation));
     }

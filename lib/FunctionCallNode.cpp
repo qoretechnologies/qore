@@ -1561,6 +1561,19 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 method = qore_class_private::get(*qc)->parseFindStaticMethod(scope->getIdentifier(), class_ctx);
         }
 
+        if (!method && defer_source_static_receiver && qore_aot_source_parse_active()
+                && !parameterized_receiver && scope->size() == 2
+                && deferred_source_receiver_path != source_receiver_path) {
+            const QoreMethod* loaded_method = nullptr;
+            QoreClass* loaded_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
+                scope->getIdentifier(), class_ctx, &loaded_method);
+            if (loaded_qc && loaded_method) {
+                qc = loaded_qc;
+                method = loaded_method;
+                defer_source_static_receiver = false;
+            }
+        }
+
         //printd(5, "StaticMethodCallNode::parseInitImpl() %s qc: %p '%s' method: %p '%s()'\n", scope->ostr, qc,
         //  qc ? qc->getName() : "n/a", method, scope->getIdentifier());
 

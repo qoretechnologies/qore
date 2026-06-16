@@ -178,8 +178,12 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT method calls", \testMethodCalls());
         addTestCase("AOT inherited overload dot-eval dispatch",
             \testInheritedOverloadDotEvalDispatch());
+        addTestCase("AOT inherited method private internal context",
+            \testInheritedMethodPrivateInternalContext());
         addTestCase("AOT optional val guard overload dispatch",
             \testOptionalValGuardOverloadDispatch());
+        addTestCase("AOT qmod nullable static overload dispatch",
+            \testQmodNullableStaticOverloadDispatch());
         addTestCase("AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
         addTestCase("AOT abstract sibling private:internal member context",
             \testAbstractSiblingPrivateInternalMemberContext());
@@ -4427,6 +4431,71 @@ exit(0);
             "inherited overload dot-eval output matches interpreter");
     }
 
+    testInheritedMethodPrivateInternalContext() {
+        # Qorus-shaped regression: a child class has a same-name overload, and
+        # a base-typed object call selects the inherited base overload.  The
+        # inherited method body must still execute with the base class context,
+        # otherwise private:internal members such as mutex resolve as NOTHING.
+        string code = "%modern
+class AOTCtxBase {
+    private:internal {
+        hash<string, list<string>> url_map();
+        Mutex mutex();
+    }
+
+    setUrls(string id, list<string> urls) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        url_map{id} = urls;
+    }
+
+    list<string> getThreadSafeUrls(string id) {
+        mutex.lock();
+        on_exit mutex.unlock();
+        return url_map{id};
+    }
+}
+
+class AOTCtxClient {
+    constructor(AOTCtxBase process, string id) {
+        list<string> urls = process.getThreadSafeUrls(id);
+        printf(\"%y\\n\", urls);
+    }
+}
+
+class AOTCtxMixinA {
+}
+
+class AOTCtxMixinB {
+}
+
+class AOTCtxDerived inherits AOTCtxBase, AOTCtxMixinA, AOTCtxMixinB {
+    private {
+        AOTCtxClient client;
+    }
+
+    constructor() {
+        setUrls(\"master\", \"tcp://127.0.0.1:1\".split(\",\"));
+        client = new AOTCtxClient(self, \"master\");
+    }
+
+    list<string> getThreadSafeUrls() {
+        return getThreadSafeUrls(\"master\");
+    }
+}
+
+AOTCtxDerived d();
+printf(\"%y\\n\", d.getThreadSafeUrls());
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited method private:internal context: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "inherited method private:internal context output matches interpreter");
+    }
+
     testOptionalValGuardOverloadDispatch() {
         # Regression: a *T local guarded by .val() must still dispatch to a T
         # overload when the runtime value is present.  The same inline assignment
@@ -4457,6 +4526,75 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "optional val guard overload dispatch output matches interpreter");
+    }
+
+    testQmodNullableStaticOverloadDispatch() {
+        # Regression for Swagger.qmod/Qorus service init: AOT qmod expression
+        # slots must not resolve a static overload from a nullable parse-time
+        # argument type such as *hash<auto>.  Runtime dispatch must see the
+        # actual hash value and select the hash overload, not the auto fallback.
+        string tmp_dir = sprintf("/tmp/aot_qmod_nullable_static_overload_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string qm_path = tmp_dir + "/AOTNullableStaticOverload.qm";
+        string qmod_path = tmp_dir + "/AOTNullableStaticOverload.qmod";
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+
+module AOTNullableStaticOverload {
+    version = \"1.0\";
+    desc = \"nullable static overload AOT regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTNullableStaticOverload {
+public class Target {
+    static string f(string name, hash<auto> h) {
+        return \"hash\";
+    }
+
+    static string f(string name, auto v) {
+        return \"auto:\" + v.type();
+    }
+}
+
+bool sub fill(reference<auto> target) {
+    target = {\"x\": 1};
+    return True;
+}
+
+public class Runner {
+    static string run() {
+        *hash<auto> h;
+        if (fill(\\h)) {
+            return Target::f(\"response_200\", h);
+        }
+        return \"not-filled\";
+    }
+}
+}
+");
+        f.close();
+
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "nullable static overload module compiled: " + result.compile_out);
+        unlink(qm_path);
+
+        string script_path = tmp_dir + "/run.qr";
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%requires AOTNullableStaticOverload
+%modern
+printf(\"%s\\n\", AOTNullableStaticOverload::Runner::run());
+");
+        f.close();
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("hash\n", aot_out, "compiled qmod nullable static overload dispatches by runtime value");
     }
 
     testImplicitSelfCopyMethodCall() {
@@ -5672,10 +5810,12 @@ public namespace ModB {
         # Symbols must be distinct (prefixed and namespace-qualified).
         string dump_a = dumpQccInfo(tmp_dir + "/ModA.qmod", True);
         string dump_b = dumpQccInfo(tmp_dir + "/ModB.qmod", True);
-        assertTrue(dump_a.regex("_qaot_ModA_ModA::shared_fn\\(string\\)"),
-            "qcc dump-symbols reports ModA _qaot_ModA_ModA::shared_fn(string) symbol: " + dump_a);
-        assertTrue(dump_b.regex("_qaot_ModB_ModB::shared_fn\\(string\\)"),
-            "qcc dump-symbols reports ModB _qaot_ModB_ModB::shared_fn(string) symbol: " + dump_b);
+        assertTrue(dump_a.regex("function[[:space:]]+ModA::shared_fn\\(string\\)[^\\n]*"
+                "native=_qaot_ModA_ModA__shared_fn_string__h[0-9a-f]+"),
+            "qcc dump-symbols reports ModA shared_fn Qore symbol with native body: " + dump_a);
+        assertTrue(dump_b.regex("function[[:space:]]+ModB::shared_fn\\(string\\)[^\\n]*"
+                "native=_qaot_ModB_ModB__shared_fn_string__h[0-9a-f]+"),
+            "qcc dump-symbols reports ModB shared_fn Qore symbol with native body: " + dump_b);
 
         # Run a script that loads both modules and calls each — a correct
         # dispatch yields ModA direct="A:x" and ModB wrapper="A:y:B".

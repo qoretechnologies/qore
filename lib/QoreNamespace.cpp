@@ -2215,6 +2215,58 @@ QoreClass* qore_root_ns_private::parseFindScopedClassWithMethodInternError(const
     return oc;
 }
 
+QoreClass* qore_root_ns_private::parseFindClassWithStaticMethodIntern(const char* cname, const char* mname,
+        const qore_class_private* class_ctx, const QoreMethod** method) {
+    assert(cname);
+    assert(mname);
+
+    if (method) {
+        *method = nullptr;
+    }
+
+    auto check_class = [mname, class_ctx, method](QoreClass* qc) -> QoreClass* {
+        if (!qc) {
+            return nullptr;
+        }
+        const QoreMethod* m = qore_class_private::get(*qc)->parseFindStaticMethod(mname, class_ctx);
+        if (!m) {
+            return nullptr;
+        }
+        if (method) {
+            *method = m;
+        }
+        return qc;
+    };
+
+    if (!useBrokenNamespaceResolutionParse()) {
+        if (QoreClass* qc = check_class(parseFindQoreClassIntern(cname))) {
+            return qc;
+        }
+    }
+
+    if (qore_ns_private* nscx = parse_get_ns()) {
+        if (QoreClass* qc = check_class(nscx->parseFindLocalClass(cname))) {
+            return qc;
+        }
+    }
+
+    clmap_t::iterator i = clmap.find(cname);
+    if (i != clmap.end()) {
+        if (QoreClass* qc = check_class(i->second.obj)) {
+            return qc;
+        }
+    }
+
+    NamespaceDepthListIterator nhi(nshlist);
+    while (nhi.next()) {
+        if (QoreClass* qc = check_class(nhi.get()->findLoadClass(cname))) {
+            return qc;
+        }
+    }
+
+    return nullptr;
+}
+
 // called in 2nd stage of parsing to resolve constant references
 QoreValue qore_root_ns_private::parseFindReferencedConstantValueIntern(const QoreProgramLocation* loc, const NamedScope& scname, const QoreTypeInfo*& typeInfo, bool& found, bool error) {
     assert(!found);

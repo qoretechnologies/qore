@@ -6102,8 +6102,11 @@ QoreValue UserMethodVariant::evalMethod(QoreObject* self, CodeEvaluationHelper& 
     //printd(5, "UserMethodVariant::evalMethod() this: %p %s::%s() self: %p cctx: %p (%s)\n", this,
     //    getClassPriv()->name.c_str(), qmethod->getName(), self, runtime_get_class(),
     //    runtime_get_class() ? runtime_get_class()->name.c_str() : "n/a");
-    const qore_class_private* method_ctx = ceh.getClass() ? ceh.getClass() : getClassPriv();
-    return eval(qmethod->getName(), &ceh, self, xsink, method_ctx);
+    // Inherited methods are copied into the child class, but user variants are
+    // shared with the original declaring method. Execute the body in the
+    // declaring class context so self-member access resolves private:internal
+    // storage from the class where the body was parsed.
+    return eval(qmethod->getName(), &ceh, self, xsink, getClassPriv());
 }
 
 void BuiltinConstructorValueVariant::evalConstructor(const QoreClass& thisclass, QoreObject* self,
