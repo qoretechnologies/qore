@@ -9598,7 +9598,7 @@ extern "C" DLLEXPORT int qore_aot_run(
 // ---- Source-Stripped AOT Runtime (V2) ----
 
 // Forward declarations for init function execution
-static void executeInitFunctions(QoreProgram* pgm,
+static int executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
@@ -10083,7 +10083,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 
 //! Per-module state for AOT-compiled modules
 // Forward declaration
-static void executeInitFunctions(QoreProgram* pgm,
+static int executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
@@ -10100,8 +10100,12 @@ struct AotModuleState {
     std::vector<uint8_t> metadata;
     //! Init function descriptors (target type, ns path, item name) read during module_init
     std::vector<AOTInitFuncDescriptor> init_descriptors;
-    //! Target programs where init functions have already run for this module
+    //! Target programs where init functions have completed for this module
     std::unordered_set<QoreProgram*> init_done_pgms;
+    //! Target programs where the namespace has been merged and init can run
+    std::unordered_set<QoreProgram*> merged_pgms;
+    //! Target programs currently executing init functions for this module
+    std::unordered_set<QoreProgram*> init_in_progress_pgms;
     //! Module path/label used for get_module_context_path() during deferred module init
     std::string path;
 };
@@ -10297,6 +10301,186 @@ static std::vector<std::string> extractDependencies(const char* source, int sour
     }
 
     return deps;
+}
+
+struct AOTModuleInitRunResult {
+    bool attempted = false;
+    bool success = true;
+    bool hard_error = false;
+    std::string error;
+};
+
+static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm);
+
+static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_name,
+        QoreProgram* tpgm) {
+    AOTModuleInitRunResult result;
+    if (mod_name.empty() || !tpgm) {
+        return result;
+    }
+
+    const QoreAOTFunc* init_funcs = nullptr;
+    int init_num_funcs = 0;
+    QoreProgram* init_ctx_pgm = nullptr;
+    std::vector<uint8_t> init_metadata;
+    std::vector<AOTInitFuncDescriptor> init_descriptors;
+    std::string mod_path;
+
+    {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        auto it = aot_module_map.find(mod_name);
+        if (aotInitTraceEnabled()) {
+            fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
+                mod_name.c_str(), it != aot_module_map.end(),
+                it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
+                it != aot_module_map.end() ? it->second.metadata.size() : 0,
+                it != aot_module_map.end() ? it->second.num_funcs : 0);
+        }
+        if (it == aot_module_map.end()
+                || it->second.init_descriptors.empty()
+                || it->second.metadata.empty()
+                || it->second.merged_pgms.find(tpgm) == it->second.merged_pgms.end()
+                || it->second.init_done_pgms.find(tpgm) != it->second.init_done_pgms.end()
+                || it->second.init_in_progress_pgms.find(tpgm)
+                    != it->second.init_in_progress_pgms.end()) {
+            return result;
+        }
+
+        it->second.init_in_progress_pgms.insert(tpgm);
+        init_funcs = it->second.funcs;
+        init_num_funcs = it->second.num_funcs;
+        init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
+        init_metadata = it->second.metadata;
+        init_descriptors = it->second.init_descriptors;
+        mod_path = it->second.path;
+    }
+
+    result.attempted = true;
+
+    auto finish = [&](bool success, bool hard_error = false, const std::string& error = std::string()) {
+        AutoLocker aot_state_al(get_aot_module_state_lock());
+        auto it = aot_module_map.find(mod_name);
+        if (it != aot_module_map.end()) {
+            it->second.init_in_progress_pgms.erase(tpgm);
+            if (success) {
+                it->second.init_done_pgms.insert(tpgm);
+            } else {
+                it->second.init_done_pgms.erase(tpgm);
+            }
+        }
+        result.success = success;
+        result.hard_error = hard_error;
+        result.error = error;
+        return result;
+    };
+
+    std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+    for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
+        const char* fname = init_funcs[i].name;
+        if (fname && init_funcs[i].fn_ptr
+                && (strncmp(fname, "__const_init::", 14) == 0
+                    || strncmp(fname, "__svar_init::", 13) == 0
+                    || strncmp(fname, "__module_init::", 15) == 0)) {
+            func_map[fname] = &init_funcs[i];
+        }
+    }
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] ns_init module=%s init func_map=%zu\n",
+            mod_name.c_str(), func_map.size());
+    }
+
+    if (!init_ctx_pgm) {
+        return finish(false, true, "missing module program");
+    }
+    if (init_ctx_pgm != tpgm) {
+        retryPendingAOTModuleInitsForProgram(init_ctx_pgm);
+    }
+
+    QoreAOTBinaryReader init_reader;
+    std::string reader_error;
+    if (!init_reader.open(init_metadata.data(),
+            static_cast<uint32_t>(init_metadata.size()), reader_error)) {
+        return finish(false, true, std::string("metadata open failed: ") + reader_error);
+    }
+
+    RootQoreNamespace* mod_root = init_ctx_pgm->getRootNS();
+    if (!mod_root) {
+        return finish(false, true, "missing module root namespace");
+    }
+    qore_ns_private* init_root_priv = qore_ns_private::get(*mod_root);
+    std::vector<AOTInitFuncExecInfo> init_func_contexts;
+    int registered = 0;
+    std::vector<std::string> registration_errors;
+    auto debug_metadata = makeAOTDebugMetadata(init_reader,
+        init_metadata.data(), static_cast<int>(init_metadata.size()));
+    registerAOTFunctionsFromSlotMaps(init_reader, init_root_priv,
+        init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
+        &registration_errors, debug_metadata);
+
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] ns_init module=%s registered=%d contexts=%zu remaining=%zu\n",
+            mod_name.c_str(), registered, init_func_contexts.size(), func_map.size());
+    }
+    if (!registration_errors.empty()) {
+        std::string msg = makeAOTRegistrationFailureMessage(mod_name.c_str(), registered,
+            static_cast<int>(func_map.size() + registered), &func_map, &registration_errors);
+        return finish(false, true, msg);
+    }
+
+    printd(2, "AOT ns_init '%s': got %d init func contexts\n",
+        mod_name.c_str(), (int)init_func_contexts.size());
+    if (!init_func_contexts.empty()) {
+        printd(2, "AOT ns_init '%s': executing %d init functions\n",
+            mod_name.c_str(), (int)init_func_contexts.size());
+        int failed = executeInitFunctions(tpgm, init_func_contexts,
+            init_descriptors, mod_name.c_str(),
+            init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
+            mod_path.empty() ? nullptr : mod_path.c_str());
+        return finish(failed == 0);
+    }
+
+    return finish(true);
+}
+
+static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm) {
+    if (!tpgm) {
+        return;
+    }
+
+    for (int round = 0; round < 16; ++round) {
+        std::vector<std::string> pending;
+        {
+            AutoLocker aot_state_al(get_aot_module_state_lock());
+            for (const auto& entry : aot_module_map) {
+                const AotModuleState& state = entry.second;
+                if (!state.init_descriptors.empty()
+                        && !state.metadata.empty()
+                        && state.merged_pgms.find(tpgm) != state.merged_pgms.end()
+                        && state.init_done_pgms.find(tpgm) == state.init_done_pgms.end()
+                        && state.init_in_progress_pgms.find(tpgm)
+                            == state.init_in_progress_pgms.end()) {
+                    pending.push_back(entry.first);
+                }
+            }
+        }
+        if (pending.empty()) {
+            return;
+        }
+
+        bool completed_any = false;
+        bool attempted_any = false;
+        for (const std::string& name : pending) {
+            AOTModuleInitRunResult r = runAOTModuleInitForProgram(name, tpgm);
+            attempted_any = attempted_any || r.attempted;
+            completed_any = completed_any || (r.attempted && r.success);
+            if (r.hard_error) {
+                printd(0, "AOT ns_init '%s': %s\n", name.c_str(), r.error.c_str());
+            }
+        }
+        if (!attempted_any || !completed_any) {
+            return;
+        }
+    }
 }
 
 //! Strip %requires directives from source code
@@ -11218,128 +11402,27 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     printd(5, "AOT module ns_init '%s': merge complete\n", mod_name);
 
     // Execute deferred init functions for constants/static vars.
-    // This must happen AFTER namespace merge so that target ConstantEntries exist
-    // and can receive mirrored values.  The init contexts themselves must still
-    // be built from the module program: AOT slot maps were lowered against the
-    // module's original namespace tree, and resolving RuntimeConstantRef slots
-    // through the importing program can bind init code to a Program that is
-    // still parsing during %requires.
+    // This must happen AFTER namespace merge so that target ConstantEntries
+    // exist and can receive mirrored values.  A module whose init is still
+    // waiting on another module's pending constants remains retryable; after
+    // every merge we run a short cross-module fixpoint over all merged AOT
+    // modules for this Program.
     if (mod_name) {
-        const QoreAOTFunc* init_funcs = nullptr;
-        int init_num_funcs = 0;
-        QoreProgram* init_ctx_pgm = nullptr;
-        std::vector<uint8_t> init_metadata;
-        std::vector<AOTInitFuncDescriptor> init_descriptors;
-
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
             auto it = aot_module_map.find(mod_name);
-            if (aotInitTraceEnabled()) {
-                fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
-                    mod_name, it != aot_module_map.end(),
-                    it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
-                    it != aot_module_map.end() ? it->second.metadata.size() : 0,
-                    it != aot_module_map.end() ? it->second.num_funcs : 0);
-            }
-            if (it != aot_module_map.end() && !it->second.init_descriptors.empty()
-                    && !it->second.metadata.empty()
-                    && it->second.init_done_pgms.find(tpgm) == it->second.init_done_pgms.end()) {
-                it->second.init_done_pgms.insert(tpgm);
-                init_funcs = it->second.funcs;
-                init_num_funcs = it->second.num_funcs;
-                init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
-                init_metadata = it->second.metadata;
-                init_descriptors = it->second.init_descriptors;
+            if (it != aot_module_map.end()) {
+                it->second.merged_pgms.insert(tpgm);
             }
         }
 
-        if (!init_descriptors.empty() && !init_metadata.empty()) {
-            // Build function table from the stored function pointers.
-            // Only include init functions (__const_init::, __svar_init::,
-            // __module_init::) — regular user functions were already registered
-            // during the module init pass against the MODULE's namespace tree
-            // (which includes private functions).  The TARGET namespace tree
-            // used here only contains public functions (merged via
-            // mergeUserPublic), so namespace-private functions would fail
-            // lookup and produce spurious "unresolved local slot" warnings.
-            std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-            for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
-                const char* fname = init_funcs[i].name;
-                if (fname && init_funcs[i].fn_ptr
-                        && (strncmp(fname, "__const_init::", 14) == 0
-                            || strncmp(fname, "__svar_init::", 13) == 0
-                            || strncmp(fname, "__module_init::", 15) == 0)) {
-                    func_map[fname] = &init_funcs[i];
-                }
-            }
-            if (aotInitTraceEnabled()) {
-                fprintf(stderr, "[aot-init] ns_init module=%s init func_map=%zu\n",
-                    mod_name, func_map.size());
-            }
-
-            // Build init function contexts from slot maps.
-            //
-            // We pass the MODULE's own program (it->second.pgm) rather than the
-            // target program (tpgm). The module's program has all dependencies
-            // loaded (e.g. reflection — providing Qore::Reflection::IntType),
-            // so RUNTIME_CONST_REF slot resolution for cross-module constants
-            // finds the right ConstantEntry. The target program may not have
-            // those dependencies loaded as top-level namespaces.
-            //
-            // Classes and hashdecls are merged into the target namespace tree
-            // by scanMergeCommittedNamespace above, but the module's own
-            // program still holds references to everything the AOT-compiled
-            // init code was lowered against, so the module program is the
-            // natural context for slot resolution.
-            assert(init_ctx_pgm);
-            QoreAOTBinaryReader init_reader;
-            std::string reader_error;
-            if (init_reader.open(init_metadata.data(),
-                    static_cast<uint32_t>(init_metadata.size()), reader_error)) {
-                qore_ns_private* init_root_priv = qore_ns_private::get(
-                    *static_cast<RootQoreNamespace*>(mod_root));
-                std::vector<AOTInitFuncExecInfo> init_func_contexts;
-                int registered = 0;
-                std::vector<std::string> registration_errors;
-                auto debug_metadata = makeAOTDebugMetadata(init_reader,
-                    init_metadata.data(), static_cast<int>(init_metadata.size()));
-                registerAOTFunctionsFromSlotMaps(init_reader, init_root_priv,
-                    init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
-                    &registration_errors, debug_metadata);
-
-                if (aotInitTraceEnabled()) {
-                    fprintf(stderr, "[aot-init] ns_init module=%s registered=%d contexts=%zu remaining=%zu\n",
-                        mod_name, registered, init_func_contexts.size(), func_map.size());
-                }
-                if (!registration_errors.empty()) {
-                    std::string msg = makeAOTRegistrationFailureMessage(mod_name, registered,
-                        static_cast<int>(func_map.size() + registered), &func_map, &registration_errors);
-                    raise_ns_init_error(std::string("AOT ns_init '")
-                        + (mod_name ? mod_name : "(unknown)") + "': " + msg);
-                    return;
-                }
-                printd(2, "AOT ns_init '%s': got %d init func contexts\n",
-                    mod_name, (int)init_func_contexts.size());
-                if (!init_func_contexts.empty()) {
-                    printd(2, "AOT ns_init '%s': executing %d init functions\n",
-                        mod_name, (int)init_func_contexts.size());
-                    // Execute with module-owned init contexts and mirror results
-                    // into both the importing target program and the module
-                    // program.  Subsequent init functions then read populated
-                    // module ConstantEntries, while user code in the importing
-                    // program reads the mirrored target ConstantEntries.
-                    executeInitFunctions(tpgm, init_func_contexts,
-                        init_descriptors, mod_name,
-                        init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
-                        mod_path);
-                }
-            } else {
-                raise_ns_init_error(std::string("AOT ns_init '")
-                    + (mod_name ? mod_name : "(unknown)") + "': metadata open failed: "
-                    + reader_error);
-                return;
-            }
+        AOTModuleInitRunResult init_result = runAOTModuleInitForProgram(mod_name, tpgm);
+        if (init_result.hard_error) {
+            raise_ns_init_error(std::string("AOT ns_init '")
+                + (mod_name ? mod_name : "(unknown)") + "': " + init_result.error);
+            return;
         }
+        retryPendingAOTModuleInitsForProgram(tpgm);
     }
     preInitStaticVarsInProgram(tpgm);
 }
@@ -11785,7 +11868,7 @@ static void preInitStaticVarsInProgram(QoreProgram* pgm) {
     the parser originally processed them — this ensures dependencies between
     constants are satisfied.
 */
-static void executeInitFunctions(
+static int executeInitFunctions(
         QoreProgram* pgm,
         const std::vector<AOTInitFuncExecInfo>& exec_infos,
         const std::vector<AOTInitFuncDescriptor>& descriptors,
@@ -11793,7 +11876,7 @@ static void executeInitFunctions(
         QoreProgram* shadow_pgm,
         const char* mod_path) {
     if (exec_infos.empty() || descriptors.empty()) {
-        return;
+        return 0;
     }
 
     // AOT init functions can load further modules and can run generated code
@@ -12303,6 +12386,7 @@ static void executeInitFunctions(
 
     printd(5, "AOT module '%s': executed %d/%d init functions (%d failed)\n",
         mod_name, executed, (int)exec_infos.size(), failed);
+    return failed;
 }
 
 //! C ABI entry point for AOT modules (v3 - full 128-bit parse options)
