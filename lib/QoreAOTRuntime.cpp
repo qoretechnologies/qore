@@ -12074,11 +12074,16 @@ static int executeInitFunctions(
             // evaluates the init expression; AOT evaluates later (during module
             // ns_init) with tpgm's parse still in progress.
             std::unique_ptr<ProgramThreadCountContextHelper> init_ctx_helper;
+            std::unique_ptr<ProgramCallContextHelper> init_call_ctx_helper;
             if (shadow_pgm && shadow_pgm != pgm) {
                 init_ctx_helper.reset(new ProgramThreadCountContextHelper(&xsink, shadow_pgm, true));
                 if (xsink.isException()) {
                     xsink.clear();
                     init_ctx_helper.reset();
+                } else {
+                    // Keep caller-visible lookups consistent with the
+                    // shadow execution program for generated init code.
+                    init_call_ctx_helper.reset(new ProgramCallContextHelper(shadow_pgm));
                 }
             }
             std::unique_ptr<QoreParseClassHelper> parse_ctx_helper = make_parse_context(desc, init_ctx_helper != nullptr);

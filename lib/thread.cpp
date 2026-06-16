@@ -2283,19 +2283,19 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
         do_ref = false;
     }
 
-    // issue #3024: ensure that the program call context is saved & updated
-    QoreProgram* call_program_context;
-    if (c && c->spgm) {
-        call_program_context = c->spgm;
-    } else if (c && c->ns) {
-        call_program_context = c->ns->getProgram();
-    } else if (obj) {
-        call_program_context = obj->getProgram();
-    } else {
-        call_program_context = nullptr;
-    }
-    if (!call_program_context && c) {
-        call_program_context = c->spgm ? c->spgm : (c->ns ? c->ns->getProgram() : nullptr);
+    // issue #3024: ensure that a program call context is available when there
+    // is no active execution program.  When current_pgm is set, it already
+    // represents the execution context; cross-program calls install the
+    // caller-visible context explicitly before evaluating user code.
+    QoreProgram* call_program_context = nullptr;
+    if (!td->current_pgm && !td->call_program_context) {
+        if (obj) {
+            call_program_context = obj->getProgram();
+        } else if (c && c->spgm) {
+            call_program_context = c->spgm;
+        } else if (c && c->ns) {
+            call_program_context = c->ns->getProgram();
+        }
     }
     if (call_program_context) {
         old_call_program_context = td->call_program_context;
@@ -2711,10 +2711,10 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
 QoreProgram* getProgram() {
     ThreadData* td = thread_data.get();
-    printd(5, "getProgram(): (td: %p) %p\n", td, td ? td->current_pgm : nullptr);
+    printd(5, "getProgram(): (td: %p) current: %p call: %p\n", td, td ? td->current_pgm : nullptr,
+        td ? td->call_program_context : nullptr);
     assert(td);
-    QoreProgram* rv = td->current_pgm;
-    return rv ? rv : td->call_program_context;
+    return td->current_pgm;
 }
 
 RootQoreNamespace* getRootNS() {

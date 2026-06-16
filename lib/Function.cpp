@@ -1011,6 +1011,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_rtflags) {
         rc.setRuntimeFlags(old_rtflags);
     }
+    if (restore_call_program_context) {
+        set_program_call_context(old_call_program_context);
+    }
     if (restore_receiver_type_info) {
         runtime_set_receiver_type_info(old_receiver_type_info);
     }
@@ -1052,6 +1055,10 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     // set the program context if necessary
     QoreProgram* old_pgm = pgm_ctx ? qore_get_call_program_context() : nullptr;
     if (pgm_ctx) {
+        if (old_pgm) {
+            old_call_program_context = get_set_program_call_context(old_pgm);
+            restore_call_program_context = true;
+        }
         set(xsink, pgm_ctx, true);
         if (*xsink) {
             return;

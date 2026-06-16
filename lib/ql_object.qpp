@@ -34,6 +34,11 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 
+static QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
+    QoreProgram* pgm = runtime_cfg.getProgram();
+    return pgm ? pgm : qore_get_call_program_context();
+}
+
 QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
     TempEncodingHelper cls_path(class_name, QCS_DEFAULT, xsink);
     if (!cls_path) {
@@ -64,25 +69,27 @@ QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* clas
     return QoreObject::evalStaticMethod(*m, m->getClass(), args, xsink);
 }
 
-static QoreValue call_static_method_args_intern(const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
-    return q_call_static_method_args(getProgram(), class_name, method, args, xsink);
+static QoreValue call_static_method_args_intern(QoreProgram* pgm, const QoreStringNode* class_name,
+        const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
+    return q_call_static_method_args(pgm, class_name, method, args, xsink);
 }
 
-static QoreObject* create_object_intern(const QoreStringNode* class_name, unsigned arg_offset, const QoreListNode* args, ExceptionSink* xsink) {
+static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* class_name, unsigned arg_offset,
+        const QoreListNode* args, ExceptionSink* xsink) {
     TempEncodingHelper tmp(class_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
         return nullptr;
     }
 
-    const QoreClass* qc = qore_program_private::runtimeFindClass(*getProgram(), tmp->c_str(), xsink);
+    const QoreClass* qc = qore_program_private::runtimeFindClass(*pgm, tmp->c_str(), xsink);
     if (!qc) {
         if (!*xsink)
             xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation", tmp->c_str());
         return nullptr;
     }
 
-    if (getProgram()->getParseOptions() & qc->getDomain())
+    if (pgm->getParseOptions() & qc->getDomain())
         xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow access to the '%s' class", qc->getName());
 
     if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
@@ -313,7 +320,8 @@ auto call_static_method(string class_name, string method, ...) {
         // create argument list by copying current list
         call_args = args->copyListFrom(2);
     }
-    return call_static_method_args_intern(class_name, method, *call_args, xsink);
+    return call_static_method_args_intern(q_get_runtime_call_program(runtime_cfg), class_name, method, *call_args,
+        xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
@@ -343,7 +351,8 @@ auto result = call_static_method_args("Namespace::Class", "method", (arg1, arg2)
     - @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()"
 */
 auto call_static_method_args(string class_name, string method, *softlist<auto> arguments) [flags=NAMED_ARGS] {
-    return call_static_method_args_intern(class_name, method, arguments, xsink);
+    return call_static_method_args_intern(q_get_runtime_call_program(runtime_cfg), class_name, method, arguments,
+        xsink);
 }
 
 //! calls a pseudo-method on the given value
@@ -406,7 +415,7 @@ object obj = create_object(class_name, arg1, arg2);
     @since %Qore 0.8.12
  */
 object create_object(string class_name, ...) {
-   return create_object_intern(class_name, 1, args, xsink);
+   return create_object_intern(q_get_runtime_call_program(runtime_cfg), class_name, 1, args, xsink);
 }
 
 //! creates an object from the class name (which can include a namespace path) and optionally any arguments for the constructor
@@ -430,6 +439,6 @@ object obj = create_object_args(class_name, arg_list);
     @since %Qore 0.8.12
  */
 object create_object_args(string class_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
-    return create_object_intern(class_name, 0, arguments, xsink);
+    return create_object_intern(q_get_runtime_call_program(runtime_cfg), class_name, 0, arguments, xsink);
 }
 ///@}

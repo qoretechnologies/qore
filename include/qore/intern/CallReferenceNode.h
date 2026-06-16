@@ -140,6 +140,10 @@ public:
     }
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode *args, ExceptionSink *xsink) const;
+
+    DLLLOCAL virtual QoreProgram* getProgram() const {
+        return pgm;
+    }
 };
 
 //! a call reference to a static user method resolved after AOT source linking
@@ -289,6 +293,10 @@ public:
     }
 
     DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreProgram* getProgram() const {
+        return pgm;
+    }
 
 protected:
     QoreProgram* pgm;

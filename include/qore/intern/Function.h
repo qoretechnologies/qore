@@ -597,6 +597,7 @@ protected:
     QoreParseOptions old_runtime_po;
     QoreParseOptions old_rc_po;
     QoreProgram* exec_pgm = nullptr;
+    QoreProgram* old_call_program_context = nullptr;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
@@ -609,6 +610,7 @@ protected:
     bool restore_receiver_type_info = false;
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
+    bool restore_call_program_context = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);

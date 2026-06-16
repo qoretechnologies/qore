@@ -74,7 +74,7 @@ QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig
         const QoreTypeInfo* receiver_type_info) const {
     const AbstractQoreFunctionVariant* variant = reinterpret_cast<const AbstractQoreFunctionVariant*>(ev);
     CodeEvaluationHelper ceh(xsink, rc, getFunction(), variant, getName(), args, self, parent_class->priv,
-        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), nullptr,
+        CT_UNUSED, false, nullptr, qore_get_method_pgm_context(*parent_class), receiver_type_info,
         explicit_type_param_instantiation);
     if (*xsink) return QoreValue();
 
