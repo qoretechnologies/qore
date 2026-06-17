@@ -4,7 +4,10 @@
 %modern
 %no-child-restrictions
 
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
 %requires QUnit
+%requires FsUtil
 
 %exec-class SandboxManagerTest
 
@@ -53,6 +56,10 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("setSandboxManager(NOTHING) clears sandbox manager", \testSetSandboxManagerNothing());
         addTestCase("Concurrent access during program cleanup", \testConcurrentAccessDuringCleanup());
         addTestCase("QoreSandboxManagerHelper with specific Program", \testHelperWithProgram());
+        addTestCase("Module-context network sandbox propagation", \testModuleContextNetworkSandbox());
+        addTestCase("Module-context filesystem sandbox propagation", \testModuleContextFilesystemSandbox());
+        addTestCase("Module-context with no sandbox is unrestricted", \testModuleContextNoSandbox());
+        addTestCase("Nested sandboxes resolve innermost-enclosing", \testNestedSandboxResolution());
         set_return_value(main());
     }
 
@@ -1681,5 +1688,170 @@ sub startBusyLoop(Counter done) {
             }
             assertEq(333, sm.getMemoryLimit(), "sandbox manager survives all programs");
         }
+    }
+
+    #! Writes a small user (.qm) module to "dir" that performs network/filesystem I/O.
+    /** A Qore-language module executes its functions in the module's OWN QoreProgram, not
+        in the calling application program.  These tests exercise sandbox enforcement from
+        that module-context code, which the rest of the suite (code parsed directly into the
+        sandboxed program) never reaches.  This is the path the runtime SandboxManager must
+        cover by walking the thread's program-context (call) stack. */
+    private writeIoModule(string dir, string modname) {
+        File f();
+        f.open2(dir + DirSep + modname + ".qm", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("%%new-style
+module %s {
+    version = \"1.0\";
+    desc = \"sandbox propagation test module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+public namespace %s {
+    public sub modConnect(string addr) {
+        Socket s();
+        s.connect(addr, 1000);
+    }
+    public string sub modReadFile(string path) {
+        File f();
+        f.open2(path, O_RDONLY);
+        return f.read(-1);
+    }
+}
+", modname, modname));
+    }
+
+    #! creates a child Program (with optional sandbox) that loads the test module from "dir"
+    private Program makeModuleClient(string dir, string modname, *SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(sprintf("%%new-style
+%%append-module-path \"%s\"
+%%requires %s
+sub doConnect(string addr) { %s::modConnect(addr); }
+string sub doRead(string path) { return %s::modReadFile(path); }
+", dir, modname, modname, modname), modname + "_client");
+        return p;
+    }
+
+    testModuleContextNetworkSandbox() {
+        TmpDir td();
+        string modname = "SbNetMod" + getpid();
+        writeIoModule(td.path, modname);
+
+        SandboxManager sm();
+        sm.blockLocalhost();
+        sm.setNetworkDefaultPolicy(True);
+
+        Program p = makeModuleClient(td.path, modname, sm);
+
+        # the module function performs the connect in the module's own program, which has no
+        # sandbox manager of its own: enforcement must propagate from the calling program
+        bool caught = False;
+        try {
+            p.callFunction("doConnect", "127.0.0.1:80");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("NETWORK-ACCESS-DENIED", ex.err,
+                "module-context network op enforced by caller's sandbox: " + ex.err);
+        }
+        assertTrue(caught, "module-context connect to blocked localhost was denied");
+    }
+
+    testModuleContextFilesystemSandbox() {
+        TmpDir td();
+        string modname = "SbFsMod" + getpid();
+        writeIoModule(td.path, modname);
+
+        # sandbox root restricted to the module dir; /etc/passwd is outside it
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(td.path);
+
+        Program p = makeModuleClient(td.path, modname, sm);
+
+        bool caught = False;
+        try {
+            p.callFunction("doRead", "/etc/passwd");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                "module-context filesystem op enforced by caller's sandbox: " + ex.err);
+        }
+        assertTrue(caught, "module-context read outside sandbox root was denied");
+    }
+
+    testModuleContextNoSandbox() {
+        TmpDir td();
+        string modname = "SbNoSbMod" + getpid();
+        writeIoModule(td.path, modname);
+
+        # no sandbox anywhere on the stack: the walk returns nullptr and the op runs
+        # unrestricted (it may fail to connect, but must NOT be denied by a sandbox)
+        Program p = makeModuleClient(td.path, modname, NOTHING);
+
+        try {
+            # nothing listens here; expect a connect error, never a security denial
+            p.callFunction("doConnect", "127.0.0.1:1");
+            # connect may even succeed in unusual environments; either way it's not denied
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("NETWORK-ACCESS-DENIED", ex.err,
+                "module-context op with no sandbox must not be denied: " + ex.err);
+        }
+        assertTrue(True, "module-context op ran without a sandbox on the stack");
+    }
+
+    testNestedSandboxResolution() {
+        # pin the documented resolution order: walking innermost -> outermost returns the
+        # NEAREST enclosing sandbox.  Outer program denies /etc reads (root restricted to its
+        # own tmp dir); inner program allows the read (root = the file's dir).  The module op
+        # is invoked through outer -> inner -> module, so the inner (nearest) sandbox must win.
+        TmpDir td();
+        string modname = "SbNestMod" + getpid();
+        writeIoModule(td.path, modname);
+
+        # a readable file inside the inner sandbox root
+        string testFile = td.path + DirSep + "nested.txt";
+        {
+            File f();
+            f.open2(testFile, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("nested content");
+        }
+
+        TmpDir tdOuter();
+        SandboxManager smOuter();
+        smOuter.setFilesystemSandboxRoot(tdOuter.path);   # does NOT include td.path
+
+        SandboxManager smInner();
+        smInner.setFilesystemSandboxRoot(td.path);         # DOES include testFile
+
+        Program pInner = makeModuleClient(td.path, modname, smInner);
+
+        Program pOuter(PO_NO_CHILD_PO_RESTRICTIONS);
+        pOuter.setSandboxManager(smOuter);
+        # outer calls into the inner program, which calls the module function
+        pOuter.parse(sprintf("%%new-style
+string sub outerGo(Program pInner, string path) {
+    return pInner.callFunction(\"doRead\", path);
+}
+"), "nested_outer");
+
+        # nearest-enclosing (inner) sandbox allows the read even though the outer sandbox
+        # would deny it; assert success to prove innermost-enclosing resolution
+        string content = pOuter.callFunction("outerGo", pInner, testFile);
+        assertEq("nested content", content,
+            "nearest-enclosing sandbox (inner) governs module-context I/O");
+
+        # sanity: the outer sandbox really would deny this file when it is the nearest sandbox
+        Program pOuterDirect = makeModuleClient(td.path, modname, smOuter);
+        bool caught = False;
+        try {
+            pOuterDirect.callFunction("doRead", testFile);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                "outer sandbox denies the file when it is the nearest sandbox: " + ex.err);
+        }
+        assertTrue(caught, "outer sandbox would deny the file directly");
     }
 }
