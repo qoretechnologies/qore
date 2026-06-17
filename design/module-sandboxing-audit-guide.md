@@ -62,6 +62,26 @@ When a module is loaded into a sandboxed program, all operations performed by th
 
 Modules that have not been audited and verified for sandbox compliance should not be made available in sandboxed environments.
 
+#### How the active manager is resolved (program-context propagation)
+
+A Qore-language (`.qm`) module executes its functions/methods in the **module's own**
+`QoreProgram`, which normally has no `SandboxManager` of its own. So the no-arg
+`QoreSandboxManagerHelper smh;` does **not** resolve the manager from the current program
+alone — it walks the thread's **program-context (call) stack** from the innermost
+(current) program outward through each enclosing caller, and uses the first program that
+has an active manager. This is what makes the rule above hold in practice: when sandboxed
+application code calls a module function that performs I/O, the helper finds the
+application's sandbox even though the I/O executes in the module's program.
+
+- Resolution order is **nearest-enclosing wins**: with nested sandboxes
+  (`p1` sandbox → `p2` sandbox → module), the helper returns `p2`'s manager — matching how
+  other per-program policies (e.g. `%no-debugging`) are resolved by the same context walk.
+- The fast path is unchanged: if no program on the stack has a manager, the helper resolves
+  to false and the operation runs unrestricted.
+- The explicit `QoreSandboxManagerHelper(QoreProgram* pgm)` constructor still means "this
+  specific program" and does **not** walk the stack; use the no-arg form for I/O on behalf
+  of user code.
+
 ### Key Principle: Sandbox Manager May Be Absent
 
 When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Modules must:

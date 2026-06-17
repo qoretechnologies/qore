@@ -68,6 +68,21 @@ public class HttpGatewayRerankerFactory inherits AbstractRerankerFactory {
     }
 }
 
+#! Factory for @ref SGLangReranker
+public class SGLangRerankerFactory inherits AbstractRerankerFactory {
+    string getType() {
+        return "sglang";
+    }
+
+    string getDisplayName() {
+        return "SGLang cross-encoder reranker";
+    }
+
+    AbstractReranker create(hash<RerankerConfig> config) {
+        return new SGLangReranker(config);
+    }
+}
+
 #! Factory for @ref StructuredChunker
 public class StructuredChunkerFactory inherits AbstractChunkerFactory {
     string getStrategy() {

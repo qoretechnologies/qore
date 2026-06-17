@@ -1,0 +1,348 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SGLangReranker.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires QoreTokenizerUtils
+%requires QoreRagUtils
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class SGLangRerankerTest
+
+#! HTTP test handler that records every request and returns a configurable response per path.
+class FakeRerankHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        hash<string, hash<auto>> responses;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> responses) {
+        self.responses = responses;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> body_parsed = body.val() ? parse_json(body) : {};
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body_parsed,
+        };
+        *hash<auto> resp = responses{cx.raw_path};
+        if (!resp) {
+            return makeResponse(404, "{\"detail\":\"Not Found\"}",
+                {"Content-Type": MimeTypeJson});
+        }
+        int code = resp.code ?? 200;
+        string body_out = resp.body.typeCode() == NT_STRING
+            ? resp.body
+            : make_json(resp.body);
+        return makeResponse(code, body_out, {"Content-Type": MimeTypeJson});
+    }
+}
+
+class SGLangRerankerTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeRerankHandler handler;
+
+        const Passages = ("alpha", "bravo", "charlie");
+    }
+
+    constructor() : Test("SGLangRerankerTest", "1.0") {
+        addTestCase("config validation", \testConfigValidation());
+        addTestCase("top-level list parsed in input order", \testListInputOrder());
+        addTestCase("{results:[...]} wrapper shape parsed", \testResultsWrapperShape());
+        addTestCase("relevance_score alias accepted", \testRelevanceScoreAlias());
+        addTestCase("out-of-range index throws", \testOutOfRangeIndex());
+        addTestCase("unrecognized response shape throws", \testUnexpectedShape());
+        addTestCase("api_key forwarded as Bearer auth", \testApiKeyForwarded());
+        addTestCase("SGLangReranker backend ordering + score fidelity",
+            \testBackendOrdering());
+        addTestCase("SGLangReranker backend top_k truncation", \testBackendTruncation());
+        addTestCase("SGLangReranker backend empty docs issues no call",
+            \testBackendEmpty());
+        addTestCase("registry resolves backend:sglang", \testRegistryResolution());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        };
+        http = new HttpServer(http_opts);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private installHandler(hash<string, hash<auto>> responses) {
+        if (handler) {
+            http.removeHandler("rr");
+        }
+        handler = new FakeRerankHandler(responses);
+        http.setHandler("rr", "/", MimeTypeJson, handler);
+    }
+
+    private string url() {
+        return "http://localhost:" + port;
+    }
+
+    private QoreTokenizerUtils::CrossEncoderReranker makeEngine(*string api_key) {
+        hash<QoreTokenizerUtils::RerankerConfig> cfg = <QoreTokenizerUtils::RerankerConfig>{
+            "mode": "sglang",
+            "url": url(),
+            "model": "bge-reranker-v2-m3",
+        };
+        if (api_key.val()) {
+            cfg.api_key = api_key;
+        }
+        return new QoreTokenizerUtils::CrossEncoderReranker(cfg);
+    }
+
+    private QoreRagUtils::SGLangReranker makeBackend() {
+        return new QoreRagUtils::SGLangReranker(<QoreRagUtils::RerankerConfig>{
+            "backend": "sglang",
+            "url": url(),
+            "model": "bge-reranker-v2-m3",
+        });
+    }
+
+    # canned response: charlie(2) most relevant, then alpha(0), then bravo(1)
+    private hash<auto> orderedListResponse() {
+        return {
+            "/v1/rerank": {
+                "code": 200,
+                "body": (
+                    {"index": 2, "score": 0.9},
+                    {"index": 0, "score": 0.5},
+                    {"index": 1, "score": 0.1},
+                ),
+            },
+        };
+    }
+
+    testConfigValidation() {
+        checkModule();
+
+        # engine: invalid mode
+        assertThrows("RERANKER-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "bogus"});
+        });
+
+        # engine: sglang mode requires url
+        assertThrows("RERANKER-CONFIG-ERROR", "url is required", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "sglang"});
+        });
+
+        # engine: valid sglang config constructs (no HTTP call yet)
+        auto engine = new QoreTokenizerUtils::CrossEncoderReranker(
+            <QoreTokenizerUtils::RerankerConfig>{"mode": "sglang", "url": url()});
+        assertTrue(exists engine, "valid sglang engine should construct");
+
+        # backend: SGLangReranker requires url
+        assertThrows("RERANKER-CONFIG-ERROR", "url", sub() {
+            new QoreRagUtils::SGLangReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "sglang",
+            });
+        });
+    }
+
+    testListInputOrder() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine();
+
+        # score() must return scores aligned to INPUT order: alpha, bravo, charlie
+        list<float> scores = rr.score("q", Passages);
+        assertEq(3, scores.size(), "one score per passage");
+        assertEq(0.5, scores[0], "alpha score");
+        assertEq(0.1, scores[1], "bravo score");
+        assertEq(0.9, scores[2], "charlie score");
+
+        # rerankWithScores() must sort descending: charlie(2), alpha(0), bravo(1)
+        list<hash<QoreTokenizerUtils::RerankerScoredHit>> hits =
+            rr.rerankWithScores("q", Passages, 3);
+        assertEq(3, hits.size());
+        assertEq(2, hits[0].index, "top hit is charlie");
+        assertEq(0, hits[1].index);
+        assertEq(1, hits[2].index);
+        assertEq(0.9, hits[0].score, "score is the model value, not fabricated");
+
+        # request body carries model/query/documents (score() and
+        # rerankWithScores() each issue one /v1/rerank call)
+        assertEq(2, handler.requests.size());
+        assertEq("/v1/rerank", handler.requests[0].path);
+        assertEq("bge-reranker-v2-m3", handler.requests[0].body.model);
+        assertEq("q", handler.requests[0].body.query);
+        assertEq(Passages, handler.requests[0].body.documents);
+    }
+
+    testResultsWrapperShape() {
+        checkModule();
+        installHandler({
+            "/v1/rerank": {
+                "code": 200,
+                "body": {
+                    "results": (
+                        {"index": 1, "score": 0.8},
+                        {"index": 0, "score": 0.2},
+                    ),
+                },
+            },
+        });
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine();
+        list<float> scores = rr.score("q", ("a", "b"));
+        assertEq((0.2, 0.8), scores, "{results:[...]} parsed in input order");
+    }
+
+    testRelevanceScoreAlias() {
+        checkModule();
+        installHandler({
+            "/v1/rerank": {
+                "code": 200,
+                "body": (
+                    {"index": 0, "relevance_score": 0.33},
+                    {"index": 1, "relevance_score": 0.66},
+                ),
+            },
+        });
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine();
+        list<float> scores = rr.score("q", ("a", "b"));
+        assertEq((0.33, 0.66), scores, "relevance_score alias honored");
+    }
+
+    testOutOfRangeIndex() {
+        checkModule();
+        installHandler({
+            "/v1/rerank": {
+                "code": 200,
+                "body": ({"index": 5, "score": 0.9},),
+            },
+        });
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine();
+        assertThrows("RERANKER-ERROR", "out-of-range", sub() {
+            rr.score("q", ("a", "b"));
+        });
+    }
+
+    testUnexpectedShape() {
+        checkModule();
+        installHandler({
+            "/v1/rerank": {
+                "code": 200,
+                "body": {"unexpected": True},
+            },
+        });
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine();
+        assertThrows("RERANKER-ERROR", "unexpected response format", sub() {
+            rr.score("q", ("a", "b"));
+        });
+    }
+
+    testApiKeyForwarded() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreTokenizerUtils::CrossEncoderReranker rr = makeEngine("s3cr3t");
+        rr.score("q", Passages);
+        assertEq("Bearer s3cr3t", handler.requests[0].auth,
+            "api_key sent as Authorization: Bearer");
+    }
+
+    testBackendOrdering() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreRagUtils::SGLangReranker rr = makeBackend();
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank("q", Passages, 3);
+
+        assertEq(3, res.size());
+        # descending score order with document text echoed back
+        assertEq(2, res[0].index);
+        assertEq(0.9, res[0].score);
+        assertEq("charlie", res[0].document);
+        assertEq(0, res[1].index);
+        assertEq("alpha", res[1].document);
+        assertEq(1, res[2].index);
+        assertEq("bravo", res[2].document);
+
+        assertEq("bge-reranker-v2-m3", rr.getModel(), "getModel returns served model");
+    }
+
+    testBackendTruncation() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreRagUtils::SGLangReranker rr = makeBackend();
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank("q", Passages, 2);
+        assertEq(2, res.size(), "top_k truncates to 2");
+        assertEq(2, res[0].index, "best survives truncation");
+        assertEq(0, res[1].index);
+    }
+
+    testBackendEmpty() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreRagUtils::SGLangReranker rr = makeBackend();
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank("q", (), 3);
+        assertEq(0, res.size(), "empty docs return empty");
+        assertEq(0, handler.requests.size(), "empty docs issue no HTTP call");
+    }
+
+    testRegistryResolution() {
+        checkModule();
+        installHandler(orderedListResponse());
+
+        QoreRagUtils::AbstractReranker rr =
+            QoreRagUtils::RagProviderRegistry::createReranker(
+                <QoreRagUtils::RerankerConfig>{
+                    "backend": "sglang",
+                    "url": url(),
+                    "model": "bge-reranker-v2-m3",
+                });
+        assertTrue(rr instanceof QoreRagUtils::SGLangReranker,
+            "registry resolves backend:sglang to SGLangReranker");
+
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank("q", Passages, 1);
+        assertEq(1, res.size());
+        assertEq(2, res[0].index, "resolved reranker scores via the server");
+    }
+}

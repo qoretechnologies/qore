@@ -34,6 +34,7 @@
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreThreadList.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <climits>
 #include <cstdlib>
@@ -972,12 +973,12 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
 //------------------------------------------------------------------------------
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper() {
-    QoreProgram* pgm = getProgram();
-    if (pgm) {
-        ptr = qore_program_private::get(*pgm)->getSandboxManagerRef();
-    } else {
-        ptr = nullptr;
-    }
+    // Resolve the active manager across the thread's program-context (call) stack so that
+    // module/library code invoked from a sandboxed program inherits the caller's sandbox.
+    // A Qore-language module executes in the module's own QoreProgram (which has no manager
+    // of its own), so resolving from getProgram() alone would silently bypass the sandbox.
+    // See design/module-sandboxing-audit-guide.md.
+    ptr = qore_find_thread_sandbox_manager_ref();
 }
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {

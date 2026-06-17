@@ -1143,21 +1143,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         return res;
     }
 
-    #! Returns the data type corresponding to the reference type
-    AbstractDataProviderType getTypeForReference(string rstr, bool required = True, *object rest) {
-        *SchemaObject ref = definitions{rstr};
-        if (!ref) {
-            throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
-        }
-        return ref.getDataType(required, rest);
-    }
-
-    replaceTypeForReference(string rstr, AbstractDataProviderType t) {
-        *SchemaObject ref = definitions{rstr};
-        if (!ref) {
-            throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
-        }
-        ref.replaceType(t);
+    #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
+    private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
+        return definitions{rstr};
     }
 
     #! Returns the data type corresponding to the values
@@ -4141,24 +4129,6 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             properties{k} = SchemaObject::newSchemaObject(k, val, swagger);
             if (!properties{k}.nullable && (val."x-nullable" || (opt_flags & LM_OPTIONAL_REF_PROPERTIES))) {
                 nullable_properties{k} = True;
-            }
-        }
-    }
-
-    replaceType(AbstractDataProviderType t) {
-        if (t.isOrNothingType()) {
-            if (dataType) {
-                dataType = t.getMandatoryType();
-            }
-            if (orNothingDataType) {
-                orNothingDataType = t;
-            }
-        } else {
-            if (dataType) {
-                dataType = t;
-            }
-            if (orNothingDataType) {
-                orNothingDataType = t.getOrNothingType();
             }
         }
     }

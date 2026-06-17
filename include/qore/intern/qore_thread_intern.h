@@ -77,6 +77,7 @@ struct ThreadLocalProgramData;
 class QoreAbstractModule;
 class QoreRWLock;
 class LoopContext;
+class QoreSandboxManager;
 
 DLLLOCAL extern Operator* OP_BACKGROUND;
 
@@ -266,6 +267,15 @@ struct RuntimeLocationCache {
 //! Returns cached pointers to the current thread's runtime location fields.
 //! Call once at function entry, then write through the pointers directly.
 DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
+
+//! Returns a ref'd SandboxManager for the first program on the current thread's
+//! program-context (call) stack that has an active manager, starting with the current
+//! program and walking outward through enclosing caller programs; nullptr if none.
+//! The caller owns the returned reference (deref via QoreSandboxManager::deref()).
+/** This makes sandbox enforcement propagate across program boundaries: code in a
+    Qore-language module (which executes in the module's own QoreProgram) invoked from a
+    sandboxed application program inherits the caller's sandbox. */
+DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_manager_ref();
 
 DLLLOCAL void set_parse_file_info(QoreProgramLocation& loc);
 DLLLOCAL const char* get_parse_code();
@@ -867,6 +877,16 @@ public:
     DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink);
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
+
+    //! returns the program active before this context was entered
+    DLLLOCAL QoreProgram* getOldProgram() const {
+        return old_pgm;
+    }
+
+    //! returns the enclosing context helper (the one active before this one)
+    DLLLOCAL const ProgramThreadCountContextHelper* getOldContext() const {
+        return old_ctx;
+    }
 
 protected:
     QoreProgram* old_pgm = nullptr;

@@ -295,6 +295,11 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
       endpoints where the auto-derived name is awkward, collides with
       another endpoint, or misses a domain-specific verb that reads more
       naturally than the HTTP method.
+    - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" now supports retrieving and replacing the data type for a
+      reusable \c "#/components/schemas/..." reference via the
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::getTypeForReference() "getTypeForReference()" and
+      @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "replaceTypeForReference()"
+      methods inherited from @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
 */
 
 #! main namespace for all public %OpenApi3 declarations
@@ -1721,6 +1726,11 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
             *object rest) {
         return schema.getDataType(required, rest);
+    }
+
+    #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
+    private *RestSchemaValidator::AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
+        return components.schemas{rstr};
     }
 
     #! Returns a field definition from the OpenApi3 parameter

@@ -2569,6 +2569,35 @@ ThreadLocalProgramData* ProgramThreadCountContextHelper::getContextFrame(int& fr
     return tlpd;
 }
 
+QoreSandboxManager* qore_find_thread_sandbox_manager_ref() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return nullptr;
+    }
+    // helper: try to resolve a ref'd manager from a single program
+    auto try_pgm = [](QoreProgram* pgm) -> QoreSandboxManager* {
+        return pgm ? qore_program_private::get(*pgm)->getSandboxManagerRef() : nullptr;
+    };
+    // 1) the current program context
+    if (QoreSandboxManager* sm = try_pgm(td->current_pgm)) {
+        return sm;
+    }
+    // 2) enclosing caller programs via the program-context (call) stack, innermost first
+    for (const ProgramThreadCountContextHelper* ch = td->current_pgm_ctx; ch; ch = ch->getOldContext()) {
+        if (QoreSandboxManager* sm = try_pgm(ch->getOldProgram())) {
+            return sm;
+        }
+    }
+    // 3) call program context fallback: matches getProgram()'s fallback when current_pgm is
+    // null (issue #3024), preserving prior single-program resolution in that edge case
+    if (td->current_pgm != td->call_program_context) {
+        if (QoreSandboxManager* sm = try_pgm(td->call_program_context)) {
+            return sm;
+        }
+    }
+    return nullptr;
+}
+
 ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink,
         QoreProgram* pgm) : old_pgm(0), old_tlpd(0), restore(false) {
     if (!pgm)
