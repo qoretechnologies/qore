@@ -118,9 +118,8 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
         if (exists copts.schema) {
             switch (copts.schema.typeCode()) {
                 case NT_STRING:
-                    # determine if the string is a file or a location
-                    if (copts.schema.size() > 1024 || copts.schema =~ /^asyncapi:/ || copts.schema =~ /^{/
-                        || copts.schema =~ /^"asyncapi":/) {
+                    # determine if the string is inline content or a location
+                    if (isSchemaSourceString(copts.schema)) {
                         setSchema(AsyncApi::AsyncApi3Loader::fromString(copts.schema));
                     } else {
                         setSchema(AsyncApi::AsyncApi3Loader::fromUrl(copts.schema));
@@ -147,6 +146,15 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
     #! Returns the data provider name
     string getName() {
         return display_name;
+    }
+
+    #! Returns True if a string option is inline schema source rather than a URL or file path
+    private static bool isSchemaSourceString(string schema_str) {
+        if (schema_str.size() > 1024) {
+            return True;
+        }
+        string source = trim(schema_str);
+        return source =~ /^(%YAML|---|[\{\[]|asyncapi\s*:|"asyncapi"\s*:)/i;
     }
 
     #! Returns the data provider description

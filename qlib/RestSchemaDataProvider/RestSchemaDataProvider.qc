@@ -168,13 +168,7 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             switch (copts.schema.typeCode()) {
                 case NT_STRING:
                     # determine if the string is schema content or a file/URL path
-                    if (copts.schema.size() > 1024
-                        || copts.schema =~ /^swagger:/
-                        || copts.schema =~ /^openapi:/
-                        || copts.schema =~ /^{/
-                        || copts.schema =~ /^swagger":/
-                        || copts.schema =~ /^"openapi":/
-                    ) {
+                    if (schemaStringIsContent(copts.schema)) {
                         setSchema(loadSchemaFromString(copts.schema, copts.lax_parsing));
                     } else {
                         setSchema(loadSchemaFromUrl(copts.schema, copts.lax_parsing));
@@ -234,32 +228,31 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
         return sprintf("%s data provider for URL `%s` and URI path `%s`", type, url, uri_path);
     }
 
+    #! Returns @ref True if the given string is inline schema content rather than a file/URL path
+    /** A filesystem path or URL is a single, relatively short line; treat anything that is large,
+        multi-line, or that begins with a recognized schema/document marker as inline content.  In
+        particular, a YAML document serialized with a \c "%YAML" version directive or a \c "---"
+        document-start marker (as emitted by some serializers) is inline content, not a path.
+    */
+    private static bool schemaStringIsContent(string str) {
+        return str.size() > 1024
+            || str =~ /\n/                  # a path or URL is never multi-line
+            || str =~ /^\s*%YAML/           # YAML version directive
+            || str =~ /^\s*---/             # YAML document-start marker
+            || str =~ /^\s*{/               # JSON or YAML flow style
+            || str =~ /^\s*["']?(swagger|openapi)["']?\s*:/;
+    }
+
     #! Loads a schema from a string
     private static AbstractRestSchemaValidator loadSchemaFromString(string schema_str, *bool lax_parsing) {
         int parse_flags = lax_parsing ? Swagger::LM_ALL : 0;
-        # try to detect if it's OpenAPI 3.0 or Swagger 2.0
-        if (schema_str =~ /^openapi\s*[:\"\']?\s*[:\"\']?3/ || schema_str =~ /"openapi"\s*:\s*"3/) {
-            return OpenApi3Loader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
-        }
-        return SwaggerLoader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
+        return RestSchemaLoader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
     }
 
     #! Loads a schema from a URL
     private static AbstractRestSchemaValidator loadSchemaFromUrl(string url, *bool lax_parsing) {
         int parse_flags = lax_parsing ? Swagger::LM_ALL : 0;
-        # first load the content to detect the schema type
-        string content;
-        if (url =~ /^[a-z]+:\/\//i) {
-            HTTPClient client({"url": url});
-            content = client.get("");
-        } else {
-            content = ReadOnlyFile::readTextFile(url);
-        }
-        # detect schema type
-        if (content =~ /^openapi\s*[:\"\']?\s*[:\"\']?3/ || content =~ /"openapi"\s*:\s*"3/) {
-            return OpenApi3Loader::fromString(content, NOTHING, {"parse_flags": parse_flags});
-        }
-        return SwaggerLoader::fromString(content, NOTHING, {"parse_flags": parse_flags});
+        return RestSchemaLoader::fromUrl(url, NOTHING, {"parse_flags": parse_flags});
     }
 
     #! Sets the schema and display name

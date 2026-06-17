@@ -170,8 +170,7 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
             switch (copts.schema.typeCode()) {
                 case NT_STRING:
                     # determine if the string is inline content or a location
-                    if (copts.schema.size() > 1024 || copts.schema =~ /^openapi:/
-                        || copts.schema =~ /^{/ || copts.schema =~ /^openapi":/) {
+                    if (isSchemaSourceString(copts.schema)) {
                         setSchema(OpenApi3Loader::fromString(copts.schema, NOTHING,
                             {"parse_flags": copts.lax_parsing}));
                     } else {
@@ -218,6 +217,15 @@ public class OpenApi3DataProvider inherits OpenApi3DataProviderCommon {
     #! Returns the data provider name
     string getName() {
         return display_name;
+    }
+
+    #! Returns True if a string option is inline schema source rather than a URL or file path
+    private static bool isSchemaSourceString(string schema_str) {
+        if (schema_str.size() > 1024) {
+            return True;
+        }
+        string source = trim(schema_str);
+        return source =~ /^(%YAML|---|[\{\[]|openapi\s*:|"openapi"\s*:)/i;
     }
 
     #! Returns the data provider description

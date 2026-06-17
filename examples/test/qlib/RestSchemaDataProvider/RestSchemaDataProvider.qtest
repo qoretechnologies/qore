@@ -35,8 +35,10 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
     constructor() : Test("RestSchemaDataProviderTest", "1.0") {
         addTestCase("Swagger schema test", \testSwaggerSchema());
         addTestCase("OpenAPI 3.0 schema test", \testOpenApi3Schema());
+        addTestCase("inline schema content detection", \testInlineSchemaContentDetection());
         addTestCase("OpenAPI 3.0 schema composition test", \testOpenApi3SchemaComposition());
         addTestCase("OpenAPI 3.0 data provider type validation", \testOpenApi3TypeValidation());
+        addTestCase("inline YAML schema markers", \testInlineYamlSchemaMarkers());
         addTestCase("OpenAPI 3.1 data provider features", \testOpenApi31Features());
         addTestCase("Abstract validator query date options", \testAbstractValidatorQueryDateOptions());
         addTestCase("Overlapping Swagger paths test", \testOverlappingSwaggerPaths());
@@ -151,6 +153,51 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         {
             AbstractDataProvider p0 = provider.getChildProviderPath("pets/GET");
             assertEq("GET", p0.getName());
+        }
+    }
+
+    # An inline "schema" string passed by value must be recognized as schema content even when it does not
+    # begin with a bare "openapi:"/"swagger:"/"{" token.  A YAML serializer can emit a document prefixed
+    # with a "%YAML 1.2" version directive and/or a "---" document-start marker, in flow style; such a
+    # document was previously misclassified as a filesystem path and failed to open (qorus#327 follow-up).
+    testInlineSchemaContentDetection() {
+        checkModules();
+
+        # 1. "%YAML 1.2" directive + "---" marker + flow style (the exact shape make_yaml() emits by
+        #    default, and the shape that triggered the original failure)
+        {
+            string directive_flow = "%YAML 1.2\n"
+                "--- {openapi: \"3.0.3\", info: {title: \"directive flow\", version: \"1.0.0\"}, "
+                "paths: {/ping: {get: {operationId: \"ping\", responses: {\"200\": {description: \"ok\"}}}}}}\n";
+            RestSchemaDataProvider provider({"schema": directive_flow});
+            assertTrue(provider.isOpenApi3(), "directive+flow OpenAPI 3 document is loaded as inline content");
+            assertEq("GET", provider.getChildProviderPath("ping/GET").getName());
+        }
+
+        # 2. flow style without a directive (leading "{")
+        {
+            string flow = "{openapi: \"3.0.0\", info: {title: \"flow\", version: \"1.0.0\"}, "
+                "paths: {/ping: {get: {operationId: \"ping\", responses: {\"200\": {description: \"ok\"}}}}}}";
+            RestSchemaDataProvider provider({"schema": flow});
+            assertTrue(provider.isOpenApi3(), "flow-style OpenAPI 3 document is loaded as inline content");
+        }
+
+        # 3. block style with a leading "---" document-start marker
+        {
+            string block_marker = "---\n"
+                "openapi: \"3.0.0\"\n"
+                "info:\n"
+                "  title: block marker\n"
+                "  version: \"1.0.0\"\n"
+                "paths:\n"
+                "  /ping:\n"
+                "    get:\n"
+                "      operationId: ping\n"
+                "      responses:\n"
+                "        \"200\":\n"
+                "          description: ok\n";
+            RestSchemaDataProvider provider({"schema": block_marker});
+            assertTrue(provider.isOpenApi3(), "block document with leading '---' marker is loaded as inline content");
         }
     }
 
@@ -892,6 +939,26 @@ paths:
             hash missingAge = {"name": "John"};
             assertThrows("MISSING-VALUE-ERROR", "age", \bodyType.acceptsValue(), missingAge);
         }
+    }
+
+    testInlineYamlSchemaMarkers() {
+        checkModules();
+
+        string openapi_schema = '%YAML 1.2
+--- {openapi: "3.0.3", info: {title: "YAML Marker OpenAPI", version: "1.0.0"}, paths: {/ping: {get: {operationId: "ping", responses: {200: {description: "ok"}}}}}}
+';
+        RestSchemaDataProvider openapi_provider({"schema": openapi_schema});
+        assertTrue(openapi_provider.isOpenApi3());
+        assertEq("YAML Marker OpenAPI", openapi_provider.getName());
+        assertEq("GET", openapi_provider.getChildProviderPath("ping/GET").getName());
+
+        string swagger_schema = '%YAML 1.2
+--- {swagger: "2.0", info: {title: "YAML Marker Swagger", version: "1.0.0"}, paths: {/ping: {get: {operationId: "ping", responses: {200: {description: "ok"}}}}}}
+';
+        RestSchemaDataProvider swagger_provider({"schema": swagger_schema});
+        assertTrue(swagger_provider.isSwagger());
+        assertEq("YAML Marker Swagger", swagger_provider.getName());
+        assertEq("GET", swagger_provider.getChildProviderPath("ping/GET").getName());
     }
 
     testOpenApi31Features() {

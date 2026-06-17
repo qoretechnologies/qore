@@ -26,6 +26,88 @@
 
 %exec-class AsyncApiDataProviderTest
 
+class CapturingAsyncApiTransport inherits AsyncApiDataProvider::AbstractAsyncApiTransport {
+    private {
+        list<hash<auto>> sent;
+        bool connected = True;
+        *code<nothing(auto, *hash<auto>)> inbound_callback;
+        *hash<auto> subscription;
+        bool unsubscribed = False;
+    }
+
+    send(string channel, auto msg, *hash<auto> headers) {
+        sent += {
+            "channel": channel,
+            "msg": msg,
+            "headers": headers,
+        };
+    }
+
+    string getProtocol() {
+        return "test";
+    }
+
+    bool isConnected() {
+        return connected;
+    }
+
+    connect() {
+        connected = True;
+    }
+
+    auto subscribe(string channel, code<nothing(auto, *hash<auto>)> callback, *hash<auto> options) {
+        inbound_callback = callback;
+        subscription = {
+            "channel": channel,
+            "options": options,
+        };
+        unsubscribed = False;
+        return subscription;
+    }
+
+    unsubscribe(auto subscription) {
+        unsubscribed = True;
+        inbound_callback = NOTHING;
+    }
+
+    disconnect() {
+        connected = False;
+    }
+
+    list<hash<auto>> getSent() {
+        return sent;
+    }
+
+    hash<auto> getSubscription() {
+        return subscription;
+    }
+
+    bool isUnsubscribed() {
+        return unsubscribed;
+    }
+
+    emit(auto msg, *hash<auto> headers) {
+        inbound_callback(msg, headers);
+    }
+}
+
+class QueueObserver inherits DataProvider::Observer {
+    private {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data) {
+        q.push({
+            "event_id": event_id,
+            "data": data,
+        });
+    }
+
+    hash<auto> get(timeout t) {
+        return q.get(t);
+    }
+}
+
 public class AsyncApiDataProviderTest inherits QUnit::Test {
     private {
         string testDir;
@@ -34,9 +116,13 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
     constructor() : Test("AsyncApiDataProviderTest", "1.0") {
         testDir = get_script_dir();
         addTestCase("data provider creation test", \dataProviderCreationTest());
+        addTestCase("inline YAML schema markers", \inlineYamlSchemaMarkersTest());
         addTestCase("channel navigation test", \channelNavigationTest());
         addTestCase("operation navigation test", \operationNavigationTest());
         addTestCase("message type test", \messageTypeTest());
+        addTestCase("multi-message union type test", \multiMessageUnionTypeTest());
+        addTestCase("message send transport test", \messageSendTransportTest());
+        addTestCase("receive operation observable transport test", \receiveObservableTransportTest());
         set_return_value(main());
     }
 
@@ -68,6 +154,18 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         hash<DataProviderInfo> info = provider.getInfo();
         assertTrue(info.supports_children);
         assertEq("asyncapi", info.schema_type);
+    }
+
+    inlineYamlSchemaMarkersTest() {
+        checkModules();
+
+        hash<auto> opts = {
+            "schema": "%YAML 1.2\n---\n"
+                + File::readTextFile(testDir + "/ChatApi.asyncapi.yaml"),
+        };
+        AsyncApiDataProvider::AsyncApiDataProvider provider(opts);
+        assertEq("Chat API", provider.getName());
+        assertTrue(inlist("userChat", provider.getChildProviderNames()));
     }
 
     channelNavigationTest() {
@@ -165,5 +263,164 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
             AbstractDataField metadataField = fields.metadata;
             assertTrue(metadataField.getType().isOrNothingType());
         }
+    }
+
+    string getMultiMessageSchema() {
+        return "asyncapi: 3.0.0\n"
+            "info:\n"
+            "  title: Multi Message API\n"
+            "  version: 1.0.0\n"
+            "servers:\n"
+            "  test:\n"
+            "    host: localhost\n"
+            "    protocol: kafka\n"
+            "channels:\n"
+            "  events:\n"
+            "    address: events\n"
+            "    messages:\n"
+            "      Alpha:\n"
+            "        $ref: '#/components/messages/Alpha'\n"
+            "      Beta:\n"
+            "        $ref: '#/components/messages/Beta'\n"
+            "operations:\n"
+            "  publishEvent:\n"
+            "    action: send\n"
+            "    channel:\n"
+            "      $ref: '#/channels/events'\n"
+            "    messages:\n"
+            "      - $ref: '#/channels/events/messages/Alpha'\n"
+            "      - $ref: '#/channels/events/messages/Beta'\n"
+            "  receiveEvent:\n"
+            "    action: receive\n"
+            "    channel:\n"
+            "      $ref: '#/channels/events'\n"
+            "    messages:\n"
+            "      - $ref: '#/channels/events/messages/Alpha'\n"
+            "      - $ref: '#/channels/events/messages/Beta'\n"
+            "components:\n"
+            "  schemas:\n"
+            "    AlphaPayload:\n"
+            "      type: object\n"
+            "      required: [id, tags]\n"
+            "      properties:\n"
+            "        id:\n"
+            "          type: string\n"
+            "        tags:\n"
+            "          type: array\n"
+            "          items:\n"
+            "            type: string\n"
+            "    BetaPayload:\n"
+            "      type: object\n"
+            "      required: [id, amount]\n"
+            "      properties:\n"
+            "        id:\n"
+            "          type: string\n"
+            "        amount:\n"
+            "          type: integer\n"
+            "  messages:\n"
+            "    Alpha:\n"
+            "      name: Alpha\n"
+            "      payload:\n"
+            "        $ref: '#/components/schemas/AlphaPayload'\n"
+            "    Beta:\n"
+            "      name: Beta\n"
+            "      payload:\n"
+            "        $ref: '#/components/schemas/BetaPayload'\n";
+    }
+
+    multiMessageUnionTypeTest() {
+        checkModules();
+
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": getMultiMessageSchema(),
+        });
+
+        AbstractDataProvider opProvider = provider.getChildProviderPath("events/publishEvent");
+        AbstractDataProviderType reqType = opProvider.getRequestType();
+        assertEq("QoreUnionDataType", reqType.className(), "multi-message request type is a union");
+
+        QoreUnionDataType unionType = cast<QoreUnionDataType>(reqType);
+        assertEq(("publishEvent: Alpha", "publishEvent: Beta"),
+            map $1.getName(), unionType.getUnionTypes());
+
+        hash<DataTypeInfo> info = reqType.getInfo();
+        assertEq(2, info.union_types.size(), "serialized union preserves both alternatives");
+        assertEq("*list<string>", info.union_types[0].fields.tags.type.name,
+            "nested generic list type is serialized");
+
+        AbstractDataProviderType restoredType = AbstractDataProviderType::get(info);
+        assertEq("QoreUnionDataType", restoredType.className(), "serialized union reconstructs");
+        QoreUnionDataType restoredUnion = cast<QoreUnionDataType>(restoredType);
+        assertEq(("publishEvent: Alpha", "publishEvent: Beta"),
+            map $1.getName(), restoredUnion.getUnionTypes());
+        assertEq("*list<string>", restoredUnion.getUnionTypes()[0].getField("tags").getType().getName(),
+            "nested generic list type reconstructs");
+
+        assertEq({"id": "a1", "tags": ("x", "y")},
+            restoredType.acceptsValue({"id": "a1", "tags": ("x", "y")}));
+        assertEq({"id": "b1", "amount": 7},
+            restoredType.acceptsValue({"id": "b1", "amount": 7}));
+        assertThrows("RUNTIME-TYPE-ERROR", \restoredType.acceptsValue(), {"id": "bad", "tags": (1,)});
+    }
+
+    messageSendTransportTest() {
+        checkModules();
+
+        CapturingAsyncApiTransport transport();
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": getMultiMessageSchema(),
+            "transport": transport,
+        });
+
+        AbstractDataProvider opProvider = provider.getChildProviderPath("events/publishEvent");
+        opProvider.sendMessage("Alpha", {"id": "a1", "tags": ("x",)}, {"reply_topic": "responses"});
+
+        list<hash<auto>> sent = transport.getSent();
+        assertEq(1, sent.size());
+        assertEq("events", sent[0].channel);
+        assertEq({"id": "a1", "tags": ("x",)}, sent[0].msg);
+        assertEq("Alpha", sent[0].headers.message_id);
+        assertEq("responses", sent[0].headers.reply_topic);
+
+        assertThrows("INVALID-MESSAGE", \opProvider.sendMessage(),
+            ("Missing", {"id": "a1", "tags": ("x",)}, NOTHING));
+        assertThrows("SEND-MESSAGE-ERROR", "RUNTIME-TYPE-ERROR", \opProvider.sendMessage(),
+            ("Alpha", {"id": "a1", "tags": (1,)}, NOTHING));
+    }
+
+    receiveObservableTransportTest() {
+        checkModules();
+
+        CapturingAsyncApiTransport transport();
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": getMultiMessageSchema(),
+            "transport": transport,
+        });
+
+        AbstractDataProvider opProvider = provider.getChildProviderPath("events/receiveEvent");
+        assertEq("events", call_object_method(opProvider, "getChannelName"));
+        assertEq("events", call_object_method(opProvider, "getChannelAddress", NOTHING));
+
+        QueueObserver observer();
+        DataProvider::Observable observable = cast<DataProvider::Observable>(opProvider);
+        observable.registerObserver(observer);
+        cast<DataProvider::DelayedObservable>(opProvider).observersReady();
+
+        hash<auto> subscription = transport.getSubscription();
+        assertEq("events", subscription.channel);
+        assertEq("receiveEvent", subscription.options.operation);
+
+        transport.emit({"id": "a1", "tags": ("x", "y")}, {"trace": "t1"});
+        hash<auto> event = observer.get(5s);
+        assertEq("Alpha", event.event_id);
+        assertEq("a1", event.data.id);
+        assertEq(("x", "y"), event.data.tags);
+        assertEq("t1", event.data.headers.trace);
+        assertEq("Alpha", event.data.message_id);
+
+        assertThrows("SCHEMA-VALIDATION-ERROR", \transport.emit(), ({"id": "bad", "tags": (1,)}, NOTHING));
+
+        cast<DataProvider::DelayedObservable>(opProvider).stopEvents();
+        assertTrue(transport.isUnsubscribed());
     }
 }
