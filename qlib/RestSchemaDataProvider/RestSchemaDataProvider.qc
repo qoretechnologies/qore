@@ -168,13 +168,7 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             switch (copts.schema.typeCode()) {
                 case NT_STRING:
                     # determine if the string is schema content or a file/URL path
-                    if (copts.schema.size() > 1024
-                        || copts.schema =~ /^swagger:/
-                        || copts.schema =~ /^openapi:/
-                        || copts.schema =~ /^{/
-                        || copts.schema =~ /^swagger":/
-                        || copts.schema =~ /^"openapi":/
-                    ) {
+                    if (schemaStringIsContent(copts.schema)) {
                         setSchema(loadSchemaFromString(copts.schema, copts.lax_parsing));
                     } else {
                         setSchema(loadSchemaFromUrl(copts.schema, copts.lax_parsing));
@@ -234,11 +228,35 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
         return sprintf("%s data provider for URL `%s` and URI path `%s`", type, url, uri_path);
     }
 
+    #! Returns @ref True if the given string is inline schema content rather than a file/URL path
+    /** A filesystem path or URL is a single, relatively short line; treat anything that is large,
+        multi-line, or that begins with a recognized schema/document marker as inline content.  In
+        particular, a YAML document serialized with a \c "%YAML" version directive or a \c "---"
+        document-start marker (as emitted by some serializers) is inline content, not a path.
+    */
+    private static bool schemaStringIsContent(string str) {
+        return str.size() > 1024
+            || str =~ /\n/                  # a path or URL is never multi-line
+            || str =~ /^\s*%YAML/           # YAML version directive
+            || str =~ /^\s*---/             # YAML document-start marker
+            || str =~ /^\s*{/               # JSON or YAML flow style
+            || str =~ /^\s*["']?(swagger|openapi)["']?\s*:/;
+    }
+
+    #! Returns @ref True if the content is an OpenAPI 3.x document (else it is treated as Swagger 2.0)
+    /** Detects both block (\c "openapi: 3...") and flow (\c "{openapi: \"3\"...}") styles, with quoted or
+        unquoted keys, and tolerates a leading \c "%YAML" directive or \c "---" document marker, so the
+        loader is not chosen from a fragile leading-token match alone.
+    */
+    private static bool contentIsOpenApi3(string content) {
+        return content =~ /(^|[\s{,])["']?openapi["']?\s*:\s*["']?3/;
+    }
+
     #! Loads a schema from a string
     private static AbstractRestSchemaValidator loadSchemaFromString(string schema_str, *bool lax_parsing) {
         int parse_flags = lax_parsing ? Swagger::LM_ALL : 0;
         # try to detect if it's OpenAPI 3.0 or Swagger 2.0
-        if (schema_str =~ /^openapi\s*[:\"\']?\s*[:\"\']?3/ || schema_str =~ /"openapi"\s*:\s*"3/) {
+        if (contentIsOpenApi3(schema_str)) {
             return OpenApi3Loader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
         }
         return SwaggerLoader::fromString(schema_str, NOTHING, {"parse_flags": parse_flags});
@@ -256,7 +274,7 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             content = ReadOnlyFile::readTextFile(url);
         }
         # detect schema type
-        if (content =~ /^openapi\s*[:\"\']?\s*[:\"\']?3/ || content =~ /"openapi"\s*:\s*"3/) {
+        if (contentIsOpenApi3(content)) {
             return OpenApi3Loader::fromString(content, NOTHING, {"parse_flags": parse_flags});
         }
         return SwaggerLoader::fromString(content, NOTHING, {"parse_flags": parse_flags});
