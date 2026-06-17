@@ -145,8 +145,11 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         // / `QorusClientBase.qmod`).  Qualified emission pins the
         // resolution to the same function the parser resolved at
         // compile time.
-        const FunctionEntry* fe = call->getFunctionEntry();
-        if (fe && fe->getNamespace()) {
+        const char* deferred_source_function = call->getAOTDeferredSourceFunction();
+        const FunctionEntry* fe = deferred_source_function ? nullptr : call->getFunctionEntry();
+        if (deferred_source_function) {
+            ctx.writer.writeStringRef(deferred_source_function);
+        } else if (fe && fe->getNamespace()) {
             std::string qualified;
             fe->getNamespace()->getPath(qualified);  // unanchored, e.g. "Util"
             if (!qualified.empty()) {
@@ -159,11 +162,15 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
             // fall back to the bare name.  Reader tolerates both.
             ctx.writer.writeStringRef(call->getName());
         }
-        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                std::string sig_ref = "sig:";
-                sig_ref += sig->getSignatureText();
-                ctx.writer.writeStringRef(sig_ref.c_str());
+        if (!deferred_source_function) {
+            if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                    std::string sig_ref = "sig:";
+                    sig_ref += sig->getSignatureText();
+                    ctx.writer.writeStringRef(sig_ref.c_str());
+                } else {
+                    ctx.writer.writeStringRef("");
+                }
             } else {
                 ctx.writer.writeStringRef("");
             }
@@ -172,13 +179,16 @@ static bool write_expr_func_call(AOTExprWriteCtx& ctx) {
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
-        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+        size_t arg_start = deferred_source_function ? 1 : 0;
+        size_t total_args = args ? args->size() : (pargs ? pargs->size() : 0);
+        size_t nargs = total_args > arg_start ? total_args - arg_start : 0;
         if (nargs > 255) {
             return false;
         }
         ctx.writer.writeU8(static_cast<uint8_t>(nargs));
         for (size_t j = 0; j < nargs; ++j) {
-            const QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+            const size_t arg_index = arg_start + j;
+            const QoreValue arg = args ? args->retrieveEntry(arg_index) : pargs->get(arg_index);
             if (!::classifyAndWriteExpr(ctx.writer, arg,
                     ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
                 return false;
@@ -939,7 +949,7 @@ static QoreValue make_deferred_object_call(AOTExprReadCtx& ctx, const char* clas
         args_list->deref(nullptr);
     }
 
-    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, class_path, pln, object_type_info);
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, class_path, pln, object_type_info, ctx.pgm);
     if (pln) {
         socn->resolveParseArgs();
     }

@@ -2190,7 +2190,7 @@ static QoreParseListNode* qoreAOTTakeParseArgs(std::vector<QoreValue>& args) {
     return parse_args;
 }
 
-static QoreValue qoreAOTMakeObjectDefaultNode(const QoreClass* qc,
+static QoreValue qoreAOTMakeObjectDefaultNode(QoreProgram* pgm, const QoreClass* qc,
         const std::string& class_path, std::vector<QoreValue>& args) {
     QoreParseListNode* parse_args = qoreAOTTakeParseArgs(args);
     ScopedObjectCallNode* socn = nullptr;
@@ -2199,7 +2199,7 @@ static QoreValue qoreAOTMakeObjectDefaultNode(const QoreClass* qc,
     } else {
         const QoreTypeInfo* object_type_info = qore_get_aot_deferred_type_info(
             &loc_builtin, class_path.c_str(), false, false);
-        socn = new ScopedObjectCallNode(&loc_builtin, class_path.c_str(), parse_args, object_type_info);
+        socn = new ScopedObjectCallNode(&loc_builtin, class_path.c_str(), parse_args, object_type_info, pgm);
     }
     if (parse_args) {
         socn->resolveParseArgs();
@@ -9071,8 +9071,11 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         // the exact function the parser resolved, not a same-named
         // wrapper in the caller's scope (see write_expr_func_call in
         // QoreAOTExprHandlers.cpp for the full rationale).
-        const FunctionEntry* fe = call->getFunctionEntry();
-        if (fe && fe->getNamespace()) {
+        const char* deferred_source_function = call->getAOTDeferredSourceFunction();
+        const FunctionEntry* fe = deferred_source_function ? nullptr : call->getFunctionEntry();
+        if (deferred_source_function) {
+            writer.writeStringRef(deferred_source_function);
+        } else if (fe && fe->getNamespace()) {
             std::string qualified;
             fe->getNamespace()->getPath(qualified);
             if (!qualified.empty()) {
@@ -9083,11 +9086,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         } else {
             writer.writeStringRef(call->getName());
         }
-        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
-            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
-                std::string sig_ref = "sig:";
-                sig_ref += sig->getSignatureText();
-                writer.writeStringRef(sig_ref.c_str());
+        if (!deferred_source_function) {
+            if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+                if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                    std::string sig_ref = "sig:";
+                    sig_ref += sig->getSignatureText();
+                    writer.writeStringRef(sig_ref.c_str());
+                } else {
+                    writer.writeStringRef("");
+                }
             } else {
                 writer.writeStringRef("");
             }
@@ -9096,7 +9103,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
-        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+        size_t arg_start = deferred_source_function ? 1 : 0;
+        size_t total_args = args ? args->size() : (pargs ? pargs->size() : 0);
+        size_t nargs = total_args > arg_start ? total_args - arg_start : 0;
         if (nargs > 255) {
             qoreAOTSetExprSerializationError("FUNC_CALL inline payload has more than 255 arguments in "
                 + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
@@ -9104,7 +9113,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
         writer.writeU8(static_cast<uint8_t>(nargs));
         for (size_t j = 0; j < nargs; ++j) {
-            const QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+            const size_t arg_index = arg_start + j;
+            const QoreValue arg = args ? args->retrieveEntry(arg_index) : pargs->get(arg_index);
             if (!classifyAndWriteExpr(writer, arg, parent_locals, parent_globals, const_reverse_map)) {
                 return false;
             }
@@ -13050,7 +13060,7 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             if (!pim.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     pim.pending_new_class_path.c_str(), &all_class_map);
-                pim.default_val = qoreAOTMakeObjectDefaultNode(target,
+                pim.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
                     pim.pending_new_class_path, pim.pending_new_args);
                 pim.pending_new_class_path.clear();
             }
@@ -13236,7 +13246,7 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             if (!psm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     psm.pending_new_class_path.c_str(), &all_class_map);
-                psm.default_val = qoreAOTMakeObjectDefaultNode(target,
+                psm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
                     psm.pending_new_class_path, psm.pending_new_args);
                 psm.pending_new_class_path.clear();
             }
@@ -13665,7 +13675,7 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             if (!phm.pending_new_class_path.empty()) {
                 const QoreClass* target = resolveClassRefForSession(
                     phm.pending_new_class_path.c_str());
-                phm.default_val = qoreAOTMakeObjectDefaultNode(target,
+                phm.default_val = qoreAOTMakeObjectDefaultNode(getProgram(), target,
                     phm.pending_new_class_path, phm.pending_new_args);
                 phm.pending_new_class_path.clear();
             }

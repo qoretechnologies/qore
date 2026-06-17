@@ -300,7 +300,8 @@ protected:
 class FunctionCallNode : public AbstractFunctionCallNode {
 public:
     DLLLOCAL FunctionCallNode(const FunctionCallNode& old, QoreListNode* args) : AbstractFunctionCallNode(old, args),
-            fe(old.fe), pgm(old.pgm), finalized(old.finalized) {
+            fe(old.fe), pgm(old.pgm),
+            aot_deferred_source_function(old.aot_deferred_source_function), finalized(old.finalized) {
     }
 
     DLLLOCAL FunctionCallNode(const QoreProgramLocation* loc, const FunctionEntry* f, QoreParseListNode* a)
@@ -358,6 +359,14 @@ public:
         return fe;
     }
 
+    DLLLOCAL void setAOTDeferredSourceFunction(const char* name) {
+        aot_deferred_source_function = name ? name : "";
+    }
+
+    DLLLOCAL const char* getAOTDeferredSourceFunction() const {
+        return aot_deferred_source_function.empty() ? nullptr : aot_deferred_source_function.c_str();
+    }
+
     // FIXME: delete when unresolved function call node implemented properly
     DLLLOCAL char* takeName() {
         char* str = c_str;
@@ -404,6 +413,7 @@ protected:
     const FunctionEntry* fe = nullptr;
     QoreProgram* pgm = nullptr;
     char* c_str = nullptr;
+    std::string aot_deferred_source_function;
     // was this call enclosed in parentheses (in which case it will not be converted to a method call)
     bool finalized = false;
 

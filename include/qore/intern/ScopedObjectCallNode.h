@@ -46,6 +46,7 @@ public:
     const QoreClass* oc;
     const QoreTypeInfo* object_type_info;
     std::string dynamic_class_name;
+    QoreProgram* aot_resolver_pgm = nullptr;
     QoreString desc;
 
     DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, NamedScope* n, QoreParseListNode* a)
@@ -59,9 +60,11 @@ public:
     }
 
     DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, const char* n_dynamic_class_name,
-            QoreParseListNode* a, const QoreTypeInfo* n_object_type_info = nullptr)
+            QoreParseListNode* a, const QoreTypeInfo* n_object_type_info = nullptr,
+            QoreProgram* n_aot_resolver_pgm = nullptr)
             : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(nullptr), oc(nullptr),
-            object_type_info(n_object_type_info), dynamic_class_name(n_dynamic_class_name ? n_dynamic_class_name : "") {
+            object_type_info(n_object_type_info), dynamic_class_name(n_dynamic_class_name ? n_dynamic_class_name : ""),
+            aot_resolver_pgm(n_aot_resolver_pgm) {
     }
 
     DLLLOCAL virtual ~ScopedObjectCallNode() {
@@ -82,6 +85,14 @@ public:
     //! Returns the class path for an AOT-deferred object construction.
     DLLLOCAL const std::string& getDynamicClassName() const {
         return dynamic_class_name;
+    }
+
+    DLLLOCAL void setAOTResolverProgram(QoreProgram* pgm) {
+        aot_resolver_pgm = pgm;
+    }
+
+    DLLLOCAL QoreProgram* getAOTResolverProgram() const {
+        return aot_resolver_pgm;
     }
 
     /* get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks

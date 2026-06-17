@@ -1188,8 +1188,8 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
         }
 
         QoreParseListNode* dynamic_args = new QoreParseListNode(loc);
-        dynamic_args->add(new QoreStringNode(defer_source_function ? deferred_source_function_path.c_str() : c_str),
-            loc);
+        const char* deferred_function_name = defer_source_function ? deferred_source_function_path.c_str() : c_str;
+        dynamic_args->add(new QoreStringNode(deferred_function_name), loc);
         QoreParseListNode* old_args = takeParseArgs();
         if (old_args) {
             dynamic_args->appendFrom(old_args);
@@ -1197,6 +1197,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
         }
 
         FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+        dynamic_call->setAOTDeferredSourceFunction(deferred_function_name);
         val = dynamic_call;
         free(c_str);
         c_str = nullptr;
@@ -1310,6 +1311,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             }
 
             dynamic_class_name = class_path;
+            aot_resolver_pgm = parse_context.pgm ? parse_context.pgm : getProgram();
             delete name;
             name = nullptr;
         } else {
@@ -1401,7 +1403,8 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class for instantiation");
             return QoreValue();
         }
-        const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
+        QoreProgram* lookup_pgm = aot_resolver_pgm ? aot_resolver_pgm : getProgram();
+        const QoreClass* qc = qore_aot_resolve_class_ref(lookup_pgm, dynamic_class_name.c_str(), false);
         if (!qc) {
             if (!*xsink) {
                 xsink->raiseException("AOT-PENDING-CLASS",
@@ -1409,7 +1412,8 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             }
             return QoreValue();
         }
-        if (getProgram()->getParseOptions() & qc->getDomain()) {
+        QoreProgram* sandbox_pgm = getProgram() ? getProgram() : lookup_pgm;
+        if (sandbox_pgm && (sandbox_pgm->getParseOptions() & qc->getDomain())) {
             xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
                 "access to the '%s' class", qc->getName());
             return QoreValue();
@@ -1647,6 +1651,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     }
 
                     FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+                    dynamic_call->setAOTDeferredSourceFunction(function_path);
                     val = dynamic_call;
                     delete scope;
                     scope = nullptr;

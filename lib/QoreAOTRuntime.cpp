@@ -1031,9 +1031,9 @@ QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* nam
     return QoreValue(call);
 }
 
-static QoreValue makeDeferredObjectSlotCall(const char* class_path, QoreParseListNode* args,
+static QoreValue makeDeferredObjectSlotCall(QoreProgram* pgm, const char* class_path, QoreParseListNode* args,
         const QoreTypeInfo* object_type_info) {
-    ScopedObjectCallNode* call = new ScopedObjectCallNode(&loc_builtin, class_path, args, object_type_info);
+    ScopedObjectCallNode* call = new ScopedObjectCallNode(&loc_builtin, class_path, args, object_type_info, pgm);
     if (args) {
         call->resolveParseArgs();
     }
@@ -1773,18 +1773,19 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS,
             class_path + 2, found_ns);
     }
-    if (!qc && getProgram() == pgm) {
-        // AOT script batch registration runs in a runtime parse context.  The
-        // aggregate metadata has created parse/pending shells before native
-        // per-file slot maps are registered, so use the same class lookup path
-        // as source parsing before falling back to committed runtime maps.
+    if (!qc) {
+        // AOT metadata is emitted from source parse, where private/internal
+        // classes in the target Program are valid constructor/type targets.
+        // Runtime lookup only sees public committed maps, and the current
+        // thread can be executing another Program (for example a Qorus system
+        // service calling into shared core code), so resolve against the target
+        // Program's parse namespace directly.
         const char* req_path = class_path;
         if (req_path[0] == ':' && req_path[1] == ':') {
             req_path += 2;
         }
         if (*req_path) {
-            NamedScope nscope(req_path);
-            qc = qore_root_ns_private::parseFindScopedClass(&loc_builtin, nscope, false);
+            qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
     }
     if (!qc && !pseudo) {
@@ -3258,7 +3259,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ctx->call_targets[i].class_path = ctx->owned_call_target_strings.back().c_str();
                     }
                     ctx->call_targets[i].object_type_info = object_type_info;
-                    QoreValue call = makeDeferredObjectSlotCall(ref1, args, object_type_info);
+                    QoreValue call = makeDeferredObjectSlotCall(pgm, ref1, args, object_type_info);
                     if (!call) {
                         std::string msg = "cannot create deferred constructor call for class '";
                         msg += ref1 ? ref1 : "";

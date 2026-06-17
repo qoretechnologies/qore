@@ -13980,6 +13980,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // FunctionCallNode: regular function call
     if (auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         id.kind = AOTExprKind::FUNC_CALL;
+        if (const char* deferred_source_function = call->getAOTDeferredSourceFunction()) {
+            id.ref1 = deferred_source_function;
+            return id;
+        }
         // Namespace-qualified identity so slot resolution at runtime
         // lands on the same function the parser resolved at compile
         // time — bare name would let a caller-scope same-named

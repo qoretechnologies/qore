@@ -111,6 +111,14 @@ static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant)
 #include <cstdio>
 #include <cstring>
 
+static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return false;
+    }
+    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    return call && call->getAOTDeferredSourceFunction();
+}
+
 // NaN-boxing constants matching QoreValue.h
 static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
 static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
@@ -8082,7 +8090,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         || inv->invoke_opcode == QoreIROpcode::CallStaticDirect)) {
                 // Call invoke: build args array from pre-evaluated operands
                 int arg_start = (inv->invoke_opcode == QoreIROpcode::CallIndirect) ? 1 : 0;
-                int nargs = static_cast<int>(inv->operands.size()) - arg_start;
+                if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect
+                        && qore_llvm_is_aot_deferred_source_function_call(inv->expr)) {
+                    arg_start = 1;
+                }
+                int total_operands = static_cast<int>(inv->operands.size());
+                if (arg_start > total_operands) {
+                    arg_start = total_operands;
+                }
+                int nargs = total_operands - arg_start;
 
                 // Hoist alloca to entry block to avoid stack overflow in loops
                 llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
@@ -9718,7 +9734,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
 
             // Check if this is an Approach B call (direct LLVM arg passing — no args_array needed)
-            int nargs = static_cast<int>(inst->operands.size());
+            int arg_start = aot_mode && qore_llvm_is_aot_deferred_source_function_call(direct_inst->expr) ? 1 : 0;
+            int total_operands = static_cast<int>(inst->operands.size());
+            if (arg_start > total_operands) {
+                arg_start = total_operands;
+            }
+            int nargs = total_operands - arg_start;
             bool is_approach_b = !aot_mode && batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)
                     && batch_callees->at(direct_inst->variant).approach_b_eligible;
@@ -9728,9 +9749,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             std::vector<llvm::Value*> boxed_args;
             if (nargs > 0) {
                 for (int i = 0; i < nargs; ++i) {
-                    auto* arg_val = getVal(inst->operands[i].id, error);
+                    auto* arg_val = getVal(inst->operands[arg_start + i].id, error);
                     if (!arg_val) { return false; }
-                    boxed_args.push_back(boxValue(arg_val, inst->operands[i].id));
+                    boxed_args.push_back(boxValue(arg_val, inst->operands[arg_start + i].id));
                 }
                 if (!is_approach_b) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
@@ -9749,7 +9770,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
             bool has_arg_cleanups = false;
-            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
+            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, arg_start, llvm_func,
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
