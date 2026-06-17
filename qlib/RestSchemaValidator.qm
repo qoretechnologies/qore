@@ -97,6 +97,12 @@ module RestSchemaValidator {
       support (alongside existing \c "text/x-yaml" and \c "application/x-yaml")
     - added query date serialization option accessors to
       @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+    - added uniform reusable-schema reference type accessors to
+      @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" so that referenced
+      types can be retrieved and replaced polymorphically across Swagger 2.0 and OpenAPI 3.x schemas:
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::getTypeForReference() "AbstractRestSchemaValidator::getTypeForReference()"
+      - @ref RestSchemaValidator::AbstractRestSchemaValidator::replaceTypeForReference() "AbstractRestSchemaValidator::replaceTypeForReference()"
+      along with @ref RestSchemaValidator::AbstractRestSchemaObject::replaceType() "AbstractRestSchemaObject::replaceType()"
 
     @subsection restschemavalidator_2_4 RestSchemaValidator v2.4
     - added @ref RestSchemaValidator::RestSchemaLoader "RestSchemaLoader" class for auto-detecting and loading
@@ -1232,6 +1238,32 @@ public namespace RestSchemaValidator {
             return orNothingDataType;
         }
 
+        #! Replaces the cached data type(s) for this schema with the given type
+        /** Updates the mandatory and/or "or nothing" cached data types from the given type, preserving the
+            required/optional cardinality already present in the schema.
+
+            @param t the new data type to use for this schema
+
+            @since RestSchemaValidator 2.5
+        */
+        replaceType(AbstractDataProviderType t) {
+            if (t.isOrNothingType()) {
+                if (dataType) {
+                    dataType = t.getMandatoryType();
+                }
+                if (orNothingDataType) {
+                    orNothingDataType = t;
+                }
+            } else {
+                if (dataType) {
+                    dataType = t;
+                }
+                if (orNothingDataType) {
+                    orNothingDataType = t.getOrNothingType();
+                }
+            }
+        }
+
         #! Returns the data type for the given schema
         private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *object rest) {
             if (type == "string") {
@@ -1593,6 +1625,56 @@ public namespace RestSchemaValidator {
         #! Creates the object with the given logger
         constructor(Logger::LoggerInterface logger) : LoggerWrapper(logger) {
         }
+
+        #! Returns the data type corresponding to the given reusable schema reference
+        /** @param rstr the name of the reusable schema reference (ex: a \c "#/definitions/..." entry for Swagger 2.0
+            or a \c "#/components/schemas/..." entry for OpenAPI 3.x)
+            @param required if @ref True "True" then the mandatory type is returned, otherwise the "or nothing" type
+            @param rest an optional REST client object used for type resolution
+
+            @return the data type corresponding to the given reusable schema reference
+
+            @throw INVALID-REFERENCE-TYPE the given reference is not a known type in the schema
+
+            @since RestSchemaValidator 2.5
+        */
+        AbstractDataProviderType getTypeForReference(string rstr, bool required = True, *object rest) {
+            *AbstractRestSchemaObject ref = getSchemaObjectForReferenceImpl(rstr);
+            if (!ref) {
+                throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
+            }
+            return ref.getDataType(required, rest);
+        }
+
+        #! Replaces the cached data type for the given reusable schema reference
+        /** @param rstr the name of the reusable schema reference (ex: a \c "#/definitions/..." entry for Swagger 2.0
+            or a \c "#/components/schemas/..." entry for OpenAPI 3.x)
+            @param t the new data type to use for the given reference
+
+            @throw INVALID-REFERENCE-TYPE the given reference is not a known type in the schema
+
+            @since RestSchemaValidator 2.5
+        */
+        replaceTypeForReference(string rstr, AbstractDataProviderType t) {
+            *AbstractRestSchemaObject ref = getSchemaObjectForReferenceImpl(rstr);
+            if (!ref) {
+                throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
+            }
+            ref.replaceType(t);
+        }
+
+        #! Returns the reusable schema object for the given reference name or @ref nothing if there is none
+        /** Each schema type stores reusable schemas in a type-specific member (ex: \c definitions for Swagger 2.0,
+            \c components.schemas for OpenAPI 3.x); this method abstracts the lookup so that
+            getTypeForReference() and replaceTypeForReference() can be implemented uniformly in the base class.
+
+            @param rstr the name of the reusable schema reference
+
+            @return the reusable schema object for the given reference name or @ref nothing if there is none
+
+            @since RestSchemaValidator 2.5
+        */
+        private abstract *AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr);
 
         #! returns a unique hash for the schema that can be used to compare schemas
         /** @return a unique hash for the schema that can be used to compare schemas
@@ -2170,6 +2252,10 @@ public namespace RestSchemaValidator {
         */
         private string getHashImpl() {
             return NullSchemaHashStr;
+        }
+
+        #! the null validator has no reusable schema references
+        private *AbstractRestSchemaObject getSchemaObjectForReferenceImpl(string rstr) {
         }
 
         #! returns the target URL for the schema

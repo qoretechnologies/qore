@@ -400,6 +400,7 @@ public class SwaggerTest inherits QUnit::Test {
         addTestCase("Test validation", \testValidation());
         addTestCase("Test examples", \testExamples());
         addTestCase("Test real msgs", \testRealMessages());
+        addTestCase("Test getTypeForReference/replaceTypeForReference", \testTypeForReference());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -412,6 +413,47 @@ public class SwaggerTest inherits QUnit::Test {
 %ifdef NoYaml
         testSkip("no yaml module");
 %endif
+    }
+
+    testTypeForReference() {
+        checkModules();
+
+        # build a schema with a reusable schema reference in "definitions"
+        hash<auto> soh = ValidSwaggerSchema + {
+            "definitions": {
+                "Pet": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "age": {"type": "integer"},
+                    },
+                },
+            },
+        };
+        SwaggerSchema schema("", soh);
+
+        # the uniform reference methods are inherited from AbstractRestSchemaValidator
+        AbstractDataProviderType t = schema.getTypeForReference("Pet");
+        assertEq(NT_HASH, t.getBaseTypeCode());
+        assertFalse(t.isOrNothingType());
+        # the resolved hash type exposes the schema's fields
+        assertEq(("name", "age"), keys t.getFields());
+
+        # the "or nothing" variant is returned when required = False
+        AbstractDataProviderType opt = schema.getTypeForReference("Pet", False);
+        assertTrue(opt.isOrNothingType());
+
+        # an unknown reference raises a well-defined exception
+        assertThrows("INVALID-REFERENCE-TYPE", "Unknown", \schema.getTypeForReference(), ("Unknown",));
+
+        # replaceTypeForReference swaps the cached type for the reference
+        AbstractDataProviderType newtype = AbstractDataProviderType::get("string");
+        schema.replaceTypeForReference("Pet", newtype);
+        assertEq("string", schema.getTypeForReference("Pet").getBaseTypeName());
+
+        # replacing an unknown reference raises the same exception
+        assertThrows("INVALID-REFERENCE-TYPE", "Unknown", \schema.replaceTypeForReference(),
+            ("Unknown", newtype));
     }
 
     testFiles() {
