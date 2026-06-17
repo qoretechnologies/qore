@@ -307,7 +307,7 @@ public hashdecl VectorStoreConfig {
 
 #! Configuration for a reranker backend
 public hashdecl RerankerConfig {
-    #! Backend identifier (e.g. "local-onnx", "voyage", "http-gateway")
+    #! Backend identifier (e.g. "local-onnx", "voyage", "http-gateway", "sglang")
     *string backend;
     #! Path to a local model file (ONNX reranker)
     *string model_path;
@@ -982,6 +982,7 @@ public class RagProviderRegistry {
             "voyage":       "VoyageRestClient",
             "local-onnx":   "QoreRagUtils",
             "http-gateway": "QoreRagUtils",
+            "sglang":       "QoreRagUtils",
             "jina":         "JinaRestClient",
             "cohere":       "CohereRestClient",
         };

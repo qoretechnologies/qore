@@ -41,7 +41,7 @@
 %endtry
 
 module QoreRagUtils {
-    version = "1.0.1";
+    version = "1.1.0";
     desc = "user module providing a composable RAG abstraction layer";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -53,6 +53,8 @@ module QoreRagUtils {
             new LocalOnnxRerankerFactory());
         RagProviderRegistry::registerRerankerFactory(
             new HttpGatewayRerankerFactory());
+        RagProviderRegistry::registerRerankerFactory(
+            new SGLangRerankerFactory());
         RagProviderRegistry::registerVectorStoreFactory(
             new PgVectorRagProviderFactory());
         RagProviderRegistry::registerChunkerFactory(
@@ -105,7 +107,8 @@ module QoreRagUtils {
       @ref QoreRagUtils::BgeM3FastApiEmbedder "BgeM3FastApiEmbedder"
     - Rerankers: @ref QoreRagUtils::LocalOnnxReranker "LocalOnnxReranker",
       @ref QoreRagUtils::VoyageReranker "VoyageReranker",
-      @ref QoreRagUtils::HttpGatewayReranker "HttpGatewayReranker"
+      @ref QoreRagUtils::HttpGatewayReranker "HttpGatewayReranker",
+      @ref QoreRagUtils::SGLangReranker "SGLangReranker"
     - Chunkers: @ref QoreRagUtils::StructuredChunker "StructuredChunker",
       @ref QoreRagUtils::FixedChunker "FixedChunker"
     - Embedding caches: @ref QoreRagUtils::LruEmbeddingCache "LruEmbeddingCache"
@@ -141,6 +144,12 @@ foreach hash<RetrievalHit> hit in (hits) {
     @endcode
 
     @section QoreRagUtilsRelnotes Release Notes
+
+    @subsection QoreRagUtilsv1_1_0 QoreRagUtils v1.1.0
+    - added @ref QoreRagUtils::SGLangReranker "SGLangReranker", a reranker
+      backend (\c backend \c "sglang") that re-ranks via an SGLang reranker
+      server's \c /v1/rerank endpoint — GPU-served cross-encoder scoring with
+      no model loaded in-process; registered in @ref RagProviderRegistry
 
     @subsection QoreRagUtilsv1_0_1 QoreRagUtils v1.0.1
     - added optional @ref RagPipelineOptions hooks to

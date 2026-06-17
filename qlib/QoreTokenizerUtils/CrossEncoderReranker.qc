@@ -40,12 +40,14 @@ public hashdecl RerankerScoredHit {
 
 #! Configuration for CrossEncoderReranker
 public hashdecl RerankerConfig {
-    #! Mode: "http" for HTTP endpoint, "onnx" for local ONNX model
+    #! Mode: "http" for HTTP endpoint, "onnx" for local ONNX model, "sglang" for an SGLang reranker server
     string mode;
-    #! HTTP mode: URL of the reranker endpoint
+    #! HTTP / SGLang mode: URL of the reranker endpoint
     *string url;
-    #! HTTP mode: optional Bearer token
+    #! HTTP / SGLang mode: optional Bearer token
     *string api_key;
+    #! SGLang mode: model name to send in the rerank request (the served reranker model)
+    *string model;
     #! ONNX mode: path to the ONNX cross-encoder model
     *string model_path;
     #! ONNX mode: in-memory .onnx model data from a registry or database artifact
@@ -75,9 +77,10 @@ public hashdecl RerankerConfig {
     approximate nearest neighbor (ANN) search for high recall, and the second
     stage uses a cross-encoder to re-rank the candidates for high precision.
 
-    Supports two backends:
+    Supports three backends:
     - \b HTTP: Calls a reranker API endpoint that accepts query/passages pairs
     - \b ONNX: Runs a local ONNX cross-encoder model through dense tensor inputs
+    - \b SGLang: Calls an SGLang reranker server's \c /v1/rerank endpoint (query/documents)
 
     @par Example: Re-rank retrieval candidates
     @code{.py}
@@ -100,10 +103,12 @@ public class CrossEncoderReranker {
     private {
         #! Backend mode
         string mode;
-        #! HTTP endpoint URL
+        #! HTTP / SGLang endpoint URL
         *string url;
         #! Authentication token
         *string api_key;
+        #! SGLang mode: served reranker model name
+        *string model;
         #! HTTP timeouts
         int connect_timeout_ms;
         int timeout_ms;
@@ -133,17 +138,19 @@ public class CrossEncoderReranker {
     */
     constructor(hash<RerankerConfig> config) {
         mode = config.mode;
-        if (mode != "http" && mode != "onnx") {
+        if (mode != "http" && mode != "onnx" && mode != "sglang") {
             throw "RERANKER-CONFIG-ERROR",
-                sprintf("invalid mode %y; expected \"http\" or \"onnx\"", mode);
+                sprintf("invalid mode %y; expected \"http\", \"onnx\", or \"sglang\"", mode);
         }
 
-        if (mode == "http") {
+        if (mode == "http" || mode == "sglang") {
             if (!config.url.val()) {
-                throw "RERANKER-CONFIG-ERROR", "url is required for HTTP mode";
+                throw "RERANKER-CONFIG-ERROR",
+                    sprintf("url is required for %s mode", mode == "sglang" ? "SGLang" : "HTTP");
             }
             url = config.url;
             api_key = config.api_key;
+            model = config.model;
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
@@ -196,6 +203,9 @@ public class CrossEncoderReranker {
         if (mode == "onnx") {
             return scoreOnnx(query, passages);
         }
+        if (mode == "sglang") {
+            return scoreSglang(query, passages);
+        }
 
         throw "RERANKER-ERROR", sprintf("unsupported mode %y", mode);
     }
@@ -229,7 +239,8 @@ public class CrossEncoderReranker {
         format and for ONNX backends, the \c score is the model's raw output (subject
         to the configured activation function); for HTTP backends using the
         `{"results": [{"relevance_score": ...}]}` format it is the provider's
-        \c relevance_score.
+        \c relevance_score; for SGLang backends it is the server's per-document
+        \c score.
     */
     list<hash<RerankerScoredHit>> rerankWithScores(string query, list<string> passages,
             int top_k) {
@@ -424,6 +435,65 @@ public class CrossEncoderReranker {
         }
 
         throw "RERANKER-ERROR", "unexpected response format from reranker endpoint";
+    }
+
+    #! Scores via an SGLang reranker server (POST /v1/rerank)
+    /** Posts the SGLang/Jina-style rerank request \c {model, query, documents} and
+        maps the returned hits — which the server may return in descending-score order —
+        back to the input passage order, so the caller (and @ref rerankWithScores())
+        sees \c scores[i] aligned to \c passages[i].
+
+        @param query the search query
+        @param passages candidate passages (documents) to score
+        @return list of float relevance scores in the same order as @a passages
+
+        @throw RERANKER-ERROR if the response shape is unrecognized or a returned
+        index is out of range
+    */
+    private list<float> scoreSglang(string query, list<string> passages) {
+        ensureRestClient();
+
+        hash<auto> body = {
+            "query": query,
+            "documents": passages,
+        };
+        if (model.val()) {
+            body.model = model;
+        }
+
+        *hash<auto> hdr;
+        if (api_key.val()) {
+            hdr."Authorization" = "Bearer " + api_key;
+        }
+
+        hash<auto> resp = rest_client.restPost("/v1/rerank", body, hdr);
+
+        # SGLang/Jina return either a top-level list of hits or {"results": [...]}
+        auto hits;
+        if (resp.body.typeCode() == NT_LIST) {
+            hits = resp.body;
+        } else if (exists resp.body.results) {
+            hits = resp.body.results;
+        } else {
+            throw "RERANKER-ERROR",
+                "unexpected response format from SGLang reranker endpoint";
+        }
+
+        # pre-fill input-ordered scores; the server may omit or reorder entries
+        list<float> scores = ();
+        for (int i = 0; i < passages.size(); ++i) {
+            push scores, 0.0;
+        }
+        foreach hash<auto> hit in (hits) {
+            int idx = hit."index";
+            if (idx < 0 || idx >= passages.size()) {
+                throw "RERANKER-ERROR",
+                    sprintf("SGLang reranker returned out-of-range index %d for %d "
+                        "passages", idx, passages.size());
+            }
+            scores[idx] = (hit.score ?? hit.relevance_score ?? 0.0).toFloat();
+        }
+        return scores;
     }
 
     #! Ensures the REST client is initialized
