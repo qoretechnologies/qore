@@ -189,7 +189,31 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("hash/list auto-vivification from NOTHING", \testAutoVivification());
         addTestCase("list assignment decomposition", \testListAssignment());
         addTestCase("extract via LValuePathTernary", \testExtractLValuePath());
+        addTestCase("enum value through typed param to enum lvalue", \testEnumParamLValue());
         set_return_value(main());
+    }
+
+    testEnumParamLValue() {
+        # Regression: a typed-enum parameter assigned to an enum-typed lvalue
+        # (object member or local) must preserve enum identity when the function
+        # runs as JIT-compiled native code.  Enum types report base type NT_INT,
+        # so the JIT used to unbox the enum local to a bare int, stripping the
+        # TAG_ENUM marker; the subsequent runtime-checked store to an
+        # *enum<...> lvalue then failed with RUNTIME-TYPE-ERROR.  The function is
+        # warmed past the JIT threshold so it genuinely runs native.
+        string code = "%modern
+enum Shape { RowRecords = 1, HashOfLists = 2, }
+class P {
+    public { *Shape last_shape; }
+    setShape(Shape shape) { last_shape = shape; }
+}
+P p();
+int ok = 0;
+for (int j = 0; j < 20000; j++) { p.setShape(Shape::RowRecords); ++ok; }
+printf(\"%d:%y\\n\", ok, p.last_shape);
+";
+        string result = trim(runScriptWithOpts(code, "jit", "--jit-jit-threshold=50"));
+        assertEq("20000:1", result, "enum param survives native lvalue store");
     }
 
     private string runScript(string code, *string exec_mode, *string suffix) {

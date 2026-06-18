@@ -4520,7 +4520,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         for (const void* key : *ir_only_locals_set) {
             const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
             const QoreTypeInfo* ti = lv->getTypeInfo();
-            if (QoreTypeInfo::isType(ti, NT_INT)) {
+            // Enum types report base type NT_INT, but an enum VALUE is a tagged
+            // QoreValue (TAG_ENUM carrying the QoreEnumMember*), not a bare int.
+            // Unboxing an enum local to a native int strips the enum tag, so a
+            // later assignment to an enum-typed lvalue (which runtime-checks for a
+            // proper enum value) fails with RUNTIME-TYPE-ERROR.  Keep enum locals
+            // boxed so they preserve enum identity (matches the IR interpreter).
+            if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
                 native_int_locals.insert(key);
             } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
                 native_float_locals.insert(key);
