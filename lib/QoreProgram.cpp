@@ -1224,6 +1224,15 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
             continue;
         }
 
+        // Skip functions imported from modules: eager compilation must cover only
+        // the program's OWN code.  Eager-compiling entire module trees (e.g. the
+        // DataProvider/Util/ConnectionProvider stacks) at parse-commit is
+        // impractically slow; module hot code is promoted to native at runtime
+        // via the tiered execution-count threshold instead.
+        if (func->getModuleName()) {
+            continue;
+        }
+
         // Iterate through all variants of the function
         QoreFunctionIterator vit(*func);
         while (vit.next()) {
@@ -1291,11 +1300,18 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
         }
     }
 
-    // Recursively compile functions in child namespaces
+    // Recursively compile functions in child namespaces, skipping namespaces
+    // imported from modules — their functions/methods belong to the module, not
+    // the program's own code, and eager-compiling the whole module namespace tree
+    // at parse-commit is impractically slow.  Module hot code promotes to native
+    // at runtime via the tiered threshold.
     for (auto ni = ns->nsl.nsmap.begin(), ne = ns->nsl.nsmap.end(); ni != ne; ++ni) {
         QoreNamespace* child_ns = ni->second;
         if (child_ns) {
             qore_ns_private* child_priv = qore_ns_private::get(*child_ns);
+            if (child_priv->imported) {
+                continue;
+            }
             eagerlyCompileAllFunctions(child_priv, exec_mode);
         }
     }
