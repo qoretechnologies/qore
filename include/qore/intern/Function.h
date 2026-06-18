@@ -933,6 +933,14 @@ public:
         return evalTiered(name, argv, self, xsink);
     }
 
+    //! Account for one execution reached via the fast-call runtime path
+    //! (qore_rt_call_fast), which bypasses evalTiered().  Increments the
+    //! execution counter and triggers background JIT promotion when the function
+    //! becomes hot, so tiered-mode functions called only as callees (from IR or
+    //! native code) still get promoted to native.  No-op once native, after a
+    //! failed compile, or when there is no cached IR.
+    DLLLOCAL void recordFastCallExecution() const;
+
     DLLLOCAL bool hasBody() const {
         return (bool)statements;
     }

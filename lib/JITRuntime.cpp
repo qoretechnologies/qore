@@ -6935,6 +6935,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     }
     const std::string& call_name = ir ? ir->getDisplayName() : call_name_buf;
 
+    // Tiered promotion: this fast-call path bypasses evalTiered(), so account for
+    // the execution here and promote the callee to native once it is hot (no-op
+    // when already native / compilation failed).
+    uvb->recordFastCallExecution();
+
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);

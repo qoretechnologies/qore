@@ -5721,20 +5721,18 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
     // For JIT mode, set IR tier so function executes immediately, then enqueue
     // for background JIT compilation. This avoids blocking startup while LLVM
     // compiles each function synchronously (~23ms each).
-    if (exec_mode == QEM_JIT && cached_ir) {
+    // Start every eagerly-lowered function at the IR tier so it runs as IR (not
+    // AST) from the first call.  IR lowering above is cheap (no LLVM); the
+    // expensive LLVM/native compilation is NOT done here.  Instead, JIT/tiered
+    // functions are promoted to native ON DEMAND — when first called (jit) or
+    // once hot (tiered) — via the execution-count threshold (recordFastCallExecution
+    // / evalTiered).  Eagerly compiling every function to native at parse-commit
+    // floods the background compile queue and stalls program teardown (which
+    // drains that queue), so it is intentionally avoided.
+    if ((exec_mode == QEM_JIT || exec_mode == QEM_TIERED || exec_mode == QEM_IR) && cached_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
-        attemptJITCompilation();
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' enqueued for background JIT\n", name);
-    } else if (exec_mode == QEM_TIERED && cached_ir) {
-        // For tiered mode, start with IR tier and enqueue for background JIT
-        // This provides 2x speedup immediately while hot code still gets JIT benefit
-        current_tier.store(TIER_IR, std::memory_order_release);
-        attemptJITCompilation();
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' (tiered) starting with IR, enqueued for background JIT\n", name);
-    } else if (exec_mode == QEM_IR && cached_ir) {
-        // For IR mode, mark tier as TIER_IR (skip threshold-based promotion)
-        current_tier.store(TIER_IR, std::memory_order_release);
-        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR compilation complete\n", name);
+        printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR lowering complete "
+            "(native compilation deferred to on-demand promotion)\n", name);
     }
 }
 
@@ -5944,6 +5942,32 @@ QoreValue UserVariantBase::evalSpecializedIR(const char* name, const QoreIRFunct
         }
     }
     return val;
+}
+
+void UserVariantBase::recordFastCallExecution() const {
+    // The fast-call runtime path (qore_rt_call_fast) is used by IR-interpreted
+    // and JIT-native callers and does NOT go through evalTiered(), so a function
+    // reached only as a callee never accrues exec_count there and would never be
+    // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
+    // promotion tail here so hot tiered-mode functions still reach the JIT tier.
+    if (jit_compile_failed || !cached_ir) {
+        return;
+    }
+    // Already native — nothing to promote.
+    if (current_tier.load(std::memory_order_acquire) == TIER_JIT
+            && (cached_jit_fn.load(std::memory_order_acquire) || cached_aot_fn)) {
+        return;
+    }
+    uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
+    // On-demand promotion: explicit --exec-mode=jit promotes on the first call
+    // (threshold 1); tiered mode promotes once the function is hot.
+    uint64_t threshold = (pgm && pgm->getExecMode() == QEM_JIT) ? 1 : QoreJIT::getJITThreshold();
+    if (cached_ir->osr_jit_requested) {
+        cached_ir->osr_jit_requested = false;
+        attemptJITCompilation();
+    } else if (count >= threshold) {
+        attemptJITCompilation();
+    }
 }
 
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
@@ -6283,12 +6307,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
             name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
+        // On-demand promotion: explicit --exec-mode=jit promotes on the first call
+        // (threshold 1); tiered mode promotes once the function is hot.
+        uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
+            ? 1 : QoreJIT::getJITThreshold();
         if (cached_ir->osr_jit_requested && !jit_compile_failed) {
             cached_ir->osr_jit_requested = false;  // Reset flag
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 cached_ir->name.c_str());
             attemptJITCompilation();
-        } else if (count >= QoreJIT::getJITThreshold() && !jit_compile_failed) {
+        } else if (count >= jit_promote_threshold && !jit_compile_failed) {
             attemptJITCompilation();
         }
 

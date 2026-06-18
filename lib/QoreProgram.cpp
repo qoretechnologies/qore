@@ -1214,8 +1214,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 }
 
-// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified
-static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+// Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified.
+// Returns the number of the program's own functions/methods submitted for eager compilation, used to
+// decide whether the --exec-mode=jit synchronous barrier is affordable for this program's size.
+static size_t eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exec_mode) {
+    size_t eager_count = 0;
     // Walk functions in this namespace
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
         FunctionEntry* fe = i->second;
@@ -1244,6 +1247,7 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
 
             // Eagerly compile to IR/JIT as requested
             uvb->eagerlyCompileForExecMode(func->getName(), exec_mode);
+            ++eager_count;
         }
     }
 
@@ -1279,6 +1283,7 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+                ++eager_count;
             }
         }
 
@@ -1296,6 +1301,7 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
                     continue;
                 }
                 uvb->eagerlyCompileForExecMode(m->getName(), exec_mode);
+                ++eager_count;
             }
         }
     }
@@ -1312,9 +1318,10 @@ static void eagerlyCompileAllFunctions(qore_ns_private* ns, qore_exec_mode_t exe
             if (child_priv->imported) {
                 continue;
             }
-            eagerlyCompileAllFunctions(child_priv, exec_mode);
+            eager_count += eagerlyCompileAllFunctions(child_priv, exec_mode);
         }
     }
+    return eager_count;
 }
 
 // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
@@ -1398,22 +1405,15 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
                     && standard_parse
                     && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
-                // For explicit --exec-mode=jit, bring up LLVM before the eager
-                // pass (otherwise the per-function background-compile enqueues are
-                // silently dropped while LLVM is null), then drain the compile
-                // queue so every function is promoted to native (TIER_JIT) before
-                // the program runs.  This is the synchronous-barrier strategy:
-                // --exec-mode=jit means "compile to native up front".  Tiered mode
-                // stays adaptive and promotes hot functions at runtime instead.
-                const bool jit_barrier = (exec_mode == QEM_JIT);
-                if (jit_barrier) {
-                    QoreJIT::instance().ensureInitialized();
-                }
+                // Eagerly lower the program's own functions to IR (cheap, no LLVM)
+                // so they run as IR from the first call.  Native (LLVM) compilation
+                // is NOT done here: it happens on demand at runtime when a function
+                // is first called (--exec-mode=jit) or once it gets hot (tiered),
+                // via the execution-count promotion path.  Compiling everything up
+                // front floods the background compile queue and stalls program
+                // teardown, so it is intentionally avoided (see eagerlyCompileForExecMode).
                 qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
                 eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
-                if (jit_barrier) {
-                    QoreJIT::instance().waitForBgCompileQueue();
-                }
             }
 
             rc = 0;
