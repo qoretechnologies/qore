@@ -32,11 +32,12 @@
 %define NoZip
 %endtry
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/Hl7v2Util
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires Hl7v2Util
 
 %exec-class Hl7v2UtilTest
 

@@ -7,19 +7,20 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/BgeM3RestClient.qm
-%requires ../../../../qlib/BgeM3FastApiDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Mime
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires ConnectionProvider
+%requires DataProvider
+%requires BgeM3RestClient
+%requires BgeM3FastApiDataProvider
 
 %try-module json
 %define NoJson

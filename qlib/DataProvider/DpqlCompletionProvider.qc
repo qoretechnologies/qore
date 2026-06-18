@@ -53,6 +53,18 @@ public hashdecl DpqlCompletionItem {
         @since DataProvider 3.4
     */
     *string detail;
+    #! Optional text used by LSP clients to filter the typed word against this item
+    /** LSP clients filter the user's typed prefix against \c filterText, falling back to
+        \c label when not present. This must be set when \c label is a human-readable
+        display name that differs from the text the user actually types (e.g. a template
+        value whose label is its \c display_name); otherwise typed-prefix filtering would
+        match against the display name instead of the raw template text.
+
+        When not present, clients filter against \c label (the current behavior).
+
+        @since DataProvider 3.5.1
+    */
+    *string filter_text;
     #! Sort priority (lower = higher priority)
     int sort_priority = 100;
 }
@@ -1274,13 +1286,19 @@ public class DpqlCompletionProvider {
             list<hash<DpqlCompletionItem>> items = ();
             string lwr_prefix = prefix.lwr();
             foreach hash<auto> ctx in (contexts) {
-                string label = "$" + ctx.name + ":";
+                # the raw template string is always what the user types; it drives insertion and
+                # (via filter_text) typed-prefix filtering, so it stays byte-identical to before
+                string raw = "$" + ctx.name + ":";
                 if (!prefix || index(ctx.name.lwr(), lwr_prefix) == 0) {
                     items += <DpqlCompletionItem>{
-                        "label": label,
+                        # use the host-supplied display name when present; fall back to the raw
+                        # template string otherwise so existing label assertions are unchanged
+                        "label": ctx.display_name ?? raw,
                         "kind": "template",
-                        "insert_text": label,
+                        "insert_text": raw,
                         "detail": ctx.needs_arg ? "requires argument" : NOTHING,
+                        # always filter against the raw template text the user types
+                        "filter_text": raw,
                         "documentation": ctx.description ?? sprintf("Template context: %s", ctx.name),
                         # Sort alphabetically by context name
                         "sort_priority": ctx.sort_priority ?? 10,
@@ -1327,10 +1345,19 @@ public class DpqlCompletionProvider {
         }
         list<hash<DpqlCompletionItem>> items = ();
         foreach hash<auto> val in (values) {
+            # the raw template string is always what the user types; it drives insertion and
+            # (via filter_text) typed-prefix filtering, so it stays byte-identical to before
+            string raw = "$" + ctx + ":" + val.name;
             items += <DpqlCompletionItem>{
-                "label": "$" + ctx + ":" + val.name,
+                # use the host-supplied display name when present; fall back to the raw template
+                # string otherwise so static contexts and existing label assertions are unchanged
+                "label": val.display_name ?? raw,
                 "kind": "template",
-                "insert_text": "$" + ctx + ":" + val.name,
+                "insert_text": raw,
+                # show the value type next to the label when the host provides it
+                "detail": val.type,
+                # always filter against the raw template text the user types, regardless of label
+                "filter_text": raw,
                 "documentation": val.description ?? sprintf("Template value: %s", val.name),
                 "sort_priority": val.sort_priority ?? 10,
             };

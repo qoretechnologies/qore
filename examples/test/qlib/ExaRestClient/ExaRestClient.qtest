@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/ExaRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreLlmTypes
+%requires ExaRestClient
 
 %exec-class ExaRestClientTest
 

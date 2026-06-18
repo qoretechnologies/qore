@@ -9,7 +9,7 @@
 %requires QUnit
 %requires Logger
 %requires Mime
-%requires ../../../../qlib/DataProvider
+%requires DataProvider
 
 %requires reflection
 
@@ -5054,6 +5054,103 @@ public class DpqlTest inherits QUnit::Test {
                 }
             }
             assertEq(True, has_value, "template value completions from callback");
+
+            AbstractDataProvider::clearTemplateCallbacks();
+        }
+
+        # Template value completions with display_name/type produce rich labels + filter_text
+        {
+            code list_values = list<hash<auto>> sub (string ctx, string prefix, *hash<auto> template_context) {
+                if (ctx == "data") {
+                    return (
+                        # rich item: has display_name + type (FSM state-data shape)
+                        {
+                            "name": "id",
+                            "display_name": "Message ID",
+                            "type": "string",
+                            "description": "The ID of the message",
+                        },
+                        # minimal item: no display_name/type (static-context shape)
+                        {"name": "raw.value", "description": "Raw value"},
+                    );
+                }
+                return ();
+            };
+            AbstractDataProvider::clearTemplateCallbacks();
+            assertEq(True, AbstractDataProvider::setTemplateCallbacks(
+                auto sub (string ctx, string val, *hash<auto> tc) { return NOTHING; },
+                NOTHING,
+                NOTHING,
+                list_values,
+            ));
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$data:', 6, fields);
+
+            *hash<DpqlCompletionItem> rich;
+            *hash<DpqlCompletionItem> minimal;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.filter_text == "$data:id") {
+                    rich = item;
+                } else if (item.filter_text == "$data:raw.value") {
+                    minimal = item;
+                }
+            }
+
+            # rich item: label is the display name, detail is the type, filter_text is the raw template,
+            # insert_text is the raw template (unchanged), kind stays "template"
+            assertEq("Message ID", rich.label, "rich item label is display_name");
+            assertEq("string", rich.detail, "rich item detail is type");
+            assertEq("$data:id", rich.filter_text, "rich item filter_text is raw template");
+            assertEq("$data:id", rich.insert_text, "rich item insert_text is raw template");
+            assertEq("template", rich.kind, "rich item kind is template");
+            assertEq("The ID of the message", rich.documentation, "rich item documentation preserved");
+
+            # minimal item (no display_name/type): label falls back to the raw template, no detail;
+            # filter_text == label so filtering is a no-op (byte-identical to legacy behavior)
+            assertEq("$data:raw.value", minimal.label, "minimal item label falls back to raw template");
+            assertNothing(minimal.detail, "minimal item has no detail without type");
+            assertEq("$data:raw.value", minimal.filter_text, "minimal item filter_text is raw template");
+            assertEq(minimal.label, minimal.filter_text, "minimal item filter_text == label (no-op)");
+
+            AbstractDataProvider::clearTemplateCallbacks();
+        }
+
+        # Template context completions with display_name produce rich labels + filter_text
+        {
+            code list_contexts = list<hash<auto>> sub (*hash<auto> template_context) {
+                return (
+                    # rich context: has display_name
+                    {"name": "data", "display_name": "State Data", "description": "FSM state data"},
+                    # minimal context: no display_name
+                    {"name": "config", "description": "Config data"},
+                );
+            };
+            AbstractDataProvider::clearTemplateCallbacks();
+            assertEq(True, AbstractDataProvider::setTemplateCallbacks(
+                auto sub (string ctx, string val, *hash<auto> tc) { return NOTHING; },
+                NOTHING,
+                list_contexts,
+                NOTHING,
+            ));
+
+            list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$', 1, fields);
+
+            *hash<DpqlCompletionItem> rich;
+            *hash<DpqlCompletionItem> minimal;
+            foreach hash<DpqlCompletionItem> item in (items) {
+                if (item.filter_text == "\$data:") {
+                    rich = item;
+                } else if (item.filter_text == "\$config:") {
+                    minimal = item;
+                }
+            }
+
+            assertEq("State Data", rich.label, "rich context label is display_name");
+            assertEq("\$data:", rich.filter_text, "rich context filter_text is raw template");
+            assertEq("\$data:", rich.insert_text, "rich context insert_text is raw template");
+
+            assertEq("\$config:", minimal.label, "minimal context label falls back to raw template");
+            assertEq(minimal.label, minimal.filter_text, "minimal context filter_text == label (no-op)");
 
             AbstractDataProvider::clearTemplateCallbacks();
         }

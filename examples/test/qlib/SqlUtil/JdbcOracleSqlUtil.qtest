@@ -11,7 +11,8 @@
 %requires OracleSqlUtilBase
 %requires JdbcOracleSqlUtil
 
-%requires ./SqlUtilTestBase.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires SqlUtilTestBase
 
 %try-module oracle
 %define NoOracle

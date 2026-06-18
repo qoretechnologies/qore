@@ -4,12 +4,13 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ExaDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires ConnectionProvider
+%requires DataProvider
+%requires ExaDataProvider
 
 %exec-class ExaDataProviderTest
 

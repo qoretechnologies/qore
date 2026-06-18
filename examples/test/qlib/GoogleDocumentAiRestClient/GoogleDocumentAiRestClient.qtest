@@ -3,9 +3,10 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/GoogleDocumentAiRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires GoogleDocumentAiRestClient
 
 %exec-class GoogleDocumentAiRestClientTest
 

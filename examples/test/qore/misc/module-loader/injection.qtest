@@ -11,7 +11,8 @@
 %requires Util
 %requires QUnit
 
-%requires ./MyTestModule.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires MyTestModule
 #/;
 
 %exec-class InjectionTest

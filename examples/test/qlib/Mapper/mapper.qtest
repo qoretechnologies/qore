@@ -9,7 +9,7 @@
 %requires MapperUtil
 %requires Logger
 %requires DataProvider
-%requires ../../../../qlib/Mapper.qm
+%requires Mapper
 
 %exec-class MapperTest
 

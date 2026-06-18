@@ -199,7 +199,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     testH3PollOpWithUdpSocket() {
         # Create and bind a UDP socket
         Socket udp();
-        udp.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        udp.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         hash<auto> info = udp.getSocketInfo();
         assertTrue(info.port > 0, "UDP socket bound to a port");
 

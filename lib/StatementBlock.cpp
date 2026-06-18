@@ -173,9 +173,17 @@ QoreValue StatementBlock::exec(ExceptionSink* xsink) {
     //QORE_TRACE("StatementBlock::exec()");
     QoreValue return_value{};
     RuntimeConfig& rc = rc_get_current_ref();
-    ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
-        ? rc.getThreadLocalProgramData()
-        : get_thread_local_program_data();
+    // Debug hooks must consult the authoritative current thread-program data — the
+    // instance a debugger attaches to (get_thread_local_program_data()) — not the
+    // value cached in the execution context, which can be a stale or duplicate
+    // ThreadLocalProgramData for the same (program, thread) and would silently make
+    // the debugger/line-coverage miss statements. The IR interpreter already
+    // resolves the tlpd this way; the cached value is only a fallback when the
+    // thread has no current program-data set up yet.
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (!tlpd) {
+        tlpd = rc.getThreadLocalProgramData();
+    }
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
     }
@@ -242,9 +250,11 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
         pushBlock(on_block_exit_list.end());
     }
 
-    ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
-        ? rc.getThreadLocalProgramData()
-        : get_thread_local_program_data();
+    // Authoritative current thread-program data for debug hooks (see note in exec()).
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (!tlpd) {
+        tlpd = rc.getThreadLocalProgramData();
+    }
     // to execute even when block is empty, e.g. while(true);
     if (tlpd->runtimeCheck()) {
         stmt_rc = tlpd->dbgStep(this, nullptr, xsink);
@@ -1041,9 +1051,11 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             return 0;
         }
 
-        ThreadLocalProgramData* tlpd = rc.getThreadLocalProgramData()
-            ? rc.getThreadLocalProgramData()
-            : get_thread_local_program_data();
+        // Authoritative current thread-program data for debug hooks (see note in exec()).
+        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+        if (!tlpd) {
+            tlpd = rc.getThreadLocalProgramData();
+        }
         // Execute only new statements
         for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
             if (tlpd->runtimeCheck()) {

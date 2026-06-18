@@ -5,8 +5,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/HttpServerUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
 
 %exec-class HttpServerUtilAuthenticatorTest
 

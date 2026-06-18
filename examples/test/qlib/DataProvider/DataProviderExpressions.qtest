@@ -4,10 +4,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/DataProvider
+%requires DataProvider
 %requires i18n
 
-%requires ../../../../qlib/QUnit.qm
+%requires QUnit
 
 %try-module yaml
 %define NoYaml

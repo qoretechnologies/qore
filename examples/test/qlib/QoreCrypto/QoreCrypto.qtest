@@ -6,10 +6,11 @@
 */
 
 %modern
-%requires ../../../../qlib/QoreCrypto
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreCrypto
+%requires FsUtil
+%requires Util
+%requires QUnit
 
 %exec-class QoreCryptoTest
 

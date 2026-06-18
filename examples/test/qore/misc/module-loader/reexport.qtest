@@ -6,7 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 
-%requires ./ReExportTest.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ReExportTest
 
 %exec-class ReExportTest
 

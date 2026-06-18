@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreAsyncJobUtils.qm
-%requires ../../../../qlib/AssemblyAiRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreAsyncJobUtils
+%requires AssemblyAiRestClient
 
 %exec-class AssemblyAiRestClientTest
 

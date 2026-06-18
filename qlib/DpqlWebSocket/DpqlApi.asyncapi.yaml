@@ -522,6 +522,24 @@ components:
           type: string
         insert_text:
           type: string
+        snippet_text:
+          type: string
+          description: >-
+            Optional snippet text with LSP parameter placeholders; when present
+            clients should use this instead of insert_text and set
+            insertTextFormat to 2 (snippet)
+        detail:
+          type: string
+          description: >-
+            Optional detail text shown next to the label (e.g. value type
+            information); displayed in a muted style by most editors
+        filter_text:
+          type: string
+          description: >-
+            Optional text used by LSP clients to filter the typed word against
+            this item; clients fall back to label when not present. Set when the
+            label is a display name that differs from the text the user types
+            (e.g. a template value labeled with its display name)
         documentation:
           type: string
         sort_priority:

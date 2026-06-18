@@ -3,8 +3,9 @@
 
 %modern
 
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/FsUtil.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
 
 # Allow child Program objects to have more liberal permissions than the parent.
 %no-child-restrictions

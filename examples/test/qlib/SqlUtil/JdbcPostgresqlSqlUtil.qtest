@@ -11,7 +11,8 @@
 %requires PgsqlSqlUtilBase
 %requires JdbcPostgresqlSqlUtil
 
-%requires ./SqlUtilTestBase.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires SqlUtilTestBase
 
 %exec-class PgsqlTest
 

@@ -8,7 +8,8 @@
 %requires Util
 %requires QUnit
 
-%requires ./Issue3506_1.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires Issue3506_1
 
 %requires reflection
 

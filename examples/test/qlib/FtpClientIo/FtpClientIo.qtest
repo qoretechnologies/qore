@@ -8,7 +8,7 @@
 %requires QUnit
 %requires Util
 %requires FsUtil
-%requires ../../../../qlib/FtpClientIo/FtpClientIo.qm
+%requires FtpClientIo
 
 %include ../../qore/classes/FtpServer.qc
 

@@ -4,15 +4,16 @@
 %modern
 %allow-injection
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/QoreAsyncJobUtils.qm
-%requires ../../../../qlib/QoreMediaUtils.qm
-%requires ../../../../qlib/BflRestClient.qm
-%requires ../../../../qlib/BflDataProvider
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires ConnectionProvider
+%requires DataProvider
+%requires QoreAsyncJobUtils
+%requires QoreMediaUtils
+%requires BflRestClient
+%requires BflDataProvider
 
 %exec-class BflDataProviderTest
 

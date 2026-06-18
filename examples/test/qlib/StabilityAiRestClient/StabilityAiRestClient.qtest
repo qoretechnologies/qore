@@ -3,10 +3,11 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreMediaUtils.qm
-%requires ../../../../qlib/StabilityAiRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreMediaUtils
+%requires StabilityAiRestClient
 
 %exec-class StabilityAiRestClientTest
 

@@ -3,12 +3,13 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/OpenAiRestClient.qm
-%requires ../../../../qlib/GroqRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires GroqRestClient
 
 %exec-class GroqRestClientTest
 
