@@ -1379,10 +1379,29 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # H2 (TCP) attempt fails fast with SOCKET-CONNECT-ERROR; the shared
         # heH2FastFail()/heThrowConnectError() must propagate it WITHOUT waiting
         # connect_timeout (identical to the synchronous race's fast-fail).
+        #
+        # Pick a free port, then hold ONLY a UDP socket on it for the duration of
+        # the test.  Rationale (root cause of a macOS-only flake): simply closing
+        # a bound socket leaves the port free to be re-bound between here and the
+        # race's connect attempts.  The most dangerous re-binder is the manager's
+        # own H3/QUIC client, which auto-binds an ephemeral UDP port from the same
+        # pool the freed port came from; on BSD/macOS that recently-freed port is
+        # reused readily, so the H3 leg could bind it and loopback-self-deliver
+        # instead of failing — making the happy-eyeballs race resolve to a bogus
+        # "ready" winner and the assertion below see no exception.  Holding the
+        # UDP port closes that hole (H3 cannot self-bind/reuse it and our socket
+        # absorbs its datagrams) while leaving the TCP port truly closed so H2
+        # still gets an immediate RST → fast SOCKET-CONNECT-ERROR.  We must NOT
+        # hold a (bound, non-listening) TCP socket: macOS drops the SYN instead
+        # of sending RST, which turns the fast-fail into a ~8s SYN-retransmit
+        # timeout.
         Socket tmp();
         tmp.bind("127.0.0.1:0");
         int bad_port = tmp.getSocketInfo().port;
         delete tmp;
+        Socket udp_hold();
+        udp_hold.bindINET("127.0.0.1", string(bad_port), False, AF_INET, SOCK_DGRAM);
+        on_exit delete udp_hold;
         string refused = "https://127.0.0.1:" + bad_port;
 
         HttpClientIo::HttpClientConnectionManager mgr(
