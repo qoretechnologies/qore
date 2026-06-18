@@ -95,6 +95,14 @@ public:
     bool initialize(std::string& error);
     bool canJit(int64 parse_options, std::string& reason) const;
 
+    //! Ensure the LLVM JIT engine is initialized (idempotent, thread-safe).
+    /** Brings up LLVM lazily via the same std::call_once guard the compile entry
+        points use.  Called by the explicit --exec-mode=jit eager path so the
+        functions enqueued for background compilation at parse-commit are not
+        silently skipped (enqueueBgCompile no-ops while LLVM is null).
+        @return true if the JIT engine is available. */
+    bool ensureInitialized();
+
     //! Compile an IR function to native code and cache the result.
     //! Returns true on success; on failure, sets error message.
     bool compileFunction(const QoreIRFunction& func, std::string& error,

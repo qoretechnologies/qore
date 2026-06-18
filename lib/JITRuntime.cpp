@@ -115,6 +115,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
     { "qore_rt_jit_dbg_step", reinterpret_cast<void*>(&qore_rt_jit_dbg_step) },
     { "qore_rt_jit_synthetic_block_step", reinterpret_cast<void*>(&qore_rt_jit_synthetic_block_step) },
+    { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
     { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
@@ -8100,6 +8101,17 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
 // Backward-compatible wrapper that calls the implementation with inline_lowered=false
 extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink) {
     qore_rt_exec_on_block_exit_impl(saved_count, xsink, false);
+}
+
+// Discard (without firing) the on_block_exit handlers registered since
+// saved_count, truncating the thread-local handler stack back to that mark.
+// Used by the JIT deopt path: when a guard fails mid-function, the function
+// re-executes via the AST interpreter, which re-registers and fires its own
+// handlers — so the handlers the native code already pushed must be dropped
+// (not fired), otherwise they leak onto the thread-local stack and fire later
+// at an unrelated call (issue: guard-deopt on_block_exit double-fire).
+extern "C" DLLEXPORT void qore_rt_discard_on_block_exit(int64_t saved_count) {
+    qore_rt_exec_on_block_exit_impl(saved_count, nullptr, /*inline_lowered=*/true);
 }
 
 // --- AOT context-based helpers (Phase 7b) ---

@@ -471,6 +471,11 @@ int64_t qore_rt_get_on_block_exit_count();
 //! Removes executed handlers from the stack.
 void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
+//! Discard (without firing) on_block_exit handlers registered since saved_count,
+//! truncating the thread-local handler stack back to that mark.  Used by the JIT
+//! deopt path before re-executing via the AST interpreter.
+void qore_rt_discard_on_block_exit(int64_t saved_count);
+
 struct QoreAOTContext;
 
 //! Register an on_block_exit handler via AOT context slot; raises if handler IR is missing.

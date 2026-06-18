@@ -3152,6 +3152,18 @@ QoreIRLowering::HandlerVariableCapture QoreIRLowering::analyzeHandlerVariables(
     return capture;
 }
 
+// Each on_block_exit handler body is compiled to its own QoreIRFunction.  The
+// JIT resolves a handler's compiled LLVM function by name (module.getFunction),
+// so every handler MUST have a unique name — otherwise multiple handlers in one
+// function (e.g. on_exit + on_error + on_success) all collide to a single LLVM
+// function and run the same body (the IR interpreter is unaffected: it uses the
+// handler_ir pointer directly).  A process-global counter assigned at
+// construction gives each handler_ir a stable, unique name for its lifetime.
+static std::string qore_ir_next_handler_name() {
+    static std::atomic<uint64_t> handler_counter{0};
+    return "handler_" + std::to_string(handler_counter.fetch_add(1, std::memory_order_relaxed));
+}
+
 QoreIRFunction* QoreIRLowering::compileHandlerToIR(
         const StatementBlock* handler_code,
         const HandlerVariableCapture& capture,
@@ -3163,7 +3175,7 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 
     // Phase 3b: Compile handler to IR function with captured variables as parameters
     // Create a new IR function for the handler
-    auto handler_func = std::make_unique<QoreIRFunction>("handler");
+    auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
 
     // Populate pre_instantiated_locals with handler body locals
     // so the IR interpreter knows which variables need instantiation
@@ -3377,7 +3389,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         }
 
         // Create handler IR function
-        auto handler_func = std::make_unique<QoreIRFunction>("handler");
+        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
@@ -3491,7 +3503,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         }
 
         // Create handler IR function
-        auto handler_func = std::make_unique<QoreIRFunction>("handler");
+        auto handler_func = std::make_unique<QoreIRFunction>(qore_ir_next_handler_name());
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // This allows handler code to reference parent-scope variables by their parent slot IDs

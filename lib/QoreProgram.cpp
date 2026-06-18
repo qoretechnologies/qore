@@ -1382,8 +1382,22 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             if ((exec_mode == QEM_IR || exec_mode == QEM_JIT || exec_mode == QEM_TIERED)
                     && standard_parse
                     && (pwo.parse_options & PO_MODERN) == PO_MODERN) {
+                // For explicit --exec-mode=jit, bring up LLVM before the eager
+                // pass (otherwise the per-function background-compile enqueues are
+                // silently dropped while LLVM is null), then drain the compile
+                // queue so every function is promoted to native (TIER_JIT) before
+                // the program runs.  This is the synchronous-barrier strategy:
+                // --exec-mode=jit means "compile to native up front".  Tiered mode
+                // stays adaptive and promotes hot functions at runtime instead.
+                const bool jit_barrier = (exec_mode == QEM_JIT);
+                if (jit_barrier) {
+                    QoreJIT::instance().ensureInitialized();
+                }
                 qore_root_ns_private* root_ns_priv = qore_root_ns_private::get(*RootNS);
                 eagerlyCompileAllFunctions(root_ns_priv, exec_mode);
+                if (jit_barrier) {
+                    QoreJIT::instance().waitForBgCompileQueue();
+                }
             }
 
             rc = 0;

@@ -5188,6 +5188,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitIteratorCleanup(module);
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
+        // Discard (without firing) any on_block_exit handlers this native frame
+        // already pushed before the guard failed.  The AST re-run re-registers
+        // and fires its own handlers; leaving these on the thread-local handler
+        // stack would leak them and fire them at a later unrelated call.
+        if (obe_saved_count) {
+            auto discard_fn = module.getOrInsertFunction("qore_rt_discard_on_block_exit",
+                    llvm::FunctionType::get(void_type, {i64_type}, false));
+            builder->CreateCall(discard_fn, {obe_saved_count});
+        }
         // Call qore_rt_request_jit_deopt(deopt_counter_ptr) to set the
         // thread-local deopt flag and increment the deopt counter
         auto deopt_fn = module.getOrInsertFunction("qore_rt_request_jit_deopt",

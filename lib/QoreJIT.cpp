@@ -158,6 +158,13 @@ bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
     return true;
 }
 
+bool QoreJIT::ensureInitialized() {
+    std::call_once(init_flag, [this]() {
+        init_success = initialize(init_error);
+    });
+    return init_success;
+}
+
 bool QoreJIT::initialize(std::string& error) {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
