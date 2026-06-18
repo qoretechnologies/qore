@@ -1696,6 +1696,44 @@ public class AbstractStreamRequest {
         return False;
     }
 
+    #! Returns @ref True "True" if this stream request should be handled as a fully-interactive
+    #! bidirectional stream on HTTP/2 and HTTP/3
+    /** By default stream requests use the <i>recv-all-then-send</i> model: @ref handleRequest() reads
+        the entire inbound body (all DATA frames) before calling @ref sendResponse() to produce the
+        reply.  This is correct for upload/download and request/response streaming, but it cannot
+        support an interactive exchange where the client sends an operation, reads its result, then
+        decides the next operation on the <b>same</b> stream (e.g. read-your-writes within a remote
+        SQL session).
+
+        When this method returns @ref True "True" <b>and</b> the request is body-streaming on HTTP/2 or
+        HTTP/3, @ref handleRequest() instead drives an <i>interleaved</i> loop: it submits early
+        \c 200 streaming response headers, then for each inbound frame it calls @ref recvImpl() and
+        immediately drains @ref sendImpl() to write a reply, sending DATA frames back on the same
+        stream via the I/O thread's push + \c wakeSocket model.  The handler thread never touches the
+        HTTP/2 / QUIC session directly — outbound DATA is submitted through the socket's thread-safe
+        thread-safe \c submit / \c sendHttp2StreamData APIs and flushed by the I/O thread.
+
+        Handlers that opt in must:
+        - override @ref getResponseHeaderMessageImpl() to return the \c 200 response code and headers
+          (e.g. the content type); no \c "body" key is used in interactive mode;
+        - implement @ref recvImpl() to process each inbound frame and queue exactly the reply
+          frame(s) for that operation;
+        - implement @ref sendImpl() to return the queued reply frame(s) for the just-received
+          operation and @ref nothing when none remain (it will be called again for the next
+          operation).
+
+        On HTTP/1.x (half-duplex) this method has no effect; the legacy recv-all-then-send model is
+        always used.
+
+        @return @ref True "True" to drive an interactive bidirectional stream on HTTP/2 or HTTP/3,
+        @ref False "False" (the default) to use the legacy recv-all-then-send model
+
+        @since HttpServerUtil 2.4
+    */
+    bool wantsInteractiveStreaming() {
+        return False;
+    }
+
     #! Notifies the request handler of a callback that can abort the in-flight inbound body read
     /** Called from @ref handleRequest() just before entering the per-chunk read loop on HTTP/2
         and HTTP/3 body-streaming requests; the closure unblocks the chunk-wait (e.g. by calling
@@ -1734,6 +1772,15 @@ public class AbstractStreamRequest {
             # signal end of data
             recvImpl({"hdr": NOTHING});
         } else if (cx."header-info".body_streaming) {
+            # Opt-in interactive bidirectional streaming on HTTP/2 / HTTP/3: instead of
+            # reading all inbound DATA before replying, interleave read -> reply on the
+            # same stream so the client can do send -> read-result -> send (e.g.
+            # read-your-writes within one session).  HTTP/1.x is half-duplex and always
+            # uses the legacy recv-all-then-send model below.
+            if (wantsInteractiveStreaming()
+                    && (cx."header-info".http2 || cx."header-info".http3)) {
+                return handleInteractiveStream();
+            }
             # HTTP/2 or HTTP/3 body streaming: read DATA frames incrementally and
             # process via recv() callbacks so the handler can detect errors mid-stream
             # (e.g. COLUMN-ERROR) without buffering the entire body in memory.
@@ -1996,6 +2043,173 @@ public class AbstractStreamRequest {
         }
         rv.body = new CallbackInputStream(\send(), self);
         return rv;
+    }
+
+    #! drives an interactive (interleaved read -> reply) bidirectional stream on HTTP/2 or HTTP/3
+    /** Submits early \c 200 streaming response headers, then for each inbound DATA frame calls
+        @ref recv() (which calls @ref recvImpl()) and immediately drains @ref send() (which calls
+        @ref sendImpl()) to write reply frame(s) for that operation back on the same stream.  At
+        END_STREAM, signals end-of-data via @c recvImpl({"hdr": NOTHING}), flushes any final reply,
+        and half-closes the stream.
+
+        Outbound DATA is submitted through the socket's thread-safe APIs and flushed by the I/O
+        thread via the \c io_wake closure (the handler thread never touches the HTTP/2 / QUIC session
+        directly).  The full response is sent here, so @c reply_sent is returned to tell the dispatch
+        the stream lifecycle was managed directly.
+
+        @return a response hash with \c reply_sent set so the server leaves the (now half-closed)
+        stream alone
+
+        @since HttpServerUtil 2.4
+    */
+    private hash<HttpHandlerResponseInfo> handleInteractiveStream() {
+        bool http3 = cx."header-info".http3 ?? False;
+        int sid = cx."header-info".stream_id;
+        int session_id = http3 ? cx."header-info".session_id : 0;
+        *code<nothing()> io_wake = cx."header-info".io_wake;
+        if (!io_wake) {
+            throw "INTERACTIVE-STREAM-ERROR",
+                sprintf("interactive streaming dispatch missing io_wake closure for stream %d", sid);
+        }
+
+        # build and submit early 200 streaming response headers (no body)
+        hash<HttpHandlerResponseInfo> rh = getResponseHeaderMessage();
+        http_set_reply_headers(s, cx, \rh);
+        int rcode = rh."code" ?? 200;
+        hash<auto> resp_hdr = rh.hdr ?? {};
+        # HTTP/2 and HTTP/3 do not use chunked transfer encoding
+        remove resp_hdr."Transfer-Encoding";
+        if (http3) {
+            s.submitQuicResponseStreaming(session_id, sid, rcode, resp_hdr);
+        } else {
+            s.submitHttp2StreamingResponseHeaders(sid, rcode, resp_hdr);
+        }
+        io_wake();
+
+        # set up inbound DATA delivery: HTTP/2 registers a Queue the I/O thread fills (NOTHING
+        # sentinel = END_STREAM); HTTP/3 reads directly from the per-stream CV-driven QUIC reader
+        Queue body_queue;
+        if (!http3) {
+            *code<nothing(Queue)> register_body_queue = cx."header-info".register_body_queue;
+            if (!register_body_queue) {
+                throw "INTERACTIVE-STREAM-ERROR",
+                    sprintf("interactive streaming dispatch missing register_body_queue closure "
+                        "for stream %d", sid);
+            }
+            body_queue = new Queue(-1);
+            register_body_queue(body_queue);
+        }
+
+        # allow another thread (e.g. a service stop) to abort the inbound read
+        if (http3) {
+            setBodyCancel(sub () {
+                try {
+                    s.cancelQuicStreamRead(session_id, sid);
+                } catch () {}
+            });
+        } else {
+            setBodyCancel(sub () {
+                body_queue.setError("STREAM-ABORTED",
+                    sprintf("inbound interactive read cancelled on stream %d", sid));
+            });
+        }
+        on_exit setBodyCancel(NOTHING);
+
+        # interleaved read -> reply loop
+        while (True) {
+            *binary chunk;
+            if (http3) {
+                chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
+            } else {
+                auto c = body_queue.get(timeout_ms);
+                if (c instanceof binary) {
+                    chunk = c;
+                }
+            }
+            if (!exists chunk) {
+                # NOTHING sentinel (H2) or clean EOF (H3) => END_STREAM
+                break;
+            }
+            recv({"data": chunk});
+            # write any reply frame(s) the handler produced for this inbound operation
+            drainInteractiveReplies(sid, session_id, http3, io_wake);
+            if (hasRecvError()) {
+                break;
+            }
+        }
+        # signal end of data, flush any final reply, then half-close the stream
+        recvImpl({"hdr": NOTHING});
+        drainInteractiveReplies(sid, session_id, http3, io_wake);
+        sendInteractiveData(sid, session_id, http3, binary(), True, io_wake);
+
+        return <HttpHandlerResponseInfo>{"code": rcode, "reply_sent": True};
+    }
+
+    #! drains and sends all reply frames the handler has queued for the current inbound operation
+    /** Calls @ref send() (=> @ref sendImpl()) repeatedly, writing each returned frame as a DATA
+        frame on the stream, until @ref nothing is returned (no more replies for this operation).
+    */
+    private drainInteractiveReplies(int sid, int session_id, bool http3, code<nothing()> io_wake) {
+        while (True) {
+            auto v = send();
+            if (!exists v) {
+                break;
+            }
+            if (v.typeCode() == NT_HASH) {
+                # a hash here is a DataStream error trailer; HTTP/2 + HTTP/3 do not support
+                # chunked trailers, so it cannot be sent as a DATA frame — stop draining
+                break;
+            }
+            sendInteractiveData(sid, session_id, http3, binary(v), False, io_wake);
+        }
+    }
+
+    #! sends a single DATA frame (optionally with END_STREAM) on an interactive stream with backpressure
+    /** Mirrors the controller's \c send_stream_data backpressure handling: on HTTP/2 retries on
+        \c HTTP2-FLOW-CONTROL after waiting for the stream send buffer to drain; on HTTP/3 retries
+        while \c submitQuicStreamData() reports the buffer full.  The I/O thread is woken via
+        \c io_wake so it flushes the queued frame.
+    */
+    private sendInteractiveData(int sid, int session_id, bool http3, binary data, bool end_stream,
+            code<nothing()> io_wake) {
+        int retries = 0;
+        if (http3) {
+            while (s.submitQuicStreamData(session_id, sid, data, end_stream) == 1) {
+                io_wake();
+                if (++retries > 200) {
+                    throw "HTTP3-FLOW-CONTROL",
+                        sprintf("stream %d: buffer not draining after %d retries", sid, retries);
+                }
+                if (s.waitForQuicStreamDrain(session_id, sid, 50ms) == -1) {
+                    throw "HTTP3-STREAM-ERROR",
+                        sprintf("stream %d: stream removed while waiting for drain", sid);
+                }
+            }
+            io_wake();
+        } else {
+            while (True) {
+                try {
+                    s.sendHttp2StreamData(sid, data, end_stream);
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "HTTP2-FLOW-CONTROL") {
+                        io_wake();
+                        if (++retries > 200) {
+                            throw "HTTP2-FLOW-CONTROL",
+                                sprintf("stream %d: buffer not draining after %d retries", sid,
+                                    retries);
+                        }
+                        if (s.waitForHttp2StreamDrain(sid, 10s)) {
+                            throw "HTTP2-STREAM-ERROR",
+                                sprintf("stream %d: drain timed out or stream removed", sid);
+                        }
+                        continue;
+                    }
+                    rethrow;
+                }
+            }
+            io_wake();
+        }
     }
 
     #! this method returns the response message description hash by calling getResponseHeaderMessageImpl()

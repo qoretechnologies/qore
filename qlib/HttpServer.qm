@@ -3493,6 +3493,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
+            # An opt-in interactive bidirectional streaming handler
+            # (AbstractStreamRequest::wantsInteractiveStreaming()) drives an interleaved
+            # read/reply loop on its dedicated thread and sends the full response itself
+            # (early 200 headers + DATA frames + END_STREAM) via the stream-context/wakeSocket
+            # model.  It signals completion with reply_sent; mark response-sent so the block
+            # below tells the controller to leave the now-half-closed stream alone.
+            if (want_streaming && rv.reply_sent
+                    && (cx."header-info".http2 || cx."header-info".http3)) {
+                cx."response-sent" = True;
+            }
+
             # Handle HTTP/2 bidirectional streaming: the handler managed the stream
             # lifecycle directly (read body data, sent response).  Mark as dedicated
             # so the controller leaves the stream alone.

@@ -1,0 +1,365 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Interactive bidirectional stream tests (issue #5351).
+
+    Exercises the opt-in AbstractStreamRequest::wantsInteractiveStreaming() path: a body-streaming
+    handler that interleaves read -> reply on a single HTTP/2 or HTTP/3 stream, so the client can do
+    send-op -> read-result -> send-op (interactive read-your-writes within one session).
+
+    The handler holds in-memory session state for the stream lifetime; a "select" op must see the
+    rows added by prior "insert" ops on the SAME stream — proving the reply for one op is produced
+    and delivered before the client sends the next op (which the legacy recv-all-then-send model
+    cannot do).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%ifdef NoYaml
+# Stub functions when the yaml module is not available; tests skip in this case
+const HaveYaml = False;
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+auto sub parse_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%else
+const HaveYaml = True;
+%endif
+
+%exec-class HttpServerInteractiveStreamTest
+
+#! length-prefixed YAML frame: 4-byte big-endian length + UTF-8 YAML payload
+binary sub frame_encode(hash<auto> msg) {
+    binary payload = binary(make_yaml(msg));
+    int sz = payload.size();
+    return binary(chr((sz >> 24) & 0xff))
+        + binary(chr((sz >> 16) & 0xff))
+        + binary(chr((sz >> 8) & 0xff))
+        + binary(chr(sz & 0xff))
+        + payload;
+}
+
+#! interactive session stream request: opt-in interleaved read -> reply on one H2/H3 stream
+/** Holds session state (rows) for the stream lifetime.  Each inbound op is processed in
+    recvImpl() (which queues exactly one reply frame); sendImpl() returns that reply, so the
+    framework's interactive loop writes a reply per op.  A "select" sees all prior "insert"s.
+*/
+class SessionStreamRequest inherits HttpServer::AbstractStreamRequest {
+    private {
+        #! reframing buffer for inbound bytes (DATA frames are not message-aligned)
+        binary m_inbuf = binary();
+        #! session state: inserted rows (uncommitted, visible to in-session selects)
+        list<auto> m_rows = ();
+        #! pending reply frames produced by recvImpl(), drained by sendImpl()
+        Queue m_replies();
+    }
+
+    constructor(HttpServer::HttpListenerInterface listener, HttpServer::AbstractHttpRequestHandler handler,
+            Qore::Socket s, hash<auto> cx, hash<auto> hdr, auto body)
+            : HttpServer::AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    #! opt in to the interactive bidirectional path on HTTP/2 and HTTP/3
+    bool wantsInteractiveStreaming() {
+        return True;
+    }
+
+    #! self-describing frames — no extra content encoding
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpServer::HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpServer::HttpHandlerResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": "application/connect+yaml"},
+        };
+    }
+
+    #! process each inbound op; queue exactly one reply frame per op
+    private nothing recvImpl(hash<auto> v) {
+        if (!exists v.data) {
+            # end-of-data marker ({"hdr": NOTHING}) — nothing to do
+            return;
+        }
+        m_inbuf += v.data.typeCode() == NT_BINARY ? v.data : binary(v.data);
+        # extract and process all complete length-prefixed frames
+        while (m_inbuf.size() >= 4) {
+            int sz = (m_inbuf[0] << 24) | (m_inbuf[1] << 16) | (m_inbuf[2] << 8) | m_inbuf[3];
+            if (m_inbuf.size() < 4 + sz) {
+                break;  # incomplete frame — wait for more bytes
+            }
+            binary payload = m_inbuf.substr(4, sz);
+            m_inbuf = m_inbuf.substr(4 + sz);
+            hash<auto> op = parse_yaml(payload.toString("utf-8"));
+            hash<auto> reply;
+            switch (op.cmd) {
+                case "insert":
+                    m_rows += op.row;
+                    reply = {"status": "ok", "n": m_rows.size()};
+                    break;
+                case "select":
+                    reply = {"status": "ok", "rows": m_rows};
+                    break;
+                default:
+                    reply = {"status": "error", "err": sprintf("unknown cmd %y", op.cmd)};
+                    break;
+            }
+            m_replies.push(frame_encode(reply));
+        }
+    }
+
+    #! return the next queued reply frame for the current op, or NOTHING when none remain
+    private auto sendImpl() {
+        if (m_replies.empty()) {
+            return NOTHING;
+        }
+        return m_replies.get();
+    }
+}
+
+#! handler wiring the interactive session stream request
+class SessionStreamHandler inherits HttpServer::AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {}
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    private HttpServer::AbstractStreamRequest getStreamRequestImpl(
+            HttpServer::HttpListenerInterface listener, Qore::Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return new SessionStreamRequest(listener, self, s, cx, hdr, body);
+    }
+
+    hash<HttpServer::HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected non-streaming dispatch for interactive session handler");
+    }
+}
+
+class HttpServerInteractiveStreamTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int mPort;
+        Logger mLogger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerInteractiveStreamTest", "1.0") {
+        addTestCase("interactive read-your-writes HTTP/2", \testInteractiveH2());
+        addTestCase("interactive read-your-writes HTTP/3", \testInteractiveH3());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("interactive-stream-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+
+        mServer = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "quic_headers_only": True,
+        });
+        mServer.setHandler("session", "/session", NOTHING, new SessionStreamHandler(), NOTHING, False);
+        mServer.waitForAsyncIo();
+
+        mPort = mServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        mServer.waitForAsyncIo();
+
+        if (m_options.verbose > 1) {
+            printf("interactive stream test server on port %d\n", mPort);
+        }
+    }
+
+    globalTearDown() {
+        delete mServer;
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getManager(string protocol) {
+        return new HttpClientIo::HttpClientConnectionManager(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": protocol,
+                "accept_all_certs": True,
+                "logger": mLogger,
+                "request_timeout": 30s,
+                "connect_timeout": 15s,
+            },
+        );
+    }
+
+    #! reads one complete length-prefixed reply frame from the stream
+    private hash<auto> readReply(HttpClientIo::HttpClientStreamHandle stream) {
+        binary buf = binary();
+        date deadline = now_us() + 20s;
+        while (now_us() < deadline) {
+            auto data = stream.readData(5s);
+            if (!exists data) {
+                continue;
+            }
+            if (data.typeCode() == NT_HASH) {
+                if (data.end_stream) {
+                    throw "STREAM-CLOSED", "stream closed before a complete reply frame arrived";
+                }
+                if (data.error) {
+                    throw "STREAM-ERROR", sprintf("stream error: %y", data.error);
+                }
+                continue;
+            }
+            buf += data.typeCode() == NT_BINARY ? data : binary(data);
+            if (buf.size() >= 4) {
+                int sz = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+                if (buf.size() >= 4 + sz) {
+                    return parse_yaml(buf.substr(4, sz).toString("utf-8"));
+                }
+            }
+        }
+        throw "STREAM-TIMEOUT", "timed out waiting for a reply frame";
+    }
+
+    #! drives an interactive read-your-writes session over the given protocol
+    private doInteractiveSession(string protocol) {
+        HttpClientIo::HttpClientConnectionManager mgr = getManager(protocol);
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", mPort);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        assertTrue(stream.supportsStreaming(), protocol + ": stream supports streaming");
+
+        # open one bidirectional stream; keep the request body half open (body_streaming = True)
+        stream.startStreaming("POST", "/session", {"Content-Type": "application/connect+yaml"}, True);
+
+        # insert row 1, then select — the select must see the uncommitted insert
+        stream.sendData(frame_encode({"cmd": "insert", "row": {"id": 1}}));
+        hash<auto> a1 = readReply(stream);
+        assertEq("ok", a1.status, protocol + ": insert 1 acknowledged");
+        assertEq(1, a1.n, protocol + ": session has 1 row after first insert");
+
+        stream.sendData(frame_encode({"cmd": "select"}));
+        hash<auto> s1 = readReply(stream);
+        assertEq(1, s1.rows.size(), protocol + ": in-session select sees the uncommitted insert");
+        assertEq(1, s1.rows[0].id, protocol + ": select returned the inserted row");
+
+        # insert row 2, then select again — must now see both rows (read-your-writes)
+        stream.sendData(frame_encode({"cmd": "insert", "row": {"id": 2}}));
+        hash<auto> a2 = readReply(stream);
+        assertEq(2, a2.n, protocol + ": session has 2 rows after second insert");
+
+        stream.sendData(frame_encode({"cmd": "select"}));
+        hash<auto> s2 = readReply(stream);
+        assertEq(2, s2.rows.size(), protocol + ": second select sees both uncommitted inserts");
+        assertEq((1, 2), (map $1.id, s2.rows), protocol + ": both inserted rows visible in order");
+
+        # half-close the request side; the handler flushes end-of-stream and completes
+        stream.writesDone();
+
+        # drain to end_stream so the stream finalizes cleanly
+        date deadline = now_us() + 10s;
+        while (now_us() < deadline) {
+            auto data = stream.readData(2s);
+            if (data.typeCode() == NT_HASH && data.end_stream) {
+                break;
+            }
+        }
+    }
+
+    testInteractiveH2() {
+        if (!HaveYaml) {
+            testSkip("the yaml module is required for this test");
+        }
+        doInteractiveSession("h2");
+    }
+
+    testInteractiveH3() {
+        if (!HaveYaml) {
+            testSkip("the yaml module is required for this test");
+        }
+        doInteractiveSession("h3");
+    }
+}
