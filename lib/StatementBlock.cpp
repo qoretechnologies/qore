@@ -180,9 +180,10 @@ QoreValue StatementBlock::exec(ExceptionSink* xsink) {
     // the debugger/line-coverage miss statements. The IR interpreter already
     // resolves the tlpd this way; the cached value is only a fallback when the
     // thread has no current program-data set up yet.
-    ThreadLocalProgramData* tlpd = get_thread_local_program_data()
-        ? get_thread_local_program_data()
-        : rc.getThreadLocalProgramData();
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (!tlpd) {
+        tlpd = rc.getThreadLocalProgramData();
+    }
     if (tlpd && tlpd->runtimeCheck()) {
         tlpd->dbgFunctionEnter(this, xsink);
     }
@@ -250,9 +251,10 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
     }
 
     // Authoritative current thread-program data for debug hooks (see note in exec()).
-    ThreadLocalProgramData* tlpd = get_thread_local_program_data()
-        ? get_thread_local_program_data()
-        : rc.getThreadLocalProgramData();
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (!tlpd) {
+        tlpd = rc.getThreadLocalProgramData();
+    }
     // to execute even when block is empty, e.g. while(true);
     if (tlpd->runtimeCheck()) {
         stmt_rc = tlpd->dbgStep(this, nullptr, xsink);
@@ -1045,9 +1047,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         }
 
         // Authoritative current thread-program data for debug hooks (see note in exec()).
-        ThreadLocalProgramData* tlpd = get_thread_local_program_data()
-            ? get_thread_local_program_data()
-            : rc.getThreadLocalProgramData();
+        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+        if (!tlpd) {
+            tlpd = rc.getThreadLocalProgramData();
+        }
         // Execute only new statements
         for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
             if (tlpd->runtimeCheck()) {
