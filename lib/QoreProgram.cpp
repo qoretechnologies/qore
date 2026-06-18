@@ -2186,6 +2186,13 @@ void ThreadLocalProgramData::dbgDetach(ExceptionSink* xsink) {
     }
 }
 
+// issue #5352: process-global debugger-attachment counter; see qore_program_private.h.
+std::atomic<int64_t> qore_debug_global_attach_count{0};
+
+const void* qore_get_debug_attach_count_addr() {
+    return &qore_debug_global_attach_count;
+}
+
 int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const AbstractStatement* statement, ExceptionSink* xsink) {
     checkAttach(xsink);
     checkBreakFlag();

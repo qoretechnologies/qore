@@ -34,6 +34,7 @@
 #include "qore/intern/QoreIRToLLVM.h"
 
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
@@ -3165,6 +3166,111 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     }
 }
 
+void QoreIRToLLVM::emitDebugStep(const QoreIRInstruction* inst, llvm::Function* llvm_func,
+        llvm::Module& module, bool synthetic_block) {
+    if (!debug_steps_enabled) {
+        return;
+    }
+    // Resolve the source line for statement lookup (file + cached_start_line +
+    // offset, matching the interpreter's getDebugStatement()).
+    const char* file = (inst->loc && inst->loc->start_line > 0) ? inst->loc->getFile() : nullptr;
+    int line = -1;
+    if (inst->loc && inst->cached_start_line >= 0) {
+        line = inst->cached_start_line + inst->loc->offset;
+    }
+    // Per-statement steps require a known source line and must not fire on loop
+    // condition blocks (mirrors the IR interpreter's PushTempMark gate).
+    if (!synthetic_block) {
+        if (line < 0 || (current_ir_block && current_ir_block->name.find(".cond") != std::string::npos)) {
+            return;
+        }
+    }
+
+    llvm::LLVMContext& c = ctx;
+
+    // Continuation block: where normal execution resumes after the step.
+    llvm::BasicBlock* cont = llvm::BasicBlock::Create(c, "dbg_cont", llvm_func);
+    // Slow path: a debugger is attached somewhere — invoke the runtime hook.
+    llvm::BasicBlock* slow = llvm::BasicBlock::Create(c, "dbg_step", llvm_func);
+
+    // Per-statement steps fire at most once per source line: compare the line to
+    // the per-invocation dbg_last_line slot and bail (to cont) when unchanged.
+    if (!synthetic_block && dbg_last_line_alloca) {
+        llvm::BasicBlock* line_changed = llvm::BasicBlock::Create(c, "dbg_line_changed", llvm_func);
+        llvm::Value* last = builder->CreateLoad(i32_type, dbg_last_line_alloca, "dbg_last");
+        llvm::Value* changed = builder->CreateICmpNE(last, llvm::ConstantInt::get(i32_type, line));
+        builder->CreateCondBr(changed, line_changed, cont);
+        builder->SetInsertPoint(line_changed);
+        // Track the current line regardless of whether a debugger is attached so a
+        // mid-execution attach does not re-fire the line already in progress.
+        builder->CreateStore(llvm::ConstantInt::get(i32_type, line), dbg_last_line_alloca);
+    }
+
+    // Cheap inline guard: skip the hook entirely unless a debugger is attached
+    // somewhere in the process (issue #5352).
+    llvm::Value* counter_ptr = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(qore_get_debug_attach_count_addr())),
+        ptr_type);
+    llvm::LoadInst* attach_cnt = builder->CreateLoad(i64_type, counter_ptr, "dbg_attach_cnt");
+    attach_cnt->setAtomic(llvm::AtomicOrdering::Monotonic);
+    attach_cnt->setAlignment(llvm::Align(8));
+    llvm::Value* attached = builder->CreateICmpNE(attach_cnt, llvm::ConstantInt::get(i64_type, 0));
+    // Bias: the no-debugger case dominates by far.
+    auto* weights = llvm::MDBuilder(c).createBranchWeights(1, 100000);
+    builder->CreateCondBr(attached, slow, cont, weights);
+
+    // --- slow path: call the runtime debug-step hook ---
+    builder->SetInsertPoint(slow);
+    llvm::Value* statements_arg = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(current_ir_func->statements)),
+        ptr_type);
+    llvm::Value* pgm_arg = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(current_ir_func->pgm)),
+        ptr_type);
+    llvm::Value* file_arg = file
+        ? static_cast<llvm::Value*>(builder->CreateGlobalStringPtr(file))
+        : static_cast<llvm::Value*>(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(c)));
+    llvm::Value* line_arg = llvm::ConstantInt::get(i32_type, line);
+    const char* helper_name = synthetic_block
+        ? "qore_rt_jit_synthetic_block_step" : "qore_rt_jit_dbg_step";
+    auto helper = module.getOrInsertFunction(helper_name,
+        llvm::FunctionType::get(i32_type,
+            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+    llvm::Value* action = builder->CreateCall(helper,
+        {statements_arg, pgm_arg, file_arg, line_arg, xsink_arg});
+
+    // Dispatch on the returned QoreJitDbgAction.
+    // QORE_JIT_DBG_RETURN: forced return / exception — run function-exit cleanup
+    // and return NOTHING (identical to a `return;` statement at this point).
+    llvm::BasicBlock* dbg_return = llvm::BasicBlock::Create(c, "dbg_return", llvm_func);
+    // QORE_JIT_DBG_BREAK: forced loop break — divert to the enclosing loop exit.
+    // When no enclosing loop is annotated, fall through (best effort).
+    llvm::BasicBlock* break_target = cont;
+    if (current_ir_block && current_ir_block->enclosing_loop_exit) {
+        auto it = block_map.find(current_ir_block->enclosing_loop_exit);
+        if (it != block_map.end() && it->second) {
+            break_target = it->second;
+        }
+    }
+    llvm::SwitchInst* sw = builder->CreateSwitch(action, cont, 2);
+    auto* i32_int_type = llvm::cast<llvm::IntegerType>(i32_type);
+    sw->addCase(llvm::ConstantInt::get(i32_int_type, QORE_JIT_DBG_RETURN), dbg_return);
+    sw->addCase(llvm::ConstantInt::get(i32_int_type, QORE_JIT_DBG_BREAK), break_target);
+
+    // Forced-return cleanup: mirror the ReturnNothing handler.
+    builder->SetInsertPoint(dbg_return);
+    emitOnBlockExitExec(module);
+    emitIteratorCleanup(module);
+    emitPreinstantiatedCleanup(module);
+    emitInvokeCleanup(module);
+    emitPendingSsaCleanup(module);
+    emitLocalUninstantiation(module);
+    builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+
+    // Resume normal execution on the continuation path.
+    builder->SetInsertPoint(cont);
+}
+
 void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
     if (!di_sp) {
         return;
@@ -4111,6 +4217,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     initTypes();
     declareRuntimeHelpers(module);
 
+    // issue #5352: enable statement-boundary debug-step hooks for JIT-compiled
+    // code belonging to a program that permits debugger attachment.  AOT code is
+    // shared across program loads (no per-program StatementBlock/QoreProgram to
+    // embed) and is debugged via IR re-materialization instead, so it is excluded.
+    debug_steps_enabled = !aot_mode && func.pgm && func.statements
+        && (func.pgm->getParseOptions64() & PO_ALLOW_DEBUGGER);
+    dbg_last_line_alloca = nullptr;
+
     // Clear COW tracking for new function
     cow_modified_locals.clear();
 
@@ -4575,6 +4689,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 "cleanup_slots");
     }
 
+    // issue #5352: per-invocation "last debug line" slot, initialised to -1, so a
+    // statement-level debug step fires at most once per source line (mirrors the
+    // IR interpreter's last_debug_line dedup).
+    if (debug_steps_enabled && !func.blocks.empty()) {
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> ab(&entry, entry.begin());
+        dbg_last_line_alloca = ab.CreateAlloca(i32_type, nullptr, "dbg_last_line");
+        ab.CreateStore(llvm::ConstantInt::get(i32_type, -1), dbg_last_line_alloca);
+    }
+
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
     // thread-local variable stack is properly set up before any code runs.
@@ -4723,6 +4847,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Lower each block
     for (const auto& block : func.blocks) {
+        current_ir_block = block.get();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
             error = "missing LLVM basic block mapping for '" + block->name + "'";
@@ -15824,6 +15949,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
 
         case QoreIROpcode::PushTempMark: {
+            // issue #5352: a PushTempMark marks a statement boundary; emit the
+            // per-statement debugger step hook (no-op unless debug_steps_enabled).
+            emitDebugStep(inst, llvm_func, module, /*synthetic_block=*/false);
             temp_cleanup_marks.push_back({
                 invoke_result_allocas.size(),
                 pending_ssa_cleanup.size(),
@@ -15832,6 +15960,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DebugBlock: {
+            // issue #5352: StatementBlock entry; emit the synthetic block-entry
+            // debugger step hook (no-op unless debug_steps_enabled).  Previously a
+            // no-op, which made JIT-compiled code invisible to an attached debugger.
+            emitDebugStep(inst, llvm_func, module, /*synthetic_block=*/true);
             return true;
         }
         case QoreIROpcode::CheckException: {

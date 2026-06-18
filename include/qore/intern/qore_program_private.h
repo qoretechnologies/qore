@@ -73,6 +73,14 @@ typedef vector_map_t<int, unsigned> ptid_map_t;
 
 typedef std::vector<AbstractStatement*> stmt_vec_t;
 
+//! Process-global count of active debugger attachments (see issue #5352).
+/** Incremented when a QoreDebugProgram attaches to a QoreProgram and decremented
+    on detach.  Non-zero means at least one program is being debugged somewhere,
+    which is the cheap inline guard JIT-compiled code uses to decide whether to
+    invoke the per-statement debug-step hook.  Always re-verified per-thread by
+    the runtime hook before any debug event fires. */
+extern std::atomic<int64_t> qore_debug_global_attach_count;
+
 class QoreParseLocationHelper {
 public:
     DLLLOCAL QoreParseLocationHelper(const char* file, const char* src = nullptr, int offset = 0) {
@@ -3006,6 +3014,12 @@ public:
 
         if (dpgm == n_dpgm)
             return;
+        // issue #5352: bump the process-global attach counter when this program
+        // transitions from "no debugger" to "debugger attached" so JIT-compiled
+        // code starts honoring statement-boundary debug steps.
+        if (!dpgm) {
+            qore_debug_global_attach_count.fetch_add(1, std::memory_order_acq_rel);
+        }
         dpgm = const_cast<qore_debug_program_private*>(n_dpgm);
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
@@ -3026,6 +3040,8 @@ public:
         if (!n_dpgm)
             return;
         dpgm = nullptr;
+        // issue #5352: matching decrement for the attach in attachDebug().
+        qore_debug_global_attach_count.fetch_sub(1, std::memory_order_acq_rel);
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
         for (auto& i : pgm_data_map) {

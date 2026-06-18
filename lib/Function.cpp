@@ -5151,6 +5151,10 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(statements);
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // issue #5352: record the debugger context so JIT lowering can emit
+    // statement-boundary debug-step hooks (pgm + top-level statement block).
+    func->pgm = pgm;
+    func->statements = statements;
     // Store the return type info for type coercion in Return opcode lowering
     func->return_type_info = qore_substitute_type_params_if_needed(getReturnTypeInfo(), specialization_receiver_type_info,
         specialization_type_param_instantiation);

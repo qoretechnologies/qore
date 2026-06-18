@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Fixture for JitDebugStep.qtest (issue #5352).
+#
+# The top-level block of a %modern program is compiled to native code via the
+# JIT (QoreJIT::executeWithFallback), so the statements in the "stepping region"
+# below execute as genuinely JIT-compiled native code.  A worker thread attaches
+# a debugger WHILE the top-level block is already running native code (an
+# already-running native frame is not helped by the entry-time tier downgrade in
+# evalTiered()), then we assert the JIT-compiled code still emits statement
+# boundary debug events: a breakpoint fires, and single-stepping reports several
+# consecutive statement lines.  Before this fix, JIT-compiled code lowered the
+# DebugBlock opcode to a no-op and emitted no debug events at all.
+#
+# Usage: qore JitDebugStepScenario.qr <break|step>
+#
+# Output (one key=value per line) is parsed by JitDebugStep.qtest.
+
+# .qr scripts are %modern automatically; %allow-debugger sets PO_ALLOW_DEBUGGER,
+# which is what gates the JIT debug-step codegen under test (issue #5352).
+%allow-debugger
+
+our string g_mode = (ARGV[0] ?? "break");
+our list<int> g_steps = ();
+our int g_bp_hits = 0;
+# Number of statement step events to record before detaching: the breakpoint
+# line plus the following statements in the stepping region.  Bounds stepping so
+# it stays within the region and cannot leak into shutdown code.
+const StepBudget = 3;
+
+class Recorder inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference runState, reference runToStatementId) {
+        # Run to breakpoints; do not single-step yet (avoids flooding the window
+        # between attach and the breakpoint).
+        runState = DebugRun;
+    }
+
+    onDetach(ProgramControl pgm, reference runState, reference runToStatementId) {
+    }
+
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId,
+            *int breakpointId, reference flow, reference runState,
+            reference runToStatementId) {
+        if (!statementId) {
+            runState = (g_mode == "step" && g_bp_hits) ? DebugStep : DebugRun;
+            return;
+        }
+        int ln = pgm.getStatementIdInfo(statementId).start_line;
+        if (breakpointId) {
+            ++g_bp_hits;
+        }
+        push g_steps, ln;
+        if (g_mode == "break") {
+            runState = DebugDetach;
+        } else {
+            # Step mode: once the breakpoint is hit, single-step a bounded number
+            # of statements, then detach.
+            runState = (g_bp_hits && g_steps.size() < StepBudget) ? DebugStep : DebugDetach;
+        }
+    }
+
+    onFunctionEnter(ProgramControl pgm, int statementId, reference runState,
+            reference runToStatementId) {
+        runState = (g_mode == "step" && g_bp_hits) ? DebugStep : DebugRun;
+    }
+
+    onFunctionExit(ProgramControl pgm, int statementId, reference returnValue,
+            reference runState, reference runToStatementId) {
+        runState = (g_mode == "step" && g_bp_hits) ? DebugStep : DebugRun;
+    }
+
+    onException(ProgramControl pgm, int statementId, hash<auto> ex,
+            reference dismiss, reference runState, reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onExit(ProgramControl pgm, int statementId, reference returnValue,
+            reference runState, reference runToStatementId) {
+        runState = DebugRun;
+    }
+}
+
+ProgramControl thisProgram = ProgramControl::getProgram();
+Recorder dbg();
+int main_tid = gettid();
+Counter running(1);
+Counter ready(1);
+# Captured below, just before the stepping region, and read by the worker after
+# it is released (so the breakpoint lands on the region's first statement).
+int base_line = 0;
+int bp_target = 0;
+
+code worker = sub () {
+    running.waitForZero();                # top-level block is running native code
+    on_exit ready.dec();                  # always release the main thread
+    Breakpoint bp();
+    bp.setEnabled(True);
+    bp.addThreadId(main_tid);
+    bp.assignProgram(thisProgram);
+    bp.assignStatement(thisProgram.findStatementId("", bp_target));
+    dbg.addProgram(thisProgram);          # attach the debugger mid-execution
+};
+background worker();
+
+# Capture the current source line, then point the breakpoint at the first call
+# statement of the stepping region below.  DO NOT change the line spacing between
+# this capture and the "acc += \"7\".toInt();" line.
+base_line = get_all_thread_call_stacks(){gettid()}[0].line;
+bp_target = base_line + 7;
+running.dec();                            # release the worker (bp_target is set)
+ready.waitForZero();                      # block until attached and breakpoint armed
+
+# === STEPPING REGION (native top-level code) ===
+int acc = 0;
+acc += "7".toInt();
+acc += "13".toInt();
+acc += sprintf("%d", 100).toInt();
+# === end stepping region ===
+
+dbg.removeProgram(thisProgram);
+dbg.waitForTerminationAndClear();
+
+printf("result=%d\n", acc);
+printf("marker=%d\n", bp_target);
+printf("bp_hits=%d\n", g_bp_hits);
+printf("steps=%s\n", (foldl $1 + "," + $2, (map $1.toString(), g_steps)) ?? "");

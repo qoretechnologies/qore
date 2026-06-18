@@ -2545,6 +2545,17 @@ public:
     //! `callee->getName()` equal `"foo"`; the LLVM emitter then issued
     //! a direct call to its own fast entry and infinite-recursed.
     const QoreFunction* source_qf = nullptr;
+
+    //! Owning program and the function's top-level statement block (issue #5352).
+    /** Set by UserVariantBase::lowerIRFunction.  Used by JIT lowering to embed the
+        debugger context (StatementBlock + QoreProgram) needed by the per-statement
+        debug-step hooks.  Valid to embed as constants because JIT-compiled native
+        code is owned by, and lives no longer than, this specific program instance.
+        Not used for AOT (shared across program loads), where debugging is handled
+        by re-materializing IR and running the interpreter instead. */
+    QoreProgram* pgm = nullptr;
+    const StatementBlock* statements = nullptr;
+
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
