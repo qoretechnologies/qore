@@ -340,6 +340,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
+            addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
         }
 
         set_return_value(main());
@@ -349,6 +350,77 @@ class PgsqlTest inherits SqlTestBase {
         on_error printf("alignment: %y\n", map {AbstractDatabase::ActionMap{$1.key}: $1.value},
             schema_info.change_map.pairIterator());
         assertTrue(schema_info.created);
+    }
+
+    #! a primary key must only be backed by a unique index
+    /** Regression test: a non-unique index covering the same column set as the primary key (in any
+        order) must not be selected as the supporting index for the PK. Previously
+        AbstractColumnSupportingConstraint::findMatchingIndex() matched any index with the same
+        column set (matchKeys() is order-independent and did not check uniqueness), so a PK could be
+        linked to a non-unique index, producing invalid DDL: PostgreSQL rejects
+        "alter table ... add constraint ... primary key using index <ix>" with
+        "<ix> is not a unique index".
+    */
+    private pkNonUniqueIndexTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string tname = "pgsql_pk_nonuniq_test";
+        string pkname = "pk_" + tname;
+        string ixname = "sk_" + tname + "_reorder";
+
+        # clean up from any previous failed run
+        {
+            PgsqlTable t(ds, tname);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        }
+
+        hash<auto> table_desc = {
+            "columns": {
+                "a": {"qore_type": Type::Int, "notnull": True},
+                "b": {"qore_type": Type::Int, "notnull": True},
+                "c": {"qore_type": Type::Int, "notnull": True},
+            },
+            "primary_key": {"name": pkname, "columns": ("a", "b", "c")},
+            "indexes": {
+                # same column set as the PK but in a different order, and NOT unique
+                ixname: {"columns": ("b", "c", "a")},
+            },
+        };
+
+        AbstractTable t = (new Table(ds, table_desc, tname)).getTable();
+
+        # the generated PK SQL must not reuse the non-unique index as a supporting index
+        *string pk_sql = t.getCreatePrimaryKeySql();
+        assertNRegex("using index", pk_sql ?? "",
+            "PK creation must not reuse a non-unique index");
+
+        # faithful repro: actually create the table to confirm the DDL executes without error
+        on_error ds.rollback();
+        t.create();
+        ds.commit();
+
+        on_exit {
+            PgsqlTable dt(ds, tname);
+            if (dt.checkExistence()) {
+                dt.dropCommit();
+            }
+        }
+
+        # verify the primary key was created with the expected columns
+        PgsqlTable verify(ds, tname);
+        AbstractPrimaryKey pk = verify.getPrimaryKey();
+        assertFalse(pk.empty(), "primary key created");
+        assertEq(("a", "b", "c"), keys pk.getHash(), "primary key columns");
+
+        # verify the non-unique index still exists and is in fact not unique
+        Indexes ixs = verify.getIndexes();
+        assertTrue(ixs.hasKey(ixname), "non-unique index retained");
+        assertFalse(ixs{ixname}.unique, "reorder index is not unique");
     }
 
     testSequenceOperators() {

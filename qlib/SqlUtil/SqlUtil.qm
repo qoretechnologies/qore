@@ -8701,15 +8701,21 @@ AbstractConstraint ix = constraints.uk_jobs;
                 return;
             }
 
+# a primary key or unique constraint can only be backed by a unique index; matching a
+            # non-unique index here generates invalid DDL (ex: PostgreSQL "alter table ... add
+            # constraint ... primary key using index <ix>" fails if <ix> is not unique), so only
+            # match unique indexes even when their column set matches (matchKeys() is order-
+            # independent, so a non-unique index covering the same columns in a different order
+            # must not be selected)
             # see if the primary key corresponds to a unique index with the same name & columns
             if (indexes.hasKey(name)) {
                 AbstractIndex ix = indexes{name};
-                if (ix.columns.matchKeys(h) && setIndexBase(ix.name))
+                if (ix.unique && ix.columns.matchKeys(h) && setIndexBase(ix.name))
                     ix.setSupportingConstraint(self);
             } else {
-                # search for an index with matching columns
+                # search for a unique index with matching columns
                 foreach AbstractIndex ix in (indexes.iterator()) {
-                    if (ix.columns.matchKeys(h)) {
+                    if (ix.unique && ix.columns.matchKeys(h)) {
                         if (setIndexBase(ix.name))
                             ix.setSupportingConstraint(self);
                         break;
