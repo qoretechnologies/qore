@@ -880,21 +880,28 @@ void QoreJIT::bgCompileThreadLoop() {
 
 void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees) {
-    // Skip if LLVM is not initialized (IR-only or tiered mode without explicit JIT).
-    // LLVM is initialized by compileFunction/compileFunctionBatch (called from
-    // --exec-mode=jit eager path or executeWithFallback). Tiered mode stays at IR
-    // tier unless LLVM was already initialized by one of those paths.
+    // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
+    // so we do NOT re-check here — the state is already 1 when we're called.
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+
+    // Skip if LLVM is not initialized.  This is expected in tiered/jit mode at
+    // parse-commit time: LLVM is not brought up until the first synchronous
+    // compile (e.g. the top-level block via executeWithFallback).  The caller
+    // already claimed the compile slot (jit_compile_state 0→1); release it here so
+    // the function can be re-submitted on a later call once LLVM is available
+    // (via the execution-count threshold), instead of being stuck at the IR tier
+    // forever — the CAS 0→1 in attemptJITCompilation would otherwise never
+    // succeed again.
     if (!jit) {
+        if (uvb) {
+            const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
+        }
         return;
     }
 
     // Ensure background thread is running
     startBackgroundThread();
 
-    // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
-    // so we do NOT re-check here — the state is already 1 when we're called.
-
-    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb) {
         return;
     }
