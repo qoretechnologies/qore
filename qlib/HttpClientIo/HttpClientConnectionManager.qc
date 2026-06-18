@@ -45,6 +45,9 @@ class AsyncRace {
         #! Controller stagger-timer id (NOTHING once fired/cancelled)
         *int stagger_timer_id;
 
+        #! Controller race recheck timer id (NOTHING once fired/cancelled)
+        *int race_recheck_timer_id;
+
         #! Race phase: "stagger" (H3-only head start) or "race" (H3 + H2)
         string phase = "stagger";
 
@@ -140,6 +143,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             connect from stranding a caller (e.g. system startup) forever.
         */
         const AsyncQueueSafetyGraceMs = 30000;
+
+        #! Race-phase recheck interval for async happy eyeballs
+        /** Once H2 has joined the race, this bounds how long the nonblocking
+            caller can wait before re-reading both candidates' authoritative
+            state.  The connection notifiers remain the primary wakeup path; the
+            timer mirrors the synchronous path's bounded race wait and covers
+            fast H2 refusal while H3 remains pending.
+        */
+        const AsyncHappyEyeballsRaceRecheckMs = 250;
     }
 
     private {
@@ -1101,9 +1113,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             shutdown = True;
         }
 
-        # Tear down any in-flight async happy-eyeballs races: cancel the
-        # stagger timers (their closures retain a self-ref until cancelled,
-        # which would otherwise defer this manager's destruction) and close
+        # Tear down any in-flight async happy-eyeballs races: cancel the race
+        # timers (their closures retain a self-ref until cancelled, which would
+        # otherwise defer this manager's destruction) and close
         # the not-yet-pooled H3/H2 candidates so the cancelByOwner() barrier
         # below has nothing left to leak.
         {
@@ -1113,7 +1125,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 if (!race) {
                     continue;
                 }
-                heAbandonTimer(race);
+                heAbandonTimers(race);
                 try { race.h3conn.close(); } catch (hash<ExceptionInfo> ex) {}
                 if (race.h2conn) {
                     try { race.h2conn.close(); } catch (hash<ExceptionInfo> ex) {}
@@ -2058,7 +2070,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: tears down any in-flight async happy-eyeballs race for a key
-    /** Idempotent.  Cancels the stagger timer, closes both in-flight
+    /** Idempotent.  Cancels race timers, closes both in-flight
         candidates (neither is pool-inserted until the race resolves), and
         drops the race state.
     */
@@ -2069,7 +2081,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
         AsyncRace race = async_races{key};
         log(LoggerLevel::DEBUG, "happy eyeballs (async): abandoning race for %s", key);
-        heAbandonTimer(race);
+        heAbandonTimers(race);
         try { race.h3conn.close(); } catch () {}
         if (race.h2conn) {
             try { race.h2conn.close(); } catch () {}
@@ -2193,60 +2205,92 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: advances an in-flight async happy-eyeballs race one step
-    /** Re-entrant and authoritative: re-reads isReady()/isClosed() on every
-        call (the notifier is only a wakeup).  Resolves the winner, fast-fails,
+    /** Re-entrant and authoritative: re-reads connection state on every call
+        (the notifier is only a wakeup).  Resolves the winner, fast-fails,
         transitions stagger->race, or returns a fresh per-call notifier to poll.
         @note Caller holds async_race_lock.
     */
     private *EventNotifier advanceAsyncHE(string key,
             reference<*HttpClientConnection> conn_out) {
-        if (!async_races.hasKey(key)) {
-            # abandoned/resolved concurrently (op being canceled) — nothing to do
-            conn_out = NOTHING;
-            return NOTHING;
-        }
-        AsyncRace race = async_races{key};
-
-        if (race.phase == "stagger") {
-            *HttpClientConnection sw = hePickReady(race.h3conn, NOTHING);
-            if (sw) {
-                heAbandonTimer(race);
-                heCommitWinner(sw, race.h3conn, NOTHING, key);
-                finishAsyncRace(key, sw);
-                conn_out = sw;
-                return NOTHING;
+        while (True) {
+            if (!async_races.hasKey(key)) {
+                # abandoned/resolved concurrently (op being canceled) — nothing to do
+                conn_out = NOTHING;
+                return;
             }
-            if (race.h3conn.isClosed() || race.stagger_fired) {
-                # H3 head start over (settled-closed or stagger elapsed) —
-                # start H2 alongside and enter the race phase
-                startRaceH2(race);
-                heAbandonTimer(race);
-                race.phase = "race";
-                # fall through to race handling below
-            } else {
-                conn_out = race.h3conn;
-                return mintAndRegisterRaceNotifier(race);
-            }
-        }
+            AsyncRace race = async_races{key};
 
-        # phase == "race"
-        *HttpClientConnection w = hePickReady(race.h3conn, race.h2conn);
-        if (w) {
-            heCommitWinner(w, race.h3conn, race.h2conn, key);
-            finishAsyncRace(key, w);
-            conn_out = w;
-            return NOTHING;
+            if (race.phase == "stagger") {
+                int h3_state = race.h3conn.getConnectionState();
+                if (h3_state == HttpClientConnectionState::Ready) {
+                    heAbandonTimers(race);
+                    heCommitWinner(race.h3conn, race.h3conn, NOTHING, key);
+                    finishAsyncRace(key, race.h3conn);
+                    conn_out = race.h3conn;
+                    return;
+                }
+                if (h3_state != HttpClientConnectionState::Connecting || race.stagger_fired) {
+                    # H3 head start over (settled-closed or stagger elapsed) —
+                    # start H2 alongside and enter the race phase
+                    startRaceH2(race);
+                    heAbandonTimers(race);
+                    race.phase = "race";
+                    # fall through to race handling below
+                } else {
+                    conn_out = race.h3conn;
+                    *EventNotifier n = mintStaggerRaceNotifier(race, h3_state);
+                    if (n) {
+                        return n;
+                    }
+                    # The H3 candidate settled between our state check and
+                    # notifier registration.  Re-read authoritative state in
+                    # this call instead of returning a notifier that may never
+                    # fire.
+                    continue;
+                }
+            }
+
+            # phase == "race"
+            Http2ClientConnection h2 = race.h2conn;
+            int h3_state = race.h3conn.getConnectionState();
+            int h2_state = h2.getConnectionState();
+            if (h3_state == HttpClientConnectionState::Ready
+                    || h2_state == HttpClientConnectionState::Ready) {
+                HttpClientConnection w = h2;
+                if (h3_state == HttpClientConnectionState::Ready) {
+                    w = race.h3conn;
+                }
+                heCommitWinner(w, race.h3conn, h2, key);
+                finishAsyncRace(key, w);
+                conn_out = w;
+                return;
+            }
+            bool h3_closed = h3_state == HttpClientConnectionState::Closed;
+            bool h2_closed = h2_state == HttpClientConnectionState::Closed;
+            bool both_closed = h3_closed && h2_closed;
+            if (heH2FastFail(h2) || both_closed) {
+                Http3ClientConnection h3 = race.h3conn;
+                # Drop race state first — heThrowConnectError closes both and throws
+                removeAsyncRaceLocked(key);
+                heThrowConnectError(h3, h2, key);
+            }
+            if (h3_state != HttpClientConnectionState::Connecting
+                    && h2_state != HttpClientConnectionState::Connecting) {
+                Http3ClientConnection h3 = race.h3conn;
+                removeAsyncRaceLocked(key);
+                heThrowConnectError(h3, h2, key);
+            }
+            conn_out = race.h3conn;
+            *EventNotifier n = mintRaceNotifier(race, h3_state, h2_state);
+            if (n) {
+                armAsyncRaceRecheckTimer(race);
+                return n;
+            }
+            # A candidate settled while we were registering the per-call
+            # notifier.  Loop and handle the ready/error/closed state now; this
+            # closes the lost-wakeup gap where H2 fast-fails while H3 remains
+            # pending until connect_timeout.
         }
-        Http2ClientConnection h2 = race.h2conn;
-        bool both_closed = race.h3conn.isClosed() && h2.isClosed();
-        if (heH2FastFail(h2) || both_closed) {
-            Http3ClientConnection h3 = race.h3conn;
-            # Drop race state first — heThrowConnectError closes both and throws
-            removeAsyncRaceLocked(key);
-            heThrowConnectError(h3, h2, key);
-        }
-        conn_out = race.h3conn;
-        return mintAndRegisterRaceNotifier(race);
     }
 
     #! Internal: creates + submits the H2 candidate when the race phase begins
@@ -2264,29 +2308,96 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         race.h2conn = h2conn;
     }
 
-    #! Internal: mints a fresh per-call notifier and registers it on the race
-    /** A fresh notifier is minted on every re-entry because the caller deletes
-        its previous notifier each wake (the established re-entrant poll-op
-        pattern).  It is registered on every still-CONNECTING candidate;
-        @c registerReadyNotifier() returning False (already settled) is benign
-        because @ref advanceAsyncHE() re-checks state authoritatively — and at
-        least one candidate is still CONNECTING here, so the notifier is
-        guaranteed to be signalled by a connection settling or the stagger
-        timer (no lost wakeup).  @note Caller holds async_race_lock.
+    #! Internal: mints a fresh per-call notifier during the H3-only stagger
+    /** Returns no notifier if H3's state changed between the caller's
+        authoritative state check and notifier registration; the caller must
+        re-run the state machine immediately instead of polling a possibly
+        un-signalled notifier.  @note Caller holds async_race_lock.
     */
-    private EventNotifier mintAndRegisterRaceNotifier(AsyncRace race) {
+    private *EventNotifier mintStaggerRaceNotifier(AsyncRace race, int h3_state) {
         EventNotifier n();
-        race.h3conn.registerReadyNotifier(n);
-        if (race.h2conn) {
-            race.h2conn.registerReadyNotifier(n);
+        if (race.h3conn.getConnectionState() != h3_state) {
+            return;
+        }
+        if (h3_state != HttpClientConnectionState::Connecting) {
+            return;
+        }
+        if (!race.h3conn.registerReadyNotifier(n)) {
+            return;
         }
         race.current_notifier = n;
         return n;
     }
 
-    #! Internal: cancels a race's stagger timer if still armed (idempotent)
+    #! Internal: mints a fresh per-call notifier and registers it on the race
+    /** A fresh notifier is minted on every re-entry because the caller deletes
+        its previous notifier each wake (the established re-entrant poll-op
+        pattern).  It is registered on every still-CONNECTING candidate;
+        if a candidate changes state between the caller's authoritative checks
+        and registration, returns no notifier so @ref advanceAsyncHE() handles
+        that state immediately.  @note Caller holds async_race_lock.
+    */
+    private *EventNotifier mintRaceNotifier(AsyncRace race, int h3_state, int h2_state) {
+        EventNotifier n();
+        bool queued = False;
+        Http2ClientConnection h2 = race.h2conn;
+
+        if (race.h3conn.getConnectionState() != h3_state || h2.getConnectionState() != h2_state) {
+            return;
+        }
+
+        if (h3_state == HttpClientConnectionState::Connecting) {
+            if (!race.h3conn.registerReadyNotifier(n)) {
+                return;
+            }
+            queued = True;
+        }
+        if (h2_state == HttpClientConnectionState::Connecting) {
+            if (!h2.registerReadyNotifier(n)) {
+                return;
+            }
+            queued = True;
+        }
+        if (!queued) {
+            return;
+        }
+        race.current_notifier = n;
+        return n;
+    }
+
+    #! Internal: arms a bounded race-phase recheck timer
+    /** The timer is deliberately separate from connection readiness
+        notifiers.  It wakes the current re-entrant caller so
+        @ref advanceAsyncHE() can observe H2's poll-op error and fail fast even
+        if H3 is still connecting.  @note Caller holds async_race_lock.
+    */
+    private armAsyncRaceRecheckTimer(AsyncRace race) {
+        heAbandonRaceRecheckTimer(race);
+        string key = race.key;
+        race.race_recheck_timer_id = controller.addTimer(
+            now_us() + milliseconds(AsyncHappyEyeballsRaceRecheckMs),
+            sub () {
+                AutoLock al(async_race_lock);
+                if (!async_races.hasKey(key)) {
+                    return;
+                }
+                AsyncRace r = async_races{key};
+                remove r.race_recheck_timer_id;
+                if (r.current_notifier) {
+                    try {
+                        r.current_notifier.notify();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # caller deleted its per-call notifier between wakes;
+                        # the next acquireConnectionAsync() re-entry reads both
+                        # candidates authoritatively
+                    }
+                }
+            });
+    }
+
+    #! Internal: cancels a race's timers if still armed (idempotent)
     /** @note Caller holds async_race_lock. */
-    private heAbandonTimer(AsyncRace race) {
+    private heAbandonTimers(AsyncRace race) {
         if (race.stagger_timer_id) {
             try {
                 controller.cancelTimer(race.stagger_timer_id);
@@ -2295,6 +2406,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     "happy eyeballs (async): cancelTimer error: %s: %s", ex.err, ex.desc);
             }
             remove race.stagger_timer_id;
+        }
+        heAbandonRaceRecheckTimer(race);
+    }
+
+    #! Internal: cancels a race-phase recheck timer if still armed (idempotent)
+    /** @note Caller holds async_race_lock. */
+    private heAbandonRaceRecheckTimer(AsyncRace race) {
+        if (race.race_recheck_timer_id) {
+            try {
+                controller.cancelTimer(race.race_recheck_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG,
+                    "happy eyeballs (async): cancelTimer error: %s: %s", ex.err, ex.desc);
+            }
+            remove race.race_recheck_timer_id;
         }
     }
 
@@ -2327,7 +2453,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: removes a race from the map + clears the sync creating gate
-    /** Idempotent.  Cancels any remaining stagger timer and, if this race set
+    /** Idempotent.  Cancels any remaining timers and, if this race set
         the per-key @c creating flag, clears it and broadcasts @c create_cond so
         a waiting sync getConnection() wakes and reuses the pooled winner.
         @note Caller holds async_race_lock.  Does not close connections.
@@ -2337,7 +2463,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             return;
         }
         AsyncRace race = remove async_races{key};
-        heAbandonTimer(race);
+        heAbandonTimers(race);
         if (race.we_set_creating) {
             AutoLock cl(create_mutex);
             remove creating{key};
