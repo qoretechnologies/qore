@@ -1017,9 +1017,23 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
         || !"FunctionCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
     QoreFunction* func = fe->getFunction();
-    QoreProgram* call_pgm = pgm ? pgm : rc.getProgram();
+    // Resolve the Program to execute this call in.  When the node carries an
+    // explicit program (a genuine cross-Program call, e.g. a runtime callFunction),
+    // use it.  Otherwise resolve against the authoritative thread-current Program
+    // (::getProgram()) rather than the threaded RuntimeConfig (rc.getProgram()):
+    // rc's program pointer is NOT restored when a nested cross-Program call
+    // returns (ProgramThreadCountContextHelper restores td->current_pgm but leaves
+    // rc.pgm pointing at the callee's Program), so reading rc here can resolve the
+    // call against the wrong Program.  This regressed set_return_value() in
+    // --exec-mode=ast for %exec-class tests deriving from a module class such as
+    // QUnit::Test: the inherited main() call left rc.pgm in QUnit's Program, so
+    // set_return_value then ran against a non-%exec-class Program and threw
+    // SETRETURNVALUE-ERROR.  Note: getProgram() (unqualified) would bind to the
+    // FunctionCallNode::getProgram() member accessor (the node's optional explicit
+    // program), so the global scope qualifier is required here.
+    QoreProgram* call_pgm = pgm ? pgm : ::getProgram();
     if (!call_pgm) {
-        call_pgm = getProgram();
+        call_pgm = rc.getProgram();
     }
     return tmp_args
         ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation())

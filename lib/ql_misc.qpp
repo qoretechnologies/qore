@@ -65,6 +65,21 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
 
 static QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
+    // The authoritative thread-current Program is the correct target for builtins
+    // that operate on "the Program this call is running in" (set_return_value(),
+    // call_function(), get_global_vars(), ...).  runtime_cfg.getProgram() is a
+    // threaded optimization that is NOT restored when a nested cross-Program call
+    // returns (ProgramThreadCountContextHelper restores td->current_pgm but leaves
+    // rc.pgm pointing at the callee), so reading it here can return the wrong
+    // Program.  This regressed set_return_value() in --exec-mode=ast for any
+    // %exec-class test deriving from a module class such as QUnit::Test: the
+    // inherited main() call left rc.pgm in QUnit's Program, so set_return_value
+    // targeted a non-%exec-class Program and threw SETRETURNVALUE-ERROR.  Prefer
+    // getProgram(); fall back to the threaded/context Program only when there is
+    // no current Program (e.g. non-Qore threads).
+    if (QoreProgram* pgm = getProgram()) {
+        return pgm;
+    }
     QoreProgram* pgm = runtime_cfg.getProgram();
     return pgm ? pgm : qore_get_call_program_context();
 }

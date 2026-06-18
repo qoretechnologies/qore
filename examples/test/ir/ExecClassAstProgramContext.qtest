@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Regression test: a %exec-class QUnit test must be able to call
+# set_return_value(main()) in every exec mode, including --exec-mode=ast.
+#
+# main() is inherited from QUnit::Test, which lives in a different Program (the
+# QUnit module).  After that cross-Program call returns, the builtin
+# set_return_value() must resolve the running %exec-class Program rather than the
+# stale program left in the threaded RuntimeConfig by the cross-Program call.
+# Before the fix this threw SETRETURNVALUE-ERROR in --exec-mode=ast for any QUnit
+# test, while JIT/IR/tiered modes masked the bug by not using the AST
+# function-call path.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ExecClassAstProgramContextTest
+
+class ExecClassAstProgramContextTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string scenario;
+    }
+
+    constructor() : QUnit::Test("ExecClassAstProgramContextTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        scenario = get_script_dir() + DirSep + "ExecClassAstProgramContextScenario.qr";
+        addTestCase("set_return_value resolves the exec-class Program in every mode",
+            \testAllExecModes());
+        set_return_value(main());
+    }
+
+    private testAllExecModes() {
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1",
+                qore_bin, mode, scenario);
+            string out = backquote(cmd);
+            on_error printf("scenario (%s mode) output:\n%s\n", mode, out);
+            # The core regression: the inherited main() call must not leave
+            # set_return_value() targeting the wrong (non-%exec-class) Program.
+            assertFalse(boolean(out =~ /SETRETURNVALUE-ERROR/),
+                sprintf("no SETRETURNVALUE-ERROR in %s mode", mode));
+            assertTrue(boolean(out =~ /1 succeeded/),
+                sprintf("scenario ran and reported success in %s mode", mode));
+        }
+    }
+}

@@ -35,6 +35,13 @@
 #include "qore/intern/QoreClassIntern.h"
 
 static QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
+    // See the matching helper in ql_misc.qpp: the thread-current Program is
+    // authoritative; runtime_cfg.getProgram() is a threaded cache that can go
+    // stale after a nested cross-Program call, so prefer getProgram() and fall
+    // back to the cached/context Program only when there is no current Program.
+    if (QoreProgram* pgm = getProgram()) {
+        return pgm;
+    }
     QoreProgram* pgm = runtime_cfg.getProgram();
     return pgm ? pgm : qore_get_call_program_context();
 }

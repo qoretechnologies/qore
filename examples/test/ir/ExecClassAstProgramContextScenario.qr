@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+# Fixture for ExecClassAstProgramContext.qtest.
+#
+# A %exec-class test class inheriting QUnit::Test calls set_return_value(main()).
+# main() is inherited from QUnit::Test, which lives in the QUnit module's
+# Program.  After that cross-Program call returns, the constructor invokes the
+# builtin set_return_value(); it must target the running %exec-class Program
+# (this one), not the QUnit module Program.
+#
+# In --exec-mode=ast this regressed: the threaded RuntimeConfig program pointer
+# was left pointing at the QUnit Program after main() returned (the program
+# context helper restores td->current_pgm but not the threaded config), so the
+# call resolved set_return_value() against a non-%exec-class Program and threw
+# SETRETURNVALUE-ERROR.  JIT/IR modes did not hit the AST function-call path and
+# so masked the bug.
+#
+# Usage: qore ExecClassAstProgramContextScenario.qr
+# A clean run prints the usual QUnit summary and exits 0.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class ExecClassCtxScenario
+
+class ExecClassCtxScenario inherits QUnit::Test {
+    constructor() : Test("ExecClassCtxScenario", "1.0") {
+        addTestCase("program context", \contextTest());
+        # main() is QUnit::Test::main() — defined in the QUnit module's Program.
+        set_return_value(main());
+    }
+
+    private contextTest() {
+        assertEq(2, 1 + 1);
+    }
+}
