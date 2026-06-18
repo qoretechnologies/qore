@@ -247,7 +247,7 @@ class DataSchemaTest inherits QUnit::Test {
     tableNormalizationTests() {
         hash<auto> table_def = {
             "columns": {
-                "id": {"type": "int", "notnull": True},
+                "id": {"type": "int"},
                 "name": {"type": "varchar", "size": 100},
             },
             "primary_key": {"name": "pk_test", "columns": ("id",)},
@@ -266,6 +266,7 @@ class DataSchemaTest inherits QUnit::Test {
 
         # Columns normalized
         assertEq(Type::Int, result.columns.id.qore_type);
+        assertTrue(result.columns.id.notnull, "primary key column marked notnull");
         assertEq(SqlUtil::VARCHAR, result.columns.name.qore_type);
 
         # Structural definitions preserved
@@ -278,6 +279,24 @@ class DataSchemaTest inherits QUnit::Test {
 
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);
+
+        hash<auto> single_pk = Schema::DataSchemaLoader::normalizeTable("single_pk", {
+            "columns": {
+                "id": {"type": "int"},
+            },
+            "primary_key": {"name": "pk_single", "columns": "id"},
+        });
+        assertTrue(single_pk.columns.id.notnull,
+            "single-column primary key shorthand marked notnull");
+
+        assertThrows("DATA-SCHEMA-ERROR", "primary key references unknown column", sub () {
+            Schema::DataSchemaLoader::normalizeTable("bad_pk", {
+                "columns": {
+                    "id": {"type": "int"},
+                },
+                "primary_key": {"name": "pk_bad", "columns": ("missing",)},
+            });
+        });
     }
 
     partitionNormalizationTests() {
