@@ -179,6 +179,24 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - persistent (dedicated-thread) handler sessions are now <b>stream-scoped on
+      multiplexed transports</b> (HTTP/2 and HTTP/3).  The connection-scoped
+      multi-request session model is an HTTP/1.x carry-over that is wrong for
+      multiplexed transports: those connections carry many independent streams and
+      are pooled/reused, so the connection-close that ends an HTTP/1.x session
+      never arrives, and a parked dedicated thread could only be released by a
+      best-effort end-of-session request — if that was lost the thread stayed
+      parked forever and its thread-pinned resources (e.g. an open DB transaction)
+      leaked.  A handler that calls \c AbstractHttpRequestHandler::setPersistent()
+      on a multiplexed connection is now released immediately after its response,
+      its thread-local context torn down deterministically (so it cannot leak); a
+      genuine cross-request session on HTTP/2 or HTTP/3 must instead be expressed
+      as a single bidirectional streaming request, whose teardown rides the
+      transport-deterministic stream lifecycle (\c END_STREAM / \c RST_STREAM /
+      \c RESET_STREAM+\c STOP_SENDING / connection-close).  HTTP/1.x retains the
+      connection-scoped model (there \c connection \c == \c stream, which is
+      already correct).
+      (<a href="https://github.com/qoretechnologies/qore/issues/5351">issue 5351</a>)
     - fixed request path decoding so the resource path is URL-decoded while the query string remains encoded until
       parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()", preventing encoded query separators such as
       \c "%26", \c "%3D", and \c "%3B" from corrupting query parameters
@@ -5388,30 +5406,32 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Manage persistent handler state after request processing
         if (is_multiplexed && phi.handler && phi.handler.isPersistent()
                 && !request_helper.isDedicated()) {
-            # For multiplexed connections, dedicate this handler pool thread to the
-            # persistent session.  Subsequent requests on the same connection will be
-            # routed to this thread via a Queue, ensuring thread affinity for
-            # thread-local resources (e.g. database transactions).
-            log("cid %d: handler opted into persistence for %s %s (multiplexed), "
-                "switching to dedicated thread mode", cx.id, hdr.method, cx.masked_path);
-            # Register the persistent queue BEFORE resuming h2op to avoid a race
-            # condition: once h2op is resumed, the I/O thread can receive the next
-            # request immediately. If the queue isn't registered yet, the request
-            # won't be routed to this dedicated thread and will go to the pool instead.
-            Queue pq();
-            code register_fn = header_info.register_persistent_queue;
-            code deregister_fn = header_info.deregister_persistent_queue;
-            register_fn(sock_key, pq, phi.handler.getPersistentQueueFilter());
-            # Resume h2op for body_streaming requests — the handler has finished reading
-            # the body, but the h2op was never resumed because the handler pool task code
-            # at lines after onHttpRequest() will never execute (we block here instead)
-            if (header_info.resume_body_streaming) {
-                header_info.resume_body_streaming();
-            }
-            on_exit deregister_fn(sock_key);
-            # Send initial response — use inline streaming for
-            # send_callback/input_stream responses to preserve thread
-            # affinity (DSP reservations are thread-local)
+            # Stream-scoped persistent sessions (issue #5351): multiplexed
+            # transports (HTTP/2, HTTP/3) no longer support a connection-scoped
+            # multi-request persistent session with a parked dedicated handler
+            # thread.  On a pooled/multiplexed connection the connection-close
+            # that ends an HTTP/1.x session never arrives, so such a session
+            # could only be released by a best-effort end-of-session request;
+            # if that was lost the dedicated thread stayed parked forever and
+            # its thread-local resources (e.g. an open DB transaction) leaked.
+            #
+            # A persistent session on a multiplexed transport must instead be a
+            # single bidirectional streaming request: the handler opts into
+            # body streaming, holds its thread-local resource for the lifetime
+            # of that one stream, and reads framed messages from the stream's
+            # data queue until the peer half-closes (END_STREAM) or the stream
+            # is reset / the connection closes — all transport-deterministic and
+            # reliably delivered.  That path runs entirely within the handler's
+            # request dispatch and does NOT reach here.
+            #
+            # Here we therefore only send the initial response (inline for
+            # thread-affine streaming responses, mirroring the non-persistent
+            # multiplexed path below) and release the thread.  The one-shot
+            # streamed-SELECT case clears its own persistence via the
+            # RestStreamRequest destructor once the response refs are dropped;
+            # any handler still reporting persistent afterwards requested an
+            # unsupported connection-scoped session and is torn down here so it
+            # cannot leak.
             if (async_response.code) {
                 if (async_response.send_callback || async_response.input_stream) {
                     sendMultiplexedStreamingResponseInline(s, header_info,
@@ -5420,41 +5440,32 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     sendMultiplexedResponse(s, header_info, async_response);
                 }
             }
-            # Drop response refs so any framework objects captured by send_callback
-            # / input_stream (e.g. RestStreamRequest) can be destroyed and run their
-            # destructors before the persistence re-check below.  RestStreamRequest's
-            # destructor is what clears handler persistence based on the underlying
-            # stream's post-streaming state (e.g. SqlUtilSelectStream::isPersistent()
-            # returns False once send_done is set).  Without this, the send_callback
-            # closure keeps the request alive past the re-check, the destructor's
-            # handler.setPersistent(False) call hasn't fired yet, and the loop entry
-            # below would erroneously dedicate this thread for the full TTL.
+            # Drop response refs so any framework objects captured by
+            # send_callback / input_stream (e.g. RestStreamRequest) are
+            # destroyed and run their destructors before the persistence
+            # re-check below — the destructor is what clears persistence for a
+            # one-shot streamed SELECT (isPersistent() returns False once
+            # send_done is set).
             remove async_response.send_callback;
             remove async_response.input_stream;
             if (header_info.body_streaming) {
                 cleanupMultiplexedBodyStream(s, header_info);
             }
-            # Re-check persistence AFTER the response (incl. any inline streaming)
-            # has been fully sent: a handler's persistence condition may become
-            # false while the response was being produced.  Persistence is a
-            # generic contract — any handler that pins itself to a dedicated
-            # thread only for the duration of some context (an open SQL
-            # statement, an in-flight bidi message exchange, a transient lock,
-            # etc.) will report persistent at dispatch time but release as
-            # soon as that context ends.  Skip the persistent queue loop
-            # entirely in that case so the handler thread is freed
-            # immediately instead of idling for the full TTL.
-            if (!phi.handler.isPersistent()) {
-                log("cid %d: persistence released during initial response, "
-                    "skipping dedicated mode", cx.id);
-                deregister_fn(sock_key);
-                drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                    getContextTemplate(info), phi, info);
-                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            if (phi.handler.isPersistent()) {
+                log("cid %d: connection-scoped persistent session is not "
+                    "supported on multiplexed transports (HTTP/2, HTTP/3); "
+                    "releasing — use a single bidirectional streaming request "
+                    "instead", cx.id);
+                # Tear down the handler's thread-local context now so the
+                # would-be session cannot leak (mirrors the on_exit teardown of
+                # the H1 dedicated loop).
+                phi.clear();
+                removeUserThreadContext();
+                remove_thread_data("svc_listener");
+            } else {
+                log("cid %d: persistence released during initial response "
+                    "(multiplexed)", cx.id);
             }
-            # Enter dedicated persistent loop
-            handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
-                deregister_fn, sock_key);
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         } else if (!is_multiplexed && phi.handler && phi.handler.isPersistent()
                 && !request_helper.isDedicated()) {

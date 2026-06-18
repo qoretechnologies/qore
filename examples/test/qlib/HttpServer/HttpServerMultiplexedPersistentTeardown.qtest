@@ -22,25 +22,38 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-# Verifies that a persistent dedicated-thread handler session bound to a
-# multiplexed connection (HTTP/2 and HTTP/3 / QUIC) is torn down deterministically
-# when the client abandons the exchange via a peer stream reset (a timed-out
-# request: RST_STREAM on H2, STOP_SENDING/RESET_STREAM on H3) — even though
-# disconnect() does not close a multiplexed connection.  Without the libqore
-# lifecycle-delivery rail (issue #5339) the parked dedicated thread would only be
-# released on full connection/listener close, leaking any thread-pinned resource
-# it holds.
+# Stream-scoped persistent sessions on multiplexed transports (issue #5351).
 #
-# Also verifies that destroying the whole server WHILE a persistent session is
-# still active (parked dedicated thread, the close-delivery queue binding still
-# live on the C++ poll operation) tears the session down cleanly.  This exercises
-# the cancellation path Http2PollOperationPriv::abort() /
-# Http3ServerPollOperationPriv::abort(): the persistent-session queue binding must
-# be released there, while the owning program's data is still valid.  Previously
-# the binding was released only in ~cleanup() (the destructor path), which can run
-# after program teardown has freed the queued objects' class/closure data — a
-# use-after-free that surfaced as a SIGSEGV (corrupt indirect call) caught first
-# by the embedded JVM's chained SIGSEGV handler.
+# The connection-scoped multi-request persistent-session model (a handler that
+# calls setPersistent() and parks a dedicated handler thread on the connection
+# for its lifetime) is an HTTP/1.x carry-over that is WRONG for HTTP/2 and
+# HTTP/3: those connections multiplex many independent streams and are pooled /
+# reused, so the connection-close that ends an H1 session never arrives.  The
+# parked thread could then only be released by a best-effort end-of-session
+# request; if that was lost on a pooled connection the thread stayed parked
+# forever and its thread-local resources (e.g. an open DB transaction) leaked —
+# exhausting datasource pools downstream.
+#
+# The fix binds a persistent session to a single bidirectional stream whose
+# lifecycle (END_STREAM / RST_STREAM / RESET_STREAM+STOP_SENDING /
+# connection-close) is transport-deterministic and reliably delivered.  On
+# multiplexed transports the framework therefore no longer parks a dedicated
+# thread for a connection-scoped session: a handler that opts into persistence
+# is released immediately after its response, its thread-local context torn down
+# deterministically — it cannot leak.  A genuine cross-request session on H2/H3
+# must instead be expressed as a single bidirectional streaming request (the
+# body_streaming / extended-CONNECT path, exercised by Http2BidiStreaming.qtest
+# and the QUIC WebSocket tests), whose teardown rides the same stream lifecycle.
+#
+# This test verifies:
+#  - a multiplexed handler that calls setPersistent() is torn down promptly and
+#    exactly once (persistentClosed() fires) without any stream reset, idle TTL,
+#    or connection close — i.e. no parked thread, no leak (the core regression);
+#  - the listener stays healthy across many such sessions on reused connections;
+#  - destroying the server is clean (no crash) whether or not a session is live.
+#
+# HTTP/1.x retains the connection-scoped model (there connection == stream, which
+# is already correct) and is covered by HttpServer.qtest / HttpServerStreamCallback.qtest.
 
 %modern
 
@@ -107,50 +120,63 @@ pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
 l50Xb2GWQesIt9k5jF5IOw==
 -----END PRIVATE KEY-----";
 
-#! Persistent handler that pins its dedicated thread for the connection lifetime.
-/** Mirrors the multiplexed persistent contract used by thread-pinned resources
-    (e.g. an open DB transaction): keepPersistentConnectionDedicated() keeps the
-    dedicated thread bound across requests, and a queue filter routes only the
-    "/persist" path to it so an abandoned request on another path goes to the
-    pool (leaving the dedicated thread genuinely parked).  persistentClosed() —
-    the server's teardown hook — pushes to a Queue so the test can wait
-    deterministically for teardown.
+#! Handler that opts into a (connection-scoped) persistent session on /persist.
+/** Simulates a handler that pins a thread-local resource (e.g. an open DB
+    transaction): it acquires a "resource" and calls setPersistent(True) on the
+    /persist request.  On a multiplexed transport (HTTP/2, HTTP/3) the framework
+    must NOT park a dedicated thread for such a session — it must release the
+    handler immediately after the response and tear down its context, firing
+    persistentClosed() exactly once so the resource cannot leak.  The handler
+    records every acquire/release through a shared, mutex-guarded counter and a
+    Queue so the test can assert teardown deterministically and verify no leak.
 */
-class KeepDedicatedHandler inherits AbstractHttpRequestHandler {
+class PersistentResourceHandler inherits AbstractHttpRequestHandler {
     public {
+        #! signalled (one "closed" entry) every time persistentClosed() fires
         Queue teardown();
     }
 
-    bool keepPersistentConnectionDedicated() {
-        return True;
+    private {
+        Mutex lck();
+        #! number of currently-held resources (must return to 0 — no leak)
+        int held = 0;
+        #! total resources ever acquired (sanity)
+        int acquired = 0;
     }
 
-    *code<bool(hash<auto>)> getPersistentQueueFilter() {
-        # only the persistent path is routed to the dedicated thread, so an
-        # abandoned request on "/slow" is handled by the pool and the dedicated
-        # thread stays parked in its queue
-        return bool sub (hash<auto> hdr) {
-            return hdr.path =~ /persist/;
-        };
+    #! number of resources currently held (0 == nothing leaked)
+    int currentlyHeld() {
+        AutoLock al(lck);
+        return held;
     }
 
+    #! total resources acquired over the test
+    int totalAcquired() {
+        AutoLock al(lck);
+        return acquired;
+    }
+
+    #! the framework teardown hook — release the thread-local resource here
     nothing persistentClosed() {
         AbstractHttpRequestHandler::persistentClosed();
+        {
+            AutoLock al(lck);
+            --held;
+        }
         teardown.push("closed");
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         hash<auto> rhdr = {"Content-Type": MimeTypeText};
         if (hdr.path =~ /persist/) {
+            # acquire a thread-pinned resource and pin the thread to the session
+            {
+                AutoLock al(lck);
+                ++held;
+                ++acquired;
+            }
             setPersistent(True);
             return AbstractHttpRequestHandler::makeResponse(rhdr, 200, "persistent");
-        }
-        if (hdr.path =~ /slow/) {
-            # never respond within the client timeout window; the client aborts
-            # the stream, which the server must turn into a persistent-session
-            # teardown.  Bounded so the server can still shut down.
-            sleep(8);
-            return AbstractHttpRequestHandler::makeResponse(rhdr, 200, "slow");
         }
         return AbstractHttpRequestHandler::makeResponse(rhdr, 200, "ok");
     }
@@ -159,7 +185,7 @@ class KeepDedicatedHandler inherits AbstractHttpRequestHandler {
 class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
     private {
         HttpServer m_http;
-        KeepDedicatedHandler m_handler;
+        PersistentResourceHandler m_handler;
         int m_quic_port;
         bool m_quic_available = False;
         int m_tls_port;
@@ -178,7 +204,7 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         });
         m_http.waitForAsyncIo();
 
-        m_handler = new KeepDedicatedHandler();
+        m_handler = new PersistentResourceHandler();
         m_http.setHandler("persistent", "/", MimeTypeText, m_handler);
         m_http.setDefaultHandler("persistent", m_handler);
 
@@ -210,16 +236,16 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         }
 
         if (m_quic_available) {
-            addTestCase("H3 persistent teardown on stream reset", \testH3TeardownOnStreamReset());
-            addTestCase("H3 persistent teardown repeats and recovers", \testH3TeardownRepeatsAndRecovers());
-            addTestCase("H3 persistent teardown on server destroy", \testH3TeardownOnServerStop());
+            addTestCase("H3 persistent session not parked", \testH3NotParked());
+            addTestCase("H3 sessions repeat without leak", \testH3RepeatsNoLeak());
+            addTestCase("H3 server destroy is clean", \testH3ServerStop());
         } else {
             printf("SKIP: QUIC not available\n");
         }
         if (m_tls_available) {
-            addTestCase("H2 persistent teardown on stream reset", \testH2TeardownOnStreamReset());
-            addTestCase("H2 persistent teardown repeats and recovers", \testH2TeardownRepeatsAndRecovers());
-            addTestCase("H2 persistent teardown on server destroy", \testH2TeardownOnServerStop());
+            addTestCase("H2 persistent session not parked", \testH2NotParked());
+            addTestCase("H2 sessions repeat without leak", \testH2RepeatsNoLeak());
+            addTestCase("H2 server destroy is clean", \testH2ServerStop());
         }
 
         set_return_value(main());
@@ -227,7 +253,7 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         delete m_http;
     }
 
-    private RestClientIo getClient(string http_version, int port, timeout request_timeout = 3s) {
+    private RestClientIo getClient(string http_version, int port, timeout request_timeout = 5s) {
         return new RestClientIo({
             "url": sprintf("https://127.0.0.1:%d", port),
             "data": "text",
@@ -245,156 +271,130 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         }
     }
 
-    #! Open a persistent session on a fresh multiplexed client, then abandon a
-    #! request on the same connection so the client resets the stream; returns
-    #! the client.
-    /** The parked dedicated thread holds the persistent session; the abandoned
-        "/slow" request (routed to the pool, not the dedicated thread) is reset by
-        the client on timeout while the multiplexed connection stays open.
-    */
-    private RestClientIo openAndAbandonPersistentSession(string http_version, int port) {
-        RestClientIo rc = getClient(http_version, port);
-
-        hash<auto> resp = rc.restGet("/persist");
-        assertEq(200, resp.status_code, "persistent session established");
-
-        bool aborted = False;
-        try {
-            rc.restGet("/slow");
-        } catch (hash<ExceptionInfo> ex) {
-            aborted = True;
-            if (m_options.verbose > 1) {
-                printf("  abandon error (expected): %s: %s\n", ex.err, ex.desc);
-            }
-        }
-        assertTrue(aborted, "slow request on persistent connection was aborted by the client");
-        return rc;
-    }
-
-    #! A peer stream reset (timed-out request) on a still-open multiplexed
-    #! connection tears down the parked persistent session.
-    private doTeardownOnStreamReset(string http_version, int port) {
+    #! A multiplexed handler that opts into persistence is torn down promptly and
+    #! exactly once WITHOUT any stream reset, idle TTL, or connection close — the
+    #! core anti-leak guarantee.  On the connection-scoped (H1) model this would
+    #! stay parked until one of those events; here the resource is released
+    #! immediately after the response.
+    private doNotParked(string http_version, int port) {
         drainTeardown();
+        int held_before = m_handler.currentlyHeld();
 
-        RestClientIo rc = openAndAbandonPersistentSession(http_version, port);
+        RestClientIo rc = getClient(http_version, port);
         on_exit delete rc;
 
-        # the server must tear down the parked persistent session in response to
-        # the abandon — deterministic wait on the teardown signal, not a poll.
+        hash<auto> resp = rc.restGet("/persist");
+        assertEq(200, resp.status_code, "persistent session response received");
+
+        # teardown must fire deterministically (no parked thread waiting for a
+        # reset / TTL / connection close) — a blocking wait on the signal, not a
+        # poll.  If the old connection-scoped parking were still in effect this
+        # get() would block until the 30s timeout.
         auto sig = m_handler.teardown.get(30s);
-        assertEq("closed", sig, "parked persistent session torn down after client abandon");
+        assertEq("closed", sig, "multiplexed persistent session torn down without a stream reset");
+        # the thread-local resource is released — net zero held
+        assertEq(held_before, m_handler.currentlyHeld(),
+            "thread-pinned resource released on teardown (no leak)");
+        # and the connection is still usable for ordinary requests
+        assertEq(200, rc.restGet("/normal").status_code,
+            "connection still usable after session teardown");
     }
 
-    #! The teardown rail fires for every abandoned session and the listener stays
-    #! healthy afterwards (no wedge, no leaked dedicated thread blocking new work).
-    private doTeardownRepeatsAndRecovers(string http_version, int port) {
+    #! Many persistent sessions over reused connections each tear down; no
+    #! resource leaks and the listener stays healthy.
+    private doRepeatsNoLeak(string http_version, int port) {
         drainTeardown();
+        int held_before = m_handler.currentlyHeld();
+        int acquired_before = m_handler.totalAcquired();
 
-        # two independent persistent sessions, each abandoned, each must tear down
-        RestClientIo rc1 = openAndAbandonPersistentSession(http_version, port);
-        on_exit delete rc1;
-        assertEq("closed", m_handler.teardown.get(30s), "first session torn down");
+        # one client, reused connection (pooled/multiplexed): the H1 leak scenario
+        RestClientIo rc = getClient(http_version, port);
+        on_exit delete rc;
 
-        RestClientIo rc2 = openAndAbandonPersistentSession(http_version, port);
-        on_exit delete rc2;
-        assertEq("closed", m_handler.teardown.get(30s), "second session torn down");
+        int N = 5;
+        for (int i = 0; i < N; ++i) {
+            assertEq(200, rc.restGet("/persist").status_code,
+                sprintf("session %d established", i));
+            assertEq("closed", m_handler.teardown.get(30s),
+                sprintf("session %d torn down", i));
+        }
 
-        # the server is still healthy: a normal request on a fresh connection
-        # completes promptly (the teardowns did not wedge the listener)
-        RestClientIo rc3 = getClient(http_version, port, 5s);
-        on_exit delete rc3;
+        assertEq(acquired_before + N, m_handler.totalAcquired(),
+            "every session acquired its resource");
+        assertEq(held_before, m_handler.currentlyHeld(),
+            "no resource leaked across repeated sessions on a reused connection");
+
+        # listener is healthy: a normal request completes promptly
         date start = now_us();
-        hash<auto> resp = rc3.restGet("/normal");
-        assertEq(200, resp.status_code, "server healthy after persistent teardowns");
-        assertTrue(now_us() - start < 5s, "normal request completed promptly after teardowns");
+        assertEq(200, rc.restGet("/normal").status_code, "server healthy after repeated sessions");
+        assertTrue(now_us() - start < 5s, "normal request completed promptly");
     }
 
-    #! Build a standalone server (its own program-scoped handler + listener) so
-    #! the server-stop test can destroy the whole server while a persistent
-    #! session is still active without disturbing the shared suite server.
-    /** @return a hash with the server, its dedicated handler, and the port
-    */
-    private hash<auto> makeStandaloneServer(string proto) {
+    #! Destroying the server is clean whether or not a session was just active —
+    #! no crash, and any session in flight has already been torn down (no parked
+    #! thread pinned by a live close-delivery binding).  Regression guard for the
+    #! poll-operation abort() path.
+    private doServerStop(string http_version, string proto) {
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
         HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": True});
         http.waitForAsyncIo();
-        KeepDedicatedHandler handler();
+        PersistentResourceHandler handler();
         http.setHandler("persistent", "/", MimeTypeText, handler);
         http.setDefaultHandler("persistent", handler);
         int port;
         if (proto == "h3") {
-            hash<auto> info = http.addQuicListener(<HttpListenerOptionInfo>{
+            port = http.addQuicListener(<HttpListenerOptionInfo>{
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
-            });
-            port = info.port;
+            }).port;
         } else {
-            hash<auto> info = http.addListener(<HttpListenerOptionInfo>{
+            port = http.addListener(<HttpListenerOptionInfo>{
                 "service": "0",
                 "node": "127.0.0.1",
                 "family": AF_INET,
                 "cert": new SSLCertificate(CertPem),
                 "key": new SSLPrivateKey(KeyPem),
-            });
-            port = info.port;
+            }).port;
         }
-        return {"http": http, "handler": handler, "port": port};
-    }
 
-    #! Destroying the server while a persistent session is still active (parked
-    #! dedicated thread, close-delivery binding live on the poll op) must tear the
-    #! session down cleanly via the abort() cancellation path — no crash, and the
-    #! handler's persistentClosed() teardown hook fires exactly once.
-    /** The client connection is kept OPEN through the server destruction so the
-        connection is not closed first: the live in-flight operation is cancelled
-        by server stop(), and abort() must release the persistent-session queue
-        binding while the program's data is still valid (regression for the
-        deferred-to-~cleanup() use-after-free).
-    */
-    private doTeardownOnServerStop(string http_version, string proto) {
-        hash<auto> srv = makeStandaloneServer(proto);
-        HttpServer http = srv.http;
-        KeepDedicatedHandler handler = srv.handler;
-
-        RestClientIo rc = getClient(http_version, srv.port);
+        RestClientIo rc = getClient(http_version, port);
         on_exit delete rc;
 
-        hash<auto> resp = rc.restGet("/persist");
-        assertEq(200, resp.status_code, "persistent session established before server destroy");
+        assertEq(200, rc.restGet("/persist").status_code, "session established before server destroy");
+        # teardown already happened (not parked); resource released
+        assertEq("closed", handler.teardown.get(30s), "session torn down before server destroy");
+        assertEq(0, handler.currentlyHeld(), "no resource held at server destroy");
 
-        # Connection still open + dedicated thread parked + C++ binding live:
-        # destroying the server cancels the in-flight op (abort()), which must
-        # release the binding deterministically rather than defer to ~cleanup().
+        # destroy the server with the (now idle) multiplexed connection still open
         delete http;
-
-        assertEq("closed", handler.teardown.get(30s),
-            "parked persistent session torn down on server destroy");
+        # no crash == pass; one explicit assertion so the case is not an identity test
+        assertEq(0, handler.currentlyHeld(), "server destroyed cleanly with no leaked resource");
     }
 
-    testH2TeardownOnServerStop() {
-        doTeardownOnServerStop("2.0", "h2");
+    testH2NotParked() {
+        doNotParked("2.0", m_tls_port);
     }
 
-    testH3TeardownOnServerStop() {
-        doTeardownOnServerStop("auto", "h3");
+    testH2RepeatsNoLeak() {
+        doRepeatsNoLeak("2.0", m_tls_port);
     }
 
-    testH3TeardownOnStreamReset() {
-        doTeardownOnStreamReset("auto", m_quic_port);
+    testH2ServerStop() {
+        doServerStop("2.0", "h2");
     }
 
-    testH3TeardownRepeatsAndRecovers() {
-        doTeardownRepeatsAndRecovers("auto", m_quic_port);
+    testH3NotParked() {
+        doNotParked("auto", m_quic_port);
     }
 
-    testH2TeardownOnStreamReset() {
-        doTeardownOnStreamReset("2.0", m_tls_port);
+    testH3RepeatsNoLeak() {
+        doRepeatsNoLeak("auto", m_quic_port);
     }
 
-    testH2TeardownRepeatsAndRecovers() {
-        doTeardownRepeatsAndRecovers("2.0", m_tls_port);
+    testH3ServerStop() {
+        doServerStop("auto", "h3");
     }
 }
