@@ -102,12 +102,41 @@ QoreHashNode* Http2PollOperationPriv::continuePoll(ExceptionSink* xsink) {
 }
 
 void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
-    AutoLocker al(op_lock);
-    if (current_op) {
-        current_op->abort(xsink);
+    // abort() is the cancellation entry point for an in-flight operation: it is
+    // invoked by program destruction (AsyncIoControllerPriv::cancelByProgram()
+    // → DT_ABORT, fired from qore_program_private cleanup before the program's
+    // namespace/class data is cleared), by HttpServer stop(), and by
+    // per-connection close/idle teardown.  The persistent-session close-delivery
+    // binding (a Queue + its wrapper QoreObject ref) must be released HERE,
+    // while the program owning the queued objects' class/closure data is still
+    // valid.  Deferring it to ~cleanup() (the destructor path) is unsafe: the op
+    // object can outlive the cancel (pinned by the dedicated handler thread's
+    // deregister closure or the controller's connection map), so the deferred
+    // deref runs a Qore destructor over freed program code → SIGSEGV.
+    Queue* q;
+    QoreObject* qobj;
+    {
+        AutoLocker al(op_lock);
+        if (current_op) {
+            current_op->abort(xsink);
+        }
+        clearStreamQueues(xsink);
+        // Capture + clear the binding under op_lock; deref below after releasing
+        // it (op_lock is non-recursive — mirrors deregisterPersistentSessionQueue()).
+        q = persistent_session_queue;
+        qobj = persistent_session_queue_obj;
+        persistent_session_queue = nullptr;
+        persistent_session_queue_obj = nullptr;
+        h2_state = H2ServerState::CLOSED;
     }
-    clearStreamQueues(xsink);
-    h2_state = H2ServerState::CLOSED;
+    // Idempotent with the dedicated handler's own later deregister and ~cleanup()
+    // (both find the binding already null).
+    if (q) {
+        q->deref(xsink);
+    }
+    if (qobj) {
+        qobj->deref(xsink);
+    }
 }
 
 QoreValue Http2PollOperationPriv::getOutput() const {

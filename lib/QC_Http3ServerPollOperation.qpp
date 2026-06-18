@@ -460,6 +460,14 @@ void Http3ServerPollOperationPriv::abort(ExceptionSink* xsink) {
     closeStreamQueues();
     AutoLocker al(op_lock);
     h3_state.store(H3State::CLOSED, std::memory_order_release);
+    // Release the persistent-session close-delivery bindings on cancel.  This
+    // map is non-owning (the QPP persistent_session_queue_objs member holds the
+    // Queue refs); clear it here under op_lock so the I/O thread stops
+    // delivering before the QPP-layer abort() drops those owning refs.  See the
+    // H2 equivalent Http2PollOperationPriv::abort() for the freed-program
+    // rationale: deferring release to QoreObject destruction can run the deref
+    // after the owning program's data has been torn down.
+    persistent_session_queues_.clear();
     if (read_op) {
         read_op->abort(xsink);
     }
@@ -975,6 +983,14 @@ nothing Http3ServerPollOperation::shutdown(*int session_id) [flags=NAMED_ARGS] {
 */
 nothing Http3ServerPollOperation::abort() {
     priv->abort(xsink);
+    // Drop the owning QoreObject refs for persistent-session queues now (on
+    // cancel), while the program's data is still valid — not deferred to
+    // QoreObject member destruction, which can run after the owning program is
+    // torn down (derefing freed class/closure data → SIGSEGV).  priv->abort()
+    // has already cleared the non-owning C++ map under op_lock.
+    AutoLocker ml(priv->stream_member_lock);
+    self->setMemberValue("persistent_session_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+        new QoreHashNode(objectTypeInfo), xsink);
 }
 
 //! Stages a certificate / private key swap to be applied on the I/O thread

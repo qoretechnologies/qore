@@ -30,6 +30,17 @@
 # lifecycle-delivery rail (issue #5339) the parked dedicated thread would only be
 # released on full connection/listener close, leaking any thread-pinned resource
 # it holds.
+#
+# Also verifies that destroying the whole server WHILE a persistent session is
+# still active (parked dedicated thread, the close-delivery queue binding still
+# live on the C++ poll operation) tears the session down cleanly.  This exercises
+# the cancellation path Http2PollOperationPriv::abort() /
+# Http3ServerPollOperationPriv::abort(): the persistent-session queue binding must
+# be released there, while the owning program's data is still valid.  Previously
+# the binding was released only in ~cleanup() (the destructor path), which can run
+# after program teardown has freed the queued objects' class/closure data — a
+# use-after-free that surfaced as a SIGSEGV (corrupt indirect call) caught first
+# by the embedded JVM's chained SIGSEGV handler.
 
 %modern
 
@@ -200,12 +211,14 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         if (m_quic_available) {
             addTestCase("H3 persistent teardown on stream reset", \testH3TeardownOnStreamReset());
             addTestCase("H3 persistent teardown repeats and recovers", \testH3TeardownRepeatsAndRecovers());
+            addTestCase("H3 persistent teardown on server destroy", \testH3TeardownOnServerStop());
         } else {
             printf("SKIP: QUIC not available\n");
         }
         if (m_tls_available) {
             addTestCase("H2 persistent teardown on stream reset", \testH2TeardownOnStreamReset());
             addTestCase("H2 persistent teardown repeats and recovers", \testH2TeardownRepeatsAndRecovers());
+            addTestCase("H2 persistent teardown on server destroy", \testH2TeardownOnServerStop());
         }
 
         set_return_value(main());
@@ -293,6 +306,79 @@ class HttpServerMultiplexedPersistentTeardownTest inherits QUnit::Test {
         hash<auto> resp = rc3.restGet("/normal");
         assertEq(200, resp.status_code, "server healthy after persistent teardowns");
         assertTrue(now_us() - start < 5s, "normal request completed promptly after teardowns");
+    }
+
+    #! Build a standalone server (its own program-scoped handler + listener) so
+    #! the server-stop test can destroy the whole server while a persistent
+    #! session is still active without disturbing the shared suite server.
+    /** @return a hash with the server, its dedicated handler, and the port
+    */
+    private hash<auto> makeStandaloneServer(string proto) {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        http.waitForAsyncIo();
+        KeepDedicatedHandler handler();
+        http.setHandler("persistent", "/", MimeTypeText, handler);
+        http.setDefaultHandler("persistent", handler);
+        int port;
+        if (proto == "h3") {
+            hash<auto> info = http.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            port = info.port;
+        } else {
+            hash<auto> info = http.addListener(<HttpListenerOptionInfo>{
+                "service": "0",
+                "node": "127.0.0.1",
+                "family": AF_INET,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            });
+            port = info.port;
+        }
+        return {"http": http, "handler": handler, "port": port};
+    }
+
+    #! Destroying the server while a persistent session is still active (parked
+    #! dedicated thread, close-delivery binding live on the poll op) must tear the
+    #! session down cleanly via the abort() cancellation path — no crash, and the
+    #! handler's persistentClosed() teardown hook fires exactly once.
+    /** The client connection is kept OPEN through the server destruction so the
+        connection is not closed first: the live in-flight operation is cancelled
+        by server stop(), and abort() must release the persistent-session queue
+        binding while the program's data is still valid (regression for the
+        deferred-to-~cleanup() use-after-free).
+    */
+    private doTeardownOnServerStop(string http_version, string proto) {
+        hash<auto> srv = makeStandaloneServer(proto);
+        HttpServer http = srv.http;
+        KeepDedicatedHandler handler = srv.handler;
+
+        RestClientIo rc = getClient(http_version, srv.port);
+        on_exit delete rc;
+
+        hash<auto> resp = rc.restGet("/persist");
+        assertEq(200, resp.status_code, "persistent session established before server destroy");
+
+        # Connection still open + dedicated thread parked + C++ binding live:
+        # destroying the server cancels the in-flight op (abort()), which must
+        # release the binding deterministically rather than defer to ~cleanup().
+        delete http;
+
+        assertEq("closed", handler.teardown.get(30s),
+            "parked persistent session torn down on server destroy");
+    }
+
+    testH2TeardownOnServerStop() {
+        doTeardownOnServerStop("2.0", "h2");
+    }
+
+    testH3TeardownOnServerStop() {
+        doTeardownOnServerStop("auto", "h3");
     }
 
     testH3TeardownOnStreamReset() {
