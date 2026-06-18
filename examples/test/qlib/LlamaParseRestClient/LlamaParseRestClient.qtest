@@ -3,11 +3,12 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/LlamaParseRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires LlamaParseRestClient
 
 %exec-class LlamaParseRestClientTest
 

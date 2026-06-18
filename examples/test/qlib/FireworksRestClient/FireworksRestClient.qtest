@@ -3,14 +3,15 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreRagUtils
-%requires ../../../../qlib/OpenAiRestClient.qm
-%requires ../../../../qlib/FireworksRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires OpenAiRestClient
+%requires FireworksRestClient
 
 %exec-class FireworksRestClientTest
 

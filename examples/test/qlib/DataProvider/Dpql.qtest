@@ -9,7 +9,7 @@
 %requires QUnit
 %requires Logger
 %requires Mime
-%requires ../../../../qlib/DataProvider
+%requires DataProvider
 
 %requires reflection
 

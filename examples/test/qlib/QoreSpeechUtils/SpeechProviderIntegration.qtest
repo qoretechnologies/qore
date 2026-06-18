@@ -5,9 +5,10 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/QoreSpeechUtils.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires QoreSpeechUtils
 # DeepgramRestClient + AssemblyAiRestClient are loaded VIA SpeechProviderRegistry
 # (lazy-load through TranscriberModuleMap / SynthesizerModuleMap) — NOT via direct
 # %requires here.  This verifies the lazy-load wiring works end-to-end.

@@ -44,15 +44,16 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires HttpClientIo
+%requires Mime
+%requires Logger
+%requires QUnit
 
 %exec-class HttpServerMultiplexedPersistentTeardownTest
 

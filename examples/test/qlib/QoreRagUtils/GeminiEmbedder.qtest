@@ -6,15 +6,16 @@
 */
 
 %modern
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/GeminiRestClient.qm
-%requires ../../../../qlib/QoreRagUtils
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires GeminiRestClient
+%requires QoreRagUtils
 %requires QUnit
 
 %try-module json

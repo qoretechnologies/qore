@@ -8,8 +8,9 @@
 %modern
 %allow-debugger
 
-%requires ../../../../qlib/LineCoverage.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires LineCoverage
+%requires QUnit
 
 %exec-class LineCoverageTest
 

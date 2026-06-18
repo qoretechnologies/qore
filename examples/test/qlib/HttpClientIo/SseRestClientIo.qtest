@@ -24,21 +24,22 @@
 
 %modern
 
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/ServerSentEventHandler
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/RestSchemaValidator.qm
-%requires ../../../../qlib/Swagger.qm
-%requires ../../../../qlib/OpenApi3.qm
-%requires ../../../../qlib/RestClient.qm
-%requires ../../../../qlib/HttpClientIo
-%requires ../../../../qlib/HttpClientStreamingIo
-%requires ../../../../qlib/RestClientIo.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestSchemaValidator
+%requires Swagger
+%requires OpenApi3
+%requires RestClient
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires RestClientIo
+%requires Mime
+%requires Logger
+%requires QUnit
 
 %exec-class SseRestClientIoTest
 

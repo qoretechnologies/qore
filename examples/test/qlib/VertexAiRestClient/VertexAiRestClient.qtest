@@ -3,19 +3,20 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/GcpAuth.qm
-%requires ../../../../qlib/GeminiBodyShape.qm
-%requires ../../../../qlib/VertexAiRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires QoreLlmTypes
+%requires QoreRagTypes
+%requires QoreLlmUtils
+%requires GcpAuth
+%requires GeminiBodyShape
+%requires VertexAiRestClient
 
 %try-module json >= 1.11
 %define NoJson

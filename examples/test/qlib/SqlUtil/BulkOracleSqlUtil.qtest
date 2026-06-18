@@ -13,7 +13,8 @@
 %requires OracleSqlUtil
 %requires Schema
 
-%requires ./BulkSqlUtilTestBase.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires BulkSqlUtilTestBase
 #/;
 %try-module oracle
 %define NoOracle

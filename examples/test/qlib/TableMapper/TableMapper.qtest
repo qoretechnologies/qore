@@ -15,8 +15,8 @@
 %requires MysqlSqlUtil
 %requires FreetdsSqlUtil
 %requires Schema
-%requires ../../../../qlib/Mapper.qm
-%requires ../../../../qlib/TableMapper.qm
+%requires Mapper
+%requires TableMapper
 
 public class TableMapperTestSchema inherits AbstractSchema {
     public {

@@ -14,7 +14,7 @@
 %requires Logger
 %requires HttpServerUtil
 %requires HttpServer
-%requires ../../../../qlib/HttpServerAsyncIo/HttpServerAsyncIo.qm
+%requires HttpServerAsyncIo
 %requires WebSocketClient
 %requires WebSocketHandler
 

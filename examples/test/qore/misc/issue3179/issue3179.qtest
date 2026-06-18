@@ -5,7 +5,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires Util
 %requires QUnit
-%requires ./issue3179.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires issue3179
 
 %requires reflection
 

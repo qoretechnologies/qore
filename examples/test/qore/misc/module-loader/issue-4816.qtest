@@ -11,7 +11,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires reflection
-%requires ./ForeignRegistry.qm
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ForeignRegistry
 
 %exec-class Issue4816Test
 

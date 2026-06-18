@@ -3,18 +3,19 @@
 
 %modern
 
-%requires ../../../../qlib/Util.qm
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/HttpServerUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo
-%requires ../../../../qlib/QoreLlmTypes.qm
-%requires ../../../../qlib/QoreRagTypes.qm
-%requires ../../../../qlib/QoreLlmUtils
-%requires ../../../../qlib/AwsRestClient.qm
-%requires ../../../../qlib/BedrockRestClient.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires QoreLlmTypes
+%requires QoreRagTypes
+%requires QoreLlmUtils
+%requires AwsRestClient
+%requires BedrockRestClient
 
 %try-module json
 %define NoJson
