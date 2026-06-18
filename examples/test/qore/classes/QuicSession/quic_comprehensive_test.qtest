@@ -134,15 +134,27 @@ class QuicComprehensiveTest inherits QUnit::Test {
     }
 
     #! Helper: create a QUIC server+client socket pair bound to localhost
+    /** @note The sockets bind ephemeral ports with @c reuseaddr=False (SO_REUSEADDR
+        disabled).  SO_REUSEADDR on a UDP socket lets sockets in *different processes*
+        bind the *same* ephemeral port; the kernel then delivers an incoming datagram
+        to one of them — not necessarily the intended one.  Because every test process
+        shares the same server certificate, a client's Initial answered by a foreign
+        process's server still completes a valid handshake, leaving the intended
+        server stranded in handshake-recv.  Disabling SO_REUSEADDR makes each
+        ephemeral port exclusively owned, which is required for reliable isolation
+        when many test processes run concurrently (e.g. under a parallel CI matrix).
+        SO_REUSEADDR provides no benefit on a fresh ephemeral UDP socket (there is no
+        UDP TIME_WAIT), so disabling it is purely corrective.
+    */
     private hash<auto> createSocketPair() {
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         server_sock.setCertificate(new SSLCertificate(CertPem));
         server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
         int port = server_sock.getSocketInfo().port;
 
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         return {
             "server_sock": server_sock,
@@ -812,15 +824,19 @@ class QuicComprehensiveTest inherits QUnit::Test {
             background sub(int conn_idx) {
                 on_exit done.dec();
                 try {
-                    # Each connection gets its own server and client socket
+                    # Each connection gets its own server and client socket.
+                    # reuseaddr=False: see createSocketPair() — SO_REUSEADDR on an
+                    # ephemeral UDP port allows cross-process port aliasing, which
+                    # strands the intended server when many test processes run
+                    # concurrently.
                     Socket srv();
-                    srv.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+                    srv.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
                     srv.setCertificate(new SSLCertificate(CertPem));
                     srv.setPrivateKey(new SSLPrivateKey(KeyPem));
                     int srv_port = srv.getSocketInfo().port;
 
                     Socket cli();
-                    cli.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+                    cli.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
                     AsyncSocketIo::AsyncSocketIoController ctrl =
                         AsyncSocketIo::getGlobalAsyncIoController();
@@ -963,13 +979,19 @@ class QuicComprehensiveTest inherits QUnit::Test {
         # race where another process could bind to the port after we close it.
         # The plain UDP socket won't respond to QUIC Initial packets, so
         # the handshake will time out deterministically.
+        #
+        # reuseaddr=False is essential here: with SO_REUSEADDR, a QUIC server in
+        # another concurrently-running test process could bind (alias) this same
+        # ephemeral port and *answer* the client's Initial, completing the
+        # handshake and breaking the "expect timeout" assertion.  Disabling
+        # SO_REUSEADDR makes dummy_server the exclusive owner of the port.
         Socket dummy_server();
-        dummy_server.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        dummy_server.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         on_exit delete dummy_server;
         int port = dummy_server.getSocketInfo().port;
 
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         string owner = client_sock.uniqueHash() + "-timeout";

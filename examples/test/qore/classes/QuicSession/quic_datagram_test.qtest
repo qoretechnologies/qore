@@ -108,13 +108,13 @@ class QuicDatagramTest inherits QUnit::Test {
     #! Helper: create a QUIC server+client socket pair bound to localhost
     private hash<auto> createSocketPair() {
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         server_sock.setCertificate(new SSLCertificate(CertPem));
         server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
         int port = server_sock.getSocketInfo().port;
 
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         return {
             "server_sock": server_sock,
@@ -294,7 +294,7 @@ class QuicDatagramTest inherits QUnit::Test {
     #! Test: datagram methods throw for invalid session
     testInvalidSessionDatagram() {
         Socket sock();
-        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         assertThrows("QUIC-ERROR", sub() {
             sock.isQuicDatagramSupported(9999);
@@ -316,7 +316,7 @@ class QuicDatagramTest inherits QUnit::Test {
     #! Test: parameter validation (session_id <= 0, stream_id < 0)
     testInvalidParameterValidation() {
         Socket sock();
-        sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         # session_id <= 0 should throw
         assertThrows("QUIC-ERROR", sub() {

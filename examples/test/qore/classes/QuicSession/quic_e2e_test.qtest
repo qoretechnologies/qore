@@ -122,7 +122,7 @@ class QuicE2ETest inherits QUnit::Test {
     testQuicPollOpCreation() {
         # Server poll op
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         server_sock.setCertificate(new SSLCertificate(CertPem));
         server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
 
@@ -132,7 +132,7 @@ class QuicE2ETest inherits QUnit::Test {
 
         # Client poll op
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         int server_port = getSocketPort(server_sock);
         AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
@@ -143,7 +143,7 @@ class QuicE2ETest inherits QUnit::Test {
     #! Test server poll operation initial state
     testQuicServerInitialState() {
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         server_sock.setCertificate(new SSLCertificate(CertPem));
         server_sock.setPrivateKey(new SSLPrivateKey(KeyPem));
 
@@ -155,11 +155,11 @@ class QuicE2ETest inherits QUnit::Test {
     #! Test client poll operation initial state
     testQuicClientInitialState() {
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         int server_port = getSocketPort(server_sock);
 
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
         # The client starts in initializing until continuePoll() resolves the
@@ -179,7 +179,7 @@ class QuicE2ETest inherits QUnit::Test {
 
         # Create server socket (UDP)
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
         int server_port = getSocketPort(server_sock);
         assertTrue(server_port > 0, "server bound to port " + string(server_port));
 
@@ -189,7 +189,7 @@ class QuicE2ETest inherits QUnit::Test {
 
         # Create client socket (UDP) — needs to be bound for recvfrom
         Socket client_sock();
-        client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        client_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         # Start poll operations
         AbstractPollOperation server_op = server_sock.startPollQuicAccept();
@@ -289,7 +289,7 @@ class QuicE2ETest inherits QUnit::Test {
     testQuicServerCertKeyValidation() {
         # Create a UDP socket without cert/key
         Socket server_sock();
-        server_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
+        server_sock.bindINET("127.0.0.1", "0", False, AF_INET, SOCK_DGRAM);
 
         # Can create the poll op without cert/key
         AbstractPollOperation server_op = server_sock.startPollQuicAccept();
