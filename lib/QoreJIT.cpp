@@ -743,10 +743,18 @@ void QoreJIT::releaseBgCompileWorkRefs(BgCompileWork& work) {
 void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
     releaseBgCompileWorkRefs(work);
 
-    int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-    if (remaining == 0) {
-        bg_queue_empty_cv.notify_all();
+    bg_active_work.fetch_sub(1, std::memory_order_acq_rel);
+    {
+        // Clear the in-progress claim under bg_queue_mutex so a per-Program waiter
+        // blocked on bg_in_progress is released as soon as this compile finishes,
+        // even when other Programs' work remains in the queue.
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        bg_in_progress = nullptr;
     }
+    // Always notify: both the shutdown waiter (queue empty && active_work == 0)
+    // and per-Program waiters (in-progress no longer references their Program)
+    // re-evaluate their predicates here.
+    bg_queue_empty_cv.notify_all();
 }
 
 void QoreJIT::bgCompileThreadLoop() {
@@ -768,6 +776,11 @@ void QoreJIT::bgCompileThreadLoop() {
             }
             work = std::move(bg_compile_queue.front());
             bg_compile_queue.pop();
+            // Publish the in-progress work under bg_queue_mutex (before releasing
+            // it to compile) so waitForBgCompileQueue(QoreProgram*) sees the claim
+            // atomically with the pop and cannot race past an in-flight compile of
+            // its Program.  Cleared in finishBgCompileWork() on every exit path.
+            bg_in_progress = &work;
         }
 
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
@@ -945,6 +958,68 @@ void QoreJIT::waitForBgCompileQueue() {
     bg_queue_empty_cv.wait(lock, [this]() {
         return bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0;
     });
+}
+
+bool QoreJIT::workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm) {
+    if (work.ir_func && work.ir_func->pgm == pgm) {
+        return true;
+    }
+    for (const auto& callee : work.callees) {
+        if (callee.ir_func && callee.ir_func->pgm == pgm) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
+    if (!pgm) {
+        return;
+    }
+    // Cancel still-queued compiles that reference this Program's IR (the Program
+    // is being destroyed; compiling its IR would be pointless and would read
+    // soon-to-be-freed program data), and wait only for an in-progress compile
+    // that references it.  Compiles belonging to other Programs stay queued and
+    // running, so Program teardown is no longer serialized behind the whole
+    // global queue.
+    std::vector<BgCompileWork> cancelled;
+    {
+        std::unique_lock<std::mutex> lock(bg_queue_mutex);
+        if (!bg_compile_queue.empty()) {
+            std::queue<BgCompileWork> kept;
+            while (!bg_compile_queue.empty()) {
+                BgCompileWork w = std::move(bg_compile_queue.front());
+                bg_compile_queue.pop();
+                if (workReferencesPgm(w, pgm)) {
+                    cancelled.push_back(std::move(w));
+                } else {
+                    kept.push(std::move(w));
+                }
+            }
+            bg_compile_queue = std::move(kept);
+        }
+        // Wait until the in-progress compile (if any) no longer touches pgm.  The
+        // bg thread clears bg_in_progress under bg_queue_mutex and notifies, and
+        // it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
+        bg_queue_empty_cv.wait(lock, [this, pgm]() {
+            return !bg_in_progress || !workReferencesPgm(*bg_in_progress, pgm);
+        });
+    }
+    // Release refs (which may destroy the now-orphaned variants) outside the lock.
+    for (auto& w : cancelled) {
+        // Reset the root compile state so the function can be re-submitted later
+        // if its Program outlives this one (it was cancelled only because some
+        // referenced callee belonged to the dying Program).
+        if (w.uvb) {
+            const_cast<UserVariantBase*>(w.uvb)->jit_compile_state.store(0, std::memory_order_release);
+        }
+        releaseBgCompileWorkRefs(w);
+        int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (remaining == 0) {
+            std::lock_guard<std::mutex> lock(bg_queue_mutex);
+            bg_queue_empty_cv.notify_all();
+        }
+    }
 }
 
 void QoreJIT::shutdown() {

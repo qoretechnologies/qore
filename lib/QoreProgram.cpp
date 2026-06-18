@@ -1904,9 +1904,13 @@ void qore_program_private::del(ExceptionSink* xsink) {
         //printd(5, "qore_program_private::del() this: %p cleared constants\n", this);
     }
 
-    // drain any pending background JIT compilations before deleting namespace data;
-    // the bg thread holds raw pointers to QoreIRFunction objects owned by this program
-    QoreJIT::instance().waitForBgCompileQueue();
+    // drain background JIT compilations that reference THIS program before
+    // deleting namespace data: the bg thread holds raw pointers to QoreIRFunction
+    // objects (and the program-owned LocalVars/AST they reference) owned by this
+    // program.  Only this program's compiles need draining — other programs'
+    // queued/in-progress compiles are left running, so teardown is not serialized
+    // behind the entire global compile queue.
+    QoreJIT::instance().waitForBgCompileQueue(pgm);
 
     // delete the namespace and all data
     qore_root_ns_private::get(*RootNS)->deleteData(!ns_vars, xsink);

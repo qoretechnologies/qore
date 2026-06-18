@@ -52,6 +52,7 @@ class LocalVar;
 class QoreIRFunction;
 class AbstractQoreFunctionVariant;
 class UserVariantBase;
+class QoreProgram;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
@@ -164,6 +165,15 @@ public:
     //! Used during shutdown.
     void waitForBgCompileQueue();
 
+    //! Drain only the background compilations that reference the given Program.
+    //! Called when a Program is being destroyed: its IR functions (and the
+    //! program-owned data they reference, e.g. LocalVars and AST) are about to be
+    //! freed, so any queued compile that touches this Program must be cancelled
+    //! and any in-progress compile that touches it must be awaited — but compiles
+    //! belonging to OTHER Programs are left running.  This avoids serializing every
+    //! Program teardown behind the entire global compile queue.
+    void waitForBgCompileQueue(QoreProgram* pgm);
+
 private:
     QoreJIT() = default;
     ~QoreJIT() {
@@ -217,6 +227,11 @@ private:
     std::atomic<bool> bg_thread_running{false};             //!< shutdown flag
     std::atomic<int> bg_active_work{0};                     //!< count of pending+in-progress compilations
     std::condition_variable bg_queue_empty_cv;              //!< signals when queue becomes empty
+    //! The work item currently being compiled by the bg thread (nullptr when
+    //! idle).  Protected by bg_queue_mutex; points at the bg thread's local while
+    //! it holds compile_mutex.  Used by waitForBgCompileQueue(QoreProgram*) to
+    //! decide whether the in-progress compile must be awaited.
+    const BgCompileWork* bg_in_progress = nullptr;
 
     //! Background thread worker loop
     void bgCompileThreadLoop();
@@ -226,6 +241,9 @@ private:
 
     //! Release variant refs held by a background work item.
     void releaseBgCompileWorkRefs(BgCompileWork& work);
+
+    //! True if a work item's root or any folded-in callee IR belongs to pgm.
+    static bool workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm);
 
     //! Complete a background work item: release refs, update active count, and notify waiters.
     void finishBgCompileWork(BgCompileWork& work);
