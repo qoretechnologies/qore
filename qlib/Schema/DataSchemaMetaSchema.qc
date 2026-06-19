@@ -123,7 +123,7 @@ public const DataSchemaJsonSchema = {
                 "type": {
                     "type": "string",
                     "enum": ("int", "varchar", "char", "timestamp", "date", "number",
-                        "blob", "clob", "binary", "float", "text",
+                        "blob", "clob", "binary", "float", "text", "bool",
                         "vector", "halfvec", "sparsevec"),
                     "description": "The column data type; may be omitted for pure driver-override "
                         "columns that set 'driver' with per-driver native_type/size/etc.",
