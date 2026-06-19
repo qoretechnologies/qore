@@ -4890,6 +4890,22 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const uint8_t* ir_end_ptr = ptr + ir_size;
 
                 // Resolve class for method context
+                // Establish a current-Program context for BOTH the class-ref
+                // resolution below and the closure constructor.  Class resolution
+                // can fall back to parseFindClass() (for private/internal classes
+                // that are not in the committed runtime maps), which reads the parse
+                // options of the *current* Program; without this context getProgram()
+                // is null and the lookup dereferences it — crashing, e.g., for a
+                // closure inside a method capturing a parameter, where the method's
+                // class is resolved here at load time.
+                //
+                // A plain current-Program context (not a parse lock) is used: this
+                // AOT slot-map reconstruction can run while the global AOT init lock
+                // is held, and taking a Program parse lock here can invert lock order
+                // with another loader thread that already holds the Program parse lock
+                // and is waiting for AOT init.
+                QoreProgramContextHelper closure_pch(pgm);
+
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
                     closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
@@ -4897,13 +4913,6 @@ static QoreAOTContext* buildContextFromSlotMap(
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
                 // so signature locals are available for IR deserialization.
-                // The constructor needs getProgram() / parse option context, but
-                // this AOT slot-map reconstruction can run while the global AOT
-                // init lock is held. Taking a Program parse lock here can invert
-                // lock order with another loader thread that already has the
-                // Program parse lock and is waiting for AOT init. A plain current
-                // Program context is sufficient for this constructor path.
-                QoreProgramContextHelper closure_pch(pgm);
                 auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
                 auto* closure_variant = static_cast<UserClosureVariant*>(
                     const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
