@@ -100,7 +100,7 @@ static int quic_input_stream_pollable_descriptor(InputStream* is, const char* er
     @param xsink for exception handling
 */
 static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry,
-                                     ExceptionSink* xsink) {
+                                     ExceptionSink* xsink, bool nothing_to_send = false) {
     int64_t timeout_ms;
     if (expiry == UINT64_MAX) {
         timeout_ms = QUIC_NO_TIMER_POLL_MS;
@@ -120,6 +120,17 @@ static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expi
             // Round up sub-millisecond durations to 1ms (curl pattern: line 933-934)
             if (timeout_ns % 1000000) {
                 ++timeout_ms;
+            }
+            // Anti-spin (issue #5351): if the timer-and-write pass produced
+            // nothing to send (e.g. a stream is flow-control-blocked and we are
+            // waiting for the peer's MAX_STREAM_DATA / an ACK to reopen the
+            // congestion window), a sub-millisecond timer wakeup just re-runs the
+            // same no-op write and busy-loops the I/O thread.  The event that
+            // actually unblocks progress is an INCOMING packet, which wakes the
+            // poll regardless of the timeout, so fall back to the long poll
+            // instead of tight-polling — same rationale as the expiry<=now branch.
+            if (nothing_to_send && timeout_ms <= 1) {
+                timeout_ms = QUIC_NO_TIMER_POLL_MS;
             }
         }
     }
@@ -830,13 +841,27 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
         // timeout so retransmission timers still fire
         expiry = quic_session->getExpiry();
     }
+    // Request write-readiness (POLLOUT) ONLY when sendPendingPackets reported a
+    // genuine socket-level partial send (SOCK_POLLOUT: the kernel UDP send buffer
+    // filled).  Do NOT request POLLOUT merely because hasPendingWrite() is true:
+    // when sendPendingPackets already drained everything it could and data still
+    // remains, that data is QUIC flow-control / congestion-window blocked, not
+    // socket-blocked.  A UDP socket is almost always writable, so requesting
+    // POLLOUT for flow-control-blocked data busy-spins the I/O thread on an
+    // always-ready POLLOUT (issue #5351).  Such data is unblocked by an INCOMING
+    // ACK / MAX_STREAM_DATA, so we wait for POLLIN (plus the retransmission timer
+    // for PTO probes) — matching the pending_write_ design comment in
+    // QuicSession::writePacketsLocked ("the next read cycle ... triggers another
+    // write attempt").
     int events = SOCK_POLLIN;
-    if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
+    if (srv == SOCK_POLLOUT) {
         events |= SOCK_POLLOUT;
     }
     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
     if (poll_info) {
-        setPollTimeoutFromExpiry(poll_info, expiry, xsink);
+        // nothing_to_send: the flush produced no packet send (srv==0) yet data may
+        // still be pending (flow-control-blocked) — avoid sub-ms tight-polling.
+        setPollTimeoutFromExpiry(poll_info, expiry, xsink, srv == 0);
     }
     return poll_info;
 }
@@ -1184,10 +1209,16 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         }
                     }
 
-                    // Register for POLLIN always; add POLLOUT if there's
-                    // pending data to write (e.g., a newly submitted request)
+                    // Register for POLLIN always; add POLLOUT ONLY for a genuine
+                    // socket-level partial send (SOCK_POLLOUT).  Do NOT add POLLOUT
+                    // for hasPendingWrite() — UDP sockets are almost always writable,
+                    // so flow-control / congestion-window-blocked data (which
+                    // sendPendingPackets could not drain) would busy-loop on an
+                    // always-ready POLLOUT; it is unblocked by an incoming ACK /
+                    // MAX_STREAM_DATA (POLLIN) plus the PTO timer (issue #5351; see
+                    // the identical guard in continuePoll()'s established-path branch).
                     int events = SOCK_POLLIN;
-                    if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
+                    if (srv == SOCK_POLLOUT) {
                         events |= SOCK_POLLOUT;
                     }
 
@@ -1200,7 +1231,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                             // request immediate re-poll for fair scheduling
                             poll_info->setKeyValue("poll_timeout_ms", 0, xsink);
                         } else {
-                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, srv == 0);
                         }
                     }
                     return poll_info;
@@ -2468,7 +2499,9 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        // flow-control-blocked pending data: don't sub-ms tight-poll
+                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
                     }
                     return poll_info;
                 }
@@ -2876,7 +2909,9 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
+                        // flow-control-blocked pending data: don't sub-ms tight-poll
+                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
                     }
                     return poll_info;
                 }

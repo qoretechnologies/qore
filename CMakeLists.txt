@@ -1105,8 +1105,8 @@ endif()
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
 # building from source via FetchContent when not installed.
-set(NGTCP2_VERSION "1.22.1")
-set(NGHTTP3_VERSION "1.15.0")
+set(NGTCP2_VERSION "1.23.0")
+set(NGHTTP3_VERSION "1.16.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
 # Consume the pkg-config IMPORTED_TARGETs (PkgConfig::*), NOT the bare
@@ -1185,7 +1185,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
-        URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
+        URL_HASH SHA256=776f59a99905c9a348846807b2e5ac9bb3485fc0f8c0250ba803018d5238a16e
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
@@ -1197,7 +1197,7 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
-        URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
+        URL_HASH SHA256=59d5b4211e96970f2d3d5e6876f73dce03414800ba04aa56835b132fce8de730
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}

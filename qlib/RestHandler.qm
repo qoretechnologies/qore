@@ -681,14 +681,14 @@ public namespace RestHandler {
 
             @param body_cancel the cancel closure, or @ref nothing to clear a previously-registered closure
 
-            @since RestHandler 1.9
+            @since RestHandler 1.8
         */
         setBodyCancel(*code<nothing()> body_cancel) {
             self.body_cancel = body_cancel;
         }
 
         #! returns the currently-registered inbound body cancel callback, or @ref nothing
-        /** @since RestHandler 1.9 */
+        /** @since RestHandler 1.8 */
         *code<nothing()> getBodyCancel() {
             return body_cancel;
         }
@@ -705,6 +705,24 @@ public namespace RestHandler {
         */
         bool needsContentEncoding() {
             return True;
+        }
+
+        #! Returns @ref True "True" to drive an interactive bidirectional stream on HTTP/2 / HTTP/3
+        /** Forwarded by @ref RestStreamRequest::wantsInteractiveStreaming() to the underlying
+            @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest" interactive path.  Stream
+            handlers that need an interleaved read -> reply exchange on a single stream (e.g. a remote
+            SQL session with read-your-writes) override this to return @ref True "True".  The default
+            is @ref False "False" (legacy recv-all-then-send model).
+
+            @return @ref True "True" to opt in to interactive bidirectional streaming on HTTP/2 and
+            HTTP/3, @ref False "False" (the default) otherwise
+
+            @see HttpServer::AbstractStreamRequest::wantsInteractiveStreaming()
+
+            @since RestHandler 1.8
+        */
+        bool wantsInteractiveStreaming() {
+            return False;
         }
 
         #! registers stream errors in the send operation with the stream handler if no error is already present
@@ -808,6 +826,14 @@ public namespace RestHandler {
             return stream.needsContentEncoding();
         }
 
+        #! delegates to the stream handler's wantsInteractiveStreaming() method
+        /** @see AbstractRestStreamRequestHandler::wantsInteractiveStreaming()
+            @since RestHandler 1.8
+        */
+        bool wantsInteractiveStreaming() {
+            return stream.wantsInteractiveStreaming();
+        }
+
         #! Returns @ref True if the stream handler has detected a receive error
         /** This allows the HTTP/2 and HTTP/3 body streaming loop in
             \c AbstractStreamRequest::handleRequest() to stop reading DATA frames
@@ -865,7 +891,7 @@ public namespace RestHandler {
 
             @param body_cancel the cancel closure, or @ref nothing to clear
 
-            @since RestHandler 1.9
+            @since RestHandler 1.8
         */
         setBodyCancel(*code<nothing()> body_cancel) {
             stream.setBodyCancel(body_cancel);

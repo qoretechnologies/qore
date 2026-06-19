@@ -1,0 +1,124 @@
+%new-style
+%require-types
+%enable-all-warnings
+%requires HttpServer
+%requires HttpServerUtil
+%requires Mime
+%requires Util
+%requires yaml
+%exec-class Main
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+# interactive bidi socket handler: holds in-memory state for the stream lifetime;
+# reads framed YAML ops (blocking), replies per op; a "select" sees prior "insert"s (read-your-writes)
+class SqlSessionHandler inherits AbstractHttpSocketHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (is_extended_connect(cx, hdr)) {
+            return <HttpResponseInfo>{"code": 200, "streaming": True};
+        }
+        return makeResponse(400, "expected extended CONNECT");
+    }
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        Queue q = cx."header-info".stream_data_queue;
+        code send = cx."header-info".send_stream_data;
+        list<auto> rows = ();
+        while (True) {
+            auto chunk = q.get(10s);
+            if (!exists chunk) break;                    # END_STREAM
+            hash<auto> op = parse_yaml(chunk.toString("utf-8"));
+            hash<auto> reply;
+            switch (op.cmd) {
+                case "insert": rows += op.row; reply = {"status": "ok", "n": rows.size()}; break;
+                case "select": reply = {"status": "ok", "rows": rows}; break;
+            }
+            send(binary(make_yaml(reply)));
+        }
+        send(NOTHING, True);
+        return False;
+    }
+}
+binary sub readFrame(HTTPClient c, int sid) {
+    date deadline = now_us() + 10s;
+    while (now_us() < deadline) {
+        *binary b = c.readHttp2StreamData(sid, 2000);
+        if (b) return b;
+        if (c.isHttp2StreamClosed(sid)) break;
+    }
+    return binary();
+}
+class Main {
+    constructor() {
+        HttpServer http(<HttpServerOptionInfo>{});
+        http.waitForAsyncIo();
+        http.setHandler("s", "/bidi", MimeTypeText, new SqlSessionHandler(), NOTHING, True);
+        http.setDefaultHandler("s", new SqlSessionHandler());
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": "0", "node": "127.0.0.1",
+            "family": AF_INET, "cert": new SSLCertificate(CertPem), "key": new SSLPrivateKey(KeyPem)}).port;
+        printf("listening on %d\n", port);
+        HTTPClient c({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False, "http_version": "2.0"});
+        c.connect();
+        hash<auto> resp = c.sendHttp2Connect("/bidi", NOTHING, "bidi-stream");
+        printf("connect code=%y\n", resp.status_code);
+        int sid = resp.stream_id;
+        # INTERACTIVE: insert, read ack, select, read result (must see the insert), insert, select
+        c.sendHttp2StreamData(sid, binary(make_yaml({"cmd": "insert", "row": {"id": 1}})));
+        auto a1 = parse_yaml(readFrame(c, sid).toString("utf-8"));
+        printf("insert1 ack: %y\n", a1);
+        c.sendHttp2StreamData(sid, binary(make_yaml({"cmd": "select"})));
+        auto s1 = parse_yaml(readFrame(c, sid).toString("utf-8"));
+        printf("select1 saw %d rows\n", s1.rows.size());
+        c.sendHttp2StreamData(sid, binary(make_yaml({"cmd": "insert", "row": {"id": 2}})));
+        readFrame(c, sid);
+        c.sendHttp2StreamData(sid, binary(make_yaml({"cmd": "select"})));
+        auto s2 = parse_yaml(readFrame(c, sid).toString("utf-8"));
+        printf("select2 saw %d rows: %y\n", s2.rows.size(), (map $1.id, s2.rows));
+        c.sendHttp2StreamData(sid, NOTHING, True);
+        printf("INTERACTIVE-RYW: %s\n", s2.rows.size() == 2 ? "WORKS" : "BROKEN");
+        delete http;
+    }
+}
