@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+
+%exec-class AotTimeoutInvokeTest
+
+class AotTimeoutInvokeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("AOT timeout invoke test", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qcc_bin = ENV.QCC_BIN ?? getQccPath();
+
+        addTestCase("timeout arithmetic lowers inside try blocks",
+            \testTimeoutArithmeticInvokeLowers());
+        set_return_value(main());
+    }
+
+    private string getQccPath() {
+        string dir = dirname(qore_bin);
+        string path = dir + "/qcc";
+        return is_file(path) ? path : "qcc";
+    }
+
+    testTimeoutArithmeticInvokeLowers() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string qm_path = tmp_dir + "/AotTimeoutInvoke.qm";
+        string qmod_path = tmp_dir + "/AotTimeoutInvoke.qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+module AotTimeoutInvoke {
+    version = \"1.0\";
+    desc = \"AOT timeout invoke regression module\";
+    author = \"Qore Technologies, s.r.o.\";
+}
+
+public namespace AotTimeoutInvoke {
+    public date sub add_timeout_in_try(timeout to) {
+        try {
+            date deadline = now_us() + to;
+            return deadline;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+
+    public date sub sub_timeout_in_try(timeout to) {
+        try {
+            date deadline = now_us() - to;
+            return deadline;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+}
+");
+        f.close();
+
+        string compile_out = backquote(sprintf("%s -m -o %s %s 2>&1",
+            shellQuote(qcc_bin), shellQuote(qmod_path), shellQuote(qm_path)));
+        assertTrue(is_file(qmod_path), "compiled timeout arithmetic qmod: " + compile_out);
+
+        string code = "date a = AotTimeoutInvoke::add_timeout_in_try(10ms); "
+            + "date b = AotTimeoutInvoke::sub_timeout_in_try(10ms); "
+            + "printf(\"ok\\n\");";
+        string run_out = backquote(sprintf("%s -l %s -ne %s 2>&1",
+            shellQuote(qore_bin), shellQuote(qmod_path), shellQuote(code)));
+        assertEq("ok\n", run_out, "compiled qmod executes timeout arithmetic");
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}
