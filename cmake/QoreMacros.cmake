@@ -1330,7 +1330,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         endif()
     endif()
     if (NOT DEFINED QORE_AOT_LINK_SOURCE_MODULES)
-        set(QORE_AOT_LINK_SOURCE_MODULES OFF)
+        # Default ON: the in-tree test suite anchors module lookup at the source
+        # qlib/ directory, so without these qlib/<name>.qmod -> built-qmod symlinks
+        # every .qm module loads as slow source-parse instead of the AOT artifact.
+        # (This silently defaulted OFF after the macro rewrite, regressing in-tree
+        # AOT module load times ~20x; develop has always defaulted this ON.)
+        set(QORE_AOT_LINK_SOURCE_MODULES ON)
     endif()
     if (DEFINED QORE_AOT_MODULES_DIR)
         set(_qmod_install_dir ${QORE_AOT_MODULES_DIR})
@@ -1509,6 +1514,12 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         ${_qmod_out}
         ${_qmod_source_link_dep}
         ${_qmod_resource_copies})
+    # Collect qmod targets so a post-build "ensure symlinks" step can run after
+    # all of them and self-heal any source qmod symlink the format-change cleanup
+    # removed but a partial/up-to-date build did not recreate.
+    if (QORE_AOT_LINK_SOURCE_MODULES)
+        set_property(GLOBAL APPEND PROPERTY QORE_SOURCE_QMOD_LINK_TARGETS ${_name}-qmod)
+    endif()
     # Ensure qcc executable + libqore.so are built before this qmod
     # rule runs — target-level deps, not mtime deps, so a newer qcc
     # binary doesn't force a qmod rebuild on its own.

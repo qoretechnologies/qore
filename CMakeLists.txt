@@ -3426,6 +3426,34 @@ add_custom_target(install-qore-qlib-aot
     USES_TERMINAL
     VERBATIM)
 
+# Self-healing guarantee for the in-tree source qmod symlinks.  The per-qmod
+# create_symlink command only recreates a symlink when its qmod target rebuilds,
+# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes the
+# symlinks unconditionally — so a partial build, or up-to-date qmods, after a
+# format-changing change can leave a module without its symlink and silently fall
+# back to slow source parsing at load.  This idempotent step recreates any
+# missing/incorrect symlink from the already-built qmods, both on (re)configure
+# and as an always-run build step after all qmod targets.
+get_property(_qore_source_qmod_link_targets GLOBAL PROPERTY QORE_SOURCE_QMOD_LINK_TARGETS)
+if (_qore_source_qmod_link_targets)
+    add_custom_target(qore-ensure-source-qmod-symlinks ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+        COMMENT "Ensuring in-tree source qmod symlinks"
+        VERBATIM)
+    add_dependencies(qore-ensure-source-qmod-symlinks ${_qore_source_qmod_link_targets})
+    # Also heal on (re)configure so an existing build tree is corrected even
+    # before the next build runs.
+    if (IS_DIRECTORY ${CMAKE_BINARY_DIR}/qlib-qmod)
+        execute_process(COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake)
+    endif()
+endif()
+
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)
         # Build TAGFILES string from collected module names
