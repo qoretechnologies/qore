@@ -2073,6 +2073,25 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
         return nullptr;
     }
 
+    // Only argument types — not a resolved variant — were serialized because the
+    // parser deferred variant selection: the method is overloaded and selection
+    // depends on runtime argument types.  Runtime type-vector matching here is
+    // stricter than value-based dispatch and, for an overloaded method where a
+    // more-specific variant matches only via a defaulted trailing parameter (e.g.
+    // a (string, hash<auto>, X, *bool) overload alongside a less-specific
+    // (string, auto, X) overload, called with 3 args), it can select the
+    // less-specific exact-arg-count variant that the parser and interpreter would
+    // never pick.  For an overloaded method, defer variant selection to
+    // value-based runtime dispatch (matching the interpreter and develop's AOT
+    // path) rather than risk pre-binding the wrong variant.  Returning nullptr
+    // leaves the call node without a pre-bound variant, so it dispatches by value
+    // at call time.  This also avoids taking the program parse lock at AOT-load
+    // time (the single-variant fallback below would otherwise require it), which
+    // can invert lock order against a concurrent parse waiting on AOT init.
+    if (func->numVariants() > 1) {
+        return nullptr;
+    }
+
     ExceptionSink xsink;
     const AbstractQoreFunctionVariant* variant = func->runtimeFindVariant(&xsink, arg_types, class_ctx,
         receiver_type_info, type_param_instantiation);
@@ -2083,11 +2102,10 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
         return variant;
     }
 
-    // The serialized signature was captured from parse-time argument types.
-    // Runtime type-vector matching is intentionally stricter and can reject
-    // valid parse-time calls such as hashdecl values passed to optional
-    // hashdecl parameters.  Fall back to parse-equivalent matching without
-    // producing diagnostics.
+    // Single variant only: runtime type-vector matching is stricter than the
+    // parser and can reject valid parse-time calls such as a hashdecl value
+    // passed to an optional hashdecl parameter.  Fall back to parse-equivalent
+    // matching (which can only resolve to that single variant here).
     ExceptionSink parse_xsink;
     ProgramRuntimeParseContextHelper pch(&parse_xsink, pgm);
     if (parse_xsink) {

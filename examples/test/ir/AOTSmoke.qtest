@@ -393,6 +393,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
         # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
         addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        addTestCase("AOT overload default-arg specificity",
+            \testAOTOverloadDefaultArgSpecificity());
         set_return_value(main());
     }
 
@@ -10347,6 +10349,42 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "method-closure-param output matches interpreter");
+    }
+
+    #! Regression: AOT overload resolution must respect type specificity over arg-count.
+    /** When a call's variant is deferred to runtime (an `auto` overload is present),
+        qcc serializes only the argument types.  At load time the AOT runtime resolves
+        the variant from those types: for an overloaded method where the more-specific
+        variant (string, hash<auto>, S, *bool) matches only via a defaulted trailing
+        parameter while a less-specific (string, auto, S) variant matches the arg count
+        exactly, runtime type-vector matching used to pick the less-specific `auto`
+        variant — disagreeing with the interpreter, which picks hash<auto>.  The fix
+        cross-checks the parse-equivalent resolution and, on disagreement, defers to
+        value-based runtime dispatch (matching the interpreter). */
+    testAOTOverloadDefaultArgSpecificity() {
+        string code = "%modern
+class S {}
+class C {
+    static string f(string n, hash<auto> h, S s, *bool opt) {
+        return \"HASH-overload\";
+    }
+    static string f(string n, auto x, S s) {
+        return \"AUTO-overload\";
+    }
+}
+S s();
+printf(\"%s\\n\", C::f(\"k\", {\"a\": 1}, s));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "overload-default-arg: all pre-compiled: " + result.compile_out);
+        # The interpreter is the ground truth: it selects the more-specific
+        # hash<auto> overload.  The AOT binary must agree.
+        string interp_out = runInterpreted(code);
+        assertEq("HASH-overload\n", interp_out, "interpreter selects the hash<auto> overload");
+        assertEq(interp_out, result.run_out,
+            "overload-default-arg output matches interpreter (no auto-overload misdispatch)");
     }
 
     testAOTMethodClosureThreadInitSelf() {
