@@ -24,6 +24,7 @@ auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required 
 %requires Logger
 %requires DataProvider
 %requires HttpServerUtil
+%requires HttpServer
 %requires RestSchemaValidator
 %requires Swagger
 %requires ConnectionProvider
@@ -35,10 +36,18 @@ auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required 
 
 %exec-class SwaggerDataProviderTest
 
+#! Test handler that always responds with HTTP 429 to simulate rate limiting
+class RateLimitHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(429, make_json({"message": "Too Many Requests"}), {"Content-Type": MimeTypeJson});
+    }
+}
+
 public class SwaggerDataProviderTest inherits QUnit::Test {
     constructor() : Test("SwaggerDataProviderTest", "1.0") {
         addTestCase("compat test", \compatTest());
         addTestCase("swagger data provider test", \testSwaggerDataProvider());
+        addTestCase("error arg preservation test", \errorArgPreservationTest());
         set_return_value(main());
     }
 
@@ -108,6 +117,51 @@ public class SwaggerDataProviderTest inherits QUnit::Test {
                 },
             });
             assertEq(obj, v.query.obj);
+        }
+    }
+
+    #! Verifies that a transient HTTP error from the REST layer preserves the
+    #! original response context (status code) in the exception argument.
+    /** SwaggerRequestDataProvider::doRequestIntern() catches and rethrows REST
+        errors; it must not replace the original response-hash argument (which
+        carries the real status code) with its empty local \c info hash, or
+        callers can no longer detect transient conditions such as HTTP 429.
+    */
+    errorArgPreservationTest() {
+        checkModules();
+
+        Logger logger("test", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo() : LoggerLevel::getLevelFatal());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger});
+        on_exit http.stop();
+        RateLimitHandler handler();
+        http.setDefaultHandler("rate-limit", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        SwaggerDataProvider provider({
+            "schema": get_script_dir() + "/PetStore.swagger.yaml",
+            "url": sprintf("http://127.0.0.1:%d", port),
+        });
+        AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
+        try {
+            # "pending" is a valid enum value, so the request passes client-side
+            # validation and reaches the server, which responds with 429
+            p0.doRequest({"query": {"status": ("pending",)}});
+            fail("expected an HTTP error exception");
+        } catch (hash<ExceptionInfo> ex) {
+            # the REST layer raises HTTP-CLIENT-RECEIVE-ERROR or REST-RESPONSE-ERROR
+            # for the 429; either way the status code must survive the rethrow
+            assertTrue(ex.err == "HTTP-CLIENT-RECEIVE-ERROR" || ex.err == "REST-RESPONSE-ERROR",
+                sprintf("unexpected error %y: %s", ex.err, ex.desc));
+            # the original response context must survive the rethrow in
+            # SwaggerRequestDataProvider::doRequestIntern() (it must not be
+            # replaced with the empty local "info" hash)
+            assertEq(429, ex.arg.status_code ?? ex.arg."response-code");
+            assertRegex("429", ex.desc);
         }
     }
 

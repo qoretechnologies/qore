@@ -41,6 +41,7 @@ public const ColumnTypeMap = {
     "clob": {"qore_type": SqlUtil::CLOB},
     "binary": {"qore_type": Type::Binary},
     "float": {"qore_type": Type::Float},
+    "bool": {"qore_type": Type::Boolean},
     # "text" renders as the native TEXT type on drivers that support it (pgsql, mysql);
     # it falls back to CLOB on drivers that do not (e.g. oracle)
     "text": {"qore_type": SqlUtil::CLOB,

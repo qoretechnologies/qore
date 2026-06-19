@@ -141,7 +141,8 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 secs = lh->getAsBigInt() / 1000;
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         DateTime l;
-        l.setRelativeDateSeconds(secs, static_cast<int>(ms));
+        // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+        l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
         return rh->get<DateTimeNode>()->add(l);
     }
 
@@ -149,7 +150,8 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 secs = rh->getAsBigInt() / 1000;
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+        // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
         return lh->get<DateTimeNode>()->add(r);
     }
 

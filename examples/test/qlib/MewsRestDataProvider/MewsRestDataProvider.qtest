@@ -97,14 +97,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }
-            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
-                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
-            if (!status_code) {
-                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
-                if (m) {
-                    status_code = int(m[0]);
-                }
-            }
+            *softint status_code = getHttpStatusCode(ex);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
@@ -160,14 +153,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
                 delete mews;
                 testSkip(sprintf("connection error: %s: %s", ex.err, ex.desc));
             }
-            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
-                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
-            if (!status_code) {
-                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
-                if (m) {
-                    status_code = int(m[0]);
-                }
-            }
+            *softint status_code = getHttpStatusCode(ex);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
                 testSkip("Rate limited");
@@ -178,6 +164,27 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
             }
             rethrow;
         }
+    }
+
+    #! Extracts the HTTP status code from an exception, if available
+    /** The status code may be present in the exception argument (when the original
+        HTTP response hash is preserved) or only in the exception description; e.g.
+        \c HTTP-CLIENT-RECEIVE-ERROR formats it as "HTTP status code <code> received",
+        and the SwaggerDataProvider layer can replace the original response-hash
+        argument with an empty info hash, leaving the description as the only signal.
+    */
+    private *softint getHttpStatusCode(hash<ExceptionInfo> ex) {
+        *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
+            ?? ex.arg."response-headers".status_code;
+        if (!status_code) {
+            # matches both "HTTP status code 429 received" and "status_code: 429"
+            status_code = (ex.desc =~ x/status[_ ]code:? ([0-9]+)/)[0];
+        }
+        if (!status_code) {
+            # last-resort fallback: any bare 4xx/5xx code in the description
+            status_code = (ex.desc =~ x/\b([45][0-9][0-9])\b/)[0];
+        }
+        return status_code;
     }
 
     private usageIntern() {
@@ -212,14 +219,7 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
 
             mews = new MewsRestDataProvider(mrc.get());
         } catch (hash<ExceptionInfo> ex) {
-            *softint status_code = ex.arg.status_code ?? ex.arg."response-code"
-                ?? (ex.desc =~ x/status_code: ([0-9]+)/[0]);
-            if (!status_code) {
-                *list<*string> m = (ex.desc =~ x/([5][0-9][0-9])/);
-                if (m) {
-                    status_code = int(m[0]);
-                }
-            }
+            *softint status_code = getHttpStatusCode(ex);
             if (status_code == 429 || status_code == 408) {
                 delete mews;
             }

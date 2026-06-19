@@ -779,7 +779,7 @@ module Schema {
     The meta-schema defines:
     - Required top-level keys: \c schema (with \c name and \c version)
     - Column types: \c int, \c varchar, \c char, \c timestamp, \c date, \c number, \c blob,
-      \c clob, \c binary
+      \c clob, \c binary, \c bool, \c float, \c text
     - Migration action types: all 17 supported actions with their field definitions
     - Reference data categories: \c strict, \c normal, \c create_only, \c insert_only
     - Auto-trigger configuration: \c created, \c modified, \c sequence_columns

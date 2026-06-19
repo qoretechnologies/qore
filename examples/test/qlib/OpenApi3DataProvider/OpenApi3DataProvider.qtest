@@ -75,6 +75,14 @@ class PetStoreHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Test handler that always responds with HTTP 429 to simulate rate limiting
+class RateLimitHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(429, make_json({"code": 429, "message": "Too Many Requests"}),
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
 public class OpenApi3DataProviderTest inherits QUnit::Test {
     public {
         const PetStoreSpec = get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml";
@@ -96,6 +104,7 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         addTestCase("phase 7 multipart form data test", \phase7MultipartFormDataTest());
         addTestCase("phase 7 multi content type test", \phase7MultiContentTypeTest());
         addTestCase("phase 7 factory and serialization test", \phase7FactoryAndSerializationTest());
+        addTestCase("error arg preservation test", \errorArgPreservationTest());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -558,6 +567,39 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
             ++count;
         }
         assertEq(2, count, "record iterator must walk both pets");
+    }
+
+    #! Verifies that a transient HTTP error preserves the original response
+    #! context (status code) in the exception argument.
+    /** OpenApi3RequestDataProvider::doRequestIntern() must not replace the
+        original response-hash argument (which carries the real status code) with
+        its empty local \c info hash when rethrowing REST errors, or callers can
+        no longer detect transient conditions such as HTTP 429.
+    */
+    errorArgPreservationTest() {
+        checkModules();
+
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelFatal())});
+        on_exit http.stop();
+        RateLimitHandler handler();
+        http.setDefaultHandler("rate-limit", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        OpenApi3DataProvider prov({
+            "schema": PetStoreSpec,
+            "url": sprintf("http://127.0.0.1:%d", port),
+        });
+        AbstractDataProvider get_pets = prov.getChildProviderPath("pets/GET");
+        try {
+            get_pets.doRequest();
+            fail("expected an HTTP error exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "HTTP-CLIENT-RECEIVE-ERROR" || ex.err == "REST-RESPONSE-ERROR",
+                sprintf("unexpected error %y: %s", ex.err, ex.desc));
+            # the original response context must survive the rethrow
+            assertEq(429, ex.arg.status_code ?? ex.arg."response-code");
+            assertRegex("429", ex.desc);
+        }
     }
 
     phase7NullableTypesTest() {
