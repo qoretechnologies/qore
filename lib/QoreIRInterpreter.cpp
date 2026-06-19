@@ -13159,7 +13159,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t secs = lms / 1000;
                 int64_t ms = lms - (secs * 1000);
                 DateTime l;
-                l.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+                l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
                 return right.get<const DateTimeNode>()->add(l);
             }
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
@@ -13167,7 +13168,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t secs = rms / 1000;
                 int64_t ms = rms - (secs * 1000);
                 DateTime r;
-                r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+                r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
                 return left.get<const DateTimeNode>()->add(r);
             }
             // Fallback for non-timeout cases
@@ -13215,7 +13217,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t lms = left.getAsBigInt();
                 int64_t secs = lms / 1000;
                 int64_t ms = lms - (secs * 1000);
-                SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms)));
+                // the leftover is in milliseconds; makeRelativeFromSeconds() takes microseconds
+                SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000)));
                 return l->subtractBy(right.get<const DateTimeNode>());
             }
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
@@ -13223,7 +13226,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 int64_t secs = rms / 1000;
                 int64_t ms = rms - (secs * 1000);
                 DateTime r;
-                r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+                r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
                 return left.get<const DateTimeNode>()->subtractBy(r);
             }
             // Fallback

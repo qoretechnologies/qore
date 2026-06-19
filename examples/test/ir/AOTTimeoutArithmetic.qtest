@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTTimeoutArithmeticTest
+
+# Regression test: the AOT/LLVM backend must natively lower the AddTimeout /
+# SubTimeout invoke opcodes (date + timeout / timeout + date / date - timeout).
+#
+# When such an expression appears inside an exception scope (try/on_exit), the
+# IR lowers it to an Invoke instruction (with exception edges) rather than a
+# plain binary op.  The Invoke dispatch in QoreIRToLLVM previously had no branch
+# for AddTimeout/SubTimeout, so AOT compilation aborted with:
+#   "unsupported AOT expression lowering: invoke opcode has no native lowering;
+#    IR opcode Invoke (invoke opcode AddTimeout)".
+#
+# The test also locks in the *semantics*: a `timeout` operand is interpreted as
+# milliseconds (a 5s relative date assigned to a timeout becomes 5000), matching
+# the legacy QorePlusOperatorNode check_(date_)?timeout_variant path (issue
+# #3157).  Expected ms deltas are hard-coded so the test fails if both the AOT
+# qmod and the interpreter ever agree on the wrong (seconds) answer.
+class AOTTimeoutArithmeticTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTTimeoutArithmeticTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("AOT date/timeout arithmetic lowering",
+            \testAOTTimeoutArithmetic());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTTimeoutArithmeticMod {
+    version = \"1.0\";
+    desc = \"AddTimeout/SubTimeout AOT lowering regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTTimeoutArithmeticMod {
+    public class Helper {
+        # try/on_exit establishes an exception target so the date/timeout
+        # arithmetic lowers to an Invoke (the path that lacked AOT lowering).
+        public static string invokeContext(timeout timeout_ms) {
+            date base = 2020-01-01T00:00:00;
+            on_exit delete base;
+            try {
+                date a = base + timeout_ms;    # date + timeout -> AddTimeout (Invoke)
+                date b = timeout_ms + base;    # timeout + date -> AddTimeout (Invoke, symmetric)
+                date c = base - timeout_ms;    # date - timeout -> SubTimeout (Invoke)
+                return sprintf(\"%d,%d,%d\",
+                    get_duration_milliseconds(a - base),
+                    get_duration_milliseconds(b - base),
+                    get_duration_milliseconds(base - c));
+            } catch (hash<ExceptionInfo> ex) {
+                return \"ERR:\" + ex.err;
+            }
+        }
+    }
+
+    # plain (non-invoke) lowering path: no enclosing exception scope.
+    public string sub plainContext(timeout timeout_ms) {
+        date base = 2020-01-01T00:00:00;
+        date a = base + timeout_ms;
+        date b = timeout_ms + base;
+        date c = base - timeout_ms;
+        return sprintf(\"%d,%d,%d\",
+            get_duration_milliseconds(a - base),
+            get_duration_milliseconds(b - base),
+            get_duration_milliseconds(base - c));
+    }
+
+    public string sub verify() {
+        # 5s  -> timeout 5000 ms  -> +/-5000 ms
+        # 250ms -> timeout 250 ms -> +/-250 ms (proves ms, not seconds, semantics)
+        return Helper::invokeContext(5s) + \"|\" + plainContext(5s) + \"|\"
+            + Helper::invokeContext(250ms) + \"|\" + plainContext(250ms);
+    }
+}
+";
+    }
+
+    private string modulePath(string module_dir) {
+        string cur = ENV.QORE_MODULE_DIR ?? "";
+        return cur == "" ? module_dir : module_dir + ":" + cur;
+    }
+
+    private writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, modulePath(module_dir), qore_bin, script_path));
+    }
+
+    private compileModule(string src_path, string qmod_path) {
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled timeout-arithmetic module: " + compile_out);
+    }
+
+    testAOTTimeoutArithmetic() {
+        TmpDir tmp("qore-aot-timeout-arithmetic-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTTimeoutArithmeticMod.qm";
+        writeFile(qm_path, moduleCode());
+
+        string script_path = tmp_dir + "/run.qr";
+        writeFile(script_path, "%modern
+%requires AOTTimeoutArithmeticMod
+printf(\"%s\", AOTTimeoutArithmeticMod::verify());
+");
+
+        string qmod_path = qmod_dir + "/AOTTimeoutArithmeticMod.qmod";
+        compileModule(qm_path, qmod_path);
+
+        # ms deltas: 5s -> 5000, 250ms -> 250 (each repeated for +, symmetric +, -)
+        string expected = "5000,5000,5000|5000,5000,5000|250,250,250|250,250,250";
+
+        assertEq(expected, runModule(src_dir, script_path),
+            "source module: ms (not seconds) timeout-date semantics");
+        assertEq(expected, runModule(qmod_dir, script_path),
+            "AOT qmod: AddTimeout/SubTimeout Invoke lowering preserves ms semantics");
+    }
+}

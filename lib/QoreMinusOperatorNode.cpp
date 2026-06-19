@@ -75,7 +75,8 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     if (check_timeout_date_variant && lt == NT_INT && rt == NT_DATE) {
         int64 secs = lh->getAsBigInt() / 1000;
         int64 ms = lh->getAsBigInt() - (secs * 1000);
-        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms)));
+        // the leftover is in milliseconds; makeRelativeFromSeconds() takes microseconds
+        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000)));
         return l->subtractBy(rh->get<DateTimeNode>());
     }
 
@@ -83,7 +84,8 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         int64 secs = rh->getAsBigInt() / 1000;
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+        // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
+        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
         return lh->get<DateTimeNode>()->subtractBy(r);
     }
 

@@ -406,8 +406,8 @@ constexpr OpcodeInfo OPCODE_REGISTRY[384] = {
     { "Sprintf"                       , false, false, false, -1, "Sprintf", false, true , "ParseNode", true , false, false, false, false }, // 345
     { "NewHashDeclFromHash"           , false, false, false,  1, "NewHashDeclFromHash", false, true , "ParseNode", true , false, false, false, false }, // 346
     { "InstantiateLocal"              , false, false, false,  0, "InstantiateLocal", false, true , "ParseNode", false, false, false, false, false }, // 347
-    { "AddTimeout"                    , false, false, false,  2, "AddTimeout", false, true , "ParseNode", true , false, true , false, false }, // 348
-    { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , false, true , false, false }, // 349
+    { "AddTimeout"                    , false, false, false,  2, "AddTimeout", false, true , "ParseNode", true , false, true , false, true  }, // 348
+    { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , false, true , false, true  }, // 349
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , false, true , false, true  }, // 350
     { "ListIndexDynamic"              , false, false, false, OPCODE_MIN_OPERANDS(2), "ListIndexDynamic", false, true , "ParseNode", true , false, true , false, true  }, // 351
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 352
