@@ -397,7 +397,11 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
             return rv;
         } catch (hash<ExceptionInfo> ex) {
             LoggerWrapper::error("%s info: %y", get_exception_string(ex), info);
-            rethrow ex.err, ex.desc, info;
+            # when the REST request itself fails, "info" was never assigned and holds
+            # only default values (status_code 0); the original exception argument
+            # carries the real HTTP response context (status code, body, headers), so
+            # preserve it and fall back to "info" only when there is no original arg
+            rethrow ex.err, ex.desc, ex.arg ?? info;
         }
     }
 

@@ -19,6 +19,7 @@
 %requires Logger
 %requires DataProvider
 %requires HttpServerUtil
+%requires HttpServer
 %requires RestSchemaValidator
 %requires Swagger
 %requires OpenApi3
@@ -30,6 +31,13 @@
 %requires RestSchemaDataProvider
 
 %exec-class RestSchemaDataProviderTest
+
+#! Test handler that always responds with HTTP 429 to simulate rate limiting
+class RateLimitHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(429, make_json({"message": "Too Many Requests"}), {"Content-Type": MimeTypeJson});
+    }
+}
 
 public class RestSchemaDataProviderTest inherits QUnit::Test {
     constructor() : Test("RestSchemaDataProviderTest", "1.0") {
@@ -43,6 +51,7 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
         addTestCase("Abstract validator query date options", \testAbstractValidatorQueryDateOptions());
         addTestCase("Overlapping Swagger paths test", \testOverlappingSwaggerPaths());
         addTestCase("Factory test", \testFactory());
+        addTestCase("error arg preservation test", \testErrorArgPreservation());
         set_return_value(main());
     }
 
@@ -1115,6 +1124,41 @@ paths:
 
         AbstractDataProvider get = provider.getChildProviderPath("events/GET");
         assertEq("GET", get.getName());
+    }
+
+    #! Verifies that a transient HTTP error preserves the original response
+    #! context (status code) in the exception argument.
+    /** RestSchemaRequestDataProvider::doRequestIntern() must not replace the
+        original response-hash argument (which carries the real status code) with
+        its empty local \c info hash when rethrowing REST errors, or callers can
+        no longer detect transient conditions such as HTTP 429.
+    */
+    testErrorArgPreservation() {
+        checkModules();
+
+        HttpServer http(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelFatal())});
+        on_exit http.stop();
+        RateLimitHandler handler();
+        http.setDefaultHandler("rate-limit", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        RestSchemaDataProvider provider({
+            "schema": get_script_dir() + "/../Swagger/PetStore.swagger.yaml",
+            "url": sprintf("http://127.0.0.1:%d", port),
+        });
+        AbstractDataProvider p0 = provider.getChildProviderPath("pet/findByStatus/GET");
+        try {
+            # "pending" is a valid enum value, so the request passes client-side
+            # validation and reaches the server, which responds with 429
+            p0.doRequest({"query": {"status": ("pending",)}});
+            fail("expected an HTTP error exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "HTTP-CLIENT-RECEIVE-ERROR" || ex.err == "REST-RESPONSE-ERROR",
+                sprintf("unexpected error %y: %s", ex.err, ex.desc));
+            # the original response context must survive the rethrow
+            assertEq(429, ex.arg.status_code ?? ex.arg."response-code");
+            assertRegex("429", ex.desc);
+        }
     }
 
     testFactory() {
