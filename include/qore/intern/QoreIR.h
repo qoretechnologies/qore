@@ -2364,6 +2364,11 @@ public:
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
     bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
     bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee
+    //! Resolved function for invoke_opcode == CallDirect, captured at IR-lowering time.
+    //! Codegen MUST use this rather than re-reading getFunction() on the AST node: for
+    //! runtime-created closures the node's resolved-function pointer can be cleared between
+    //! lowering and codegen, which would otherwise bake a null func into the direct call.
+    const QoreFunction* func = nullptr;
 };
 
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)

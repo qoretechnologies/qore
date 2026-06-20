@@ -10653,6 +10653,11 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvoke(expr, operands, normal_block, handler, call->loc);
             inst->invoke_opcode = QoreIROpcode::CallDirect;
+            // Capture the resolved func now (guaranteed non-null by the enclosing guard):
+            // codegen reads inst->func instead of re-resolving getFunction() on the AST node,
+            // which can be cleared by codegen time for runtime-created closures (#null-func-crash).
+            assert(func);
+            inst->func = func;
             inst->has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
             builder.setBlock(normal_block);
             return inst->result;

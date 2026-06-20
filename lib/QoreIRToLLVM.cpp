@@ -8269,8 +8269,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto* call = dynamic_cast<const FunctionCallNode*>(
                             inv->expr.getInternalNode());
                     assert(call);
-                    const QoreFunction* func = call->getFunction();
-                    assert(func);
+                    // Use the func captured at IR-lowering time.  Re-reading
+                    // call->getFunction() here is unsafe: for runtime-created closures the
+                    // AST node's resolved-function pointer can be cleared between lowering and
+                    // codegen, baking a null func into qore_rt_call_function_direct and
+                    // crashing at runtime.  Fall back to the node only if (legacy) the
+                    // instruction has no captured func.
+                    const QoreFunction* func = inv->func ? inv->func : call->getFunction();
+                    assert(func && "CallDirect invoke must have a resolved function");
+                    if (!func) {
+                        error = "internal error: CallDirect invoke has no resolved function "
+                            "(func pointer lost between IR lowering and codegen)";
+                        return false;
+                    }
 
                     // Check if callee is in the batch module
                     if (batch_callees && call->getVariant()

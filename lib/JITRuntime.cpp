@@ -6386,7 +6386,20 @@ static uint64_t qore_rt_call_function_direct_impl(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
-    assert(func);
+    // A direct call must always carry a resolved function: a variant belongs to a function,
+    // so a null func reaching here means the func pointer was lost upstream (a codegen/lowering
+    // bug).  assert() catches it in debug builds; the runtime guard turns it into a clean error
+    // instead of dereferencing null and crashing in release builds.
+    assert(func && "direct function call must have a resolved function");
+    if (!func) {
+        clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+        if (xsink) {
+            xsink->raiseException("IR-EXECUTION-ERROR",
+                "internal error: direct function call has a null function pointer "
+                "(the resolved function was lost before the call)");
+        }
+        return toBits(QoreValue());
+    }
     // Build QoreListNode from the NaN-boxed args array
     // Use pushIntern() to bypass checkVal/stripVal which strips complex types
     // (e.g., hash<string, bool> -> hash<auto>) from arguments in untyped lists,
