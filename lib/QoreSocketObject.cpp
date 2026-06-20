@@ -54,19 +54,22 @@ static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* e
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // NT_STRING values may be stored inline (SSO short strings), in which case there is no
+    // QoreStringNode to dereference; QoreStringNodeValueHelper materializes a referenced node safely
     xsink->raiseException(
         err.getType() == NT_STRING
-            ? err.get<const QoreStringNode>()->stringRefSelf()
+            ? QoreStringNodeValueHelper(err).getReferencedValue()
             : new QoreStringNode("ASYNC-IO-ERROR"),
         desc.getType() == NT_STRING
-            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            ? QoreStringNodeValueHelper(desc).getReferencedValue()
             : new QoreStringNode("async socket operation failed"),
         arg.refSelf());
 }
 
 static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const char* err) {
     QoreValue ex_err = ex.getKeyValue("err");
-    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+    // a NT_STRING value may be an inline (SSO) short string with no QoreStringNode; access it safely
+    return ex_err.getType() == NT_STRING && !strcmp(QoreStringValueHelper(ex_err)->c_str(), err);
 }
 
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
@@ -1295,14 +1298,18 @@ static int qore_socket_object_parse_http2_request_headers(const QoreHashNode* he
         const char* key = hi.getKey();
         QoreValue val = hi.get();
         std::string skey(key);
+        // a NT_STRING value may be stored inline (SSO short string) with no QoreStringNode to
+        // dereference; QoreStringValueHelper yields the string buffer safely in either case
         if (val.getType() == NT_STRING) {
-            append(skey, val.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper str(val);
+            append(skey, str->c_str());
         } else if (val.getType() == NT_LIST) {
             const QoreListNode* l = val.get<const QoreListNode>();
             for (size_t i = 0; i < l->size(); ++i) {
                 QoreValue elem = l->retrieveEntry(i);
                 if (elem.getType() == NT_STRING) {
-                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                    QoreStringValueHelper str(elem);
+                    append(skey, str->c_str());
                 }
             }
         }
@@ -1479,8 +1486,9 @@ static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const Qore
     ConstHashIterator hi(headers);
     while (hi.next()) {
         QoreValue val = hi.get();
+        // NT_STRING may be an inline (SSO) short string with no QoreStringNode; access it safely
         if (val.getType() == NT_STRING) {
-            out[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+            out[hi.getKey()] = QoreStringValueHelper(val)->c_str();
         }
     }
 }
@@ -2986,16 +2994,17 @@ static QoreHashNode* qore_socket_object_get_addr_info_from_output(const QoreValu
     struct sockaddr_storage addr = {};
     memcpy(&addr, bin->getPtr(), sizeof(addr));
 
+    // NT_STRING values may be inline (SSO) short strings with no QoreStringNode; access them safely
     std::string socketname;
     QoreValue socketname_value = h->getKeyValue("socketname");
     if (socketname_value.getType() == NT_STRING) {
-        socketname = socketname_value.get<const QoreStringNode>()->c_str();
+        socketname = QoreStringValueHelper(socketname_value)->c_str();
     }
 
     std::string hostname;
     QoreValue hostname_value = h->getKeyValue("hostname");
     if (hostname_value.getType() == NT_STRING) {
-        hostname = hostname_value.get<const QoreStringNode>()->c_str();
+        hostname = QoreStringValueHelper(hostname_value)->c_str();
     }
 
     return qore_socket_private::makeAddrInfo(addr, static_cast<socklen_t>(raw_len), socketname,
@@ -3456,7 +3465,8 @@ static QoreStringNode* qore_socket_object_exec_recv_string(QoreSocketObject* s, 
             result->getFullTypeName());
         return nullptr;
     }
-    return result.release().get<QoreStringNode>();
+    // the received NT_STRING value may be an inline (SSO) short string; materialize a node safely
+    return QoreStringNodeValueHelper(*result).getReferencedValue();
 }
 
 static BinaryNode* qore_socket_object_exec_recv_binary(QoreSocketObject* s, int64 size,
@@ -3590,7 +3600,9 @@ static QoreStringNode* qore_socket_object_exec_read_http_header_string(QoreSocke
         return nullptr;
     }
 
-    QoreStringNode* raw = result->get<QoreStringNode>();
+    // the received NT_STRING value may be an inline (SSO) short string; materialize a node safely
+    QoreStringNodeValueHelper raw_holder(*result);
+    const QoreStringNode* raw = *raw_holder;
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
     if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
@@ -3666,7 +3678,8 @@ static QoreStringNode* qore_socket_object_exec_recv_http_line(QoreSocketObject* 
             result->getFullTypeName());
         return nullptr;
     }
-    return result.release().get<QoreStringNode>();
+    // the received NT_STRING value may be an inline (SSO) short string; materialize a node safely
+    return QoreStringNodeValueHelper(*result).getReferencedValue();
 }
 
 static int qore_socket_object_exec_read_http_chunked_trailers(QoreSocketObject* s, QoreHashNode& output,
@@ -4132,17 +4145,20 @@ static int qore_socket_object_exec_send_http_chunked_body_callback(QoreSocketObj
         size_t size = 0;
         const QoreStringNode* body_event = nullptr;
         bool done = false;
+        // keeps a referenced string node alive past the switch when the callback returns a string
+        // (a NT_STRING value may be an inline SSO short string with no QoreStringNode of its own)
+        SimpleRefHolder<QoreStringNode> str_holder;
 
         switch (res->getType()) {
             case NT_STRING: {
-                const QoreStringNode* str = res->get<const QoreStringNode>();
-                if (str->empty()) {
+                str_holder = QoreStringNodeValueHelper(*res).getReferencedValue();
+                if (str_holder->empty()) {
                     done = true;
                     break;
                 }
-                data = str->c_str();
-                size = str->size();
-                body_event = str;
+                data = str_holder->c_str();
+                size = str_holder->size();
+                body_event = *str_holder;
                 break;
             }
             case NT_BINARY: {
@@ -6441,7 +6457,8 @@ QoreStringNode* QoreSocketObject::getQuicSSLCipherName(int64_t session_id, Excep
     if (*xsink || str->isNothing()) {
         return nullptr;
     }
-    return str->getType() == NT_STRING ? str.release().get<QoreStringNode>() : nullptr;
+    // a NT_STRING value may be an inline (SSO) short string; materialize a referenced node safely
+    return str->getType() == NT_STRING ? QoreStringNodeValueHelper(*str).getReferencedValue() : nullptr;
 }
 
 QoreStringNode* QoreSocketObject::getQuicSSLCipherVersion(int64_t session_id, ExceptionSink* xsink) {
@@ -6452,7 +6469,8 @@ QoreStringNode* QoreSocketObject::getQuicSSLCipherVersion(int64_t session_id, Ex
     if (*xsink || str->isNothing()) {
         return nullptr;
     }
-    return str->getType() == NT_STRING ? str.release().get<QoreStringNode>() : nullptr;
+    // a NT_STRING value may be an inline (SSO) short string; materialize a referenced node safely
+    return str->getType() == NT_STRING ? QoreStringNodeValueHelper(*str).getReferencedValue() : nullptr;
 }
 
 int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t stream_id,
