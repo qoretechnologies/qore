@@ -2200,7 +2200,12 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
             || ek == AOTExprKind::ASSIGN || ek == AOTExprKind::LOG_AND
             || ek == AOTExprKind::LOG_OR || ek == AOTExprKind::BIT_AND
             || ek == AOTExprKind::BIT_OR || ek == AOTExprKind::BIT_XOR
-            || ek == AOTExprKind::SHIFT_LEFT || ek == AOTExprKind::SHIFT_RIGHT) {
+            || ek == AOTExprKind::SHIFT_LEFT || ek == AOTExprKind::SHIFT_RIGHT
+            || ek == AOTExprKind::PLUS_EQ || ek == AOTExprKind::MINUS_EQ
+            || ek == AOTExprKind::MULTIPLY_EQ || ek == AOTExprKind::DIVIDE_EQ
+            || ek == AOTExprKind::MODULO_EQ || ek == AOTExprKind::AND_EQ
+            || ek == AOTExprKind::OR_EQ || ek == AOTExprKind::XOR_EQ
+            || ek == AOTExprKind::SHL_EQ || ek == AOTExprKind::SHR_EQ) {
         skipOneExpr(rdr, p, e);  // left operand
         skipOneExpr(rdr, p, e);  // right operand
         return;
@@ -3788,7 +3793,52 @@ static QoreAOTContext* buildContextFromSlotMap(
                 has_unsupported = true;
                 continue;
             }
-            case AOTExprKind::SELF_METHOD_CALL:
+            case AOTExprKind::SELF_METHOD_CALL: {
+                ref1 = reader.readStringRef(ptr);
+                ref2 = reader.readStringRef(ptr);
+                // When the producer carried slot args (QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS), read
+                // them here: the pointer MUST advance past them to stay in sync, and the
+                // reconstructed self-call node needs them so AST/IR-interpreter fallback
+                // evaluation dispatches the call with its arguments (native dispatch passes args
+                // as separate operands and is unaffected).
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS) != 0) {
+                    uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                    ReferenceHolder<QoreListNode> self_args(
+                        num_args ? qore_list_private::newList(true) : nullptr, nullptr);
+                    bool self_args_ok = true;
+                    for (uint8_t j = 0; j < num_args; ++j) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
+                            arg.discard(nullptr);
+                            self_args->push(QoreValue(), nullptr);
+                            self_args_ok = false;
+                        } else {
+                            self_args->push(arg, nullptr);
+                        }
+                    }
+                    // Build the base (method/class/variant-resolved) self-call node, then wrap it
+                    // with the args via the copy constructor (mirrors read_node_EN_SELF_CALL).
+                    uint64_t base_bits = resolveExprSlot(kind, ref1, ref2, pgm);
+                    if (base_bits) {
+                        QoreValue base_val = fromBits(base_bits);
+                        const SelfFunctionCallNode* base_sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                            base_val.getInternalNode());
+                        if (base_sfcn && num_args && self_args_ok) {
+                            SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base_sfcn,
+                                self_args.release());
+                            base_val.discard(nullptr);
+                            ctx->exprs[i] = toBitsNB(QoreValue(sfcn));
+                        } else {
+                            // no args (or a static-method self call, or arg error): keep base node
+                            ctx->exprs[i] = base_bits;
+                        }
+                    }
+                    continue;
+                }
+                break;
+            }
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
                 ref1 = reader.readStringRef(ptr);
@@ -4524,6 +4574,16 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::FOLDR:
             case AOTExprKind::MAP:
             case AOTExprKind::SELECT:
+            case AOTExprKind::PLUS_EQ:
+            case AOTExprKind::MINUS_EQ:
+            case AOTExprKind::MULTIPLY_EQ:
+            case AOTExprKind::DIVIDE_EQ:
+            case AOTExprKind::MODULO_EQ:
+            case AOTExprKind::AND_EQ:
+            case AOTExprKind::OR_EQ:
+            case AOTExprKind::XOR_EQ:
+            case AOTExprKind::SHL_EQ:
+            case AOTExprKind::SHR_EQ:
             case AOTExprKind::ASSIGN: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
@@ -4583,6 +4643,36 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else if (kind == AOTExprKind::LOG_OR) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalOrOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::PLUS_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePlusEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::MINUS_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMinusEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::MULTIPLY_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMultiplyEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::DIVIDE_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreDivideEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::MODULO_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreModuloEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::AND_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreAndEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::OR_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreOrEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::XOR_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreXorEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::SHL_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreShiftLeftEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::SHR_EQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreShiftRightEqualsOperatorNode(&loc_builtin, left, right)));
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalEqualsOperatorNode(&loc_builtin, left, right)));

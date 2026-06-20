@@ -1080,6 +1080,7 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     flags |= QORE_AOT_FEAT_FUNC_CALL_VARIANT;
     flags |= QORE_AOT_FEAT_INLINE_CALL_ARGS;
     flags |= QORE_AOT_FEAT_SELF_CALL_ARGS;
+    flags |= QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS;
     flags |= QORE_AOT_FEAT_LIST_SELECTOR_RANGE;
     // Body-local metadata carries the original local slot id so duplicate
     // local names in nested scopes deserialize to the same LocalVar identity
@@ -14030,6 +14031,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (method && call->getVariant()) {
             id.reloc_qore_path = aotRelocMethodDisplayKey(method->getClass(), method->getName(), call->getVariant());
         }
+        // Carry the call args in the slot (gated by QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS in
+        // write_slot_SELF_METHOD_CALL): native dispatch passes args as separate operands, but
+        // IR-interpreter / AST-fallback evaluation of the reconstructed self-call node needs them.
+        // Source selection mirrors the EN_SELF_CALL EXPR_TREE writer's serializeCallArgs/serializeArgs:
+        // use the parse-arg list when present, otherwise the runtime arg list (a self call resolved
+        // to its instance method may carry args in either, depending on parse state).
+        id.parse_args = call->getParseArgs();
+        id.call_args = call->getArgs();
         return id;
     }
 

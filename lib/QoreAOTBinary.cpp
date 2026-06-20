@@ -116,6 +116,16 @@
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
+#include "qore/intern/QorePlusEqualsOperatorNode.h"
+#include "qore/intern/QoreMinusEqualsOperatorNode.h"
+#include "qore/intern/QoreMultiplyEqualsOperatorNode.h"
+#include "qore/intern/QoreDivideEqualsOperatorNode.h"
+#include "qore/intern/QoreModuloEqualsOperatorNode.h"
+#include "qore/intern/QoreAndEqualsOperatorNode.h"
+#include "qore/intern/QoreOrEqualsOperatorNode.h"
+#include "qore/intern/QoreXorEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -9581,6 +9591,49 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::ASSIGN));
         return write_inline_expr(assign->getLeft()) && write_inline_expr(assign->getRight());
+    }
+    // Compound-assignment operators: native encodings so they round-trip without the legacy
+    // EXPR_TREE fallback when they appear as call args / sub-expressions (e.g. SqlUtil dropColumn's
+    // self-call arg `i += 1`).  NOTE: QoreDivideEquals inherits QoreMultiplyEquals — check Divide first.
+    if (auto* op = dynamic_cast<const QorePlusEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PLUS_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreMinusEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MINUS_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreDivideEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::DIVIDE_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreMultiplyEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreModuloEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MODULO_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreAndEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::AND_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreOrEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::OR_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreXorEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::XOR_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftLeftEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHL_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftRightEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHR_EQ));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
     }
 
     // Plus operator: used inside hash/list/constructor argument literals.

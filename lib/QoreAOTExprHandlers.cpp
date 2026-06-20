@@ -59,6 +59,16 @@
 #include "qore/intern/QoreMultiplicationOperatorNode.h"
 #include "qore/intern/QoreDivisionOperatorNode.h"
 #include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QorePlusEqualsOperatorNode.h"
+#include "qore/intern/QoreMinusEqualsOperatorNode.h"
+#include "qore/intern/QoreMultiplyEqualsOperatorNode.h"
+#include "qore/intern/QoreDivideEqualsOperatorNode.h"
+#include "qore/intern/QoreModuloEqualsOperatorNode.h"
+#include "qore/intern/QoreAndEqualsOperatorNode.h"
+#include "qore/intern/QoreOrEqualsOperatorNode.h"
+#include "qore/intern/QoreXorEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftLeftEqualsOperatorNode.h"
+#include "qore/intern/QoreShiftRightEqualsOperatorNode.h"
 #include "qore/intern/QoreBinaryAndOperatorNode.h"
 #include "qore/intern/QoreBinaryOrOperatorNode.h"
 #include "qore/intern/QoreBinaryXorOperatorNode.h"
@@ -3910,6 +3920,68 @@ static QoreValue read_expr_shift_left(AOTExprReadCtx& ctx) {
 
 static QoreValue read_expr_shift_right(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreShiftRightOperatorNode>(ctx);
+}
+
+// Compound-assignment operators (native AOTExprKind encodings; lvalue + value children).
+static bool write_expr_plus_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QorePlusEqualsOperatorNode>(ctx, AOTExprKind::PLUS_EQ);
+}
+static QoreValue read_expr_plus_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QorePlusEqualsOperatorNode>(ctx);
+}
+static bool write_expr_minus_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreMinusEqualsOperatorNode>(ctx, AOTExprKind::MINUS_EQ);
+}
+static QoreValue read_expr_minus_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreMinusEqualsOperatorNode>(ctx);
+}
+static bool write_expr_multiply_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreMultiplyEqualsOperatorNode>(ctx, AOTExprKind::MULTIPLY_EQ);
+}
+static QoreValue read_expr_multiply_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreMultiplyEqualsOperatorNode>(ctx);
+}
+static bool write_expr_divide_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreDivideEqualsOperatorNode>(ctx, AOTExprKind::DIVIDE_EQ);
+}
+static QoreValue read_expr_divide_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreDivideEqualsOperatorNode>(ctx);
+}
+static bool write_expr_modulo_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreModuloEqualsOperatorNode>(ctx, AOTExprKind::MODULO_EQ);
+}
+static QoreValue read_expr_modulo_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreModuloEqualsOperatorNode>(ctx);
+}
+static bool write_expr_and_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreAndEqualsOperatorNode>(ctx, AOTExprKind::AND_EQ);
+}
+static QoreValue read_expr_and_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreAndEqualsOperatorNode>(ctx);
+}
+static bool write_expr_or_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreOrEqualsOperatorNode>(ctx, AOTExprKind::OR_EQ);
+}
+static QoreValue read_expr_or_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreOrEqualsOperatorNode>(ctx);
+}
+static bool write_expr_xor_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreXorEqualsOperatorNode>(ctx, AOTExprKind::XOR_EQ);
+}
+static QoreValue read_expr_xor_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreXorEqualsOperatorNode>(ctx);
+}
+static bool write_expr_shl_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreShiftLeftEqualsOperatorNode>(ctx, AOTExprKind::SHL_EQ);
+}
+static QoreValue read_expr_shl_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreShiftLeftEqualsOperatorNode>(ctx);
+}
+static bool write_expr_shr_eq(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreShiftRightEqualsOperatorNode>(ctx, AOTExprKind::SHR_EQ);
+}
+static QoreValue read_expr_shr_eq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreShiftRightEqualsOperatorNode>(ctx);
 }
 
 static bool write_expr_log_eq(AOTExprWriteCtx& ctx) {

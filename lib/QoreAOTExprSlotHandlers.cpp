@@ -672,6 +672,38 @@ static bool write_slot_SHIFT_RIGHT(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreShiftRightOperatorNode>(ctx);
 }
 
+// Compound-assignment operators (native AOTExprKind slot encodings; lvalue + value children).
+static bool write_slot_PLUS_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QorePlusEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MINUS_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreMinusEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MULTIPLY_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreMultiplyEqualsOperatorNode>(ctx);
+}
+static bool write_slot_DIVIDE_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreDivideEqualsOperatorNode>(ctx);
+}
+static bool write_slot_MODULO_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreModuloEqualsOperatorNode>(ctx);
+}
+static bool write_slot_AND_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreAndEqualsOperatorNode>(ctx);
+}
+static bool write_slot_OR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreOrEqualsOperatorNode>(ctx);
+}
+static bool write_slot_XOR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreXorEqualsOperatorNode>(ctx);
+}
+static bool write_slot_SHL_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftLeftEqualsOperatorNode>(ctx);
+}
+static bool write_slot_SHR_EQ(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftRightEqualsOperatorNode>(ctx);
+}
+
 static bool write_slot_LOG_AND(AOTExprSlotWriteCtx& ctx) {
     if (dynamic_cast<const QoreLogicalOrOperatorNode*>(
             ctx.expr.child_expr.getInternalNode())) {
@@ -979,6 +1011,19 @@ static bool write_slot_CAST(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    // Serialize call args (u8 num_args + N inline exprs) so AST/IR-interpreter fallback
+    // evaluation of the reconstructed self-call dispatches with its arguments.  Gated by the
+    // feature flag for wire-format compatibility with older qmods (which carry no slot args).
+    // Source selection mirrors EN_SELF_CALL's serializeArgs(): use the parse-arg list when it is
+    // present (even if empty), otherwise the runtime arg list.  A self call may carry its args in
+    // either list depending on parse state; preferring parse args avoids serializing the
+    // runtime-evaluated list when a valid parse list exists.
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS) != 0) {
+        if (ctx.expr.parse_args) {
+            return write_slot_parse_args(ctx, ctx.expr.parse_args);
+        }
+        return write_slot_call_args(ctx, ctx.expr.call_args);
+    }
     return true;
 }
 

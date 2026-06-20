@@ -201,8 +201,9 @@ constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi rec
 constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
 constexpr uint64_t QORE_AOT_FEAT_HASH_DEREF_TYPEINFO = 1ULL << 59; //!< HASH_DEREF records preserve parse-time result typeInfo
 constexpr uint64_t QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS = 1ULL << 60; //!< SLOT_MAPS global records preserve required import flags
+constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS = 1ULL << 61; //!< SLOT_MAPS SELF_METHOD_CALL records carry serialized call args (u8 num_args + N×expr), so AST/IR-interpreter fallback evaluation dispatches the self call with its arguments
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1290,6 +1291,18 @@ enum class AOTExprKind : uint8_t {
     STREAMING          = 109, //!< Streaming operator: kind byte + predicate/count expression + source expression
     DEFERRED_STATIC_METHOD_REF = 110, //!< Deferred static method reference: ref1=class_path, ref2=method_name
     DEFERRED_FUNCTION_REF = 111, //!< Deferred function call reference: ref1=function_name
+    // Compound-assignment operators: lvalue(AOTExprKind) + value(AOTExprKind).  Native encodings so
+    // these expressions round-trip without the legacy EXPR_TREE fallback (e.g. as call args).
+    PLUS_EQ            = 112, //!< += operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MINUS_EQ           = 113, //!< -= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MULTIPLY_EQ        = 114, //!< *= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    DIVIDE_EQ          = 115, //!< /= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    MODULO_EQ          = 116, //!< %= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    AND_EQ             = 117, //!< &= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    OR_EQ              = 118, //!< |= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    XOR_EQ             = 119, //!< ^= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    SHL_EQ             = 120, //!< <<= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    SHR_EQ             = 121, //!< >>= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
