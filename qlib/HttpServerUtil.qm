@@ -2115,6 +2115,27 @@ public class AbstractStreamRequest {
         }
         on_exit setBodyCancel(NOTHING);
 
+        # The 200 streaming response headers were already submitted above, so the client is
+        # committed to reading reply frames on this stream.  If the handler is aborted (e.g. the
+        # owning service is stopping, which sets the cooperative abort flag and cancels the inbound
+        # read, so the next recv()/send() raises STREAM-ABORTED) or hits a transport error here,
+        # unwinding silently would leave the client blocked waiting for a reply that never comes
+        # (observed as a multi-minute hang on a RemoteSqlSession commit when the sqlutil service is
+        # reset mid-session - issue #5351 bug1388).  Reset the stream so the client's read fails
+        # fast, mirroring StreamResponseProducer::resetStream() and the body-streaming error paths.
+        on_error {
+            try {
+                if (http3) {
+                    s.resetQuicStream(session_id, sid);
+                } else {
+                    s.resetHttp2Stream(sid);
+                    io_wake();
+                }
+            } catch (hash<ExceptionInfo> reset_ex) {
+                # best-effort: the stream may already be gone (client closed in a race)
+            }
+        }
+
         # interleaved read -> reply loop
         while (True) {
             *binary chunk;
