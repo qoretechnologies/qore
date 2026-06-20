@@ -208,12 +208,20 @@ public class DataSchemaLoader {
         foreach hash<auto> pair in (table_def.columns.pairIterator()) {
             columns{pair.key} = DataSchemaLoader::normalizeColumn(table_name, pair.key, pair.value);
         }
-        result.columns = columns;
 
         # Pass through structural definitions
         if (table_def.primary_key) {
             result.primary_key = table_def.primary_key;
+            auto pk_cols = table_def.primary_key.columns;
+            if (pk_cols.typeCode() == NT_STRING) {
+                DataSchemaLoader::normalizePrimaryKeyColumn(table_name, \columns, pk_cols);
+            } else {
+                foreach string pk_col in (pk_cols) {
+                    DataSchemaLoader::normalizePrimaryKeyColumn(table_name, \columns, pk_col);
+                }
+            }
         }
+        result.columns = columns;
         if (table_def.indexes) {
             result.indexes = table_def.indexes;
         }
@@ -251,6 +259,19 @@ public class DataSchemaLoader {
         }
 
         return result;
+    }
+
+    private static normalizePrimaryKeyColumn(string table_name, reference<hash<auto!>> columns, string col_name) {
+        if (!columns.hasKey(col_name)) {
+            throw "DATA-SCHEMA-ERROR", sprintf("table %y primary key references unknown column %y",
+                table_name, col_name);
+        }
+        hash<auto!> column;
+        foreach hash<auto> pair in (columns{col_name}.pairIterator()) {
+            column{pair.key} = pair.value;
+        }
+        column.notnull = True;
+        columns{col_name} = column;
     }
 
     #! Normalizes a column definition from shorthand to GenericColumnInfo format
