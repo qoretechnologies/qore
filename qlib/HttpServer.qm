@@ -179,6 +179,11 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_6 HttpServer 1.6
+    - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
+      called after the migration to event-driven async I/O removed per-listener accept threads; the notification
+      (which subclasses use to report when listeners are actually accepting connections) is now issued
+      synchronously from \c addListenerIntern() right after the listener is registered with the async I/O
+      controller, restoring listener-started reporting during server startup
     - persistent (dedicated-thread) handler sessions are now <b>stream-scoped on
       multiplexed transports</b> (HTTP/2 and HTTP/3).  The connection-scoped
       multi-request session model is an HTTP/1.x carry-over that is wrong for
@@ -1564,8 +1569,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         c.wait();
     }
 
-    #! called from listener when the actual listener thread is running
-    /** @param id the listener ID
+    #! called when a listener has been registered with the async I/O controller and is accepting connections
+    /** Issued synchronously from addListenerIntern() right after the listener is added to the async I/O
+        controller; with the event-driven async I/O model there are no per-listener accept threads.
+
+        @param id the listener ID
         @param sinfo a socket information hash as returned by @ref Qore::Socket::getSocketInfo()
 
         @since HttpServer 0.3.11
@@ -2780,6 +2788,25 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
                 l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
                 l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+
+            # Notify that the listener is now accepting connections.  With the
+            # event-driven async I/O model there are no per-listener threads, so
+            # this notification (formerly issued as the first action of the
+            # listener's dedicated accept thread) is issued here instead, right
+            # after the listener has been registered with the async I/O
+            # controller.  addListenerIntern() runs in the async I/O controller
+            # task whose result the caller awaits via Future::get(), so this call
+            # happens-before the caller resumes, preserving the original ordering
+            # relative to server startup (i.e. it is delivered before
+            # HttpServer::startup() completes for system listeners).  Wrapped so a
+            # notification handler error cannot tear down a successfully-started
+            # listener.
+            try {
+                listenerStarted(id, l.getListenerSocketInfo());
+            } catch (hash<ExceptionInfo> ex) {
+                logError("error in listenerStarted() notification for listener %d (%s): %s: %s", id,
+                    l.getListenerSocketInfo().desc, ex.err, ex.desc);
+            }
 
             return l;
         }
