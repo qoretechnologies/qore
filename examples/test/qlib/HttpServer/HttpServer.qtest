@@ -388,6 +388,30 @@ class ThrowOnceServer inherits HttpServer {
     }
 }
 
+# records listenerStarted() notifications so tests can verify they are delivered
+class ListenerStartedServer inherits HttpServer {
+    private:internal {
+        Mutex m();
+        list<hash<auto>> notifications();
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    listenerStarted(int id, hash<auto> sinfo) {
+        m.lock();
+        on_exit m.unlock();
+        notifications += {"id": id, "sinfo": sinfo};
+        HttpServer::listenerStarted(id, sinfo);
+    }
+
+    list<hash<auto>> getNotifications() {
+        m.lock();
+        on_exit m.unlock();
+        return notifications;
+    }
+}
+
 public class HttpServerTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -545,6 +569,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode I/O thread non-blocking", \asyncModeIoThreadNonBlockingTest());
         addTestCase("async mode H1 keep-alive server close", \asyncModeH1KeepAliveServerCloseTest());
         addTestCase("async mode connection refused", \asyncModeConnectionRefusedTest());
+        addTestCase("listenerStarted notification", \listenerStartedTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -607,6 +632,49 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         delete mServer;
         delete mHandler;
         delete mAsyncServer;
+    }
+
+    # verifies that the listenerStarted() notification is delivered when listeners start; with the
+    # event-driven async I/O model there are no per-listener accept threads, so the notification is
+    # issued synchronously from addListenerIntern() right after the listener is registered with the
+    # async I/O controller and before addListener() returns
+    listenerStartedTest() {
+        Logger logger("listener-started-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        ListenerStartedServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit delete server;
+        server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
+        server.setDefaultHandler("my-handler", new ReqHandler());
+
+        # no notifications before any listener is added
+        assertEq(0, server.getNotifications().size());
+
+        # plain HTTP listener: notification must already be present when addListener() returns
+        hash<auto> hinfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        list<hash<auto>> nl = server.getNotifications();
+        assertEq(1, nl.size());
+        assertEq(hinfo.id, nl[0].id);
+        assertEq(hinfo.id, nl[0].sinfo.id);
+        assertEq(False, nl[0].sinfo.ssl);
+        # desc is what subclasses report to the user; it must be populated
+        assertEq(Type::String, nl[0].sinfo.desc.type());
+        assertNeq("", nl[0].sinfo.desc);
+
+        # HTTPS listener: a second notification with ssl = True
+        hash<auto> sinfo = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        nl = server.getNotifications();
+        assertEq(2, nl.size());
+        assertEq(sinfo.id, nl[1].id);
+        assertEq(True, nl[1].sinfo.ssl);
     }
 
     setUp() {
