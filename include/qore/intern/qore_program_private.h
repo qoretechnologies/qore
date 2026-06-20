@@ -3694,6 +3694,12 @@ private:
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 
+class RuntimeConfig;
+//! Returns the QoreProgram a builtin call should operate on: the thread-current Program is
+//! authoritative, falling back to the runtime-config/context Program only when there is no
+//! current Program.  Single definition in ql_misc.cpp; also called from ql_object.cpp.
+DLLLOCAL QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg);
+
 //! returns the structured parse diagnostics collected on the Program serialized as a JSON array;
 //! exported so the standalone interpreter (--diag-format=json) can emit them
 DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);

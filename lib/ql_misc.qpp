@@ -64,7 +64,9 @@ static const QoreFunction* get_builtin_func(const QoreStringNode* str, Exception
 
 static const char* tlist[] = { "OPTION", "ALGORITHM", "FUNCTION" };
 
-static QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
+// Single definition; declared DLLLOCAL in qore_program_private.h and also called from
+// ql_object.cpp.
+QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
     // The authoritative thread-current Program is the correct target for builtins
     // that operate on "the Program this call is running in" (set_return_value(),
     // call_function(), get_global_vars(), ...).  runtime_cfg.getProgram() is a

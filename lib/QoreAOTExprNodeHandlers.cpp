@@ -458,7 +458,7 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         }
     }
     printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
-        class_name.c_str(), method_name.c_str(), static_cast<int>(num_children), m);
+        class_name.c_str(), method_name ? method_name : "", static_cast<int>(num_children), m);
     if (m->isStatic()) {
         StaticMethodCallNode base(&loc_builtin, m, nullptr);
         StaticMethodCallNode* smcn = new StaticMethodCallNode(base, ql);

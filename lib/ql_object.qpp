@@ -34,17 +34,8 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 
-static QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
-    // See the matching helper in ql_misc.qpp: the thread-current Program is
-    // authoritative; runtime_cfg.getProgram() is a threaded cache that can go
-    // stale after a nested cross-Program call, so prefer getProgram() and fall
-    // back to the cached/context Program only when there is no current Program.
-    if (QoreProgram* pgm = getProgram()) {
-        return pgm;
-    }
-    QoreProgram* pgm = runtime_cfg.getProgram();
-    return pgm ? pgm : qore_get_call_program_context();
-}
+// q_get_runtime_call_program() is declared DLLLOCAL in qore_program_private.h and defined
+// once in ql_misc.cpp; the calls below resolve to that single definition.
 
 QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink) {
     TempEncodingHelper cls_path(class_name, QCS_DEFAULT, xsink);
