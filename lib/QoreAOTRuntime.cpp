@@ -2116,7 +2116,17 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
     if (method_ref.variant_class_path && *method_ref.variant_class_path) {
         const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
         if (variant_qc) {
-            if (const QoreMethod* m = findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)) {
+            // Re-resolve the method in the variant class while preserving the static-ness of the
+            // original call.  findAOTStaticCallMethodByName() prefers a static overload, so for a
+            // self/instance call it would wrongly rebind to a same-named static method (e.g.
+            // Program::issueModuleCmd has both a static and a non-static variant with identical
+            // signatures).  The static issueModuleCmd operates on getProgram() (the AOT module's
+            // own program) instead of the receiver object, sending the command to the wrong
+            // QoreProgram.  Match the original method kind: instance -> instance, static -> static.
+            const QoreMethod* m = method->isStatic()
+                ? findAOTStaticCallMethodByName(variant_qc, method_ref.method_name)
+                : findAOTInstanceMethod(variant_qc, method_ref.method_name, nullptr);
+            if (m) {
                 variant_method = m;
             }
         }
