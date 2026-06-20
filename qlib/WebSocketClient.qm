@@ -3904,6 +3904,15 @@ class MyObserver inherits Observer {
         }
     }
 
+    #! Returns @ref True if any registered observer would be notified of @ref EVENT_WS_ERROR events
+    /** Used to decide whether a data-processing error needs the stderr last-resort fallback; if an
+        observer is handling error events, the error is not silently dropped and stderr noise is
+        unnecessary.
+    */
+    private bool hasErrorObservers() {
+        return any !$1.event_map || $1.event_map{EVENT_WS_ERROR}, observer_map.iterator();
+    }
+
     #! Handles processed messages
     private int handleEvent(string buf) {
         try {
@@ -3913,13 +3922,15 @@ class MyObserver inherits Observer {
                 "buf": buf,
                 "data": ex,
             });
-            # Emit to stderr as well — the logger may have no appender, in which
-            # case data-processing errors would otherwise be silently dropped and
-            # the caller would see an unexplained timeout (e.g., parse_json failure
-            # on a non-JSON payload when serialization is "json").
             auto buf_summary = LoggerUtil::getArgSummary(buf);
-            stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
-                serialization, ex.err, ex.desc, buf_summary);
+            # Emit to stderr only as a last resort — when no observer is subscribed to
+            # EVENT_WS_ERROR, data-processing errors would otherwise be silently dropped if the
+            # logger has no appender, and the caller would see an unexplained timeout (e.g.,
+            # parse_json failure on a non-JSON payload when serialization is "json").
+            if (!hasErrorObservers()) {
+                stderr.printf("WebSocketClient: error handling %y data: %s: %s (message: %y)\n",
+                    serialization, ex.err, ex.desc, buf_summary);
+            }
             logError("Error handling WebSocket event data message: %s (message: %y)",
                 get_exception_string(ex), buf_summary);
             return WSEDC_CONTINUE;
@@ -3943,9 +3954,12 @@ class MyObserver inherits Observer {
                     "buf": buf,
                     "data": ex,
                 });
-                # Emit to stderr as well — the logger may have no appender
-                stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
-                    ex.err, ex.desc);
+                # Emit to stderr only as a last resort — when no observer handles EVENT_WS_ERROR
+                # and the logger may have no appender
+                if (!hasErrorObservers()) {
+                    stderr.printf("WebSocketClient: error handling binary data: %s: %s\n",
+                        ex.err, ex.desc);
+                }
                 logError("Error handling binary WebSocket event data message: %s",
                     get_exception_string(ex));
             }
