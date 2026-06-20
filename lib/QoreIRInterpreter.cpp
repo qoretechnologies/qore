@@ -3223,6 +3223,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         StaticMethodCallNode clone(*call, arg_list);
                         res = evalAndRef(&clone, xsink);
                         used_operands = true;
+                    } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                            inv->expr.getInternalNode())) {
+                        // Scoped self call (Class::method(args)) lowered through a CallStatic slot
+                        // but keeping its SelfFunctionCallNode expr — dispatch with the IR operand
+                        // args (the AST node carries none).
+                        SelfFunctionCallNode clone(*call, arg_list);
+                        res = evalAndRef(&clone, xsink);
+                        used_operands = true;
                     }
                 } else {
                     // CallIndirect
@@ -11986,6 +11994,16 @@ lvalue_path_unary_done:
                         if (auto* call = dynamic_cast<const StaticMethodCallNode*>(call_expr.getInternalNode())) {
                             // Direct evalImpl() — avoids evalExprNode() overhead
                             StaticMethodCallNode clone(*call, arg_list);
+                            res = evalAndRef(&clone, xsink);
+                            used_operands = true;
+                        } else if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(
+                                call_expr.getInternalNode())) {
+                            // A scoped self call (Class::method(args) within the class hierarchy)
+                            // is lowered through a CallStatic slot but keeps its SelfFunctionCallNode
+                            // expr. Dispatch via the self-call node with the IR operand args so the
+                            // call receives its arguments (the AST node itself carries none — the
+                            // args live in inv->operands).
+                            SelfFunctionCallNode clone(*call, arg_list);
                             res = evalAndRef(&clone, xsink);
                             used_operands = true;
                         } else if (auto* call = dynamic_cast<const FunctionCallNode*>(
