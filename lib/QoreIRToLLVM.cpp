@@ -10081,10 +10081,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = builder->CreateCall(helper, {variant_ptr, args_array,
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             } else {
+                // Use the func captured at IR-lowering time.  AOT-deserialized CallDirect
+                // instructions carry a null func (QoreAOTRuntime sets it null and relies on
+                // re-resolution from the expr); re-read the FunctionCallNode's resolved function
+                // here, mirroring the Invoke-CallDirect path.  If it is still null (e.g. an
+                // anonymous closure call that cannot be statically resolved), fail codegen so the
+                // function falls back to the IR interpreter instead of baking a null pointer into
+                // qore_rt_call_function_direct and crashing at runtime.
+                const QoreFunction* resolved_func = direct_inst->func;
+                if (!resolved_func) {
+                    if (auto* call = dynamic_cast<const FunctionCallNode*>(
+                            direct_inst->expr.getInternalNode())) {
+                        resolved_func = call->getFunction();
+                    }
+                }
+                if (!resolved_func) {
+                    error = "internal error: CallDirect has no resolved function "
+                        "(func pointer lost between IR lowering/AOT load and codegen)";
+                    return false;
+                }
                 // JIT: call function directly with embedded pointers
                 llvm::Value* func_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(direct_inst->func)), ptr_type);
+                            reinterpret_cast<uint64_t>(resolved_func)), ptr_type);
                 llvm::Value* variant_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
