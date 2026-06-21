@@ -1783,7 +1783,14 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
         QoreSuggestionList sl(bword);
         // local variables (only reachable when bare references are enabled)
         if (abr) {
-            for (VNode* vnode = getVStack(); vnode; vnode = vnode->nextSearch()) {
+            // the top of the stack can be a block-start marker with no lvar; skip it before
+            // dereferencing names, then nextSearch() maintains the "lvar is set" invariant
+            // (cf. find_local_var())
+            VNode* vnode = getVStack();
+            if (vnode && !vnode->lvar) {
+                vnode = vnode->nextSearch();
+            }
+            for (; vnode; vnode = vnode->nextSearch()) {
                 sl.add(vnode->getName());
             }
         }
