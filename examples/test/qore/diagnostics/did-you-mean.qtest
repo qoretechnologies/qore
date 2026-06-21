@@ -22,6 +22,8 @@ public class DidYouMeanTest inherits QUnit::Test {
         addTestCase("undefined type typo", \testUndefinedTypeTypo());
         addTestCase("undefined function typo", \testUndefinedFunctionTypo());
         addTestCase("undefined hashdecl type typo", \testUndefinedHashDeclTypo());
+        addTestCase("bareword in constant initializer", \testBarewordInConstantInitializer());
+        addTestCase("constant typo in constant initializer", \testConstantTypoInConstantInitializer());
         set_return_value(main());
     }
 
@@ -115,5 +117,24 @@ public class DidYouMeanTest inherits QUnit::Test {
         *string txt = parseErrText("hashdecl MyData { int a; } hash<MyDataa> sub t() { return new hash<MyData>(); }");
         assertEq(True, exists txt, "parse must fail");
         assertRegex("undefined hashdecl 'MyDataa'; did you mean 'MyData'", txt);
+    }
+
+    testBarewordInConstantInitializer() {
+        # regression: an unresolvable bareword in a constant initializer used to crash the
+        # parser with a null deref. Constant parsing pushes a block-marker VNode with no
+        # lvar onto the local-variable stack, and the "did you mean" suggestion code walked
+        # that stack and dereferenced the marker's missing lvar. It must now produce a clean
+        # parse error instead of a segfault.
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "cannot resolve bareword 'nonexistent_bareword'", \p.parse(),
+            ("const C = nonexistent_bareword;", ""));
+    }
+
+    testConstantTypoInConstantInitializer() {
+        # the local-var stack walk must be skipped safely (leading marker VNode) yet still
+        # surface the constant near-match suggestion from the constant-initializer context
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "did you mean 'MY_BASE'", \p.parse(),
+            ("const MY_BASE = 1; const DERIVED = MY_BASEE + 1;", ""));
     }
 }
