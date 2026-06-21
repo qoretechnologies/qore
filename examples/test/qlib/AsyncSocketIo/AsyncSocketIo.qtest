@@ -796,9 +796,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             SimpleStringHandler::interruptSleep(False);
         }
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         *hash<SocketPollResultInfo> info = q.get(2s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(exists info, "timeout result should be returned within 2s");
         assertEq("SOCKET-TIMEOUT", info.ex.err, "expected timeout result");
@@ -851,7 +851,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             });
         }
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         for (int i = 0; i < N; ++i) {
             # generous bound: the 300ms controller timeout must fire and the
             # completion must be delivered well within this.
@@ -860,7 +860,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             assertEq("SOCKET-TIMEOUT", info.ex.err,
                 sprintf("op %d: expected timeout completion", i));
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed < 8s,
             sprintf("all %d notifier timeouts delivered within bound (elapsed=%y)", N, elapsed));
     }
@@ -905,7 +905,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             }
         }();
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         for (int i = 0; i < N; ++i) {
             # Each waiter MUST be freed (cancel completion or backstop) — never
             # hang.  q.get(10s) throws QUEUE-TIMEOUT if the invariant is
@@ -917,7 +917,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                 sprintf("op %d: exactly one completion (no duplicate)", i));
         }
         cancels_done.waitForZero();
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed < 10s,
             sprintf("all %d waiters freed within bound (elapsed=%y)", N, elapsed));
     }
@@ -929,11 +929,11 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         on_exit delete io_controller;
 
         EventNotifier n();
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         # controller `to` is 30s, but the explicit 400ms queue safety bound
         # must free the caller first and report "not signaled".
         bool signaled = io_controller.waitForNotifier(n, 30s, 400ms);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertFalse(signaled, "never-signaled notifier must return False");
         assertTrue(elapsed >= 400ms,
             sprintf("safety timeout should not be immediate (elapsed=%y)", elapsed));
@@ -988,9 +988,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "owner": "cr-b",
             "to": 1s,
         });
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<SocketPollResultInfo> ib = qb.get(8s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         # not canceled: a timed-out op has no "canceled" key (NOTHING), a
         # tombstone-canceled op would have canceled == True
@@ -1036,7 +1036,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         *hash<SocketPollResultInfo> pinfo = q.get(20s);
         assertTrue(exists pinfo, "parent op completion delivered");
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         background sub () {
             io_controller.cancelByOwner("p3-parent");
         }();
@@ -1045,7 +1045,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         # inherited scope and free it promptly.  Pre-fix the nested op had no
         # "p3-parent" association, so this would block ~120s (nested `to`).
         *hash<SocketPollResultInfo> ninfo = op.nested_q.get(20s);
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertTrue(exists ninfo, "nested op completion delivered");
         assertTrue(ninfo.canceled ?? False,
@@ -1075,7 +1075,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         op.entered.waitForZero();
 
         Queue fq();
-        date t0 = now_us();
+        int t0 = clock_get_monotonic_us();
         background sub () {
             io_controller.flushCallbacks();
             fq.push("done");
@@ -1084,7 +1084,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         # forever -> QUEUE-TIMEOUT here.  Post-fix: returns promptly because
         # continuePoll dispatches are excluded from the callback-idle barrier.
         string r = fq.get(15s);
-        date elapsed = now_us() - t0;
+        date elapsed = microseconds(clock_get_monotonic_us() - t0);
         assertEq("done", r, "flushCallbacks() returned");
         assertTrue(elapsed < 15s,
             sprintf("flushCallbacks() did not wait for the in-flight "
@@ -1681,7 +1681,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         # Simultaneously deliver one byte to every server socket so all N become "ready"
         # at the same time.  The ioThread must process all N completions in one Phase 3 pass
         # while holding the mutex — this is the O(N²) hot spot with the old code.
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         Counter sent(n);
         for (int i = 0; i < n; ++i) {
             int idx = i;
@@ -1700,7 +1700,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                 ++completed;
             }
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         assertEq(n, completed,
             sprintf("all %d concurrent receive ops must complete (elapsed=%y)", n, elapsed));
