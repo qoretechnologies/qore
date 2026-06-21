@@ -3979,6 +3979,21 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             if (!local_ed) {
                 continue;
             }
+            // The enum-member namespace and its member constants are (re)created here while
+            // merging a module into this program. Both the QoreNamespace(const char*) ctor and
+            // ConstantList::add() attribute new items to the *current* module-load context
+            // (get_module_context_name()) — i.e. the module being merged, not the module that
+            // declares the enum. When an importing module's self-contained AOT program is merged
+            // in, a dependency's enum (e.g. SqlUtil's "PartitionVerifiedBy") would thus be
+            // falsely tagged as belonging to the importer, and that false attribution accumulates
+            // across every importer. It misdirects module-root resolution that relies on
+            // QoreNamespace::isFromModule() and on the member constants' module attribution
+            // (namespaceHasDirectItemFromModule) — notably the Python qoreloader's
+            // getModuleRootNs(), which then roots `qore.<Module>` at the dependency's enum
+            // namespace and hides the module's real classes. Scope the module context to the
+            // enum's declaring module so the namespace and its member constants are attributed
+            // correctly.
+            QoreModuleNameContextHelper enum_ctx(qore_enum_decl_private::get(*local_ed)->getModuleName());
             // Check if namespace for this enum already exists
             QoreNamespace* enum_ns = nsl.find(enum_name);
             qore_ns_private* ens_priv;
