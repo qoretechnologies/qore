@@ -39,7 +39,7 @@ auto sub parse_json(string val) {
 %endif
 
 module GcpAuth {
-    version = "1.0";
+    version = "1.1";
     desc = "GCP service-account JWT-bearer and Application Default Credentials "
         "token broker for Vertex AI, GCP Vision, GCP Document AI, etc.";
     author = "Qore Technologies, s.r.o.";
@@ -69,9 +69,17 @@ module GcpAuth {
        with the <tt>Metadata-Flavor: Google</tt> header.  See
        @ref GcpAuth::getAccessTokenFromMetadataServer() "getAccessTokenFromMetadataServer()".
 
-    3. **Composite ADC chain** — explicit SA file → \c GOOGLE_APPLICATION_CREDENTIALS
+    3. **User (authorized_user) credentials** — the file written by
+       <tt>gcloud auth application-default login</tt> (JSON
+       <tt>type: "authorized_user"</tt>) is exchanged via the OAuth2
+       refresh-token grant (<tt>grant_type=refresh_token</tt>).  See
+       @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()".
+
+    4. **Composite ADC chain** — explicit SA file → \c GOOGLE_APPLICATION_CREDENTIALS
        env var → \c ~/.config/gcloud/application_default_credentials.json →
-       metadata server.  See @ref GcpAuth::getAccessToken() "getAccessToken()".
+       metadata server, dispatching each resolved file to the service-account or
+       authorized_user grant by its \c "type".  See
+       @ref GcpAuth::getAccessToken() "getAccessToken()".
 
     All three functions cache tokens keyed by the request parameters and
     refresh within a 5-minute safety window before expiry.
@@ -96,6 +104,15 @@ string token = GcpAuth::getAccessTokenFromServiceAccountFile(
     @endcode
 
     @section gcpauthrelnotes Release Notes
+
+    @subsection gcpauth_v1_1 GcpAuth v1.1
+    - added support for user (\c "authorized_user") ADC credentials written by
+      \c "gcloud auth application-default login" via the OAuth2 refresh-token
+      grant, so the ADC chain works for local user logins as well as
+      service-account keys and the metadata server
+    - fixed the token-endpoint request to POST to the endpoint's exact path; the
+      previous empty-relative-path request hit \c /token/ (trailing slash), which
+      the live Google token endpoint rejects with HTTP 404
 
     @subsection gcpauth_v1_0 GcpAuth v1.0
     - initial release: service-account file, metadata server, ADC chain with caching
@@ -266,19 +283,13 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
             sprintf("RS256 JWT signing failed for %y: %s",
                 sa.client_email, ex.desc), ex;
     }
-    RestClientIo::RestClientIo rest({
-        "url": token_uri,
-        "data": "url",
-    });
     hash<auto> form = {
         "grant_type": JwtBearerGrantType,
         "assertion": assertion,
     };
     hash<auto> resp;
     try {
-        resp = rest.restPost("", form, {
-            "Content-Type": "application/x-www-form-urlencoded",
-        });
+        resp = postTokenForm(token_uri, form);
     } catch (hash<ExceptionInfo> ex) {
         throw "GCP-AUTH-ERROR",
             sprintf("token exchange at %y failed: %s", token_uri, ex.desc), ex;
@@ -352,6 +363,15 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
        \c gcloud auth application-default login)
     4. compute metadata server (GCE, GKE, Cloud Run, Cloud Functions)
 
+    File-based credentials are dispatched by their \c "type": an
+    \c "authorized_user" file (the credential written by
+    \c "gcloud auth application-default login") is exchanged via the OAuth2
+    refresh-token grant (see
+    @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()"),
+    while any other file is treated as a service-account key and signed with
+    the JWT-bearer grant.  This matches how \c gcloud and the official Google
+    client libraries resolve ADC.
+
     @param sa_json_path optional explicit SA JSON file path
     @param scopes OAuth2 scopes
     @param opts forwarded to the underlying fetcher (\c metadata_endpoint,
@@ -382,10 +402,143 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
         }
     }
     if (candidate.val()) {
+        # dispatch by credential type: "authorized_user" files (written by
+        # "gcloud auth application-default login") use the OAuth2 refresh-token
+        # grant; all other files are treated as service-account keys (JWT-bearer)
+        if (credentialFileType(candidate) == "authorized_user") {
+            return getAccessTokenFromAuthorizedUserFile(candidate, opts);
+        }
         return getAccessTokenFromServiceAccountFile(candidate, scopes, opts);
     }
     # last resort: metadata server (will throw if not on GCP)
     return getAccessTokenFromMetadataServer(scopes, opts);
+}
+
+#! Fetches a GCP access token from a user ("authorized_user") ADC credential file
+/** Handles the credential written by \c "gcloud auth application-default login"
+    (JSON \c type \c "authorized_user"): the stored \c refresh_token is exchanged
+    at the token endpoint using \c grant_type=refresh_token together with the
+    \c client_id and \c client_secret.  The resulting access token carries
+    whatever scopes the refresh token was authorized for (typically
+    \c cloud-platform), so no \c scope is sent in the request and the \a scopes
+    used elsewhere in the ADC chain are not needed here.
+
+    Tokens are cached keyed by the file path; a second call returns the cached
+    token unless it is within @ref TokenSafetyWindowMs of expiry.
+
+    @param path filesystem path to the \c authorized_user JSON file
+    @param opts optional overrides:
+        - \c force_refresh (\c bool): bypass the cache
+
+    @return the bearer access token (without the \c "Bearer " prefix)
+
+    @throw GCP-AUTH-ERROR file unreadable, JSON malformed, required fields
+        missing, or the token refresh failed
+    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
+*/
+public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> opts) {
+%ifdef NoJson
+    throw "GCP-AUTH-MISSING-JSON-MODULE",
+        "GcpAuth requires the json module for parsing credentials and token "
+        "responses; install the json module to use authorized_user credentials";
+%else
+    string key = sprintf("au|%s", path);
+    if (!opts.force_refresh) {
+        *string cached = TokenCache::getCached(key);
+        if (cached) {
+            return cached;
+        }
+    }
+    hash<auto> cred = readCredentialFile(path);
+    foreach string field in (("client_id", "client_secret", "refresh_token")) {
+        if (!cred{field}.val()) {
+            throw "GCP-AUTH-ERROR",
+                sprintf("authorized_user credential file %y is missing required field %y",
+                    path, field);
+        }
+    }
+    string token_uri = cred.token_uri ?? TokenUrl;
+    hash<auto> form = {
+        "grant_type": "refresh_token",
+        "client_id": cred.client_id,
+        "client_secret": cred.client_secret,
+        "refresh_token": cred.refresh_token,
+    };
+    hash<auto> resp;
+    try {
+        resp = postTokenForm(token_uri, form);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("authorized_user token refresh at %y failed: %s", token_uri, ex.desc), ex;
+    }
+    string token;
+    int expires_in;
+    (token, expires_in) = parseTokenResponse(resp.body);
+    TokenCache::put(key, token, expires_in);
+    return token;
+%endif
+}
+
+#! Reads and parses a GCP credential JSON file, throwing a clear error on failure
+hash<auto> sub readCredentialFile(string path) {
+    string text;
+    try {
+        text = File::readTextFile(path);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("cannot read GCP credential file %y: %s", path, ex.desc), ex;
+    }
+    try {
+        return parse_json(text);
+    } catch (hash<ExceptionInfo> ex) {
+        throw "GCP-AUTH-ERROR",
+            sprintf("GCP credential file %y is not valid JSON: %s", path, ex.desc), ex;
+    }
+}
+
+#! POSTs url-encoded form parameters to a GCP OAuth2 token endpoint at its exact path
+/** RestClientIo treats an empty relative path as the root and appends a trailing
+    slash, so posting to a \c token_uri such as
+    \c https://oauth2.googleapis.com/token via \c restPost("") targets
+    \c /token/ — which the Google token endpoint rejects with HTTP 404.  This
+    helper splits the endpoint URL so the request hits the exact path.
+
+    @param token_uri the full token endpoint URL
+    @param form the form parameters to send url-encoded
+
+    @return the @ref RestClientIo response hash
+*/
+hash<auto> sub postTokenForm(string token_uri, hash<auto> form) {
+    hash<auto> url = parse_url(token_uri);
+    string base = sprintf("%s://%s%s", url.protocol ?? "https", url.host,
+        exists url.port ? sprintf(":%d", url.port) : "");
+    string req_path = url.path ?? "/token";
+    RestClientIo::RestClientIo rest({
+        "url": base,
+        "data": "url",
+    });
+    return rest.restPost(req_path, form, {
+        "Content-Type": "application/x-www-form-urlencoded",
+    });
+}
+
+#! Returns the \c "type" field of a credential file, or \c "service_account" if absent/unreadable
+/** Used by @ref getAccessToken() to dispatch a resolved ADC file to the correct
+    grant.  A missing or unreadable file resolves to \c "service_account" so the
+    downstream service-account fetcher reports the underlying error with full
+    context rather than this helper masking it.
+*/
+string sub credentialFileType(string path) {
+%ifdef NoJson
+    return "service_account";
+%else
+    try {
+        hash<auto> cred = readCredentialFile(path);
+        return cred.type ?? "service_account";
+    } catch (hash<ExceptionInfo> ex) {
+        return "service_account";
+    }
+%endif
 }
 
 #! Clears the entire token cache (for tests)

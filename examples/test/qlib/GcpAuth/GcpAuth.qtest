@@ -25,6 +25,9 @@ class FakeGcpTokenHandler inherits AbstractHttpRequestHandler {
     public {
         string last_grant_type;
         string last_assertion;
+        string last_path;
+        string last_refresh_token;
+        string last_client_id;
         int call_count = 0;
         hash<auto> token_response = {
             "access_token": "fake-access-token",
@@ -48,6 +51,9 @@ class FakeGcpTokenHandler inherits AbstractHttpRequestHandler {
         }
         last_grant_type = form.grant_type ?? "";
         last_assertion = form.assertion ?? "";
+        last_refresh_token = form.refresh_token ?? "";
+        last_client_id = form.client_id ?? "";
+        last_path = cx.raw_path ?? "";
 
         if (error_mode) {
             return makeResponse({"Content-Type": MimeTypeJson}, 400,
@@ -82,6 +88,7 @@ public class GcpAuthTest inherits QUnit::Test {
         FakeGcpTokenHandler token_handler;
         FakeGcpMetadataHandler mds_handler;
         string sa_path;
+        string au_path;
     }
 
     constructor() : Test("GcpAuth Test", "1.0") {
@@ -95,6 +102,12 @@ public class GcpAuthTest inherits QUnit::Test {
             \mdsHeaderTest());
         addTestCase("ADC chain resolves to explicit SA path",
             \adcChainTest());
+        addTestCase("authorized_user refresh-token round-trip",
+            \authorizedUserTest());
+        addTestCase("ADC chain dispatches authorized_user files",
+            \adcChainAuthorizedUserTest());
+        addTestCase("token endpoint is posted at its exact path",
+            \exactTokenPathTest());
         addTestCase("missing access_token throws",
             \missingTokenErrorTest());
 
@@ -138,11 +151,29 @@ public class GcpAuthTest inherits QUnit::Test {
             "token_uri": "http://localhost:" + token_port + "/token",
         }));
         f.close();
+
+        # write a user ("authorized_user") ADC file, as produced by
+        # "gcloud auth application-default login"
+        au_path = tmp_location() + "/gcp_auth_test_au_" + get_random_string(8) + ".json";
+        File af();
+        af.open2(au_path, O_CREAT | O_WRONLY | O_TRUNC);
+        af.write(make_json({
+            "type": "authorized_user",
+            "client_id": "test-client-id.apps.googleusercontent.com",
+            "client_secret": "test-client-secret",
+            "refresh_token": "test-refresh-token",
+            "token_uri": "http://localhost:" + token_port + "/token",
+            "quota_project_id": "test-project",
+        }));
+        af.close();
     }
 
     globalTearDown() {
         if (sa_path && is_file(sa_path)) {
             unlink(sa_path);
+        }
+        if (au_path && is_file(au_path)) {
+            unlink(au_path);
         }
         delete token_http;
         delete mds_http;
@@ -272,6 +303,66 @@ public class GcpAuthTest inherits QUnit::Test {
             ("https://www.googleapis.com/auth/cloud-platform",));
         assertEq("fake-access-token", token);
         assertEq(1, token_handler.call_count);
+    }
+
+    private authorizedUserTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+
+        string token = GcpAuth::getAccessTokenFromAuthorizedUserFile(au_path);
+        assertEq("fake-access-token", token, "refresh-token grant returns the access token");
+        assertEq(1, token_handler.call_count);
+        assertEq("refresh_token", token_handler.last_grant_type,
+            "authorized_user credentials use the refresh_token grant");
+        assertEq("test-refresh-token", token_handler.last_refresh_token);
+        assertEq("test-client-id.apps.googleusercontent.com", token_handler.last_client_id);
+
+        # second call must hit the cache (keyed by path)
+        token = GcpAuth::getAccessTokenFromAuthorizedUserFile(au_path);
+        assertEq("fake-access-token", token);
+        assertEq(1, token_handler.call_count, "authorized_user token is cached");
+    }
+
+    private adcChainAuthorizedUserTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+
+        # getAccessToken() must detect the authorized_user type and use the
+        # refresh-token grant (not the service-account JWT-bearer grant)
+        string token = GcpAuth::getAccessToken(au_path,
+            ("https://www.googleapis.com/auth/cloud-platform",));
+        assertEq("fake-access-token", token);
+        assertEq("refresh_token", token_handler.last_grant_type,
+            "ADC chain dispatches authorized_user files to the refresh-token grant");
+        assertEq("test-refresh-token", token_handler.last_refresh_token);
+    }
+
+    private exactTokenPathTest() {
+        GcpAuthTest::checkJson(self);
+        if (!token_http || !mds_http) {
+            testSkip("no HttpServer set up");
+        }
+        # regression: the token endpoint must be posted at its exact path; an
+        # empty relative path produced "/token/" (trailing slash), which the live
+        # Google token endpoint rejects with HTTP 404
+        GcpAuth::clearTokenCache();
+        GcpAuth::getAccessTokenFromServiceAccountFile(sa_path,
+            ("https://www.googleapis.com/auth/cloud-platform",), {"force_refresh": True});
+        assertEq("/token", token_handler.last_path,
+            "service-account token POST targets the exact path");
+
+        GcpAuth::clearTokenCache();
+        GcpAuth::getAccessTokenFromAuthorizedUserFile(au_path, {"force_refresh": True});
+        assertEq("/token", token_handler.last_path,
+            "authorized_user token POST targets the exact path");
     }
 
     private missingTokenErrorTest() {
