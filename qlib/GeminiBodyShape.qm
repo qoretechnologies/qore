@@ -26,6 +26,7 @@
 %modern
 
 %requires(reexport) QoreLlmTypes
+%requires(reexport) RestClientIo
 
 %try-module json
 %define NoJson
@@ -42,10 +43,11 @@ auto sub parse_json(string val) {
 %endif
 
 module GeminiBodyShape {
-    version = "1.0";
-    desc = "Pure-static request/response shapers for the Gemini generateContent "
-        "wire format — shared between the native GeminiRestClient provider and "
-        "the Vertex AI Gemini-on-Vertex pathway";
+    version = "1.1";
+    desc = "Shared Gemini generateContent wire format: request/response shapers "
+        "plus the common AbstractGeminiModelProvider base — shared between the "
+        "native GeminiRestClient provider and the Vertex AI Gemini-on-Vertex "
+        "pathway so the two cannot drift on tool/option/response handling";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -96,6 +98,15 @@ module GeminiBodyShape {
     - @ref bareModelName() — strip \c "models/" prefix
 
     @section geminibodyshaperelnotes Release Notes
+
+    @subsection geminibodyshape_v1_1 GeminiBodyShape v1.1
+    - added @ref AbstractGeminiModelProvider, the common provider base shared by
+      \c GeminiRestClient (Gemini on AI Studio) and \c VertexAiRestClient (Gemini
+      on Vertex); both now differ only in transport and auth (URL, request path,
+      auth headers, REST client), so OpenAI tool/option/response handling cannot
+      diverge between them
+    - added @ref requestErrorDetail() to surface the upstream provider error
+      message and status from a failed request
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release: extracted from \c GeminiRestClient.qm so Vertex AI
@@ -857,5 +868,277 @@ public *hash<auto> sub openAiToolChoiceToGeminiConfig(auto choice) {
         };
     }
     return cfg ? cfg : NOTHING;
+}
+
+#! Returns a failure detail string including the upstream provider error and status
+/** On a non-2xx response the underlying REST exception carries the response body
+    (with the provider's \c {error: {code, message, status}} payload) in \c ex.arg;
+    this surfaces that message instead of just the bare HTTP status, so the cause
+    of a rejection is visible.
+
+    @param ex the REST exception caught from a request
+    @return \c ex.desc, augmented with the upstream status and message when available
+*/
+public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_HASH) {
+        return ex.desc;
+    }
+    auto body = ex.arg.body;
+    *string msg;
+    switch (body.typeCode()) {
+        case NT_HASH:
+            msg = body.error.message ?? body.error.status ?? body.message;
+            break;
+        case NT_STRING:
+            msg = body;
+            break;
+        case NT_BINARY:
+            msg = body.toString("UTF-8");
+            break;
+    }
+    if (!msg.val()) {
+        return ex.desc;
+    }
+    return sprintf("%s (HTTP %s: %s)", ex.desc, ex.arg.status_code ?? "?", trim(msg));
+}
+
+#! Common provider base for Gemini-family models served over different transports
+/** Holds everything shared between Gemini-on-AI-Studio (\c GeminiRestClient) and
+    Gemini-on-Vertex (\c VertexAiRestClient): @ref chat(), @ref complete(), the
+    default synthetic @ref chatStream(), request-body building, and the
+    OpenAI-compatible adapter hooks (\c tool_choice → \c toolConfig,
+    \c response_format → output schema, body-option merging, and streaming
+    tool-call harvesting).  Subclasses supply only transport and authentication
+    via @ref createRestClient(), @ref getRequestPath(), @ref getRequestHeaders(),
+    @ref getDefaultModel(), and (optionally) @ref getProviderLabel().
+
+    Because the OpenAI/Gemini wire handling lives here once, the two providers
+    cannot drift on tool/option/response behavior.
+
+    @since GeminiBodyShape 1.1
+*/
+public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    private {
+        #! Lazy-initialized REST client (a RestClientIo or subclass)
+        *RestClientIo::RestClientIo rest_client;
+        #! Serializes lazy initialization
+        Mutex rest_mutex();
+    }
+
+    #! Creates the provider base from an @ref QoreLlmUtils::LlmBackendConfig
+    constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
+            : QoreLlmUtils::AbstractLlmProvider(config) {
+    }
+
+    #! Returns the provider's default model when none is supplied per request
+    abstract string getDefaultModel();
+
+    #! Builds the configured REST client for this provider's transport
+    abstract RestClientIo::RestClientIo createRestClient();
+
+    #! Returns the generateContent REST path for the given request
+    abstract string getRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts);
+
+    #! Returns per-request auth headers (default: none — e.g. an API key in the client)
+    *hash<auto> getRequestHeaders(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return NOTHING;
+    }
+
+    #! Human-readable provider label used in error messages (default: the mode)
+    string getProviderLabel() {
+        return getMode();
+    }
+
+    #! Resolves the model for this request, falling back to @ref getDefaultModel()
+    string getModelName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return getRequestModel(opts) ?? getDefaultModel();
+    }
+
+    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
+            string user_prompt, *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = buildModelBody((
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
+        ), NOTHING, output_schema, opts);
+        hash<auto> resp = postGenerate(body, opts);
+        return <QoreLlmUtils::LlmCompletionResult>{
+            "content": GeminiBodyShape::extractText(resp.body),
+            "usage": GeminiBodyShape::normalizeUsage(resp.body.usageMetadata),
+        };
+    }
+
+    hash<QoreLlmUtils::ChatResponse> chat(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = buildModelBody(messages, tools, opts.output_schema, opts);
+        hash<auto> resp = postGenerate(body, opts);
+        hash<QoreLlmUtils::ChatResponse> rv =
+            GeminiBodyShape::parseChatResponse(resp.body);
+        rv.model = getModelName(opts);
+        return rv;
+    }
+
+    #! Default synthetic streaming: one non-streamed call surfaced as delta + done
+    /** Subclasses with a native SSE endpoint override this with real streaming. */
+    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
+        if (r.content.val()) {
+            callback(<QoreLlmUtils::ChatStreamEvent>{
+                "delta": r.content,
+                "raw": r.raw,
+            });
+        }
+        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True, "raw": r.raw});
+    }
+
+    #! Merges \c body_options with Gemini nested \c generationConfig semantics
+    hash<auto> mergeRequestBodyOptions(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        if (!opts.body_options) {
+            return body;
+        }
+        hash<auto!> rv;
+        rv += body;
+        foreach string key in (keys opts.body_options) {
+            if (key == "generationConfig"
+                    && rv.generationConfig.typeCode() == NT_HASH
+                    && opts.body_options{key}.typeCode() == NT_HASH) {
+                hash<auto!> gc;
+                gc += rv.generationConfig;
+                gc += opts.body_options{key};
+                rv.generationConfig = gc;
+            } else {
+                rv{key} = opts.body_options{key};
+            }
+        }
+        return rv;
+    }
+
+    #! Translates an OpenAI \c tool_choice into Gemini's \c toolConfig form
+    applyOpenAiToolChoice(reference<hash<auto!>> body_options, auto choice) {
+        *hash<auto> tool_cfg = GeminiBodyShape::openAiToolChoiceToGeminiConfig(choice);
+        if (tool_cfg) {
+            body_options.toolConfig = tool_cfg;
+        }
+    }
+
+    #! Routes an OpenAI \c response_format=json_schema to the request output schema
+    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
+            reference<hash<QoreLlmUtils::LlmRequestOptions>> options,
+            hash<auto> output_schema, *hash<auto> response_format) {
+        options.output_schema = output_schema;
+    }
+
+    #! Updates OpenAI stream state from a Gemini-native event
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state, *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        if (raw.responseId.val()) {
+            state.id = raw.responseId;
+        } else if (raw.id.val()) {
+            state.id = raw.id;
+        }
+        if (raw.model.val()) {
+            state.model = raw.model;
+        }
+        if (raw.usageMetadata.typeCode() == NT_HASH) {
+            state.usage = GeminiBodyShape::normalizeUsage(raw.usageMetadata);
+        } else if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = raw.usage;
+        }
+        *string finish_reason = raw.candidates[0].finishReason;
+        if (finish_reason.val()) {
+            state.finish_reason = state.tool_calls
+                ? "tool_calls" : GeminiBodyShape::finishReasonToOpenAi(finish_reason);
+        } else if (raw.choices[0].finish_reason.val()) {
+            state.finish_reason = raw.choices[0].finish_reason;
+        }
+    }
+
+    #! Harvests OpenAI-shaped \c tool_calls deltas from Gemini \c functionCall parts
+    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach hash<auto> part in (raw.candidates[0].content.parts ?? ()) {
+            if (!part.functionCall) {
+                continue;
+            }
+            int idx = state.tool_calls.size();
+            hash<auto> tc = {
+                "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
+                "type": "function",
+                "function": {
+                    "name": part.functionCall.name,
+                    "arguments": make_json(part.functionCall.args ?? {}),
+                },
+            };
+            state.tool_calls += tc;
+            streamed += {
+                "index": idx,
+                "id": tc.id,
+                "type": "function",
+                "function": tc.function,
+            };
+        }
+        return streamed;
+    }
+
+    #! Builds a generateContent request body, honoring per-call knobs and body_options
+    private hash<auto> buildModelBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<auto> output_schema,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> resolved = {
+            "max_output_tokens": getRequestMaxOutputTokens(opts),
+            "temperature": getRequestTemperature(opts),
+            "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
+        };
+        hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
+            output_schema, resolved);
+        return mergeRequestBodyOptions(body, opts);
+    }
+
+    #! Posts a generateContent request through the provider transport and returns the response
+    private hash<auto> postGenerate(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        ensureRestClient();
+        string path = getRequestPath(opts);
+        *hash<auto> hdr = getRequestHeaders(opts);
+        try {
+            return withRetry(hash<auto> sub () {
+                return rest_client.restPost(path, body, hdr);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR",
+                sprintf("%s request to %y failed: %s", getProviderLabel(), path,
+                    GeminiBodyShape::requestErrorDetail(ex)), ex;
+        }
+    }
+
+    #! Returns the lazily-initialized REST client (for subclass streaming overrides)
+    private *RestClientIo::RestClientIo getRestClient() {
+        return rest_client;
+    }
+
+    #! Lazy-initializes the REST client via @ref createRestClient()
+    private ensureRestClient() {
+        if (!rest_client) {
+            rest_mutex.lock();
+            on_exit rest_mutex.unlock();
+            if (!rest_client) {
+                rest_client = createRestClient();
+            }
+        }
+    }
 }
 }
