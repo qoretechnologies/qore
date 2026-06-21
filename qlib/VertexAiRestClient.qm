@@ -39,7 +39,7 @@
 %endtry
 
 module VertexAiRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "REST client and LLM provider for Google Vertex AI — Gemini-on-Vertex "
         "via the regional generateContent endpoint with service-account/ADC auth";
     author = "Qore Technologies, s.r.o.";
@@ -97,6 +97,9 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
       omitted, ADC resolution runs
     - \c gcp_scopes (optional): OAuth2 scopes (default
       \c "https://www.googleapis.com/auth/cloud-platform")
+    - \c gcp_quota_project_id (optional): billing/quota project sent as the
+      \c x-goog-user-project header; not required for the project-scoped
+      endpoints used here
 
     @par LlmBackendConfig consumed by @ref VertexAiLlmProvider
 
@@ -106,6 +109,8 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     - \c provider_options.gcp_region (optional): default \c "us-central1"
     - \c provider_options.gcp_sa_json_path (optional)
     - \c provider_options.gcp_scopes (optional)
+    - \c provider_options.gcp_quota_project_id (optional): billing/quota project
+      sent as the \c x-goog-user-project header
 
     @par Example
 
@@ -127,6 +132,12 @@ hash<ChatResponse> r = p.chat((
 
     @section vertexairestclientrelnotes Release Notes
 
+    @subsection vertexairestclient_v1_1 VertexAiRestClient v1.1
+    - added the optional \c gcp_quota_project_id provider/connection option,
+      sent as the \c x-goog-user-project header so quota and billing can be
+      attributed to a specific project (matches the official Google client
+      libraries); applies to both \c :generateContent and \c :predict requests
+
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release: Gemini-on-Vertex generateContent (chat + tools +
       multimodal), Gecko embeddings, ADC/SA authentication
@@ -139,6 +150,25 @@ public const DefaultRegion = "us-central1";
 
 #! Default OAuth2 scope for Vertex AI calls
 public const DefaultScopes = ("https://www.googleapis.com/auth/cloud-platform",);
+
+#! Builds Vertex AI request headers: the bearer token plus an optional quota project
+/** @param token the OAuth2 access token (without the \c "Bearer " prefix)
+    @param quota_project_id optional GCP billing/quota project; when set it is
+        sent as the \c x-goog-user-project header so quota and billing are
+        attributed to that project (matches the behavior of the official Google
+        client libraries when a credential has a \c quota_project_id).  Not
+        required for the project-scoped \c :generateContent / \c :predict
+        endpoints, where the project in the URL path is authoritative.
+
+    @return the request header hash
+*/
+public hash<auto> sub vertexAuthHeaders(string token, *string quota_project_id) {
+    hash<auto> hdr = {"Authorization": "Bearer " + token};
+    if (quota_project_id.val()) {
+        hdr."x-goog-user-project" = quota_project_id;
+    }
+    return hdr;
+}
 
 #! Vertex AI REST connection (registered under the \c "vertex-ai" scheme)
 public class VertexAiRestConnection inherits RestClient::RestConnection {
@@ -173,6 +203,16 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                     "desc": "Explicit path to a GCP service-account JSON file "
                         "for JWT-bearer auth; when omitted, Application "
                         "Default Credentials are used",
+                },
+                "gcp_quota_project_id": <ConnectionOptionInfo>{
+                    "display_name": "GCP Quota Project ID",
+                    "short_desc": "Billing/quota project for the x-goog-user-project header",
+                    "type": "string",
+                    "desc": "Optional GCP billing/quota project; when set it is "
+                        "sent as the x-goog-user-project header so quota and "
+                        "billing are attributed to that project. Not required "
+                        "for the project-scoped Vertex endpoints, where the "
+                        "project in the URL path is authoritative",
                 },
             },
         };
@@ -226,6 +266,7 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         string project_id;
         string region;
         *string sa_json_path;
+        *string quota_project_id;
         list<string> scopes;
     }
 
@@ -239,6 +280,7 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         project_id = p;
         region = config.provider_options.gcp_region ?? DefaultRegion;
         sa_json_path = config.provider_options.gcp_sa_json_path;
+        quota_project_id = config.provider_options.gcp_quota_project_id;
         list<auto> raw_scopes =
             config.provider_options.gcp_scopes ?? DefaultScopes;
         scopes = ();
@@ -345,7 +387,7 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
         string token = GcpAuth::getAccessToken(sa_json_path, scopes);
-        hash<auto> hdr = {"Authorization": "Bearer " + token};
+        hash<auto> hdr = vertexAuthHeaders(token, quota_project_id);
         string path = getVertexPath(opts);
         try {
             return withRetry(hash<auto> sub () {
@@ -428,6 +470,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         string region;
         *string sa_json_path;
         list<string> scopes;
+        *string quota_project_id;
         *RestClientIo::RestClientIo rest_client;
         Mutex rest_mutex();
         *int cached_dimension;
@@ -448,6 +491,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         project_id = p;
         region = config.options.gcp_region ?? DefaultRegion;
         sa_json_path = config.options.gcp_sa_json_path;
+        quota_project_id = config.options.gcp_quota_project_id;
         list<auto> raw_scopes = config.options.gcp_scopes ?? DefaultScopes;
         scopes = ();
         foreach auto s in (raw_scopes) {
@@ -482,7 +526,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         hash<auto> resp;
         try {
             resp = rest_client.restPost(path, body,
-                {"Authorization": "Bearer " + token});
+                vertexAuthHeaders(token, quota_project_id));
         } catch (hash<ExceptionInfo> ex) {
             throw "EMBEDDER-ERROR",
                 sprintf("Vertex AI :predict request for %y failed: %s",
