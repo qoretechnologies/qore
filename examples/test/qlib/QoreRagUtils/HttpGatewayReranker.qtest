@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  HttpGatewayReranker.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires QoreRagUtils
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class HttpGatewayRerankerTest
+
+class FakeGatewayRerankHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        Mutex m();
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> body_parsed = body.val() ? parse_json(body) : {};
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body_parsed,
+        };
+        if (cx.raw_path != "/ai/rerank") {
+            return makeResponse(404, "{\"detail\":\"Not Found\"}",
+                {"Content-Type": MimeTypeJson});
+        }
+
+        int request_num = requests.size();
+        list<hash<auto>> results = ();
+        for (int i = 0; i < body_parsed.documents.size(); ++i) {
+            push results, {
+                "index": i,
+                "score": request_num * 1000 + i,
+            };
+        }
+        return makeResponse(200, make_json({"results": results}),
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
+class HttpGatewayRerankerTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeGatewayRerankHandler handler;
+    }
+
+    constructor() : Test("HttpGatewayRerankerTest", "1.0") {
+        addTestCase("config validation", \testConfigValidation());
+        addTestCase("large catalogs are batched and merged", \testBatching());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        });
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        handler = new FakeGatewayRerankHandler();
+        http.setHandler("rr", "/", MimeTypeJson, handler);
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private string url() {
+        return "http://localhost:" + port;
+    }
+
+    private list<string> makeDocuments(int count) {
+        list<string> rv = ();
+        for (int i = 0; i < count; ++i) {
+            push rv, sprintf("doc-%03d", i);
+        }
+        return rv;
+    }
+
+    testConfigValidation() {
+        checkModule();
+
+        assertThrows("RERANKER-CONFIG-ERROR", "url", sub() {
+            new QoreRagUtils::HttpGatewayReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "gateway",
+            });
+        });
+
+        assertThrows("RERANKER-CONFIG-ERROR", "batch_size", sub() {
+            new QoreRagUtils::HttpGatewayReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "gateway",
+                "url": url(),
+                "batch_size": 0,
+            });
+        });
+    }
+
+    testBatching() {
+        checkModule();
+
+        list<string> docs = makeDocuments(120);
+        QoreRagUtils::HttpGatewayReranker rr =
+            new QoreRagUtils::HttpGatewayReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "gateway",
+                "url": url(),
+                "api_key": "secret",
+                "model": "rerank-test",
+                "batch_size": 50,
+            });
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank(
+            "q", docs, 4, {"vendor_option": True});
+
+        assertEq(3, handler.requests.size(), "120 docs split into 3 requests");
+        assertEq(50, handler.requests[0].body.documents.size());
+        assertEq(50, handler.requests[1].body.documents.size());
+        assertEq(20, handler.requests[2].body.documents.size());
+        assertEq("doc-000", handler.requests[0].body.documents[0]);
+        assertEq("doc-050", handler.requests[1].body.documents[0]);
+        assertEq("doc-100", handler.requests[2].body.documents[0]);
+        assertEq("Bearer secret", handler.requests[0].auth);
+        assertEq("rerank-test", handler.requests[0].body.model);
+        assertTrue(handler.requests[0].body.vendor_option);
+
+        assertEq(4, res.size(), "final top_k applied after merging batches");
+        assertEq(119, res[0].index);
+        assertEq("doc-119", res[0].document);
+        assertEq(118, res[1].index);
+        assertEq(117, res[2].index);
+        assertEq(116, res[3].index);
+    }
+}

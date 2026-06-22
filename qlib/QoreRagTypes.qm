@@ -315,6 +315,8 @@ public hashdecl RerankerConfig {
     *string url;
     #! Model name to send
     *string model;
+    #! Maximum documents sent per reranker request; default 50
+    int batch_size = 50;
     #! API key
     *string api_key;
     #! Free-form backend-specific options
