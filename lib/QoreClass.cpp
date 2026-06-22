@@ -65,7 +65,15 @@ static QoreProgram* qore_get_method_pgm_context(const QoreClass& cls, QoreProgra
     if (explicit_pgm) {
         return explicit_pgm;
     }
-    return c->ns ? c->ns->getProgram() : nullptr;
+    // No source Program and no explicit Program (e.g. a builtin/system class such as a Qorus
+    // UserApi/ServiceApi/JobApi imported into an interface Program): only switch into the namespace's
+    // Program if it is genuinely a *different* Program than the current one.  Returning it when it is
+    // the current Program makes the method-call CodeEvaluationHelper reset the active runtime parse
+    // options to that Program's base options, which wrongly drops a more-permissive active context and
+    // e.g. blocks a dom=THREAD_CONTROL builtin (get_thread_data()) the API calls on behalf of the
+    // interface.  Returning nullptr here matches the pre-AOT behavior (no Program switch).
+    QoreProgram* nspgm = c->ns ? c->ns->getProgram() : nullptr;
+    return (nspgm && nspgm != ::getProgram()) ? nspgm : nullptr;
 }
 
 QoreValue qore_method_private::evalNormalVariant(QoreObject* self, RuntimeConfig& rc,
