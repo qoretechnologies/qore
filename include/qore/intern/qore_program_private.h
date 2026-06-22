@@ -915,6 +915,14 @@ protected:
     //typedef std::map<const char*, AbstractQoreProgramExternalData*, ltstr> extmap_t;
     extmap_t extmap;
 
+    // objects captured from languages without deterministic garbage collection (e.g. jni, python);
+    // each is held with a strong reference and released when this program is torn down, so the
+    // captured objects' destructors run while the program is still valid (ptid == tid).  This makes
+    // object lifetime deterministic despite the foreign runtime's non-deterministic GC.
+    // protected by plock
+    typedef std::map<QoreObject*, int64> saved_obj_map_t;
+    saved_obj_map_t saved_objects;
+
     DLLLOCAL void setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options);
 
     // for independent programs (not inherited from another QoreProgram object)
@@ -2645,6 +2653,81 @@ public:
         AbstractQoreProgramExternalData* rv = i->second;
         extmap.erase(i);
         return rv;
+    }
+
+    // saves an object in this program's saved-object cache, holding a strong reference; the object
+    // will be released (its destructor run) when this program is torn down, while it is still valid.
+    // used to give deterministic lifetime to Qore objects created from languages without
+    // deterministic GC (jni, python).  a no-op if the object is already present.
+    DLLLOCAL void saveObject(QoreObject* obj) {
+        AutoLocker al(plock);
+        if (saved_objects.find(obj) == saved_objects.end()) {
+            obj->ref();
+            saved_objects.insert(saved_obj_map_t::value_type(obj, q_epoch()));
+        }
+    }
+
+    // removes an object from the saved-object cache and dereferences it; returns true if it was
+    // present
+    DLLLOCAL bool clearObject(QoreObject* obj, ExceptionSink* xsink) {
+        {
+            AutoLocker al(plock);
+            saved_obj_map_t::iterator i = saved_objects.find(obj);
+            if (i == saved_objects.end()) {
+                return false;
+            }
+            saved_objects.erase(i);
+        }
+        // deref outside the lock: the destructor may run user code that needs the program
+        obj->deref(xsink);
+        return true;
+    }
+
+    // clears the entire saved-object cache; returns the number of objects cleared
+    DLLLOCAL int clearSavedObjects(ExceptionSink* xsink) {
+        saved_obj_map_t tmp;
+        {
+            AutoLocker al(plock);
+            tmp.swap(saved_objects);
+        }
+        int rv = (int)tmp.size();
+        for (saved_obj_map_t::iterator i = tmp.begin(), e = tmp.end(); i != e; ++i) {
+            i->first->deref(xsink);
+        }
+        return rv;
+    }
+
+    // clears all saved objects cached at or before the given epoch (seconds); returns the count
+    DLLLOCAL int clearSavedObjectsBefore(int64 cutoff, ExceptionSink* xsink) {
+        std::vector<QoreObject*> to_deref;
+        {
+            AutoLocker al(plock);
+            for (saved_obj_map_t::iterator i = saved_objects.begin(), e = saved_objects.end(); i != e;) {
+                if (i->second <= cutoff) {
+                    to_deref.push_back(i->first);
+                    saved_objects.erase(i++);
+                } else {
+                    ++i;
+                }
+            }
+        }
+        for (size_t i = 0; i < to_deref.size(); ++i) {
+            to_deref[i]->deref(xsink);
+        }
+        return (int)to_deref.size();
+    }
+
+    // returns the number of objects in the saved-object cache
+    DLLLOCAL size_t getSavedObjectCount() const {
+        AutoLocker al(plock);
+        return saved_objects.size();
+    }
+
+    // returns the epoch (seconds) when the object was cached, or 0 if not present
+    DLLLOCAL int64 checkSavedObject(QoreObject* obj) const {
+        AutoLocker al(plock);
+        saved_obj_map_t::const_iterator i = saved_objects.find(obj);
+        return i == saved_objects.end() ? 0 : i->second;
     }
 
     DLLLOCAL QoreHashNode* getGlobalVars() const {

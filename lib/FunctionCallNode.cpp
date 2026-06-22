@@ -1035,9 +1035,17 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     if (!call_pgm) {
         call_pgm = rc.getProgram();
     }
+    // A deliberate cross-Program call - the node carries an explicit Program (e.g. a runtime
+    // QoreProgram::callFunction()) - defers the parse-options switch so the called function's
+    // functional-domain (dom=...) check is evaluated against the CALLER's parse options (the
+    // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
+    // dom check is evaluated against the function's own Program.
+    const bool defer_domain_po = (pgm != nullptr);
     return tmp_args
-        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation())
-        : func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation());
+        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
+            defer_domain_po)
+        : func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
+            defer_domain_po);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {

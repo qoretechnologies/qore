@@ -1109,6 +1109,11 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
 
+        // release objects captured from languages without deterministic GC (jni, python) while the
+        // program is still valid (data not yet cleared, ptid == tid), so their destructors run in a
+        // valid program context instead of failing against a half-destroyed program
+        clearSavedObjects(xsink);
+
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 
@@ -2665,7 +2670,12 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
         return QoreValue();
     }
 
-    // we assign the args to 0 below so that they will not be deleted
+    // Evaluate the call through the standard FunctionCallNode path with this (the target) Program
+    // bound as the call's Program: this is what correctly resolves the cross-Program context and parse
+    // options for every kind of target (user function defined in the target, Program-internal builtin
+    // like load_module() operating on the target, and privileged builtins like set_save_object_callback()
+    // invoked by a trusted caller on a sandboxed target).  Hand-rolling the parse-option handling here
+    // gets one of those cases wrong; the shared path handles all of them.
     fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
@@ -3021,6 +3031,10 @@ AbstractQoreProgramExternalData* QoreProgram::getExternalData(const char* owner)
 
 AbstractQoreProgramExternalData* QoreProgram::removeExternalData(const char* owner) {
    return priv->removeExternalData(owner);
+}
+
+void QoreProgram::saveObject(QoreObject* obj) {
+    priv->saveObject(obj);
 }
 
 QoreHashNode* QoreProgram::getGlobalVars() const {

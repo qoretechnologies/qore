@@ -948,7 +948,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -967,6 +967,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
+    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -974,7 +975,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
         QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info,
-        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation)
+        const QoreTypeParamInstantiation* n_explicit_type_param_instantiation, bool n_defer_domain_po)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
         tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
@@ -993,6 +994,7 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
         return;
     }
 
+    defer_domain_po = n_defer_domain_po;
     init(func, variant, is_copy, cctx, self, pgm_ctx);
 }
 
@@ -1064,15 +1066,23 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             return;
         }
         exec_pgm = pgm_ctx;
-        QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
-        if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
-            old_rc_po = rc.getParseOptions();
-            rc.setParseOptions(pgm_po);
-            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
-                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
-            restore_runtime_ctx = true;
-            if (*xsink) {
-                return;
+        // Unless this is a deliberate cross-Program QoreProgram::callFunction() (defer_domain_po),
+        // switch the runtime parse options to the called Program's now -- before the functional-domain
+        // check below -- so that method calls, call references, and closures evaluate the dom=... check
+        // against the Program where they run (their target/creation context).  For a cross-Program
+        // callFunction() the switch is deferred (see below) so the dom check is evaluated against the
+        // CALLER's options (the cross-Program privilege model).
+        if (!defer_domain_po) {
+            QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+            if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+                old_rc_po = rc.getParseOptions();
+                rc.setParseOptions(pgm_po);
+                swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                    old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+                restore_runtime_ctx = true;
+                if (*xsink) {
+                    return;
+                }
             }
         }
     }
@@ -1146,6 +1156,28 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         }
         if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {
             return;
+        }
+    }
+
+    // For a deliberate cross-Program callFunction() (defer_domain_po), the parse-options switch was
+    // deferred to here: call arguments were evaluated (in the constructor, in the CALLING context) and
+    // the variant + functional-domain (dom=...) check were resolved against the CALLING Program's parse
+    // options.  Now switch to the called Program's options for body execution.  This implements the
+    // cross-Program privilege model: a trusted caller (e.g. a Qorus UserApi method with privileged
+    // options) can invoke a privileged builtin (e.g. set_save_object_callback(), dom=PROCESS) on a
+    // sandboxed target Program, while the body itself still runs under the called Program's options (so
+    // e.g. load_module() registers into the target with the target's options).
+    if (pgm_ctx && defer_domain_po) {
+        QoreParseOptions pgm_po = pgm_ctx->getParseOptions();
+        if (pgm_ctx != old_pgm || runtime_get_parse_options() != pgm_po) {
+            old_rc_po = rc.getParseOptions();
+            rc.setParseOptions(pgm_po);
+            swap_runtime_statement_location(xsink, rc.getStatement(), rc.getLocation(), pgm_po,
+                old_runtime_stmt, old_runtime_ctx_loc, old_runtime_po);
+            restore_runtime_ctx = true;
+            if (*xsink) {
+                return;
+            }
         }
     }
 
@@ -4533,7 +4565,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 // identified at run time
 QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
 
     // issue #3027: catch recursive references during parse initialization
@@ -4557,7 +4589,7 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation);
+        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }
@@ -4568,12 +4600,12 @@ QoreValue QoreFunction::evalFunction(const AbstractQoreFunctionVariant* variant,
 // identified at run time
 QoreValue QoreFunction::evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
         QoreProgram *pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-        const QoreTypeParamInstantiation* explicit_type_param_instantiation) const {
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation, bool defer_domain_po) const {
     const char* fname = getName();
     // issue #3024: make the caller's call context available
     ProgramCallContextHelper pcch(pgm);
     CodeEvaluationHelper ceh(xsink, rc, this, variant, fname, args, nullptr, nullptr, CT_UNUSED, false, nullptr,
-        pgm, nullptr, explicit_type_param_instantiation);
+        pgm, nullptr, explicit_type_param_instantiation, defer_domain_po);
     if (*xsink) {
         return QoreValue();
     }

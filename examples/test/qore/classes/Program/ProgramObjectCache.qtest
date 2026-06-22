@@ -1,0 +1,111 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ProgramObjectCacheTest
+
+# code parsed into a child Program: a class whose destructor invokes a callback, so the test can
+# observe when the cached object is destroyed
+const InnerCode = "
+    class C {
+        private {
+            code cb;
+        }
+        constructor(code c) { cb = c; }
+        destructor() { cb(); }
+    }
+    C sub mk(code c) { return new C(c); }
+";
+
+public class ProgramObjectCacheTest inherits QUnit::Test {
+    constructor() : Test("ProgramObjectCacheTest", "1.0") {
+        addTestCase("object cache API", \objectCacheApiTest());
+        addTestCase("cross-program privilege", \crossProgramPrivilegeTest());
+        addTestCase("teardown release", \teardownReleaseTest());
+        set_return_value(main());
+    }
+
+    objectCacheApiTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(InnerCode, "inner");
+        auto o = p.callFunction("mk", sub () {});
+
+        assertEq(0, p.objectCacheSize());
+        assertNothing(p.checkObjectCache(o));
+
+        # save + dedup
+        p.saveObject(o);
+        assertEq(1, p.objectCacheSize());
+        assertEq(Qore::NT_DATE, p.checkObjectCache(o).typeCode());
+        p.saveObject(o);
+        assertEq(1, p.objectCacheSize(), "saving the same object twice is a no-op");
+
+        # remove one
+        assertTrue(p.clearObject(o));
+        assertEq(0, p.objectCacheSize());
+        assertFalse(p.clearObject(o), "removing an object not in the cache returns False");
+
+        # clear all
+        p.saveObject(o);
+        assertEq(1, p.clearObjectCache());
+        assertEq(0, p.objectCacheSize());
+
+        # clear by cutoff date
+        p.saveObject(o);
+        assertEq(0, p.clearObjectCache(now() - 1h), "objects newer than the cutoff are not cleared");
+        assertEq(1, p.objectCacheSize());
+        assertEq(1, p.clearObjectCache(now() + 1h), "objects older than the cutoff are cleared");
+        assertEq(0, p.objectCacheSize());
+    }
+
+    crossProgramPrivilegeTest() {
+        # Program::callFunction() sets the target Program as the context but does NOT override the
+        # caller's runtime parse options.  This is the Qorus privilege model: trusted parent code
+        # (full options) can invoke a privileged (dom=PROCESS) builtin on a sandboxed child Program
+        # on the interface's behalf, while untrusted child code cannot escalate.
+
+        # 1) trusted parent calling a dom=PROCESS builtin (setenv) on a sandboxed child -> allowed
+        #    (the functional-domain check uses the CALLER's/parent's parse options)
+        Program child(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        child.parse("nothing sub dummy() {}", "child");
+        assertEq(0, child.callFunction("setenv", "QORE_TEST_CROSSPGM", "1"));
+
+        # 2) untrusted child CODE cannot escalate: a function defined in the sandboxed child runs
+        #    with the child's restricted options, so its own callFunction() of a dom=PROCESS builtin
+        #    is rejected
+        Program child2(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        child2.parse("auto sub esc(Program p) { return p.callFunction('setenv', 'X', '1'); }", "child2");
+        Program target(PO_NEW_STYLE);
+        target.parse("nothing sub dummy() {}", "target");
+        assertThrows("INVALID-FUNCTION-ACCESS", \child2.callFunction(), ("esc", target));
+
+        # 3) a sandboxed Program cannot even parse dom=PROCESS code (the only escalation vector is
+        #    closed at parse time)
+        Program child3(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        assertThrows("PARSE-EXCEPTION", \child3.parse(), ("nothing sub bad() { setenv('X', '1'); }", "child3"));
+    }
+
+    teardownReleaseTest() {
+        # an object held only by the Program's object cache must have its destructor run when the
+        # Program is torn down, while the Program is still valid (deterministic lifetime)
+        int destroyed = 0;
+        code cb = sub () { ++destroyed; };
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(InnerCode, "inner");
+            auto o = p.callFunction("mk", cb);
+            p.saveObject(o);
+            remove o;
+            # only the program's object cache holds the object now; it must not be destroyed yet
+            assertEq(0, destroyed);
+            assertEq(1, p.objectCacheSize());
+        }
+        # the child Program went out of scope and was torn down; the cached object's destructor must
+        # have run exactly once (against a still-valid Program)
+        assertEq(1, destroyed, "cached object's destructor runs at Program teardown");
+    }
+}

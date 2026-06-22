@@ -459,7 +459,8 @@ public:
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool n_defer_domain_po = false);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -480,7 +481,8 @@ public:
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
             const QoreTypeInfo* explicit_receiver_type_info = nullptr,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool n_defer_domain_po = false);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -611,6 +613,13 @@ protected:
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
     bool restore_call_program_context = false;
+    // when true, defer switching the runtime parse options to the called Program until *after* argument
+    // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
+    // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse
+    // options (the cross-Program privilege model).  For everything else (direct calls, method calls,
+    // call references, closures) the switch happens before the dom check, so the check runs against the
+    // target/creation Program's options.
+    bool defer_domain_po = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
         const qore_class_private* cctx, QoreObject* self, QoreProgram* pgm_ctx);
@@ -1474,13 +1483,15 @@ public:
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool defer_domain_po = false) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
             QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
-            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr,
+            bool defer_domain_po = false) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
