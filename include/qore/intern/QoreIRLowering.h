@@ -487,14 +487,15 @@ private:
         //! emitBlockCleanups() uses it to skip the firing Scope entry so a
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
-        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar };
+        enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
+            ForeachElement };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
-        QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord
+        QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
