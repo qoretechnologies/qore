@@ -35,7 +35,7 @@
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
-    version = "3.0";
+    version = "3.1";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -128,6 +128,17 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @endverbatim
 
     @section connectionproviderrelnotes Release Notes
+
+    @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - the HTTP connection \c ssl_cert_path and \c ssl_key_path options are now
+      declared as \c "file-as-string" + \c freeform, advertising that the value
+      (already resolved with \c FileLocationHandler) may be a bare path or any
+      registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
+    - the HTTP connection \c ssl_key_data option (X.509 private key material) is
+      now marked \c sensitive so it is masked in user interfaces and logs
+    - the HTTP connection \c negotiate_keytab option is no longer marked
+      \c sensitive; it is a keytab file location (not secret material, which lives
+      in the keytab file itself), consistent with the other file-location options
 
     @subsection connectionprovider_3_0 ConnectionProvider 3.0
     - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()

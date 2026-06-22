@@ -53,12 +53,14 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
                 "short_desc": "Sets the OAuth2 client secret",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The OAuth2 client secret",
+                "sensitive": True,
             },
             "oauth2_refresh_token": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Refresh Token",
                 "short_desc": "Sets the OAuth2 refresh token",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The OAuth2 refresh token, if known; complements option `token`",
+                "sensitive": True,
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "Authorization Token",
@@ -68,6 +70,7 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
                     "`Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; "
                     "this option cannot be used with `username` and `password` options or authentication information "
                     "in the URL; if this option is set then most OAuth2 options are ignored for logins",
+                "sensitive": True,
             },
         };
     }

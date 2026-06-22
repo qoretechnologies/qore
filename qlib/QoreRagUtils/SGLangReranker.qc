@@ -38,6 +38,7 @@ public namespace QoreRagUtils {
     - \c model (optional): served reranker model name, sent in the request body
     - \c api_key (optional): bearer token for SGLang deployments with
       authentication enabled
+    - \c batch_size (optional, default 50): maximum documents sent per request
 
     @note Reuses the same \c /v1/rerank wire contract and response parsing as the
     @ref QoreTokenizerUtils::CrossEncoderReranker "CrossEncoderReranker" engine,
@@ -62,6 +63,10 @@ public class SGLangReranker inherits AbstractReranker {
         if (!config.url.val()) {
             throw "RERANKER-CONFIG-ERROR",
                 "SGLangReranker requires 'url' in RerankerConfig";
+        }
+        if (config.batch_size < 1) {
+            throw "RERANKER-CONFIG-ERROR",
+                sprintf("batch_size must be at least 1, got %d", config.batch_size);
         }
         self.config = config;
     }
@@ -110,6 +115,7 @@ public class SGLangReranker inherits AbstractReranker {
                         "url": config.url,
                         "model": config.model,
                         "api_key": config.api_key,
+                        "batch_size": config.batch_size,
                     });
             }
         }

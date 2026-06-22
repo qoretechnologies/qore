@@ -33,9 +33,11 @@ public namespace EdifactUtil {
             #! Constructor options
             const ConstructorOptions = {
                 "path": <DataProviderOptionInfo>{
-                    "display_name": "File Path",
-                    "short_desc": "The path to the EDIFACT file to read",
-                    "type": AbstractDataProviderTypeMap."string",
+                    "display_name": "File Location",
+                    "short_desc": "The location of the EDIFACT file to read",
+                    "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                        DTT_FromLocation: True,
+                    }),
                     "desc": "The absolute or relative path to the EDIFACT file. Supports standard file "
                         "location syntax including file://, sftp://, etc.",
                     "required": True,

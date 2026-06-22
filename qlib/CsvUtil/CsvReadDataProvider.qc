@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Qore CsvReadDataProvider class definition
 
-/*  CsvReadDataProvider.qc Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  CsvReadDataProvider.qc Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,9 +43,11 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
         #! Constructor options
         const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
-                "display_name": "CSV Input Path",
-                "short_desc": "The path to the input file",
-                "type": AbstractDataProviderTypeMap."string",
+                "display_name": "CSV Input Location",
+                "short_desc": "The location of the input file",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
                 "desc": "The location of the CSV data; conflicts with `stream` and `data`; resolved with a call to "
                     "[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/"
                     "current/qore/modules/FileLocationHandler/html/"

@@ -36,6 +36,7 @@ public class FirecrawlDataProviderBase inherits DataProvider::AbstractDataProvid
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Firecrawl API key used for authentication; sent as the "
                     "`Authorization: Bearer` header",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

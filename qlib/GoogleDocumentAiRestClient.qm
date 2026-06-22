@@ -177,12 +177,16 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
                     "default_value": DefaultRegion,
                 },
                 "gcp_sa_json_path": <ConnectionOptionInfo>{
-                    "display_name": "Service-Account JSON Path",
-                    "short_desc": "Path to a service-account JSON key file",
-                    "type": "string",
-                    "desc": "Explicit path to a GCP service-account JSON file "
-                        "for JWT-bearer auth.  When omitted, Application Default "
-                        "Credentials are used.",
+                    "display_name": "Service-Account JSON Location",
+                    "short_desc": "Location of a service-account JSON key file",
+                    "type": "file-as-string",
+                    "desc": "Location of a GCP service-account JSON file for "
+                        "JWT-bearer auth; processed with "
+                        "`FileLocationHandler::getTextFileFromLocation()`, so it may "
+                        "be a bare path or any registered scheme (ex: "
+                        "`file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When "
+                        "omitted, Application Default Credentials are used.",
+                    "freeform": True,
                 },
             },
             "required_options": "gcp_project_id",

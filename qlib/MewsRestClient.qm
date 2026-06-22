@@ -312,6 +312,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The Mews account token for access to the given Mews instance",
                     "type": "string",
                     "desc": "The Mews account token for access to the given Mews instance",
+                    "sensitive": True,
                 },
                 "client": <ConnectionOptionInfo>{
                     "display_name": "Mews Client",
@@ -325,6 +326,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The Mews client token for access to the given Mews instance",
                     "type": "string",
                     "desc": "The Mews client token for access to the given Mews instance",
+                    "sensitive": True,
                 },
                 "ping_body": RestConnection::ConnectionScheme.options.ping_body + <ConnectionOptionInfo>{
                     "default_value": DefaultMewsPingBody,

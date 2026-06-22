@@ -52,6 +52,18 @@ class FakeRerankHandler inherits AbstractHttpRequestHandler {
                 {"Content-Type": MimeTypeJson});
         }
         int code = resp.code ?? 200;
+        if (resp.dynamic == "request-index-scores") {
+            int request_num = requests.size();
+            list<hash<auto>> results = ();
+            for (int i = 0; i < body_parsed.documents.size(); ++i) {
+                push results, {
+                    "index": i,
+                    "score": request_num * 1000 + i,
+                };
+            }
+            return makeResponse(code, make_json(results),
+                {"Content-Type": MimeTypeJson});
+        }
         string body_out = resp.body.typeCode() == NT_STRING
             ? resp.body
             : make_json(resp.body);
@@ -79,6 +91,8 @@ class SGLangRerankerTest inherits QUnit::Test {
         addTestCase("SGLangReranker backend ordering + score fidelity",
             \testBackendOrdering());
         addTestCase("SGLangReranker backend top_k truncation", \testBackendTruncation());
+        addTestCase("SGLangReranker backend batches large catalogs",
+            \testBackendBatching());
         addTestCase("SGLangReranker backend empty docs issues no call",
             \testBackendEmpty());
         addTestCase("registry resolves backend:sglang", \testRegistryResolution());
@@ -129,12 +143,24 @@ class SGLangRerankerTest inherits QUnit::Test {
         return new QoreTokenizerUtils::CrossEncoderReranker(cfg);
     }
 
-    private QoreRagUtils::SGLangReranker makeBackend() {
-        return new QoreRagUtils::SGLangReranker(<QoreRagUtils::RerankerConfig>{
+    private QoreRagUtils::SGLangReranker makeBackend(*int batch_size) {
+        hash<QoreRagUtils::RerankerConfig> cfg = <QoreRagUtils::RerankerConfig>{
             "backend": "sglang",
             "url": url(),
             "model": "bge-reranker-v2-m3",
-        });
+        };
+        if (exists batch_size) {
+            cfg.batch_size = batch_size;
+        }
+        return new QoreRagUtils::SGLangReranker(cfg);
+    }
+
+    private list<string> makeDocuments(int count) {
+        list<string> rv = ();
+        for (int i = 0; i < count; ++i) {
+            push rv, sprintf("doc-%03d", i);
+        }
+        return rv;
     }
 
     # canned response: charlie(2) most relevant, then alpha(0), then bravo(1)
@@ -175,6 +201,23 @@ class SGLangRerankerTest inherits QUnit::Test {
         assertThrows("RERANKER-CONFIG-ERROR", "url", sub() {
             new QoreRagUtils::SGLangReranker(<QoreRagUtils::RerankerConfig>{
                 "backend": "sglang",
+            });
+        });
+
+        assertThrows("RERANKER-CONFIG-ERROR", "batch_size", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{
+                    "mode": "sglang",
+                    "url": url(),
+                    "batch_size": 0,
+                });
+        });
+
+        assertThrows("RERANKER-CONFIG-ERROR", "batch_size", sub() {
+            new QoreRagUtils::SGLangReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "sglang",
+                "url": url(),
+                "batch_size": 0,
             });
         });
     }
@@ -315,6 +358,38 @@ class SGLangRerankerTest inherits QUnit::Test {
         assertEq(2, res.size(), "top_k truncates to 2");
         assertEq(2, res[0].index, "best survives truncation");
         assertEq(0, res[1].index);
+    }
+
+    testBackendBatching() {
+        checkModule();
+        installHandler({
+            "/v1/rerank": {
+                "code": 200,
+                "dynamic": "request-index-scores",
+            },
+        });
+
+        list<string> docs = makeDocuments(120);
+        QoreRagUtils::SGLangReranker rr = makeBackend(50);
+        list<hash<QoreRagUtils::RerankResult>> res = rr.rerank("q", docs, 4);
+
+        assertEq(3, handler.requests.size(), "120 docs split into 3 requests");
+        assertEq(50, handler.requests[0].body.documents.size(),
+            "first batch size");
+        assertEq(50, handler.requests[1].body.documents.size(),
+            "second batch size");
+        assertEq(20, handler.requests[2].body.documents.size(),
+            "last batch size");
+        assertEq("doc-000", handler.requests[0].body.documents[0]);
+        assertEq("doc-050", handler.requests[1].body.documents[0]);
+        assertEq("doc-100", handler.requests[2].body.documents[0]);
+
+        assertEq(4, res.size(), "final top_k applied after merging batches");
+        assertEq(119, res[0].index);
+        assertEq("doc-119", res[0].document);
+        assertEq(118, res[1].index);
+        assertEq(117, res[2].index);
+        assertEq(116, res[3].index);
     }
 
     testBackendEmpty() {

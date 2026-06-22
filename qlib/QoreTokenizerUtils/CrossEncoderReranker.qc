@@ -69,6 +69,8 @@ public hashdecl RerankerConfig {
     int connect_timeout_ms = 10000;
     #! HTTP request timeout in milliseconds; default 60000
     int timeout_ms = 60000;
+    #! HTTP / SGLang mode: maximum passages sent per rerank request; default 50
+    int batch_size = 50;
 }
 
 #! Cross-encoder re-ranker for two-stage retrieval
@@ -81,6 +83,10 @@ public hashdecl RerankerConfig {
     - \b HTTP: Calls a reranker API endpoint that accepts query/passages pairs
     - \b ONNX: Runs a local ONNX cross-encoder model through dense tensor inputs
     - \b SGLang: Calls an SGLang reranker server's \c /v1/rerank endpoint (query/documents)
+
+    HTTP and SGLang modes split large candidate lists into request batches
+    controlled by \c batch_size (default 50) and return scores in the original
+    input order.
 
     @par Example: Re-rank retrieval candidates
     @code{.py}
@@ -112,6 +118,8 @@ public class CrossEncoderReranker {
         #! HTTP timeouts
         int connect_timeout_ms;
         int timeout_ms;
+        #! Maximum candidate passages sent per HTTP / SGLang request
+        int request_batch_size;
         #! Maximum sequence length for ONNX mode
         int max_length;
         #! Activation function for ONNX scoring
@@ -153,6 +161,11 @@ public class CrossEncoderReranker {
             model = config.model;
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
+            if (config.batch_size < 1) {
+                throw "RERANKER-CONFIG-ERROR",
+                    sprintf("batch_size must be at least 1, got %d", config.batch_size);
+            }
+            request_batch_size = config.batch_size;
         } else if (mode == "onnx") {
             if (!config.model_path.val() && !exists config.model_data) {
                 throw "RERANKER-CONFIG-ERROR",
@@ -404,6 +417,22 @@ public class CrossEncoderReranker {
 
     #! Scores via HTTP endpoint
     private list<float> scoreHttp(string query, list<string> passages) {
+        if (passages.size() <= request_batch_size) {
+            return scoreHttpBatch(query, passages);
+        }
+
+        list<float> rv = ();
+        for (int offset = 0; offset < passages.size(); offset += request_batch_size) {
+            int end = min(offset + request_batch_size, passages.size());
+            foreach float score in (scoreHttpBatch(query, passages[offset .. end - 1])) {
+                push rv, score;
+            }
+        }
+        return rv;
+    }
+
+    #! Scores one HTTP request batch
+    private list<float> scoreHttpBatch(string query, list<string> passages) {
         ensureRestClient();
 
         # Standard reranker API format (compatible with most reranker services)
@@ -421,17 +450,30 @@ public class CrossEncoderReranker {
 
         # handle response format: {"scores": [float, ...]}
         if (exists resp.body.scores) {
+            if (resp.body.scores.size() != passages.size()) {
+                throw "RERANKER-ERROR",
+                    sprintf("HTTP reranker returned %d scores for %d passages",
+                        resp.body.scores.size(), passages.size());
+            }
             return resp.body.scores;
         }
 
         # alternative format: {"results": [{"index": N, "relevance_score": F}, ...]}
         if (exists resp.body.results) {
-            # sort results by index to match input order
-            list<hash<auto>> results = sort(resp.body.results,
-                int sub(hash<auto> a, hash<auto> b) {
-                    return a."index" <=> b."index";
-                });
-            return map $1.relevance_score, results;
+            list<float> scores = ();
+            for (int i = 0; i < passages.size(); ++i) {
+                push scores, 0.0;
+            }
+            foreach hash<auto> hit in (resp.body.results) {
+                int idx = hit."index";
+                if (idx < 0 || idx >= passages.size()) {
+                    throw "RERANKER-ERROR",
+                        sprintf("HTTP reranker returned out-of-range index %d for %d "
+                            "passages", idx, passages.size());
+                }
+                scores[idx] = (hit.relevance_score ?? hit.score ?? 0.0).toFloat();
+            }
+            return scores;
         }
 
         throw "RERANKER-ERROR", "unexpected response format from reranker endpoint";
@@ -451,6 +493,22 @@ public class CrossEncoderReranker {
         index is out of range
     */
     private list<float> scoreSglang(string query, list<string> passages) {
+        if (passages.size() <= request_batch_size) {
+            return scoreSglangBatch(query, passages);
+        }
+
+        list<float> rv = ();
+        for (int offset = 0; offset < passages.size(); offset += request_batch_size) {
+            int end = min(offset + request_batch_size, passages.size());
+            foreach float score in (scoreSglangBatch(query, passages[offset .. end - 1])) {
+                push rv, score;
+            }
+        }
+        return rv;
+    }
+
+    #! Scores one SGLang request batch
+    private list<float> scoreSglangBatch(string query, list<string> passages) {
         ensureRestClient();
 
         hash<auto> body = {

@@ -132,14 +132,18 @@ public class QoreChunkTextProcessor inherits AbstractDataProviderMLProcessor {
                 ),
             },
             "tokenizer_config_path": <DataProviderOptionInfo>{
-                "display_name": "Tokenizer Config Path",
-                "short_desc": "Path to HuggingFace tokenizer.json file",
-                "desc": "The filesystem path to a HuggingFace `tokenizer.json` configuration "
-                    "file. This file defines the vocabulary and tokenization rules used to "
+                "display_name": "Tokenizer Config Location",
+                "short_desc": "Location of a HuggingFace tokenizer.json file",
+                "desc": "The location of a HuggingFace `tokenizer.json` configuration "
+                    "file, read with `FileLocationHandler::getTextFileFromLocation()` (a "
+                    "bare path or any registered scheme: `file://`, `http(s)://`, `sftp://`, "
+                    "...). This file defines the vocabulary and tokenization rules used to "
                     "measure chunk boundaries accurately for a specific model. Provide either "
                     "this option or `tokenizer_model_name` to load the tokenizer from "
                     "QoreModelRegistry.",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
             },
             "tokenizer_model_name": <DataProviderOptionInfo>{
                 "display_name": "Tokenizer Model Name",
@@ -371,7 +375,8 @@ public class QoreChunkTextProcessor inherits AbstractDataProviderMLProcessor {
                 tokenizer_config = tokenizer_package.tokenizer_json;
                 tokenizer_runtime_config = tokenizer_package.tokenizer_config;
             } else {
-                tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+                tokenizer_config =
+                    parse_json(FileLocationHandler::getTextFileFromLocation(tokenizer_config_path));
             }
             chunker = new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {
                 "chunk_size": chunk_size,

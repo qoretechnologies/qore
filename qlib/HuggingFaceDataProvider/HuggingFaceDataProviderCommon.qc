@@ -43,6 +43,7 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Hugging Face API token used for authentication; sent as the "
                     "`Authorization: Bearer` header",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

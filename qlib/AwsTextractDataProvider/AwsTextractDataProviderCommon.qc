@@ -41,7 +41,6 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "AWS access key ID.  Optional — when omitted, the AWS "
                     "credential chain (env, ECS task role, IMDSv2) is used.",
-                "sensitive": True,
             },
             "aws_secret": <DataProviderOptionInfo>{
                 "display_name": "AWS Secret Access Key",

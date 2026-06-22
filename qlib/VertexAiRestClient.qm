@@ -39,7 +39,7 @@
 %endtry
 
 module VertexAiRestClient {
-    version = "1.1";
+    version = "1.0";
     desc = "REST client and LLM provider for Google Vertex AI — Gemini-on-Vertex "
         "via the regional generateContent endpoint with service-account/ADC auth";
     author = "Qore Technologies, s.r.o.";
@@ -132,23 +132,21 @@ hash<ChatResponse> r = p.chat((
 
     @section vertexairestclientrelnotes Release Notes
 
-    @subsection vertexairestclient_v1_1 VertexAiRestClient v1.1
-    - added the optional \c gcp_quota_project_id provider/connection option,
-      sent as the \c x-goog-user-project header so quota and billing can be
-      attributed to a specific project (matches the official Google client
-      libraries); applies to both \c :generateContent and \c :predict requests
-    - request failures now surface the upstream Vertex error message and status
-      (from the response body) instead of only the bare HTTP status, so the cause
-      of a rejection (e.g. an unsupported tool-schema field) is visible
-    - fixed OpenAI-compatible request handling: an OpenAI \c tool_choice is now
-      translated to Vertex's \c toolConfig (previously it leaked through as a raw
-      field and Vertex rejected the request with HTTP 400), \c response_format
-      \c json_schema is routed to the request output schema, and passthrough
-      \c generationConfig options are deep-merged — matching GeminiRestClient
-
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release: Gemini-on-Vertex generateContent (chat + tools +
-      multimodal), Gecko embeddings, ADC/SA authentication
+      multimodal), Gecko embeddings, and ADC/service-account authentication via
+      @ref gcpauthintro "GcpAuth"
+    - the optional \c gcp_quota_project_id provider/connection option is sent as
+      the \c x-goog-user-project header so quota and billing can be attributed to
+      a specific project (matches the official Google client libraries); applies
+      to both \c :generateContent and \c :predict requests
+    - request failures surface the upstream Vertex error message and status (from
+      the response body) instead of only the bare HTTP status, so the cause of a
+      rejection (e.g. an unsupported tool-schema field) is visible
+    - OpenAI-compatible request handling: an OpenAI \c tool_choice is translated
+      to Vertex's \c toolConfig, \c response_format \c json_schema is routed to the
+      request output schema, and passthrough \c generationConfig options are
+      deep-merged — matching GeminiRestClient
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
@@ -205,12 +203,16 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                     "default_value": DefaultRegion,
                 },
                 "gcp_sa_json_path": <ConnectionOptionInfo>{
-                    "display_name": "Service-Account JSON Path",
-                    "short_desc": "Path to a service-account JSON key file",
-                    "type": "string",
-                    "desc": "Explicit path to a GCP service-account JSON file "
-                        "for JWT-bearer auth; when omitted, Application "
-                        "Default Credentials are used",
+                    "display_name": "Service-Account JSON Location",
+                    "short_desc": "Location of a service-account JSON key file",
+                    "type": "file-as-string",
+                    "desc": "Location of a GCP service-account JSON file for "
+                        "JWT-bearer auth; processed with "
+                        "`FileLocationHandler::getTextFileFromLocation()`, so it may "
+                        "be a bare path or any registered scheme (ex: "
+                        "`file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`); when "
+                        "omitted, Application Default Credentials are used",
+                    "freeform": True,
                 },
                 "gcp_quota_project_id": <ConnectionOptionInfo>{
                     "display_name": "GCP Quota Project ID",

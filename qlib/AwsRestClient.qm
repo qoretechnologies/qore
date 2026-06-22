@@ -1006,6 +1006,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
                     "short_desc": "A temporary session token",
                     "type": "string",
                     "desc": "A temporary session token from AWS Security Token Service for this HTTP session",
+                    "sensitive": True,
                 },
             },
             "required_options": foldl $1 + "," + $2, AwsRestClientBase::RequiredOptions,

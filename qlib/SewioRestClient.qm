@@ -264,6 +264,7 @@ public class SewioRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The Sewio RTLS Studio API key",
                     "type": "string",
                     "desc": "The Sewio RTLS Studio API key",
+                    "sensitive": True,
                 },
             },
             "required_options": foldl $1 + "," + $2, SewioRestClientBase::RequiredOptions,

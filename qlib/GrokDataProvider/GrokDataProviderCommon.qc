@@ -84,6 +84,7 @@ public class GrokDataProviderCommon inherits DataProvider::AbstractDataProvider 
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The xAI Grok API key used for Bearer authentication.\n\n"
                     "Get your API key from the [xAI Console](https://console.x.ai/)",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

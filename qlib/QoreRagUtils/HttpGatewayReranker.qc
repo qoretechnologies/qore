@@ -32,6 +32,7 @@ public namespace QoreRagUtils {
     - \c url (required): gateway base URL (the \c /ai/rerank path is appended)
     - \c api_key (optional): sent as \c Authorization: \c Bearer
     - \c model (optional): forwarded in the request body
+    - \c batch_size (optional, default 50): maximum documents sent per request
 
     @par Expected response shape
     @code{.unparsed}
@@ -53,6 +54,8 @@ public class HttpGatewayReranker inherits AbstractReranker {
         *RestClientIo::RestClientIo rest_client;
         #! Guard for lazy initialization
         Mutex init_mutex();
+        #! Maximum documents sent per gateway rerank request
+        int batch_size;
     }
 
     #! Creates the reranker
@@ -65,7 +68,12 @@ public class HttpGatewayReranker inherits AbstractReranker {
             throw "RERANKER-CONFIG-ERROR",
                 "HttpGatewayReranker requires 'url' in RerankerConfig";
         }
+        if (config.batch_size < 1) {
+            throw "RERANKER-CONFIG-ERROR",
+                sprintf("batch_size must be at least 1, got %d", config.batch_size);
+        }
         self.config = config;
+        batch_size = config.batch_size;
     }
 
     #! Re-ranks a list of documents against a query and returns the top-K
@@ -81,9 +89,43 @@ public class HttpGatewayReranker inherits AbstractReranker {
         if (!documents) {
             return ();
         }
+        if (top_k <= 0) {
+            return ();
+        }
+        if (documents.size() <= batch_size) {
+            return rerankBatch(query, documents, top_k, opts, 0);
+        }
+
+        list<hash<RerankResult>> rv = ();
+        for (int offset = 0; offset < documents.size(); offset += batch_size) {
+            int end = min(offset + batch_size, documents.size());
+            foreach hash<RerankResult> hit in (rerankBatch(query,
+                    documents[offset .. end - 1], min(top_k, end - offset), opts,
+                    offset)) {
+                push rv, hit;
+            }
+        }
+
+        rv = sort(rv, int sub(hash<RerankResult> a, hash<RerankResult> b) {
+            return b.score <=> a.score;
+        });
+        if (!rv) {
+            return ();
+        }
+        return rv[0 .. min(top_k, rv.size()) - 1];
+    }
+
+    #! Re-ranks one gateway request batch and translates indices to the caller's document list
+    private list<hash<RerankResult>> rerankBatch(string query, list<string> documents, int top_k,
+            *hash<auto> opts, int offset) {
         ensureRestClient();
 
-        hash<auto> body = opts ?? {};
+        hash<auto> body = {};
+        if (opts) {
+            foreach hash<auto> opt in (opts.pairIterator()) {
+                body{opt.key} = opt.value;
+            }
+        }
         body."query" = query;
         body."documents" = documents;
         body."top_k" = top_k;
@@ -102,11 +144,16 @@ public class HttpGatewayReranker inherits AbstractReranker {
         list<hash<RerankResult>> rv = ();
         foreach hash<auto> item in (results) {
             int idx = item."index";
+            if (idx < 0 || idx >= documents.size()) {
+                throw "RERANKER-ERROR",
+                    sprintf("gateway reranker returned out-of-range index %d for %d "
+                        "documents", idx, documents.size());
+            }
             string doc = item.document.typeCode() == NT_STRING
                 ? item.document
                 : documents[idx];
             push rv, <RerankResult>{
-                "index": idx,
+                "index": idx + offset,
                 "score": item.score.toFloat(),
                 "document": doc,
             };

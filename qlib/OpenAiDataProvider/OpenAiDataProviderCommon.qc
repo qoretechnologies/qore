@@ -116,6 +116,7 @@ public class OpenAiDataProviderCommon inherits DataProvider::AbstractDataProvide
                 "short_desc": "The API key required to communicate with OpenAi servers",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The API key required to communicate with OpenAi servers",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

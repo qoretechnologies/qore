@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FixedLengthReadDataProvider.qc Qore user module for working with files with fixed lines length
 
-/*  FixedLengthReadDataProvider Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  FixedLengthReadDataProvider Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -43,9 +43,11 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
         #! Constructor options
         const hash<string, hash<DataProviderOptionInfo>> ConstructorOptions = {
             "path": <DataProviderOptionInfo>{
-                "display_name": "Input Path",
-                "short_desc": "The path to the input file",
-                "type": AbstractDataProviderType::get(StringType),
+                "display_name": "Input Location",
+                "short_desc": "The location of the input file",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
                 "desc": "The path to the fixed-length data; mutually exclusive with \"stream\"; resolved with a call "
                     "to "
                     "[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/"

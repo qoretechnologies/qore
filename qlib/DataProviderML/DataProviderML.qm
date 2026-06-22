@@ -40,9 +40,10 @@
 %requires QoreGuardrails
 %requires QoreOcrUtils
 %requires QoreVisionExtraction
+%requires FileLocationHandler
 
 module DataProviderML {
-    version = "1.4.0";
+    version = "1.5.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1946,6 +1947,14 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
     @endcode
 
     @section dataproviderml_relnotes Release Notes
+
+    @subsection dataproviderml_v1_5 DataProviderML v1.5
+    - the \c tokenizer_config_path option of the tokenization, chunking, embedding,
+      re-ranking, and semantic-chunking processors is now read as a
+      @ref filelocationhandlerintro "FileLocationHandler" location, so the
+      \c tokenizer.json may be a bare filesystem path or any registered scheme
+      (\c file://, \c http(s)://, \c sftp://, ...); the data-provider option is
+      tagged @ref DataProvider::DTT_FromLocation "DTT_FromLocation"
 
     @subsection dataproviderml_v1_4 DataProviderML v1.4
     - Tokenization, chunking, embedding, re-ranking, and semantic chunking processors

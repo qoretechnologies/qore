@@ -122,7 +122,6 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "type": "string",
                 "desc": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
                 "subst_env_vars": True,
-                "sensitive": True,
             },
             "negotiate_credential_cache": <ConnectionOptionInfo>{
                 "display_name": "Kerberos Credential Cache",
@@ -306,9 +305,12 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "ssl_cert_path": <ConnectionOptionInfo>{
                     "display_name": "SSL Certificate Location",
                     "short_desc": "The location of the X.509 client certificate to use",
-                    "type": "string",
-                    "desc": "The location of a X.509 client certificate file in PEM format",
+                    "type": "file-as-string",
+                    "desc": "The location of a X.509 client certificate file in PEM format; "
+                        "processed with `FileLocationHandler`, so it may be a bare path or "
+                        "any registered scheme (`file://`, `http(s)://`, `sftp://`, ...)",
                     "subst_env_vars": True,
+                    "freeform": True,
                 },
                 "ssl_key_password": <ConnectionOptionInfo>{
                     "display_name": "SSL Key Password",
@@ -323,13 +325,18 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                     "type": "data",
                     "desc": "The X.509 private key data in PEM format (string) or in DER format (binary); if this "
                         "option is set, then `ssl_key_path` is ignored",
+                    "sensitive": True,
                 },
                 "ssl_key_path": <ConnectionOptionInfo>{
                     "display_name": "SSL Key Location",
                     "short_desc": "The location of the private key file",
-                    "type": "string",
-                    "desc": "The location to a private key file in PEM format for the X.509 client certificate",
+                    "type": "file-as-string",
+                    "desc": "The location of a private key file in PEM format for the X.509 "
+                        "client certificate; processed with `FileLocationHandler`, so it may "
+                        "be a bare path or any registered scheme (`file://`, `http(s)://`, "
+                        "`sftp://`, ...)",
                     "subst_env_vars": True,
+                    "freeform": True,
                 },
                 "ssl_verify_cert": <ConnectionOptionInfo>{
                     "display_name": "SSL Verify Certificate",

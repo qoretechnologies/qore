@@ -36,7 +36,6 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
                 "short_desc": "The OAuth2 client ID for Microsoft Graph API",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The OAuth2 client ID from your Azure app registration",
-                "sensitive": True,
             },
             "oauth2_client_secret": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client Secret",

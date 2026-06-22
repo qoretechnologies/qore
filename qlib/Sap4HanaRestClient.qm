@@ -252,6 +252,7 @@ public class Sap4HanaRestConnection inherits RestClient::RestConnection {
                     "short_desc": "The SAP S/4 Hana API key",
                     "type": "string",
                     "desc": "The SAP S/4 Hana API key",
+                    "sensitive": True,
                 },
                 "client_id": RestConnection::ConnectionScheme.options.oauth2_client_id,
                 "client_secret": RestConnection::ConnectionScheme.options.oauth2_client_secret,
