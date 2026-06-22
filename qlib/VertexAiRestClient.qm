@@ -137,6 +137,14 @@ hash<ChatResponse> r = p.chat((
       sent as the \c x-goog-user-project header so quota and billing can be
       attributed to a specific project (matches the official Google client
       libraries); applies to both \c :generateContent and \c :predict requests
+    - request failures now surface the upstream Vertex error message and status
+      (from the response body) instead of only the bare HTTP status, so the cause
+      of a rejection (e.g. an unsupported tool-schema field) is visible
+    - fixed OpenAI-compatible request handling: an OpenAI \c tool_choice is now
+      translated to Vertex's \c toolConfig (previously it leaked through as a raw
+      field and Vertex rejected the request with HTTP 400), \c response_format
+      \c json_schema is routed to the request output schema, and passthrough
+      \c generationConfig options are deep-merged — matching GeminiRestClient
 
     @subsection vertexairestclient_v1_0 VertexAiRestClient v1.0
     - initial release: Gemini-on-Vertex generateContent (chat + tools +
@@ -255,14 +263,12 @@ string sub ensureVertexUrl(string url, *hash<auto> options) {
     Streaming and Claude-on-Vertex / Llama-on-Vertex via \c :rawPredict are
     follow-ups; v1 ships with non-streaming Gemini support.
 */
-public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProvider {
     public {
         const DefaultModel = "gemini-2.0-flash";
     }
 
     private {
-        *RestClientIo::RestClientIo rest_client;
-        Mutex rest_mutex();
         string project_id;
         string region;
         *string sa_json_path;
@@ -271,7 +277,7 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
-            : QoreLlmUtils::AbstractLlmProvider(config) {
+            : GeminiBodyShape::AbstractGeminiModelProvider(config) {
         *string p = config.provider_options.gcp_project_id;
         if (!p.val()) {
             throw "LLM-CONFIG-ERROR",
@@ -293,56 +299,12 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return "vertex-ai";
     }
 
-    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
-            string user_prompt, *hash<auto> output_schema,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        list<hash<QoreLlmUtils::ChatMessage>> messages = (
-            <QoreLlmUtils::ChatMessage>{"role": "system",
-                "content": system_prompt},
-            <QoreLlmUtils::ChatMessage>{"role": "user",
-                "content": user_prompt},
-        );
-        hash<auto> body = buildGenerateContentBody(messages, NOTHING,
-            output_schema, opts);
-        hash<auto> resp = postGenerateContent(body, opts);
-        return <QoreLlmUtils::LlmCompletionResult>{
-            "content": GeminiBodyShape::extractText(resp.body),
-            "usage": GeminiBodyShape::normalizeUsage(resp.body.usageMetadata),
-        };
+    string getProviderLabel() {
+        return "Vertex AI";
     }
 
-    hash<QoreLlmUtils::ChatResponse> chat(
-            list<hash<QoreLlmUtils::ChatMessage>> messages,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<auto> body = buildGenerateContentBody(messages, tools,
-            opts.output_schema, opts);
-        hash<auto> resp = postGenerateContent(body, opts);
-        hash<QoreLlmUtils::ChatResponse> rv =
-            GeminiBodyShape::parseChatResponse(resp.body);
-        rv.model = getVertexModel(opts);
-        return rv;
-    }
-
-    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
-            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        # v1 synthetic streaming: non-streamed call + single delta + done.
-        # Vertex AI's :streamGenerateContent + SSE pump lands as a follow-up.
-        hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
-        if (r.content.val()) {
-            callback(<QoreLlmUtils::ChatStreamEvent>{
-                "delta": r.content,
-                "raw": r.raw,
-            });
-        }
-        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True, "raw": r.raw});
-    }
-
-    #! Returns the configured (or default) Gemini-on-Vertex model
-    string getVertexModel(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        return getRequestModel(opts) ?? DefaultModel;
+    string getDefaultModel() {
+        return DefaultModel;
     }
 
     #! Returns the configured GCP project ID
@@ -362,62 +324,34 @@ public class VertexAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "/v1/projects/%s/locations/%s/publishers/google/models/%s:%s",
             encode_url(project_id, True),
             encode_url(region, True),
-            encode_url(getVertexModel(opts), True),
+            encode_url(getModelName(opts), True),
             suffix ?? "generateContent");
     }
 
-    #! Builds the :generateContent request body using GeminiBodyShape
-    private:internal hash<auto> buildGenerateContentBody(
-            list<hash<QoreLlmUtils::ChatMessage>> messages,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<auto> output_schema,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<auto> resolved = {
-            "max_output_tokens": getRequestMaxOutputTokens(opts),
-            "temperature": getRequestTemperature(opts),
-            "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
-        };
-        hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
-            output_schema, resolved);
-        return mergeRequestBodyOptions(body, opts);
+    #! Returns the Vertex \c :generateContent REST path for this request
+    string getRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return getVertexPath(opts);
     }
 
-    #! Posts a :generateContent request and returns the deserialized response
-    private:internal hash<auto> postGenerateContent(hash<auto> body,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        ensureRestClient();
+    #! Returns the bearer token (ADC/service-account) plus optional quota-project header
+    *hash<auto> getRequestHeaders(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
         string token = GcpAuth::getAccessToken(sa_json_path, scopes);
-        hash<auto> hdr = vertexAuthHeaders(token, quota_project_id);
-        string path = getVertexPath(opts);
-        try {
-            return withRetry(hash<auto> sub () {
-                return rest_client.restPost(path, body, hdr);
-            });
-        } catch (hash<ExceptionInfo> ex) {
-            throw "LLM-ERROR",
-                sprintf("Vertex AI :generateContent request to %y failed: %s",
-                    path, ex.desc), ex;
-        }
+        return vertexAuthHeaders(token, quota_project_id);
     }
 
-    private:internal ensureRestClient() {
-        if (!rest_client) {
-            rest_mutex.lock();
-            on_exit rest_mutex.unlock();
-            if (!rest_client) {
-                hash<auto!> opts;
-                opts.url = getConfig().url
-                    ?? sprintf("https://%s-aiplatform.googleapis.com", region);
-                opts.data = "json";
-                if (getConfig().connect_timeout_ms) {
-                    opts.connect_timeout = getConfig().connect_timeout_ms;
-                }
-                if (getConfig().timeout_ms) {
-                    opts.timeout = getConfig().timeout_ms;
-                }
-                rest_client = new RestClientIo::RestClientIo(opts);
-            }
+    #! Builds the regional Vertex RestClientIo (auth is applied per request via headers)
+    RestClientIo::RestClientIo createRestClient() {
+        hash<auto!> opts;
+        opts.url = getConfig().url
+            ?? sprintf("https://%s-aiplatform.googleapis.com", region);
+        opts.data = "json";
+        if (getConfig().connect_timeout_ms) {
+            opts.connect_timeout = getConfig().connect_timeout_ms;
         }
+        if (getConfig().timeout_ms) {
+            opts.timeout = getConfig().timeout_ms;
+        }
+        return new RestClientIo::RestClientIo(opts);
     }
 }
 
@@ -530,7 +464,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
         } catch (hash<ExceptionInfo> ex) {
             throw "EMBEDDER-ERROR",
                 sprintf("Vertex AI :predict request for %y failed: %s",
-                    config.model, ex.desc), ex;
+                    config.model, GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
         list<list<float>> rv = ();
         foreach hash<auto> pred in (resp.body.predictions ?? ()) {

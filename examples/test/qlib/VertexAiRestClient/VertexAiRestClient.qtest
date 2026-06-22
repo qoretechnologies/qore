@@ -104,6 +104,7 @@ public class VertexAiTest inherits QUnit::Test {
     constructor() : Test("VertexAi Test", "1.0") {
         addTestCase("factory + getInfo",                  \factoryTest());
         addTestCase("Gemini-on-Vertex chat round-trip",   \chatTest());
+        addTestCase("OpenAI tool_choice maps to toolConfig", \toolChoiceConversionTest());
         addTestCase("complete() helper",                  \completeTest());
         addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
         addTestCase("URL path includes project/region/model", \pathTest());
@@ -167,6 +168,51 @@ public class VertexAiTest inherits QUnit::Test {
         assertTrue(info.supports_structured_output);
         assertTrue(info.supports_multimodal);
         assertTrue(info.supports_reasoning_token_budget);
+    }
+
+    #! Regression: the OpenAI-compatible adapter path must translate tool_choice
+    #! into Vertex's toolConfig rather than leaking the raw OpenAI field (which
+    #! Vertex rejects with HTTP 400 "Unknown name \"tool_choice\"")
+    private toolChoiceConversionTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        QoreLlmUtils::LlmBackend backend(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "vertex-ai",
+                "model": "gemini-2.0-flash",
+                "url": "http://localhost:" + fake_port,
+                "provider_options": {
+                    "gcp_project_id": "fake-project",
+                    "gcp_region": "us-central1",
+                    "gcp_sa_json_path": sa_path,
+                },
+            });
+        backend.chatCompletions({
+            "messages": ({"role": "user", "content": "hi"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "description": "look up a value",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"k": {"type": "string"}},
+                    },
+                },
+            },),
+            "tool_choice": {"type": "function", "function": {"name": "lookup"}},
+        });
+        assertNothing(handler.last_body.tool_choice,
+            "raw OpenAI tool_choice must not be sent to Vertex");
+        assertEq("ANY",
+            handler.last_body.toolConfig.functionCallingConfig.mode,
+            "named tool_choice maps to Vertex toolConfig mode ANY");
+        assertEq("lookup",
+            handler.last_body.tools[0].functionDeclarations[0].name,
+            "OpenAI tool is converted to a Vertex functionDeclaration");
     }
 
     private chatTest() {

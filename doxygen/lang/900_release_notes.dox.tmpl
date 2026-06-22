@@ -2039,10 +2039,14 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM API
 
     - @ref gcpauthintro "GcpAuth" module
-      - new module exchanging GCP service-account credentials for bearer access tokens
+      - new module exchanging GCP credentials for bearer access tokens via the full Application Default \
+        Credentials chain: service-account JSON keys (JWT-bearer), user \c "authorized_user" credentials \
+        from \c "gcloud auth application-default login" (refresh-token grant), and the GCE/GKE metadata server
 
     - @ref geminibodyshapeintro "GeminiBodyShape" module
-      - new helper module exposing pure-static request/response shapers for the Gemini \c generateContent wire format
+      - new shared module for the Gemini \c generateContent wire format: request/response shapers plus the \
+        common \c AbstractGeminiModelProvider base used by both @ref geminirestclientintro "GeminiRestClient" \
+        and @ref vertexairestclientintro "VertexAiRestClient" so the two cannot drift on tool/option/response handling
 
     - @ref generatordataproviderintro "GeneratorDataProvider" module
       - new module providing a data provider API for generating configurable test record streams for data

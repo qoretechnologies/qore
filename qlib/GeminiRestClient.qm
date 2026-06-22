@@ -689,14 +689,7 @@ public class GeminiRestConnection inherits RestClient::RestConnection {
     Thread-safe: the underlying @ref GeminiRestClientIo is lazy-initialized
     behind a mutex.
 */
-public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
-    private {
-        #! Lazy-initialized REST client
-        *GeminiRestClientIo rest_client;
-        #! Serializes lazy initialization
-        Mutex rest_mutex();
-    }
-
+public class GeminiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProvider {
     #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig
     /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::api_key
             is required
@@ -705,7 +698,7 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         @throw LLM-DEPENDENCY-ERROR the \c json module is not available
     */
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
-            : QoreLlmUtils::AbstractLlmProvider(config) {
+            : GeminiBodyShape::AbstractGeminiModelProvider(config) {
         if (!config.api_key.val()) {
             throw "LLM-CONFIG-ERROR",
                 "api_key is required for \"gemini\" mode";
@@ -720,66 +713,47 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return "gemini";
     }
 
-    hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
-            string user_prompt, *hash<auto> output_schema,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        ensureRestClient();
+    string getProviderLabel() {
+        return "Gemini";
+    }
 
-        hash<auto> body = buildGeminiBody((
-            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
-            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
-        ), NOTHING, output_schema, opts);
+    string getDefaultModel() {
+        return "gemini-2.5-flash";
+    }
 
-        hash<auto> resp;
-        try {
-            resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost(getGeminiGeneratePath(opts), body);
-            });
-        } catch (hash<ExceptionInfo> ex) {
-            throw "LLM-ERROR", sprintf("Gemini completion request failed: %s",
-                ex.desc), ex;
-        }
+    #! Returns the Gemini \c generateContent REST path (relative to the API-key client)
+    string getRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        return GeminiBodyShape::modelResource(getModelName(opts)) + ":generateContent";
+    }
 
-        return <QoreLlmUtils::LlmCompletionResult>{
-            "content": GeminiBodyShape::extractText(resp.body),
-            "usage": GeminiBodyShape::normalizeUsage(resp.body.usageMetadata),
+    #! Builds the @ref GeminiRestClientIo (the API key is carried in the client)
+    RestClientIo::RestClientIo createRestClient() {
+        hash<auto!> opts = {
+            "apikey": getConfig().api_key,
+            "connect_timeout": getConfig().connect_timeout_ms,
+            "timeout": getConfig().timeout_ms,
         };
-    }
-
-    hash<QoreLlmUtils::ChatResponse> chat(
-            list<hash<QoreLlmUtils::ChatMessage>> messages,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        ensureRestClient();
-
-        hash<auto> body = buildGeminiBody(messages, tools,
-            opts.output_schema, opts);
-        hash<auto> resp;
-        try {
-            resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost(getGeminiGeneratePath(opts), body);
-            });
-        } catch (hash<ExceptionInfo> ex) {
-            throw "LLM-ERROR", sprintf("Gemini chat request failed: %s",
-                ex.desc), ex;
+        if (getConfig().url.val()) {
+            opts.url = getConfig().url;
         }
-
-        hash<QoreLlmUtils::ChatResponse> rv = GeminiBodyShape::parseChatResponse(resp.body);
-        rv.model = getGeminiModelName(opts);
-        return rv;
+        if (getConfig().protocol.val()) {
+            opts.protocol = getConfig().protocol;
+        }
+        return new GeminiRestClientIo(opts);
     }
 
+    #! Real Gemini SSE streaming (overrides the synthetic base default)
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = buildGeminiBody(messages, tools,
+        hash<auto> body = buildModelBody(messages, tools,
             opts.output_schema, opts);
         GeminiResponseSseStreamIo stream =
-            rest_client.openStreamingConnection(
-                GeminiBodyShape::bareModelName(getGeminiModelName(opts)), body,
+            cast<GeminiRestClientIo>(getRestClient()).openStreamingConnection(
+                GeminiBodyShape::bareModelName(getModelName(opts)), body,
                 NOTHING, getConfig().timeout_ms);
         on_exit stream.close();
 
@@ -846,168 +820,13 @@ public class GeminiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
     }
 
-    #! Merges \c body_options with Gemini-specific nested \c generationConfig semantics
-    hash<auto> mergeRequestBodyOptions(hash<auto> body,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        if (!opts.body_options) {
-            return body;
-        }
-        hash<auto!> rv;
-        rv += body;
-        foreach string key in (keys opts.body_options) {
-            if (key == "generationConfig"
-                    && rv.generationConfig.typeCode() == NT_HASH
-                    && opts.body_options{key}.typeCode() == NT_HASH) {
-                hash<auto!> gc;
-                gc += rv.generationConfig;
-                gc += opts.body_options{key};
-                rv.generationConfig = gc;
-            } else {
-                rv{key} = opts.body_options{key};
-            }
-        }
-        return rv;
-    }
-
-    #! Translates an OpenAI \c tool_choice into Gemini's \c toolConfig form
-    applyOpenAiToolChoice(reference<hash<auto!>> body_options, auto choice) {
-        *hash<auto> tool_cfg = GeminiBodyShape::openAiToolChoiceToGeminiConfig(choice);
-        if (tool_cfg) {
-            body_options.toolConfig = tool_cfg;
-        }
-    }
-
-    #! Routes an OpenAI \c response_format=json_schema to Gemini's
-    #! @ref QoreLlmUtils::LlmRequestOptions::output_schema
-    applyOpenAiResponseFormat(reference<hash<auto!>> body_options,
-            reference<hash<QoreLlmUtils::LlmRequestOptions>> options,
-            hash<auto> output_schema, *hash<auto> response_format) {
-        options.output_schema = output_schema;
-    }
-
-    #! Updates OpenAI stream state from a Gemini-native event
-    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
-            *hash<auto> raw) {
-        if (!raw) {
-            return;
-        }
-        if (raw.responseId.val()) {
-            state.id = raw.responseId;
-        } else if (raw.id.val()) {
-            state.id = raw.id;
-        }
-        if (raw.model.val()) {
-            state.model = raw.model;
-        }
-        if (raw.usageMetadata.typeCode() == NT_HASH) {
-            state.usage = GeminiBodyShape::normalizeUsage(raw.usageMetadata);
-        } else if (raw.usage.typeCode() == NT_HASH) {
-            state.usage = raw.usage;
-        }
-        *string finish_reason = raw.candidates[0].finishReason;
-        if (finish_reason.val()) {
-            state.finish_reason = state.tool_calls
-                ? "tool_calls" : GeminiBodyShape::finishReasonToOpenAi(finish_reason);
-        } else if (raw.choices[0].finish_reason.val()) {
-            state.finish_reason = raw.choices[0].finish_reason;
-        }
-    }
-
-    #! Harvests OpenAI-shaped \c tool_calls deltas from Gemini \c functionCall parts
-    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
-            *hash<auto> raw) {
-        if (!raw) {
-            return ();
-        }
-        list<hash<auto>> streamed = ();
-        foreach hash<auto> part in (raw.candidates[0].content.parts ?? ()) {
-            if (!part.functionCall) {
-                continue;
-            }
-            int idx = state.tool_calls.size();
-            hash<auto> tc = {
-                "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
-                "type": "function",
-                "function": {
-                    "name": part.functionCall.name,
-                    "arguments": make_json(part.functionCall.args ?? {}),
-                },
-            };
-            state.tool_calls += tc;
-            streamed += {
-                "index": idx,
-                "id": tc.id,
-                "type": "function",
-                "function": tc.function,
-            };
-        }
-        return streamed;
-    }
-
-    #! Lazy-initializes the GeminiRestClientIo
-    private ensureRestClient() {
-        if (!rest_client) {
-            rest_mutex.lock();
-            on_exit rest_mutex.unlock();
-            if (!rest_client) {
-                hash<auto!> opts = {
-                    "apikey": getConfig().api_key,
-                    "connect_timeout": getConfig().connect_timeout_ms,
-                    "timeout": getConfig().timeout_ms,
-                };
-                if (getConfig().url.val()) {
-                    opts.url = getConfig().url;
-                }
-                if (getConfig().protocol.val()) {
-                    opts.protocol = getConfig().protocol;
-                }
-                rest_client = new GeminiRestClientIo(opts);
-            }
-        }
-    }
-
-    #! Resolves the Gemini model, defaulting to the stable Flash model
-    private string getGeminiModelName(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        return getRequestModel(opts) ?? "gemini-2.5-flash";
-    }
-
-    #! Returns the Gemini \c generateContent REST path
-    private string getGeminiGeneratePath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        return GeminiBodyShape::modelResource(getGeminiModelName(opts))
-            + ":generateContent";
-    }
-
-    #! Builds a Gemini \c generateContent request body
-    /** Delegates pure shaping to @ref GeminiBodyShape::shapeChatBody after
-        resolving per-call knobs from \a opts; then runs the body through
-        @ref mergeRequestBodyOptions() to honor \c body_options.
-    */
-    private hash<auto> buildGeminiBody(
-            list<hash<QoreLlmUtils::ChatMessage>> messages,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<auto> output_schema,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<auto> resolved = {
-            "max_output_tokens": getRequestMaxOutputTokens(opts),
-            "temperature": getRequestTemperature(opts),
-            "reasoning_token_budget": getRequestReasoningTokenBudget(opts),
-        };
-        hash<auto> body = GeminiBodyShape::shapeChatBody(messages, tools,
-            output_schema, resolved);
-        return mergeRequestBodyOptions(body, opts);
-    }
-
-    # Note: the request/response shaping helpers previously defined here as
-    # `private static` methods have moved to the standalone
-    # @ref geminibodyshapeintro "GeminiBodyShape" module so they can also be
-    # consumed by the Vertex AI Gemini-on-Vertex pathway without forcing a
-    # GeminiRestClient.qm import.  See:
-    # - GeminiBodyShape::shapeChatBody / shapeContentParts / parseToolResponse
-    # - GeminiBodyShape::sanitizeSchema / sanitizeSchemaValue
-    # - GeminiBodyShape::parseChatResponse / providerDiagnostics / extractText
-    # - GeminiBodyShape::normalizeUsage / mapFinishReason / finishReasonToOpenAi
-    # - GeminiBodyShape::openAiToolChoiceToGeminiConfig
-    # - GeminiBodyShape::modelResource / bareModelName
+    # Chat/completion, request-body building, OpenAI tool_choice / response_format
+    # adapters, OpenAI streaming-state + tool-call harvesting, body-option merging,
+    # and the lazy REST-client/POST orchestration all live in the shared
+    # @ref GeminiBodyShape::AbstractGeminiModelProvider base; this class supplies
+    # only the API-key transport (createRestClient + getRequestPath) and real SSE
+    # streaming (chatStream above).  The pure body shapers live in GeminiBodyShape
+    # (shapeChatBody, parseChatResponse, sanitizeSchema, normalizeUsage, etc.).
 }
 
 #! Factory for @ref GeminiLlmProvider
