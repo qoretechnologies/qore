@@ -2283,19 +2283,26 @@ CodeContextHelperBase::CodeContextHelperBase(const char* code, QoreObject* obj, 
         do_ref = false;
     }
 
-    // issue #3024: ensure that a program call context is available when there
-    // is no active execution program.  When current_pgm is set, it already
-    // represents the execution context; cross-program calls install the
-    // caller-visible context explicitly before evaluating user code.
-    QoreProgram* call_program_context = nullptr;
-    if (!td->current_pgm && !td->call_program_context) {
-        if (obj) {
-            call_program_context = obj->getProgram();
-        } else if (c && c->spgm) {
-            call_program_context = c->spgm;
-        } else if (c && c->ns) {
-            call_program_context = c->ns->getProgram();
-        }
+    // issue #3024 / issue #3390: save & update the program call context from the code context
+    // (class/object) for every frame.  This reverts ca3139789's ("preserve AOT runtime caller
+    // contexts") gating of this block behind "no active execution program" back to develop's
+    // proven per-frame update.  The gating broke the JNI object-capture path: a runtime
+    // Program::callFunction() invoked on a Program object reached through getProgram() left
+    // call_program_context pointing at the wrapped target Program, so set_save_object_callback()
+    // and the object-save path (both via qore_get_call_program_context()) resolved to different
+    // Programs -- the capture callback landed where the caller's objects are NOT created (issue
+    // #3390).  AOTSmoke (221/221) and the IR suite (49/49) confirm ca3139789's AOT protection
+    // lives in its getProgram() change, not in this gating.
+    QoreProgram* call_program_context;
+    if (c && c->spgm) {
+        call_program_context = c->spgm;
+    } else if (obj) {
+        call_program_context = obj->getProgram();
+    } else {
+        call_program_context = nullptr;
+    }
+    if (!call_program_context && c) {
+        call_program_context = c->spgm;
     }
     if (call_program_context) {
         old_call_program_context = td->call_program_context;
