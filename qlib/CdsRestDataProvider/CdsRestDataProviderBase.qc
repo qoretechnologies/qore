@@ -52,6 +52,7 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
                 "short_desc": "Sets the OAuth2 client secret",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "Sets the OAuth2 client secret (required if 'client_id' provided)",
+                "sensitive": True,
             },
             "scope": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Scope",

@@ -91,6 +91,7 @@ public class AwsRestClientDataProvider inherits AwsRestClientDataProviderBase {
                 "short_desc": "A temporary session token",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "A temporary session token from AWS Security Token Service for this HTTP session",
+                "sensitive": True,
             },
         };
     }

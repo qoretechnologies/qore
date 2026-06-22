@@ -72,12 +72,14 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
                 "short_desc": "Sets the OAuth2 client secret",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The client secret (required if `client_id` is provided)",
+                "sensitive": True,
             },
             "password": <DataProviderOptionInfo>{
                 "display_name": "Password",
                 "short_desc": "The password for authentication",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The password (required if `username` is provided)",
+                "sensitive": True,
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "ServiceNow URL",

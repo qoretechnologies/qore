@@ -34,6 +34,7 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
                 "short_desc": "The API key required to communicate with Google Gemini servers",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The API key required to communicate with Google Gemini servers",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

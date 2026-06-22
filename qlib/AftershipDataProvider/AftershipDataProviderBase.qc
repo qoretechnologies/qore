@@ -36,6 +36,7 @@ public class AftershipDataProviderBase inherits DataProvider::AbstractDataProvid
                 "short_desc": "The API key required to communicate with Aftership servers",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Aftership API key used for authentication; sent as the `as-api-key` header",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

@@ -52,6 +52,7 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
                 "short_desc": "Sets the Salesforce consumer secret",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "the Salesforce.com consumer secret / OAuth2 client secret",
+                "sensitive": True,
             },
             "oauth2_token_url": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Token URL",
@@ -70,6 +71,7 @@ public class SalesforceRestDataProviderBase inherits DataProvider::AbstractDataP
                 "short_desc": "The password for authentication",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "the Salesforce.com account password",
+                "sensitive": True,
             },
             "salesforcerestclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

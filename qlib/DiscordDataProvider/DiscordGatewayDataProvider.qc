@@ -57,6 +57,7 @@ public class DiscordGatewayDataProvider inherits DataProvider::AbstractDataProvi
                 "short_desc": "The bot token for the gateway",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The bot token for the gateway",
+                "sensitive": True,
                 "required": True,
             },
             "wsclient": <DataProviderOptionInfo>{

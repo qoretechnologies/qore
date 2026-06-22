@@ -118,6 +118,7 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
                 "short_desc": "The API key required to communicate with Anthropic servers",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Anthropic API key used for authentication; sent as the `x-api-key` header",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

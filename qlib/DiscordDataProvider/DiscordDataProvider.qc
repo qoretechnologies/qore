@@ -64,18 +64,21 @@ public class DiscordDataProvider inherits DiscordDataProviderBase {
                 "short_desc": "Sets the OAuth2 client secret",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The OAuth2 client secret",
+                "sensitive": True,
             },
             "oauth2_refresh_token": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Refresh Token",
                 "short_desc": "Sets the OAuth2 refresh token",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The OAuth2 refresh token, if known",
+                "sensitive": True,
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "Authorization Token",
                 "short_desc": "Set an authorization token to be included in requests",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "The OAuth2 token, if known",
+                "sensitive": True,
             },
         };
     }

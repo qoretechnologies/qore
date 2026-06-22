@@ -34,6 +34,7 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
                 "short_desc": "The API key required to communicate with ElevenLabs servers",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The API key required to communicate with ElevenLabs servers",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
