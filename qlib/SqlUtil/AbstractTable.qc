@@ -1863,8 +1863,11 @@ list l = table.getDropAllConstraintsAndIndexesOnColumnSql("status");
             if (c.hasColumn(cname)) {
                 on_success if (opt.sql_callback_executed) {
                     constraints.take(c.getName());
-                    # if it's a unique constraint, remove any index with the same name
-                    if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl())
+                    # if it's a unique constraint, remove any index with the same name if it exists
+                    # in the index container (the backing index is not always stored separately; ex:
+                    # on PostgreSQL indexes backing unique constraints are not kept in the container)
+                    if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
+                        && indexes.hasKey(c.getName()))
                         indexes.take(c.getName());
                 }
 
@@ -2776,16 +2779,22 @@ string sql = table.getDropConstraintSql("uk_mytable_name");
             c = constraints{cname};
             rmv = sub () {
                 constraints.take(cname);
-                # if it's a unique constraint, remove any index with the same name
-                if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl())
+                # if it's a unique constraint, remove any index with the same name; note that the
+                # backing index is not always present in the index container (ex: on PostgreSQL,
+                # indexes backing PKs and matched unique constraints are not stored separately), so
+                # only remove it if it actually exists, otherwise Indexes::take() raises a runtime
+                # type error returning no value for its declared AbstractIndex return type
+                if (c instanceof AbstractUniqueConstraint && constraintsLinkedToIndexesImpl()
+                    && indexes.hasKey(cname))
                     indexes.take(cname);
             };
         } else if (!primaryKey.empty() && primaryKey.getName() == cname) {
             c = primaryKey;
             rmv = sub () {
                 remove self.primaryKey;
-                # remove any index with the same name
-                if (constraintsLinkedToIndexesImpl())
+                # remove any index with the same name if it exists in the index container (see note
+                # above for findDropConstraintUnlocked() unique constraint handling)
+                if (constraintsLinkedToIndexesImpl() && indexes.hasKey(cname))
                     indexes.take(cname);
             };
         } else if (foreignConstraints && foreignConstraints.hasKey(cname)) {

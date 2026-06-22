@@ -342,6 +342,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("partition enhancements", \partitionEnhancementsTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
+            addTestCase("drop PK constraint without backing index", \dropPkConstraintNoBackingIndexTest());
         }
 
         set_return_value(main());
@@ -422,6 +423,81 @@ class PgsqlTest inherits SqlTestBase {
         Indexes ixs = verify.getIndexes();
         assertTrue(ixs.hasKey(ixname), "non-unique index retained");
         assertFalse(ixs{ixname}.unique, "reorder index is not unique");
+    }
+
+    #! dropping a PK constraint must not fail when the backing index is not in the index container
+    /** Regression test: on PostgreSQL the index backing a primary key (and a matched unique
+        constraint) is deliberately not stored separately in the table's index container (see
+        PgsqlTable::getIndexesImpl()). When dropping such a constraint with
+        \c sql_callback_executed = True, the internal removal closure called
+        Indexes::take(constraint_name) unconditionally; with no matching index present, take()
+        returned no value for its non-optional AbstractIndex return type and raised a confusing
+        RUNTIME-TYPE-ERROR ("<block return> expects type 'object<AbstractIndex>'"). Because the
+        error was thrown from an on_success handler, the table mutex was left locked, so the next
+        operation on the table failed with a cascading LOCK-ERROR. Both the constraint removal
+        closure and getDropAllConstraintsAndIndexesOnColumnSqlUnlocked() now only remove the index
+        if it actually exists in the container.
+    */
+    private dropPkConstraintNoBackingIndexTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string tname = "pgsql_drop_pk_test";
+        string pkname = "pk_" + tname;
+
+        code drop_if_exists = sub () {
+            PgsqlTable t(ds, tname);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        };
+
+        drop_if_exists();
+        on_exit drop_if_exists();
+
+        hash<auto> table_desc = {
+            "columns": {
+                "a": {"qore_type": Type::Int, "notnull": True},
+                "b": {"qore_type": Type::Int, "notnull": True},
+            },
+            "primary_key": {"name": pkname, "columns": ("a", "b")},
+        };
+
+        # create the table in the DB so the PK is real
+        on_error ds.rollback();
+        AbstractTable created = (new Table(ds, table_desc, tname)).getTable();
+        created.create();
+        ds.commit();
+
+        # load the table fresh from the DB; the PK's backing index is NOT present in the index
+        # container on PostgreSQL, which is the exact condition that previously triggered the error
+        PgsqlTable t(ds, tname);
+        Indexes ixs = t.getIndexes();
+        assertFalse(ixs.hasKey(pkname), "PK backing index is not stored in the index container");
+
+        hash<auto> callback_opts = {"sql_callback_executed": True};
+
+        # before the fix this threw RUNTIME-TYPE-ERROR from the on_success removal closure (the
+        # closure unconditionally called Indexes::take() for an index that is not in the container)
+        string drop_sql = t.getDropConstraintSql(pkname, callback_opts);
+        assertRegex("drop constraint", drop_sql, "PK drop SQL generated without error");
+
+        # execute the generated DDL against the DB, mirroring the real schema-upgrade flow where the
+        # collected callback SQL is executed externally (sql_callback_executed = True)
+        on_error ds.rollback();
+        ds.exec(drop_sql);
+        ds.commit();
+
+        # before the fix the mutex was left locked by the failed on_success handler, so this locking
+        # call failed with a cascading LOCK-ERROR; confirm a subsequent locking operation works
+        list<auto> mod_sql = t.getModifyColumnSql("b", c_number(14), True, callback_opts);
+        assertTrue(mod_sql.size() > 0, "subsequent locking operation succeeds (no mutex leak)");
+
+        # verify against the DB that the primary key was actually dropped
+        PgsqlTable verify(ds, tname);
+        assertTrue(verify.getPrimaryKey().empty(), "primary key dropped from the database");
     }
 
     testSequenceOperators() {
