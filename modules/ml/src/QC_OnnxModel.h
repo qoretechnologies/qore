@@ -731,6 +731,12 @@ public:
     DLLLOCAL QoreHashNode* runTensors(const QoreHashNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreObject* createBinding(QoreProgram*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* runBound(const QoreObject*, const QoreObject*, bool, ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreStringNode* endProfiling(ExceptionSink*) { return nullptr; }
+    DLLLOCAL QoreHashNode* getInferenceStats(ExceptionSink*) const { return nullptr; }
+    DLLLOCAL void resetInferenceStats() {}
+    DLLLOCAL QoreHashNode* saveOptimized(const char*, const QoreHashNode*, bool, ExceptionSink*) const {
+        return nullptr;
+    }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreListNode* runBatch(const QoreListNode*, const QoreListNode*, ExceptionSink*) { return nullptr; }
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink*) const { return nullptr; }
@@ -762,6 +768,8 @@ public:
     DLLLOCAL void bindInputs(const QoreHashNode*, ExceptionSink*) {}
     DLLLOCAL void bindOutput(const char*, ExceptionSink*) {}
     DLLLOCAL void bindOutputs(ExceptionSink*) {}
+    DLLLOCAL void bindOutputDevice(const char*, const QoreHashNode*, ExceptionSink*) {}
+    DLLLOCAL void bindOutputsDevice(const QoreHashNode*, ExceptionSink*) {}
     DLLLOCAL void bindOutputTensor(const char*, const QoreObject*, ExceptionSink*) {}
     DLLLOCAL void clearInputs() {}
     DLLLOCAL void clearOutputs() {}
