@@ -131,11 +131,15 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."string",
             },
             "tokenizer_config_path": <DataProviderOptionInfo>{
-                "display_name": "Tokenizer Config Path",
-                "short_desc": "Path to tokenizer.json for ONNX mode",
-                "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. Required "
+                "display_name": "Tokenizer Config Location",
+                "short_desc": "Location of a tokenizer.json file for ONNX mode",
+                "desc": "Location of a HuggingFace `tokenizer.json` file, read with "
+                    "`FileLocationHandler::getTextFileFromLocation()` (a bare path or any "
+                    "registered scheme: `file://`, `http(s)://`, `sftp://`, ...). Required "
                     "for `onnx` mode unless the tokenizer is loaded from QoreModelRegistry.",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
             },
             "onnx_session_config": <DataProviderOptionInfo>{
                 "display_name": "ONNX Session Config",
@@ -766,7 +770,7 @@ public class QoreEmbedTextProcessor inherits AbstractDataProviderMLProcessor {
                     config.tokenizer_runtime_config = tokenizer_package.tokenizer_config;
                 } else {
                     config.tokenizer_config =
-                        parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
+                        parse_json(FileLocationHandler::getTextFileFromLocation(tokenizer_config_path));
                 }
                 if (onnx_session_config) {
                     config.session_config = onnx_session_config;

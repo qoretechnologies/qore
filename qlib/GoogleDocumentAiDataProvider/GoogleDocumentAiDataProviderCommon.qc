@@ -45,13 +45,16 @@ public class GoogleDocumentAiDataProviderCommon inherits DataProvider::AbstractD
                 "default_value": DefaultRegion,
             },
             "gcp_sa_json_path": <DataProviderOptionInfo>{
-                "display_name": "Service-Account JSON Path",
-                "short_desc": "Path to a service-account JSON key file",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "Explicit path to a GCP service-account JSON file for "
-                    "JWT-bearer auth.  When omitted, Application Default "
-                    "Credentials are used.",
-                "sensitive": True,
+                "display_name": "Service-Account JSON Location",
+                "short_desc": "Location of a service-account JSON key file",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
+                "desc": "Location of a GCP service-account JSON key file for "
+                    "JWT-bearer auth, read via the @ref filelocationhandlerintro "
+                    "\"FileLocationHandler\" module (a bare path or any registered "
+                    "scheme: `file://`, `http(s)://`, `sftp://`, ...).  When omitted, "
+                    "Application Default Credentials are used.",
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",

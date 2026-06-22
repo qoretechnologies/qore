@@ -31,9 +31,11 @@ public namespace Hl7v2Util {
 
             const ConstructorOptions = {
                 "path": <DataProviderOptionInfo>{
-                    "display_name": "Schema Path",
-                    "short_desc": "Path to a generated HL7 v2 schema artifact",
-                    "type": AbstractDataProviderTypeMap."string",
+                    "display_name": "Schema Location",
+                    "short_desc": "Location of a generated HL7 v2 schema artifact",
+                    "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                        DTT_FromLocation: True,
+                    }),
                     "desc": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema "
                         "artifact in Qore value format.",
                 },

@@ -68,12 +68,17 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
                 "input_field_names": True,
             },
             "tokenizer_config_path": <DataProviderOptionInfo>{
-                "display_name": "Tokenizer Config Path",
-                "short_desc": "Path to HuggingFace tokenizer.json",
-                "desc": "Filesystem path to a HuggingFace `tokenizer.json` file used for "
-                    "token counting and sentence segmentation. Provide either this option "
-                    "or `registry_model_name` to load the tokenizer from QoreModelRegistry.",
-                "type": AbstractDataProviderTypeMap."string",
+                "display_name": "Tokenizer Config Location",
+                "short_desc": "Location of a HuggingFace tokenizer.json file",
+                "desc": "Location of a HuggingFace `tokenizer.json` file used for "
+                    "token counting and sentence segmentation, read with "
+                    "`FileLocationHandler::getTextFileFromLocation()` (a bare path or any "
+                    "registered scheme: `file://`, `http(s)://`, `sftp://`, ...). Provide "
+                    "either this option or `registry_model_name` to load the tokenizer from "
+                    "QoreModelRegistry.",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
                 "required": False,
             },
             "chunk_size": <DataProviderOptionInfo>{
@@ -236,7 +241,8 @@ public class QoreSemanticChunkProcessor inherits AbstractDataProviderMLProcessor
             tok_config = tokenizer_package.tokenizer_json;
             tok_runtime_config = tokenizer_package.tokenizer_config;
         } else {
-            tok_config = parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+            tok_config =
+                parse_json(FileLocationHandler::getTextFileFromLocation(copts.tokenizer_config_path));
         }
 %else
         throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";

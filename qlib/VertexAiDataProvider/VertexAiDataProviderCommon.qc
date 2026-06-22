@@ -51,14 +51,18 @@ public class VertexAiDataProviderCommon inherits DataProvider::AbstractDataProvi
                 "default_value": DefaultRegion,
             },
             "gcp_sa_json_path": <DataProviderOptionInfo>{
-                "display_name": "Service-Account JSON Path",
-                "short_desc": "Path to a GCP service-account JSON key file",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "Path to a GCP service-account JSON key file; when "
-                    "omitted, Application Default Credentials resolution runs "
-                    "(`GOOGLE_APPLICATION_CREDENTIALS` env var, "
-                    "`~/.config/gcloud/application_default_credentials.json`, "
-                    "or the GCE/GKE/Cloud-Run metadata server)",
+                "display_name": "Service-Account JSON Location",
+                "short_desc": "Location of a GCP service-account JSON key file",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
+                "desc": "Location of a GCP service-account JSON key file, read via "
+                    "the @ref filelocationhandlerintro \"FileLocationHandler\" module "
+                    "(a bare path or any registered scheme: `file://`, `http(s)://`, "
+                    "`sftp://`, ...); when omitted, Application Default Credentials "
+                    "resolution runs (`GOOGLE_APPLICATION_CREDENTIALS` env var, "
+                    "`~/.config/gcloud/application_default_credentials.json`, or the "
+                    "GCE/GKE/Cloud-Run metadata server)",
             },
             "gcp_scopes": <DataProviderOptionInfo>{
                 "display_name": "GCP OAuth2 Scopes",

@@ -27,6 +27,7 @@
 
 %requires(reexport) RestClient
 %requires(reexport) RestClientIo
+%requires(reexport) FileLocationHandler
 
 %try-module json
 %define NoJson
@@ -39,9 +40,10 @@ auto sub parse_json(string val) {
 %endif
 
 module GcpAuth {
-    version = "1.1";
+    version = "1.0";
     desc = "GCP service-account JWT-bearer and Application Default Credentials "
-        "token broker for Vertex AI, GCP Vision, GCP Document AI, etc.";
+        "token broker for Vertex AI, GCP Vision, GCP Document AI, etc.; "
+        "credential files are read as FileLocationHandler locations";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -105,17 +107,18 @@ string token = GcpAuth::getAccessTokenFromServiceAccountFile(
 
     @section gcpauthrelnotes Release Notes
 
-    @subsection gcpauth_v1_1 GcpAuth v1.1
-    - added support for user (\c "authorized_user") ADC credentials written by
-      \c "gcloud auth application-default login" via the OAuth2 refresh-token
-      grant, so the ADC chain works for local user logins as well as
-      service-account keys and the metadata server
-    - fixed the token-endpoint request to POST to the endpoint's exact path; the
-      previous empty-relative-path request hit \c /token/ (trailing slash), which
-      the live Google token endpoint rejects with HTTP 404
-
     @subsection gcpauth_v1_0 GcpAuth v1.0
-    - initial release: service-account file, metadata server, ADC chain with caching
+    - initial release: GCP credential broker that mints bearer access tokens via the
+      Application Default Credentials chain, supporting:
+      - service-account JSON keys (\c "service_account") via the OAuth2 JWT-bearer grant
+      - user credentials (\c "authorized_user") written by
+        \c "gcloud auth application-default login" via the OAuth2 refresh-token grant
+      - the GCE/GKE/Cloud-Run metadata server / workload identity
+    - tokens are cached and reused until within a safety window of expiry
+    - explicit credential files are read as @ref filelocationhandlerintro
+      "FileLocationHandler" locations, so a credential location may be a bare
+      filesystem path or any registered scheme (\c file://, \c http(s)://,
+      \c sftp://, ...)
 */
 
 #! Contains all public definitions in the GcpAuth module
@@ -231,22 +234,7 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
             return cached;
         }
     }
-    string sa_text;
-    try {
-        sa_text = File::readTextFile(sa_json_path);
-    } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("cannot read service-account file %y: %s",
-                sa_json_path, ex.desc), ex;
-    }
-    hash<auto> sa;
-    try {
-        sa = parse_json(sa_text);
-    } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("service-account file %y is not valid JSON: %s",
-                sa_json_path, ex.desc), ex;
-    }
+    hash<auto> sa = readCredentialFile(sa_json_path);
     foreach string field in (("private_key", "client_email")) {
         if (!sa{field}.val()) {
             throw "GCP-AUTH-ERROR",
@@ -480,19 +468,23 @@ public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> 
 }
 
 #! Reads and parses a GCP credential JSON file, throwing a clear error on failure
-hash<auto> sub readCredentialFile(string path) {
+hash<auto> sub readCredentialFile(string location) {
     string text;
     try {
-        text = File::readTextFile(path);
+        # read the credential as a FileLocationHandler location: a bare path reads
+        # a local file, or any registered scheme (file://, http(s)://, sftp://, ...)
+        text = FileLocationHandler::getTextFileFromLocation(location);
     } catch (hash<ExceptionInfo> ex) {
         throw "GCP-AUTH-ERROR",
-            sprintf("cannot read GCP credential file %y: %s", path, ex.desc), ex;
+            sprintf("cannot read GCP credential location %y: %s: %s",
+                location, ex.err, ex.desc), ex;
     }
     try {
         return parse_json(text);
     } catch (hash<ExceptionInfo> ex) {
         throw "GCP-AUTH-ERROR",
-            sprintf("GCP credential file %y is not valid JSON: %s", path, ex.desc), ex;
+            sprintf("GCP credential location %y is not valid JSON: %s",
+                location, ex.desc), ex;
     }
 }
 

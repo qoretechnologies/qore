@@ -43,7 +43,7 @@ auto sub parse_json(string val) {
 %endif
 
 module GeminiBodyShape {
-    version = "1.1";
+    version = "1.0";
     desc = "Shared Gemini generateContent wire format: request/response shapers "
         "plus the common AbstractGeminiModelProvider base — shared between the "
         "native GeminiRestClient provider and the Vertex AI Gemini-on-Vertex "
@@ -99,18 +99,16 @@ module GeminiBodyShape {
 
     @section geminibodyshaperelnotes Release Notes
 
-    @subsection geminibodyshape_v1_1 GeminiBodyShape v1.1
-    - added @ref AbstractGeminiModelProvider, the common provider base shared by
-      \c GeminiRestClient (Gemini on AI Studio) and \c VertexAiRestClient (Gemini
-      on Vertex); both now differ only in transport and auth (URL, request path,
-      auth headers, REST client), so OpenAI tool/option/response handling cannot
-      diverge between them
-    - added @ref requestErrorDetail() to surface the upstream provider error
-      message and status from a failed request
-
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
-    - initial release: extracted from \c GeminiRestClient.qm so Vertex AI
-      and any other Gemini-fronting transport can reuse the body shapers
+    - initial release: extracted from \c GeminiRestClient.qm so Vertex AI and any
+      other Gemini-fronting transport can reuse the body shapers
+    - provides @ref AbstractGeminiModelProvider, the common provider base shared by
+      \c GeminiRestClient (Gemini on AI Studio) and \c VertexAiRestClient (Gemini
+      on Vertex); both differ only in transport and auth (URL, request path, auth
+      headers, REST client), so OpenAI tool/option/response handling cannot diverge
+      between them
+    - provides @ref requestErrorDetail() to surface the upstream provider error
+      message and status from a failed request
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
@@ -915,7 +913,7 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
     Because the OpenAI/Gemini wire handling lives here once, the two providers
     cannot drift on tool/option/response behavior.
 
-    @since GeminiBodyShape 1.1
+    @since GeminiBodyShape 1.0
 */
 public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvider {
     private {

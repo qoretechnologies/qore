@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FixedLengthUtil.qm Qore user module for working with files with fixed lines length
 
-/*  FixedLengthUtil.qm Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  FixedLengthUtil.qm Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,7 +32,7 @@
 %modern
 
 module FixedLengthUtil {
-    version = "1.6";
+    version = "1.7";
     desc    = "user module for working with files with fixed length lines";
     author  = "Jiri Vaclavik <jiri.vaclavik@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -325,6 +325,12 @@ w.write(data);
     @endcode
 
     @section fixedlengthutil_relnotes Release Notes
+
+    @subsection fixedlengthutil_v1_7 Version 1.7
+    - the read data provider's \c path option is now tagged
+      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
+      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
+      may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
 
     @subsection fixedlengthutil_v1_6 Version 1.6
     - added support for data provider application actions

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file CsvUtil.qm Qore user module for working with CSV files
 
-/*  CsvUtil.qm Copyright 2012 - 2024 Qore Technologies, s.r.o.
+/*  CsvUtil.qm Copyright 2012 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,7 +38,7 @@
 %modern
 
 module CsvUtil {
-    version = "1.11";
+    version = "1.12";
     desc = "user module for working with CSV files";
     author = "Petr Vanek <petr@yarpen.cz>, David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -324,6 +324,12 @@ while (i.next()) {
     Also the \c "example-multi-file-copy.csv" will contain data from the original file formatted as CSV.
 
     @section csvutil_relnotes Release Notes
+
+    @subsection csvutil_v1_12 Version 1.12
+    - the read data provider's \c path option is now tagged
+      @ref DataProvider::DTT_FromLocation "DTT_FromLocation", advertising that the
+      value (already resolved with \c FileLocationHandler::getBinaryStreamFromLocation())
+      may be a bare path or any registered scheme (\c file://, \c http(s)://, \c sftp://, ...)
 
     @subsection csvutil_v1_11 Version 1.11
     - added support for data provider application actions

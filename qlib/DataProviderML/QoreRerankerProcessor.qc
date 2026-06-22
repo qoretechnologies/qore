@@ -126,11 +126,15 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 "required": False,
             },
             "tokenizer_config_path": <DataProviderOptionInfo>{
-                "display_name": "Tokenizer Config Path",
-                "short_desc": "Path to tokenizer.json for ONNX mode",
-                "desc": "Filesystem path to a HuggingFace `tokenizer.json` file. "
+                "display_name": "Tokenizer Config Location",
+                "short_desc": "Location of a tokenizer.json file for ONNX mode",
+                "desc": "Location of a HuggingFace `tokenizer.json` file, read with "
+                    "`FileLocationHandler::getTextFileFromLocation()` (a bare path or any "
+                    "registered scheme: `file://`, `http(s)://`, `sftp://`, ...). "
                     "Required for `onnx` mode unless `registry_model_name` is provided.",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
+                    DTT_FromLocation: True,
+                }),
                 "required": False,
             },
             "onnx_session_config": <DataProviderOptionInfo>{
@@ -341,7 +345,7 @@ public class QoreRerankerProcessor inherits AbstractDataProviderMLProcessor {
                 rconfig.model_path = copts.reranker_model_path;
 %ifndef NoJson
                 rconfig.tokenizer_config =
-                    parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+                    parse_json(FileLocationHandler::getTextFileFromLocation(copts.tokenizer_config_path));
 %else
                 throw "CONSTRUCTOR-ERROR",
                     "json module is required for tokenizer config parsing";
