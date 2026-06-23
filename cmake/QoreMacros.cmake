@@ -807,10 +807,39 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 DESTINATION ${_qmod_install_dir}/${_name}
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         endif()
-        if (_qmod_jar_srcs)
-            install(FILES ${_qmod_jar_srcs}
-                DESTINATION ${_qmod_install_dir}/${_name}/jar
+        # Make the module's jar/ dir available beside the AOT .qmod so its
+        # baked `add-relative-classpath ./jar/...` (and cross-module refs like
+        # `../ExcelDataProvider/jar/...`) resolve at module load.  The jars are
+        # already installed beside the .qm source under QORE_USER_MODULES_DIR,
+        # and they are large (POI/Camel/... ~160 MB across modules), so where
+        # symlinks are supported we link the AOT-side jar/ to the source-side
+        # one instead of duplicating it.  The link is RELATIVE so it survives
+        # DESTDIR staging and prefix relocation (e.g. the docker build's
+        # `mv /opt /buildroot`).  This is done at INSTALL time, not via a
+        # configure-time file list, because a jni module's own
+        # qore-dataprovider-*.jar is generated during the build (and is
+        # gitignored), so it is absent when cmake first configures.  Falls back
+        # to a real copy on Windows.  Cross-module deps resolve because the
+        # referenced module installs its own jar/ link by the same rule.
+        if (NOT WIN32 AND NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            file(RELATIVE_PATH _qmod_jar_rel
+                "${_qmod_install_dir}/${_name}"
+                "${QORE_USER_MODULES_DIR}/${_name}/jar")
+            install(CODE
+"set(_src_jar_dir \"\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}/jar\")
+if (EXISTS \"\${_src_jar_dir}\")
+    set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_install_dir}/${_name}\")
+    file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
+    file(REMOVE_RECURSE \"\${_aot_mod_dir}/jar\")
+    file(CREATE_LINK \"${_qmod_jar_rel}\" \"\${_aot_mod_dir}/jar\" SYMBOLIC)
+    message(STATUS \"AOT jar dir symlink: \${_aot_mod_dir}/jar -> ${_qmod_jar_rel}\")
+endif()"
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        else()
+            install(DIRECTORY ${_source_root}/jar/
+                DESTINATION ${_qmod_install_dir}/${_name}/jar
+                COMPONENT ${QORE_QMOD_INSTALL_COMPONENT}
+                FILES_MATCHING PATTERN "*.jar")
         endif()
     else()
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
