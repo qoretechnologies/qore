@@ -1633,6 +1633,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
 
+        // Register a cleanup entry so a non-local exit (return / thread_exit) from
+        // inside the body restores $# to the caller's value.  Break and continue
+        // are handled on their own paths (break pops via ft.old_implicit_element
+        // below; continue falls through to the latch which pops), so this entry is
+        // pushed *before* ft.cleanup_stack_depth is captured: emitBlockCleanups()
+        // for break/continue stops above it and will not double-pop, while a return
+        // walks the whole cleanup stack and fires it.  Matches the reference foreach,
+        // which pops $# from its RefForeachRecord cleanup entry.
+        BlockCleanupEntry elem_entry;
+        elem_entry.type = BlockCleanupEntry::ForeachElement;
+        elem_entry.old_implicit_element = old_element;
+        elem_entry.loc = stmt->loc;
+        cleanup_stack.push_back(elem_entry);
+
         // Lower the loop body with proper break/continue targets
         // break → exit_block (break handler pops $# via old_implicit_element)
         // continue → latch_block (pops $# and increments index)
@@ -1650,11 +1664,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (!lowerStatementBlock(body, error)) {
                 --loop_depth;
                 flow_stack.pop_back();
+                cleanup_stack.pop_back();  // ForeachElement
                 return false;
             }
             --loop_depth;
         }
         flow_stack.pop_back();
+        cleanup_stack.pop_back();  // ForeachElement
 
         // Normal body exit falls through to latch block
         if (!blockHasTerminator(builder.getBlock())) {
@@ -2946,6 +2962,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
                     ui->is_block_exit = true;
                 }
+                break;
+            case BlockCleanupEntry::ForeachElement:
+                // Value (iterator-based) foreach: restore $# to the caller's value
+                // on a non-local exit (return / thread_exit) out of the loop body.
+                builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
                 break;
             case BlockCleanupEntry::RefForeachRecord: {
                 // Pop implicit element ($#) and record modified loop variable value

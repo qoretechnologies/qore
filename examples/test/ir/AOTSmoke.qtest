@@ -56,6 +56,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
         addTestCase("AOT parse reference map selector uses inner implicit index",
             \testParseRefMapSelectorUsesInnerImplicitIndex());
+        addTestCase("AOT foreach implicit index survives callee early return",
+            \testForeachImplicitIndexSurvivesCalleeEarlyReturn());
         addTestCase("AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
         addTestCase("AOT stale closure self member access fails",
@@ -902,6 +904,60 @@ printf(\"ok\\n\");
             + result.compile_out);
         assertEq("ok\n", result.run_out,
             "AOT parse references resolve map selector $# from the inner map context");
+    }
+
+    testForeachImplicitIndexSurvivesCalleeEarlyReturn() {
+        # Regression: a value (iterator-based) foreach registered the $# restore
+        # only on its break/continue paths, not on the cleanup stack walked by a
+        # non-local exit.  A `return` from inside the loop body therefore left $#
+        # holding the loop's last index, and that stale value leaked back to the
+        # caller's enclosing foreach.  The interpreter restores $# correctly, so
+        # the compiled output must match it.
+        string code = "%modern
+*string sub pick(list<hash<auto>> al) {
+    foreach hash<auto> info in (al) {
+        if (info.skip) {
+            continue;
+        }
+        return info.address;   # early return from inside foreach -> must restore \$#
+    }
+    return;
+}
+
+int sub nested(list<int> a, list<int> b) {
+    foreach int x in (a) {
+        foreach int y in (b) {
+            if (y == 5) {
+                return x * 100 + y;   # non-local exit through two nested foreaches
+            }
+        }
+    }
+    return -1;
+}
+
+list<hash<auto>> addrs = ();
+for (int i = 0; i < 14; ++i) {
+    addrs += {\"skip\": i < 13, \"address\": sprintf(\"a%d\", i)};
+}
+list<int> nums = ();
+for (int i = 0; i < 14; ++i) {
+    nums += i;
+}
+
+list<hash<auto>> rows = ({\"n\": \"a\"}, {\"n\": \"b\"}, {\"n\": \"c\"}, {\"n\": \"d\"});
+foreach hash<auto> row in (\\rows) {
+    pick(addrs);
+    nested(nums, nums);
+    printf(\"n=%s pos=%d\\n\", row.n, \$#);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT foreach preserves \$# across a callee that returns from inside its own foreach");
+        # the implicit index must follow the outer loop, not the callee's last index
+        assertEq("n=a pos=0\nn=b pos=1\nn=c pos=2\nn=d pos=3\n", aot_out,
+            "outer foreach \$# tracks the outer iteration after callee early returns");
     }
 
     testClosureUseReferenceParamsTeardown() {
