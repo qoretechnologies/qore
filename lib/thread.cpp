@@ -2950,11 +2950,11 @@ int q_deregister_foreign_thread() {
 
     ExceptionSink xsink;
 
+    // cleanup thread resources before deleting thread data; cleanup callbacks can execute Qore code
+    purge_thread_resources(&xsink);
+
     // delete any thread data
     td->del(&xsink);
-
-    // cleanup thread resources
-    purge_thread_resources(&xsink);
 
     xsink.handleExceptions();
 
@@ -3006,11 +3006,11 @@ int q_deregister_reserved_foreign_thread() {
 
     ExceptionSink xsink;
 
+    // cleanup thread resources before deleting thread data; cleanup callbacks can execute Qore code
+    purge_thread_resources(&xsink);
+
     // delete any thread data
     td->del(&xsink);
-
-    // cleanup thread resources
-    purge_thread_resources(&xsink);
 
     xsink.handleExceptions();
 
