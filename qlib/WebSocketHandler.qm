@@ -375,6 +375,13 @@ public class WebSocketConnection {
         */
         *WebSocketStreamProcessor stream_processor;
 
+        #! True once the transport close has been signaled (guards against duplicate close frames)
+        /** Set by @ref signalTransportClose() under @ref io_mutex.
+
+            @since WebSocketHandler 2.8
+        */
+        bool transport_close_signaled = False;
+
         #! True after the async transport has been registered and can accept direct writes
         /** Sends performed during @ref registered() must be queued and drained
             after async H1 poll-op registration or H2/H3 stream-listener
@@ -920,6 +927,42 @@ public class WebSocketConnection {
     #! force closing socket related to connection
     stop() {
         stop_flag = True;
+        # initiate the transport close (no-op if the async transport is not wired yet — the
+        # handler's startImpl() replays signalTransportClose() once the transport is registered,
+        # so a stop() that arrives during the setup window is not lost)
+        signalTransportClose();
+        # closing the channel wakes up the polling thread immediately
+        channel.close();
+        # signal the condition to wake up the I/O loop in case it's waiting
+        {
+            AutoLock al(io_mutex);
+            io_pending = True;
+            io_cond.signal();
+        }
+    }
+
+    #! Signals the wired async transport (H1 poll op or H2/H3 stream processor) to begin closing
+    /** Idempotent and safe to call from any thread.  Called by @ref stop() and replayed by the
+        handler's @ref WebSocketHandler::startImpl() after the transport is wired: a @ref stop()
+        that arrives during the setup window — after the connection is registered in the handler's
+        connection hash but before @ref setWsPollOp() (H1) or @ref setStreamProcessor() (H2/H3) has
+        wired the transport — would otherwise silently lose the close, leaving the connection alive
+        until an unrelated timeout.  The @ref transport_close_signaled guard ensures the close is
+        signaled exactly once even when @ref stop() and the replay race.
+
+        @note Internal API — not intended for use by subclasses.
+
+        @since WebSocketHandler 2.8
+    */
+    signalTransportClose() {
+        {
+            AutoLock al(io_mutex);
+            if (transport_close_signaled || (!async_ws_poll_op && !stream_processor)) {
+                # already signaled, or the transport is not wired yet (startImpl() will replay)
+                return;
+            }
+            transport_close_signaled = True;
+        }
         # For async H1 WebSocket: initiate close handshake via poll op
         if (async_ws_poll_op) {
             try {
@@ -941,14 +984,6 @@ public class WebSocketConnection {
             try {
                 stream_processor.forceClose();
             } catch () {}
-        }
-        # closing the channel wakes up the polling thread immediately
-        channel.close();
-        # signal the condition to wake up the I/O loop in case it's waiting
-        {
-            AutoLock al(io_mutex);
-            io_pending = True;
-            io_cond.signal();
         }
     }
 
@@ -2158,6 +2193,14 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         # Set up async H1 WebSocket I/O
         if (is_ws_async) {
+            # test hook: deterministically widen the setup window (between connection registration
+            # and poll-op wiring) so a regression test can force a stop()/drop into it; compiled out
+            # of release builds
+            @debug {
+                if (*string delay_ms = getenv("QORE_WS_SETUP_DELAY_MS")) {
+                    usleep(delay_ms.toInt() * 1000);
+                }
+            }
             ws_poll_op.setHeartbeat(heartbeat * 1000);
             ws_poll_op.setIdleTimeout(idle_timeout * 1000);
             ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
@@ -2253,6 +2296,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # Block until the connection closes
             Counter done(1);
             call_object_method(ws_poll_op, "setDone", done);
+            # If stop() was called during the setup window (before setWsPollOp() wired the poll op),
+            # its transport close was skipped; replay it now that the poll op is registered so the
+            # connection is torn down instead of lingering until an unrelated timeout.
+            if (wsc.stop_flag) {
+                wsc.signalTransportClose();
+            }
             done.waitForZero();
 
             # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
@@ -2310,6 +2359,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # processor. PINGs are sent only when no inbound WebSocket frame has
         # arrived within the configured heartbeat interval.
         stream_proc.startHeartbeat(heartbeat, heartbeat_msg, idle_timeout);
+
+        # If stop() was called during the setup window (before setStreamProcessor() wired the
+        # processor), its transport close was skipped; replay it now that the processor is wired.
+        if (wsc.stop_flag) {
+            wsc.signalTransportClose();
+        }
 
         # Block until stream closes. The stream_done counter is decremented by
         # WebSocketStreamProcessor::notifyIo() when it detects the close. When

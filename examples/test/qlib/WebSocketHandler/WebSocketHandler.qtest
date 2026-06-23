@@ -319,6 +319,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("pending send buffer tests", \pendingSendBufferTests());
         addTestCase("AsyncAPI handler option tests", \asyncApiHandlerOptionTests());
         addTestCase("max_queue_size drops slow client", \maxQueueSizeDropsTest());
+        addTestCase("max_queue_size drop during setup window", \maxQueueSizeDropsDuringSetupWindowTest());
         addTestCase("H2/H3 stream backpressure drops slow client", \streamBackpressureDropsTest());
         addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
 
@@ -1034,6 +1035,26 @@ class WebSocketHandlerTest inherits QUnit::Test {
         assertFalse(runWsMaxQueueScenario(0), "with no limit, the over-queue connection stays registered");
         # with the limit set, the over-limit connection IS dropped on the next send
         assertTrue(runWsMaxQueueScenario(5), "with max_queue_size set, the over-limit connection is dropped");
+    }
+
+    #! a drop (stop()) that lands in the async-H1 setup window (after the connection is registered
+    #! but before the poll op is wired) must still tear the connection down, not lose the close
+    /** Regression for the tiered-CI flake where stop() found async_ws_poll_op still null and
+        silently skipped the close; the handler's startImpl() now replays the transport close once
+        the poll op is wired.  The QORE_WS_SETUP_DELAY_MS hook in WebSocketHandler::startImpl() (only
+        present in debug builds) widens the window so the race is hit deterministically; when the test
+        is run without --enable-debug the hook is compiled out and this degenerates to the normal drop
+        path, which still passes.
+    */
+    maxQueueSizeDropsDuringSetupWindowTest() {
+        # widen the server-side setup window so sendAll()/stop() reliably lands before the poll op is
+        # wired; setenv() (not ENV{}) is used because the module hook reads the value with getenv()
+        setenv("QORE_WS_SETUP_DELAY_MS", "2000");
+        on_exit {
+            unsetenv("QORE_WS_SETUP_DELAY_MS");
+        }
+        assertTrue(runWsMaxQueueScenario(5),
+            "a drop during the setup window still closes and deregisters the connection");
     }
 
     #! when a limit is set, a backpressured H2/H3 stream closes the connection instead of blocking or dropping frames
