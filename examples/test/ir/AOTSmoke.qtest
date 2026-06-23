@@ -58,6 +58,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testParseRefMapSelectorUsesInnerImplicitIndex());
         addTestCase("AOT foreach implicit index survives callee early return",
             \testForeachImplicitIndexSurvivesCalleeEarlyReturn());
+        addTestCase("AOT inline closure-call iterable is not discarded",
+            \testInlineClosureCallIterableNotDiscarded());
         addTestCase("AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
         addTestCase("AOT stale closure self member access fails",
@@ -950,6 +952,50 @@ foreach hash<auto> row in (\\rows) {
         # the implicit index must follow the outer loop, not the callee's last index
         assertEq("n=a pos=0\nn=b pos=1\nn=c pos=2\nn=d pos=3\n", aot_out,
             "outer foreach \$# tracks the outer iteration after callee early returns");
+    }
+
+    testInlineClosureCallIterableNotDiscarded() {
+        # Regression: the IR interpreter's operand_use_counts table (used to decide
+        # whether a CallClosureDirect result may be discarded as dead) was built only
+        # from inst->operands and ignored value operands carried in dedicated fields
+        # such as IteratorCreate::iterable.  A closure/call-reference result used
+        # directly as a foreach/map/select/foldl iterable therefore looked unused,
+        # was discarded, and the iterator saw NOTHING -> zero iterations.  Binding the
+        # call result to a local first masked the bug.  All modes must match AST.
+        string code = "%modern
+code cl = list sub () { return (1, 2, 3, 4); };
+
+# foreach over an inline closure call in the scope where it is defined
+int a = 0; foreach auto x in (cl()) { ++a; }
+printf(\"local-foreach=%d\\n\", a);
+
+# the same closure value invoked inline in foreach after arriving via a parameter
+int sub viaParam(code fn) {
+    int n = 0;
+    foreach auto x in (fn()) { ++n; }
+    return n;
+}
+printf(\"param-foreach=%d\\n\", viaParam(cl));
+
+# functional operators over an inline closure call
+int m = 0; map ++m, cl();
+printf(\"map=%d\\n\", m);
+printf(\"select=%d\\n\", (select cl(), \$1 > 2).size());
+printf(\"foldl=%d\\n\", foldl \$1 + \$2, cl());
+
+# call-reference (\\f) form passed via parameter
+list sub gen() { return (9, 8, 7); }
+printf(\"ref-foreach=%d\\n\", viaParam(\\gen()));
+";
+        string ast_out = runExecMode(code, "ast");
+        assertEq("local-foreach=4\nparam-foreach=4\nmap=4\nselect=2\nfoldl=10\nref-foreach=3\n",
+            ast_out, "AST inline closure-call iteration counts");
+        assertEq(ast_out, runExecMode(code, "ir"),
+            "IR inline closure-call iterable matches AST");
+        assertEq(ast_out, runExecMode(code, "jit"),
+            "JIT inline closure-call iterable matches AST");
+        assertEq(ast_out, compileAndRun(code),
+            "AOT inline closure-call iterable matches AST");
     }
 
     testClosureUseReferenceParamsTeardown() {
