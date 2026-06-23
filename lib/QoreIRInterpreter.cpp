@@ -1540,7 +1540,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     break;
                 }
                 case QoreIROpcode::IteratorCreate:
-                case QoreIROpcode::IteratorCreateReverse: {
+                case QoreIROpcode::IteratorCreateIterate: {
+                    // IteratorCreateReverse is intentionally absent: it is built as a
+                    // plain QoreIRInstruction with its iterable in operands (already
+                    // counted above), so casting it to QoreIRIteratorCreateInstruction
+                    // here would read a non-existent field.
                     auto* iter = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
                     countIRValueUse(counts, iter->iterable);
                     markIRValueUse(non_dot_eval_uses, iter->iterable);
@@ -1781,10 +1785,47 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     && instructionMayInvalidateCallerCaches(func, inst_ptr.get())) {
                 may_invalidate_external_caches = true;
             }
-            for (const auto& op : inst_ptr->operands) {
+            auto countOperand = [&operand_use_counts](QoreIRValue op) {
                 if (op.isValid() && op.id < operand_use_counts.size()) {
                     ++operand_use_counts[op.id];
                 }
+            };
+            for (const auto& op : inst_ptr->operands) {
+                countOperand(op);
+            }
+            // Some instructions carry value operands in dedicated fields that are
+            // not present in inst->operands.  These must be counted here too, or a
+            // value whose only consumer is such a field (e.g. a call result used
+            // directly as a foreach/map iterable) is seen as having zero uses and
+            // is wrongly discarded as dead.  Mirror buildValueUseCounts(), but only
+            // for the fields that are *not* also mirrored into operands (Phi and
+            // IteratorCreateReverse already push their operands, so are skipped).
+            switch (inst_ptr->opcode) {
+                case QoreIROpcode::BrIf:
+                    countOperand(static_cast<const QoreIRBranchIfInstruction*>(inst_ptr.get())->condition);
+                    break;
+                case QoreIROpcode::SwitchInt:
+                    countOperand(static_cast<const QoreIRSwitchIntInstruction*>(inst_ptr.get())->switch_val);
+                    break;
+                case QoreIROpcode::SwitchString:
+                    countOperand(static_cast<const QoreIRSwitchStringInstruction*>(inst_ptr.get())->switch_val);
+                    break;
+                case QoreIROpcode::IteratorCreate:
+                case QoreIROpcode::IteratorCreateIterate:
+                    countOperand(static_cast<const QoreIRIteratorCreateInstruction*>(inst_ptr.get())->iterable);
+                    break;
+                case QoreIROpcode::IteratorNext:
+                    countOperand(static_cast<const QoreIRIteratorNextInstruction*>(inst_ptr.get())->iterator);
+                    break;
+                case QoreIROpcode::Return: {
+                    auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                    if (ret->has_value) {
+                        countOperand(ret->value);
+                    }
+                    break;
+                }
+                default:
+                    break;
             }
         }
     }
