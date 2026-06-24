@@ -727,10 +727,6 @@ static bool getAOTDirectObjectClassRefForMatch(const std::string& param, bool& o
 static bool aotDirectObjectClassParamMatchesVariant(const std::string& var_param,
         const std::string& target_param, const QoreTypeInfo* variant_ti,
         QoreAOTTypeResolver* type_resolver) {
-    if (!type_resolver) {
-        return false;
-    }
-
     bool var_or_nothing = false;
     bool target_or_nothing = false;
     std::string var_class_ref;
@@ -746,8 +742,20 @@ static bool aotDirectObjectClassParamMatchesVariant(const std::string& var_param
         return false;
     }
 
-    const QoreClass* target_qc = qore_aot_resolve_class_ref(type_resolver->getProgram(),
-        target_class_ref.c_str(), false);
+    // A class can be referenced under different namespace spellings: a --stub
+    // declares e.g. OMQ::SegmentEventQueue while the runtime builtin's canonical
+    // path is Qorus::SegmentEventQueue (OMQ is a Qorus namespace alias).  Resolve
+    // the target ref to a class and compare identity rather than path text.  The
+    // slot-map registration path passes no shared resolver, so fall back to the
+    // current (loading) program; without this, a method taking a stub-provided
+    // builtin-class parameter never matches its compiled slot-map entry and is
+    // left unregistered as AOT-native, so an AOT caller's CallDirect resolves to
+    // an unset target and the callee body silently never runs (issue-1326).
+    QoreProgram* pgm = type_resolver ? type_resolver->getProgram() : ::getProgram();
+    if (!pgm) {
+        return false;
+    }
+    const QoreClass* target_qc = qore_aot_resolve_class_ref(pgm, target_class_ref.c_str(), false);
     return target_qc && target_qc == variant_qc;
 }
 
