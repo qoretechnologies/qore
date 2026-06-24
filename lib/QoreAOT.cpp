@@ -649,6 +649,11 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
+// AOT exception source-location extraction: read the line table back from the
+// emitted object to build a per-function native-offset -> source-line map.
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
+#include <llvm/Support/MemoryBuffer.h>
 
 #include <cstdlib>
 #include <dlfcn.h>
@@ -4283,6 +4288,70 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     if (debug_opt) {
         fprintf(stderr, "AOT: Object file emission completed successfully\n");
         fflush(stderr);
+    }
+
+    // Step 1 (lazy-location prototype): verify the emitted object's DWARF line
+    // table is readable in-process and carries original-source offset->line rows.
+    // Logging only (QORE_AOT_LOC_DEBUG); no format/runtime change yet.
+    if (getenv("QORE_AOT_LOC_DEBUG")) {
+        auto buf_or = llvm::MemoryBuffer::getFile(path);
+        if (buf_or) {
+            auto obj_or = llvm::object::ObjectFile::createObjectFile(
+                (*buf_or)->getMemBufferRef());
+            if (obj_or) {
+                // Function symbols (addr, name), sorted by addr, for mapping each
+                // line-table row to its enclosing function + a function-relative
+                // offset (the stable key dladdr will reproduce at runtime).
+                std::vector<std::pair<uint64_t, std::string>> funcs;
+                for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
+                    auto ty = sym.getType();
+                    if (!ty) { llvm::consumeError(ty.takeError()); continue; }
+                    if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
+                    auto addr = sym.getAddress();
+                    auto nm = sym.getName();
+                    if (!addr) { llvm::consumeError(addr.takeError()); continue; }
+                    if (!nm) { llvm::consumeError(nm.takeError()); continue; }
+                    funcs.emplace_back(*addr, nm->str());
+                }
+                std::sort(funcs.begin(), funcs.end());
+                auto enclosing = [&funcs](uint64_t a) -> int {
+                    size_t lo = 0, hi = funcs.size();
+                    while (lo < hi) {
+                        size_t mid = (lo + hi) / 2;
+                        if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
+                    }
+                    return lo == 0 ? -1 : static_cast<int>(lo - 1);
+                };
+                std::unique_ptr<llvm::DWARFContext> dctx =
+                    llvm::DWARFContext::create(**obj_or);
+                size_t rows = 0, shown = 0;
+                for (const auto& unit : dctx->compile_units()) {
+                    const llvm::DWARFDebugLine::LineTable* lt =
+                        dctx->getLineTableForUnit(unit.get());
+                    if (!lt) {
+                        continue;
+                    }
+                    for (const auto& row : lt->Rows) {
+                        ++rows;
+                        if (shown < 25 && row.Line > 0) {
+                            int fi = enclosing(row.Address.Address);
+                            if (fi >= 0) {
+                                fprintf(stderr, "AOT-LOC: func=%s off=0x%llx line=%u\n",
+                                    funcs[fi].second.c_str(),
+                                    (unsigned long long)(row.Address.Address - funcs[fi].first),
+                                    row.Line);
+                                ++shown;
+                            }
+                        }
+                    }
+                }
+                fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu func symbols\n",
+                    path.c_str(), rows, funcs.size());
+            } else {
+                llvm::consumeError(obj_or.takeError());
+                fprintf(stderr, "AOT-LOC: createObjectFile failed for %s\n", path.c_str());
+            }
+        }
     }
 
     delete tm;
