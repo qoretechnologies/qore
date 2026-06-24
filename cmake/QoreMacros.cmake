@@ -1131,6 +1131,12 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-undefined -Wl,dynamic_lookup")
     endif(CMAKE_HOST_APPLE)
 
+    # NOTE: install(TARGETS) for a shared module already unlinks-then-writes a
+    # NEW inode on install (libqore.so itself showed "(deleted)" in the
+    # rebuilt-under-a-live-process crash and did not tear), so a running
+    # dlopen() keeps its old inode mapping intact.  Only the AOT .qmod path,
+    # which used plain install(FILES), needed the atomic stage-and-rename
+    # treatment (see QORE_INSTALL_QMOD_ATOMIC).
     install(TARGETS ${_module_name}
         DESTINATION ${_mod_target_dir}
         COMPONENT ${QORE_BINARY_MODULE_INSTALL_COMPONENT})
@@ -1260,6 +1266,66 @@ MACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL _name _is_dir)
             ${_name} ${_is_dir} "${QORE_AOT_MODULES_DIR}" ${QORE_QM_SOURCE_INSTALL_COMPONENT})
     endif()
 ENDMACRO (QORE_AOT_REMOVE_INSTALLED_QMODS_FOR_SOURCE_INSTALL)
+
+# Atomically publish a built AOT .qmod into its install location.
+#
+# CMake's plain install(FILES) copies file content into the destination path.
+# On some filesystems (notably overlayfs on containerized dev/CI nodes) this
+# rewrites the EXISTING destination inode in place.  A process that already has
+# the old .qmod dlopen()'d holds a MAP_PRIVATE mapping of that inode; an
+# in-place rewrite tears the mapping -- clean text pages re-fault to the new
+# bytes while the relocated GOT/PLT pages keep the old copy.  AOT code then
+# calls a libqore runtime helper through an un-relocated PLT slot, jumps to a
+# garbage (link-time) address and SIGSEGVs.  Reusing a freed inode can also
+# make glibc's dlopen() dedup (keyed on dev+inode) return a stale,
+# already-relocated link_map for the new file, with the same result.
+#
+# Publishing via a freshly-created temp file in the destination directory
+# followed by rename(2) guarantees:
+#   * the new .qmod always gets a brand-new inode the running process never
+#     mapped (defeats both the torn-mapping and the dlopen inode-reuse paths);
+#   * the swap is atomic, so a concurrent dlopen() never observes a partial
+#     file (also closes the overlayfs truncated-read window);
+#   * the old inode is unlinked but kept alive by any live mapping, so already
+#     running services keep working on the old code until they reload.
+#
+# This only matters for development installs over a live tree (production
+# installs modules before starting the process), so the extra copy is cheap.
+#
+# _src        absolute path of the built .qmod in the build tree
+# _dest_dir   install directory (absolute, or relative to CMAKE_INSTALL_PREFIX)
+# _dest_name  installed file name (e.g. <name>.qmod)
+# _component  install component (may be empty)
+FUNCTION (QORE_INSTALL_QMOD_ATOMIC _src _dest_dir _dest_name _component)
+    if (IS_ABSOLUTE "${_dest_dir}")
+        set(_qore_qmod_dest "\$ENV{DESTDIR}${_dest_dir}")
+    else()
+        set(_qore_qmod_dest "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_dest_dir}")
+    endif()
+    set(_qore_qmod_component_args "")
+    if (NOT "${_component}" STREQUAL "")
+        set(_qore_qmod_component_args COMPONENT ${_component})
+    endif()
+    install(CODE "
+set(_qore_qmod_dir \"${_qore_qmod_dest}\")
+set(_qore_qmod_dst \"\${_qore_qmod_dir}/${_dest_name}\")
+set(_qore_qmod_tmp \"\${_qore_qmod_dst}.inst.tmp\")
+file(MAKE_DIRECTORY \"\${_qore_qmod_dir}\")
+file(REMOVE \"\${_qore_qmod_tmp}\")
+# Stage the new bytes into a fresh inode in the destination directory, then
+# atomically rename(2) it onto the final name.  cmake -E copy (rather than
+# file(COPY_FILE), which needs CMake 3.21) keeps this working at the declared
+# 3.14 floor.  Staging in the same directory keeps src and dst on one
+# filesystem so the rename is a single atomic inode swap.
+execute_process(COMMAND \"\${CMAKE_COMMAND}\" -E copy \"${_src}\" \"\${_qore_qmod_tmp}\"
+    RESULT_VARIABLE _qore_qmod_rc)
+if (NOT _qore_qmod_rc EQUAL 0)
+    message(FATAL_ERROR \"failed to stage AOT qmod '${_src}' -> '\${_qore_qmod_tmp}': \${_qore_qmod_rc}\")
+endif()
+file(RENAME \"\${_qore_qmod_tmp}\" \"\${_qore_qmod_dst}\")
+message(STATUS \"Atomically installed: \${_qore_qmod_dst}\")
+" ${_qore_qmod_component_args})
+ENDFUNCTION (QORE_INSTALL_QMOD_ATOMIC)
 
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
@@ -1562,25 +1628,56 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
             COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
-        install(FILES ${_qmod_out}
-            DESTINATION ${_qmod_install_dir}/${_name}
-            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        # Atomic stage-and-rename publish (new inode) so rebuilding under a live
+        # process doesn't tear the running dlopen() mapping -- see
+        # QORE_INSTALL_QMOD_ATOMIC.
+        QORE_INSTALL_QMOD_ATOMIC("${_qmod_out}" "${_qmod_install_dir}/${_name}"
+            "${_name}.qmod" "${QORE_QMOD_INSTALL_COMPONENT}")
         if (_qmod_resource_srcs)
             install(FILES ${_qmod_resource_srcs}
                 DESTINATION ${_qmod_install_dir}/${_name}
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
         endif()
-        if (_qmod_jar_srcs)
-            install(FILES ${_qmod_jar_srcs}
-                DESTINATION ${_qmod_install_dir}/${_name}/jar
+        # Make the module's jar/ dir available beside the AOT .qmod so its
+        # baked `add-relative-classpath ./jar/...` (and cross-module refs like
+        # `../ExcelDataProvider/jar/...`) resolve at module load.  The jars are
+        # already installed beside the .qm source under QORE_USER_MODULES_DIR,
+        # and they are large (POI/Camel/... ~160 MB across modules), so where
+        # symlinks are supported we link the AOT-side jar/ to the source-side
+        # one instead of duplicating it.  The link is RELATIVE so it survives
+        # DESTDIR staging and prefix relocation (e.g. the docker build's
+        # `mv /opt /buildroot`).  This is done at INSTALL time, not via a
+        # configure-time file list, because a jni module's own
+        # qore-dataprovider-*.jar is generated during the build (and is
+        # gitignored), so it is absent when cmake first configures.  Falls back
+        # to a real copy on Windows.  Cross-module deps resolve because the
+        # referenced module installs its own jar/ link by the same rule.
+        if (NOT WIN32 AND NOT "${_qmod_install_dir}" STREQUAL "${QORE_USER_MODULES_DIR}")
+            file(RELATIVE_PATH _qmod_jar_rel
+                "${_qmod_install_dir}/${_name}"
+                "${QORE_USER_MODULES_DIR}/${_name}/jar")
+            install(CODE
+"set(_src_jar_dir \"\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}/jar\")
+if (EXISTS \"\${_src_jar_dir}\")
+    set(_aot_mod_dir \"\$ENV{DESTDIR}${_qmod_install_dir}/${_name}\")
+    file(MAKE_DIRECTORY \"\${_aot_mod_dir}\")
+    file(REMOVE_RECURSE \"\${_aot_mod_dir}/jar\")
+    file(CREATE_LINK \"${_qmod_jar_rel}\" \"\${_aot_mod_dir}/jar\" SYMBOLIC)
+    message(STATUS \"AOT jar dir symlink: \${_aot_mod_dir}/jar -> ${_qmod_jar_rel}\")
+endif()"
                 COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        else()
+            install(DIRECTORY ${_source_root}/jar/
+                DESTINATION ${_qmod_install_dir}/${_name}/jar
+                COMPONENT ${QORE_QMOD_INSTALL_COMPONENT}
+                FILES_MATCHING PATTERN "*.jar")
         endif()
     else()
         install(CODE "file(REMOVE\n${_qmod_stale_install_paths})"
             COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
-        install(FILES ${_qmod_out}
-            DESTINATION ${_qmod_install_dir}
-            COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+        # Atomic stage-and-rename publish (new inode); see QORE_INSTALL_QMOD_ATOMIC.
+        QORE_INSTALL_QMOD_ATOMIC("${_qmod_out}" "${_qmod_install_dir}"
+            "${_name}.qmod" "${QORE_QMOD_INSTALL_COMPONENT}")
     endif()
 ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 
