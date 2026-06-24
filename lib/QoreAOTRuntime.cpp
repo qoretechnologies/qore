@@ -727,6 +727,10 @@ static bool getAOTDirectObjectClassRefForMatch(const std::string& param, bool& o
 static bool aotDirectObjectClassParamMatchesVariant(const std::string& var_param,
         const std::string& target_param, const QoreTypeInfo* variant_ti,
         QoreAOTTypeResolver* type_resolver) {
+    if (!type_resolver) {
+        return false;
+    }
+
     bool var_or_nothing = false;
     bool target_or_nothing = false;
     std::string var_class_ref;
@@ -742,20 +746,8 @@ static bool aotDirectObjectClassParamMatchesVariant(const std::string& var_param
         return false;
     }
 
-    // A class can be referenced under different namespace spellings: a --stub
-    // declares e.g. OMQ::SegmentEventQueue while the runtime builtin's canonical
-    // path is Qorus::SegmentEventQueue (OMQ is a Qorus namespace alias).  Resolve
-    // the target ref to a class and compare identity rather than path text.  The
-    // slot-map registration path passes no shared resolver, so fall back to the
-    // current (loading) program; without this, a method taking a stub-provided
-    // builtin-class parameter never matches its compiled slot-map entry and is
-    // left unregistered as AOT-native, so an AOT caller's CallDirect resolves to
-    // an unset target and the callee body silently never runs (issue-1326).
-    QoreProgram* pgm = type_resolver ? type_resolver->getProgram() : ::getProgram();
-    if (!pgm) {
-        return false;
-    }
-    const QoreClass* target_qc = qore_aot_resolve_class_ref(pgm, target_class_ref.c_str(), false);
+    const QoreClass* target_qc = qore_aot_resolve_class_ref(type_resolver->getProgram(),
+        target_class_ref.c_str(), false);
     return target_qc && target_qc == variant_qc;
 }
 
@@ -832,6 +824,21 @@ static std::string qualifyAOTTypePathInScope(const std::string& path, const std:
 static bool aotVariantSignatureMatches(const AbstractQoreFunctionVariant* v,
         const std::string& target_sig, QoreAOTTypeResolver* type_resolver,
         const char* scope_path = nullptr) {
+    // The slot-map registration path supplies no shared type resolver.  Without
+    // one, a parameter type whose path differs only by namespace qualification
+    // between the compiled slot and the runtime variant cannot be reconciled and
+    // the method is left unregistered as AOT-native (its body becomes a silent
+    // no-op).  This affects every category that can carry a qualified name:
+    //   - object<class>: stub OMQ::SegmentEventQueue vs builtin Qorus::SegmentEventQueue
+    //   - hash<hashdecl>: compiled hash<SlaInfo> vs runtime hash<OMQ::SlaInfo>
+    // Bind a fallback resolver to the current (loading) program so the
+    // resolve()+isInputIdentical comparison below can run for all such types.
+    QoreProgram* fallback_pgm = type_resolver ? nullptr : ::getProgram();
+    QoreAOTTypeResolver fallback_resolver(fallback_pgm);
+    if (!type_resolver && fallback_pgm) {
+        type_resolver = &fallback_resolver;
+    }
+
     std::string var_sig = normalizeTypePaths(makeAOTVariantSignature(v));
     std::string normalized_target_sig = normalizeTypePaths(target_sig);
     if (var_sig == normalized_target_sig) {
