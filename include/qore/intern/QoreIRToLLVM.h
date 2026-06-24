@@ -588,6 +588,15 @@ private:
     //! AOT location table: owns location data captured during LLVM codegen.
     std::vector<AOTLocEntry> aot_loc_table;
 
+    //! AOT-mode debug-location encoding state: the loc-index currently encoded into
+    //! the DWARF column, advanced on source-line change (mirrors the eager updater's
+    //! line-change gate) so the emitted line table carries the exact active loc-index.
+    int last_aot_dbg_line = -1;
+    int32_t current_aot_loc_index = -1;
+
+    //! Return the AOT loc-index for `loc`, appending to aot_loc_table on first use.
+    int32_t getOrAddAotLocIndex(const QoreProgramLocation* loc);
+
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
 

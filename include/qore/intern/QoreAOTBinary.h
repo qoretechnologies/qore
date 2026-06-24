@@ -1563,6 +1563,7 @@ struct AOTSlotIdentities {
 //! Descriptor for a compiled function with slot identities
 struct AOTCompiledFuncWithSlots {
     std::string name;                //!< AOT function name (e.g. "myFunc", "MyClass::method")
+    std::string llvm_symbol;         //!< LLVM/native symbol name in the emitted object (for PC->loc mapping)
     int num_locals = 0;              //!< number of local variable slots
     int num_globals = 0;             //!< number of global variable slots
     int num_exprs = 0;               //!< number of expression slots
@@ -1589,6 +1590,10 @@ struct AOTCompiledFuncWithSlots {
     };
     //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
     std::vector<AOTLocEntry> aot_locs;
+    //! Native-PC map: sorted (function-relative native offset -> loc-index into aot_locs).
+    //! Built post-emission from the object's DWARF line table (column carries the exact
+    //! loc-index). Drives lazy on-throw source-location recovery (replaces the eager updater).
+    std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int16_t start_line = 0;

@@ -3118,6 +3118,26 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
     return f;
 }
 
+int32_t QoreIRToLLVM::getOrAddAotLocIndex(const QoreProgramLocation* loc) {
+    auto it = aot_loc_slots.find(loc);
+    if (it != aot_loc_slots.end()) {
+        return it->second;
+    }
+    int32_t loc_index = static_cast<int32_t>(aot_loc_table.size());
+    aot_loc_slots[loc] = loc_index;
+    // Copy location data by value immediately — the table owns the data,
+    // eliminating any dependency on the loc pointer lifetime.
+    AOTLocEntry entry;
+    entry.start_line = loc->start_line;
+    entry.end_line = loc->end_line;
+    const char* f = loc->getFile();
+    if (f) {
+        entry.file = f;
+    }
+    aot_loc_table.push_back(std::move(entry));
+    return loc_index;
+}
+
 void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module) {
     if (!loc_cache_ptr || !stmt_cache_ptr) {
         return;
@@ -3132,24 +3152,7 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
 
     if (aot_mode) {
         // AOT mode: call runtime helper to update location from ctx->locs table
-        auto it = aot_loc_slots.find(inst->loc);
-        int32_t loc_index;
-        if (it != aot_loc_slots.end()) {
-            loc_index = it->second;
-        } else {
-            loc_index = static_cast<int32_t>(aot_loc_table.size());
-            aot_loc_slots[inst->loc] = loc_index;
-            // Copy location data by value immediately — the table owns the data,
-            // eliminating any dependency on inst->loc pointer lifetime.
-            AOTLocEntry entry;
-            entry.start_line = inst->loc->start_line;
-            entry.end_line = inst->loc->end_line;
-            const char* f = inst->loc->getFile();
-            if (f) {
-                entry.file = f;
-            }
-            aot_loc_table.push_back(std::move(entry));
-        }
+        int32_t loc_index = getOrAddAotLocIndex(inst->loc);
         auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
                 {ptr_type, llvm::Type::getInt32Ty(ctx)}, false));
@@ -3276,10 +3279,26 @@ void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
         return;
     }
     unsigned line = 0;
+    unsigned col = 0;
     if (inst->loc && inst->loc->start_line > 0) {
         line = static_cast<unsigned>(inst->loc->start_line);
+        if (aot_mode) {
+            // Encode the active AOT loc-index into the DWARF column so the emitted
+            // line table can be read back post-emission as an exact native-offset ->
+            // loc-index map (drives lazy on-throw source-location recovery). Advance
+            // the index only on source-line change, mirroring emitRuntimeLocationUpdate's
+            // gate, so consecutive same-line instructions carry the same active location
+            // exactly as the eager updater would.
+            if (inst->loc->start_line != last_aot_dbg_line) {
+                last_aot_dbg_line = inst->loc->start_line;
+                current_aot_loc_index = getOrAddAotLocIndex(inst->loc);
+            }
+            if (current_aot_loc_index >= 0) {
+                col = static_cast<unsigned>(current_aot_loc_index + 1);
+            }
+        }
     }
-    builder->SetCurrentDebugLocation(llvm::DILocation::get(ctx, line, 0, di_sp));
+    builder->SetCurrentDebugLocation(llvm::DILocation::get(ctx, line, col, di_sp));
 }
 
 llvm::BasicBlock* QoreIRToLLVM::getOrCreateJitDeoptBlock(llvm::Module& module,
@@ -4730,6 +4749,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
     last_runtime_line = -1;
+    last_aot_dbg_line = -1;
+    current_aot_loc_index = -1;
     aot_loc_slots.clear();
     aot_loc_table.clear();
     {

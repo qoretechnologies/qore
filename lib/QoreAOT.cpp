@@ -4021,8 +4021,140 @@ struct TimeTraceRAII {
     }
 };
 
+//! Read the emitted object's DWARF line table and populate each func's pc_loc_map
+//! (sorted function-relative native offset -> loc-index). The DWARF column carries
+//! loc-index+1 (see QoreIRToLLVM::setDebugLocation); EndSequence/col==0 rows are
+//! skipped, and consecutive rows with the same active loc-index are collapsed since
+//! lookup uses the largest offset <= pc.
+static void buildAOTPcLocMaps(const std::string& path,
+        std::vector<AOTCompiledFuncWithSlots>& func_slots) {
+    bool dbg = getenv("QORE_AOT_LOC_DEBUG");
+    auto buf_or = llvm::MemoryBuffer::getFile(path);
+    if (!buf_or) {
+        if (dbg) {
+            fprintf(stderr, "AOT-LOC: cannot read object %s\n", path.c_str());
+        }
+        return;
+    }
+    auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
+    if (!obj_or) {
+        llvm::consumeError(obj_or.takeError());
+        if (dbg) {
+            fprintf(stderr, "AOT-LOC: createObjectFile failed for %s\n", path.c_str());
+        }
+        return;
+    }
+
+    // Function symbols (addr, name) sorted by addr for enclosing-function lookup.
+    std::vector<std::pair<uint64_t, std::string>> funcs;
+    for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
+        auto ty = sym.getType();
+        if (!ty) { llvm::consumeError(ty.takeError()); continue; }
+        if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
+        auto addr = sym.getAddress();
+        auto nm = sym.getName();
+        if (!addr) { llvm::consumeError(addr.takeError()); continue; }
+        if (!nm) { llvm::consumeError(nm.takeError()); continue; }
+        funcs.emplace_back(*addr, nm->str());
+    }
+    std::sort(funcs.begin(), funcs.end());
+    auto enclosing = [&funcs](uint64_t a) -> int {
+        size_t lo = 0, hi = funcs.size();
+        while (lo < hi) {
+            size_t mid = (lo + hi) / 2;
+            if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
+        }
+        return lo == 0 ? -1 : static_cast<int>(lo - 1);
+    };
+
+    // Map LLVM symbol name -> index into func_slots so DWARF rows attach to the
+    // owning function descriptor.
+    std::unordered_map<std::string, size_t> sym_to_fws;
+    sym_to_fws.reserve(func_slots.size());
+    for (size_t i = 0; i < func_slots.size(); ++i) {
+        if (!func_slots[i].llvm_symbol.empty()) {
+            sym_to_fws[func_slots[i].llvm_symbol] = i;
+        }
+        func_slots[i].pc_loc_map.clear();
+    }
+
+    std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
+    size_t rows = 0, mapped = 0;
+    for (const auto& unit : dctx->compile_units()) {
+        const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
+        if (!lt) {
+            continue;
+        }
+        for (const auto& row : lt->Rows) {
+            ++rows;
+            if (row.EndSequence || row.Column == 0) {
+                continue;
+            }
+            int fi = enclosing(row.Address.Address);
+            if (fi < 0) {
+                continue;
+            }
+            auto it = sym_to_fws.find(funcs[fi].second);
+            if (it == sym_to_fws.end()) {
+                continue;
+            }
+            AOTCompiledFuncWithSlots& fws = func_slots[it->second];
+            uint32_t offset = static_cast<uint32_t>(row.Address.Address - funcs[fi].first);
+            uint32_t loc_index = static_cast<uint32_t>(row.Column - 1);
+            if (loc_index >= fws.aot_locs.size()) {
+                // Column carried a loc-index outside this function's loc table —
+                // should not happen; skip rather than serialize a bad entry.
+                if (dbg) {
+                    fprintf(stderr, "AOT-LOC: WARN %s off=0x%x col-loc=%u >= aot_locs=%zu\n",
+                        funcs[fi].second.c_str(), offset, loc_index, fws.aot_locs.size());
+                }
+                continue;
+            }
+            fws.pc_loc_map.emplace_back(offset, loc_index);
+            ++mapped;
+        }
+    }
+
+    // Sort each map by offset and collapse consecutive entries sharing the same
+    // loc-index (lookup uses largest offset <= pc, so redundant runs add no info).
+    size_t total_entries = 0;
+    for (auto& fws : func_slots) {
+        auto& m = fws.pc_loc_map;
+        std::sort(m.begin(), m.end());
+        std::vector<std::pair<uint32_t, uint32_t>> compact;
+        for (const auto& e : m) {
+            if (!compact.empty() && compact.back().second == e.second) {
+                continue;
+            }
+            if (!compact.empty() && compact.back().first == e.first) {
+                // Same offset, different loc-index (multiple rows at one PC): keep
+                // the last one written (matches the eager updater's final store).
+                compact.back().second = e.second;
+                continue;
+            }
+            compact.push_back(e);
+        }
+        m.swap(compact);
+        total_entries += m.size();
+        if (dbg && !m.empty()) {
+            fprintf(stderr, "AOT-LOC: func=%s entries=%zu (locs=%zu)\n",
+                fws.name.c_str(), m.size(), fws.aot_locs.size());
+            for (size_t k = 0; k < m.size() && k < 12; ++k) {
+                int16_t ln = fws.aot_locs[m[k].second].start_line;
+                fprintf(stderr, "AOT-LOC:   off=0x%x -> loc=%u line=%d\n",
+                    m[k].first, m[k].second, (int)ln);
+            }
+        }
+    }
+    if (dbg) {
+        fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu mapped, %zu compacted entries, %zu funcs\n",
+            path.c_str(), rows, mapped, total_entries, func_slots.size());
+    }
+}
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
-        int opt_level = 3, const char* target_triple = nullptr) {
+        int opt_level = 3, const char* target_triple = nullptr,
+        std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
     // Phase 1 instrumentation: Chrome trace for opt + codegen.
     TimeTraceRAII time_trace;
 
@@ -4290,68 +4422,15 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         fflush(stderr);
     }
 
-    // Step 1 (lazy-location prototype): verify the emitted object's DWARF line
-    // table is readable in-process and carries original-source offset->line rows.
-    // Logging only (QORE_AOT_LOC_DEBUG); no format/runtime change yet.
-    if (getenv("QORE_AOT_LOC_DEBUG")) {
-        auto buf_or = llvm::MemoryBuffer::getFile(path);
-        if (buf_or) {
-            auto obj_or = llvm::object::ObjectFile::createObjectFile(
-                (*buf_or)->getMemBufferRef());
-            if (obj_or) {
-                // Function symbols (addr, name), sorted by addr, for mapping each
-                // line-table row to its enclosing function + a function-relative
-                // offset (the stable key dladdr will reproduce at runtime).
-                std::vector<std::pair<uint64_t, std::string>> funcs;
-                for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
-                    auto ty = sym.getType();
-                    if (!ty) { llvm::consumeError(ty.takeError()); continue; }
-                    if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
-                    auto addr = sym.getAddress();
-                    auto nm = sym.getName();
-                    if (!addr) { llvm::consumeError(addr.takeError()); continue; }
-                    if (!nm) { llvm::consumeError(nm.takeError()); continue; }
-                    funcs.emplace_back(*addr, nm->str());
-                }
-                std::sort(funcs.begin(), funcs.end());
-                auto enclosing = [&funcs](uint64_t a) -> int {
-                    size_t lo = 0, hi = funcs.size();
-                    while (lo < hi) {
-                        size_t mid = (lo + hi) / 2;
-                        if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
-                    }
-                    return lo == 0 ? -1 : static_cast<int>(lo - 1);
-                };
-                std::unique_ptr<llvm::DWARFContext> dctx =
-                    llvm::DWARFContext::create(**obj_or);
-                size_t rows = 0, shown = 0;
-                for (const auto& unit : dctx->compile_units()) {
-                    const llvm::DWARFDebugLine::LineTable* lt =
-                        dctx->getLineTableForUnit(unit.get());
-                    if (!lt) {
-                        continue;
-                    }
-                    for (const auto& row : lt->Rows) {
-                        ++rows;
-                        if (shown < 25 && row.Line > 0) {
-                            int fi = enclosing(row.Address.Address);
-                            if (fi >= 0) {
-                                fprintf(stderr, "AOT-LOC: func=%s off=0x%llx line=%u\n",
-                                    funcs[fi].second.c_str(),
-                                    (unsigned long long)(row.Address.Address - funcs[fi].first),
-                                    row.Line);
-                                ++shown;
-                            }
-                        }
-                    }
-                }
-                fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu func symbols\n",
-                    path.c_str(), rows, funcs.size());
-            } else {
-                llvm::consumeError(obj_or.takeError());
-                fprintf(stderr, "AOT-LOC: createObjectFile failed for %s\n", path.c_str());
-            }
-        }
+    // Lazy-location support (Steps 2a/2b): read the just-emitted object's DWARF
+    // line table and build, per AOT function, a sorted (function-relative native
+    // offset -> loc-index) map. The DWARF column carries the exact active loc-index
+    // (encoded in QoreIRToLLVM::setDebugLocation), so recovery is exact rather than
+    // a fragile line-match. The map drives lazy on-throw source-location recovery,
+    // replacing the eager per-line updater. Only runs when func_slots is supplied
+    // (the main per-program emit site); a no-op for glue/cross-compile objects.
+    if (func_slots && !func_slots->empty()) {
+        buildAOTPcLocMaps(path, *func_slots);
     }
 
     delete tm;
@@ -4857,6 +4936,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
         failed_count, compiled_funcs, target_triple);
 
     // Step 3: Build serialized metadata and generate main() + function registration table
+    // Hoisted out of the metadata block so the function descriptors survive to the
+    // post-emission DWARF pass (buildAOTPcLocMaps needs the emitted object, which only
+    // exists after emitObjectFile below).
+    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
     {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
@@ -4954,6 +5037,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 fws.handler_irs.push_back(hir);
             }
             fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -4969,6 +5053,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(pgm, func_slots, error)) {
@@ -5010,6 +5095,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
         finalizeAOTMetadataCompression(metadata, include_source, report_metadata);
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
             compiled_init_funcs);
+
+        // Preserve the function descriptors for the post-emission PC->loc pass.
+        emitted_func_slots.swap(func_slots);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -5038,7 +5126,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         fprintf(stderr, "AOT: emitting object file (O%d, total IR insts: %zu)...\n",
             opt_level, total_ir_insts_all);
     }
-    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
         return false;
     }
     if (getenv("QORE_AOT_DEBUG")) {
@@ -6953,6 +7041,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
                 fws.handler_irs.push_back(hir);
             }
             fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -6968,6 +7057,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -7414,6 +7504,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     fws.handler_irs.push_back(hir);
                 }
                 fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -7429,6 +7520,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -7883,6 +7975,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
 
     // Build the fragment metadata blob.
     std::vector<uint8_t> metadata_blob;
+    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
+    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
     {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
@@ -7945,6 +8039,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
                 fws.handler_irs.push_back(hir);
             }
             fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -7959,6 +8054,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, target_canon.c_str())) {
@@ -7990,6 +8086,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             error = "failed to finalize script metadata for " + target_canon;
             return false;
         }
+        emitted_func_slots.swap(func_slots);
     }
 
     // Merge init funcs into compiled_funcs BEFORE register-symbol
@@ -8043,7 +8140,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         module->print(llvm::errs(), nullptr);
     }
 
-    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
         return false;
     }
 
@@ -8753,6 +8850,7 @@ bool QoreAOT::compileScriptAggregate(
                 fws.handler_irs.push_back(hir);
             }
             fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
             ++func_i;
@@ -8774,6 +8872,7 @@ bool QoreAOT::compileScriptAggregate(
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
             ++init_slot_i;
         }
@@ -9478,6 +9577,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // contributions (slice 5 format).  No module-info globals, no
     // register fn.
     std::vector<uint8_t> metadata_blob;
+    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
+    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
     {
         QoreAOTBinaryWriter writer;
         QoreAOTBinaryHeader hdr{};
@@ -9538,6 +9639,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 fws.handler_irs.push_back(hir);
             }
             fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
             fws.debug_ir = cf.debug_ir.get();
             func_slots.push_back(std::move(fws));
         }
@@ -9552,6 +9654,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
             func_slots.push_back(std::move(fws));
         }
         if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
@@ -9582,6 +9685,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "failed to finalize script metadata";
             return false;
         }
+        emitted_func_slots.swap(func_slots);
     }
 
     if (qccAOTVerbose()) {
@@ -9657,7 +9761,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         module->print(llvm::errs(), nullptr);
     }
 
-    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
+    if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
         return false;
     }
 
@@ -10088,6 +10192,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                     fws.handler_irs.push_back(hir);
                 }
                 fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -10102,6 +10207,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
@@ -10542,6 +10648,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     fws.handler_irs.push_back(hir);
                 }
                 fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -10556,6 +10663,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
@@ -11012,6 +11120,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     fws.handler_irs.push_back(hir);
                 }
                 fws.aot_locs = cf.aot_locs;
+            fws.llvm_symbol = cf.llvm_symbol;
                 fws.debug_ir = cf.debug_ir.get();
                 func_slots.push_back(std::move(fws));
             }
@@ -11026,6 +11135,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 setAOTInitFuncConstantExclusions(fws, cif);
+            fws.llvm_symbol = cif.llvm_symbol;
                 func_slots.push_back(std::move(fws));
             }
             if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
