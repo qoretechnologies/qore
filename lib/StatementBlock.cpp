@@ -864,6 +864,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         + std::to_string((uintptr_t)this) + "_"
                         + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+                    // Debug-step hook context (issue #5352): the top-level block runs as
+                    // JIT-compiled native code (executeWithFallback), so record its own
+                    // StatementBlock and the program's attached-debugger slot to enable the
+                    // per-statement dbgStep hook for top-level code too.  Skip entirely when
+                    // the program forbids debugging (PO_NO_DEBUGGING) so non-debuggable code
+                    // pays zero per-statement overhead (leaving these null no-ops the hook).
+                    if (qore_program_private::get(*pgm)->checkAllowDebugging(nullptr)) {
+                        func->source_statement_block = this;
+                        func->source_dpgm_addr = const_cast<void*>(static_cast<const void*>(
+                                qore_program_private::get(*pgm)->getAttachedDebugProgramAddr()));
+                    }
 
                     // Collect nested body locals from the statement tree.  Root
                     // top-level locals remain owned by QoreProgram and must not

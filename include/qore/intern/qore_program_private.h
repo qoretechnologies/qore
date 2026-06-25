@@ -940,6 +940,18 @@ public:
         return dpgm != nullptr;
     }
 
+    //! Returns the address of the attached-debugger pointer slot
+    /** Used by the JIT lowering (issue #5352) to bake a cheap inline gate for the
+        per-statement debug-step hook: the generated native code loads through this
+        address and only calls the dbgStep runtime hook when a debugger is attached.
+        The address is stable for the program's lifetime (the JIT code is discarded
+        when the program is destroyed), and a racy relaxed read is fine — the hook
+        re-checks the precise thread run-state via ThreadLocalProgramData::runtimeCheck().
+    */
+    DLLLOCAL qore_debug_program_private* const* getAttachedDebugProgramAddr() const {
+        return &dpgm;
+    }
+
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
     // map for line to statement
     typedef std::map<int, AbstractStatement*> sline_statement_map_t;
