@@ -1,7 +1,11 @@
 # AOT lazy exception locations — innermost-frame mechanism (Step 6 enabler)
 
-Status: **design** (2026-06-25). Prereq: the lazy throw-location path (commits
-`853ce1bcf`→`219010537`, opt-in `QORE_AOT_LOC_LAZY`).
+Status: **DONE** (2026-06-25). Lazy is now the default and the eager per-line AOT
+updater is removed (Step 6). Commits: mechanism `e6ff2d78d`+`0c220a9ed`, lazy-default
+`4ccda3d10` (Phase A), eager removal `e6f42799e` (Phase B). Opt out with
+`QORE_AOT_LOC_NO_LAZY`; `--strip-debug-info` retains the eager updater (no DWARF).
+Full core suite 789/789 in default mode AND with the eager updater removed; callstack
+tests intact; AOT codegen emits 0 per-line location calls (was 3).
 
 ## Problem
 
