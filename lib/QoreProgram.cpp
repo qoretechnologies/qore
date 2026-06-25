@@ -330,14 +330,14 @@ void qore_program_private::registerProgram() {
 
 qore_program_private::~qore_program_private() {
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: %d\n", this, pgm, programId);
-    if (dpgm) {
+    if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
         // the thread can be stopped.
         ThreadLocalProgramData *tlpd = get_thread_local_program_data();
         if (tlpd) {
             tlpd->dbgDetach(nullptr);
         }
-        dpgm->removeProgram(pgm);
+        dp->removeProgram(pgm);
     }
     // wait till all debug calls are finished, no new calls possible as dpgm->removeProgram() set dpmg to NULL
     debug_program_counter.waitForZero();
@@ -364,7 +364,7 @@ qore_program_private::~qore_program_private() {
     assert(pgm_data_map.empty());
     assert(!exec_class_rv);
     assert(!exec_class_inst);
-    assert(!dpgm);
+    assert(!dpgm.load(std::memory_order_relaxed));
 }
 
 QoreListNode* qore_program_private::getParseDiagnosticList() const {
@@ -1046,14 +1046,14 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // detach itself from debug
-    if (dpgm) {
+    if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to
         // this thread the thread can be stopped.
         ThreadLocalProgramData *tlpd = get_thread_local_program_data();
         if (tlpd) {
             tlpd->dbgDetach(xsink);
         }
-        dpgm->removeProgram(pgm);
+        dp->removeProgram(pgm);
     }
 
     // this is probably not necessary, as the next waiting for thread

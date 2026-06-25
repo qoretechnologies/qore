@@ -937,7 +937,20 @@ class qore_program_private : public qore_program_private_base {
 public:
     //! Returns true if a debugger is currently attached to this program
     DLLLOCAL bool hasDebuggerAttached() const {
-        return dpgm != nullptr;
+        return dpgm.load(std::memory_order_relaxed) != nullptr;
+    }
+
+    //! Returns the address of the attached-debugger pointer slot
+    /** Used by the JIT lowering (issue #5352) to bake a cheap inline gate for the
+        per-statement debug-step hook: the generated native code performs a relaxed
+        atomic load through this address and only calls the dbgStep runtime hook when a
+        debugger is attached.  The address is stable for the program's lifetime (the JIT
+        code is discarded when the program is destroyed); \c dpgm is atomic so the
+        lock-free load does not race with attachDebug()/detachDebug().  The hook still
+        re-checks the precise thread run-state via ThreadLocalProgramData::runtimeCheck().
+    */
+    DLLLOCAL const std::atomic<qore_debug_program_private*>* getAttachedDebugProgramAddr() const {
+        return &dpgm;
     }
 
     typedef std::map<const char*, int, ltstr> section_offset_map_t;
@@ -2832,14 +2845,16 @@ public:
     }
 
     DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {
-        printd(5, "qore_program_private::attachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm, dpgm);
+        printd(5, "qore_program_private::attachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm,
+            dpgm.load(std::memory_order_relaxed));
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
 
-        if (dpgm == n_dpgm)
+        if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
-        dpgm = const_cast<qore_debug_program_private*>(n_dpgm);
-        printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
+        dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
+        printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n",
+            dpgm.load(std::memory_order_relaxed),
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
         for (auto& i : pgm_data_map) {
             if (!i.first->canRunDebugCallbacks()) {
@@ -2851,14 +2866,16 @@ public:
     }
 
     DLLLOCAL void detachDebug(const qore_debug_program_private* n_dpgm) {
-        printd(5, "qore_program_private::detachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm, dpgm);
+        printd(5, "qore_program_private::detachDebug(n_dpgm: %p), dpgm: %p\n", n_dpgm,
+            dpgm.load(std::memory_order_relaxed));
         AutoLocker al(tlock);
         //QoreAutoRWWriteLocker arwl(&lck_debug_program);
-        assert(n_dpgm==dpgm);
+        assert(n_dpgm==dpgm.load(std::memory_order_relaxed));
         if (!n_dpgm)
             return;
-        dpgm = nullptr;
-        printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
+        dpgm.store(nullptr, std::memory_order_release);
+        printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n",
+            dpgm.load(std::memory_order_relaxed),
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
         for (auto& i : pgm_data_map) {
             if (!i.first->canRunDebugCallbacks()) {
@@ -3241,7 +3258,10 @@ private:
         }
     }
 
-    qore_debug_program_private* dpgm = nullptr;
+    // Atomic so the lock-free JIT debug-step gate (issue #5352) and hasDebuggerAttached()
+    // can read it concurrently with attachDebug()/detachDebug() (which write under tlock)
+    // without a data race; relaxed ordering compiles to a plain aligned load/store.
+    std::atomic<qore_debug_program_private*> dpgm{nullptr};
     QoreRWLock lck_breakpoint; // to protect breakpoint manipulation
     QoreBreakpointList_t breakpointList;
 
@@ -3270,7 +3290,7 @@ private:
     DLLLOCAL qore_debug_program_private* getDebugProgram(AutoQoreCounterDec& ad) {
         AutoLocker al(tlock);
         //QoreAutoRWReadLocker al(&lck_debug_program);
-        qore_debug_program_private* ret = dpgm;
+        qore_debug_program_private* ret = dpgm.load(std::memory_order_relaxed);
         if (ret) {
             // new debug call in progress
             ad.inc();
