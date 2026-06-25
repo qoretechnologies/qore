@@ -3988,7 +3988,12 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
             llvm::ConstantInt::get(i64_type,
                     reinterpret_cast<uint64_t>(current_ir_func->source_dpgm_addr)),
             ptr_type);
-    llvm::Value* dpgm = builder->CreateLoad(ptr_type, dpgm_slot, "dbg_dpgm");
+    // Relaxed atomic load: dpgm is std::atomic, written under tlock by attachDebug()/
+    // detachDebug(); a monotonic load here reads it race-free with the single-branch gate.
+    llvm::LoadInst* dpgm_ld = builder->CreateLoad(ptr_type, dpgm_slot, "dbg_dpgm");
+    dpgm_ld->setAtomic(llvm::AtomicOrdering::Monotonic);
+    dpgm_ld->setAlignment(llvm::Align(sizeof(void*)));
+    llvm::Value* dpgm = dpgm_ld;
     llvm::Value* attached = builder->CreateICmpNE(dpgm,
             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
             "dbg_attached");
@@ -4014,18 +4019,19 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
         emit_call();
     } else {
         // Per-statement dedup by source line: only fire when the line changed since the
-        // last step event in this frame (mirrors the interpreter's last_debug_line).
+        // last step event in this frame.  Dedup on cached_start_line (NOT abs_line) to
+        // match the IR interpreter's last_debug_line exactly (QoreIRInterpreter.cpp), so
+        // JIT-tier stepping never diverges from IR-tier when loc->offset is non-zero.
+        // abs_line is still passed to the runtime hook for statement-index lookup.
+        llvm::Constant* dedup_line = llvm::ConstantInt::get(i32_type,
+                static_cast<uint64_t>(static_cast<uint32_t>(inst->cached_start_line)));
         llvm::AllocaInst* last_slot = getOrCreateDebugLastLineSlot(llvm_func);
         llvm::Value* last = builder->CreateLoad(i32_type, last_slot, "dbg_last");
-        llvm::Value* changed = builder->CreateICmpNE(last,
-                llvm::ConstantInt::get(i32_type, static_cast<uint64_t>(
-                        static_cast<uint32_t>(abs_line))),
-                "dbg_line_changed");
+        llvm::Value* changed = builder->CreateICmpNE(last, dedup_line, "dbg_line_changed");
         llvm::BasicBlock* do_fire = llvm::BasicBlock::Create(ctx, "dbg_do_fire", llvm_func);
         builder->CreateCondBr(changed, do_fire, cont);
         builder->SetInsertPoint(do_fire);
-        builder->CreateStore(llvm::ConstantInt::get(i32_type, static_cast<uint64_t>(
-                static_cast<uint32_t>(abs_line))), last_slot);
+        builder->CreateStore(dedup_line, last_slot);
         emit_call();
     }
     builder->SetInsertPoint(cont);
