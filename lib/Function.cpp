@@ -5191,6 +5191,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(statements);
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // Owning program for the per-Program background-compile drain (set unconditionally).
+    func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
     // the owning program's attached-debugger pointer slot so the JIT lowering can bake
     // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).

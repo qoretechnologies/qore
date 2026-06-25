@@ -864,6 +864,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         + std::to_string((uintptr_t)this) + "_"
                         + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+                    // Owning program for the per-Program background-compile drain (always).
+                    func->pgm = pgm;
                     // Debug-step hook context (issue #5352): the top-level block runs as
                     // JIT-compiled native code (executeWithFallback), so record its own
                     // StatementBlock and the program's attached-debugger slot to enable the

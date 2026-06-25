@@ -2559,6 +2559,11 @@ public:
     //! (qore_program_private::getAttachedDebugProgramAddr()), used as the inline
     //! gate for the JIT debug-step hook.  Null in AOT mode / when unavailable.
     void* source_dpgm_addr = nullptr;
+    //! Owning program of this lowered IR function. Used by the per-Program background
+    //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
+    //! only the compiles referencing a Program being torn down. Set unconditionally at
+    //! lowering (independent of the #5352 debug context above). Null for AOT.
+    QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
