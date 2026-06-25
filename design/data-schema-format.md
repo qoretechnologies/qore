@@ -339,6 +339,51 @@ migrations:
         where: {display_name: null}
 ```
 
+A migration's `version` is the schema version it advances the database **to**: it runs whenever
+the database's current (source) version is in the range `(current_version, target_version]`.
+
+### Source-Version Gating
+
+A migration runs for **every** source version older than its `version` — including versions that
+predate the objects the migration touches. A `pre_align` step in particular runs before any DDL,
+so a step that operates on a table introduced in a later version will fail when upgrading from a
+version where that table did not yet exist (the table has not been created yet).
+
+`min_source_version` and `max_source_version` gate a migration (or an individual step) on the
+**source** (current) database version. Both bounds are inclusive and compared against the database's
+current version, not the target:
+
+```yaml
+migrations:
+  - version: "1.4.0"
+    description: "Backfill embedding_model before adding NOT NULL"
+    # the collections table was introduced at 1.2.0; databases older than that create it fresh
+    # (already NOT NULL with a default) during DDL alignment and need no backfill
+    min_source_version: "1.2.0"
+    pre_align:
+      - action: update
+        table: collections
+        set: {embedding_model: "default"}
+        where: {embedding_model: null}
+```
+
+Gating may also be applied per step, which is useful when a single migration mixes steps that apply
+to different source-version ranges:
+
+```yaml
+post_align:
+  - action: update
+    table: users
+    min_source_version: "1.1.0"   # only for databases that already had this column
+    set: {tier: "free"}
+    where: {tier: null}
+```
+
+This is distinct from the `populate` column attribute (see [Populate Expressions](#populate-expressions)):
+`populate` backfills a **genuinely new** column during DDL alignment, while a source-version-gated
+migration handles backfilling an **existing** column before a constraint change, only for databases
+where that column already exists.
+
 ### Migration Actions
 
 **Data-driven actions** (allowed at any access level):

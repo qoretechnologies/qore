@@ -181,6 +181,24 @@ module Schema {
             where: {status: null}
     @endcode
 
+    @par Example: Source-version-gated migration
+    A migration (or an individual step) may declare @c min_source_version and/or
+    @c max_source_version (both inclusive) to restrict it to a range of @b source (current) database
+    versions. This skips a migration when upgrading from a version that predates the objects it
+    touches — such databases create those objects fresh during DDL alignment and need no migration.
+    @code{.yaml}
+    migrations:
+      - version: "1.4.0"
+        description: "Backfill embedding_model before adding NOT NULL"
+        # the table was introduced at 1.2.0; older databases create it fresh (already NOT NULL)
+        min_source_version: "1.2.0"
+        pre_align:
+          - action: update
+            table: collections
+            set: {embedding_model: "default"}
+            where: {embedding_model: null}
+    @endcode
+
     @par Example: Column type shorthands including text, float, and pgvector types
     @code{.yaml}
     tables:
@@ -805,6 +823,13 @@ module Schema {
       conventions) rather than the top level
     - PostgreSQL schema alignment now creates the \c vector extension before table DDL when a
       schema template uses pgvector native types and the extension is missing
+    - added \c min_source_version and \c max_source_version source-version gating on migrations and
+      on individual migration steps (both inclusive, compared against the current/source database
+      version) — lets a migration that operates on objects introduced in a later schema version be
+      skipped when upgrading from a version that predates those objects (such databases create the
+      objects fresh during DDL alignment and need no migration); see
+      @ref Schema::MigrationExecutor::migrationApplies() and
+      @ref Schema::MigrationExecutor::stepApplies()
 
     @subsection schema_v1_5_0 Schema Module v1.5.0
     - separated module into individual \c .qc files for better maintainability

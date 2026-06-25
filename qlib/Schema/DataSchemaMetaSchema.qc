@@ -459,6 +459,16 @@ public const DataSchemaJsonSchema = {
                     "items": {"type": "string"},
                     "description": "Step IDs that must complete before this step",
                 },
+                "min_source_version": {
+                    "type": "string",
+                    "description": "Minimum source (current) database version (inclusive) for this "
+                        "step to execute; the step is skipped when the database is older",
+                },
+                "max_source_version": {
+                    "type": "string",
+                    "description": "Maximum source (current) database version (inclusive) for this "
+                        "step to execute",
+                },
                 "action": {
                     "type": "string",
                     "enum": (
@@ -541,6 +551,17 @@ public const DataSchemaJsonSchema = {
                 },
                 "description": {
                     "type": "string",
+                },
+                "min_source_version": {
+                    "type": "string",
+                    "description": "Minimum source (current) database version (inclusive) for this "
+                        "migration to apply; databases older than this skip the migration (the "
+                        "relevant objects are created fresh during DDL alignment)",
+                },
+                "max_source_version": {
+                    "type": "string",
+                    "description": "Maximum source (current) database version (inclusive) for this "
+                        "migration to apply",
                 },
                 "pre_align": {
                     "type": "array",

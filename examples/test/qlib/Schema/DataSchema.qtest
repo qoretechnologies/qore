@@ -563,6 +563,35 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(action_enum.contains("sql"));
         assertTrue(action_enum.contains("script"));
         assertEq(17, action_enum.size());  # 15 unrestricted + 2 restricted
+
+        # Verify source-version gating fields exist on both migration and migrationAction
+        assertTrue(action_def.properties.hasKey("min_source_version"),
+            "migrationAction should have 'min_source_version' field for per-step source gating");
+        assertTrue(action_def.properties.hasKey("max_source_version"),
+            "migrationAction should have 'max_source_version' field for per-step source gating");
+
+        hash<auto> migration_def = ms."$defs".migration;
+        assertTrue(migration_def.properties.hasKey("min_source_version"),
+            "migration should have 'min_source_version' field for source gating");
+        assertTrue(migration_def.properties.hasKey("max_source_version"),
+            "migration should have 'max_source_version' field for source gating");
+
+        # A migration carrying source-version bounds must validate against the meta-schema
+        hash<auto> gated = {
+            "schema": {"name": "Gated", "version": "0.34"},
+            "migrations": (
+                {
+                    "version": "0.34",
+                    "min_source_version": "0.22",
+                    "pre_align": (
+                        {"action": "update", "table": "ai_collections",
+                            "set": {"embedding_model": "bge-m3"}, "where": {"embedding_model": NOTHING}},
+                    ),
+                },
+            ),
+        };
+        hash<auto> loaded = Schema::DataSchemaLoader::loadHash(gated, True);
+        assertEq("0.22", loaded.migrations[0].min_source_version);
     }
 
     loaderErrorPathTests() {
