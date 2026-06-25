@@ -2897,13 +2897,13 @@ bool g_aot_pc_ranges_sorted = true;
 //! path skip the lock entirely in non-AOT programs (the common case).
 std::atomic<bool> g_aot_have_ranges{false};
 
-//! The lazy source-location infrastructure (registry build at load, segment snapshot,
-//! throw-time resolution) is inert unless explicitly enabled, so default builds pay
-//! ZERO overhead. QORE_AOT_LOC_LAZY activates the lazy throw location; QORE_AOT_LOC_GATE
-//! computes it for comparison only. Becomes unconditional in Step 6 (lazy default).
+//! Lazy AOT exception source-location resolution is ON by default (Step 6, Phase A):
+//! the registry is built at load and the innermost-frame resolver runs at throw. Opt
+//! out with QORE_AOT_LOC_NO_LAZY (falls back to the eager runtime_loc). QORE_AOT_LOC_GATE
+//! still forces the build for diagnostic comparison. Validated lazy-active 789/789.
 inline bool aotLazyLocEnabled() {
-    static const bool enabled =
-        getenv("QORE_AOT_LOC_LAZY") != nullptr || getenv("QORE_AOT_LOC_GATE") != nullptr;
+    static const bool enabled = getenv("QORE_AOT_LOC_NO_LAZY") == nullptr
+        || getenv("QORE_AOT_LOC_GATE") != nullptr;
     return enabled;
 }
 
@@ -3104,15 +3104,12 @@ _Unwind_Reason_Code aotUnwindCb(struct _Unwind_Context* uctx, void* arg) {
 // the comparison phase keeps using the eager value (returns nullptr) so behavior is
 // unchanged until the lazy path is proven identical across the suite.
 const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLocation* eager) {
-    // Two opt-ins during the validation phase:
-    //   QORE_AOT_LOC_GATE  - compute the lazy location and compare to eager (log), but
-    //                        keep returning the eager value (behavior unchanged).
-    //   QORE_AOT_LOC_LAZY  - actually return the lazy value (activate the new path).
-    // Default (neither set): no-op, zero cost, eager behavior — until the lazy path is
-    // proven across the full suite, after which it becomes the default (Step 6).
+    // Lazy resolution is ON by default (Step 6, Phase A). Opt out with
+    // QORE_AOT_LOC_NO_LAZY (returns nullptr -> eager). QORE_AOT_LOC_GATE forces the
+    // comparison-only mode: compute + log the decision, but still return eager.
     static const char* gate_env = getenv("QORE_AOT_LOC_GATE");
-    static const bool lazy_enabled = getenv("QORE_AOT_LOC_LAZY") != nullptr;
-    if (!gate_env && !lazy_enabled) {
+    static const bool no_lazy = getenv("QORE_AOT_LOC_NO_LAZY") != nullptr;
+    if (!gate_env && no_lazy) {
         return nullptr;
     }
     // Lock-free fast-path: no AOT code loaded -> nothing to do (common case).
