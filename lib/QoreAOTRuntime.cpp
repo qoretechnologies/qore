@@ -2897,6 +2897,80 @@ bool g_aot_pc_ranges_sorted = true;
 //! path skip the lock entirely in non-AOT programs (the common case).
 std::atomic<bool> g_aot_have_ranges{false};
 
+//! The lazy source-location infrastructure (registry build at load, segment snapshot,
+//! throw-time resolution) is inert unless explicitly enabled, so default builds pay
+//! ZERO overhead. QORE_AOT_LOC_LAZY activates the lazy throw location; QORE_AOT_LOC_GATE
+//! computes it for comparison only. Becomes unconditional in Step 6 (lazy default).
+inline bool aotLazyLocEnabled() {
+    static const bool enabled =
+        getenv("QORE_AOT_LOC_LAZY") != nullptr || getenv("QORE_AOT_LOC_GATE") != nullptr;
+    return enabled;
+}
+
+// --- Loaded executable-segment snapshot (for JIT-frame detection at throw) ---
+// A sorted, immutable array of [start, end) ranges covering every loaded ELF object's
+// executable segments (libqore, the exe, binary modules, AOT .qmods). Published via an
+// atomic pointer and read lock-free at throw — NO dl_* call is made on the throw path
+// (dladdr/dl_iterate take dl_load_lock and would deadlock against a concurrent dlopen
+// during stack unwinding). Rebuilt off the throw path when a new module appears.
+using LoadedSegs = std::vector<std::pair<uintptr_t, uintptr_t>>;
+std::atomic<const LoadedSegs*> g_loaded_segs{nullptr};
+QoreThreadLock g_loaded_segs_build_lock;       // serializes (rare) rebuilds
+std::unordered_set<std::string> g_loaded_seg_modules; // module paths already seen
+
+#ifdef __GLIBC__
+int aotCollectPhdr(struct dl_phdr_info* info, size_t, void* data) {
+    auto* segs = static_cast<LoadedSegs*>(data);
+    for (int i = 0; i < info->dlpi_phnum; ++i) {
+        const ElfW(Phdr)& ph = info->dlpi_phdr[i];
+        if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X)) {
+            uintptr_t base = static_cast<uintptr_t>(info->dlpi_addr) + ph.p_vaddr;
+            segs->emplace_back(base, base + ph.p_memsz);
+        }
+    }
+    return 0;
+}
+#endif
+
+// Rebuild the loaded-segment snapshot the first time a given AOT module is seen. MUST
+// be called off the throw path and WITHOUT g_aot_pcmap_lock held (it takes dl_load_lock
+// via dl_iterate_phdr; holding g_aot_pcmap_lock here could cycle against a concurrent
+// module-init thread that holds dl_load_lock and wants g_aot_pcmap_lock). Safe from AOT
+// module registration, which runs after the owning dlopen returns. The prior snapshot is
+// intentionally leaked (rebuilds are rare — one per newly loaded AOT module).
+void maybeRebuildSegmentsForModule(const char* path) {
+#ifdef __GLIBC__
+    AutoLocker al(g_loaded_segs_build_lock);
+    if (!g_loaded_seg_modules.insert(path).second) {
+        return;  // already captured a snapshot covering this module
+    }
+    auto* segs = new LoadedSegs();
+    dl_iterate_phdr(aotCollectPhdr, segs);
+    std::sort(segs->begin(), segs->end());
+    g_loaded_segs.store(segs, std::memory_order_release);
+#endif
+}
+
+// Lock-free: is `pc` inside any loaded executable segment? Returns true when the
+// snapshot is unavailable (conservative: treat as "loaded" so we never misfire the
+// JIT-defer before the snapshot exists).
+bool aotPcInLoadedSegment(uintptr_t pc) {
+    const LoadedSegs* segs = g_loaded_segs.load(std::memory_order_acquire);
+    if (!segs || segs->empty()) {
+        return true;
+    }
+    // Largest start <= pc.
+    size_t lo = 0, hi = segs->size();
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        if ((*segs)[mid].first <= pc) { lo = mid + 1; } else { hi = mid; }
+    }
+    if (lo == 0) {
+        return false;
+    }
+    return pc < (*segs)[lo - 1].second;
+}
+
 // Load + cache the PC->loc trailer for `path`; returns null when absent/garbage.
 std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
     std::string key(path);
@@ -2932,6 +3006,11 @@ std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
 // Best-effort: silently no-ops when the artifact carries no trailer (graceful for
 // --strip-debug-info / pre-feature builds, where the eager path remains the source).
 static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) {
+    // Skip all lazy-location bookkeeping (dladdr1, trailer parse, registry, segment
+    // snapshot) unless the feature is enabled — default builds pay nothing.
+    if (!aotLazyLocEnabled()) {
+        return;
+    }
     if (!fn_ptr || !ctx || !ctx->locs || ctx->num_locs <= 0) {
         return;
     }
@@ -2963,6 +3042,9 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     if (it == symmap->end()) {
         return;
     }
+    // Refresh the loaded-segment snapshot for JIT-frame detection the first time we see
+    // this module. Done before taking g_aot_pcmap_lock (dl_load_lock ordering).
+    maybeRebuildSegmentsForModule(info.dli_fname);
     AotPcRange range;
     range.base = reinterpret_cast<uintptr_t>(info.dli_saddr);
     if (sym_size) {
@@ -3125,8 +3207,19 @@ _Unwind_Reason_Code aotUnwindCb(struct _Unwind_Context* uctx, void* arg) {
         st->found = loc;
         return _URC_END_OF_STACK;  // stop at the innermost AOT frame
     }
+    // JIT-compiled user code lives in anonymous JIT memory not backed by any loaded
+    // object; libqore/.qmod/exe/binary-module frames are all in loaded ELF segments. A
+    // frame inner to an AOT frame that is in NO loaded segment is therefore JIT user
+    // code whose location the eager (inline JIT) updater already tracks — defer. The
+    // segment snapshot is consulted lock-free (no dl_* call here — dladdr/dl_iterate
+    // take dl_load_lock and would deadlock against a concurrent dlopen during unwind).
+    if (!aotPcInLoadedSegment(probe)) {
+        st->deferred = true;
+        return _URC_END_OF_STACK;
+    }
     return _URC_NO_REASON;
 }
+
 } // anonymous namespace
 
 // Resolve the source location of the innermost AOT stack frame for an exception
