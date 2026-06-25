@@ -3151,18 +3151,15 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     last_runtime_line = inst->loc->start_line;
 
     if (aot_mode) {
-        // Step 6 (perf): with debug info present, the lazy on-throw resolver derives the
-        // exception location from the DWARF-encoded PC->loc trailer at throw — zero
-        // steady-state cost. So skip the eager per-line updater entirely (the external
-        // qore_rt_set_runtime_loc_aot call + its optimization barrier). The loc table
-        // (ctx->locs) is still built by setDebugLocation()'s column encoding, and outer
-        // callstack frames use QoreJITStackLocation's fixed loc, not this TLS value.
-        // Under --strip-debug-info (no DWARF) the lazy path can't work, so keep the
-        // eager updater as the source.
-        if (emit_debug_info) {
-            return;
-        }
-        // AOT mode (stripped): call runtime helper to update location from ctx->locs.
+        // NOTE (Step 6, Phase B reverted): the eager per-line updater was removed when
+        // debug info is present (lazy handles the primary ex.line), but that regressed
+        // AOT *callstack* call-site lines — the per-call QoreStackLocation/CEH/JIT-stack
+        // push captures get_runtime_location(), which the eager updater fed. Outer AOT
+        // frames then reported stale lines (off by 1-2). Removing it safely requires the
+        // full-backtrace lazy reconstruction (resolve each AOT frame's PC at throw across
+        // all frame-push paths) — a separate effort. Until then the eager updater stays
+        // as the callstack source; the lazy path still improves the primary ex.line.
+        // AOT mode: call runtime helper to update location from ctx->locs.
         int32_t loc_index = getOrAddAotLocIndex(inst->loc);
         auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
