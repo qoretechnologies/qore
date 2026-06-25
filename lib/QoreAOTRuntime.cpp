@@ -56,6 +56,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreOpcodeRegistry.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
@@ -3052,8 +3053,52 @@ const QoreProgramLocation* aotLookupLocForPc(uintptr_t pc) {
     return r.offmap[olo - 1].second;
 }
 
+// Address ranges of libqore functions that EXECUTE non-AOT user code (the IR
+// interpreter). If the innermost user frame is one of these (i.e. it appears in the
+// unwind before any AOT frame), the throw originated in interpreted code whose
+// location the eager path already tracks correctly, so the lazy path must defer.
+// Computed once; covers the interpreter dispatch boundary that AOT code crosses when
+// it calls into a non-AOT function (e.g. QUnit calling user test methods).
+struct AotAddrRange { uintptr_t base; uintptr_t end; };
+const std::vector<AotAddrRange>& aotUserCodeBarriers() {
+    static const std::vector<AotAddrRange> ranges = []() {
+        std::vector<AotAddrRange> v;
+        auto add = [&v](void* fn) {
+            if (!fn) {
+                return;
+            }
+            Dl_info bi;
+#ifdef __GLIBC__
+            const ElfW(Sym)* s = nullptr;
+            if (dladdr1(fn, &bi, reinterpret_cast<void**>(const_cast<ElfW(Sym)**>(&s)),
+                    RTLD_DL_SYMENT) && bi.dli_saddr && s && s->st_size) {
+                uintptr_t b = reinterpret_cast<uintptr_t>(bi.dli_saddr);
+                v.push_back({b, b + static_cast<uintptr_t>(s->st_size)});
+                return;
+            }
+#endif
+            if (dladdr(fn, &bi) && bi.dli_saddr) {
+                uintptr_t b = reinterpret_cast<uintptr_t>(bi.dli_saddr);
+                v.push_back({b, b + 0x10000});  // coarse fallback when size unknown
+            }
+        };
+        add(reinterpret_cast<void*>(&QoreIRInterpreter::execute));
+        return v;
+    }();
+    return ranges;
+}
+inline bool aotPcInUserCodeBarrier(uintptr_t pc) {
+    for (const auto& r : aotUserCodeBarriers()) {
+        if (pc >= r.base && pc < r.end) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct AotUnwindState {
     const QoreProgramLocation* found = nullptr;
+    bool deferred = false;  //!< innermost user frame is interpreted -> keep eager
     int idx = 0;
     int skip = 0;
 };
@@ -3068,7 +3113,14 @@ _Unwind_Reason_Code aotUnwindCb(struct _Unwind_Context* uctx, void* arg) {
     }
     // _Unwind_GetIP returns the return address (one past the call); look up ip-1 so
     // we land inside the call instruction's line, matching the eager updater.
-    const QoreProgramLocation* loc = aotLookupLocForPc(ip - 1);
+    uintptr_t probe = ip - 1;
+    // An interpreter frame inner to any AOT frame means the innermost user code is
+    // interpreted (eager is authoritative) — stop and defer.
+    if (aotPcInUserCodeBarrier(probe)) {
+        st->deferred = true;
+        return _URC_END_OF_STACK;
+    }
+    const QoreProgramLocation* loc = aotLookupLocForPc(probe);
     if (loc) {
         st->found = loc;
         return _URC_END_OF_STACK;  // stop at the innermost AOT frame
@@ -3101,6 +3153,20 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     AotUnwindState st;
     _Unwind_Backtrace(aotUnwindCb, &st);
     if (gate_env) {
+        // Nothing to report unless an AOT frame was found or the barrier deferred.
+        if (!st.found && !st.deferred) {
+            return nullptr;
+        }
+        FILE* gate_out = stderr;
+        bool gate_close = false;
+        if (strcmp(gate_env, "1") && strcmp(gate_env, "on")) {
+            FILE* gf = fopen(gate_env, "a");
+            if (gf) { gate_out = gf; gate_close = true; }
+        }
+        if (st.deferred) {
+            // Innermost user frame is interpreted: the barrier correctly kept eager.
+            fprintf(gate_out, "AOT-LOC-GATE: DEFER (interp inner)\n");
+        }
         // Only meaningful when the raising frame IS an AOT function (st.found set).
         // For non-AOT exceptions the eager value is authoritative; stay silent.
         if (st.found) {
@@ -3123,17 +3189,11 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
             } else {
                 tag = "REGRESS?";  // both real but differ — scrutinize (mixed stack?)
             }
-            // Route to a file when the env names a path (so we don't pollute the
-            // stderr of tests that compare subprocess output); "1"/"on" -> stderr.
-            FILE* out = stderr;
-            bool close_out = false;
-            if (strcmp(gate_env, "1") && strcmp(gate_env, "on")) {
-                FILE* f = fopen(gate_env, "a");
-                if (f) { out = f; close_out = true; }
-            }
-            fprintf(out, "AOT-LOC-GATE: %s eager=%s:%d lazy=%s:%d\n",
+            fprintf(gate_out, "AOT-LOC-GATE: %s eager=%s:%d lazy=%s:%d\n",
                 tag, ef, el, lf, ll);
-            if (close_out) { fclose(out); }
+        }
+        if (gate_close) {
+            fclose(gate_out);
         }
         return nullptr;  // gate phase: keep eager behavior
     }
