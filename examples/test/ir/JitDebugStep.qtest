@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Regression test for issue #5352: JIT-compiled native code must emit debugger step
+# events (dbgStep) at statement boundaries when a debugger attaches mid-execution.
+#
+# Before the fix, QoreIROpcode::DebugBlock / PushTempMark were lowered to no-ops in the
+# JIT, so a function running as JIT-compiled native code was invisible to single-stepping,
+# breakpoints, and line coverage: it emitted NO step events.
+#
+# evalTiered() downgrades a function to AST/IR when a debugger is attached at entry, so the
+# only way native JIT code runs under a debugger is a mid-flight attach.  This test uses
+# the top-level program block, which in --exec-mode=jit is compiled to native code and run
+# synchronously (executeWithFallback) with no background-compile delay and no IR-interpreter
+# fallback.  The script attaches a stepping DebugProgram to its own program partway through
+# the top-level block, then executes several statement-temp-creating statements; with the
+# fix the JIT-compiled frame fires a step event for each, exactly as the AST/IR tiers do.
+#
+# Without the fix this script prints an EMPTY step-line list in jit mode (the native
+# top-level emits nothing), while the AST and IR tiers print the full list — so the empty
+# result also confirms the top-level genuinely ran as native code and did not fall back to
+# the IR interpreter.
+
+%modern
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class JitDebugStepTest
+
+public class JitDebugStepTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+
+        # The child script.  Its top-level block attaches a stepping debugger to its own
+        # program after the `int a = 1` statement, then runs statement-temp-creating
+        # statements whose lines must all produce step events if the JIT debug-step hook
+        # works.  The markers in MarkerLines below identify those statements.
+        const ChildScript = '
+%new-style
+%allow-debugger
+
+class StepRecorder inherits DebugProgram {
+    public {
+        list<int> step_lines = ();
+    }
+    onAttach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onDetach(ProgramControl pgm, reference rs, reference rts) {
+        rs = DebugDetach;
+    }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs,
+            reference rts) {
+        if (sid) {
+            *hash<auto> loc = pgm.getStatementIdInfo(sid);
+            if (loc.start_line) {
+                push step_lines, loc.start_line;
+            }
+        }
+        rs = DebugStep;
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) {
+        rs = DebugStep;
+    }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs,
+            reference rts) {
+    }
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {
+    }
+}
+
+our StepRecorder dbg = new StepRecorder();
+ProgramControl pc = ProgramControl::getProgram();
+int a = 1;
+dbg.addProgram(pc);
+string s1 = sprintf("v=%d", a);                  ### STEP
+string s2 = s1 + "-end";                          ### STEP
+list<int> ls = (a, a + 1, a + 2);                 ### STEP
+string s3 = s2 + sprintf(":%d", ls.size());       ### STEP
+dbg.removeProgram(pc);
+printf("RESULT:%s\n", s3);
+printf("STEPLINES:%y\n", dbg.step_lines);
+';
+    }
+
+    constructor() : QUnit::Test("JitDebugStep", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("JIT emits step events on mid-execution attach", \testJitStepEvents());
+        set_return_value(main());
+    }
+
+    # 1-based source line numbers of the statements marked with "### STEP" in ChildScript
+    private list<int> markerLines() {
+        list<int> ret = ();
+        list<string> script_lines = ChildScript.split("\n");
+        for (int i = 0; i < script_lines.size(); ++i) {
+            if (script_lines[i] =~ /### STEP/) {
+                ret += i + 1;
+            }
+        }
+        return ret;
+    }
+
+    private hash<auto> runChild(string exec_mode) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(ChildScript);
+        tmp.file.close();
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, exec_mode,
+            tmp.path);
+        string out = backquote(cmd);
+        list<int> step_lines = ();
+        list<string> nums = (out =~ x/STEPLINES:\[([0-9, ]*)\]/)[0].split(",");
+        foreach string n in (nums) {
+            if (trim(n) != "") {
+                step_lines += trim(n).toInt();
+            }
+        }
+        return {
+            "out": out,
+            "step_lines": step_lines,
+        };
+    }
+
+    testJitStepEvents() {
+        list<int> markers = markerLines();
+        assertEq(4, markers.size(), "child script has the expected number of step markers");
+
+        hash<auto> jit = runChild("jit");
+        assertRegex("RESULT:", jit.out, "child ran to completion in JIT mode");
+
+        # With the fix, the JIT-compiled top-level frame fires a step event for every marked
+        # statement executed after the mid-execution attach.  Without the fix this list is
+        # empty (native JIT code emits no step events), so each of these assertions fails.
+        foreach int line in (markers) {
+            assertTrue(inlist(line, jit.step_lines),
+                sprintf("JIT-native code stepped statement at line %d", line));
+        }
+
+        # Sanity: the JIT tier must observe exactly the same statement lines as the IR tier
+        # (the fix makes native code match the interpreter), proving the top-level ran as
+        # native JIT code rather than silently falling back to the IR interpreter.
+        hash<auto> ir = runChild("ir");
+        assertEq(ir.step_lines, jit.step_lines,
+            "JIT-tier step events match the IR-tier step events");
+    }
+}

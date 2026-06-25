@@ -20,6 +20,7 @@ class MigrationExecutorTest inherits QUnit::Test {
         addTestCase("unknown dependency detection", \unknownDepsTests());
         addTestCase("action permission sets", \actionPermissionTests());
         addTestCase("version filtering logic", \versionFilteringTests());
+        addTestCase("source-version gating", \sourceVersionGatingTests());
         addTestCase("validateStepField negative tests", \validateStepFieldTests());
         addTestCase("action-to-switch completeness", \actionSwitchCompletenessTests());
         set_return_value(main());
@@ -147,6 +148,72 @@ class MigrationExecutorTest inherits QUnit::Test {
             }
         }
         assertEq(("1.1.0", "2.0.0"), should_execute);
+    }
+
+    sourceVersionGatingTests() {
+        # --- migrationApplies: version-range filtering (no source bounds) ---
+        # for current=1.0, target=2.0
+        assertFalse(Schema::MigrationExecutor::migrationApplies({"version": "0.9.0"}, "1.0.0", "2.0.0"),
+            "version below current is skipped");
+        assertFalse(Schema::MigrationExecutor::migrationApplies({"version": "1.0.0"}, "1.0.0", "2.0.0"),
+            "version equal to current is skipped");
+        assertTrue(Schema::MigrationExecutor::migrationApplies({"version": "1.1.0"}, "1.0.0", "2.0.0"),
+            "version between current and target applies");
+        assertTrue(Schema::MigrationExecutor::migrationApplies({"version": "2.0.0"}, "1.0.0", "2.0.0"),
+            "version equal to target applies");
+        assertFalse(Schema::MigrationExecutor::migrationApplies({"version": "2.1.0"}, "1.0.0", "2.0.0"),
+            "version above target is skipped");
+
+        # --- migrationApplies: min_source_version gating ---
+        # this is the ai_collections scenario: migration targets 0.34, table introduced at 0.22
+        hash<auto> mig = {"version": "0.34", "min_source_version": "0.22"};
+        # source 0.20 is older than 0.22 -> skip (table does not exist yet, created fresh by DDL)
+        assertFalse(Schema::MigrationExecutor::migrationApplies(mig, "0.20", "0.35"),
+            "source older than min_source_version is skipped even though target range matches");
+        # source exactly at the boundary -> apply (inclusive)
+        assertTrue(Schema::MigrationExecutor::migrationApplies(mig, "0.22", "0.35"),
+            "source equal to min_source_version applies (inclusive)");
+        # source newer than boundary but still below the migration version -> apply
+        assertTrue(Schema::MigrationExecutor::migrationApplies(mig, "0.30", "0.35"),
+            "source above min_source_version and below migration version applies");
+
+        # --- migrationApplies: max_source_version gating ---
+        hash<auto> capped = {"version": "2.0.0", "max_source_version": "1.5.0"};
+        assertTrue(Schema::MigrationExecutor::migrationApplies(capped, "1.4.0", "2.0.0"),
+            "source below max_source_version applies");
+        assertTrue(Schema::MigrationExecutor::migrationApplies(capped, "1.5.0", "2.0.0"),
+            "source equal to max_source_version applies (inclusive)");
+        assertFalse(Schema::MigrationExecutor::migrationApplies(capped, "1.6.0", "2.0.0"),
+            "source above max_source_version is skipped");
+
+        # --- migrationApplies: both bounds form an inclusive source range ---
+        hash<auto> ranged = {"version": "3.0.0", "min_source_version": "1.0.0", "max_source_version": "2.0.0"};
+        assertFalse(Schema::MigrationExecutor::migrationApplies(ranged, "0.9.0", "3.0.0"));
+        assertTrue(Schema::MigrationExecutor::migrationApplies(ranged, "1.0.0", "3.0.0"));
+        assertTrue(Schema::MigrationExecutor::migrationApplies(ranged, "1.7.0", "3.0.0"));
+        assertTrue(Schema::MigrationExecutor::migrationApplies(ranged, "2.0.0", "3.0.0"));
+        assertFalse(Schema::MigrationExecutor::migrationApplies(ranged, "2.1.0", "3.0.0"));
+
+        # --- stepApplies: per-step source-version gating ---
+        assertTrue(Schema::MigrationExecutor::stepApplies({"action": "update"}, "0.20"),
+            "step with no bounds always applies");
+        assertFalse(Schema::MigrationExecutor::stepApplies(
+            {"action": "update", "min_source_version": "0.22"}, "0.20"),
+            "step source older than min_source_version is skipped");
+        assertTrue(Schema::MigrationExecutor::stepApplies(
+            {"action": "update", "min_source_version": "0.22"}, "0.22"),
+            "step source equal to min_source_version applies (inclusive)");
+        assertTrue(Schema::MigrationExecutor::stepApplies(
+            {"action": "update", "max_source_version": "1.0.0"}, "0.50"),
+            "step source below max_source_version applies");
+        assertFalse(Schema::MigrationExecutor::stepApplies(
+            {"action": "update", "max_source_version": "1.0.0"}, "1.1.0"),
+            "step source above max_source_version is skipped");
+
+        # empty-string bounds are treated as unset
+        assertTrue(Schema::MigrationExecutor::stepApplies(
+            {"action": "update", "min_source_version": "", "max_source_version": ""}, "0.01"),
+            "empty-string bounds are ignored");
     }
 
     validateStepFieldTests() {

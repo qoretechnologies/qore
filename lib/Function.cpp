@@ -5191,6 +5191,17 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(statements);
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    // Debug-step hook context (issue #5352): record the top-level StatementBlock and
+    // the owning program's attached-debugger pointer slot so the JIT lowering can bake
+    // the per-statement dbgStep hook (blockStatement context + cheap inline attach gate).
+    // Skip entirely when the program forbids debugging (PO_NO_DEBUGGING): such a program
+    // can never attach a debugger, so the hook would be pure dead weight — leaving these
+    // null makes emitDebugStepHook() emit nothing (zero per-statement overhead).
+    if (qore_program_private::get(*pgm)->checkAllowDebugging(nullptr)) {
+        func->source_statement_block = statements;
+        func->source_dpgm_addr = const_cast<void*>(static_cast<const void*>(
+                qore_program_private::get(*pgm)->getAttachedDebugProgramAddr()));
+    }
     // Store the return type info for type coercion in Return opcode lowering
     func->return_type_info = qore_substitute_type_params_if_needed(getReturnTypeInfo(), specialization_receiver_type_info,
         specialization_type_param_instantiation);

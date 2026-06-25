@@ -2550,6 +2550,15 @@ public:
     //! `callee->getName()` equal `"foo"`; the LLVM emitter then issued
     //! a direct call to its own fast entry and infinite-recursed.
     const QoreFunction* source_qf = nullptr;
+    //! The top-level StatementBlock this IR was lowered from (issue #5352).
+    //! Baked into the JIT debug-step hook as the `blockStatement` context passed
+    //! to the debugger onStep callback.  Only valid/used for in-process JIT
+    //! lowering (the program is fixed); AOT does not emit the hook.
+    const StatementBlock* source_statement_block = nullptr;
+    //! Address of the owning program's attached-debugger pointer slot
+    //! (qore_program_private::getAttachedDebugProgramAddr()), used as the inline
+    //! gate for the JIT debug-step hook.  Null in AOT mode / when unavailable.
+    void* source_dpgm_addr = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)

@@ -116,15 +116,18 @@ public class MigrationExecutor {
         schema_info = n_schema_info;
 
         foreach hash<auto> migration in (migrations) {
-            # Only execute migrations for versions > current and <= target
-            if (Util::compare_version(migration.version, current_version) <= 0) {
-                continue;
-            }
-            if (Util::compare_version(migration.version, target_version) > 0) {
+            if (!MigrationExecutor::migrationApplies(migration, current_version, target_version)) {
                 continue;
             }
 
             *list<auto> steps = migration{phase};
+            if (!steps) {
+                continue;
+            }
+
+            # Apply per-step source-version gating before ordering; steps whose source-version
+            # bounds exclude the current (source) database version are skipped
+            steps = select steps, MigrationExecutor::stepApplies($1, current_version);
             if (!steps) {
                 continue;
             }
@@ -139,6 +142,74 @@ public class MigrationExecutor {
                 executeStep(step, table_cache);
             }
         }
+    }
+
+    #! Returns @ref True "True" if a migration applies for the given version transition
+    /** A migration applies when its declared @c version advances the schema (i.e.
+        <tt>current_version < migration.version <= target_version</tt>) @b and the source (current)
+        database version satisfies the migration's optional @c min_source_version and
+        @c max_source_version bounds (both inclusive).
+
+        Source-version gating lets a migration that operates on objects introduced in a later
+        schema version (e.g. a backfill on a table that did not exist in older databases) be skipped
+        when upgrading from a version that predates those objects; such databases create the objects
+        fresh during DDL alignment and require no migration.
+
+        @param migration the migration definition hash
+        @param current_version the current (source) schema version in the database
+        @param target_version the target schema version
+
+        @return @ref True "True" if the migration should be executed
+
+        @since Schema 1.6
+    */
+    static bool migrationApplies(hash<auto> migration, string current_version, string target_version) {
+        # the migration must advance the version: current < migration.version <= target
+        if (Util::compare_version(migration.version, current_version) <= 0) {
+            return False;
+        }
+        if (Util::compare_version(migration.version, target_version) > 0) {
+            return False;
+        }
+        return MigrationExecutor::sourceVersionInRange(migration, current_version);
+    }
+
+    #! Returns @ref True "True" if a single migration step applies for the given source version
+    /** A step applies when the source (current) database version satisfies the step's optional
+        @c min_source_version and @c max_source_version bounds (both inclusive). A step with no
+        bounds always applies.
+
+        @param step the migration step (action) hash
+        @param current_version the current (source) schema version in the database
+
+        @return @ref True "True" if the step should be executed
+
+        @since Schema 1.6
+    */
+    static bool stepApplies(hash<auto> step, string current_version) {
+        return MigrationExecutor::sourceVersionInRange(step, current_version);
+    }
+
+    #! Returns @ref True "True" if \a current_version is within the optional source-version bounds of \a def
+    /** @param def a migration or step hash that may carry @c min_source_version and/or
+        @c max_source_version keys
+        @param current_version the current (source) schema version in the database
+
+        @return @ref True "True" if \a current_version is >= @c min_source_version (when set) and
+        <= @c max_source_version (when set)
+
+        @since Schema 1.6
+    */
+    private static bool sourceVersionInRange(hash<auto> def, string current_version) {
+        if (def.min_source_version.val()
+                && Util::compare_version(current_version, def.min_source_version) < 0) {
+            return False;
+        }
+        if (def.max_source_version.val()
+                && Util::compare_version(current_version, def.max_source_version) > 0) {
+            return False;
+        }
+        return True;
     }
 
     #! Executes a single migration step

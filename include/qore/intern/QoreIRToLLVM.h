@@ -472,6 +472,16 @@ private:
     // Created lazily on first guard with deopt_target.
     llvm::BasicBlock* jit_deopt_block = nullptr;
 
+    // Debug-step hook state (issue #5352).
+    // The IR basic block currently being lowered, so lowerInstruction() can read its
+    // name to skip per-statement step events in ".cond" blocks (matching the IR
+    // interpreter's PushTempMark gate).  Reset per function.
+    const QoreIRBasicBlock* current_lowering_block_ = nullptr;
+    // Per-frame i32 slot holding the last source line a dbgStep event fired on
+    // (init -1), used to dedup repeated step events on the same line — mirrors the IR
+    // interpreter's last_debug_line.  Created lazily in the entry block; reset per function.
+    llvm::AllocaInst* dbg_last_line_slot = nullptr;
+
     // Shared landingpad blocks: maps exception handler block → landingpad block.
     // Multiple invoke instructions targeting the same handler share a single
     // landingpad, avoiding BB explosion.
@@ -823,6 +833,18 @@ private:
     // Emit exception check: if xsink has exception, branch to exception_target
     void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
+
+    // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
+    // block-entry → dbgSyntheticBlockStep) or PushTempMark (synthetic=false,
+    // per-statement → dbgStep) boundary.  Gated by an inline attached-debugger check so
+    // non-debug JIT execution pays at most one predictable not-taken branch; the
+    // per-statement form additionally dedups by source line.  No-op in AOT mode.
+    void emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, bool synthetic);
+
+    // Get or create the per-frame "last debug line" i32 slot (init -1) used by the
+    // per-statement debug-step hook to dedup repeated events on the same source line.
+    llvm::AllocaInst* getOrCreateDebugLastLineSlot(llvm::Function* llvm_func);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
