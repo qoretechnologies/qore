@@ -184,6 +184,24 @@ SpGuard. Closing them to 0 (the Step 6 gate) means auditing those dispatchers an
 the same save/restore guard. The JIT fast-call guard (qore_rt_call_fast exec_fn) was
 added; the others remain.
 
+## Perf benchmark (2026-06-25)
+
+A/B on a hot AOT loop (`BenchMod::Bench::hot`, an LCG + modulo body, n=200M),
+compiled with the eager per-line updater force-kept vs removed (identical code
+otherwise), wall-clock over the whole process:
+
+| build | best | runs |
+|-------|------|------|
+| eager removed (lazy) | 90.3s | 90.3 / 93.4 |
+| eager per-line updater | 95.4s | 95.4 / 99.7 |
+
+~5-6% faster with the updater removed (~1B per-line external calls eliminated,
+~5.7ns each). The absolute times are dominated by NaN-boxed AOT arithmetic, so
+this is a conservative figure; workloads with more line-changes per unit work see
+a larger share. The structural win (one external call + optimization barrier per
+source-line-change, gone) is verified independently: AOT codegen emits 0 such
+calls with debug info (was 12 in this module's IR).
+
 ## Implementation order
 
 1. `RuntimeLocationCache` += `sp_ptr`; `ThreadData::runtime_loc_sp`; thread.cpp
