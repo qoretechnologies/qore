@@ -150,6 +150,36 @@ hot-path benchmark.
   it is bundled into the existing `runtime_loc` restore (already exception-safe via the
   paired swap calls / `CodeEvaluationHelper` dtor), this is satisfied by construction.
 
+## Implementation status (2026-06-25, committed e6ff2d78d + 0c220a9ed)
+
+Implemented and validated. Full core suite 789/789 under the gate; the gate logs the
+mechanism's decision (LAZY/EAGER) alongside the eager-vs-lazy tag. Decision tally over
+~96k AOT-frame exceptions:
+
+| tag       | decision=LAZY | decision=EAGER | meaning |
+|-----------|---------------|----------------|---------|
+| OK        | 61045 (all)   | 0              | identical either way ✓ |
+| IMPROVE   | 32073 (kept)  | 4256           | EAGER = over-deferred, *lost* improvement (safe, not a regression) |
+| REGRESS?  | ~110          | ~1040 (fixed)  | LAZY = residual mixed-stack bug |
+
+vs the prior barrier/segment approach (296 REGRESS): all OK now resolve LAZY, ~91% of
+REGRESS? correctly defer, ~88% of IMPROVE preserved. `exception-location.qtest`
+(207 assertions) passes with `QORE_AOT_LOC_LAZY=1`. valgrind clean.
+
+Set once-per-call (not per line): IR at execute() entry (FrameGuard save/restores);
+JIT in the prologue via llvm.frameaddress (evalTiered + fast-call SpGuard save/restore);
+AST per-statement via RuntimeConfigLocationHelper.
+
+**Residual (~110 REGRESS?->LAZY + ~4256 IMPROVE->EAGER):** both are staleness — a
+non-AOT callee set runtime_loc_sp inner and an execution path returned to AOT without
+the save/restore guard (REGRESS?->LAZY = sp not set inner when it should be; IMPROVE->
+EAGER = stale inner sp left after a non-AOT callee returned). Remaining uncovered paths
+are other fast-call/closure-dispatch entries (qore_rt_call_method_fast,
+qore_rt_call_closure_fast, batch-inlined JIT calls) that run non-AOT code without an
+SpGuard. Closing them to 0 (the Step 6 gate) means auditing those dispatchers and adding
+the same save/restore guard. The JIT fast-call guard (qore_rt_call_fast exec_fn) was
+added; the others remain.
+
 ## Implementation order
 
 1. `RuntimeLocationCache` += `sp_ptr`; `ThreadData::runtime_loc_sp`; thread.cpp
