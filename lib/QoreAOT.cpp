@@ -4206,6 +4206,94 @@ static bool writeAndVerifyPcLocTrailer(const std::string& path,
     return true;
 }
 
+//! Build + append the PC->loc trailer for an ALREADY-LINKED aggregate artifact (e.g.
+//! qorus-core's QORUS_CORE_MAIN_ALL_QO_AGG.qmod) by reading its DWARF directly. The
+//! aggregate-link path combines pre-built per-file .qo objects and has no func_slots /
+//! aot_locs, but the DWARF column already carries each row's loc-index (loc_index+1,
+//! per QoreIRToLLVM::setDebugLocation), so the map is reconstructed per function symbol
+//! from the symbol table + line table alone. Each function's loc-index indexes its own
+//! ctx->locs at load (built from its per-file slot map), so no loc table is needed here.
+static bool buildAndAppendAggregateTrailer(const std::string& path, std::string& error) {
+    bool dbg = getenv("QORE_AOT_LOC_DEBUG");
+    auto buf_or = llvm::MemoryBuffer::getFile(path);
+    if (!buf_or) {
+        return true;  // best-effort; absence just means no lazy locations for this artifact
+    }
+    auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
+    if (!obj_or) {
+        llvm::consumeError(obj_or.takeError());
+        return true;
+    }
+    std::vector<std::pair<uint64_t, std::string>> funcs;
+    for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
+        auto ty = sym.getType();
+        if (!ty) { llvm::consumeError(ty.takeError()); continue; }
+        if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
+        auto addr = sym.getAddress();
+        auto nm = sym.getName();
+        if (!addr) { llvm::consumeError(addr.takeError()); continue; }
+        if (!nm) { llvm::consumeError(nm.takeError()); continue; }
+        funcs.emplace_back(*addr, nm->str());
+    }
+    std::sort(funcs.begin(), funcs.end());
+    auto enclosing = [&funcs](uint64_t a) -> int {
+        size_t lo = 0, hi = funcs.size();
+        while (lo < hi) {
+            size_t mid = (lo + hi) / 2;
+            if (funcs[mid].first <= a) { lo = mid + 1; } else { hi = mid; }
+        }
+        return lo == 0 ? -1 : static_cast<int>(lo - 1);
+    };
+    // symbol -> (offset, loc-index) collected from the linked DWARF.
+    std::unordered_map<std::string, std::vector<std::pair<uint32_t, uint32_t>>> by_sym;
+    std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
+    size_t rows = 0;
+    for (const auto& unit : dctx->compile_units()) {
+        const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
+        if (!lt) {
+            continue;
+        }
+        for (const auto& row : lt->Rows) {
+            ++rows;
+            if (row.EndSequence || row.Column == 0) {
+                continue;
+            }
+            int fi = enclosing(row.Address.Address);
+            if (fi < 0) {
+                continue;
+            }
+            uint32_t offset = static_cast<uint32_t>(row.Address.Address - funcs[fi].first);
+            by_sym[funcs[fi].second].emplace_back(offset, static_cast<uint32_t>(row.Column - 1));
+        }
+    }
+    // Materialize as func descriptors carrying only llvm_symbol + the compacted map,
+    // then reuse the standard serializer/append/round-trip path.
+    std::vector<AOTCompiledFuncWithSlots> fs;
+    fs.reserve(by_sym.size());
+    for (auto& kv : by_sym) {
+        auto& m = kv.second;
+        std::sort(m.begin(), m.end());
+        AOTCompiledFuncWithSlots f;
+        f.llvm_symbol = kv.first;
+        for (const auto& e : m) {
+            if (!f.pc_loc_map.empty() && f.pc_loc_map.back().second == e.second) {
+                continue;
+            }
+            if (!f.pc_loc_map.empty() && f.pc_loc_map.back().first == e.first) {
+                f.pc_loc_map.back().second = e.second;
+                continue;
+            }
+            f.pc_loc_map.push_back(e);
+        }
+        fs.push_back(std::move(f));
+    }
+    if (dbg) {
+        fprintf(stderr, "AOT-LOC: aggregate %s: %zu rows, %zu funcs with maps\n",
+            path.c_str(), rows, fs.size());
+    }
+    return writeAndVerifyPcLocTrailer(path, fs, error);
+}
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
         int opt_level = 3, const char* target_triple = nullptr,
         std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
@@ -10837,6 +10925,20 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         if (!linkSharedLibMulti(link_inputs, output_path, error, target_triple)) {
             remove(glue_obj.c_str());
             return false;
+        }
+
+        // Append the PC->loc trailer for the linked aggregate (e.g. qorus-core's
+        // QORUS_CORE_MAIN_ALL_QO_AGG.qmod) so on-throw lazy resolution can recover real
+        // .qc/.ql source locations for natively-executing aggregate functions instead of
+        // the aggregate label. Reconstructed from the linked artifact's own DWARF (the
+        // per-file .qo column encoding survives the link). Best-effort: a failure must
+        // not fail the build, so log and continue (lazy just stays unavailable).
+        if (!target_triple) {
+            std::string trailer_err;
+            if (!buildAndAppendAggregateTrailer(output_path, trailer_err)) {
+                printd(0, "AOT: aggregate PC->loc trailer for %s failed: %s (continuing)\n",
+                    output_path.c_str(), trailer_err.c_str());
+            }
         }
 
         if (!target_triple) {
