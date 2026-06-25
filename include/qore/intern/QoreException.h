@@ -39,9 +39,23 @@
 // Forward declaration for loc_builtin fallback
 DLLLOCAL extern const class QoreProgramLocation loc_builtin;
 
+//! Resolve the innermost AOT stack frame's source location for an exception being
+//! raised, or nullptr when no AOT frame is on the stack. Defined in QoreAOTRuntime.cpp.
+//! During the gate phase (QORE_AOT_LOC_GATE) this returns nullptr after comparing
+//! against `eager`, so exception locations are unchanged until the lazy path is
+//! proven byte-identical to the eager updater across the test suite.
+DLLLOCAL extern const QoreProgramLocation* qore_aot_resolve_throw_location(
+    const QoreProgramLocation* eager);
+
 // Helper to safely get runtime location with fallback to loc_builtin
 static inline const QoreProgramLocation& get_runtime_location_safe() {
     const QoreProgramLocation* loc = get_runtime_location();
+    // AOT lazy source-location recovery: prefer the location of the innermost AOT
+    // frame when available (gate phase returns nullptr, keeping the eager value).
+    const QoreProgramLocation* lazy = qore_aot_resolve_throw_location(loc);
+    if (lazy) {
+        return *lazy;
+    }
     return loc ? *loc : loc_builtin;
 }
 
