@@ -339,6 +339,267 @@ bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEn
     return ok;
 }
 
+void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out) {
+    if (payload.empty()) {
+        return;
+    }
+    pcmapPut32(out, QORE_AOT_PCMAP_MAGIC);
+    pcmapPut32(out, static_cast<uint32_t>(payload.size()));
+    out.insert(out.end(), payload.begin(), payload.end());
+}
+
+// Locate the `qore_aot_pcloc` section bytes in a 64-bit ELF file via a self-contained
+// section-header walk (no libLLVM). Returns true and fills `sec` with the section
+// contents (copied) when found.
+static bool readElfSectionBytes(const std::string& path, const char* sec_name,
+        std::vector<uint8_t>& sec) {
+    sec.clear();
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return false;
+    }
+    bool ok = false;
+    do {
+        unsigned char e_ident[16];
+        if (fread(e_ident, 1, 16, f) != 16) {
+            break;
+        }
+        // ELF magic + 64-bit class + little-endian (the only AOT target layout).
+        if (e_ident[0] != 0x7f || e_ident[1] != 'E' || e_ident[2] != 'L' || e_ident[3] != 'F') {
+            break;
+        }
+        if (e_ident[4] != 2 /*ELFCLASS64*/ || e_ident[5] != 1 /*ELFDATA2LSB*/) {
+            break;
+        }
+        // Read the rest of the ELF64 header fields we need.
+        // Offsets within Elf64_Ehdr: e_shoff@40 (8), e_shentsize@58 (2), e_shnum@60 (2),
+        // e_shstrndx@62 (2).
+        unsigned char hdr[64 - 16];
+        if (fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr)) {
+            break;
+        }
+        auto rd16 = [](const unsigned char* p) -> uint16_t {
+            return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
+        };
+        auto rd64 = [](const unsigned char* p) -> uint64_t {
+            uint64_t v = 0;
+            for (int i = 0; i < 8; ++i) {
+                v |= static_cast<uint64_t>(p[i]) << (8 * i);
+            }
+            return v;
+        };
+        uint64_t e_shoff = rd64(hdr + (40 - 16));
+        uint16_t e_shentsize = rd16(hdr + (58 - 16));
+        uint16_t e_shnum = rd16(hdr + (60 - 16));
+        uint16_t e_shstrndx = rd16(hdr + (62 - 16));
+        if (!e_shoff || !e_shnum || e_shentsize < 64 || e_shstrndx >= e_shnum) {
+            break;
+        }
+        // Read the section header table.
+        std::vector<unsigned char> sh(static_cast<size_t>(e_shentsize) * e_shnum);
+        if (fseek(f, static_cast<long>(e_shoff), SEEK_SET) != 0
+                || fread(sh.data(), 1, sh.size(), f) != sh.size()) {
+            break;
+        }
+        // Within Elf64_Shdr: sh_name@0 (4), sh_offset@24 (8), sh_size@32 (8).
+        auto shdr = [&](uint16_t i) -> const unsigned char* {
+            return sh.data() + static_cast<size_t>(i) * e_shentsize;
+        };
+        auto rd32 = [](const unsigned char* p) -> uint32_t {
+            return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
+                | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+        };
+        // Read .shstrtab to resolve section names.
+        const unsigned char* str_sh = shdr(e_shstrndx);
+        uint64_t str_off = rd64(str_sh + 24);
+        uint64_t str_size = rd64(str_sh + 32);
+        if (!str_size) {
+            break;
+        }
+        std::vector<char> strtab(str_size);
+        if (fseek(f, static_cast<long>(str_off), SEEK_SET) != 0
+                || fread(strtab.data(), 1, str_size, f) != str_size) {
+            break;
+        }
+        size_t name_len = strlen(sec_name);
+        for (uint16_t i = 0; i < e_shnum; ++i) {
+            const unsigned char* s = shdr(i);
+            uint32_t nm = rd32(s + 0);
+            if (nm >= str_size) {
+                continue;
+            }
+            if (strncmp(strtab.data() + nm, sec_name, name_len) != 0
+                    || strtab[nm + name_len] != '\0') {
+                continue;
+            }
+            uint64_t off = rd64(s + 24);
+            uint64_t size = rd64(s + 32);
+            if (!size) {
+                break;
+            }
+            sec.resize(size);
+            if (fseek(f, static_cast<long>(off), SEEK_SET) != 0
+                    || fread(sec.data(), 1, size, f) != size) {
+                sec.clear();
+                break;
+            }
+            ok = true;
+            break;
+        }
+    } while (false);
+    fclose(f);
+    return ok;
+}
+
+bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out) {
+    out.clear();
+    std::vector<uint8_t> sec;
+    if (!readElfSectionBytes(path, QORE_AOT_PCLOC_SECTION_NAME, sec)) {
+        return false;
+    }
+    // Walk concatenated [magic][len][payload] records.
+    size_t p = 0;
+    const size_t n = sec.size();
+    while (p + 8 <= n) {
+        uint32_t magic = 0, plen = 0;
+        size_t q = p;
+        if (!pcmapGet32(sec.data(), n, q, magic) || !pcmapGet32(sec.data(), n, q, plen)) {
+            break;
+        }
+        if (magic != QORE_AOT_PCMAP_MAGIC || plen == 0 || q + plen > n) {
+            break;
+        }
+        std::vector<AOTPcLocFuncEntry> recs;
+        if (qoreAOTParsePcLocPayload(sec.data() + q, plen, recs)) {
+            for (auto& r : recs) {
+                out.push_back(std::move(r));
+            }
+        }
+        p = q + plen;
+    }
+    if (out.empty()) {
+        return false;
+    }
+    return true;
+}
+
+bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_et_dyn) {
+    out.clear();
+    out_is_et_dyn = false;
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return false;
+    }
+    bool ok = false;
+    do {
+        unsigned char e_ident[16];
+        if (fread(e_ident, 1, 16, f) != 16) {
+            break;
+        }
+        if (e_ident[0] != 0x7f || e_ident[1] != 'E' || e_ident[2] != 'L' || e_ident[3] != 'F'
+                || e_ident[4] != 2 /*ELFCLASS64*/ || e_ident[5] != 1 /*ELFDATA2LSB*/) {
+            break;
+        }
+        unsigned char hdr[64 - 16];
+        if (fread(hdr, 1, sizeof(hdr), f) != sizeof(hdr)) {
+            break;
+        }
+        auto rd16 = [](const unsigned char* p) -> uint16_t {
+            return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
+        };
+        // e_type is the first ELF64 header field after e_ident (offset 16 => hdr[0]).
+        out_is_et_dyn = (rd16(hdr + 0) == 3 /*ET_DYN*/);
+        auto rd32 = [](const unsigned char* p) -> uint32_t {
+            return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
+                | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+        };
+        auto rd64 = [](const unsigned char* p) -> uint64_t {
+            uint64_t v = 0;
+            for (int i = 0; i < 8; ++i) {
+                v |= static_cast<uint64_t>(p[i]) << (8 * i);
+            }
+            return v;
+        };
+        uint64_t e_shoff = rd64(hdr + (40 - 16));
+        uint16_t e_shentsize = rd16(hdr + (58 - 16));
+        uint16_t e_shnum = rd16(hdr + (60 - 16));
+        if (!e_shoff || !e_shnum || e_shentsize < 64) {
+            break;
+        }
+        std::vector<unsigned char> sh(static_cast<size_t>(e_shentsize) * e_shnum);
+        if (fseek(f, static_cast<long>(e_shoff), SEEK_SET) != 0
+                || fread(sh.data(), 1, sh.size(), f) != sh.size()) {
+            break;
+        }
+        auto shdr = [&](uint32_t i) -> const unsigned char* {
+            return sh.data() + static_cast<size_t>(i) * e_shentsize;
+        };
+        // Section header fields: sh_type@4(4), sh_link@40(4), sh_offset@24(8),
+        // sh_size@32(8), sh_entsize@56(8).
+        for (uint16_t i = 0; i < e_shnum; ++i) {
+            const unsigned char* s = shdr(i);
+            if (rd32(s + 4) != 2 /*SHT_SYMTAB*/) {
+                continue;
+            }
+            uint64_t sym_off = rd64(s + 24);
+            uint64_t sym_size = rd64(s + 32);
+            uint64_t sym_entsz = rd64(s + 56);
+            uint32_t strndx = rd32(s + 40);
+            if (!sym_size || sym_entsz < 24 || strndx >= e_shnum) {
+                continue;
+            }
+            const unsigned char* ss = shdr(strndx);
+            uint64_t str_off = rd64(ss + 24);
+            uint64_t str_size = rd64(ss + 32);
+            if (!str_size) {
+                continue;
+            }
+            std::vector<unsigned char> syms(sym_size);
+            std::vector<char> strtab(str_size);
+            if (fseek(f, static_cast<long>(sym_off), SEEK_SET) != 0
+                    || fread(syms.data(), 1, sym_size, f) != sym_size) {
+                break;
+            }
+            if (fseek(f, static_cast<long>(str_off), SEEK_SET) != 0
+                    || fread(strtab.data(), 1, str_size, f) != str_size) {
+                break;
+            }
+            uint64_t count = sym_size / sym_entsz;
+            for (uint64_t k = 0; k < count; ++k) {
+                const unsigned char* sym = syms.data() + k * sym_entsz;
+                // Elf64_Sym: st_name@0(4), st_info@4(1), st_value@8(8), st_size@16(8).
+                if ((sym[4] & 0xf) != 2 /*STT_FUNC*/) {
+                    continue;
+                }
+                uint64_t st_size = rd64(sym + 16);
+                if (!st_size) {
+                    continue;
+                }
+                uint32_t nm = rd32(sym + 0);
+                if (nm >= str_size) {
+                    continue;
+                }
+                AOTElfFuncSym e;
+                e.value = rd64(sym + 8);
+                e.size = st_size;
+                e.name.assign(strtab.data() + nm);
+                out.push_back(std::move(e));
+            }
+            // typically a single SYMTAB; stop after the first non-empty one
+            if (!out.empty()) {
+                ok = true;
+                break;
+            }
+        }
+    } while (false);
+    fclose(f);
+    if (!ok) {
+        out.clear();
+    }
+    return ok;
+}
+
 static bool qorePluginQordTrace() {
     return std::getenv("QORE_PLUGIN_QORD_TRACE") != nullptr;
 }

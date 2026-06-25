@@ -2919,9 +2919,16 @@ std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
     }
     // Parse outside the lock (file I/O). A concurrent loader may parse the same file
     // too; the data is identical, last writer wins.
+    //
+    // Prefer the `qore_aot_pcloc` ELF SECTION (survives downstream relinking — e.g.
+    // qorus links per-file .qo's into the qorus-core executable, which drops any EOF
+    // trailer but keeps the section). Fall back to the EOF trailer for legacy artifacts
+    // that predate the section. The section may carry several concatenated records (one
+    // per input object linked into the artifact); the reader accumulates all of them.
     std::vector<AOTPcLocFuncEntry> entries;
     std::shared_ptr<AotSymMap> symmap;
-    if (qoreAOTReadPcLocTrailer(key, entries) && !entries.empty()) {
+    if ((qoreAOTReadPcLocSection(key, entries) && !entries.empty())
+            || (qoreAOTReadPcLocTrailer(key, entries) && !entries.empty())) {
         symmap = std::make_shared<AotSymMap>();
         for (auto& e : entries) {
             (*symmap)[e.symbol] = std::move(e.entries);
@@ -2934,6 +2941,43 @@ std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
     }
     g_aot_trailer_cache[key] = symmap;  // cache negatives (null) too
     return symmap;
+}
+
+// Cached static-symbol table for an artifact, used to name AOT functions that dladdr
+// cannot (functions linked into an EXECUTABLE live only in .symtab, not .dynsym).
+struct AotSymtab {
+    bool is_et_dyn = false;                  //!< true => runtime addr = fbase + st_value
+    std::vector<AOTElfFuncSym> syms;         //!< sorted by value for address lookup
+};
+std::unordered_map<std::string, std::shared_ptr<const AotSymtab>> g_aot_symtab_cache;
+
+// Load + cache the .symtab FUNC symbols for `path` (sorted by value). Null when absent.
+std::shared_ptr<const AotSymtab> getOrLoadSymtab(const char* path) {
+    std::string key(path);
+    {
+        AutoLocker al(g_aot_pcmap_lock);
+        auto it = g_aot_symtab_cache.find(key);
+        if (it != g_aot_symtab_cache.end()) {
+            return it->second;
+        }
+    }
+    std::shared_ptr<AotSymtab> st;
+    std::vector<AOTElfFuncSym> syms;
+    bool is_dyn = false;
+    if (qoreAOTReadElfFuncSymbols(key, syms, is_dyn) && !syms.empty()) {
+        std::sort(syms.begin(), syms.end(),
+            [](const AOTElfFuncSym& a, const AOTElfFuncSym& b) { return a.value < b.value; });
+        st = std::make_shared<AotSymtab>();
+        st->is_et_dyn = is_dyn;
+        st->syms = std::move(syms);
+    }
+    AutoLocker al(g_aot_pcmap_lock);
+    auto it = g_aot_symtab_cache.find(key);
+    if (it != g_aot_symtab_cache.end()) {
+        return it->second;
+    }
+    g_aot_symtab_cache[key] = st;  // cache negatives too
+    return st;
 }
 } // anonymous namespace
 
@@ -2952,39 +2996,87 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     }
     Dl_info info;
     uintptr_t sym_size = 0;
+    // Require only fname/fbase: dli_sname/dli_saddr may be ABSENT for functions that
+    // exist solely in .symtab (AOT functions linked into an executable like qorus-core
+    // are not in .dynsym, which is all dladdr sees) — those are resolved via .symtab.
 #ifdef __GLIBC__
-    // dladdr1 with RTLD_DL_SYMENT yields the ELF symbol entry, giving a precise
-    // function size for an exact PC upper bound (avoids gap misattribution).
     const ElfW(Sym)* sym = nullptr;
     if (!dladdr1(reinterpret_cast<void*>(fn_ptr), &info, reinterpret_cast<void**>(
             const_cast<ElfW(Sym)**>(&sym)), RTLD_DL_SYMENT)
-            || !info.dli_fname || !info.dli_sname || !info.dli_saddr) {
+            || !info.dli_fname) {
         return;
     }
     if (sym && sym->st_size) {
         sym_size = static_cast<uintptr_t>(sym->st_size);
     }
 #else
-    if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info)
-            || !info.dli_fname || !info.dli_sname || !info.dli_saddr) {
+    if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info) || !info.dli_fname) {
         return;
     }
 #endif
     std::shared_ptr<const AotSymMap> symmap = getOrLoadPcLocTrailer(info.dli_fname);
     if (!symmap) {
+        if (getenv("QORE_AOT_LOC_DEBUG")) {
+            fprintf(stderr, "AOT-LOC: no map for fname=%s sym=%s\n",
+                info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?");
+        }
         return;
     }
-    auto it = symmap->find(info.dli_sname);
-    if (it == symmap->end()) {
+    // Resolve the function's name (-> map key), runtime start, and size. Prefer the
+    // dladdr/.dynsym result; fall back to .symtab when the symbol is absent there or
+    // its name isn't in the map (covers executable-resident AOT functions).
+    const std::vector<std::pair<uint32_t, uint32_t>>* sym_entries = nullptr;
+    uintptr_t fn_start = 0;
+    uintptr_t fn_size = 0;
+    if (info.dli_sname && info.dli_saddr) {
+        auto it = symmap->find(info.dli_sname);
+        if (it != symmap->end()) {
+            sym_entries = &it->second;
+            fn_start = reinterpret_cast<uintptr_t>(info.dli_saddr);
+            fn_size = sym_size;
+        }
+    }
+    if (!sym_entries) {
+        std::shared_ptr<const AotSymtab> stab = getOrLoadSymtab(info.dli_fname);
+        if (stab && !stab->syms.empty()) {
+            uintptr_t bias = stab->is_et_dyn
+                ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
+            uint64_t link_addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(fn_ptr) - bias);
+            // Largest st_value <= link_addr, then bounds-check against its size.
+            const auto& v = stab->syms;
+            size_t lo = 0, hi = v.size();
+            while (lo < hi) {
+                size_t mid = (lo + hi) / 2;
+                if (v[mid].value <= link_addr) { lo = mid + 1; } else { hi = mid; }
+            }
+            if (lo > 0) {
+                const AOTElfFuncSym& e = v[lo - 1];
+                if (link_addr < e.value + e.size) {
+                    auto it = symmap->find(e.name);
+                    if (it != symmap->end()) {
+                        sym_entries = &it->second;
+                        fn_start = bias + e.value;
+                        fn_size = e.size;
+                    }
+                }
+            }
+        }
+    }
+    if (!sym_entries) {
+        if (getenv("QORE_AOT_LOC_DEBUG")) {
+            fprintf(stderr, "AOT-LOC: sym MISS fname=%s dladdr-sym=%s (map has %zu syms)\n",
+                info.dli_fname ? info.dli_fname : "?", info.dli_sname ? info.dli_sname : "?",
+                symmap->size());
+        }
         return;
     }
     AotPcRange range;
-    range.base = reinterpret_cast<uintptr_t>(info.dli_saddr);
-    if (sym_size) {
-        range.end = range.base + sym_size;
+    range.base = fn_start;
+    if (fn_size) {
+        range.end = range.base + fn_size;
     }
-    range.offmap.reserve(it->second.size());
-    for (const auto& e : it->second) {
+    range.offmap.reserve(sym_entries->size());
+    for (const auto& e : *sym_entries) {
         if (e.second < static_cast<uint32_t>(ctx->num_locs) && ctx->locs[e.second]) {
             range.offmap.emplace_back(e.first, ctx->locs[e.second]);
             if (e.first > range.max_off) {
@@ -3005,8 +3097,9 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     g_aot_pc_ranges_sorted = false;
     g_aot_have_ranges.store(true, std::memory_order_release);
     if (getenv("QORE_AOT_LOC_DEBUG")) {
-        fprintf(stderr, "AOT-LOC: registered PC range base=%p sym=%s entries=%zu (total=%zu)\n",
-            info.dli_saddr, info.dli_sname, g_aot_pc_ranges.back().offmap.size(),
+        fprintf(stderr, "AOT-LOC: registered PC range base=0x%lx sym=%s entries=%zu (total=%zu)\n",
+            (unsigned long)fn_start, info.dli_sname ? info.dli_sname : "(symtab)",
+            g_aot_pc_ranges.back().offmap.size(),
             g_aot_pc_ranges.size());
     }
 }

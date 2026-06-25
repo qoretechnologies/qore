@@ -1649,6 +1649,47 @@ bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_
 //! leaves `out` empty) when the file has no valid trailer.
 bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
 
+//! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
+//! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
+//! per-file .qo's into the qorus-core executable via the system linker), a real ELF
+//! section survives every link: the linker concatenates same-named input sections
+//! into the output artifact. So qcc adds this section to every object it emits and the
+//! map rides through arbitrary downstream linking with ZERO changes required of qore's
+//! users. Read from the loaded artifact file at throw time (the section is non-alloc /
+//! not mapped, so it is read from `dli_fname`, like the trailer). C-identifier name so
+//! it stays a clean section label.
+#define QORE_AOT_PCLOC_SECTION_NAME "qore_aot_pcloc"
+
+//! Frame a serialized PC->loc payload as one self-delimiting section record:
+//! [uint32 magic('QPCM')][uint32 payload_len][payload]. Multiple objects' records are
+//! concatenated by the linker into one section; the reader walks them sequentially.
+//! No-op (leaves `out` empty) when `payload` is empty.
+void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out);
+
+//! Read + parse the `qore_aot_pcloc` ELF section from the artifact at `path`, walking
+//! all concatenated records and accumulating their per-function entries into `out`.
+//! Self-contained 64-bit-ELF parse (no libLLVM dependency on the throw path's TU).
+//! Returns false (and leaves `out` empty) when the artifact has no such section.
+bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
+
+//! One ELF static-symbol-table FUNC entry: link-time value + size + name.
+struct AOTElfFuncSym {
+    uint64_t value;   //!< st_value (link-time address / offset within the image)
+    uint64_t size;    //!< st_size
+    std::string name; //!< symbol name
+};
+
+//! Read all STT_FUNC symbols from the artifact's static symbol table (`.symtab`). This
+//! is needed because dladdr/dladdr1 only see the DYNAMIC table (`.dynsym`): functions
+//! AOT-linked into an EXECUTABLE (e.g. qorus-core) live only in `.symtab`, so dladdr
+//! cannot name them and the symbol-keyed PC->loc map can't be matched without this.
+//! `out_is_et_dyn` receives true for ET_DYN images (PIE exe / .so — st_value is a
+//! load-relative offset, runtime addr = dli_fbase + st_value) and false for ET_EXEC
+//! (st_value is absolute). Self-contained 64-bit-ELF parse. Returns false (out empty)
+//! when no `.symtab`.
+bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_et_dyn);
+
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {
     std::string name;               //!< init function name (e.g. "__const_init::Ns::ConstName")

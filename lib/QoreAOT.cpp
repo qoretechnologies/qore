@@ -4206,23 +4206,23 @@ static bool writeAndVerifyPcLocTrailer(const std::string& path,
     return true;
 }
 
-//! Build + append the PC->loc trailer for an ALREADY-LINKED aggregate artifact (e.g.
-//! qorus-core's QORUS_CORE_MAIN_ALL_QO_AGG.qmod) by reading its DWARF directly. The
-//! aggregate-link path combines pre-built per-file .qo objects and has no func_slots /
-//! aot_locs, but the DWARF column already carries each row's loc-index (loc_index+1,
-//! per QoreIRToLLVM::setDebugLocation), so the map is reconstructed per function symbol
-//! from the symbol table + line table alone. Each function's loc-index indexes its own
-//! ctx->locs at load (built from its per-file slot map), so no loc table is needed here.
-static bool buildAndAppendAggregateTrailer(const std::string& path, std::string& error) {
-    bool dbg = getenv("QORE_AOT_LOC_DEBUG");
+//! Reconstruct per-function (function-relative native offset -> loc-index) maps from an
+//! object/artifact's OWN DWARF. The DWARF column carries each row's loc-index
+//! (loc_index+1, per QoreIRToLLVM::setDebugLocation), so the map is recovered from the
+//! symbol table + line table alone — no func_slots / aot_locs needed (each function's
+//! loc-index indexes its own ctx->locs at load). Works on a freshly-emitted object AND
+//! on an already-linked aggregate. Output `fs` carries only llvm_symbol + pc_loc_map.
+static void collectPcLocMapsFromObjectDwarf(const std::string& path,
+        std::vector<AOTCompiledFuncWithSlots>& fs) {
+    fs.clear();
     auto buf_or = llvm::MemoryBuffer::getFile(path);
     if (!buf_or) {
-        return true;  // best-effort; absence just means no lazy locations for this artifact
+        return;
     }
     auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
     if (!obj_or) {
         llvm::consumeError(obj_or.takeError());
-        return true;
+        return;
     }
     std::vector<std::pair<uint64_t, std::string>> funcs;
     for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
@@ -4244,17 +4244,14 @@ static bool buildAndAppendAggregateTrailer(const std::string& path, std::string&
         }
         return lo == 0 ? -1 : static_cast<int>(lo - 1);
     };
-    // symbol -> (offset, loc-index) collected from the linked DWARF.
     std::unordered_map<std::string, std::vector<std::pair<uint32_t, uint32_t>>> by_sym;
     std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
-    size_t rows = 0;
     for (const auto& unit : dctx->compile_units()) {
         const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
         if (!lt) {
             continue;
         }
         for (const auto& row : lt->Rows) {
-            ++rows;
             if (row.EndSequence || row.Column == 0) {
                 continue;
             }
@@ -4266,9 +4263,6 @@ static bool buildAndAppendAggregateTrailer(const std::string& path, std::string&
             by_sym[funcs[fi].second].emplace_back(offset, static_cast<uint32_t>(row.Column - 1));
         }
     }
-    // Materialize as func descriptors carrying only llvm_symbol + the compacted map,
-    // then reuse the standard serializer/append/round-trip path.
-    std::vector<AOTCompiledFuncWithSlots> fs;
     fs.reserve(by_sym.size());
     for (auto& kv : by_sym) {
         auto& m = kv.second;
@@ -4287,11 +4281,62 @@ static bool buildAndAppendAggregateTrailer(const std::string& path, std::string&
         }
         fs.push_back(std::move(f));
     }
-    if (dbg) {
-        fprintf(stderr, "AOT-LOC: aggregate %s: %zu rows, %zu funcs with maps\n",
-            path.c_str(), rows, fs.size());
+}
+
+//! Add (or replace) the `qore_aot_pcloc` ELF section on the just-emitted object at
+//! `path`, carrying the framed PC->loc payload derived from the object's own DWARF.
+//! Unlike the EOF trailer, this SECTION survives arbitrary downstream linking (the
+//! linker concatenates same-named sections), so it rides into whatever final artifact
+//! the object is linked into — including qorus-core's executable, which links the
+//! per-file .qo's via the system linker. This is how qore owns lazy-location support
+//! across ALL build/link topologies with no work pushed onto qore's users. Best-effort:
+//! a failure logs and returns true (lazy just stays unavailable for this artifact).
+static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
+    bool dbg = getenv("QORE_AOT_LOC_DEBUG");
+    std::vector<AOTCompiledFuncWithSlots> fs;
+    collectPcLocMapsFromObjectDwarf(path, fs);
+    std::vector<uint8_t> payload;
+    size_t n = qoreAOTSerializePcLocPayload(fs, payload);
+    if (!n || payload.empty()) {
+        return true;  // no DWARF / no mappable functions
     }
-    return writeAndVerifyPcLocTrailer(path, fs, error);
+    std::vector<uint8_t> record;
+    qoreAOTFramePcLocSectionRecord(payload, record);
+
+    std::string tmp = path + ".pcloc." + std::to_string(getpid());
+    FILE* tf = fopen(tmp.c_str(), "wb");
+    if (!tf) {
+        printd(0, "AOT: cannot write pcloc section payload '%s': %s (continuing)\n",
+            tmp.c_str(), strerror(errno));
+        return true;
+    }
+    bool wok = fwrite(record.data(), 1, record.size(), tf) == record.size();
+    if (fclose(tf) != 0) {
+        wok = false;
+    }
+    if (!wok) {
+        remove(tmp.c_str());
+        printd(0, "AOT: failed writing pcloc payload to '%s' (continuing)\n", tmp.c_str());
+        return true;
+    }
+    // objcopy in place: remove any pre-existing section (defensive for re-emits), then
+    // add the non-alloc readonly section. GNU objcopy with one file arg edits in place.
+    std::string cmd = "objcopy --remove-section " QORE_AOT_PCLOC_SECTION_NAME
+        " --add-section " QORE_AOT_PCLOC_SECTION_NAME "=" + tmp
+        + " --set-section-flags " QORE_AOT_PCLOC_SECTION_NAME "=readonly,contents "
+        + path + " " + path;
+    int rc = system(cmd.c_str());
+    remove(tmp.c_str());
+    if (rc != 0) {
+        printd(0, "AOT: objcopy add pcloc section failed (rc=%d) for '%s' (continuing)\n",
+            rc, path.c_str());
+        return true;
+    }
+    if (dbg) {
+        fprintf(stderr, "AOT-LOC: added %s section to %s (%zu funcs, %zu payload bytes)\n",
+            QORE_AOT_PCLOC_SECTION_NAME, path.c_str(), n, payload.size());
+    }
+    return true;
 }
 
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
@@ -4573,6 +4618,17 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // (the main per-program emit site); a no-op for glue/cross-compile objects.
     if (func_slots && !func_slots->empty()) {
         buildAOTPcLocMaps(path, *func_slots);
+    }
+
+    // Carry the PC->loc map in a linker-surviving ELF section on EVERY emitted object
+    // (native only). This rides through arbitrary downstream linking — including when
+    // qorus relinks per-file .qo's into the qorus-core executable via the system linker
+    // — so lazy on-throw source locations work for all build/link topologies with no
+    // work required of qore's users. (The EOF trailer the other emit paths append is
+    // dropped by any such relink; the section is the robust, universal mechanism. The
+    // runtime prefers the section and falls back to the trailer for legacy artifacts.)
+    if (!target_triple) {
+        addPcLocSectionFromObjectDwarf(path);
     }
 
     delete tm;
@@ -10927,19 +10983,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             return false;
         }
 
-        // Append the PC->loc trailer for the linked aggregate (e.g. qorus-core's
-        // QORUS_CORE_MAIN_ALL_QO_AGG.qmod) so on-throw lazy resolution can recover real
-        // .qc/.ql source locations for natively-executing aggregate functions instead of
-        // the aggregate label. Reconstructed from the linked artifact's own DWARF (the
-        // per-file .qo column encoding survives the link). Best-effort: a failure must
-        // not fail the build, so log and continue (lazy just stays unavailable).
-        if (!target_triple) {
-            std::string trailer_err;
-            if (!buildAndAppendAggregateTrailer(output_path, trailer_err)) {
-                printd(0, "AOT: aggregate PC->loc trailer for %s failed: %s (continuing)\n",
-                    output_path.c_str(), trailer_err.c_str());
-            }
-        }
+        // No post-link trailer needed for the aggregate: each input .qo already carries
+        // a `qore_aot_pcloc` ELF section (added in emitObjectFile), and the linker
+        // concatenates them into the linked artifact — so lazy on-throw locations work
+        // for aggregate-resident functions automatically.
 
         if (!target_triple) {
             remove(glue_obj.c_str());
