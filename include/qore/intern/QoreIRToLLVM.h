@@ -580,6 +580,7 @@ private:
     // Runtime location tracking: per-function cached TLS pointers
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    llvm::Value* loc_frame_cache_ptr = nullptr; //!< Cached ptr to runtime_loc_sp TLS (JIT only)
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
 
     //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).

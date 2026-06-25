@@ -310,7 +310,7 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
         ExceptionSink* xsink)
     : rc(rc), old_loc(rc.getLocation()), old_stmt(rc.getStatement()), old_po(rc.getParseOptions()),
       tls_old_loc(rc.getLocation()), tls_old_stmt(rc.getStatement()), tls_old_po(rc.getParseOptions()),
-      restore_po(has_po), used_swap(false) {
+      tls_old_sp(get_runtime_loc_sp()), restore_po(has_po), used_swap(false) {
     rc.setLocation(new_loc);
     if (new_stmt) {
         rc.setStatement(new_stmt);
@@ -327,11 +327,18 @@ RuntimeConfigLocationHelper::RuntimeConfigLocationHelper(RuntimeConfig& rc,
     } else {
         update_runtime_statement_location(rc.getStatement(), rc.getLocation(), rc.getParseOptions());
     }
+    // Mark this AST-execution frame as the innermost non-AOT owner of the runtime
+    // location (saved/restored with the per-statement scope). An AOT callee never
+    // touches this, so while AOT runs it inherits an OUTER non-AOT frame's value (or 0),
+    // letting the throw resolver classify the AOT frame as innermost. See
+    // design/aot-lazy-loc-innermost-frame.md.
+    set_runtime_loc_sp(reinterpret_cast<uintptr_t>(__builtin_frame_address(0)));
 }
 
 RuntimeConfigLocationHelper::~RuntimeConfigLocationHelper() {
     rc.setLocation(old_loc);
     rc.setStatement(old_stmt);
+    set_runtime_loc_sp(tls_old_sp);  // restore the enclosing scope's non-AOT frame marker
     if (restore_po) {
         rc.setParseOptions(old_po);
     }

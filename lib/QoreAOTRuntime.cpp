@@ -2907,70 +2907,6 @@ inline bool aotLazyLocEnabled() {
     return enabled;
 }
 
-// --- Loaded executable-segment snapshot (for JIT-frame detection at throw) ---
-// A sorted, immutable array of [start, end) ranges covering every loaded ELF object's
-// executable segments (libqore, the exe, binary modules, AOT .qmods). Published via an
-// atomic pointer and read lock-free at throw — NO dl_* call is made on the throw path
-// (dladdr/dl_iterate take dl_load_lock and would deadlock against a concurrent dlopen
-// during stack unwinding). Rebuilt off the throw path when a new module appears.
-using LoadedSegs = std::vector<std::pair<uintptr_t, uintptr_t>>;
-std::atomic<const LoadedSegs*> g_loaded_segs{nullptr};
-QoreThreadLock g_loaded_segs_build_lock;       // serializes (rare) rebuilds
-std::unordered_set<std::string> g_loaded_seg_modules; // module paths already seen
-
-#ifdef __GLIBC__
-int aotCollectPhdr(struct dl_phdr_info* info, size_t, void* data) {
-    auto* segs = static_cast<LoadedSegs*>(data);
-    for (int i = 0; i < info->dlpi_phnum; ++i) {
-        const ElfW(Phdr)& ph = info->dlpi_phdr[i];
-        if (ph.p_type == PT_LOAD && (ph.p_flags & PF_X)) {
-            uintptr_t base = static_cast<uintptr_t>(info->dlpi_addr) + ph.p_vaddr;
-            segs->emplace_back(base, base + ph.p_memsz);
-        }
-    }
-    return 0;
-}
-#endif
-
-// Rebuild the loaded-segment snapshot the first time a given AOT module is seen. MUST
-// be called off the throw path and WITHOUT g_aot_pcmap_lock held (it takes dl_load_lock
-// via dl_iterate_phdr; holding g_aot_pcmap_lock here could cycle against a concurrent
-// module-init thread that holds dl_load_lock and wants g_aot_pcmap_lock). Safe from AOT
-// module registration, which runs after the owning dlopen returns. The prior snapshot is
-// intentionally leaked (rebuilds are rare — one per newly loaded AOT module).
-void maybeRebuildSegmentsForModule(const char* path) {
-#ifdef __GLIBC__
-    AutoLocker al(g_loaded_segs_build_lock);
-    if (!g_loaded_seg_modules.insert(path).second) {
-        return;  // already captured a snapshot covering this module
-    }
-    auto* segs = new LoadedSegs();
-    dl_iterate_phdr(aotCollectPhdr, segs);
-    std::sort(segs->begin(), segs->end());
-    g_loaded_segs.store(segs, std::memory_order_release);
-#endif
-}
-
-// Lock-free: is `pc` inside any loaded executable segment? Returns true when the
-// snapshot is unavailable (conservative: treat as "loaded" so we never misfire the
-// JIT-defer before the snapshot exists).
-bool aotPcInLoadedSegment(uintptr_t pc) {
-    const LoadedSegs* segs = g_loaded_segs.load(std::memory_order_acquire);
-    if (!segs || segs->empty()) {
-        return true;
-    }
-    // Largest start <= pc.
-    size_t lo = 0, hi = segs->size();
-    while (lo < hi) {
-        size_t mid = (lo + hi) / 2;
-        if ((*segs)[mid].first <= pc) { lo = mid + 1; } else { hi = mid; }
-    }
-    if (lo == 0) {
-        return false;
-    }
-    return pc < (*segs)[lo - 1].second;
-}
-
 // Load + cache the PC->loc trailer for `path`; returns null when absent/garbage.
 std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
     std::string key(path);
@@ -3042,9 +2978,6 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     if (it == symmap->end()) {
         return;
     }
-    // Refresh the loaded-segment snapshot for JIT-frame detection the first time we see
-    // this module. Done before taking g_aot_pcmap_lock (dl_load_lock ordering).
-    maybeRebuildSegmentsForModule(info.dli_fname);
     AotPcRange range;
     range.base = reinterpret_cast<uintptr_t>(info.dli_saddr);
     if (sym_size) {
@@ -3135,52 +3068,9 @@ const QoreProgramLocation* aotLookupLocForPc(uintptr_t pc) {
     return r.offmap[olo - 1].second;
 }
 
-// Address ranges of libqore functions that EXECUTE non-AOT user code (the IR
-// interpreter). If the innermost user frame is one of these (i.e. it appears in the
-// unwind before any AOT frame), the throw originated in interpreted code whose
-// location the eager path already tracks correctly, so the lazy path must defer.
-// Computed once; covers the interpreter dispatch boundary that AOT code crosses when
-// it calls into a non-AOT function (e.g. QUnit calling user test methods).
-struct AotAddrRange { uintptr_t base; uintptr_t end; };
-const std::vector<AotAddrRange>& aotUserCodeBarriers() {
-    static const std::vector<AotAddrRange> ranges = []() {
-        std::vector<AotAddrRange> v;
-        auto add = [&v](void* fn) {
-            if (!fn) {
-                return;
-            }
-            Dl_info bi;
-#ifdef __GLIBC__
-            const ElfW(Sym)* s = nullptr;
-            if (dladdr1(fn, &bi, reinterpret_cast<void**>(const_cast<ElfW(Sym)**>(&s)),
-                    RTLD_DL_SYMENT) && bi.dli_saddr && s && s->st_size) {
-                uintptr_t b = reinterpret_cast<uintptr_t>(bi.dli_saddr);
-                v.push_back({b, b + static_cast<uintptr_t>(s->st_size)});
-                return;
-            }
-#endif
-            if (dladdr(fn, &bi) && bi.dli_saddr) {
-                uintptr_t b = reinterpret_cast<uintptr_t>(bi.dli_saddr);
-                v.push_back({b, b + 0x10000});  // coarse fallback when size unknown
-            }
-        };
-        add(reinterpret_cast<void*>(&QoreIRInterpreter::execute));
-        return v;
-    }();
-    return ranges;
-}
-inline bool aotPcInUserCodeBarrier(uintptr_t pc) {
-    for (const auto& r : aotUserCodeBarriers()) {
-        if (pc >= r.base && pc < r.end) {
-            return true;
-        }
-    }
-    return false;
-}
-
 struct AotUnwindState {
     const QoreProgramLocation* found = nullptr;
-    bool deferred = false;  //!< innermost user frame is interpreted -> keep eager
+    uintptr_t aot_cfa = 0;  //!< CFA of the innermost AOT frame (for the SP comparison)
     int idx = 0;
     int skip = 0;
 };
@@ -3193,28 +3083,14 @@ _Unwind_Reason_Code aotUnwindCb(struct _Unwind_Context* uctx, void* arg) {
     if (st->idx++ < st->skip) {
         return _URC_NO_REASON;
     }
-    // _Unwind_GetIP returns the return address (one past the call); look up ip-1 so
-    // we land inside the call instruction's line, matching the eager updater.
-    uintptr_t probe = ip - 1;
-    // An interpreter frame inner to any AOT frame means the innermost user code is
-    // interpreted (eager is authoritative) — stop and defer.
-    if (aotPcInUserCodeBarrier(probe)) {
-        st->deferred = true;
-        return _URC_END_OF_STACK;
-    }
-    const QoreProgramLocation* loc = aotLookupLocForPc(probe);
+    // _Unwind_GetIP returns the return address (one past the call); look up ip-1 so we
+    // land inside the call instruction's line, matching the eager updater. Find the
+    // innermost AOT frame; whether it is the innermost USER frame is decided by the SP
+    // comparison in the resolver (runtime_loc_sp vs this CFA).
+    const QoreProgramLocation* loc = aotLookupLocForPc(ip - 1);
     if (loc) {
         st->found = loc;
-        return _URC_END_OF_STACK;  // stop at the innermost AOT frame
-    }
-    // JIT-compiled user code lives in anonymous JIT memory not backed by any loaded
-    // object; libqore/.qmod/exe/binary-module frames are all in loaded ELF segments. A
-    // frame inner to an AOT frame that is in NO loaded segment is therefore JIT user
-    // code whose location the eager (inline JIT) updater already tracks — defer. The
-    // segment snapshot is consulted lock-free (no dl_* call here — dladdr/dl_iterate
-    // take dl_load_lock and would deadlock against a concurrent dlopen during unwind).
-    if (!aotPcInLoadedSegment(probe)) {
-        st->deferred = true;
+        st->aot_cfa = static_cast<uintptr_t>(_Unwind_GetCFA(uctx));
         return _URC_END_OF_STACK;
     }
     return _URC_NO_REASON;
@@ -3245,24 +3121,38 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     }
     AotUnwindState st;
     _Unwind_Backtrace(aotUnwindCb, &st);
+
+    // Decide whether the innermost USER frame is AOT. runtime_loc_sp is the stack-frame
+    // address of the innermost live non-AOT (AST/IR/JIT) frame that set runtime_loc; it
+    // is 0 while an AOT frame owns the location. Stacks grow down (inner = smaller addr):
+    //   - no AOT frame found            -> non-AOT exception, eager is authoritative
+    //   - sp == 0                       -> an AOT frame owns the location -> AOT innermost
+    //   - aot_cfa < sp                  -> the AOT frame is deeper than the live non-AOT
+    //                                      frame -> AOT innermost
+    //   - else                          -> a non-AOT frame is innermost -> eager
+    // See design/aot-lazy-loc-innermost-frame.md.
+    const QoreProgramLocation* lazy = nullptr;
+    bool aot_innermost = false;
+    if (st.found) {
+        uintptr_t sp = get_runtime_loc_sp();
+        aot_innermost = (sp == 0) || (st.aot_cfa < sp);
+        if (aot_innermost) {
+            lazy = st.found;
+        }
+    }
+
     if (gate_env) {
-        // Nothing to report unless an AOT frame was found or the barrier deferred.
-        if (!st.found && !st.deferred) {
-            return nullptr;
-        }
-        FILE* gate_out = stderr;
-        bool gate_close = false;
-        if (strcmp(gate_env, "1") && strcmp(gate_env, "on")) {
-            FILE* gf = fopen(gate_env, "a");
-            if (gf) { gate_out = gf; gate_close = true; }
-        }
-        if (st.deferred) {
-            // Innermost user frame is interpreted: the barrier correctly kept eager.
-            fprintf(gate_out, "AOT-LOC-GATE: DEFER (interp inner)\n");
-        }
-        // Only meaningful when the raising frame IS an AOT function (st.found set).
-        // For non-AOT exceptions the eager value is authoritative; stay silent.
+        // Report only when an AOT frame is on the stack (otherwise eager is trivially
+        // authoritative). The gate logs the eager-vs-lazy divergence tag AND the
+        // mechanism's decision so validation can confirm REGRESS? -> DEFER and that
+        // IMPROVE cases stay LAZY.
         if (st.found) {
+            FILE* gate_out = stderr;
+            bool gate_close = false;
+            if (strcmp(gate_env, "1") && strcmp(gate_env, "on")) {
+                FILE* gf = fopen(gate_env, "a");
+                if (gf) { gate_out = gf; gate_close = true; }
+            }
             auto fileOf = [](const QoreProgramLocation* l) -> const char* {
                 const char* f = l ? l->getFile() : nullptr;
                 return f ? f : "";
@@ -3271,26 +3161,20 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
             int el = eager ? eager->start_line : -1;
             const char* lf = fileOf(st.found);
             int ll = st.found->start_line;
-            // Is the eager value a "real" source location, or a degenerate
-            // <builtin>/empty/aggregate one the lazy path is expected to improve?
             bool eager_real = eager && el > 0 && *ef && strcmp(ef, "<builtin>");
-            const char* tag;
-            if (!eager_real) {
-                tag = "IMPROVE";   // eager had no usable location; lazy supplies one
-            } else if (el == ll && !strcmp(ef, lf)) {
-                tag = "OK";        // identical — the must-not-regress invariant
-            } else {
-                tag = "REGRESS?";  // both real but differ — scrutinize (mixed stack?)
+            const char* tag = !eager_real ? "IMPROVE"
+                : (el == ll && !strcmp(ef, lf)) ? "OK" : "REGRESS?";
+            fprintf(gate_out, "AOT-LOC-GATE: %s decision=%s sp=%p aot_cfa=%p eager=%s:%d lazy=%s:%d\n",
+                tag, aot_innermost ? "LAZY" : "EAGER",
+                reinterpret_cast<void*>(get_runtime_loc_sp()),
+                reinterpret_cast<void*>(st.aot_cfa), ef, el, lf, ll);
+            if (gate_close) {
+                fclose(gate_out);
             }
-            fprintf(gate_out, "AOT-LOC-GATE: %s eager=%s:%d lazy=%s:%d\n",
-                tag, ef, el, lf, ll);
-        }
-        if (gate_close) {
-            fclose(gate_out);
         }
         return nullptr;  // gate phase: keep eager behavior
     }
-    return st.found;
+    return lazy;
 }
 
 static QoreAOTContext* buildContextFromSlotMap(

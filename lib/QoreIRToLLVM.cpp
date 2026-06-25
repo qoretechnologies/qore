@@ -3166,6 +3166,15 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
             llvm::PointerType::getUnqual(ctx));
         builder->CreateStore(loc_val, loc_cache_ptr);
+        // Record this JIT frame's address as the innermost non-AOT runtime-loc owner.
+        if (loc_frame_cache_ptr) {
+            llvm::Function* frameaddr = llvm::Intrinsic::getDeclaration(&module,
+                llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
+            llvm::Value* fa = builder->CreateCall(frameaddr,
+                {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
+            llvm::Value* fa_int = builder->CreatePtrToInt(fa, i64_type);
+            builder->CreateStore(fa_int, loc_frame_cache_ptr);
+        }
     }
 }
 
@@ -4748,6 +4757,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // AOT mode: location indices into ctx->locs[] table (populated at load time).
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
+    loc_frame_cache_ptr = nullptr;
     last_runtime_line = -1;
     last_aot_dbg_line = -1;
     current_aot_loc_index = -1;
@@ -4760,6 +4770,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto stmt_fn = module.getOrInsertFunction("qore_rt_get_stmt_ptr",
             llvm::FunctionType::get(ptr_type, {}, false));
         stmt_cache_ptr = builder->CreateCall(stmt_fn, {}, "stmt_ptr");
+        // JIT mode caches the runtime_loc_sp slot so the per-line eager store can record
+        // this JIT frame's address (lets the AOT throw resolver tell JIT from AOT).
+        if (!aot_mode) {
+            auto frame_fn = module.getOrInsertFunction("qore_rt_get_loc_frame_ptr",
+                llvm::FunctionType::get(ptr_type, {}, false));
+            loc_frame_cache_ptr = builder->CreateCall(frame_fn, {}, "loc_frame_ptr");
+        }
         // AOT mode: no preloading needed — qore_rt_set_runtime_loc_aot handles
         // null checks and TLS access internally per line change.
     }

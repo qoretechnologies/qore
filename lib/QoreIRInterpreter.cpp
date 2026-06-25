@@ -4030,16 +4030,21 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     size_t local_slot_count = func.local_var_slots.empty()
         ? 0 : static_cast<size_t>(func.max_local_slot_id) + 1;
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
-    // RAII guard: return the frame to the pool on any exit path
+    // RAII guard: return the frame to the pool on any exit path, and save/restore the
+    // innermost-non-AOT-frame marker (runtime_loc_sp) across this call so an AOT caller
+    // that resumes after this IR call sees its own (outer) marker, not this frame's
+    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
     struct FrameGuard {
         IRCallFrame& frame;
+        uintptr_t saved_sp;
         ~FrameGuard() {
             // Pooled frames outlive the call.  Never let a dormant frame retain
             // refs from IR-only local caches or missed cleanup paths.
             frame.releaseReferences(nullptr);
             tl_frame_pool.pop();
+            set_runtime_loc_sp(saved_sp);
         }
-    } frame_guard{frame};
+    } frame_guard{frame, get_runtime_loc_sp()};
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
@@ -5252,6 +5257,9 @@ next_instruction:
             // Update runtime_loc for exception/callstack reporting via cached pointers
             *rl_cache.stmt_ptr = nullptr;
             *rl_cache.loc_ptr = inst->loc;
+            // Mark this IR-interpreter frame as the innermost non-AOT frame owning the
+            // runtime location, so an AOT throw resolver can tell interp from AOT.
+            *rl_cache.sp_ptr = reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
             last_ephemeral_line = inst->cached_start_line;
             if (!debug_active) {
                 last_debug_line = inst->cached_start_line;

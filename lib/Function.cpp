@@ -6069,6 +6069,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         QoreValue val{};
+        // Save/restore the innermost-non-AOT-frame marker across native (JIT/AOT)
+        // execution. JIT code sets runtime_loc_sp per line to its own (inner) frame; on
+        // return an AOT caller must see its own outer marker again, not the stale inner
+        // one, so the throw resolver still classifies the AOT caller as innermost. AOT
+        // code never sets the marker, so for it this is a no-op. See
+        // design/aot-lazy-loc-innermost-frame.md.
+        struct SpGuard {
+            uintptr_t saved_sp;
+            ~SpGuard() { set_runtime_loc_sp(saved_sp); }
+        } sp_guard{get_runtime_loc_sp()};
         {
             // Only create ArgvContextHelper if argv is used
             std::optional<ArgvContextHelper> argv_helper;

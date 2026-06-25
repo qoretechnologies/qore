@@ -357,6 +357,12 @@ public:
     const QoreStackLocation* current_stack_location = nullptr;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
+    // Stack-frame address of the innermost LIVE non-AOT (AST/IR/JIT) frame that set
+    // runtime_loc per statement/line; 0 means "owned by an AOT frame (or not yet set)".
+    // Shadows runtime_loc's save/restore lifecycle so it never points at a dead frame.
+    // Read at throw to decide whether the innermost user frame is AOT (-> lazy location)
+    // or non-AOT (-> eager). See design/aot-lazy-loc-innermost-frame.md.
+    uintptr_t runtime_loc_sp = 0;
     // current dynamic runtime statement
     const AbstractStatement* runtime_statement = nullptr;
     const char* parse_code = nullptr; // the current function, method, or closure being parsed
@@ -1814,8 +1820,17 @@ RuntimeLocationCache get_runtime_location_cache() {
     ThreadData* td = thread_data.get();
     return RuntimeLocationCache{
         &td->runtime_loc,
-        &td->runtime_statement
+        &td->runtime_statement,
+        &td->runtime_loc_sp
     };
+}
+
+uintptr_t get_runtime_loc_sp() {
+    return thread_data.get()->runtime_loc_sp;
+}
+
+void set_runtime_loc_sp(uintptr_t sp) {
+    thread_data.get()->runtime_loc_sp = sp;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {

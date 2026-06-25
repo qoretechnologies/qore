@@ -262,11 +262,19 @@ DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, c
 struct RuntimeLocationCache {
     const QoreProgramLocation** loc_ptr;
     const AbstractStatement** stmt_ptr;
+    uintptr_t* sp_ptr;   //!< runtime_loc_sp slot (innermost non-AOT frame address)
 };
 
 //! Returns cached pointers to the current thread's runtime location fields.
 //! Call once at function entry, then write through the pointers directly.
 DLLLOCAL RuntimeLocationCache get_runtime_location_cache();
+
+//! Returns the current thread's runtime_loc_sp (innermost live non-AOT frame address,
+//! 0 if owned by an AOT frame). Read at throw by the AOT lazy-location resolver.
+DLLLOCAL uintptr_t get_runtime_loc_sp();
+//! Sets the current thread's runtime_loc_sp. Used by the per-statement RAII helpers to
+//! mark/restore the innermost non-AOT execution frame.
+DLLLOCAL void set_runtime_loc_sp(uintptr_t sp);
 
 //! Returns a ref'd SandboxManager for the first program on the current thread's
 //! program-context (call) stack that has an active manager, starting with the current

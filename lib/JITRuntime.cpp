@@ -413,6 +413,14 @@ extern "C" DLLEXPORT const AbstractStatement** qore_rt_get_stmt_ptr() {
     return cache.stmt_ptr;
 }
 
+// Returns pointer to the thread-local runtime_loc_sp variable. JIT-compiled code stores
+// its current stack frame address here per line so the AOT lazy-throw resolver can tell
+// a JIT frame (eager-tracked) from an AOT frame.
+extern "C" DLLEXPORT uintptr_t* qore_rt_get_loc_frame_ptr() {
+    RuntimeLocationCache cache = get_runtime_location_cache();
+    return cache.sp_ptr;
+}
+
 // AOT mode: set runtime location from context location table.
 // Per-line update: loads location pointer from ctx->locs[loc_index] and stores to TLS.
 extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32_t loc_index) {

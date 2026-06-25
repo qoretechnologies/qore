@@ -199,6 +199,7 @@ private:
     const QoreProgramLocation* tls_old_loc;
     const AbstractStatement* tls_old_stmt;
     QoreParseOptions tls_old_po;
+    uintptr_t tls_old_sp;   //!< saved runtime_loc_sp (innermost non-AOT frame marker)
     bool restore_po;
     bool used_swap;
 };
