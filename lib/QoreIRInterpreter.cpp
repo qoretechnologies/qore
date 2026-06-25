@@ -4045,6 +4045,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             set_runtime_loc_sp(saved_sp);
         }
     } frame_guard{frame, get_runtime_loc_sp()};
+    // Mark this IR-interpreter frame as the innermost non-AOT owner of the runtime
+    // location for the duration of the call (the frame address is constant, so set it
+    // once here rather than per line); FrameGuard restores the caller's marker on exit.
+    set_runtime_loc_sp(reinterpret_cast<uintptr_t>(__builtin_frame_address(0)));
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
@@ -5257,9 +5261,6 @@ next_instruction:
             // Update runtime_loc for exception/callstack reporting via cached pointers
             *rl_cache.stmt_ptr = nullptr;
             *rl_cache.loc_ptr = inst->loc;
-            // Mark this IR-interpreter frame as the innermost non-AOT frame owning the
-            // runtime location, so an AOT throw resolver can tell interp from AOT.
-            *rl_cache.sp_ptr = reinterpret_cast<uintptr_t>(__builtin_frame_address(0));
             last_ephemeral_line = inst->cached_start_line;
             if (!debug_active) {
                 last_debug_line = inst->cached_start_line;

@@ -6650,6 +6650,14 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         swapped_runtime_ctx = true;
     }
 
+    // Save/restore the innermost-non-AOT-frame marker across this native (JIT) call so an
+    // AOT caller that resumes after it sees its own outer marker, not this JIT frame's
+    // stale inner one. See design/aot-lazy-loc-innermost-frame.md.
+    struct SpGuard {
+        uintptr_t saved_sp;
+        ~SpGuard() { set_runtime_loc_sp(saved_sp); }
+    } sp_guard{get_runtime_loc_sp()};
+
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
     try {
