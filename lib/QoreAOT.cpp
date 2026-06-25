@@ -4152,6 +4152,60 @@ static void buildAOTPcLocMaps(const std::string& path,
     }
 }
 
+//! Serialize the per-function PC->loc maps from `func_slots` and append them as a
+//! trailer to the final artifact at `path`. Under QORE_AOT_LOC_DEBUG, immediately
+//! reads the trailer back and asserts a byte-for-byte round-trip. Safe to call on
+//! any final artifact (.qo/.qmod/exe) — dlopen and the ELF object reader both ignore
+//! trailing bytes.
+static bool writeAndVerifyPcLocTrailer(const std::string& path,
+        const std::vector<AOTCompiledFuncWithSlots>& func_slots, std::string& error) {
+    std::vector<uint8_t> payload;
+    size_t n = qoreAOTSerializePcLocPayload(func_slots, payload);
+    if (!n) {
+        return true;  // nothing to write (no DWARF / empty maps)
+    }
+    if (!qoreAOTAppendPcLocTrailer(path, payload, error)) {
+        return false;
+    }
+    if (getenv("QORE_AOT_LOC_DEBUG")) {
+        std::vector<AOTPcLocFuncEntry> rt;
+        if (!qoreAOTReadPcLocTrailer(path, rt)) {
+            fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: trailer unreadable from %s\n", path.c_str());
+        } else {
+            // Build expected symbol->entries from func_slots and compare.
+            size_t mismatches = 0, checked = 0;
+            std::unordered_map<std::string, const std::vector<std::pair<uint32_t, uint32_t>>*> want;
+            for (const auto& fws : func_slots) {
+                if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty()) {
+                    want[fws.llvm_symbol] = &fws.pc_loc_map;
+                }
+            }
+            if (rt.size() != want.size()) {
+                fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: func count %zu != %zu\n",
+                    rt.size(), want.size());
+                ++mismatches;
+            }
+            for (const auto& fe : rt) {
+                auto it = want.find(fe.symbol);
+                if (it == want.end()) {
+                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: extra symbol %s\n", fe.symbol.c_str());
+                    ++mismatches;
+                    continue;
+                }
+                ++checked;
+                if (fe.entries != *it->second) {
+                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: %s entries differ (%zu vs %zu)\n",
+                        fe.symbol.c_str(), fe.entries.size(), it->second->size());
+                    ++mismatches;
+                }
+            }
+            fprintf(stderr, "AOT-LOC: trailer round-trip %s: %zu funcs, %zu verified, %zu mismatches, payload=%zu bytes\n",
+                mismatches ? "MISMATCH" : "OK", rt.size(), checked, mismatches, payload.size());
+        }
+    }
+    return true;
+}
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
         int opt_level = 3, const char* target_triple = nullptr,
         std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
@@ -5145,6 +5199,12 @@ bool QoreAOT::compile(QoreProgram* pgm,
     // Clean up object file (keep for cross-compilation since user needs it)
     if (!target_triple) {
         remove(obj_path.c_str());
+    }
+
+    // Append the lazy PC->loc trailer to the final executable.
+    if (!writeAndVerifyPcLocTrailer(target_triple ? obj_path : output_path,
+            emitted_func_slots, error)) {
+        return false;
     }
 
     reportAOTArtifactStats("compilation", opt_level, include_source,
@@ -6973,6 +7033,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
         failed_count, compiled_funcs, target_triple);
 
+    // Hoisted so the function descriptors survive to the post-emission DWARF pass.
+    std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
     // Step 4: Generate module ABI with serialized metadata
     {
         QoreAOTBinaryWriter writer;
@@ -7111,6 +7173,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         // at module load time.  mod_po is only the initial seed.
         generateModuleABIV2(ctx, *module, metadata, label, qpgm->getParseOptions(),
             mod_info, compiled_funcs, compile_only);
+
+        emitted_func_slots.swap(func_slots);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -7133,7 +7197,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // file IS the final artifact; otherwise it's an intermediate that gets
     // linked into a .so.
     std::string obj_path = compile_only ? output_path : (output_path + ".o");
-    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
+    if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
         return false;
     }
 
@@ -7148,6 +7212,12 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         if (!target_triple) {
             remove(obj_path.c_str());
         }
+    }
+
+    // Append the lazy PC->loc trailer to the final loaded artifact (output_path is
+    // the .qo in compile_only mode, otherwise the just-linked .qmod).
+    if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+        return false;
     }
 
     reportAOTArtifactStats("module compilation", opt_level, include_source,
@@ -7439,6 +7509,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         reportAOTCompileStats("split module compilation", compiled_count, total_funcs,
             failed_count, compiled_funcs, target_triple);
 
+        // Hoisted so the function descriptors survive to the post-emission DWARF pass.
+        std::vector<AOTCompiledFuncWithSlots> emitted_func_slots;
         // Step 10: Generate module ABI with serialized metadata
         {
             QoreAOTBinaryWriter writer;
@@ -7573,6 +7645,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             // single-file module path.
             generateModuleABIV2(ctx, *module, metadata, qm_path.c_str(),
                 qpgm->getParseOptions(), mod_info, compiled_funcs, compile_only);
+
+            emitted_func_slots.swap(func_slots);
         }
 
         // Finalize shared debug info after all functions are lowered
@@ -7595,7 +7669,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // object file IS the final artifact; otherwise it's an intermediate
         // that gets linked into a .so.
         std::string obj_path = compile_only ? output_path : (output_path + ".o");
-        if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple)) {
+        if (!emitObjectFile(*module, obj_path, error, opt_level, target_triple, &emitted_func_slots)) {
             return false;
         }
 
@@ -7610,6 +7684,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             if (!target_triple) {
                 remove(obj_path.c_str());
             }
+        }
+
+        // Append the lazy PC->loc trailer to the final loaded artifact.
+        if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+            return false;
         }
 
         reportAOTArtifactStats("split module compilation", opt_level, include_source,
@@ -9762,6 +9841,11 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     if (!emitObjectFile(*module, output_path, error, opt_level, target_triple, &emitted_func_slots)) {
+        return false;
+    }
+
+    // Append the lazy PC->loc trailer to the final .qo (no link step on this path).
+    if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
         return false;
     }
 

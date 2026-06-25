@@ -1605,6 +1605,50 @@ struct AOTCompiledFuncWithSlots {
     std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
+//! AOT PC->loc trailer: appended to the END of the final loaded AOT artifact
+//! (.qo/.qmod/exe) after object emission and any debug-info stripping, carrying
+//! the per-function native-PC -> loc-index maps used for lazy on-throw source
+//! location recovery. Independent of the metadata blob (which is baked into the
+//! module before object emission, so it cannot carry post-emission native offsets).
+//!
+//! File layout: [payload][footer]. The fixed 16-byte footer sits at EOF:
+//!   uint64 payload_len; uint32 magic('QPCM'); uint32 version
+//! Payload (little-endian):
+//!   uint32 num_funcs
+//!   repeat: uint32 sym_len; char[sym_len] symbol;
+//!           uint32 num_entries; repeat: uint32 offset; uint32 loc_index
+//! Absence/garbage in the last 16 bytes simply means "no map" (graceful for
+//! pre-feature artifacts) — the loader falls back to the eager location path.
+static constexpr uint32_t QORE_AOT_PCMAP_MAGIC = 0x4d435051u;   //!< 'QPCM' little-endian
+static constexpr uint32_t QORE_AOT_PCMAP_VERSION = 1u;
+static constexpr size_t QORE_AOT_PCMAP_FOOTER_SIZE = 16;
+
+//! One function's parsed PC->loc map (symbol-keyed).
+struct AOTPcLocFuncEntry {
+    std::string symbol;                                  //!< native/LLVM symbol name
+    std::vector<std::pair<uint32_t, uint32_t>> entries;  //!< sorted (offset -> loc-index)
+};
+
+//! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
+//! Returns the number of functions written (functions with an empty map or symbol
+//! are skipped).
+size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::vector<uint8_t>& out);
+
+//! Parse a trailer payload (without footer) into per-function entries. Returns false
+//! on truncation/corruption.
+bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
+        std::vector<AOTPcLocFuncEntry>& out);
+
+//! Append a PC->loc trailer (payload + footer) to the file at `path`. No-op (returns
+//! true) when `payload` is empty. Sets `error` and returns false on I/O failure.
+bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_t>& payload,
+        std::string& error);
+
+//! Read and parse the PC->loc trailer from the file at `path`. Returns false (and
+//! leaves `out` empty) when the file has no valid trailer.
+bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
+
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {
     std::string name;               //!< init function name (e.g. "__const_init::Ns::ConstName")

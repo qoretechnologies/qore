@@ -174,6 +174,171 @@ static thread_local std::string qore_aot_expr_serialization_error;
 
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
+// ---------------------------------------------------------------------------
+// AOT PC->loc trailer (lazy on-throw source-location maps). See QoreAOTBinary.h
+// for the on-disk layout.
+// ---------------------------------------------------------------------------
+namespace {
+inline void pcmapPut32(std::vector<uint8_t>& out, uint32_t v) {
+    out.push_back(static_cast<uint8_t>(v & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 8) & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 16) & 0xff));
+    out.push_back(static_cast<uint8_t>((v >> 24) & 0xff));
+}
+inline bool pcmapGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) {
+    if (p + 4 > len) {
+        return false;
+    }
+    v = static_cast<uint32_t>(data[p])
+        | (static_cast<uint32_t>(data[p + 1]) << 8)
+        | (static_cast<uint32_t>(data[p + 2]) << 16)
+        | (static_cast<uint32_t>(data[p + 3]) << 24);
+    p += 4;
+    return true;
+}
+} // anonymous namespace
+
+size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::vector<uint8_t>& out) {
+    const size_t count_pos = out.size();
+    pcmapPut32(out, 0);  // placeholder for num_funcs
+    uint32_t n = 0;
+    for (const auto& fws : func_slots) {
+        if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty()) {
+            continue;
+        }
+        ++n;
+        pcmapPut32(out, static_cast<uint32_t>(fws.llvm_symbol.size()));
+        out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
+        pcmapPut32(out, static_cast<uint32_t>(fws.pc_loc_map.size()));
+        for (const auto& e : fws.pc_loc_map) {
+            pcmapPut32(out, e.first);
+            pcmapPut32(out, e.second);
+        }
+    }
+    // Backfill num_funcs now that it is known.
+    out[count_pos]     = static_cast<uint8_t>(n & 0xff);
+    out[count_pos + 1] = static_cast<uint8_t>((n >> 8) & 0xff);
+    out[count_pos + 2] = static_cast<uint8_t>((n >> 16) & 0xff);
+    out[count_pos + 3] = static_cast<uint8_t>((n >> 24) & 0xff);
+    return n;
+}
+
+bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
+        std::vector<AOTPcLocFuncEntry>& out) {
+    size_t p = 0;
+    uint32_t n = 0;
+    if (!pcmapGet32(data, len, p, n)) {
+        return false;
+    }
+    out.clear();
+    out.reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        uint32_t slen = 0;
+        if (!pcmapGet32(data, len, p, slen) || p + slen > len) {
+            return false;
+        }
+        AOTPcLocFuncEntry m;
+        m.symbol.assign(reinterpret_cast<const char*>(data + p), slen);
+        p += slen;
+        uint32_t ne = 0;
+        if (!pcmapGet32(data, len, p, ne)) {
+            return false;
+        }
+        m.entries.reserve(ne);
+        for (uint32_t j = 0; j < ne; ++j) {
+            uint32_t off = 0, loc = 0;
+            if (!pcmapGet32(data, len, p, off) || !pcmapGet32(data, len, p, loc)) {
+                return false;
+            }
+            m.entries.emplace_back(off, loc);
+        }
+        out.push_back(std::move(m));
+    }
+    return true;
+}
+
+bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_t>& payload,
+        std::string& error) {
+    if (payload.empty()) {
+        return true;
+    }
+    FILE* f = fopen(path.c_str(), "ab");
+    if (!f) {
+        error = "failed to open '" + path + "' to append PC->loc trailer: " + strerror(errno);
+        return false;
+    }
+    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size();
+    if (ok) {
+        uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
+        uint64_t plen = payload.size();
+        uint32_t magic = QORE_AOT_PCMAP_MAGIC;
+        uint32_t ver = QORE_AOT_PCMAP_VERSION;
+        memcpy(footer, &plen, 8);
+        memcpy(footer + 8, &magic, 4);
+        memcpy(footer + 12, &ver, 4);
+        ok = fwrite(footer, 1, QORE_AOT_PCMAP_FOOTER_SIZE, f) == QORE_AOT_PCMAP_FOOTER_SIZE;
+    }
+    if (fclose(f) != 0) {
+        ok = false;
+    }
+    if (!ok) {
+        error = "failed to write PC->loc trailer to '" + path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out) {
+    out.clear();
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return false;
+    }
+    bool ok = false;
+    do {
+        if (fseek(f, 0, SEEK_END) != 0) {
+            break;
+        }
+        long fsize = ftell(f);
+        if (fsize < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)) {
+            break;
+        }
+        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE), SEEK_SET) != 0) {
+            break;
+        }
+        uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
+        if (fread(footer, 1, QORE_AOT_PCMAP_FOOTER_SIZE, f) != QORE_AOT_PCMAP_FOOTER_SIZE) {
+            break;
+        }
+        uint64_t plen = 0;
+        uint32_t magic = 0, ver = 0;
+        memcpy(&plen, footer, 8);
+        memcpy(&magic, footer + 8, 4);
+        memcpy(&ver, footer + 12, 4);
+        if (magic != QORE_AOT_PCMAP_MAGIC || ver != QORE_AOT_PCMAP_VERSION) {
+            break;
+        }
+        if (plen == 0 || plen > static_cast<uint64_t>(fsize) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+            break;
+        }
+        std::vector<uint8_t> payload(plen);
+        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+                - static_cast<long>(plen), SEEK_SET) != 0) {
+            break;
+        }
+        if (fread(payload.data(), 1, plen, f) != plen) {
+            break;
+        }
+        ok = qoreAOTParsePcLocPayload(payload.data(), payload.size(), out);
+    } while (false);
+    fclose(f);
+    if (!ok) {
+        out.clear();
+    }
+    return ok;
+}
+
 static bool qorePluginQordTrace() {
     return std::getenv("QORE_PLUGIN_QORD_TRACE") != nullptr;
 }
