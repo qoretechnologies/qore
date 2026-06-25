@@ -3833,9 +3833,10 @@ QoreHashNode* QoreThreadList::getCallStackHash(qore_call_t call_type, const std:
 }
 
 // static
-QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc) {
+QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_loc,
+        const QoreProgramLocation* override_loc) {
     ReferenceHolder<QoreHashNode> h(getCallStackHash(stack_loc.getCallType(), stack_loc.getCallName(),
-        stack_loc.getLocation()), nullptr);
+        override_loc ? *override_loc : stack_loc.getLocation()), nullptr);
 
     QoreProgram* pgm = stack_loc.getProgram();
     if (pgm) {

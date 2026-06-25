@@ -489,6 +489,16 @@ public:
     //! returns the source location of the element
     DLLLOCAL virtual const QoreProgramLocation& getLocation() const = 0;
 
+    //! returns true if this frame is an AOT-compiled function executing natively
+    /** Used by the exception machinery to repair AOT callstack-frame call-site
+        locations via the lazy PC->loc registry (the eager updater could leave them at
+        the aggregate label). Default false; overridden by native-AOT stack locations.
+        @since %Qore 3.0
+    */
+    DLLLOCAL virtual bool isAOTFrame() const {
+        return false;
+    }
+
 protected:
     const QoreStackLocation* stack_next = nullptr;
 };

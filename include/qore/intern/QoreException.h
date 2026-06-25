@@ -47,6 +47,15 @@ DLLLOCAL extern const class QoreProgramLocation loc_builtin;
 DLLLOCAL extern const QoreProgramLocation* qore_aot_resolve_throw_location(
     const QoreProgramLocation* eager);
 
+//! Collect the source location of EVERY AOT stack frame for an exception being raised,
+//! innermost-first, into `out` (one entry per resolvable AOT native frame; non-AOT
+//! frames are skipped). Used to repair AOT callstack-frame call-site locations that the
+//! removed/incomplete eager updater left pointing at the aggregate label. Returns the
+//! number of AOT frames found (0 when no AOT code is on the stack). Defined in
+//! QoreAOTRuntime.cpp.
+DLLLOCAL extern size_t qore_aot_collect_backtrace_locs(
+    std::vector<const QoreProgramLocation*>& out);
+
 // Helper to safely get runtime location with fallback to loc_builtin
 static inline const QoreProgramLocation& get_runtime_location_safe() {
     const QoreProgramLocation* loc = get_runtime_location();

@@ -6498,9 +6498,9 @@ static uint64_t qore_rt_call_function_dynamic(const QoreFunction* func,
 class QoreJITStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
 public:
     DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
-            const StatementBlock* statements, QoreProgram* pgm)
+            const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)
         : QoreProgramStackLocationHelper(this, saved_stmt, saved_pgm),
-          call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
+          call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
         if (!this->pgm) {
             this->pgm = saved_pgm;
         }
@@ -6508,6 +6508,10 @@ public:
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
         return loc ? *loc : loc_builtin;
+    }
+
+    DLLLOCAL bool isAOTFrame() const override {
+        return is_aot;
     }
 
     DLLLOCAL const std::string& getCallName() const override {
@@ -6531,6 +6535,7 @@ private:
     const QoreProgramLocation* loc;
     const StatementBlock* statements;
     QoreProgram* pgm;
+    bool is_aot = false;  //!< true when this frame executes an AOT-compiled function natively
     // saved_stmt and saved_pgm receive old thread-local values from
     // QoreProgramStackLocationHelper constructor via output references.
     // IMPORTANT: no default member initializers — they would overwrite the values
@@ -6611,8 +6616,10 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // call; if not provided, we fall back to uvb->pgm (pre-existing behavior).
     const QoreProgramLocation* parse_loc = uvb->getUserSignature()->getParseLocation();
     const QoreProgramLocation* call_loc = get_runtime_location();
+    // Mark the frame as native-AOT (has_aot) so the exception machinery can repair its
+    // call-site location via the lazy PC->loc registry when the eager value is stale.
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
-        caller_pgm ? caller_pgm : runtime_pgm);
+        caller_pgm ? caller_pgm : runtime_pgm, has_aot);
 
     struct ReceiverTypeInfoGuard {
         const QoreTypeInfo* old = nullptr;

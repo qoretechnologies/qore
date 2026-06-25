@@ -3267,6 +3267,48 @@ const QoreProgramLocation* qore_aot_resolve_throw_location(const QoreProgramLoca
     return lazy;
 }
 
+namespace {
+struct AotCollectState {
+    std::vector<const QoreProgramLocation*>* out = nullptr;
+};
+_Unwind_Reason_Code aotCollectCb(struct _Unwind_Context* uctx, void* arg) {
+    AotCollectState* st = static_cast<AotCollectState*>(arg);
+    uintptr_t ip = static_cast<uintptr_t>(_Unwind_GetIP(uctx));
+    if (!ip) {
+        return _URC_END_OF_STACK;
+    }
+    // ip-1: land inside the call instruction's line (matches the eager updater).
+    const QoreProgramLocation* loc = aotLookupLocForPc(ip - 1);
+    if (loc) {
+        st->out->push_back(loc);
+    }
+    return _URC_NO_REASON;
+}
+} // anonymous namespace
+
+size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& out) {
+    out.clear();
+    static const bool no_lazy = getenv("QORE_AOT_LOC_NO_LAZY") != nullptr;
+    if (no_lazy) {
+        return 0;
+    }
+    if (!g_aot_have_ranges.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    AotCollectState st;
+    st.out = &out;
+    _Unwind_Backtrace(aotCollectCb, &st);
+    if (getenv("QORE_AOT_LOC_DEBUG") && !out.empty()) {
+        fprintf(stderr, "AOT-LOC: backtrace collected %zu AOT frames:\n", out.size());
+        for (size_t i = 0; i < out.size(); ++i) {
+            const char* f = out[i] ? out[i]->getFile() : nullptr;
+            fprintf(stderr, "AOT-LOC:   R[%zu] = %s:%d\n", i, f ? f : "?",
+                out[i] ? out[i]->start_line : -1);
+        }
+    }
+    return out.size();
+}
+
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,

@@ -573,6 +573,10 @@ public:
         return stmt;
     }
 
+    DLLLOCAL bool isAOTFrame() const override {
+        return is_aot;
+    }
+
     //! Returns the method / function name only without any class
     DLLLOCAL const char* getName() const {
         return name;
@@ -613,6 +617,9 @@ protected:
     bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
     bool restore_call_program_context = false;
+    //! true when the called variant has a cached AOT function (frame executes natively),
+    //! so the exception machinery can repair its call-site location via the lazy registry
+    bool is_aot = false;
     // when true, defer switching the runtime parse options to the called Program until *after* argument
     // evaluation + variant resolution + the functional-domain (dom=...) check, so that a deliberate
     // cross-Program QoreProgram::callFunction() evaluates the dom check against the CALLER's parse

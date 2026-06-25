@@ -1190,6 +1190,14 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
 
+    // Mark this frame as native-AOT when the called variant has a cached AOT function,
+    // so the exception machinery can repair its callstack call-site location via the
+    // lazy PC->loc registry. Set before the stack push so the visible frame reflects it.
+    {
+        const UserVariantBase* uvb = variant->getUserVariantBase();
+        is_aot = uvb && uvb->hasCachedAOT();
+    }
+
     // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
         stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
