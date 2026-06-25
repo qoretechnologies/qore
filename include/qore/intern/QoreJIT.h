@@ -64,17 +64,6 @@ using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 //! Called by evalTiered() after JIT execution returns.
 DLLLOCAL bool qore_jit_deopt_requested();
 
-//! Returns the address of the process-global "debugger attached" counter.
-/** The counter is non-zero whenever at least one QoreDebugProgram is attached
-    to any QoreProgram.  JIT-compiled code (for programs that allow debugger
-    attachment) loads this counter inline at statement boundaries as a cheap
-    guard: when it is zero, no thread can be single-stepping, so the debug-step
-    runtime hook is skipped entirely — keeping native code fast until a debugger
-    actually attaches.  The slow path (count > 0) calls qore_rt_jit_dbg_step() /
-    qore_rt_jit_synthetic_block_step(), which re-check the precise per-thread
-    debug run-state before firing any event.  See issue #5352. */
-DLLLOCAL const void* qore_get_debug_attach_count_addr();
-
 //! Info about a batch callee for LLVM lowering (Approach B: direct LLVM arg passing).
 //! Used by QoreIRToLLVM to decide how to emit CallDirect instructions.
 struct BatchCalleeInfo {

@@ -113,8 +113,6 @@
 
 static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_check_stack", reinterpret_cast<void*>(&qore_rt_check_stack) },
-    { "qore_rt_jit_dbg_step", reinterpret_cast<void*>(&qore_rt_jit_dbg_step) },
-    { "qore_rt_jit_synthetic_block_step", reinterpret_cast<void*>(&qore_rt_jit_synthetic_block_step) },
     { "qore_rt_discard_on_block_exit", reinterpret_cast<void*>(&qore_rt_discard_on_block_exit) },
     { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
@@ -897,85 +895,6 @@ DLLLOCAL bool qore_jit_deopt_requested() {
     bool val = tl_jit_deopt_requested;
     tl_jit_deopt_requested = false;
     return val;
-}
-
-// --- Debugger support (issue #5352) ---
-// JIT-compiled native code emits no debug-step events on its own.  These hooks
-// are invoked at statement boundaries (only when the process-global attach
-// counter is non-zero — see qore_get_debug_attach_count_addr()).  They re-check
-// the precise per-thread debug run-state and fire the same dbgStep /
-// dbgSyntheticBlockStep events the AST and IR interpreters produce, so a
-// debugger that attaches while a function is already running as native code
-// still sees single-step / breakpoint / line-coverage events.  The return value
-// is a QoreJitDbgAction directing the JIT-emitted dispatch.
-
-extern "C" DLLEXPORT int qore_rt_jit_dbg_step(const StatementBlock* statements, QoreProgram* pgm,
-        const char* file, int line, ExceptionSink* xsink) {
-    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
-    // Fast bail: no debugger single-stepping this thread.
-    if (!tlpd || !tlpd->runtimeCheck()) {
-        return QORE_JIT_DBG_CONTINUE;
-    }
-    // Resolve the concrete statement from the source location (carries the
-    // breakpoint flag and is reported to the debugger via onStep()).
-    AbstractStatement* stmt = nullptr;
-    if (pgm && file) {
-        stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file, line);
-    }
-    int rc = tlpd->dbgStep(statements, stmt, xsink);
-    if (xsink && *xsink) {
-        // Debug callback raised: mirror the interpreter (dbgFunctionExit then unwind).
-        QoreValue rv;
-        tlpd->dbgFunctionExit(statements, rv, xsink);
-        rv.discard(xsink);
-        return QORE_JIT_DBG_RETURN;
-    }
-    if (rc == RC_RETURN) {
-        QoreValue rv;
-        tlpd->dbgFunctionExit(statements, rv, xsink);
-        rv.discard(xsink);
-        return QORE_JIT_DBG_RETURN;
-    }
-    if (rc == RC_BREAK) {
-        return QORE_JIT_DBG_BREAK;
-    }
-    // RC_CONTINUE / RC_DEFAULT: no special control flow (matches the IR interpreter).
-    return QORE_JIT_DBG_CONTINUE;
-}
-
-extern "C" DLLEXPORT int qore_rt_jit_synthetic_block_step(const StatementBlock* statements,
-        QoreProgram* pgm, const char* file, int line, ExceptionSink* xsink) {
-    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
-    if (!tlpd || !tlpd->runtimeCheck()) {
-        return QORE_JIT_DBG_CONTINUE;
-    }
-    // Match the IR interpreter's DebugBlock handler: prefer the StatementBlock
-    // resolved from the source location, falling back to the function's block.
-    const StatementBlock* block = statements;
-    if (pgm && file) {
-        if (AbstractStatement* stmt = qore_program_private::get(*pgm)->getStatementFromIndex(file, line)) {
-            if (const StatementBlock* sb = dynamic_cast<const StatementBlock*>(stmt)) {
-                block = sb;
-            }
-        }
-    }
-    int rc = tlpd->dbgSyntheticBlockStep(block, xsink);
-    if (xsink && *xsink) {
-        QoreValue rv;
-        tlpd->dbgFunctionExit(statements, rv, xsink);
-        rv.discard(xsink);
-        return QORE_JIT_DBG_RETURN;
-    }
-    if (rc == RC_RETURN) {
-        QoreValue rv;
-        tlpd->dbgFunctionExit(statements, rv, xsink);
-        rv.discard(xsink);
-        return QORE_JIT_DBG_RETURN;
-    }
-    if (rc == RC_BREAK) {
-        return QORE_JIT_DBG_BREAK;
-    }
-    return QORE_JIT_DBG_CONTINUE;
 }
 
 // --- Invoke helpers ---

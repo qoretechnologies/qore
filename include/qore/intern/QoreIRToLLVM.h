@@ -546,21 +546,8 @@ private:
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
 
-    // Pointer to current IR basic block being lowered (issue #5352: needed to
-    // resolve a debugger RC_BREAK to the enclosing loop exit).
-    const QoreIRBasicBlock* current_ir_block = nullptr;
-
     // Pointer to current LLVM module (set during lowerFunction)
     llvm::Module* current_module = nullptr;
-
-    // issue #5352: JIT debugger-step support, per function.
-    //! True when statement-boundary debug-step hooks should be emitted: JIT mode
-    //! (not AOT) and the owning program allows debugger attachment.
-    bool debug_steps_enabled = false;
-    //! Entry-block alloca holding the last source line a debug step fired for
-    //! (i32, initialised to -1).  Used to fire dbgStep at most once per source
-    //! line, matching the IR interpreter's last_debug_line dedup.
-    llvm::Value* dbg_last_line_alloca = nullptr;
 
     // Phase 5c: Debug info (DWARF)
     // Controls whether DWARF is emitted (-g / --strip-debug-info).
@@ -600,18 +587,6 @@ private:
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
-
-    //! Emit a guarded debug-step hook for a statement boundary (issue #5352).
-    /** Emits an inline check of the process-global debugger-attach counter and,
-        when non-zero, calls qore_rt_jit_dbg_step (per-statement) or
-        qore_rt_jit_synthetic_block_step (block entry), dispatching on the
-        returned QoreJitDbgAction (continue / forced-return / forced-break).
-        No-op unless debug_steps_enabled.  On return the builder is positioned on
-        the continuation path so subsequent instructions append normally.
-        \param synthetic_block true for DebugBlock (block entry), false for the
-        per-statement step at PushTempMark. */
-    void emitDebugStep(const QoreIRInstruction* inst, llvm::Function* llvm_func,
-            llvm::Module& module, bool synthetic_block);
 
     // Initialize types and helpers
     void initTypes();

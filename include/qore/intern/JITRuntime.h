@@ -42,22 +42,10 @@ class QoreIRLValuePathInstruction;
 class QoreValue;
 class QoreVarInfo;
 class UserVariantBase;
-class StatementBlock;
-class QoreProgram;
 
 struct QoreJITRuntimeSymbolInfo {
     const char* name;
     void* address;
-};
-
-//! Action codes returned by the JIT debug-step runtime hooks (issue #5352).
-/** The hooks do the real debug work (re-checking the per-thread run-state and
-    firing dbgStep/dbgSyntheticBlockStep) and hand the JIT-emitted dispatch a
-    small action telling it how control flow must continue. */
-enum QoreJitDbgAction {
-    QORE_JIT_DBG_CONTINUE = 0,  //!< keep executing the function normally
-    QORE_JIT_DBG_RETURN   = 1,  //!< forced return (RC_RETURN) or exception: run exit cleanup, return NOTHING
-    QORE_JIT_DBG_BREAK    = 2,  //!< forced loop break (RC_BREAK): branch to the enclosing loop exit
 };
 
 //! Returns the central JIT runtime helper symbol registry.
@@ -82,22 +70,6 @@ extern "C" {
 
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
-
-// --- Debugger support (issue #5352) ---
-
-//! Per-statement debug-step hook fired at statement boundaries in JIT code.
-/** Returns a QoreJitDbgAction.  Resolves the source statement from
-    (file, line) within \a pgm at runtime, then — only when a debugger is
-    actually single-stepping this thread — fires ThreadLocalProgramData::dbgStep().
-    \a statements is the function's top-level block (the dbgStep block context). */
-int qore_rt_jit_dbg_step(const StatementBlock* statements, QoreProgram* pgm,
-        const char* file, int line, ExceptionSink* xsink);
-
-//! Block-entry synthetic debug-step hook fired at StatementBlock entry in JIT code.
-/** Mirrors the IR interpreter's DebugBlock handler: fires
-    ThreadLocalProgramData::dbgSyntheticBlockStep() for the entered block. */
-int qore_rt_jit_synthetic_block_step(const StatementBlock* statements, QoreProgram* pgm,
-        const char* file, int line, ExceptionSink* xsink);
 
 // --- Arithmetic helpers (for .any ops that need dynamic dispatch) ---
 

@@ -864,11 +864,6 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         + std::to_string((uintptr_t)this) + "_"
                         + std::to_string(toplevel_counter.fetch_add(1));
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
-                    // issue #5352: record the debugger context so JIT lowering can
-                    // emit statement-boundary debug-step hooks for top-level code
-                    // that runs as native (JIT) code via executeWithFallback().
-                    func->pgm = pgm;
-                    func->statements = this;
 
                     // Collect nested body locals from the statement tree.  Root
                     // top-level locals remain owned by QoreProgram and must not
