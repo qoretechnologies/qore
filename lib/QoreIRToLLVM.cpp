@@ -4769,8 +4769,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             auto frame_fn = module.getOrInsertFunction("qore_rt_get_loc_frame_ptr",
                 llvm::FunctionType::get(ptr_type, {}, false));
             loc_frame_cache_ptr = builder->CreateCall(frame_fn, {}, "loc_frame_ptr");
+            // Intrinsic::getDeclaration was renamed to getOrInsertDeclaration in LLVM 20
+            // (and removed in later toolchains, e.g. the macOS CI), so guard by version.
+#if LLVM_VERSION_MAJOR >= 20
+            llvm::Function* frameaddr = llvm::Intrinsic::getOrInsertDeclaration(&module,
+                llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
+#else
             llvm::Function* frameaddr = llvm::Intrinsic::getDeclaration(&module,
                 llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
+#endif
             llvm::Value* fa = builder->CreateCall(frameaddr,
                 {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
             builder->CreateStore(builder->CreatePtrToInt(fa, i64_type), loc_frame_cache_ptr);
