@@ -4323,7 +4323,8 @@ static void collectPcLocMapsFromObjectDwarf(const std::string& path,
 //! per-file .qo's via the system linker. This is how qore owns lazy-location support
 //! across ALL build/link topologies with no work pushed onto qore's users. Best-effort:
 //! a failure logs and returns true (lazy just stays unavailable for this artifact).
-static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
+static bool addPcLocSectionFromObjectDwarf(const std::string& path,
+        const std::vector<AOTCompiledFuncWithSlots>* prebuilt = nullptr) {
     bool dbg = getenv("QORE_AOT_LOC_DEBUG");
     // The qore_aot_pcloc section rides into whatever final artifact this object is linked
     // into (the linker concatenates same-named input sections), so lazy on-throw source
@@ -4364,10 +4365,18 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
         }
         return true;
     }
-    std::vector<AOTCompiledFuncWithSlots> fs;
-    collectPcLocMapsFromObjectDwarf(path, fs);
+    // Reuse the per-function PC->loc maps buildAOTPcLocMaps already computed for the EOF
+    // trailer when available (same DWARF columns, same llvm_symbol keys, same serializer),
+    // avoiding a second full DWARF parse of the just-emitted object. Fall back to parsing
+    // the object directly for callers with no prebuilt slots (e.g. already-linked aggregates).
+    std::vector<AOTCompiledFuncWithSlots> fs_local;
+    const std::vector<AOTCompiledFuncWithSlots>* fs = prebuilt;
+    if (!fs) {
+        collectPcLocMapsFromObjectDwarf(path, fs_local);
+        fs = &fs_local;
+    }
     std::vector<uint8_t> payload;
-    size_t n = qoreAOTSerializePcLocPayload(fs, payload);
+    size_t n = qoreAOTSerializePcLocPayload(*fs, payload);
     if (!n || payload.empty()) {
         return true;  // no DWARF / no mappable functions
     }
@@ -4719,7 +4728,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // dropped by any such relink; the section is the robust, universal mechanism. The
     // runtime prefers the section and falls back to the trailer for legacy artifacts.)
     if (!target_triple) {
-        addPcLocSectionFromObjectDwarf(path);
+        addPcLocSectionFromObjectDwarf(path,
+            (func_slots && !func_slots->empty()) ? func_slots : nullptr);
     }
 
     delete tm;
