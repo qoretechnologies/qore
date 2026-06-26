@@ -793,6 +793,16 @@ bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFunc
     if (!f) {
         return false;
     }
+    // Capture the file size so all allocations below can be bounded against it: a corrupted
+    // or crafted nsyms/strsize must not trigger a huge allocation (this can run on the throw
+    // path during exception-backtrace resolution, where a bad_alloc would be catastrophic).
+    uint64_t fsize = 0;
+    if (fseek(f, 0, SEEK_END) == 0) {
+        long end = ftell(f);
+        if (end > 0) {
+            fsize = static_cast<uint64_t>(end);
+        }
+    }
     bool ok = false;
     do {
         uint64_t slice = 0;
@@ -807,7 +817,8 @@ bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFunc
         }
         uint32_t ncmds = machoRd32(mh + 16);
         uint32_t sizeofcmds = machoRd32(mh + 20);
-        if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
+        if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)
+                || !fsize || slice + 32 + sizeofcmds > fsize) {
             break;
         }
         std::vector<unsigned char> cmds(sizeofcmds);
@@ -842,7 +853,13 @@ bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFunc
         if (!have_text || !have_symtab || !nsyms || !strsize) {
             break;
         }
-        std::vector<unsigned char> syms(static_cast<size_t>(nsyms) * 16);
+        // Bound the symbol- and string-table allocations: both must lie wholly within the
+        // file (offsets are slice-relative). Rejects corrupted/oversized header fields.
+        uint64_t sym_bytes = static_cast<uint64_t>(nsyms) * 16;
+        if (!fsize || slice + symoff + sym_bytes > fsize || slice + stroff + strsize > fsize) {
+            break;
+        }
+        std::vector<unsigned char> syms(static_cast<size_t>(sym_bytes));
         std::vector<char> strtab(strsize);
         if (fseek(f, static_cast<long>(slice + symoff), SEEK_SET) != 0
                 || fread(syms.data(), 1, syms.size(), f) != syms.size()
