@@ -8,6 +8,10 @@
 # linker.  The CMake source list is used only as a stable tie breaker, not as
 # the source of dependency truth.
 
+# Defer annotation evaluation (PEP 563) so PEP 604 unions like `set[str] | None` parse on
+# Python 3.9 (e.g. macOS system Python), where they would otherwise raise at def time.
+from __future__ import annotations
+
 import argparse
 import hashlib
 import heapq
