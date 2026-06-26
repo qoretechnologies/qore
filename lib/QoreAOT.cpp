@@ -4293,6 +4293,28 @@ static void collectPcLocMapsFromObjectDwarf(const std::string& path,
 //! a failure logs and returns true (lazy just stays unavailable for this artifact).
 static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
     bool dbg = getenv("QORE_AOT_LOC_DEBUG");
+    // The qore_aot_pcloc section + its runtime reader are ELF-only. On Mach-O (macOS)
+    // GNU objcopy --add-section corrupts the object ("slice is not valid mach-o file"),
+    // making the .qmod un-loadable; on any non-ELF format the section is useless anyway.
+    // So skip emission unless the just-emitted object is ELF.
+    {
+        auto buf_or = llvm::MemoryBuffer::getFile(path);
+        if (!buf_or) {
+            return true;
+        }
+        auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf_or)->getMemBufferRef());
+        if (!obj_or) {
+            llvm::consumeError(obj_or.takeError());
+            return true;
+        }
+        if (!(*obj_or)->isELF()) {
+            if (dbg) {
+                fprintf(stderr, "AOT-LOC: skipping qore_aot_pcloc section for non-ELF %s\n",
+                    path.c_str());
+            }
+            return true;
+        }
+    }
     std::vector<AOTCompiledFuncWithSlots> fs;
     collectPcLocMapsFromObjectDwarf(path, fs);
     std::vector<uint8_t> payload;
