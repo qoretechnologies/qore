@@ -24,10 +24,22 @@ endif()
 set(QORE_FOUND 1)
 
 set(_qore_build_cmake_dir "@CMAKE_BINARY_DIR@/cmake")
+# Resolve both sides to real paths before comparing: symlinked build/checkout paths
+# (common on macOS, e.g. /tmp vs /private/tmp, /var vs /private/var) otherwise make this
+# exact STREQUAL fail, falling through to the installed branch which includes a
+# QoreMacros.cmake that does not exist next to a build-tree config -> the exported
+# qore_* commands become undefined for build-tree consumers.
+get_filename_component(_qore_this_cmake_dir_real "${CMAKE_CURRENT_LIST_DIR}" REALPATH)
+get_filename_component(_qore_build_cmake_dir_real "${_qore_build_cmake_dir}" REALPATH)
+if (_qore_this_cmake_dir_real STREQUAL _qore_build_cmake_dir_real)
+    set(_qore_in_build_tree TRUE)
+else()
+    set(_qore_in_build_tree FALSE)
+endif()
 # Build-tree mode: point consumers at build outputs for local debugging without install.
 # Limitations: assumes single-config generators and default output dirs; multi-config/custom
 # output layouts may need explicit Qore_DIR or manual overrides.
-if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
+if (_qore_in_build_tree)
     set(QORE_CMAKE_DIR "@CMAKE_SOURCE_DIR@/cmake")
     set(QORE_QCC_INCREMENTAL_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-incremental")
     set(QORE_QCC_SOURCE_ORDER_HELPER "@CMAKE_SOURCE_DIR@/tools/qore-qo-source-order")
@@ -105,7 +117,7 @@ else()
 endif()
 
 # allow the qore executable to be overridden (for example, when cross-compiling)
-if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
+if (_qore_in_build_tree)
     if(NOT DEFINED QORE_EXECUTABLE)
         set(QORE_EXECUTABLE "@CMAKE_BINARY_DIR@/qore${CMAKE_EXECUTABLE_SUFFIX}")
     endif()
@@ -192,7 +204,7 @@ else ()
 endif ()
 
 
-if (CMAKE_CURRENT_LIST_DIR STREQUAL _qore_build_cmake_dir)
+if (_qore_in_build_tree)
     include("@CMAKE_SOURCE_DIR@/cmake/QoreMacros.cmake")
 else()
     include("${CMAKE_CURRENT_LIST_DIR}/QoreMacros.cmake")
