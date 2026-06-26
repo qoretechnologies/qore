@@ -8946,13 +8946,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct_aot(QoreAOTContext* ctx, int
         }
         if (dynamic_cast<const NewObjectCallNode*>(expr.getInternalNode())
                 || dynamic_cast<const ScopedObjectCallNode*>(expr.getInternalNode())) {
-            bool needs_deref = false;
+            // QoreValue::eval(bool&) requires needs_deref==true on entry (the deref
+            // contract; debug-asserted). These nodes always evaluate to a new owned
+            // object, so the returned (owned) value is correct to bake into the slot.
+            bool needs_deref = true;
             return toBits(expr.eval(needs_deref, xsink));
         }
         if (auto* fcn = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode())) {
             const char* name = fcn->getName();
             if (name && !strcmp(name, "create_object")) {
-                bool needs_deref = false;
+                bool needs_deref = true;
                 return toBits(expr.eval(needs_deref, xsink));
             }
         }
