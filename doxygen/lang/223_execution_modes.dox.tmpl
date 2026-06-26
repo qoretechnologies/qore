@@ -60,6 +60,15 @@ qore --exec-mode=jit script.qr
     JIT mode is useful for long-running or CPU-intensive programs where native
     compilation cost is amortized.
 
+    Native compilation runs on a dedicated background thread. In explicit JIT
+    mode the program's own functions are compiled to native code up front: a
+    parse-commit barrier waits for them to finish before execution begins.
+    Functions imported from modules are not all compiled at once; they are
+    promoted to native code adaptively on first use, so startup is not dominated
+    by compiling the entire imported module stack. When a program is destroyed,
+    only its own pending background compilations are drained, so unrelated
+    programs' compilation is unaffected.
+
     @subsection jit_debugging Debugging JIT-Compiled Code
 
     JIT-compiled code registers symbols through the GDB JIT interface. Debuggers
@@ -74,7 +83,12 @@ $ gdb --args qore --exec-mode=jit script.qr
     @endcode
 
     When debugger semantics require AST execution, tiered dispatch can force
-    affected variants back to AST.
+    affected variants back to AST. JIT-compiled native code additionally emits
+    statement-boundary debug events, so single-stepping, breakpoints, and line
+    coverage also work for a native frame that is already running when a debugger
+    attaches mid-execution. These hooks are emitted only for programs parsed with
+    \c PO_ALLOW_DEBUGGER and remain dormant behind a single atomic check until a
+    debugger is actually attached, so they impose no cost on normal execution.
 
     @section exec_mode_tiered Tiered Execution Mode
 
@@ -91,6 +105,10 @@ $ gdb --args qore --exec-mode=jit script.qr
 qore --exec-mode=tiered script.qr
 qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.qr
     @endcode
+
+    Promotion is non-blocking: native compilation is queued on a background
+    thread and the function keeps executing through the IR interpreter until its
+    compiled form is ready, after which subsequent calls run native.
 
     If native compilation fails for a function variant, that variant remains at
     IR instead of repeatedly retrying. IR lowering failures in modern code are
@@ -171,6 +189,21 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     Source-stripped artifacts contain QORD metadata and native code but not
     readable Qore source text. Missing AOT metadata is an error; source is not
     used as a runtime fallback for incomplete artifacts.
+
+    @subsection aot_exception_locations Exception Source Locations
+
+    Exceptions raised from AOT-compiled code report the real source file and
+    line number for each Qore stack frame, matching interpreted execution. The
+    throwing location and the full backtrace are reconstructed lazily, only when
+    an exception is thrown, from line-number tables embedded in the artifact, so
+    code that runs without throwing pays no per-statement location-tracking cost.
+
+    Lazy reconstruction relies on the line tables emitted by default alongside
+    debug info (\c -g). Compiling with \c --strip-debug-info removes those
+    tables; such artifacts instead keep per-statement location tracking so source
+    locations remain available without the embedded tables. Source text itself is
+    not required: stripped-source artifacts still report file and line because
+    those come from the line tables, not from embedded Qore source.
 
     @subsection qcc_tool Qore Code Compiler (qcc)
 

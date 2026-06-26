@@ -12,7 +12,9 @@ Runtime modes:
 
 - `--exec-mode=ast`: AST interpreter and default execution mode.
 - `--exec-mode=ir`: eager IR lowering and IR interpreter execution.
-- `--exec-mode=jit`: eager IR lowering and LLVM JIT compilation.
+- `--exec-mode=jit`: eager IR lowering; the program's own functions are compiled
+  to native code on a background thread behind a parse-commit barrier, while
+  functions imported from modules promote to native adaptively on first use.
 - `--exec-mode=tiered`: explicit adaptive execution, promoting hot functions
   AST -> IR -> JIT.
 - `qcc`: ahead-of-time compiler and artifact inspection tool for executables,
@@ -43,9 +45,18 @@ Tiered mode starts functions on AST and promotes by call count:
 - AST -> IR after `--jit-ir-threshold` calls.
 - IR -> JIT after `--jit-jit-threshold` calls.
 
+Native compilation always runs asynchronously on a background thread; promotion
+is non-blocking, so a function keeps executing through the IR interpreter until
+its compiled form is ready. Program teardown drains only that Program's own
+pending background compiles (matched via `QoreIRFunction::pgm`; a compile with no
+owning program is treated as matching any teardown), so destroying one Program
+never serializes behind unrelated Programs' compilation.
+
 Failed lowering or compilation disables promotion for that variant rather than
 retrying on every call. Debug attach can force dispatch back to AST so debugger
-semantics remain predictable.
+semantics remain predictable; JIT-compiled native code also emits
+statement-boundary debug events (gated on `PO_ALLOW_DEBUGGER` and dormant until a
+debugger attaches) so an already-running native frame stays debuggable.
 
 ## AOT Compiler
 
@@ -119,6 +130,21 @@ The current implementation relies on explicit registries for extension safety:
   user code during compile-time name/type resolution.
 - Batch AOT registration must keep cross-session barriers: shells, type/base
   resolution, constants, members, functions, then final class fixups.
+
+## Exception Source Locations
+
+AOT-compiled code reports real per-frame source file and line numbers in
+exceptions, matching interpreted execution. The throwing location and full
+backtrace are reconstructed lazily at throw from line-number tables embedded in
+the artifact (emitted by default with debug info), so non-throwing code carries
+no per-statement location-updater cost. `--strip-debug-info` emits no line
+tables and retains the per-statement updater instead. Source text is not
+required: stripped-source artifacts still report file and line from the line
+tables.
+
+For the innermost-frame detection mechanism that decides, at throw, whether the
+innermost user frame is AOT (and therefore whether to resolve lazily), see
+[`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md).
 
 ## Exception Cleanup Dominance
 
