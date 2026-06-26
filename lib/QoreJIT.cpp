@@ -961,11 +961,15 @@ void QoreJIT::waitForBgCompileQueue() {
 }
 
 bool QoreJIT::workReferencesPgm(const BgCompileWork& work, const QoreProgram* pgm) {
-    if (work.ir_func && work.ir_func->pgm == pgm) {
+    // A null ir_func->pgm means the owning Program of this work item is unknown (e.g. closure IR
+    // funcs created without a pgm binding). Such items must be treated as referencing ANY program
+    // so they are always drained before any Program tears down (and frees) its source IR; otherwise
+    // a background lowering can race a use-after-free on the source QoreIR being compiled.
+    if (work.ir_func && (work.ir_func->pgm == pgm || !work.ir_func->pgm)) {
         return true;
     }
     for (const auto& callee : work.callees) {
-        if (callee.ir_func && callee.ir_func->pgm == pgm) {
+        if (callee.ir_func && (callee.ir_func->pgm == pgm || !callee.ir_func->pgm)) {
             return true;
         }
     }
