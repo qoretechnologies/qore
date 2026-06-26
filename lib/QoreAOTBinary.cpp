@@ -451,10 +451,140 @@ static bool readElfSectionBytes(const std::string& path, const char* sec_name,
     return ok;
 }
 
+// Little-endian fixed-width readers shared by the Mach-O walk below.
+static inline uint32_t machoRd32(const unsigned char* p) {
+    return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
+        | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+}
+static inline uint64_t machoRd64(const unsigned char* p) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) {
+        v |= static_cast<uint64_t>(p[i]) << (8 * i);
+    }
+    return v;
+}
+
+// Walk one 64-bit Mach-O image starting at file offset `slice_off`, accumulating the
+// bytes of every (seg,sect) section that matches into `sec`. Self-contained (no libLLVM).
+static void readMachoSliceSections(FILE* f, uint64_t slice_off, const char* seg,
+        const char* sect, std::vector<uint8_t>& sec) {
+    unsigned char mh[32];
+    if (fseek(f, static_cast<long>(slice_off), SEEK_SET) != 0
+            || fread(mh, 1, sizeof(mh), f) != sizeof(mh)) {
+        return;
+    }
+    // MH_MAGIC_64 (0xFEEDFACF) only — AOT targets are little-endian arm64 / x86_64.
+    if (machoRd32(mh) != 0xFEEDFACFu) {
+        return;
+    }
+    uint32_t ncmds = machoRd32(mh + 16);
+    uint32_t sizeofcmds = machoRd32(mh + 20);
+    if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
+        return;
+    }
+    std::vector<unsigned char> cmds(sizeofcmds);
+    if (fread(cmds.data(), 1, sizeofcmds, f) != sizeofcmds) {
+        return;
+    }
+    const size_t seg_len = strlen(seg);
+    const size_t sect_len = strlen(sect);
+    size_t p = 0;
+    for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
+        uint32_t cmd = machoRd32(cmds.data() + p);
+        uint32_t cmdsize = machoRd32(cmds.data() + p + 4);
+        if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
+            break;
+        }
+        if (cmd == 0x19u /*LC_SEGMENT_64*/ && cmdsize >= 72) {
+            uint32_t nsects = machoRd32(cmds.data() + p + 64);
+            // section_64 records follow the 72-byte segment_command_64 header.
+            if (static_cast<uint64_t>(nsects) * 80 + 72 <= cmdsize) {
+                for (uint32_t s = 0; s < nsects; ++s) {
+                    const unsigned char* sc = cmds.data() + p + 72 + static_cast<size_t>(s) * 80;
+                    // sectname@0 (16), segname@16 (16), addr@32, size@40, offset@48 (u32).
+                    if (strncmp(reinterpret_cast<const char*>(sc), sect, sect_len) == 0
+                            && (sect_len == 16 || sc[sect_len] == '\0')
+                            && strncmp(reinterpret_cast<const char*>(sc + 16), seg, seg_len) == 0
+                            && (seg_len == 16 || sc[16 + seg_len] == '\0')) {
+                        uint64_t size = machoRd64(sc + 40);
+                        uint32_t off = machoRd32(sc + 48);
+                        if (size && size < (256u << 20)) {
+                            std::vector<uint8_t> buf(size);
+                            if (fseek(f, static_cast<long>(slice_off + off), SEEK_SET) == 0
+                                    && fread(buf.data(), 1, size, f) == size) {
+                                sec.insert(sec.end(), buf.begin(), buf.end());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        p += cmdsize;
+    }
+}
+
+// Locate the (seg,sect) Mach-O section bytes in a thin or FAT 64-bit Mach-O file,
+// accumulating every matching section (the linker concatenates same-named sections, and
+// the framed-record reader walks the result). Returns true when any bytes were found.
+static bool readMachoSectionBytes(const std::string& path, const char* seg, const char* sect,
+        std::vector<uint8_t>& sec) {
+    sec.clear();
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return false;
+    }
+    unsigned char magic[4];
+    if (fread(magic, 1, 4, f) != 4) {
+        fclose(f);
+        return false;
+    }
+    // FAT headers store fields big-endian. Select the slice matching this process's arch.
+    auto rd32be = [](const unsigned char* p) -> uint32_t {
+        return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
+            | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+    };
+    uint32_t m = rd32be(magic);
+    if (m == 0xCAFEBABEu || m == 0xCAFEBABFu) {  // FAT_MAGIC / FAT_MAGIC_64
+        bool fat64 = (m == 0xCAFEBABFu);
+#if defined(__aarch64__) || defined(__arm64__)
+        const uint32_t want_cpu = 0x0100000Cu;  // CPU_TYPE_ARM64
+#elif defined(__x86_64__)
+        const uint32_t want_cpu = 0x01000007u;  // CPU_TYPE_X86_64
+#else
+        const uint32_t want_cpu = 0;
+#endif
+        unsigned char nbuf[4];
+        if (fread(nbuf, 1, 4, f) == 4) {
+            uint32_t narch = rd32be(nbuf);
+            for (uint32_t i = 0; i < narch && i < 64; ++i) {
+                unsigned char a[32];
+                size_t asz = fat64 ? 32 : 20;
+                if (fread(a, 1, asz, f) != asz) {
+                    break;
+                }
+                uint32_t cputype = rd32be(a);
+                uint64_t off = fat64
+                    ? ((static_cast<uint64_t>(rd32be(a + 8)) << 32) | rd32be(a + 12))
+                    : rd32be(a + 8);
+                if (want_cpu && cputype == want_cpu) {
+                    readMachoSliceSections(f, off, seg, sect, sec);
+                    break;
+                }
+            }
+        }
+    } else if (m == 0xCFFAEDFEu /*MH_MAGIC_64 on disk, LE*/ || machoRd32(magic) == 0xFEEDFACFu) {
+        readMachoSliceSections(f, 0, seg, sect, sec);
+    }
+    fclose(f);
+    return !sec.empty();
+}
+
 bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out) {
     out.clear();
     std::vector<uint8_t> sec;
-    if (!readElfSectionBytes(path, QORE_AOT_PCLOC_SECTION_NAME, sec)) {
+    if (!readElfSectionBytes(path, QORE_AOT_PCLOC_SECTION_NAME, sec)
+            && !readMachoSectionBytes(path, QORE_AOT_PCLOC_MACHO_SEG,
+                QORE_AOT_PCLOC_MACHO_SECT, sec)) {
         return false;
     }
     // Walk concatenated [magic][len][payload] records.
@@ -592,6 +722,175 @@ bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSy
                 break;
             }
         }
+    } while (false);
+    fclose(f);
+    if (!ok) {
+        out.clear();
+    }
+    return ok;
+}
+
+// Resolve the file offset of the 64-bit Mach-O image to parse (0 for thin; the matching
+// arch slice for FAT). Returns false when `f` is not a 64-bit Mach-O.
+static bool machoSliceOffset(FILE* f, uint64_t& slice_off) {
+    slice_off = 0;
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        return false;
+    }
+    unsigned char magic[4];
+    if (fread(magic, 1, 4, f) != 4) {
+        return false;
+    }
+    auto rd32be = [](const unsigned char* p) -> uint32_t {
+        return (static_cast<uint32_t>(p[0]) << 24) | (static_cast<uint32_t>(p[1]) << 16)
+            | (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+    };
+    uint32_t m = rd32be(magic);
+    if (m == 0xCAFEBABEu || m == 0xCAFEBABFu) {  // FAT_MAGIC / FAT_MAGIC_64
+        bool fat64 = (m == 0xCAFEBABFu);
+#if defined(__aarch64__) || defined(__arm64__)
+        const uint32_t want_cpu = 0x0100000Cu;  // CPU_TYPE_ARM64
+#elif defined(__x86_64__)
+        const uint32_t want_cpu = 0x01000007u;  // CPU_TYPE_X86_64
+#else
+        const uint32_t want_cpu = 0;
+#endif
+        unsigned char nbuf[4];
+        if (fread(nbuf, 1, 4, f) != 4) {
+            return false;
+        }
+        uint32_t narch = rd32be(nbuf);
+        for (uint32_t i = 0; i < narch && i < 64; ++i) {
+            unsigned char a[32];
+            size_t asz = fat64 ? 32 : 20;
+            if (fread(a, 1, asz, f) != asz) {
+                return false;
+            }
+            uint32_t cputype = rd32be(a);
+            uint64_t off = fat64
+                ? ((static_cast<uint64_t>(rd32be(a + 8)) << 32) | rd32be(a + 12))
+                : rd32be(a + 8);
+            if (want_cpu && cputype == want_cpu) {
+                slice_off = off;
+                return true;
+            }
+        }
+        return false;
+    }
+    // Thin little-endian MH_MAGIC_64 (on disk: CF FA ED FE -> 0xCFFAEDFE big-endian).
+    return m == 0xCFFAEDFEu;
+}
+
+// Read function symbols (value as offset from the image base, computed size, name with the
+// Mach-O leading '_' stripped) from a thin/FAT 64-bit Mach-O LC_SYMTAB. `out_is_pie` is
+// always true: Mach-O images are position-independent, so the runtime bias is dli_fbase
+// and `value` is the offset from it (matching qoreAOTReadElfFuncSymbols' ET_DYN contract).
+bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_pie) {
+    out.clear();
+    out_is_pie = true;
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        return false;
+    }
+    bool ok = false;
+    do {
+        uint64_t slice = 0;
+        if (!machoSliceOffset(f, slice)) {
+            break;
+        }
+        unsigned char mh[32];
+        if (fseek(f, static_cast<long>(slice), SEEK_SET) != 0
+                || fread(mh, 1, sizeof(mh), f) != sizeof(mh)
+                || machoRd32(mh) != 0xFEEDFACFu) {
+            break;
+        }
+        uint32_t ncmds = machoRd32(mh + 16);
+        uint32_t sizeofcmds = machoRd32(mh + 20);
+        if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
+            break;
+        }
+        std::vector<unsigned char> cmds(sizeofcmds);
+        if (fread(cmds.data(), 1, sizeofcmds, f) != sizeofcmds) {
+            break;
+        }
+        // Locate __TEXT vmaddr/vmsize (image preferred base + text extent) and LC_SYMTAB.
+        uint64_t text_vmaddr = 0, text_end = 0;
+        uint32_t symoff = 0, nsyms = 0, stroff = 0, strsize = 0;
+        bool have_text = false, have_symtab = false;
+        size_t p = 0;
+        for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
+            uint32_t cmd = machoRd32(cmds.data() + p);
+            uint32_t cmdsize = machoRd32(cmds.data() + p + 4);
+            if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
+                break;
+            }
+            if (cmd == 0x19u /*LC_SEGMENT_64*/ && cmdsize >= 72
+                    && !memcmp(cmds.data() + p + 8, "__TEXT\0\0\0\0\0\0\0\0\0\0", 16)) {
+                text_vmaddr = machoRd64(cmds.data() + p + 24);
+                text_end = text_vmaddr + machoRd64(cmds.data() + p + 32);
+                have_text = true;
+            } else if (cmd == 0x2u /*LC_SYMTAB*/ && cmdsize >= 24) {
+                symoff = machoRd32(cmds.data() + p + 8);
+                nsyms = machoRd32(cmds.data() + p + 12);
+                stroff = machoRd32(cmds.data() + p + 16);
+                strsize = machoRd32(cmds.data() + p + 20);
+                have_symtab = true;
+            }
+            p += cmdsize;
+        }
+        if (!have_text || !have_symtab || !nsyms || !strsize) {
+            break;
+        }
+        std::vector<unsigned char> syms(static_cast<size_t>(nsyms) * 16);
+        std::vector<char> strtab(strsize);
+        if (fseek(f, static_cast<long>(slice + symoff), SEEK_SET) != 0
+                || fread(syms.data(), 1, syms.size(), f) != syms.size()
+                || fseek(f, static_cast<long>(slice + stroff), SEEK_SET) != 0
+                || fread(strtab.data(), 1, strsize, f) != strsize) {
+            break;
+        }
+        for (uint32_t k = 0; k < nsyms; ++k) {
+            const unsigned char* s = syms.data() + static_cast<size_t>(k) * 16;
+            // nlist_64: n_strx@0(4), n_type@4(1), n_sect@5(1), n_desc@6(2), n_value@8(8).
+            uint8_t n_type = s[4];
+            if (n_type & 0xe0) {  // N_STAB (debug) entry
+                continue;
+            }
+            if ((n_type & 0x0e) != 0x0e) {  // N_TYPE != N_SECT
+                continue;
+            }
+            uint64_t n_value = machoRd64(s + 8);
+            if (n_value < text_vmaddr || n_value >= text_end) {  // only __TEXT functions
+                continue;
+            }
+            uint32_t strx = machoRd32(s);
+            if (strx == 0 || strx >= strsize) {
+                continue;
+            }
+            const char* nm = strtab.data() + strx;
+            if (!*nm) {
+                continue;
+            }
+            AOTElfFuncSym e;
+            e.value = n_value - text_vmaddr;  // offset from image base
+            e.size = 0;                       // filled by next-symbol delta below
+            e.name.assign(nm[0] == '_' ? nm + 1 : nm);
+            out.push_back(std::move(e));
+        }
+        if (out.empty()) {
+            break;
+        }
+        // Mach-O symbols carry no size; derive it from the gap to the next function symbol,
+        // bounding the last by the __TEXT segment end.
+        std::sort(out.begin(), out.end(),
+            [](const AOTElfFuncSym& a, const AOTElfFuncSym& b) { return a.value < b.value; });
+        uint64_t text_size = text_end - text_vmaddr;
+        for (size_t i = 0; i < out.size(); ++i) {
+            uint64_t next = (i + 1 < out.size()) ? out[i + 1].value : text_size;
+            out[i].size = (next > out[i].value) ? (next - out[i].value) : 0;
+        }
+        ok = true;
     } while (false);
     fclose(f);
     if (!ok) {

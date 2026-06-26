@@ -2964,7 +2964,8 @@ std::shared_ptr<const AotSymtab> getOrLoadSymtab(const char* path) {
     std::shared_ptr<AotSymtab> st;
     std::vector<AOTElfFuncSym> syms;
     bool is_dyn = false;
-    if (qoreAOTReadElfFuncSymbols(key, syms, is_dyn) && !syms.empty()) {
+    if ((qoreAOTReadElfFuncSymbols(key, syms, is_dyn)
+            || qoreAOTReadMachoFuncSymbols(key, syms, is_dyn)) && !syms.empty()) {
         std::sort(syms.begin(), syms.end(),
             [](const AOTElfFuncSym& a, const AOTElfFuncSym& b) { return a.value < b.value; });
         st = std::make_shared<AotSymtab>();
@@ -3034,6 +3035,31 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             sym_entries = &it->second;
             fn_start = reinterpret_cast<uintptr_t>(info.dli_saddr);
             fn_size = sym_size;
+        }
+    }
+    if (sym_entries && !fn_size) {
+        // dladdr matched the function but gave no size (macOS: plain dladdr has no
+        // st_size). Recover the size from the symbol table so the registered PC range
+        // spans the WHOLE function — a return address past the last mapped offset (e.g.
+        // the throw call site) must stay in-range or lazy lookup misses and falls back
+        // to the function's declaration line.
+        std::shared_ptr<const AotSymtab> stab = getOrLoadSymtab(info.dli_fname);
+        if (stab && !stab->syms.empty()) {
+            uintptr_t bias = stab->is_et_dyn
+                ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
+            uint64_t link_addr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(fn_ptr) - bias);
+            const auto& v = stab->syms;
+            size_t lo = 0, hi = v.size();
+            while (lo < hi) {
+                size_t mid = (lo + hi) / 2;
+                if (v[mid].value <= link_addr) { lo = mid + 1; } else { hi = mid; }
+            }
+            if (lo > 0) {
+                const AOTElfFuncSym& e = v[lo - 1];
+                if (e.size && link_addr < e.value + e.size) {
+                    fn_size = e.size;
+                }
+            }
         }
     }
     if (!sym_entries) {

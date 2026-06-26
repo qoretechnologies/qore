@@ -1660,16 +1660,25 @@ bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEn
 //! it stays a clean section label.
 #define QORE_AOT_PCLOC_SECTION_NAME "qore_aot_pcloc"
 
+//! Mach-O equivalent of QORE_AOT_PCLOC_SECTION_NAME. Mach-O section names are
+//! (segment, section) pairs, each <=16 chars; GNU objcopy corrupts Mach-O, so the
+//! section is added with llvm-objcopy as "__QORE,__pcloc". The Mach-O linker
+//! concatenates same-named input sections exactly like ELF, so the relink-surviving
+//! contract holds identically. The framed-record payload format is the same on both.
+#define QORE_AOT_PCLOC_MACHO_SEG "__QORE"
+#define QORE_AOT_PCLOC_MACHO_SECT "__pcloc"
+
 //! Frame a serialized PC->loc payload as one self-delimiting section record:
 //! [uint32 magic('QPCM')][uint32 payload_len][payload]. Multiple objects' records are
 //! concatenated by the linker into one section; the reader walks them sequentially.
 //! No-op (leaves `out` empty) when `payload` is empty.
 void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out);
 
-//! Read + parse the `qore_aot_pcloc` ELF section from the artifact at `path`, walking
-//! all concatenated records and accumulating their per-function entries into `out`.
-//! Self-contained 64-bit-ELF parse (no libLLVM dependency on the throw path's TU).
-//! Returns false (and leaves `out` empty) when the artifact has no such section.
+//! Read + parse the qore_aot_pcloc section from the artifact at `path`, walking all
+//! concatenated records and accumulating their per-function entries into `out`. Handles
+//! both 64-bit ELF (`qore_aot_pcloc`) and 64-bit Mach-O (`__QORE,__pcloc`, thin or FAT)
+//! via self-contained parses (no libLLVM dependency on the throw path's TU). Returns
+//! false (and leaves `out` empty) when the artifact has no such section.
 bool qoreAOTReadPcLocSection(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
 
 //! One ELF static-symbol-table FUNC entry: link-time value + size + name.
@@ -1689,6 +1698,16 @@ struct AOTElfFuncSym {
 //! when no `.symtab`.
 bool qoreAOTReadElfFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
         bool& out_is_et_dyn);
+
+//! Mach-O counterpart of qoreAOTReadElfFuncSymbols: read __TEXT function symbols from the
+//! LC_SYMTAB of a thin/FAT 64-bit Mach-O. macOS dladdr provides no symbol size, so the
+//! PC->loc range would be bounded too tightly (return addresses past the last mapped
+//! offset fall outside, defeating lazy resolution); this recovers per-function sizes (gap
+//! to the next function symbol). `value` is the offset from the image base and `out_is_pie`
+//! is always true, so the runtime applies bias = dli_fbase exactly as for ELF ET_DYN. Names
+//! have the Mach-O leading '_' stripped to match the dladdr/dli_sname spelling.
+bool qoreAOTReadMachoFuncSymbols(const std::string& path, std::vector<AOTElfFuncSym>& out,
+        bool& out_is_pie);
 
 //! Descriptor for a compiled constant/static-var init function
 struct AOTCompiledInitFunc {

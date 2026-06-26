@@ -4045,12 +4045,25 @@ static void buildAOTPcLocMaps(const std::string& path,
         return;
     }
 
+    // Mach-O prefixes a leading '_' on every symbol, but func_slots[].llvm_symbol holds
+    // the LLVM-level name (no underscore), so the enclosing-function lookup below must
+    // strip it to match. Without this, sym_to_fws misses for every Mach-O function and
+    // pc_loc_map stays empty (no lazy locations on macOS).
+    const bool is_macho = (*obj_or)->isMachO();
+
     // Function symbols (addr, name) sorted by addr for enclosing-function lookup.
     std::vector<std::pair<uint64_t, std::string>> funcs;
     for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
         auto ty = sym.getType();
         if (!ty) { llvm::consumeError(ty.takeError()); continue; }
         if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
+        if (is_macho) {
+            // Skip Mach-O local labels (e.g. `ltmp0`) that share a real function's address
+            // and would otherwise shadow the global symbol in the enclosing lookup.
+            auto fl = sym.getFlags();
+            if (!fl) { llvm::consumeError(fl.takeError()); continue; }
+            if (!(*fl & llvm::object::SymbolRef::SF_Global)) { continue; }
+        }
         auto addr = sym.getAddress();
         auto nm = sym.getName();
         if (!addr) { llvm::consumeError(addr.takeError()); continue; }
@@ -4095,6 +4108,10 @@ static void buildAOTPcLocMaps(const std::string& path,
                 continue;
             }
             auto it = sym_to_fws.find(funcs[fi].second);
+            if (it == sym_to_fws.end() && is_macho && !funcs[fi].second.empty()
+                    && funcs[fi].second[0] == '_') {
+                it = sym_to_fws.find(funcs[fi].second.substr(1));
+            }
             if (it == sym_to_fws.end()) {
                 continue;
             }
@@ -4224,16 +4241,31 @@ static void collectPcLocMapsFromObjectDwarf(const std::string& path,
         llvm::consumeError(obj_or.takeError());
         return;
     }
+    // Mach-O prefixes a leading '_' on every symbol; strip it so the emitted record key
+    // (f.llvm_symbol) matches the runtime dladdr name (macOS dladdr reports dli_sname
+    // without the underscore). Otherwise every Mach-O record key misses at throw time.
+    const bool is_macho = (*obj_or)->isMachO();
     std::vector<std::pair<uint64_t, std::string>> funcs;
     for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
         auto ty = sym.getType();
         if (!ty) { llvm::consumeError(ty.takeError()); continue; }
         if (*ty != llvm::object::SymbolRef::ST_Function) { continue; }
+        if (is_macho) {
+            // Skip Mach-O local labels (e.g. `ltmp0`) that share a real function's address
+            // and would otherwise shadow the global symbol, mis-keying the emitted record.
+            auto fl = sym.getFlags();
+            if (!fl) { llvm::consumeError(fl.takeError()); continue; }
+            if (!(*fl & llvm::object::SymbolRef::SF_Global)) { continue; }
+        }
         auto addr = sym.getAddress();
         auto nm = sym.getName();
         if (!addr) { llvm::consumeError(addr.takeError()); continue; }
         if (!nm) { llvm::consumeError(nm.takeError()); continue; }
-        funcs.emplace_back(*addr, nm->str());
+        std::string name = nm->str();
+        if (is_macho && !name.empty() && name[0] == '_') {
+            name.erase(0, 1);
+        }
+        funcs.emplace_back(*addr, std::move(name));
     }
     std::sort(funcs.begin(), funcs.end());
     auto enclosing = [&funcs](uint64_t a) -> int {
@@ -4293,10 +4325,13 @@ static void collectPcLocMapsFromObjectDwarf(const std::string& path,
 //! a failure logs and returns true (lazy just stays unavailable for this artifact).
 static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
     bool dbg = getenv("QORE_AOT_LOC_DEBUG");
-    // The qore_aot_pcloc section + its runtime reader are ELF-only. On Mach-O (macOS)
-    // GNU objcopy --add-section corrupts the object ("slice is not valid mach-o file"),
-    // making the .qmod un-loadable; on any non-ELF format the section is useless anyway.
-    // So skip emission unless the just-emitted object is ELF.
+    // The qore_aot_pcloc section rides into whatever final artifact this object is linked
+    // into (the linker concatenates same-named input sections), so lazy on-throw source
+    // locations survive arbitrary downstream linking. ELF uses GNU objcopy; Mach-O uses
+    // llvm-objcopy with the "__QORE,__pcloc" (segment,section) name — GNU objcopy corrupts
+    // Mach-O ("slice is not valid mach-o file") whereas LLVM's objcopy handles it. Any
+    // other format has no supported reader, so skip it.
+    bool is_macho = false;
     {
         auto buf_or = llvm::MemoryBuffer::getFile(path);
         if (!buf_or) {
@@ -4307,13 +4342,27 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
             llvm::consumeError(obj_or.takeError());
             return true;
         }
-        if (!(*obj_or)->isELF()) {
+        if ((*obj_or)->isMachO()) {
+            is_macho = true;
+        } else if (!(*obj_or)->isELF()) {
             if (dbg) {
-                fprintf(stderr, "AOT-LOC: skipping qore_aot_pcloc section for non-ELF %s\n",
-                    path.c_str());
+                fprintf(stderr, "AOT-LOC: skipping qore_aot_pcloc section for unsupported "
+                    "object format %s\n", path.c_str());
             }
             return true;
         }
+    }
+#ifdef QORE_LLVM_OBJCOPY
+    const char* llvm_objcopy = QORE_LLVM_OBJCOPY;
+#else
+    const char* llvm_objcopy = "llvm-objcopy";
+#endif
+    if (is_macho && !llvm_objcopy[0]) {
+        if (dbg) {
+            fprintf(stderr, "AOT-LOC: no llvm-objcopy available; skipping Mach-O pcloc "
+                "section for %s\n", path.c_str());
+        }
+        return true;
     }
     std::vector<AOTCompiledFuncWithSlots> fs;
     collectPcLocMapsFromObjectDwarf(path, fs);
@@ -4341,22 +4390,42 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path) {
         printd(0, "AOT: failed writing pcloc payload to '%s' (continuing)\n", tmp.c_str());
         return true;
     }
-    // objcopy in place: remove any pre-existing section (defensive for re-emits), then
-    // add the non-alloc readonly section. GNU objcopy with one file arg edits in place.
-    std::string cmd = "objcopy --remove-section " QORE_AOT_PCLOC_SECTION_NAME
-        " --add-section " QORE_AOT_PCLOC_SECTION_NAME "=" + tmp
-        + " --set-section-flags " QORE_AOT_PCLOC_SECTION_NAME "=readonly,contents "
-        + path + " " + path;
-    int rc = system(cmd.c_str());
-    remove(tmp.c_str());
-    if (rc != 0) {
-        printd(0, "AOT: objcopy add pcloc section failed (rc=%d) for '%s' (continuing)\n",
-            rc, path.c_str());
-        return true;
+    std::string cmd;
+    if (is_macho) {
+        // llvm-objcopy needs distinct in/out for Mach-O; emit to a temp then rename over
+        // the original. Freshly emitted objects carry no prior section, so no remove is
+        // needed (and the runtime reader accumulates every matching section regardless).
+        std::string outp = path + ".objcopy." + std::to_string(getpid());
+        cmd = std::string("'") + llvm_objcopy + "' --add-section "
+            QORE_AOT_PCLOC_MACHO_SEG "," QORE_AOT_PCLOC_MACHO_SECT "='" + tmp + "' '"
+            + path + "' '" + outp + "'";
+        int rc = system(cmd.c_str());
+        remove(tmp.c_str());
+        if (rc != 0 || rename(outp.c_str(), path.c_str()) != 0) {
+            remove(outp.c_str());
+            printd(0, "AOT: llvm-objcopy add pcloc section failed (rc=%d) for '%s' "
+                "(continuing)\n", rc, path.c_str());
+            return true;
+        }
+    } else {
+        // GNU objcopy edits in place with one file arg: remove any pre-existing section
+        // (defensive for re-emits), then add the non-alloc readonly section.
+        cmd = "objcopy --remove-section " QORE_AOT_PCLOC_SECTION_NAME
+            " --add-section " QORE_AOT_PCLOC_SECTION_NAME "=" + tmp
+            + " --set-section-flags " QORE_AOT_PCLOC_SECTION_NAME "=readonly,contents "
+            + path + " " + path;
+        int rc = system(cmd.c_str());
+        remove(tmp.c_str());
+        if (rc != 0) {
+            printd(0, "AOT: objcopy add pcloc section failed (rc=%d) for '%s' (continuing)\n",
+                rc, path.c_str());
+            return true;
+        }
     }
     if (dbg) {
         fprintf(stderr, "AOT-LOC: added %s section to %s (%zu funcs, %zu payload bytes)\n",
-            QORE_AOT_PCLOC_SECTION_NAME, path.c_str(), n, payload.size());
+            is_macho ? QORE_AOT_PCLOC_MACHO_SEG "," QORE_AOT_PCLOC_MACHO_SECT
+                     : QORE_AOT_PCLOC_SECTION_NAME, path.c_str(), n, payload.size());
     }
     return true;
 }

@@ -541,6 +541,16 @@ unset(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
+# llvm-objcopy is used to embed the relink-surviving qore_aot_pcloc section into AOT
+# objects on Mach-O (GNU objcopy corrupts Mach-O; LLVM's objcopy handles it correctly).
+# Prefer the tool shipped with the LLVM we build against; fall back to PATH.
+find_program(QORE_LLVM_OBJCOPY NAMES llvm-objcopy HINTS ${LLVM_TOOLS_BINARY_DIR})
+if (QORE_LLVM_OBJCOPY)
+    message(STATUS "Found llvm-objcopy: ${QORE_LLVM_OBJCOPY}")
+else()
+    message(STATUS "llvm-objcopy not found; Mach-O AOT lazy-location sections will be unavailable")
+endif()
+
 # Homebrew LLVM loads zstd before Arrow, but can leave the zstd export set
 # without the aggregate target that a later Arrow find_dependency(zstd) expects.
 if (TARGET zstd::libzstd_shared AND NOT TARGET zstd::libzstd)
@@ -2297,6 +2307,9 @@ target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE QORE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}")
+if (QORE_LLVM_OBJCOPY)
+    target_compile_definitions(libqore PRIVATE QORE_LLVM_OBJCOPY="${QORE_LLVM_OBJCOPY}")
+endif()
 option(ENABLE_ASYNC_IO_TRACE "Enable async I/O controller trace instrumentation" OFF)
 if (ENABLE_ASYNC_IO_TRACE)
     target_compile_definitions(libqore PRIVATE DEBUG_ASYNC_IO)
