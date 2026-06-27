@@ -516,6 +516,9 @@ static bool write_depfile_list(const char* path, const std::string& output,
 // Program options
 static const char* output_path = nullptr;
 static int opt_level = 3;
+// Parallel backend codegen across N threads (split-after-opt). 0 = unset (single-object
+// codegen, the reference path). Propagated to libqore via the QCC_JOBS env var.
+static int aot_jobs = 0;
 static const char* target_triple = nullptr;
 static bool static_link = false;
 static bool module_mode = false;
@@ -916,6 +919,7 @@ static void print_usage(const char* prog) {
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
     printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
+    printf("      --jobs=N           Parallel backend codegen across N threads (split-after-opt)\n");
     printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
     printf("                         default: 200; 0 = off)\n");
     printf("  -e, --entry=FN         Qore function the emitted C++ main() calls after\n"
@@ -1016,6 +1020,7 @@ static struct option long_options[] = {
     {"depfile-target",    required_argument, nullptr, 0x11b},
     {"depfile-qo-input-content-stamps", no_argument, nullptr, 0x11c},
     {"source-symbol-manifest", required_argument, nullptr, 0x11d},
+    {"jobs",              required_argument, nullptr, 0x11e},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1185,6 +1190,13 @@ static int parse_options_cmdline(int argc, char** argv) {
             case 0x11d:  // --source-symbol-manifest
                 source_symbol_manifest_path = optarg;
                 manifest_inputs.emplace_back(optarg);
+                break;
+            case 0x11e:  // --jobs
+                aot_jobs = atoi(optarg);
+                if (aot_jobs < 1) {
+                    fprintf(stderr, "error: --jobs must be >= 1\n");
+                    return -1;
+                }
                 break;
             case 'F':
                 from_objects = true;
@@ -6367,6 +6379,13 @@ int main(int argc, char** argv) {
         snprintf(buf, sizeof(buf), "%d", big_fn_threshold);
         setenv("QORE_AOT_BIG_FN_THRESHOLD", buf,
                big_fn_threshold_cli_explicit ? 1 : 0);
+    }
+    // Propagate --jobs to QCC_JOBS so the backend-codegen path (emitObjectFile) picks it up.
+    // An explicit flag overrides any pre-existing QCC_JOBS in the environment.
+    if (aot_jobs > 0) {
+        char jbuf[32];
+        snprintf(jbuf, sizeof(jbuf), "%d", aot_jobs);
+        setenv("QCC_JOBS", jbuf, 1);
     }
 
     if (show_help) {

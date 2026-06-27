@@ -637,6 +637,9 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <thread>
+#include <atomic>
+#include <fcntl.h>
+#include <unistd.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassInstrumentation.h>
@@ -4492,6 +4495,100 @@ static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
     return true;  // `dest` closes at scope end -> all bytes on disk
 }
 
+// GNU-make jobserver client (the same mechanism GCC-LTO `-flto=jobserver` and Cargo/rustc
+// use): bounds the total concurrent codegen threads across all qcc invocations under
+// `make -jN`, so parallel codegen never oversubscribes. The process always owns one implicit
+// token; additional concurrency requires tokens read from the jobserver. Parses MAKEFLAGS for
+// `--jobserver-auth=fifo:PATH` (make >= 4.4 named pipe — robust to the fact that make does not
+// keep the inherited pipe fds open for non-recursive recipes like CMake custom commands) or
+// `--jobserver-auth=R,W` / `--jobserver-fds=R,W` (older inherited-fd style). Best-effort:
+// when no jobserver is present, available() is false and the caller uses its own job count.
+class JobserverClient {
+public:
+    JobserverClient() {
+        const char* mf = getenv("MAKEFLAGS");
+        if (!mf) {
+            return;
+        }
+        std::string s(mf);
+        size_t pos = s.find("--jobserver-auth=");
+        size_t taglen = sizeof("--jobserver-auth=") - 1;
+        if (pos == std::string::npos) {
+            pos = s.find("--jobserver-fds=");
+            taglen = sizeof("--jobserver-fds=") - 1;
+        }
+        if (pos == std::string::npos) {
+            return;
+        }
+        std::string val = s.substr(pos + taglen);
+        size_t sp = val.find_first_of(" \t\n");
+        if (sp != std::string::npos) {
+            val = val.substr(0, sp);
+        }
+        if (val.rfind("fifo:", 0) == 0) {
+            std::string path = val.substr(5);
+            int fd = open(path.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+            if (fd >= 0) {
+                rfd = wfd = fd;
+                own_fd = true;
+                ok = true;
+            }
+        } else {
+            size_t comma = val.find(',');
+            if (comma != std::string::npos) {
+                rfd = atoi(val.substr(0, comma).c_str());
+                wfd = atoi(val.substr(comma + 1).c_str());
+                // Only usable if make actually left the fds open for this process.
+                if (rfd >= 0 && wfd >= 0 && fcntl(rfd, F_GETFD) != -1 && fcntl(wfd, F_GETFD) != -1) {
+                    ok = true;
+                }
+            }
+        }
+    }
+    ~JobserverClient() {
+        releaseAll();
+        if (own_fd && rfd >= 0) {
+            close(rfd);
+        }
+    }
+    bool available() const { return ok; }
+    // Non-blocking: acquire up to `max` tokens; return the count actually obtained.
+    int acquire(int max) {
+        if (!ok || max <= 0) {
+            return 0;
+        }
+        int fl = fcntl(rfd, F_GETFL);
+        if (fl != -1) {
+            fcntl(rfd, F_SETFL, fl | O_NONBLOCK);
+        }
+        int got = 0;
+        while (got < max) {
+            char c;
+            ssize_t r = read(rfd, &c, 1);
+            if (r == 1) {
+                tokens.push_back(c);
+                ++got;
+            } else {
+                break;  // EAGAIN / empty -> no more tokens available right now
+            }
+        }
+        return got;
+    }
+    void releaseAll() {
+        for (char c : tokens) {
+            ssize_t w = write(wfd, &c, 1);
+            (void)w;  // best-effort; the same token byte is written back
+        }
+        tokens.clear();
+    }
+private:
+    int rfd = -1;
+    int wfd = -1;
+    bool ok = false;
+    bool own_fd = false;
+    std::vector<char> tokens;
+};
+
 // Phase 3 parallel codegen (split-after-opt): partition the already-optimized `module` into
 // up to `jobs` parts and codegen each on a worker thread with its own LLVMContext +
 // TargetMachine (cross-context Value* is UB, so parts move via bitcode), then partial-link
@@ -4571,14 +4668,35 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         }
         delete tm;
     };
+    // Bound concurrency: under a make jobserver, throttle to acquired tokens (+1 implicit) so
+    // we don't oversubscribe `make -jN`; standalone, use the requested job count. Never exceed
+    // nparts. `objs` is indexed by part, so the ld -r output is deterministic regardless of
+    // which thread codegens which part.
+    JobserverClient js;
+    int want = static_cast<int>(std::min<size_t>(static_cast<size_t>(jobs), nparts));
+    int concurrency = js.available() ? (1 + js.acquire(want - 1)) : want;
+    if (concurrency < 1) {
+        concurrency = 1;
+    }
+    std::atomic<size_t> next_part{0};
+    auto pool_worker = [&]() {
+        for (;;) {
+            size_t i = next_part.fetch_add(1);
+            if (i >= nparts) {
+                break;
+            }
+            worker(i);
+        }
+    };
     std::vector<std::thread> threads;
-    threads.reserve(nparts);
-    for (size_t i = 0; i < nparts; ++i) {
-        threads.emplace_back(worker, i);
+    threads.reserve(static_cast<size_t>(concurrency));
+    for (int t = 0; t < concurrency; ++t) {
+        threads.emplace_back(pool_worker);
     }
     for (auto& th : threads) {
         th.join();
     }
+    js.releaseAll();
 
     bool all = true;
     for (size_t i = 0; i < nparts; ++i) {
@@ -4607,8 +4725,8 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         }
     }
     if (debug_opt && all) {
-        fprintf(stderr, "AOT: parallel codegen %zu parts (jobs=%d) -> %s\n",
-            nparts, jobs, out_o.c_str());
+        fprintf(stderr, "AOT: parallel codegen %zu parts, concurrency=%d (jobs=%d, jobserver=%s)"
+            " -> %s\n", nparts, concurrency, jobs, js.available() ? "yes" : "no", out_o.c_str());
     }
     return all;
 }
