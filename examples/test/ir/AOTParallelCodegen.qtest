@@ -102,10 +102,10 @@ class AOTParallelCodegenTest inherits QUnit::Test {
         mkdir(single_dir);
         mkdir(par_dir);
 
-        string s_out = run(sprintf("%s -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, single_dir));
+        string s_out = run(sprintf("QCC_JOBS=1 %s -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, single_dir));
         assertTrue(is_file(single_dir + "/ParallelCgMod.qmod"),
             "single-object module compiles: " + s_out);
-        string p_out = run(sprintf("%s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, par_dir));
+        string p_out = run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, par_dir));
         assertTrue(is_file(par_dir + "/ParallelCgMod.qmod"),
             "parallel (--jobs 4) module compiles: " + p_out);
 
@@ -123,14 +123,14 @@ class AOTParallelCodegenTest inherits QUnit::Test {
 
         string a = tmp_dir + "/a.qmod";
         string b = tmp_dir + "/b.qmod";
-        run(sprintf("%s --jobs 4 -m %s -o %s", qcc_bin, src, a));
-        run(sprintf("%s --jobs 4 -m %s -o %s", qcc_bin, src, b));
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s", qcc_bin, src, a));
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s", qcc_bin, src, b));
         assertTrue(is_file(a) && is_file(b), "both parallel builds produced output");
 
         string s1 = tmp_dir + "/s1.qmod";
         string s2 = tmp_dir + "/s2.qmod";
-        run(sprintf("%s -m %s -o %s", qcc_bin, src, s1));
-        run(sprintf("%s -m %s -o %s", qcc_bin, src, s2));
+        run(sprintf("QCC_JOBS=1 %s -m %s -o %s", qcc_bin, src, s1));
+        run(sprintf("QCC_JOBS=1 %s -m %s -o %s", qcc_bin, src, s2));
 
         if (sameBytes(s1, s2)) {
             # Where the single-object build is byte-reproducible, the parallel build must be too.
@@ -143,8 +143,8 @@ class AOTParallelCodegenTest inherits QUnit::Test {
             string sb = tmp_dir + "/rb";
             mkdir(sa);
             mkdir(sb);
-            run(sprintf("%s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sa));
-            run(sprintf("%s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sb));
+            run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sa));
+            run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -m %s -o %s/ParallelCgMod.qmod", qcc_bin, src, sb));
             assertEq(probe(sa), probe(sb),
                 "parallel builds are functionally identical (platform byte-non-deterministic)");
         }

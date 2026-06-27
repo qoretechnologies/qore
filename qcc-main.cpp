@@ -919,7 +919,8 @@ static void print_usage(const char* prog) {
     printf("      --time-trace[=PATH]  Emit Chrome-format trace of opt+codegen passes\n");
     printf("                         (default PATH: qcc.trace.json; view at chrome://tracing)\n");
     printf("      --big-fn-threshold=N  Mark functions >= N IR blocks as OptimizeNone+NoInline\n");
-    printf("      --jobs=N           Parallel backend codegen across N threads (split-after-opt)\n");
+    printf("      --jobs=N           Parallel backend codegen threads, split-after-opt (default:\n");
+    printf("                         CPU count; throttled by the make jobserver; 1 = single)\n");
     printf("                         (trades ~1-7%% runtime for up to 46x compile speedup;\n");
     printf("                         default: 200; 0 = off)\n");
     printf("  -e, --entry=FN         Qore function the emitted C++ main() calls after\n"
