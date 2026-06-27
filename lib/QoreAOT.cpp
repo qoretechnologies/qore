@@ -4439,6 +4439,55 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path,
     return true;
 }
 
+// Codegen one already-optimized module to a relocatable object file via the supplied
+// target machine. Factored out of emitObjectFile so the parallel split-codegen path
+// (Phase 3) can reuse it per-partition on its own thread/TargetMachine. The caller owns
+// `tm` and any cleanup of `out_o` on failure. The BackendCodegen TimeTraceScope wraps the
+// bulk of compile time (SelectionDAG + MachineInstr passes + RegAlloc + asm emission).
+static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
+        const std::string& out_o, std::string& error, bool debug_opt = false) {
+    std::error_code EC;
+    llvm::raw_fd_ostream dest(out_o, EC, llvm::sys::fs::OF_None);
+    if (EC) {
+        error = "failed to open output file: " + EC.message();
+        return false;
+    }
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
+        fflush(stderr);
+    }
+
+    llvm::legacy::PassManager emit_pm;
+    if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
+        error = "target machine cannot emit object files";
+        return false;
+    }
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Running code generation pass manager...\n");
+        fflush(stderr);
+    }
+
+    {
+        llvm::TimeTraceScope backend_scope("BackendCodegen", m.getName().str());
+        emit_pm.run(m);
+    }
+
+    if (debug_opt) {
+        fprintf(stderr, "AOT: Code generation completed, flushing output\n");
+        fflush(stderr);
+    }
+
+    dest.flush();
+
+    if (dest.has_error()) {
+        error = "LLVM code generation failed writing to " + out_o;
+        return false;
+    }
+    return true;  // `dest` closes at scope end -> all bytes on disk
+}
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
         int opt_level = 3, const char* target_triple = nullptr,
         std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
@@ -4640,60 +4689,14 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // name does not end in `.qo`, so a concurrent sibling scan (regex
     // `.+\.qo$`) skips it.  Same idiom as linkSharedLib's atomic replace.
     std::string tmp_path = path + ".tmp." + std::to_string(getpid());
-    {
-        std::error_code EC;
-        llvm::raw_fd_ostream dest(tmp_path, EC, llvm::sys::fs::OF_None);
-        if (EC) {
-            error = "failed to open output file: " + EC.message();
-            delete tm;
-            return false;
-        }
-
-        if (debug_opt) {
-            fprintf(stderr, "AOT: Creating legacy PassManager for code generation\n");
-            fflush(stderr);
-        }
-
-        llvm::legacy::PassManager emit_pm;
-        if (tm->addPassesToEmitFile(emit_pm, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-            error = "target machine cannot emit object files";
-            remove(tmp_path.c_str());
-            delete tm;
-            return false;
-        }
-
-        if (debug_opt) {
-            fprintf(stderr, "AOT: Running code generation pass manager...\n");
-            fflush(stderr);
-        }
-
-        // Phase 1 instrumentation: wrap backend codegen in a TimeTraceScope so
-        // the bulk of compile time (SelectionDAG + MachineInstr passes +
-        // RegAlloc + assembly emission) appears as a single coarse event in the
-        // Chrome trace.  Sub-phases within the backend emit their own scopes if
-        // they call llvm::TimeTraceScope — legacy backend passes don't, but the
-        // total here gives us a clear picture of backend vs middle-end split.
-        {
-            llvm::TimeTraceScope backend_scope("BackendCodegen",
-                    module.getName().str());
-            emit_pm.run(module);
-        }
-
-        if (debug_opt) {
-            fprintf(stderr, "AOT: Code generation completed, flushing output\n");
-            fflush(stderr);
-        }
-
-        dest.flush();
-
-        if (dest.has_error()) {
-            error = "LLVM code generation failed writing to " + tmp_path;
-            remove(tmp_path.c_str());
-            delete tm;
-            return false;
-        }
-        // `dest` closes here (end of scope) so all bytes are on disk in the
-        // temp file before the rename below.
+    // Backend codegen of the optimized module -> one relocatable object. (Phase 3 will
+    // add a split-after-opt parallel path here that partitions `module` and calls
+    // codegenModuleToObject per-partition on worker threads; the single-object path
+    // below is the jobs=1 reference.)
+    if (!codegenModuleToObject(module, tm, tmp_path, error, debug_opt)) {
+        remove(tmp_path.c_str());
+        delete tm;
+        return false;
     }
 
     if (rename(tmp_path.c_str(), path.c_str()) != 0) {
