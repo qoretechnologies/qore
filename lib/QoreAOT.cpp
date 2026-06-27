@@ -638,6 +638,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <thread>
 #include <atomic>
+#include <unordered_set>
 #include <fcntl.h>
 #include <unistd.h>
 #include <llvm/IR/IRBuilder.h>
@@ -4658,6 +4659,27 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         return ok;
     }
 
+    // Record the symbols that are legitimately global (defined, non-local) in the ORIGINAL
+    // module. SplitModule(PreserveLocals=false) promotes the module's internal symbols to
+    // external so cross-partition references resolve; after the ld -r merge those are
+    // re-internalized (below) so the produced object's symbol visibility matches a
+    // single-codegen object — no extra globals leak into a downstream static link.
+    std::unordered_set<std::string> keep_global;
+    auto collect_global = [&keep_global](llvm::GlobalValue& gv) {
+        if (!gv.isDeclaration() && !gv.hasLocalLinkage() && gv.hasName()) {
+            keep_global.insert(gv.getName().str());
+        }
+    };
+    for (llvm::Function& f : module.functions()) {
+        collect_global(f);
+    }
+    for (llvm::GlobalVariable& g : module.globals()) {
+        collect_global(g);
+    }
+    for (llvm::GlobalAlias& a : module.aliases()) {
+        collect_global(a);
+    }
+
     // Partition into `concurrency` parts (matched to the cores we hold) + serialize each to
     // bitcode on the main thread (in module's context).
     std::vector<llvm::SmallString<0>> bc;
@@ -4743,6 +4765,55 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         if (system(cmd.c_str()) != 0) {
             all = false;
             error = "ld -r partial link of codegen parts failed";
+        }
+    }
+    if (all) {
+        // Re-internalize the symbols SplitModule externalized: any DEFINED GLOBAL in the merged
+        // object that was not global in the original module is a promoted local -> localize it,
+        // so the object's symbol visibility matches a single-codegen object (no global-namespace
+        // pollution, no downstream static-link collision risk). ELF only via GNU objcopy: on
+        // Mach-O the final .qmod link already strips these (verified: identical dynsyms), GNU
+        // objcopy corrupts Mach-O, and llvm-objcopy has no --localize-symbols for Mach-O.
+        std::vector<std::string> to_localize;
+        auto buf = llvm::MemoryBuffer::getFile(out_o);
+        if (buf) {
+            auto obj_or = llvm::object::ObjectFile::createObjectFile((*buf)->getMemBufferRef());
+            if (!obj_or) {
+                llvm::consumeError(obj_or.takeError());
+            } else if ((*obj_or)->isELF()) {
+                for (const llvm::object::SymbolRef& sym : (*obj_or)->symbols()) {
+                    auto fl = sym.getFlags();
+                    if (!fl) { llvm::consumeError(fl.takeError()); continue; }
+                    if (!(*fl & llvm::object::SymbolRef::SF_Global)
+                            || (*fl & llvm::object::SymbolRef::SF_Undefined)) {
+                        continue;
+                    }
+                    auto nm = sym.getName();
+                    if (!nm) { llvm::consumeError(nm.takeError()); continue; }
+                    std::string s = nm->str();
+                    if (!s.empty() && !keep_global.count(s)) {
+                        to_localize.push_back(std::move(s));
+                    }
+                }
+            }
+        }
+        if (!to_localize.empty()) {
+            std::string lf = out_o + ".loc." + std::to_string(getpid());
+            FILE* lfp = fopen(lf.c_str(), "w");
+            if (lfp) {
+                for (const auto& s : to_localize) {
+                    fprintf(lfp, "%s\n", s.c_str());
+                }
+                bool wok = (fclose(lfp) == 0);
+                if (wok) {
+                    std::string cmd = "objcopy --localize-symbols='" + lf + "' '" + out_o + "'";
+                    if (system(cmd.c_str()) != 0) {
+                        printd(0, "AOT: objcopy --localize-symbols failed for '%s' (continuing)\n",
+                            out_o.c_str());
+                    }
+                }
+                remove(lf.c_str());
+            }
         }
     }
     for (const auto& o : objs) {

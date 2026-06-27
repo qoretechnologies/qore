@@ -31,6 +31,11 @@ class AOTParallelCodegenTest inherits QUnit::Test {
 
         addTestCase("parallel codegen is load-equivalent to single-object", \testLoadEquivalence());
         addTestCase("parallel codegen is deterministic (same binary)", \testDeterminism());
+        # The externalized-local re-internalization (symbol equivalence) is ELF-only:
+        # on Mach-O the final .qmod link strips the extras and GNU objcopy corrupts Mach-O.
+        if (Qore::PlatformOS != "Darwin" && PlatformOS != "Windows") {
+            addTestCase("split .qo has no extra global symbols vs single", \testQoSymbolEquivalence());
+        }
 
         set_return_value(main());
     }
@@ -90,6 +95,47 @@ class AOTParallelCodegenTest inherits QUnit::Test {
     # cmp two files for byte-equality (portable to Linux + macOS).
     private bool sameBytes(string a, string b) {
         return run(sprintf("cmp -s %s %s && echo SAME || echo DIFF", a, b)) =~ /SAME/;
+    }
+
+    # Sorted set of an object's defined global symbol names (via nm; "" = nm unavailable).
+    private list<string> globalSyms(string obj) {
+        string out = run(sprintf("nm -g --defined-only %s", obj));
+        hash<string, bool> seen;
+        foreach string line in (out.split("\n")) {
+            # "<value> <type> <name>" for a defined symbol
+            *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(\S+)\s*$/);
+            if (m && exists m[0]) {
+                seen{m[0]} = True;
+            }
+        }
+        return sort(keys seen);
+    }
+
+    private testQoSymbolEquivalence() {
+        TmpDir tmp = initDirs();
+        # Source with internal helpers + switch tables so SplitModule has locals to externalize.
+        string src = tmp_dir + "/qoe.qr";
+        string body = "%new-style\n";
+        for (int i = 0; i < 22; ++i) {
+            body += sprintf("int sub qoe_f%d(int x) { switch (x) { case 1: return %d; default: "
+                "return x * %d; } }\n", i, i, i + 1);
+        }
+        write(src, body);
+
+        # Same basename in two dirs so registration-symbol names (which embed the basename)
+        # match; the only difference would be the externalized locals re-internalization closes.
+        string sg = tmp_dir + "/sg";
+        string sp = tmp_dir + "/sp";
+        mkdir(sg);
+        mkdir(sp);
+        run(sprintf("QCC_JOBS=1 %s -c %s -o %s/x.qo", qcc_bin, src, sg));
+        run(sprintf("QCC_SPLIT_THRESHOLD=1 %s --jobs 4 -c %s -o %s/x.qo", qcc_bin, src, sp));
+
+        list<string> single_syms = globalSyms(sg + "/x.qo");
+        list<string> split_syms = globalSyms(sp + "/x.qo");
+        assertTrue(single_syms.size() > 0, "nm read global symbols from the single-object .qo");
+        assertEq(single_syms, split_syms,
+            "split .qo exports the same global symbols as single (externalized locals re-internalized)");
     }
 
     private testLoadEquivalence() {
