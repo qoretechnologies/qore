@@ -6471,7 +6471,8 @@ static uint64_t qore_rt_call_function_dynamic(const QoreFunction* func,
 }
 
 // Stack location for JIT/AOT-executed frames.
-class QoreJITStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
+class QoreJITStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper,
+        public QoreAOTStackFrameMarker {
 public:
     DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
             const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)

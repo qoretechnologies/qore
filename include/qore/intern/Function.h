@@ -439,7 +439,8 @@ class RuntimeConfig;
 #define ARG_DEF   (1 << 0)
 #define ARG_OTHER (1 << 1)
 
-class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper {
+class CodeEvaluationHelper : public QoreStackLocation, public ProgramThreadCountContextHelper,
+        public QoreAOTStackFrameMarker {
 public:
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
