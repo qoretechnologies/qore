@@ -223,12 +223,34 @@ ends at `MPM.run(module, MAM)` (~line 4604) and codegen is `addPassesToEmitFile`
 4. *Oversubscription*: the jobserver (above).
 
 **Milestones (in-branch):**
-- **M0 — de-risk spike** (½–1 session, throwaway/env-gated, not pushed):
-  prove SplitModule → bitcode round-trip → per-thread codegen → aggregate-link
-  produces a loadable, deterministic, test-passing `.qmod` for a real module;
-  and prototype a jobserver client throttling under a real `make -jN`
-  (including the CMake-custom-command caveat). Kill criterion: if determinism or
-  internal-symbol resolution can't be made clean, stop and reconsider.
+- **M0 — de-risk spike** (DONE 2026-06-27, env-gated throwaway, not pushed):
+  validated end-to-end. SplitModule → per-part bitcode → fresh-`LLVMContext`
+  worker threads (`parseBitcodeFile` + own `TargetMachine`) → `ld -r` merge into
+  one relocatable object. Results on DataProvider (16-core):
+  - **Correctness**: Mime functions correct; DataProvider registers 139 classes
+    **identical to baseline** (reflection enumerated); lazy exception locations
+    survive the split+merge.
+  - **Determinism**: the `.qmod` is byte-identical across builds. (The single
+    `.qo` is non-deterministic, but **so is the baseline** — pre-existing; the
+    build keys content-digest stamps on inputs, not output bytes.)
+  - **Speedup**: **32.6 s → 20.1 s (~38%)** at jobs=8; codegen parallel-eff
+    **6.4×** (16 s → 2.8 s). jobs=16 no better — only 8 partitions, and the run
+    is now opt-bound.
+  - **KEY finding**: `SplitModule(..., PreserveLocals=false)` is mandatory.
+    `=true` keeps the dense web of AOT-emitted local symbols in ONE partition
+    (measured: a single 20.8 MB part vs seven ~1 MB parts → eff 1.11×, no win).
+    `=false` externalizes locals and balances (~3-5 MB parts, eff 6.4×).
+  - **Residual for M2** (from `=false`): externalizing promotes local symbols to
+    external linkage — must verify **no cross-module symbol clashes** when many
+    parallel-built modules load together (single-module load is fine). Likely
+    re-internalize/localize-hidden after the merge (e.g. `objcopy --localize-hidden`)
+    or have the final `.qmod` link hide them.
+  - **Ceiling reality**: the ~16 s **opt phase stays single-threaded**
+    (split-after-opt) + ~3 s split/serialize overhead → ~38% is the realistic
+    win, not higher, unless opt is sped up separately (Phase 5a/7) or split-
+    before-opt is used (rejected — runtime-perf risk).
+  - **Still TODO in M0/M2**: prototype the jobserver client throttling under a
+    real `make -jN` (the CMake-custom-command-doesn't-inherit-jobserver caveat).
 - **M1 — seam refactor** (1 session): split `emitObjectFile` into
   `optimizeModule()` + `codegenModuleToObject()`, `--jobs 1` path **byte-
   identical** to today. Land alone; full AOT suite green.
