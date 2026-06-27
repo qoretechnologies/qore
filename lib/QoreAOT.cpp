@@ -633,6 +633,10 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/Utils/SplitModule.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+#include <llvm/Bitcode/BitcodeReader.h>
+#include <thread>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassInstrumentation.h>
@@ -4488,6 +4492,127 @@ static bool codegenModuleToObject(llvm::Module& m, llvm::TargetMachine* tm,
     return true;  // `dest` closes at scope end -> all bytes on disk
 }
 
+// Phase 3 parallel codegen (split-after-opt): partition the already-optimized `module` into
+// up to `jobs` parts and codegen each on a worker thread with its own LLVMContext +
+// TargetMachine (cross-context Value* is UB, so parts move via bitcode), then partial-link
+// (ld -r) the parts into one relocatable object at `out_o`, preserving emitObjectFile's
+// single-object contract. Optimization stays whole-module (done by the caller) so
+// cross-function inlining and runtime perf are unchanged. PreserveLocals=false is required to
+// balance the partitions (=true keeps the dense web of AOT local symbols in one partition,
+// defeating parallelism). The final .qmod/exe link controls symbol visibility, so the locals
+// SplitModule externalizes do not leak into the artifact's exported (dynamic) symbol table.
+static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string& triple,
+        const std::string& out_o, std::string& error, bool debug_opt) {
+    auto makeTM = [&triple]() -> llvm::TargetMachine* {
+        std::string terr;
+        const llvm::Target* t = llvm::TargetRegistry::lookupTarget(triple, terr);
+        if (!t) {
+            return nullptr;
+        }
+#if LLVM_VERSION_MAJOR >= 21
+        return t->createTargetMachine(llvm::Triple(triple), "generic", "",
+            llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#else
+        return t->createTargetMachine(triple, "generic", "",
+            llvm::TargetOptions{}, llvm::Reloc::PIC_);
+#endif
+    };
+
+    // Partition + serialize each part to bitcode on the main thread (in module's context).
+    std::vector<llvm::SmallString<0>> bc;
+    llvm::SplitModule(module, static_cast<unsigned>(jobs),
+        [&bc](std::unique_ptr<llvm::Module> mp) {
+            llvm::SmallString<0> buf;
+            llvm::raw_svector_ostream os(buf);
+            llvm::WriteBitcodeToFile(*mp, os);
+            bc.push_back(std::move(buf));
+        },
+        /*PreserveLocals=*/false);
+
+    const size_t nparts = bc.size();
+    if (nparts <= 1) {
+        // Degenerate split (tiny module): single-machine codegen, no threads.
+        llvm::TargetMachine* tm = makeTM();
+        if (!tm) {
+            error = "failed to create target machine for '" + triple + "'";
+            return false;
+        }
+        module.setDataLayout(tm->createDataLayout());
+        bool ok = codegenModuleToObject(module, tm, out_o, error, debug_opt);
+        delete tm;
+        return ok;
+    }
+
+    // Codegen each partition on its own thread: re-parse the bitcode into a fresh context,
+    // build a per-thread TargetMachine (not shareable across concurrent codegen), emit one .o.
+    std::vector<std::string> objs(nparts);
+    std::vector<char> ok(nparts, 0);
+    std::vector<std::string> werr(nparts);
+    auto worker = [&](size_t i) {
+        auto ctx = std::make_unique<llvm::LLVMContext>();
+        llvm::MemoryBufferRef ref(llvm::StringRef(bc[i].data(), bc[i].size()), "aot-part");
+        auto m_or = llvm::parseBitcodeFile(ref, *ctx);
+        if (!m_or) {
+            llvm::consumeError(m_or.takeError());
+            werr[i] = "bitcode re-parse failed";
+            return;
+        }
+        std::unique_ptr<llvm::Module> wm = std::move(*m_or);
+        llvm::TargetMachine* tm = makeTM();
+        if (!tm) {
+            werr[i] = "no target machine";
+            return;
+        }
+        wm->setDataLayout(tm->createDataLayout());
+        std::string po = out_o + ".p" + std::to_string(i) + ".o";
+        if (codegenModuleToObject(*wm, tm, po, werr[i], false)) {
+            objs[i] = po;
+            ok[i] = 1;
+        }
+        delete tm;
+    };
+    std::vector<std::thread> threads;
+    threads.reserve(nparts);
+    for (size_t i = 0; i < nparts; ++i) {
+        threads.emplace_back(worker, i);
+    }
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    bool all = true;
+    for (size_t i = 0; i < nparts; ++i) {
+        if (!ok[i]) {
+            all = false;
+            if (error.empty()) {
+                error = "parallel codegen failed for part " + std::to_string(i) + ": " + werr[i];
+            }
+        }
+    }
+    if (all) {
+        // Partial-link the parts into one relocatable object (sections, including
+        // qore_aot_pcloc, are concatenated; cross-part references resolve).
+        std::string cmd = "ld -r -o '" + out_o + "'";
+        for (const auto& o : objs) {
+            cmd += " '" + o + "'";
+        }
+        if (system(cmd.c_str()) != 0) {
+            all = false;
+            error = "ld -r partial link of codegen parts failed";
+        }
+    }
+    for (const auto& o : objs) {
+        if (!o.empty()) {
+            remove(o.c_str());
+        }
+    }
+    if (debug_opt && all) {
+        fprintf(stderr, "AOT: parallel codegen %zu parts (jobs=%d) -> %s\n",
+            nparts, jobs, out_o.c_str());
+    }
+    return all;
+}
+
 static bool emitObjectFile(llvm::Module& module, const std::string& path, std::string& error,
         int opt_level = 3, const char* target_triple = nullptr,
         std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr) {
@@ -4689,11 +4814,20 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
     // name does not end in `.qo`, so a concurrent sibling scan (regex
     // `.+\.qo$`) skips it.  Same idiom as linkSharedLib's atomic replace.
     std::string tmp_path = path + ".tmp." + std::to_string(getpid());
-    // Backend codegen of the optimized module -> one relocatable object. (Phase 3 will
-    // add a split-after-opt parallel path here that partitions `module` and calls
-    // codegenModuleToObject per-partition on worker threads; the single-object path
-    // below is the jobs=1 reference.)
-    if (!codegenModuleToObject(module, tm, tmp_path, error, debug_opt)) {
+    // Backend codegen of the optimized module -> one relocatable object. With QCC_JOBS>1
+    // (native main-module emit only), use split-after-opt parallel codegen; otherwise the
+    // single-object reference path. Both produce one .o at tmp_path.
+    int aot_jobs = 1;
+    if (const char* jenv = getenv("QCC_JOBS")) {
+        aot_jobs = atoi(jenv);
+        if (aot_jobs < 1) {
+            aot_jobs = 1;
+        }
+    }
+    bool cg_ok = (aot_jobs > 1 && func_slots && !func_slots->empty() && !target_triple)
+        ? codegenModuleSplit(module, aot_jobs, triple, tmp_path, error, debug_opt)
+        : codegenModuleToObject(module, tm, tmp_path, error, debug_opt);
+    if (!cg_ok) {
         remove(tmp_path.c_str());
         delete tm;
         return false;
