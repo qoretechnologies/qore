@@ -54,7 +54,7 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
             : GoogleDataProviderBase(rest) {
         self.api = api;
         self.resource_action = resource_action;
-        self.path_args = cast<hash<string, softstring>>(path_args);
+        self.path_args = cast<*hash<string, softstring>>(path_args);
 
         (category, name) = (resource_action =~ x/([^\/]+)\/([^\/]+)/);
         desc = sprintf("Google %s %s provider for `%s`", api, resource_action, rest.getSafeUrl());
