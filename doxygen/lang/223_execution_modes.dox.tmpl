@@ -232,11 +232,42 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c -g|Emit DWARF debug info
     |\c --time-trace[=PATH]|Emit Chrome-format LLVM timing trace
     |\c --big-fn-threshold=N|Use \c OptimizeNone for functions with at least N IR blocks, default 200
+    |\c --jobs=N|Parallel backend-codegen threads (split-after-opt); default CPU count, throttled by the GNU make jobserver, \c 1 = single-object
     |\c -e, \c --entry=FN|Entry function for generated one-shot or link-mode \c main()
     |\c -r, \c --warnings-are-errors|Treat Qore parser warnings as fatal compile errors
     |\c --dump-info|Inspect embedded AOT metadata without executing code
     |\c --dump-symbols|Include an nm-like symbol table in dump output
     |\c --dump-sections|Include object and AOT section tables in dump output
+
+    @subsection qcc_parallel_codegen Parallel Backend Codegen and the GNU make Jobserver
+
+    \c qcc can parallelize LLVM backend codegen for a single compilation using a
+    <i>split-after-opt</i> strategy: it optimizes the whole module once, then partitions
+    the optimized module along whole-function boundaries, runs codegen for the partitions
+    concurrently, and links the results back into one relocatable object that is
+    symbol-equivalent and byte-deterministic with respect to the single-object build.
+
+    - \c --jobs=N sets the number of codegen threads (default: CPU count, capped at 32;
+      \c 1 selects the single-object reference path). The equivalent environment variable
+      is \c QCC_JOBS (see @ref environment_variables); an explicit \c --jobs flag wins.
+    - Only modules at or above \c QCC_SPLIT_THRESHOLD optimized-IR instructions (default
+      \c 50000) are split, so small modules keep the single-object path.
+
+    <b>GNU make jobserver integration.</b> When \c qcc runs as part of a parallel
+    <tt>make -jN</tt> build (for example the CMake user-module build, or a module or host
+    project that compiles \c .qo files), it participates as a
+    <a href="https://www.gnu.org/software/make/manual/html_node/Job-Slots.html">GNU make
+    jobserver</a> client so that \c qcc's internal codegen threads and make's own parallel
+    recipes share one global job budget rather than oversubscribing the machine. \c qcc
+    reads \c MAKEFLAGS and supports both the make 4.4+ named-pipe form
+    (<tt>--jobserver-auth=fifo:PATH</tt>) and the older inherited-file-descriptor form
+    (<tt>--jobserver-auth=R,W</tt> / <tt>--jobserver-fds=R,W</tt>). Each qcc process owns
+    one implicit job slot; additional codegen concurrency is used only for as many extra
+    jobserver tokens as it can acquire non-blockingly <i>before</i> splitting. If no spare
+    tokens are available (a saturated build), \c qcc falls back to single-object codegen,
+    so parallel codegen is safe to leave enabled by default even under <tt>make -j</tt>.
+    Outside a jobserver-aware make (a bare \c qcc invocation), \c --jobs / \c QCC_JOBS
+    apply directly.
 
     @subsection aot_inspection Inspecting AOT Artifacts
 

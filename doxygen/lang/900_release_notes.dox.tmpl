@@ -707,6 +707,16 @@ int echoed = child.echo(value);
     executables, dependency files, and artifact inspection with
     \c --dump-info.
 
+    \c qcc can also parallelize LLVM backend codegen for a single compilation
+    (\c --jobs=N / \c QCC_JOBS, split-after-opt) and acts as a GNU make jobserver
+    client so parallel codegen shares one job budget under <tt>make -j</tt> without
+    oversubscription; see @ref qcc_parallel_codegen "Parallel Backend Codegen and the
+    GNU make Jobserver". AOT exceptions report real \c .qc/\c .qm source locations,
+    reconstructed lazily at throw time from line tables (see
+    @ref exec_mode_aot "AOT" exception source locations). CMake-based module and host
+    projects that drive \c qcc directly can use the AOT build macros documented in the
+    @ref qore_cmake "CMake API guide".
+
     LLVM 16 or later is required for JIT and AOT support.  See
     @ref execution_modes "Execution Modes" for execution-mode semantics,
     qcc options, artifact types, source-stripping behavior, and debugging

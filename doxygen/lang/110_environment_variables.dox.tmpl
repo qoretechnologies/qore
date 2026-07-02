@@ -12,4 +12,6 @@
     |\c TZ|On UNIX systems, this environment variables points to the zoneinfo file that contains the definition of the current time zone; for more information, see @ref unix_time_zones
     |\c QORE_DIAG_FORMAT|If set to \c json, %Qore parses the program and emits its parse diagnostics as a JSON array on \c stdout instead of executing it, exactly as if @ref diag_json_format "--diag-format=json" had been given on the command line. Intended for editors, build tools, and AI coding assistants that drive the \c qore binary but cannot control its command line.
     |\c QORE_CODE_FRAMES|If set (to any value), %Qore parses the program and renders its parse diagnostics as @ref diag_code_frames "code frames" on \c stderr instead of executing it, exactly as if \c --code-frames had been given on the command line.
+    |\c QCC_JOBS|Read by the \c qcc AOT compiler: number of parallel backend-codegen threads for @ref qcc_parallel_codegen "split-after-opt" compilation (default: CPU count, capped at 32; \c 1 = single-object). Throttled by the GNU make jobserver when present. The \c qcc \c --jobs=N option sets this and takes precedence.
+    |\c QCC_SPLIT_THRESHOLD|Read by the \c qcc AOT compiler: minimum optimized-IR instruction count for a module to be split for @ref qcc_parallel_codegen "parallel codegen" (default: \c 50000). Smaller modules use the single-object path.
 */

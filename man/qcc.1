@@ -36,6 +36,23 @@ If omitted, the input file name without its extension is used.
 Set LLVM optimization level 0 through 3.
 The default is 3.
 .TP
+.B \-\-jobs =\fIN\fP
+Number of parallel backend code-generation threads for a single compilation
+(split-after-opt): the optimized module is partitioned along whole-function
+boundaries, each partition's code generation runs on a worker thread, and the
+results are linked back into one relocatable object that is symbol-equivalent and
+byte-deterministic with the single-object build.
+The default is the number of hardware threads (capped at 32); \fB1\fP selects the
+single-object path.
+Sets the \fBQCC_JOBS\fP environment variable; an explicit flag overrides it.
+Only modules at or above \fBQCC_SPLIT_THRESHOLD\fP optimized-IR instructions are
+split.
+Under a parallel \fBmake\fP, \fBqcc\fP acts as a GNU make jobserver client and
+uses extra codegen threads only for jobserver tokens it can acquire, so a build is
+never oversubscribed.
+This is distinct from \fBQORE_AOT_BATCH_JOBS\fP, which parallelizes emitting
+\fImultiple\fP objects in batch \fB\-\-output\-dir\fP mode.
+.TP
 .BR \-m ", " \-\-module
 Compile the input as a user module.
 A single \fB.qm\fP file or a split module directory can be compiled to
@@ -225,6 +242,20 @@ Number of worker threads used to emit \fB.qo\fP objects in batch
 The sources are parsed once on a single thread, then each object's code
 generation runs on the pool, parallelizing the dominant \fB\-O3\fP backend.
 Defaults to the number of hardware threads; set to 1 to emit serially.
+.TP
+.B QCC_JOBS
+Number of parallel backend code-generation threads for a \fIsingle\fP compilation
+(split-after-opt); see \fB\-\-jobs\fP.
+Defaults to the number of hardware threads (capped at 32); \fB1\fP selects the
+single-object path.
+Throttled by the GNU make jobserver when \fBqcc\fP runs under a parallel
+\fBmake\fP.
+The \fB\-\-jobs\fP option sets this and takes precedence.
+.TP
+.B QCC_SPLIT_THRESHOLD
+Minimum optimized-IR instruction count for a module to be split for parallel
+codegen.
+Defaults to \fB50000\fP; smaller modules use the single-object path.
 .SH EXAMPLES
 Compile a script to a native executable:
 .RS

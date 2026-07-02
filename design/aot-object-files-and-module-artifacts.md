@@ -122,6 +122,32 @@ Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol
 index.
 
+## PC→Location Section (`qore_aot_pcloc`)
+
+To report real source locations in exceptions thrown from AOT-compiled native code,
+qcc emits a per-function PC→location map into a dedicated **object section** rather
+than into the QORD metadata blob. Unlike the metadata blob (which is consumed when a
+`.qmod`/`.qo`/executable is loaded), this section must survive *arbitrary downstream
+linking* — a `.qo` fragment gets `ld -r`-merged, aggregated into a `.qmod`, or linked
+into a host executable — so the map has to ride through relinking with no cooperation
+from the linker or the user.
+
+- Both ELF and Mach-O linkers concatenate same-named input sections into the output
+  artifact, so qcc adds the map as its own section to every object it emits and the
+  data is preserved verbatim across relinks.
+  - ELF: a non-alloc section named `qore_aot_pcloc` (added with GNU `objcopy`).
+  - Mach-O: `__QORE,__pcloc` (segment/section pair; added with `llvm-objcopy`, since
+    GNU objcopy corrupts Mach-O).
+- The payload is a sequence of self-delimiting framed records
+  (`[uint32 magic 'QPCM'][uint32 payload_len][payload]`); each object contributes one
+  record, and the reader walks all concatenated records, accumulating per-function
+  entries. The framed-record and per-function payload format is identical on ELF and
+  Mach-O.
+- The section is non-alloc / not mapped at runtime; it is read from the artifact file
+  (via `dladdr`'s `dli_fname`) lazily at throw time, so it adds no steady-state cost.
+  See [`aot-lazy-loc-innermost-frame.md`](aot-lazy-loc-innermost-frame.md) for how the
+  map is consumed during exception construction.
+
 ## Inspection
 
 `qcc --dump-info <path>` inspects executables, `.qmod`, `.qo`, `.qoa`, and

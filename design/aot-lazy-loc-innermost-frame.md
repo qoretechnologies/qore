@@ -119,6 +119,30 @@ require `sp` to lie outside the AOT frame's own `[aot_cfa, inner_cfa)` extent.
 - **Nested AOT→interp→AOT**: each boundary save/restores `sp`; the innermost frame's
   mode wins by the address comparison. ✓
 
+## Identifying AOT frames without breaking `QoreStackLocation` ABI
+
+The exception machinery must ask, per call-stack frame, "is this an AOT-native frame?"
+The obvious implementation — a `virtual bool isAOTFrame()` on `QoreStackLocation` — is an
+**ABI break**: `QoreStackLocation` is a public base (in `include/qore/ExceptionSink.h`)
+subclassed by external binary modules via `QoreExternalStackLocation` (e.g. the `jni`
+module's `QoreJniStackLocationHelper`). Adding a virtual shifts the vtable, so a module
+compiled against the prior header has no slot at that index; when libqore invokes the new
+slot on such a frame it jumps through a phantom vtable entry → SIGSEGV.
+
+The fix keeps `QoreStackLocation`'s layout/vtable identical to prior releases: instead of a
+base virtual, a separate internal interface `QoreAOTStackFrameMarker` (also in
+`ExceptionSink.h`) declares `isAOTFrame()`, and only the libqore-internal frame types that
+actually run AOT-native code implement it (`CodeEvaluationHelper`, the JIT/AOT stack
+location). The exception walk `dynamic_cast<const QoreAOTStackFrameMarker*>(loc)`: internal
+AOT frames match and report their flag; external/foreign frames (jni, IR-inline, builtin)
+yield `nullptr` and are treated as non-AOT. `dynamic_cast` relies only on RTTI
+(`vtable[-1]`), which is identical across old and new builds, so stale external modules are
+handled without ever indexing a phantom slot.
+
+**Rule:** never add a virtual function or data member to `QoreStackLocation` (or any public
+base under `QoreExternalStackLocation`) — it silently breaks the vtable/layout ABI of
+external modules. Use an independent internal marker interface + `dynamic_cast` instead.
+
 ## Validation (the gate IS sufficient — earlier worry was wrong)
 
 The earlier concern was that with the eager updater still active, false-defers are

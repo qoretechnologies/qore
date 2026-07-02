@@ -79,6 +79,37 @@ For the object-file and module artifact contract, see
 For multi-file script/application AOT, see
 [`aot-script-context.md`](aot-script-context.md).
 
+### Parallel Backend Codegen (split-after-opt)
+
+`qcc` can parallelize LLVM backend codegen for a single compilation. It optimizes
+the whole module once (so cross-function optimization is unaffected), then
+`llvm::SplitModule(PreserveLocals=false)` partitions the optimized module into N
+balanced pieces along whole-function boundaries, codegens each piece concurrently on
+a worker thread (each with its own `LLVMContext` via a bitcode round-trip, since a
+`Value*` may not cross contexts, plus its own `TargetMachine`), and `ld -r`
+partial-links the per-partition objects back into one relocatable object.
+`SplitModule` externalizes internal symbols, so after the merge qcc re-internalizes
+the extras (ELF: `objcopy --localize-symbols`) to keep the split object
+symbol-equivalent to the single-object build. Output is byte-deterministic wherever
+the single-object build is.
+
+- `--jobs=N` selects the number of codegen threads (default: CPU count, capped at
+  32; `1` = single-object, the reference path). `qcc` propagates it to the backend
+  via the `QCC_JOBS` environment variable.
+- Splitting is gated by a size threshold (`QCC_SPLIT_THRESHOLD`, default `50000`
+  optimized-IR instructions — a CPU-speed-invariant metric) so trivially small
+  modules are never split.
+- Concurrency is bounded by a **GNU make jobserver client**: qcc parses `MAKEFLAGS`
+  and acquires tokens *before* splitting; if no spare tokens are available (a
+  saturated `make -jN`), it falls back to single codegen so a parallel build is
+  never oversubscribed. The client supports both the make 4.4+ named-pipe form
+  (`--jobserver-auth=fifo:PATH`) and the older inherited-fd form
+  (`--jobserver-auth=R,W` / `--jobserver-fds=R,W`); each qcc process owns one
+  implicit job slot and uses extra codegen threads only for tokens it can acquire
+  non-blockingly. This makes parallel codegen safe to leave default-on under
+  `make -j`.
+- `QORE_AOT_SIZE_DEBUG` traces the module instruction count and the split decision.
+
 ## User Module Build Behavior
 
 `QORE_BUILD_AOT_MODULES` defaults to `ON`. The CMake build compiles user
