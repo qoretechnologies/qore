@@ -100,6 +100,7 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         addTestCase("async_io disconnect", \disconnectTest());
         addTestCase("async_io isAsyncIo accessor", \accessorTest());
         addTestCase("async_io reconnect", \reconnectTest());
+        addTestCase("async_io disconnect stops failed reconnect loop", \disconnectStopsFailedReconnectTest());
         addTestCase("async_io startEventLoop", \startEventLoopTest());
         addTestCase("async_io connectAsync", \connectAsyncTest());
         addTestCase("async_io connectAsync error", \connectAsyncErrorTest());
@@ -346,6 +347,39 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         wsc.send("after reconnect");
         resp = response_queue.get(30s);
         assertEq("ECHO:after reconnect", resp, "message after reconnect");
+    }
+
+    #! Test explicit disconnect while a reconnect worker is retrying failed connection attempts
+    disconnectStopsFailedReconnectTest() {
+        Counter running();
+        Counter started(1);
+
+        code<int(code<nothing()>)> starter = int sub (code<nothing()> call) {
+            running.inc();
+            return background sub () {
+                on_exit running.dec();
+                started.dec();
+                call();
+            }();
+        };
+
+        WebSocketClient wsc(sub (auto msg) {}, {
+            "url": "ws://127.0.0.1:1",
+            "async_io": True,
+            "reconnect": True,
+            "start_thread": starter,
+            "connect_timeout": 200ms,
+            "timeout": 200ms,
+            "logger": logger,
+        });
+
+        assertTrue(wsc.reconnect(), "failed reconnect loop started");
+        assertEq(0, started.waitForZero(5s), "reconnect worker entered");
+        Qore::usleep(500ms);
+
+        wsc.disconnect();
+        assertFalse(wsc.getReconnect(), "explicit disconnect disables reconnect");
+        assertEq(0, running.waitForZero(5s), "disconnect stops reconnect worker");
     }
 
     #! Test startEventLoop with async_io mode

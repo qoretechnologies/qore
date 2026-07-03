@@ -623,6 +623,9 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Reconnect flag
         bool reconnect = False;
 
+        #! True when an explicit disconnect must stop a pending reconnect worker
+        bool reconnect_stopping = False;
+
         #! TID of the event thread; only changed in the log
         /** Threads can wait for it to be cleared using tid_waiting and tid_cond
         */
@@ -874,8 +877,12 @@ WebSocketClient ws(\event(), {
 
     #! disconnects the connection and stops the event thread if connected
     destructor() {
-        if (reconnect) {
-            reconnect = False;
+        {
+            AutoLock al(m);
+            self.reconnect = False;
+            self.reconnect_stopping = True;
+            self.stop = WSCC_GoingAway;
+            self.sleep_cond.broadcast();
         }
         disconnectIntern(WSCC_GoingAway, True);
         # Wait for any pending delivery tasks to fully exit before members are destroyed.
@@ -1366,12 +1373,14 @@ ws.connect();
         {
             AutoLock al(m);
 
-            if (stop) {
+            if (self.stop) {
                 return False;
             }
 
-            if (!reconnect) {
-                reconnect = True;
+            self.reconnect_stopping = False;
+
+            if (!self.reconnect) {
+                self.reconnect = True;
             }
 
             if (!tid) {
@@ -1476,8 +1485,12 @@ ws.connect();
     #! Disconnect with the given @ref closecodes "close code"
     disconnect(int cmd = WSCC_GoingAway) {
         # do not reconnect if an explicit disconnect is called
-        if (reconnect) {
-            reconnect = False;
+        {
+            AutoLock al(m);
+            self.reconnect = False;
+            self.reconnect_stopping = True;
+            self.stop = cmd;
+            self.sleep_cond.broadcast();
         }
 
         disconnectIntern(cmd);
@@ -1553,7 +1566,7 @@ ws.connect();
     }
 
     #! Connects to the websocket server
-    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
+    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnecting) {
         if (opts.hdr && opts.hdr.typeCode() != NT_HASH) {
             raiseError("option hash to WebSocketClient::connect() 'hdr' key not assigned to a hash; type "
                 "received: %y", opts.hdr.fullType());
@@ -1562,11 +1575,16 @@ ws.connect();
         m.lock();
         on_exit m.unlock();
 
+        if (!reconnecting) {
+            self.reconnect_stopping = False;
+            self.stop = 0;
+        }
+
         if (isOpenUnlocked()) {
             disconnectUnlocked();
         }
 
-        hash<auto> h = connectUnlocked(opts.hdr, \info, reconnect);
+        hash<auto> h = connectUnlocked(opts.hdr, \info, reconnecting);
         on_error {
             clearTid();
         }
@@ -2783,6 +2801,14 @@ ws.setEventQueue();
 
     #! Starts a reconnect
     private startReconnect() {
+        {
+            AutoLock al(m);
+            if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                do_reconnect = False;
+                return;
+            }
+        }
+
         int tid;
 %ifdef PO_NO_THREAD_CONTROL
         tid = start_thread(\doReconnect());
@@ -2799,10 +2825,30 @@ ws.setEventQueue();
 
             # connect to the new gateway
             int retries = 0;
-            while (!stop) {
+            bool connected = False;
+            while (True) {
+                {
+                    AutoLock al(m);
+                    if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                        break;
+                    }
+                }
+
                 hash<auto> info;
                 try {
                     reestablishConnection(\info);
+                    int stop_cmd = 0;
+                    {
+                        AutoLock al(m);
+                        if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                            stop_cmd = self.stop ? self.stop : WSCC_GoingAway;
+                        }
+                    }
+                    if (stop_cmd) {
+                        disconnectIntern(stop_cmd);
+                        break;
+                    }
+                    connected = True;
                     break;
                 } catch (hash<ExceptionInfo> ex) {
                     ++retries;
@@ -2816,14 +2862,24 @@ ws.setEventQueue();
                     # Use the Mutex and Condition variable to delay, because sleep() is protected with
                     # PO_NO_PROCESS_CONTROL
                     AutoLock al(m);
-                    sleep_cond.wait(m, ReconnectDelay);
+                    if (!self.reconnect || self.reconnect_stopping || self.stop) {
+                        break;
+                    }
+                    self.sleep_cond.wait(m, ReconnectDelay);
                 }
             }
-            if (stop) {
+            if (self.stop || self.reconnect_stopping) {
                 logInfo("Reconnect %d: interrupted by disconnect request", retries);
+            } else if (!self.reconnect) {
+                logInfo("Reconnect %d: interrupted by reconnect disable request", retries);
             }
 
-            reconnectPostamble();
+            if (connected) {
+                reconnectPostamble();
+            } else {
+                AutoLock al(m);
+                do_reconnect = False;
+            }
         } catch (hash<ExceptionInfo> ex) {
             try {
                 logError("Failed to reconnect: %s", get_exception_string(ex));
