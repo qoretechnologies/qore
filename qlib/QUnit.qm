@@ -37,7 +37,7 @@
 %requires Util
 
 module QUnit {
-    version = "0.5";
+    version = "0.5.1";
     desc = "User module for unit testing with dependency injection support";
     author = "Zdenek Behan <zdenek.behan@qoretechnologies.com>";
     url = "http://qore.org";
@@ -157,6 +157,13 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - junit - machine readable format for further processing
 
     @section qunit_relnotes Release Notes
+
+    @subsection qunit_v0_5_1 Version 0.5.1
+    - added @ref QUnit::Test::isConnectionError() "Test::isConnectionError()", a shared predicate
+      for tests that talk to external services: it returns @ref True "True" for external-connection
+      / transport failures (\c SOCKET-*, \c HTTP2-*, \c HTTP3-*, \c QUIC-*, \c QOREADDRINFO-*, the
+      \c HTTPCLIENT- transport errors, and \c NETWORK-ACCESS-DENIED) so such tests skip gracefully
+      when the dependency is unavailable instead of failing
 
     @subsection qunit_v0_5 Version 0.5
     - added an optional \a depends argument to @ref QUnit::Test::addTestCase() so
@@ -2278,6 +2285,36 @@ fail("Unexpected code executed");
      */
     public testSkip(string reason) {
         throw "TEST-SKIPPED-EXCEPTION", vsprintf(reason, argv);
+    }
+
+    #! Returns @ref True "True" if the exception is an external-connection / transport failure
+    /** Intended for tests that talk to external services (REST/HTTP/DataProvider tests): a
+        connection/transport failure means the external dependency is unavailable in this
+        environment (no network route, DNS failure, TLS/handshake failure, timeout, etc.), and
+        the test should skip gracefully with @ref QUnit::Test::testSkip() "testSkip()" rather
+        than fail.
+
+        Matches the transport error families by prefix so new codes are covered automatically:
+        \c SOCKET-*, \c HTTP2-*, \c HTTP3-*, \c QUIC-*, and \c QOREADDRINFO-* (DNS), plus the
+        HTTP-client transport errors (\c HTTPCLIENT-HOSTNAME-ERROR, \c HTTPCLIENT-CONNECT-ERROR,
+        \c HTTPCLIENT-CONNECT-TIMEOUT, \c HTTPCLIENT-NEGOTIATE-ERROR, \c HTTPCLIENT-NEGOTIATE-TIMEOUT,
+        \c HTTPCLIENT-TIMEOUT, \c HTTPCLIENT-RECEIVE-ERROR, \c HTTPCLIENT-SEND-ERROR) and
+        \c NETWORK-ACCESS-DENIED. Does not match application-level responses (e.g. HTTP status
+        codes), which callers should handle separately.
+
+        @param ex the exception hash caught by the test
+
+        @return @ref True "True" if \a ex is an external-connection/transport error and the test
+        should be skipped
+
+        @since %QUnit 0.5.1
+    */
+    public static bool isConnectionError(hash<ExceptionInfo> ex) {
+        return exists ex.err && (
+            ex.err =~ /^(SOCKET|HTTP2|HTTP3|QUIC|QOREADDRINFO)-/
+            || ex.err =~ /^HTTPCLIENT-(HOSTNAME|CONNECT|NEGOTIATE|TIMEOUT|RECEIVE|SEND)/
+            || ex.err == "NETWORK-ACCESS-DENIED"
+        );
     }
 
 ######### Test conditions passable to test assertions

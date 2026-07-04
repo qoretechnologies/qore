@@ -66,20 +66,9 @@ public class AsyncApiTest inherits QUnit::Test {
         - HTTPCLIENT-TIMEOUT       - request timed out (no body received)
     */
     static bool isNetworkError(hash<ExceptionInfo> ex) {
-        switch (ex.err) {
-            case "SOCKET-CONNECT-ERROR":
-            case "SOCKET-SSL-ERROR":
-            case "SOCKET-TIMEOUT":
-            case "QOREADDRINFO-GETINFO-ERROR":
-            case "HTTPCLIENT-HOSTNAME-ERROR":
-            case "HTTPCLIENT-CONNECT-ERROR":
-            case "HTTPCLIENT-NEGOTIATE-ERROR":
-            case "HTTPCLIENT-NEGOTIATE-TIMEOUT":
-            case "HTTPCLIENT-CONNECT-TIMEOUT":
-            case "HTTPCLIENT-TIMEOUT":
-                return True;
-        }
-        return False;
+        # delegate to the shared QUnit predicate so QUIC/HTTP3 and future transport
+        # error codes are covered automatically
+        return QUnit::Test::isConnectionError(ex);
     }
 
     #! Returns True for transient HTTP responses from the external public schema host.
