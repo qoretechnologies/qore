@@ -871,10 +871,9 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
     inst->has_ref_args = checkRefArgs(variant);
     // Self-recursion check: compare QoreFunction pointer identity when
     // available (e.g. AOT module compile flows populate
-    // `func->source_qf` via tryLowerFunction).  Falls back to base-name
-    // comparison when source_qf is unset (JIT / runtime closures that
-    // don't route through tryLowerFunction).  Pointer compare is the
-    // correct discriminator — base-name compare mis-flags cross-
+    // `func->source_qf` via tryLowerFunction or runtime variant parseInit).
+    // Falls back to base-name comparison when source_qf is unset. Pointer
+    // compare is the correct discriminator — base-name compare mis-flags cross-
     // namespace same-name wrappers (e.g. `OMQ::foo` → `Util::foo`)
     // as self-recursive and the LLVM emitter then issues a direct
     // call to the caller's own fast entry, infinite-recursing at

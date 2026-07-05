@@ -838,6 +838,10 @@ protected:
     //! Source-stripped AOT has no executable AST body, but ProgramControl and
     //! debugger APIs still need a stable function-entry statement identity.
     StatementBlock* aot_entry_statement = nullptr;
+    //! Source function owning this variant. Used by IR lowering to identify
+    //! self-recursive direct calls by pointer identity even when JIT symbol names
+    //! are uniquified.
+    const QoreFunction* source_qf = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
 

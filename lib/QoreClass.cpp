@@ -6199,6 +6199,7 @@ void UserConstructorVariant::evalConstructor(const QoreClass &thisclass, QoreObj
 }
 
 int UserConstructorVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
     const QoreClass& parent_class = *(mf->MethodFunctionBase::getClass());
 
@@ -6286,6 +6287,7 @@ void UserCopyVariant::evalCopy(const QoreClass& thisclass, QoreObject* self, Qor
 }
 
 int UserCopyVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
     const QoreClass& parent_class = *(mf->MethodFunctionBase::getClass());
 

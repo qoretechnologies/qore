@@ -5191,6 +5191,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     assert(statements);
 
     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
+    func->source_qf = source_qf;
     // Owning program for the per-Program background-compile drain (set unconditionally).
     func->pgm = pgm;
     // Debug-step hook context (issue #5352): record the top-level StatementBlock and
@@ -7000,6 +7001,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     signature.resolve();
 
     // set the varargs flag on the variant if the signature has ellipses at the end
@@ -7024,6 +7026,7 @@ int UserFunctionVariant::parseInit(QoreFunction* f) {
 }
 
 int UserClosureVariant::parseInit(QoreFunction* f) {
+    source_qf = f;
     UserClosureFunction* cf = static_cast<UserClosureFunction*>(f);
 
     int err = signature.resolve();

@@ -396,6 +396,7 @@ public:
     COMMON_USER_VARIANT_FUNCTIONS
 
     DLLLOCAL virtual int parseInit(QoreFunction* f) {
+        source_qf = f;
         MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
 
         signature.resolve();
@@ -489,6 +490,7 @@ public:
     COMMON_USER_VARIANT_FUNCTIONS
 
     DLLLOCAL virtual int parseInit(QoreFunction* f) {
+        source_qf = f;
         MethodFunctionBase* mf = static_cast<MethodFunctionBase*>(f);
 
         int err = signature.resolve();
