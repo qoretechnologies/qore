@@ -9789,6 +9789,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 bool safe_to_bypass_name_dispatch = getAnalysis(base_expr, base_analysis)
                     && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                     && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis.known_type);
+                if (pseudo_method && pseudo_method->getClass()
+                        && !strcmp(pseudo_method->getClass()->getName(), "<list>")
+                        && !strcmp(method_name, "size")) {
+                    return builder.createListSize(base_val, op->loc)->result;
+                }
                 if (pseudo_method && pseudo_method->getClass() == QC_PSEUDOVALUE
                         && method_name && safe_to_bypass_name_dispatch) {
                     QoreIROpcode conversion_op = QoreIROpcode::ToBool;
