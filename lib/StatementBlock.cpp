@@ -840,8 +840,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // IR/JIT/Tiered execution dispatch — only for non-REPARSE mode
     if (!(runtime_parse_options & PO_ALLOW_REPARSE)) {
         qore_exec_mode_t exec_mode = qore_program_private::get(*pgm)->exec_mode;
-        // QEM_TIERED uses IR/JIT immediately for top-level code (same as QEM_JIT)
-        // but only for %modern programs — legacy parse options are not supported by IR
+        // QEM_TIERED uses IR immediately for top-level code and leaves native
+        // promotion to functions. Top-level code is commonly one-shot, so
+        // synchronous native JIT compile cost usually cannot be amortized.
+        // Only %modern programs are supported by IR.
         if (exec_mode == QEM_IR || exec_mode == QEM_JIT
             || (exec_mode == QEM_TIERED
                 && (runtime_parse_options & PO_MODERN) == PO_MODERN)) {
@@ -866,7 +868,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     QoreIRFunction* func = new QoreIRFunction(unique_name.c_str());
                     // Owning program for the per-Program background-compile drain (always).
                     func->pgm = pgm;
-                    // Debug-step hook context (issue #5352): the top-level block runs as
+                    // Debug-step hook context (issue #5352): the top-level block can run as
                     // JIT-compiled native code (executeWithFallback), so record its own
                     // StatementBlock and the program's attached-debugger slot to enable the
                     // per-statement dbgStep hook for top-level code too.  Skip entirely when
@@ -978,7 +980,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     }
                 }
 
-                // Instantiate nested non-closure body locals before JIT execution.
+                // Instantiate nested non-closure body locals before optimized execution.
                 // Closure-use nested locals are scoped by explicit IR
                 // InstantiateLocal / UninstantiateLocal operations.
                 const LVList* toplevel_lvars = getLVList();
@@ -997,7 +999,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
 
                 std::string error;
-                if (exec_mode == QEM_JIT || exec_mode == QEM_TIERED) {
+                if (exec_mode == QEM_JIT) {
                     ok = QoreJIT::instance().executeWithFallback(*ir_func, ir_return_value, xsink, error,
                         &pre_instantiated);
 
