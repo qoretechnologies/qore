@@ -13286,6 +13286,61 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
     return toBits(QoreValue(has_value));
 }
 
+//! Fast no-guard pseudo-method: <string>::empty() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_empty_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    if (v.isShortString()) {
+        return toBits(QoreValue(v.shortStringLen() == 0));
+    }
+    if (v.getType() == NT_STRING) {
+        const QoreStringNode* str = v.get<const QoreStringNode>();
+        return toBits(QoreValue(!str || str->empty()));
+    }
+    return qore_rt_pseudo_empty(val_bits);
+}
+
+//! Fast no-guard pseudo-method: <string>::val() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    if (v.isShortString()) {
+        return toBits(QoreValue(v.shortStringLen() != 0));
+    }
+    if (v.getType() == NT_STRING) {
+        const QoreStringNode* str = v.get<const QoreStringNode>();
+        return toBits(QoreValue(str && !str->empty()));
+    }
+    return qore_rt_pseudo_val(val_bits);
+}
+
+//! Fast no-guard pseudo-method: <string>::size()/strlen() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_size_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    if (v.isShortString()) {
+        return toBits(QoreValue(static_cast<int64_t>(v.shortStringLen())));
+    }
+    if (v.getType() == NT_STRING) {
+        const QoreStringNode* str = v.get<const QoreStringNode>();
+        return toBits(QoreValue(static_cast<int64_t>(str ? str->strlen() : 0)));
+    }
+    return qore_rt_pseudo_size(val_bits);
+}
+
+//! Fast no-guard pseudo-method: <string>::length() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    if (v.isShortString()) {
+        char buf[7];
+        v.getShortString(buf);
+        QoreString str(buf, v.shortStringLen(), QCS_UTF8);
+        return toBits(QoreValue(static_cast<int64_t>(str.length())));
+    }
+    if (v.getType() == NT_STRING) {
+        const QoreStringNode* str = v.get<const QoreStringNode>();
+        return toBits(QoreValue(static_cast<int64_t>(str ? str->length() : 0)));
+    }
+    return qore_rt_pseudo_length(val_bits);
+}
+
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);

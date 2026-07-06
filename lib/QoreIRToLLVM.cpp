@@ -72,6 +72,26 @@ static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, cons
     return false;
 }
 
+static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* method, const QoreClass* qc) {
+    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
+        return nullptr;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "empty")) {
+        return "qore_rt_pseudo_string_empty_noguard";
+    }
+    if (!strcmp(method_name, "val")) {
+        return "qore_rt_pseudo_string_val_noguard";
+    }
+    if (!strcmp(method_name, "size") || !strcmp(method_name, "strlen")) {
+        return "qore_rt_pseudo_string_size_noguard";
+    }
+    if (!strcmp(method_name, "length")) {
+        return "qore_rt_pseudo_string_length_noguard";
+    }
+    return nullptr;
+}
+
 static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     return uvb && uvb->isStaticallyFastCallEligible();
@@ -10604,8 +10624,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
 
+            bool call_may_throw = true;
+            bool call_may_modify_runtime_locals = true;
+            bool result_needs_cleanup = true;
             bool invert_list_empty = false;
-            if (direct_inst->pseudo && nargs == 0
+            const char* string_noguard_helper = (direct_inst->pseudo
+                    && direct_inst->pseudo_base_known_assigned_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->method, direct_inst->qc)
+                : nullptr;
+            if (string_noguard_helper) {
+                auto helper = module.getOrInsertFunction(string_noguard_helper,
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed});
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (direct_inst->pseudo && nargs == 0
                     && qore_ir_is_list_bool_pseudo_fast_path(direct_inst->method, direct_inst->qc,
                         invert_list_empty)) {
                 if (aot_mode) {
@@ -10902,15 +10936,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's locals
-            // through the TLS variable stack. Reference-capable arguments can
-            // also mutate locals that normal call invalidation would skip.
-            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            if (call_may_modify_runtime_locals) {
+                // Qore's scoping allows callees to access the caller's locals
+                // through the TLS variable stack. Reference-capable arguments can
+                // also mutate locals that normal call invalidation would skip.
+                reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
-            emitExceptionCheck(module, llvm_func, inst);
+            if (result_needs_cleanup) {
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
+            if (call_may_throw) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             return true;
         }
 
@@ -10941,8 +10981,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
 
+            bool call_may_throw = true;
+            bool call_may_modify_runtime_locals = true;
+            bool result_needs_cleanup = true;
             bool invert_list_empty = false;
-            if (invoke_inst->pseudo && nargs == 0
+            const char* string_noguard_helper = (invoke_inst->pseudo
+                    && invoke_inst->pseudo_base_known_assigned_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->method, invoke_inst->qc)
+                : nullptr;
+            if (string_noguard_helper) {
+                auto helper = module.getOrInsertFunction(string_noguard_helper,
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed});
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (invoke_inst->pseudo && nargs == 0
                     && qore_ir_is_list_bool_pseudo_fast_path(invoke_inst->method, invoke_inst->qc,
                         invert_list_empty)) {
                 if (aot_mode) {
@@ -11239,22 +11293,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Qore's scoping allows callees to access the caller's locals
-            // through the TLS variable stack. Reference-capable arguments can
-            // also mutate locals that normal call invalidation would skip.
-            reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
+            if (call_may_modify_runtime_locals) {
+                // Qore's scoping allows callees to access the caller's locals
+                // through the TLS variable stack. Reference-capable arguments can
+                // also mutate locals that normal call invalidation would skip.
+                reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            if (result_needs_cleanup) {
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
-
-            // Check for exception and branch accordingly
-            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
-                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
-            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
-            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
-                    llvm::ConstantInt::get(i64_type, 0));
 
             auto normal_it = block_map.find(invoke_inst->normal_target);
             auto except_it = block_map.find(invoke_inst->exception_target);
@@ -11266,6 +11317,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke.dot.eval.method.direct exception target block not found";
                 return false;
             }
+            if (!call_may_throw) {
+                builder->CreateBr(normal_it->second);
+                return true;
+            }
+
+            // Check for exception and branch accordingly
+            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                    llvm::ConstantInt::get(i64_type, 0));
             builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
             return true;
         }

@@ -9786,7 +9786,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 const QoreMethod* pseudo_method = m->getMethod();
                 const char* method_name = pseudo_method ? pseudo_method->getName() : m->getName();
                 QoreParseAnalysis base_analysis;
-                bool safe_to_bypass_name_dispatch = getAnalysis(base_expr, base_analysis)
+                bool have_base_analysis = getAnalysis(base_expr, base_analysis);
+                bool safe_to_bypass_name_dispatch = have_base_analysis
                     && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                     && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis.known_type);
                 if (pseudo_method && pseudo_method->getClass()
@@ -9822,6 +9823,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
 
             QoreIRValue result;
             bool should_invoke = !exception_stack.empty();
+            QoreParseAnalysis base_analysis;
+            bool have_base_analysis = m->isPseudo() && getAnalysis(base_expr, base_analysis);
+            bool pseudo_base_known_assigned_string = have_base_analysis
+                && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                && QoreTypeInfo::isType(selectAnalysisType(base_analysis), NT_STRING);
             // Ordinary object dot-eval must use runtime name dispatch: the parse-time
             // method pointer can be a containing method object whose overload set does
             // not match the runtime overload lookup exactly after AOT deserialization.
@@ -9843,6 +9851,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     operands, normal_block, handler, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
+                inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
@@ -9850,6 +9859,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     operands, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
+                inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 result = inst->result;
             }
             return result;
