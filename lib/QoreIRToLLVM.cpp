@@ -251,6 +251,16 @@ static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr
     return call && call->getAOTDeferredSourceFunction();
 }
 
+static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
+    const auto* call = expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    if (!call) {
+        return false;
+    }
+    const char* name = call->getName();
+    return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
+}
+
 // NaN-boxing constants matching QoreValue.h
 static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
 static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
@@ -10072,6 +10082,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_approach_b = !aot_mode && batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)
                     && batch_callees->at(direct_inst->variant).approach_b_eligible;
+            bool type_name_fast_path = nargs == 1
+                && qore_llvm_is_type_name_builtin_call(direct_inst->expr);
 
             // Box args and optionally build args_array (skipped for Approach B)
             llvm::Value* args_array = nullptr;
@@ -10082,7 +10094,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!arg_val) { return false; }
                     boxed_args.push_back(boxValue(arg_val, inst->operands[arg_start + i].id));
                 }
-                if (!is_approach_b) {
+                if (!is_approach_b && !type_name_fast_path) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                             llvm_func->getEntryBlock().begin());
                     args_array = ab.CreateAlloca(i64_type,
@@ -10094,7 +10106,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
-            if (!args_array) {
+            if (!args_array && !type_name_fast_path) {
                 args_array = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
@@ -10103,7 +10115,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
-            if (aot_mode && direct_inst->is_self_recursive
+            bool call_may_modify_runtime_locals = true;
+            if (type_name_fast_path) {
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                call_result = builder->CreateCall(helper, {boxed_args[0]});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                call_may_modify_runtime_locals = false;
+            } else if (aot_mode && direct_inst->is_self_recursive
                     && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()) {
                 // AOT Approach B self-recursive: direct LLVM call to fast entry
@@ -10312,7 +10337,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            if (call_may_modify_runtime_locals) {
+                reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);

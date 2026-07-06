@@ -44,6 +44,8 @@ int deleted_int = 101;
 delete deleted_int;
 printf(\"deleted-int:%y:%y:%y:%y:%y\\n\", deleted_int.typeCode() == NT_NOTHING, deleted_int.type(),
     deleted_int.empty(), deleted_int.val(), deleted_int.size());
+printf(\"builtin-type:%y:%y:%y:%y:%y\\n\", type(i), typename(s), type(maybe_int), type(removed_int),
+    typename(value: deleted_int));
 
 printf(\"char:%y:%d\\n\", c\"\\u{E9}\".val(), c\"\\u{E9}\".size());
 ";
