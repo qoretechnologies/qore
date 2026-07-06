@@ -1090,6 +1090,18 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args(uint64_t b
 uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, int32_t invert_empty, ExceptionSink* xsink);
 
+//! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
+uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg_bits, int32_t predicate,
+    ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::find() for assigned string base and substring operands.
+uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+    ExceptionSink* xsink);
+
+//! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
+uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits, int64_t start, int64_t length,
+    int32_t has_length, ExceptionSink* xsink);
+
 //! Name-based dot-eval method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint64_t base_bits, const char* method_name,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);

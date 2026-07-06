@@ -102,6 +102,65 @@ extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
         uint64_t* args, int nargs, ExceptionSink* xsink);
 
+static int qore_ir_interpreter_get_string_pseudo_predicate_id(const QoreMethod* method, const QoreClass* qc) {
+    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
+        return -1;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "startsWith")) {
+        return 0;
+    }
+    if (!strcmp(method_name, "endsWith")) {
+        return 1;
+    }
+    if (!strcmp(method_name, "contains")) {
+        return 2;
+    }
+    return -1;
+}
+
+static bool qore_ir_interpreter_is_string_pseudo_find(const QoreMethod* method, const QoreClass* qc) {
+    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "find");
+}
+
+static bool qore_ir_interpreter_is_string_pseudo_substr(const QoreMethod* method, const QoreClass* qc) {
+    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "substr");
+}
+
+static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_assigned_string,
+        bool arg0_known_assigned_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
+        const QoreMethod* method, const QoreClass* qc, const QoreValue& base, uint64_t* nanboxed_args,
+        int nargs, QoreValue& res, ExceptionSink* xsink) {
+    if (!pseudo || !base_known_assigned_string || base.getType() != NT_STRING) {
+        return false;
+    }
+
+    int predicate_id = qore_ir_interpreter_get_string_pseudo_predicate_id(method, qc);
+    if (predicate_id >= 0 && nargs == 1 && arg0_known_assigned_string) {
+        res = fromBits(qore_rt_pseudo_string_predicate_noguard(toBits(base), nanboxed_args[0],
+            predicate_id, xsink));
+        return true;
+    }
+
+    if (qore_ir_interpreter_is_string_pseudo_find(method, qc) && arg0_known_assigned_string
+            && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
+        int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
+        res = fromBits(qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink));
+        return true;
+    }
+
+    if (qore_ir_interpreter_is_string_pseudo_substr(method, qc) && arg0_known_assigned_int
+            && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
+        int64_t start = fromBits(nanboxed_args[0]).getAsBigInt();
+        int64_t length = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
+        res = fromBits(qore_rt_pseudo_string_substr_noguard(toBits(base), start, length,
+            nargs == 2 ? 1 : 0, xsink));
+        return true;
+    }
+
+    return false;
+}
+
 static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
     return (obj && qore_closure_self_context(obj))
         ? qore_object_private::get(*obj)->checkClosureSelfValid(xsink)
@@ -12401,7 +12460,14 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (name_dispatch_first && method_name) {
+                    if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
+                            direct_inst->pseudo_base_known_assigned_string,
+                            direct_inst->pseudo_arg0_known_assigned_string,
+                            direct_inst->pseudo_arg0_known_assigned_int,
+                            direct_inst->pseudo_arg1_known_assigned_int, pseudo_method, pseudo_qc,
+                            base, nanboxed_args, nargs, res, xsink)) {
+                        // Result produced by the inline string pseudo-method helper.
+                    } else if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,
                             nanboxed_args, nargs, xsink, explicit_inst));
@@ -12571,7 +12637,14 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (name_dispatch_first && method_name) {
+                    if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                            de_invoke_inst->pseudo_base_known_assigned_string,
+                            de_invoke_inst->pseudo_arg0_known_assigned_string,
+                            de_invoke_inst->pseudo_arg0_known_assigned_int,
+                            de_invoke_inst->pseudo_arg1_known_assigned_int, pseudo_method, pseudo_qc,
+                            base, nanboxed_args, nargs, res, xsink)) {
+                        // Result produced by the inline string pseudo-method helper.
+                    } else if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,
                             nanboxed_args, nargs, xsink, explicit_inst));
