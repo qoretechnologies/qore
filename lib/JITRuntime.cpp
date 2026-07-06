@@ -239,6 +239,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
     { "qore_rt_load_static_var_for_call_throwing",
         reinterpret_cast<void*>(&qore_rt_load_static_var_for_call_throwing) },
+    { "qore_rt_pseudo_list_bool_guarded", reinterpret_cast<void*>(&qore_rt_pseudo_list_bool_guarded) },
+    { "qore_rt_pseudo_list_bool_guarded_aot", reinterpret_cast<void*>(&qore_rt_pseudo_list_bool_guarded_aot) },
     { "qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size) },
     { "qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int) },
     { "qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float) },
@@ -13124,6 +13126,55 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value(uint64_t case_val_
 extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value_aot(QoreAOTContext* ctx,
         int32_t case_slot, uint64_t switch_val_bits, ExceptionSink* xsink) {
     return qore_rt_switch_case_match_value(ctx->exprs[case_slot], switch_val_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits,
+        const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        int32_t invert_empty, ExceptionSink* xsink) {
+    QoreValue raw_base = fromBits(base_bits);
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    QoreValue base;
+    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base = raw_base;
+    } else {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (base.getType() == NT_LIST) {
+        bool empty = base.get<const QoreListNode>()->empty();
+        return toBits(QoreValue(invert_empty ? !empty : empty));
+    }
+    if (base.isNothing()) {
+        return toBits(QoreValue(!invert_empty));
+    }
+    return qore_rt_dot_eval_pseudo_method_direct(toBits(base), method, qc, variant, nullptr, 0, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t base_bits, int32_t invert_empty, ExceptionSink* xsink) {
+    QoreValue raw_base = fromBits(base_bits);
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    QoreValue base;
+    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base = raw_base;
+    } else {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (base.getType() == NT_LIST) {
+        bool empty = base.get<const QoreListNode>()->empty();
+        return toBits(QoreValue(invert_empty ? !empty : empty));
+    }
+    if (base.isNothing()) {
+        return toBits(QoreValue(!invert_empty));
+    }
+    return qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, toBits(base), nullptr, 0, xsink);
 }
 
 // ============================================================================

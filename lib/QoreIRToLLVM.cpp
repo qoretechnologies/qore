@@ -55,6 +55,23 @@ static_assert(QORE_IR_MAX_OPCODE == 383,
 // precedence; the qore_rt_pseudo_* helpers intentionally do not.
 static constexpr bool InlinePseudoDotEvalFastPath = false;
 
+static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, const QoreClass* qc,
+        bool& invert_empty) {
+    if (!method || !qc || strcmp(qc->getName(), "<list>")) {
+        return false;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "empty")) {
+        invert_empty = false;
+        return true;
+    }
+    if (!strcmp(method_name, "val")) {
+        invert_empty = true;
+        return true;
+    }
+    return false;
+}
+
 static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     return uvb && uvb->isStaticallyFastCallEligible();
@@ -10587,8 +10604,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
 
+            bool invert_list_empty = false;
+            if (direct_inst->pseudo && nargs == 0
+                    && qore_ir_is_list_bool_pseudo_fast_path(direct_inst->method, direct_inst->qc,
+                        invert_list_empty)) {
+                if (aot_mode) {
+                    QoreValue expr_val = direct_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_bool_guarded_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                         llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
+                } else {
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                    llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->qc)), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_bool_guarded",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed, method_ptr, qc_ptr, variant_ptr,
+                         llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
+                }
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (InlinePseudoDotEvalFastPath && direct_inst->pseudo && nargs == 0 && direct_inst->method) {
+            } else if (InlinePseudoDotEvalFastPath && direct_inst->pseudo && nargs == 0 && direct_inst->method) {
                 const char* method_name = direct_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {
@@ -10892,8 +10941,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
 
+            bool invert_list_empty = false;
+            if (invoke_inst->pseudo && nargs == 0
+                    && qore_ir_is_list_bool_pseudo_fast_path(invoke_inst->method, invoke_inst->qc,
+                        invert_list_empty)) {
+                if (aot_mode) {
+                    QoreValue expr_val = invoke_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_bool_guarded_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                         llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
+                } else {
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->method)), ptr_type);
+                    llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->qc)), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_bool_guarded",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed, method_ptr, qc_ptr, variant_ptr,
+                         llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
+                }
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (InlinePseudoDotEvalFastPath && invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
+            } else if (InlinePseudoDotEvalFastPath && invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
                 const char* method_name = invoke_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {
