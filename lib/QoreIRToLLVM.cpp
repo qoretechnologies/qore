@@ -117,6 +117,9 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(const QoreM
     if (!strcmp(method_name, "upr")) {
         return {"qore_rt_pseudo_string_upr_noguard", true, true};
     }
+    if (!strcmp(method_name, "toInt")) {
+        return {"qore_rt_pseudo_string_to_int_noguard", false, true};
+    }
     return {};
 }
 

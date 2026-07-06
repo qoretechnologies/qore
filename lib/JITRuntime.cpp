@@ -13368,6 +13368,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bit
     return qore_rt_pseudo_string_case_noguard(val_bits, xsink, true);
 }
 
+//! Fast pseudo-method: <string>::toInt() for bases known as string/NOTHING/NULL.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    if (!v.isShortString() && v.getType() != NT_STRING) {
+        return toBits(QoreValue(v.getAsBigInt()));
+    }
+    QoreStringValueHelper str(v);
+    if (!str->getEncoding()->isAsciiCompat()) {
+        if (xsink) {
+            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot convert string in non-ASCII-compatible "
+                "encoding \"%s\" to an integer", str->getEncoding()->getCode());
+        }
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(strtoll(str->c_str(), nullptr, 10)));
+}
+
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);

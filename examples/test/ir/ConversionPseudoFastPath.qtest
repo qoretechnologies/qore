@@ -19,12 +19,22 @@ int i = 12345;
 float f = 12.5;
 bool b = True;
 string s = \"abc\";
+string sint = \"12345\";
+string bad_int = \"12x\";
+string unassigned;
+string removed = \"77\";
+remove removed;
+string deleted = \"88\";
+delete deleted;
+*string nullable = NULL;
 
 printf(\"int:%y\\n\", i.toString());
 printf(\"float:%y\\n\", f.toString());
 printf(\"bool:%y\\n\", b.toString());
 printf(\"string:%y\\n\", s.toString());
 printf(\"nothing:%y\\n\", NOTHING.toString());
+printf(\"string-toInt:%y:%y:%y:%y:%y:%y\\n\",
+    sint.toInt(), bad_int.toInt(), unassigned.toInt(), removed.toInt(), deleted.toInt(), nullable.toInt());
 ";
 }
 
@@ -34,6 +44,7 @@ float:\"12.5\"
 bool:\"1\"
 string:\"abc\"
 nothing:\"\"
+string-toInt:12345:12:0:0:0:0
 ";
 }
 
