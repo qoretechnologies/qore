@@ -133,20 +133,31 @@ public class VoyageRestClientBase {
 
     #! returns options for the constructor
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # Build via `+=` into an explicit hash<auto>.  A literal/`+` initializer
+        # whose values are all strings (e.g. the reranker passes only apikey +
+        # url) narrows the hash's value type to string, after which neither the
+        # `headers` sub-hash nor the `headers` key itself can hold a hash.
+        hash<auto> rv;
+        rv += DefaultOptions;
+        rv += opts;
         # set default_path for RestClientIo (uses this instead of setConnectionPath)
         if (!rv.default_path) {
             rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
         }
+        hash<auto> headers;
+        if (rv.headers.typeCode() == NT_HASH) {
+            headers += rv.headers;
+        }
         # ensure Accept header is JSON (RestClientIo ignores the "data" option)
-        if (!rv.headers."Accept") {
-            rv.headers."Accept" = MimeTypeJson;
+        if (!headers."Accept") {
+            headers."Accept" = MimeTypeJson;
         }
         # map apikey to Authorization: Bearer header
         if (rv.apikey) {
-            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            headers."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        rv.headers = headers;
         remove rv{"embedding-model"};
         return rv;
     }
@@ -549,8 +560,22 @@ public class VoyageReranker inherits AbstractReranker {
 
     list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
             *hash<auto> opts) {
+        return doRerank(query, documents, top_k, opts).results;
+    }
+
+    hash<RerankOutcome> rerankEx(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
+        return doRerank(query, documents, top_k, opts);
+    }
+
+    #! Single Voyage \c /rerank round-trip returning results and provider usage
+    private hash<RerankOutcome> doRerank(string query, list<string> documents,
+            int top_k, *hash<auto> opts) {
         if (!documents) {
-            return ();
+            return <RerankOutcome>{
+                "results": (),
+                "usage": AbstractReranker::estimateRerankUsage(query, documents),
+            };
         }
         ensureRestClient();
 
@@ -591,7 +616,23 @@ public class VoyageReranker inherits AbstractReranker {
                 "document": doc,
             };
         }
-        return result;
+        return <RerankOutcome>{
+            "results": result,
+            "usage": rerankUsageFromResponse(resp.body, query, documents),
+        };
+    }
+
+    #! Builds normalized usage from the Voyage response, falling back to an estimate
+    private hash<RerankUsage> rerankUsageFromResponse(*hash<auto> resp_body,
+            string query, list<string> documents) {
+        *int total = resp_body.usage."total_tokens";
+        if (!total.val()) {
+            return AbstractReranker::estimateRerankUsage(query, documents);
+        }
+        return <RerankUsage>{
+            "total_tokens": total,
+            "token_source": "provider",
+        };
     }
 
     *string getModel() {
