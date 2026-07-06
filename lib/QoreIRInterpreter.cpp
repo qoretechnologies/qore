@@ -127,6 +127,29 @@ static bool qore_ir_interpreter_is_string_pseudo_substr(const QoreMethod* method
     return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "substr");
 }
 
+static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_known_assigned_string,
+        const QoreMethod* method, const QoreClass* qc, const QoreValue& base, int nargs, QoreValue& res,
+        ExceptionSink* xsink) {
+    if (!pseudo || !base_known_assigned_string || nargs || base.getType() != NT_STRING
+            || !method || !qc || strcmp(qc->getName(), "<string>")) {
+        return false;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "lwr")) {
+        res = fromBits(qore_rt_pseudo_string_lwr_noguard(toBits(base), xsink));
+        return true;
+    }
+    if (!strcmp(method_name, "upr")) {
+        res = fromBits(qore_rt_pseudo_string_upr_noguard(toBits(base), xsink));
+        return true;
+    }
+    if (!strcmp(method_name, "toInt")) {
+        res = fromBits(qore_rt_pseudo_string_to_int_noguard(toBits(base), xsink));
+        return true;
+    }
+    return false;
+}
+
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_assigned_string,
         bool arg0_known_assigned_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
         const QoreMethod* method, const QoreClass* qc, const QoreValue& base, uint64_t* nanboxed_args,
@@ -12460,7 +12483,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
+                    if (qore_ir_try_string_no_arg_pseudo_fast_path(direct_inst->pseudo,
+                            direct_inst->pseudo_base_known_assigned_string, pseudo_method, pseudo_qc,
+                            base, nargs, res, xsink)) {
+                        // Result produced by the inline string pseudo-method helper.
+                    } else if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
                             direct_inst->pseudo_base_known_assigned_string,
                             direct_inst->pseudo_arg0_known_assigned_string,
                             direct_inst->pseudo_arg0_known_assigned_int,
@@ -12637,7 +12664,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                    if (qore_ir_try_string_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                            de_invoke_inst->pseudo_base_known_assigned_string, pseudo_method, pseudo_qc,
+                            base, nargs, res, xsink)) {
+                        // Result produced by the inline string pseudo-method helper.
+                    } else if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
                             de_invoke_inst->pseudo_base_known_assigned_string,
                             de_invoke_inst->pseudo_arg0_known_assigned_string,
                             de_invoke_inst->pseudo_arg0_known_assigned_int,
