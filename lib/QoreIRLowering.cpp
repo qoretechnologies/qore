@@ -10537,6 +10537,8 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
         opcode = QoreIROpcode::ToInt;
     } else if (!strcmp(func_name, "float")) {
         opcode = QoreIROpcode::ToFloat;
+    } else if (!strcmp(func_name, "boolean")) {
+        opcode = QoreIROpcode::ToBool;
     } else {
         return QoreIRValue();
     }

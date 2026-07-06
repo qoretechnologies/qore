@@ -16,10 +16,13 @@ string sub scriptCode() {
     return "%modern
 
 int i = 12345;
+int zero = 0;
 float f = 12.5;
 bool b = True;
 string s = \"abc\";
+string empty = \"\";
 string sint = \"12345\";
+string sfloat = \"12.5\";
 string bad_int = \"12x\";
 string unassigned;
 string removed = \"77\";
@@ -39,6 +42,17 @@ printf(\"string-intp:%y:%y:%y:%y:%y:%y\\n\",
     sint.intp(), bad_int.intp(), s.intp(), unassigned.intp(), removed.intp(), nullable.intp());
 printf(\"string-strp:%y:%y:%y:%y:%y\\n\", sint.strp(), s.strp(), unassigned.strp(), deleted.strp(),
     nullable.strp());
+printf(\"builtin-int:%y:%y:%y:%y:%y:%y\\n\",
+    int(i), int(sint), int(bad_int), int(unassigned), int(removed), int(nullable));
+printf(\"builtin-float:%y:%y:%y:%y:%y\\n\",
+    float(f), float(sfloat), float(unassigned), float(removed), float(nullable));
+printf(\"builtin-boolean:%y:%y:%y:%y:%y:%y:%y\\n\",
+    boolean(i), boolean(zero), boolean(s), boolean(empty), boolean(unassigned), boolean(deleted),
+    boolean(nullable));
+printf(\"builtin-string:%y:%y:%y:%y:%y\\n\", string(i), string(f), string(b), string(unassigned),
+    string(nullable));
+printf(\"builtin-named:%y:%y:%y:%y\\n\", int(value: sint), float(value: sfloat), boolean(value: s),
+    string(value: i));
 ";
 }
 
@@ -51,6 +65,11 @@ nothing:\"\"
 string-toInt:12345:12:0:0:0:0
 string-intp:True:True:False:False:False:False
 string-strp:True:True:False:False:False
+builtin-int:12345:12345:12:0:0:0
+builtin-float:12.5:12.5:0.0:0.0:0.0
+builtin-boolean:True:False:True:False:False:False:False
+builtin-string:\"12345\":\"12.5\":\"1\":\"\":\"\"
+builtin-named:12345:12.5:True:\"12345\"
 ";
 }
 

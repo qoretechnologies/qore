@@ -156,7 +156,8 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
         return false;
     }
     const char* func_name = call->getName();
-    if (!func_name || strcmp(func_name, "string")) {
+    if (!func_name || (strcmp(func_name, "string") && strcmp(func_name, "int") && strcmp(func_name, "float")
+            && strcmp(func_name, "boolean"))) {
         return false;
     }
     const QoreListNode* args = call->getArgs();
