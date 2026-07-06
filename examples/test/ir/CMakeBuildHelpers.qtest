@@ -19,8 +19,12 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? dirname(qore_bin));
+        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR ?? dirname(qore_bin));
         qore_dir = qore_build_dir + "/cmake";
+        if (!is_file(qore_dir + "/QoreConfig.cmake")
+                && is_file(qore_dir + "/Qore/QoreConfig.cmake")) {
+            qore_dir += "/Qore";
+        }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
         addTestCase("generic qcc object helper builds standalone .qo files",
