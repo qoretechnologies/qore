@@ -9805,6 +9805,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                         conversion_op = QoreIROpcode::ToFloat;
                     } else if (!strcmp(method_name, "toBool")) {
                         conversion_op = QoreIROpcode::ToBool;
+                    } else if (!strcmp(method_name, "toString")) {
+                        conversion_op = QoreIROpcode::ToString;
                     } else {
                         recognized_conversion = false;
                     }
