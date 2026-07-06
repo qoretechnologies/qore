@@ -32,6 +32,13 @@ printf(\"lengths:%d:%d:%d:%d:%d:%d\\n\",
 printf(\"unicode-lengths:%d:%d:%d:%d:%d:%d\\n\",
     u_short.size(), u_short.strlen(), u_short.length(),
     u_heap.size(), u_heap.strlen(), u_heap.length());
+printf(\"global-lengths:%d:%d:%d:%d\\n\",
+    length(short), strlen(short), length(u_short), strlen(u_short));
+string global_missing;
+string global_removed = \"abc\";
+remove global_removed;
+printf(\"global-nothing-lengths:%d:%d:%d:%d\\n\",
+    length(global_missing), strlen(global_missing), length(global_removed), strlen(global_removed));
 
 string pred = \"éabcdef\";
 string pred_prefix = \"éa\";
@@ -140,6 +147,8 @@ sizep:True:True:True
 case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
+global-lengths:3:3:2:3
+global-nothing-lengths:0:0:0:0
 predicates:True:True:True:False:False:False
 predicates.named:True:True:True
 find.substr:2:-1:-1:\"abcdef\":\"bcd\":\"éa\"

@@ -212,6 +212,7 @@ static void setPluginLoweringError(std::string& error, const QorePluginLoweringI
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
+#include <qore/intern/QorePseudoMethods.h>
 #include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/Variable.h>
@@ -10586,6 +10587,35 @@ static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const
     return args->retrieveEntry(i);
 }
 
+static bool qore_ir_get_single_positional_call_arg(const QoreParseListNode* parse_args,
+        const QoreListNode* args, QoreValue& arg) {
+    if (parse_args) {
+        if (parse_args->size() != 1) {
+            return false;
+        }
+        arg = parse_args->get(0);
+        return true;
+    }
+    if (!args) {
+        return false;
+    }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+        if (!pos_map || pos_map->size() != 1 || args_priv->getCallArgEvalResultSize() != 1
+                || args_priv->callArgEvalMapHasHoles() || (*pos_map)[0] != 0) {
+            return false;
+        }
+        arg = args->retrieveEntry(0);
+        return true;
+    }
+    if (args->size() != 1) {
+        return false;
+    }
+    arg = args->retrieveEntry(0);
+    return true;
+}
+
 static bool qore_ir_call_args_have_named_holes(const QoreListNode* args) {
     const qore_list_private* args_priv = qore_list_private::get(args);
     return args_priv && args_priv->callArgEvalMapHasHoles();
@@ -10749,6 +10779,39 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
     if (!call) {
         return QoreIRValue();
+    }
+    const char* func_name = call->getName();
+    if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
+            && !call->hasExplicitTypeArgs()) {
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        QoreValue arg_expr;
+        QoreParseAnalysis arg_analysis;
+        if (qore_ir_get_single_positional_call_arg(parse_args, args, arg_expr)
+                && getAnalysis(arg_expr, arg_analysis)
+                && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                && (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    || arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)) {
+            std::vector<QoreIRValue> operands;
+            if (!lowerCallArgs(parse_args, args, operands, error)) {
+                return QoreIRValue();
+            }
+            if (operands.size() == 1) {
+                QoreClass* qc = nullptr;
+                const QoreMethod* method = pseudo_classes_find_method(NT_STRING, func_name, qc);
+                if (method && qc) {
+                    auto* inst = builder.createDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                        operands, call->loc);
+                    inst->fallback_method_name = strdup(func_name);
+                    inst->pseudo_base_known_string = true;
+                    inst->pseudo_base_known_assigned_string = true;
+                    inst->pseudo_base_safe_value_dispatch = true;
+                    never_nothing_values.insert(inst->result.id);
+                    return inst->result;
+                }
+            }
+        }
     }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
