@@ -13341,6 +13341,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_
     return qore_rt_pseudo_length(val_bits);
 }
 
+//! Fast no-guard pseudo-method: <string>::sizep() for bases known as string/NOTHING.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_sizep_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    return toBits(QoreValue(v.isShortString() || v.getType() == NT_STRING));
+}
+
 static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionSink* xsink, bool upper) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);

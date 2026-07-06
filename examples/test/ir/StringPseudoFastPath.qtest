@@ -21,6 +21,7 @@ string empty = \"\";
 
 printf(\"assigned:%y:%y:%y:%y:%y:%y\\n\",
     heap.val(), heap.empty(), short.val(), short.empty(), empty.val(), empty.empty());
+printf(\"sizep:%y:%y:%y\\n\", heap.sizep(), short.sizep(), empty.sizep());
 
 string u_short = \"éx\";
 string u_heap = \"éabcdefghijklmnopqrstuvwxyz\";
@@ -36,15 +37,18 @@ string removed = \"removed\";
 remove removed;
 printf(\"removed.val:%y\\n\", removed.val());
 printf(\"removed.empty:%y\\n\", removed.empty());
+printf(\"removed.sizep:%y\\n\", removed.sizep());
 
 string deleted = \"deleted\";
 delete deleted;
 printf(\"deleted.val:%y\\n\", deleted.val());
 printf(\"deleted.empty:%y\\n\", deleted.empty());
+printf(\"deleted.sizep:%y\\n\", deleted.sizep());
 
 string unassigned;
 printf(\"unassigned.val:%y\\n\", unassigned.val());
 printf(\"unassigned.empty:%y\\n\", unassigned.empty());
+printf(\"unassigned.sizep:%y\\n\", unassigned.sizep());
 
 bool sub choose() {
     return False;
@@ -81,15 +85,19 @@ printf(\"looped:%y:%y:%d\\n\", looped.val(), looped.empty(), looped.size());
 
 string sub expectedOutput() {
     return "assigned:True:False:True:False:False:True
+sizep:True:True:True
 case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
 removed.val:False
 removed.empty:True
+removed.sizep:False
 deleted.val:False
 deleted.empty:True
+deleted.sizep:False
 unassigned.val:False
 unassigned.empty:True
+unassigned.sizep:False
 conditional.length:EX:PSEUDO-METHOD-DOES-NOT-EXIST
 conditional.strlen:EX:PSEUDO-METHOD-DOES-NOT-EXIST
 conditional:False:True:0

@@ -99,6 +99,9 @@ static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* me
     if (!strcmp(method_name, "length")) {
         return base_never_nothing ? "qore_rt_pseudo_string_length_noguard" : nullptr;
     }
+    if (!strcmp(method_name, "sizep")) {
+        return "qore_rt_pseudo_string_sizep_noguard";
+    }
     return nullptr;
 }
 
