@@ -86,37 +86,64 @@ public class HttpGatewayReranker inherits AbstractReranker {
     */
     list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
             *hash<auto> opts) {
-        if (!documents) {
-            return ();
-        }
-        if (top_k <= 0) {
-            return ();
+        return doRerank(query, documents, top_k, opts).results;
+    }
+
+    hash<RerankOutcome> rerankEx(string query, list<string> documents, int top_k,
+            *hash<auto> opts) {
+        return doRerank(query, documents, top_k, opts);
+    }
+
+    #! Re-ranks all documents (batching as needed) returning results and accumulated usage
+    private hash<RerankOutcome> doRerank(string query, list<string> documents,
+            int top_k, *hash<auto> opts) {
+        if (!documents || top_k <= 0) {
+            return <RerankOutcome>{
+                "results": (),
+                "usage": AbstractReranker::estimateRerankUsage(query, documents),
+            };
         }
         if (documents.size() <= batch_size) {
             return rerankBatch(query, documents, top_k, opts, 0);
         }
 
         list<hash<RerankResult>> rv = ();
+        # accumulate provider-reported usage across batches; if any batch lacks
+        # a usage block the whole call falls back to a single length estimate
+        int provider_tokens = 0;
+        bool all_provider = True;
         for (int offset = 0; offset < documents.size(); offset += batch_size) {
             int end = min(offset + batch_size, documents.size());
-            foreach hash<RerankResult> hit in (rerankBatch(query,
-                    documents[offset .. end - 1], min(top_k, end - offset), opts,
-                    offset)) {
+            hash<RerankOutcome> batch = rerankBatch(query,
+                documents[offset .. end - 1], min(top_k, end - offset), opts,
+                offset);
+            foreach hash<RerankResult> hit in (batch.results) {
                 push rv, hit;
+            }
+            if (batch.usage.token_source == "provider") {
+                provider_tokens += batch.usage.total_tokens;
+            } else {
+                all_provider = False;
             }
         }
 
         rv = sort(rv, int sub(hash<RerankResult> a, hash<RerankResult> b) {
             return b.score <=> a.score;
         });
-        if (!rv) {
-            return ();
+        if (rv) {
+            rv = rv[0 .. min(top_k, rv.size()) - 1];
         }
-        return rv[0 .. min(top_k, rv.size()) - 1];
+        hash<RerankUsage> usage = all_provider
+            ? <RerankUsage>{"total_tokens": provider_tokens, "token_source": "provider"}
+            : AbstractReranker::estimateRerankUsage(query, documents);
+        return <RerankOutcome>{
+            "results": rv,
+            "usage": usage,
+        };
     }
 
     #! Re-ranks one gateway request batch and translates indices to the caller's document list
-    private list<hash<RerankResult>> rerankBatch(string query, list<string> documents, int top_k,
+    private hash<RerankOutcome> rerankBatch(string query, list<string> documents, int top_k,
             *hash<auto> opts, int offset) {
         ensureRestClient();
 
@@ -158,7 +185,16 @@ public class HttpGatewayReranker inherits AbstractReranker {
                 "document": doc,
             };
         }
-        return rv;
+        # the documented gateway response shape includes an optional "usage"
+        # block; use it when present, otherwise fall back to a length estimate
+        *int total = resp.body.usage."total_tokens";
+        hash<RerankUsage> usage = total.val()
+            ? <RerankUsage>{"total_tokens": total, "token_source": "provider"}
+            : AbstractReranker::estimateRerankUsage(query, documents);
+        return <RerankOutcome>{
+            "results": rv,
+            "usage": usage,
+        };
     }
 
     #! Returns the configured model name (if any)

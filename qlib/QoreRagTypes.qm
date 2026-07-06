@@ -28,7 +28,7 @@
 %requires reflection
 
 module QoreRagTypes {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing the provider-neutral hashdecls and abstract "
         "provider classes shared by QoreRagUtils and RAG provider modules";
     author = "Qore Technologies, s.r.o.";
@@ -439,6 +439,39 @@ public hashdecl RerankResult {
     string document;
 }
 
+#! Normalized token usage for a reranker call
+/** Populated by @ref AbstractReranker::rerankEx().  Cloud rerankers that
+    report usage (Voyage, Cohere, Jina, an SGLang/gateway server that returns a
+    \c usage block) set \c token_source to \c "provider"; local or
+    non-reporting backends fall back to a length-based estimate and set
+    \c token_source to \c "estimated".  \c total_tokens is the billable input
+    token count (query + all candidate documents); reranker calls have no
+    generated ("completion") tokens.
+*/
+public hashdecl RerankUsage {
+    #! Total billable input tokens (query + candidate documents)
+    int total_tokens = 0;
+    #! Query-only token count when separable, otherwise @ref nothing
+    *int query_tokens;
+    #! Candidate-document token count when separable, otherwise @ref nothing
+    *int document_tokens;
+    #! \c "provider" when reported by the backend; \c "estimated" otherwise
+    string token_source = "estimated";
+}
+
+#! The full outcome of a reranker call: ordered results plus token usage
+/** Returned by @ref AbstractReranker::rerankEx() so callers that must account
+    for reranking cost (token accounting / observability) get usage alongside
+    the ranked results without a second call.  @ref AbstractReranker::rerank()
+    remains available for callers that only need the ranked results.
+*/
+public hashdecl RerankOutcome {
+    #! Reranked results ordered by descending score (see @ref RerankResult)
+    list<hash<RerankResult>> results;
+    #! Normalized token usage for the call (see @ref RerankUsage)
+    hash<RerankUsage> usage;
+}
+
 #! A retrieval hit returned by RagPipeline::retrieve()
 public hashdecl RetrievalHit {
     #! Stored chunk id
@@ -722,9 +755,65 @@ public class AbstractReranker {
     abstract list<hash<RerankResult>> rerank(string query, list<string> documents,
             int top_k, *hash<auto> opts);
 
+    #! Re-ranks documents and returns the results together with token usage
+    /** Same contract as @ref rerank(), but returns a @ref RerankOutcome so
+        callers that must account for reranking cost (token accounting,
+        observability) receive normalized token usage alongside the ranked
+        results without issuing a second call.
+
+        The base implementation calls @ref rerank() and reports a length-based
+        token estimate (\c token_source \c "estimated").  Backends that receive
+        a provider-reported \c usage block (Voyage, Cohere, Jina, an
+        SGLang/gateway server that returns usage) override this method to return
+        the real counts with \c token_source \c "provider".
+
+        @param query the query text
+        @param documents the candidate documents
+        @param top_k how many results to return after reranking
+        @param opts optional per-call backend-specific options (see @ref rerank())
+
+        @return a @ref RerankOutcome with the ranked results and token usage
+
+        @since %QoreRagTypes 1.1
+    */
+    hash<RerankOutcome> rerankEx(string query, list<string> documents,
+            int top_k, *hash<auto> opts) {
+        list<hash<RerankResult>> results = rerank(query, documents, top_k, opts);
+        return <RerankOutcome>{
+            "results": results,
+            "usage": estimateRerankUsage(query, documents),
+        };
+    }
+
     #! Returns the model name in use (informational)
     *string getModel() {
         return NOTHING;
+    }
+
+    #! Estimates reranker token usage from query + candidate document lengths
+    /** Uses the module-wide 4-byte-per-token heuristic; the same estimate the
+        RAG telemetry summaries use.  Backends without a provider-reported usage
+        block use this so every reranker call still yields a non-zero billable
+        token count for token accounting.
+
+        @param query the query text
+        @param documents the candidate documents
+
+        @return a @ref RerankUsage with \c token_source \c "estimated"
+    */
+    static hash<RerankUsage> estimateRerankUsage(string query, list<string> documents) {
+        int query_tokens = (query.length() + 3) / 4;
+        int doc_bytes = 0;
+        foreach string doc in (documents) {
+            doc_bytes += doc.length();
+        }
+        int doc_tokens = (doc_bytes + 3) / 4;
+        return <RerankUsage>{
+            "total_tokens": query_tokens + doc_tokens,
+            "query_tokens": query_tokens,
+            "document_tokens": doc_tokens,
+            "token_source": "estimated",
+        };
     }
 }
 

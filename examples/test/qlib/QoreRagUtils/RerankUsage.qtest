@@ -1,0 +1,222 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  RerankUsage.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+
+    Covers AbstractReranker::rerankEx()/estimateRerankUsage() and provider-usage
+    capture in VoyageReranker and HttpGatewayReranker (QoreRagTypes 1.1).
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires QoreRagTypes
+%requires QoreRagUtils
+%requires VoyageRestClient
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%ifdef NoJson
+auto sub make_json(auto val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+
+auto sub parse_json(auto val) {
+    throw "JSON-ERROR", "the json module is required for this operation";
+}
+%endif
+
+%exec-class RerankUsageTest
+
+#! In-process reranker with no provider usage — exercises the base rerankEx()/estimate.
+class FakeReranker inherits QoreRagUtils::AbstractReranker {
+    list<hash<QoreRagUtils::RerankResult>> rerank(string query, list<string> documents,
+            int top_k, *hash<auto> opts) {
+        list<hash<QoreRagUtils::RerankResult>> rv = ();
+        int upper = min(top_k, documents.size());
+        for (int i = 0; i < upper; ++i) {
+            push rv, <QoreRagUtils::RerankResult>{
+                "index": i,
+                "score": (documents.size() - i).toFloat(),
+                "document": documents[i],
+            };
+        }
+        return rv;
+    }
+
+    *string getModel() {
+        return "fake-reranker";
+    }
+}
+
+#! HTTP handler returning a configurable rerank response per path.
+class FakeRerankHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        # path -> {"results_key": "data"|"results", "score_key": "relevance_score"|"score",
+        #          "usage": *int (total_tokens; omit to send no usage block)}
+        hash<string, hash<auto>> cfg;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> cfg) {
+        self.cfg = cfg;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> parsed = body.val() ? parse_json(body) : {};
+        push requests, {"path": cx.raw_path, "body": parsed};
+        *hash<auto> c = cfg{cx.raw_path};
+        if (!c) {
+            return makeResponse(404, "{}", {"Content-Type": MimeTypeJson});
+        }
+        list<auto> items = ();
+        for (int i = 0; i < parsed.documents.size(); ++i) {
+            push items, {
+                "index": i,
+                (c.score_key ?? "score"): (parsed.documents.size() - i).toFloat(),
+                "document": parsed.documents[i],
+            };
+        }
+        hash<auto> resp_body;
+        resp_body{c.results_key ?? "results"} = items;
+        # a "no-usage" query marker suppresses the usage block so callers can
+        # exercise the estimate fallback path
+        if (exists c.usage && parsed.query != "no-usage") {
+            resp_body{"usage"} = {"total_tokens": c.usage};
+        }
+        return makeResponse(200, make_json(resp_body), {"Content-Type": MimeTypeJson});
+    }
+}
+
+class RerankUsageTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeRerankHandler handler;
+    }
+
+    constructor() : QUnit::Test("RerankUsage", "1.0") {
+        addTestCase("base estimate", \baseEstimateTest());
+        addTestCase("voyage provider usage", \voyageUsageTest());
+        addTestCase("gateway provider usage", \gatewayUsageTest());
+        addTestCase("gateway estimate fallback", \gatewayEstimateTest());
+        addTestCase("gateway batch accumulation", \gatewayBatchTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        handler = new FakeRerankHandler({
+            # Voyage posts to /v1/rerank (api-version default_path "/v1" + "/rerank")
+            "/v1/rerank": {"results_key": "data", "score_key": "relevance_score", "usage": 123},
+            "/ai/rerank": {"results_key": "results", "score_key": "score", "usage": 77},
+            "/ai/rerank-nousage": {"results_key": "results", "score_key": "score"},
+        });
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+        };
+        http = new HttpServer(opts);
+        http.setHandler("rerank", "", NOTHING, handler, NOTHING, False);
+        http.setDefaultHandler("rerank", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (http) {
+            http.stop();
+        }
+    }
+
+    private string url() {
+        return "http://localhost:" + port;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    baseEstimateTest() {
+        FakeReranker r();
+        # query "hello" = 5 bytes -> 2 tokens; docs "aaaa"(4)+"bb"(2)=6 bytes -> 2 tokens
+        hash<QoreRagUtils::RerankOutcome> o = r.rerankEx("hello", ("aaaa", "bb"), 2);
+        assertEq(2, o.results.size());
+        assertEq("estimated", o.usage.token_source);
+        assertEq(2, o.usage.query_tokens);
+        assertEq(2, o.usage.document_tokens);
+        assertEq(4, o.usage.total_tokens);
+        # rerank() still returns just the results
+        assertEq(2, r.rerank("hello", ("aaaa", "bb"), 2).size());
+    }
+
+    voyageUsageTest() {
+        checkModule();
+
+        QoreRagUtils::VoyageReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "voyage",
+            "model": "rerank-2.5-lite",
+            "url": url(),
+            "api_key": "test-key",
+        });
+        hash<QoreRagUtils::RerankOutcome> o = r.rerankEx("q", ("d1", "d2", "d3"), 3);
+        assertEq(3, o.results.size());
+        assertEq("provider", o.usage.token_source);
+        assertEq(123, o.usage.total_tokens);
+    }
+
+    gatewayUsageTest() {
+        checkModule();
+
+        QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "gateway",
+            "url": url(),
+        });
+        hash<QoreRagUtils::RerankOutcome> o = r.rerankEx("q", ("d1", "d2"), 2);
+        assertEq(2, o.results.size());
+        assertEq("provider", o.usage.token_source);
+        assertEq(77, o.usage.total_tokens);
+    }
+
+    gatewayEstimateTest() {
+        checkModule();
+
+        # the "no-usage" query marker makes the fake gateway omit the usage
+        # block, so the reranker must fall back to a length estimate
+        QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "gateway",
+            "url": url(),
+        });
+        hash<QoreRagUtils::RerankOutcome> o = r.rerankEx("no-usage", ("d1", "d2"), 2);
+        assertEq(2, o.results.size());
+        assertEq("estimated", o.usage.token_source);
+        assertGt(0, o.usage.total_tokens);
+    }
+
+    gatewayBatchTest() {
+        checkModule();
+
+        # batch_size 1 forces multiple gateway calls; provider usage must sum
+        QoreRagUtils::HttpGatewayReranker r(<QoreRagUtils::RerankerConfig>{
+            "backend": "gateway",
+            "url": url(),
+            "batch_size": 1,
+        });
+        hash<QoreRagUtils::RerankOutcome> o = r.rerankEx("q", ("d1", "d2", "d3"), 3);
+        assertEq("provider", o.usage.token_source);
+        # three batches * 77 tokens each
+        assertEq(231, o.usage.total_tokens);
+    }
+}
