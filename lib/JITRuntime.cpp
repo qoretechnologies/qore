@@ -13347,6 +13347,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_sizep_noguard(uint64_t val_b
     return toBits(QoreValue(v.isShortString() || v.getType() == NT_STRING));
 }
 
+//! Fast no-guard pseudo-method: <string>::intp() for bases known as string/NOTHING/NULL.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_intp_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    if (!v.isShortString() && v.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringValueHelper str(v);
+    if (str->empty()) {
+        return toBits(QoreValue(false));
+    }
+    const char* data = str->c_str();
+    char c = data[0];
+    if (c == '-') {
+        c = data[1];
+    }
+    return toBits(QoreValue(isdigit(static_cast<unsigned char>(c)) ? true : false));
+}
+
+//! Fast no-guard pseudo-method: <string>::strp() for bases known as string/NOTHING/NULL.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_strp_noguard(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    return toBits(QoreValue(v.isShortString() || v.getType() == NT_STRING));
+}
+
 static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionSink* xsink, bool upper) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);

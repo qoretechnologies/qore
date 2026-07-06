@@ -35,6 +35,10 @@ printf(\"string:%y\\n\", s.toString());
 printf(\"nothing:%y\\n\", NOTHING.toString());
 printf(\"string-toInt:%y:%y:%y:%y:%y:%y\\n\",
     sint.toInt(), bad_int.toInt(), unassigned.toInt(), removed.toInt(), deleted.toInt(), nullable.toInt());
+printf(\"string-intp:%y:%y:%y:%y:%y:%y\\n\",
+    sint.intp(), bad_int.intp(), s.intp(), unassigned.intp(), removed.intp(), nullable.intp());
+printf(\"string-strp:%y:%y:%y:%y:%y\\n\", sint.strp(), s.strp(), unassigned.strp(), deleted.strp(),
+    nullable.strp());
 ";
 }
 
@@ -45,6 +49,8 @@ bool:\"1\"
 string:\"abc\"
 nothing:\"\"
 string-toInt:12345:12:0:0:0:0
+string-intp:True:True:False:False:False:False
+string-strp:True:True:False:False:False
 ";
 }
 
