@@ -43,6 +43,9 @@ printf(\"predicates:%y:%y:%y:%y:%y:%y\\n\",
 printf(\"predicates.named:%y:%y:%y\\n\",
     pred.startsWith(prefix: pred_prefix), pred.endsWith(suffix: pred_suffix),
     pred.contains(substring: pred_middle));
+printf(\"find.substr:%d:%d:%d:%y:%y:%y\\n\",
+    pred.find(pred_middle), pred.find(pred_middle, 3), pred.find(\"zz\"),
+    pred.substr(1), pred.substr(2, 3), pred.substr(start: 0, length: 2));
 
 string pred_missing_arg;
 try {
@@ -62,6 +65,23 @@ try {
     printf(\"predicate.missing_base:%y\\n\", pred_missing_base.startsWith(pred_prefix));
 } catch (hash<auto> ex) {
     printf(\"predicate.missing_base:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"find.missing_arg:%d\\n\", pred.find(pred_missing_arg));
+} catch (hash<auto> ex) {
+    printf(\"find.missing_arg:EX:%s\\n\", ex.err);
+}
+int pred_missing_offset;
+try {
+    printf(\"find.missing_offset:%d\\n\", pred.find(pred_middle, pred_missing_offset));
+} catch (hash<auto> ex) {
+    printf(\"find.missing_offset:EX:%s\\n\", ex.err);
+}
+int pred_missing_start;
+try {
+    printf(\"substr.missing_start:%y\\n\", pred.substr(pred_missing_start));
+} catch (hash<auto> ex) {
+    printf(\"substr.missing_start:EX:%s\\n\", ex.err);
 }
 
 string removed = \"removed\";
@@ -122,9 +142,13 @@ lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
 predicates:True:True:True:False:False:False
 predicates.named:True:True:True
+find.substr:2:-1:-1:\"abcdef\":\"bcd\":\"éa\"
 predicate.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
 predicate.removed_arg:EX:RUNTIME-OVERLOAD-ERROR
 predicate.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+find.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
+find.missing_offset:2
+substr.missing_start:EX:RUNTIME-OVERLOAD-ERROR
 removed.val:False
 removed.empty:True
 removed.sizep:False

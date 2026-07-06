@@ -9838,14 +9838,19 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
             bool pseudo_arg0_known_string = false;
             bool pseudo_arg0_known_assigned_string = false;
+            bool pseudo_arg0_known_assigned_int = false;
+            bool pseudo_arg1_known_assigned_int = false;
             if (m->isPseudo() && !lowered_args.empty()) {
-                QoreValue arg0;
-                bool have_arg0 = false;
+                QoreValue pseudo_args[2];
+                bool have_pseudo_arg[2] = {false, false};
                 const QoreParseListNode* parse_args = m->getParseArgs();
                 const QoreListNode* args = m->getArgs();
                 if (parse_args && parse_args->size()) {
-                    arg0 = parse_args->get(0);
-                    have_arg0 = true;
+                    size_t max_args = std::min<size_t>(parse_args->size(), 2);
+                    for (size_t ai = 0; ai < max_args; ++ai) {
+                        pseudo_args[ai] = parse_args->get(ai);
+                        have_pseudo_arg[ai] = true;
+                    }
                 } else if (args && args->size()) {
                     const qore_list_private* args_priv = qore_list_private::get(args);
                     if (args_priv && args_priv->hasCallArgEvalMap()) {
@@ -9856,24 +9861,38 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                                 error = "IR named pseudo call argument analysis cancelled or interrupted";
                                 return QoreIRValue();
                             }
-                            if ((*pos_map)[si] == 0) {
-                                arg0 = args->retrieveEntry(si);
-                                have_arg0 = true;
-                                break;
+                            size_t logical_pos = (*pos_map)[si];
+                            if (logical_pos < 2) {
+                                pseudo_args[logical_pos] = args->retrieveEntry(si);
+                                have_pseudo_arg[logical_pos] = true;
                             }
                         }
                     } else {
-                        arg0 = args->retrieveEntry(0);
-                        have_arg0 = true;
+                        size_t max_args = std::min<size_t>(args->size(), 2);
+                        for (size_t ai = 0; ai < max_args; ++ai) {
+                            pseudo_args[ai] = args->retrieveEntry(ai);
+                            have_pseudo_arg[ai] = true;
+                        }
                     }
                 }
-                QoreParseAnalysis arg0_analysis;
-                pseudo_arg0_known_string = have_arg0 && getAnalysis(arg0, arg0_analysis)
-                    && arg0_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-                    && QoreTypeInfo::isType(selectAnalysisType(arg0_analysis), NT_STRING);
-                pseudo_arg0_known_assigned_string = pseudo_arg0_known_string
-                    && (arg0_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-                        || arg0_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+                for (int ai = 0; ai < 2; ++ai) {
+                    QoreParseAnalysis arg_analysis;
+                    bool have_analysis = have_pseudo_arg[ai] && getAnalysis(pseudo_args[ai], arg_analysis)
+                        && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo);
+                    const QoreTypeInfo* arg_type = have_analysis ? selectAnalysisType(arg_analysis) : nullptr;
+                    bool assigned = have_analysis
+                        && (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                            || arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+                    bool known_assigned_int = assigned && QoreTypeInfo::isType(arg_type, NT_INT);
+                    if (!ai) {
+                        pseudo_arg0_known_string = have_analysis
+                            && QoreTypeInfo::isType(arg_type, NT_STRING);
+                        pseudo_arg0_known_assigned_string = assigned && pseudo_arg0_known_string;
+                        pseudo_arg0_known_assigned_int = known_assigned_int;
+                    } else {
+                        pseudo_arg1_known_assigned_int = known_assigned_int;
+                    }
+                }
             }
             const QoreTypeInfo* pseudo_base_type = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
@@ -9905,6 +9924,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 inst->pseudo_arg0_known_string = pseudo_arg0_known_string;
                 inst->pseudo_arg0_known_assigned_string = pseudo_arg0_known_assigned_string;
+                inst->pseudo_arg0_known_assigned_int = pseudo_arg0_known_assigned_int;
+                inst->pseudo_arg1_known_assigned_int = pseudo_arg1_known_assigned_int;
                 inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 builder.setBlock(normal_block);
                 result = inst->result;
@@ -9917,6 +9938,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 inst->pseudo_arg0_known_string = pseudo_arg0_known_string;
                 inst->pseudo_arg0_known_assigned_string = pseudo_arg0_known_assigned_string;
+                inst->pseudo_arg0_known_assigned_int = pseudo_arg0_known_assigned_int;
+                inst->pseudo_arg1_known_assigned_int = pseudo_arg1_known_assigned_int;
                 inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 result = inst->result;
             }

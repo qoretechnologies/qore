@@ -146,6 +146,14 @@ static int qore_ir_get_string_pseudo_predicate_id(const QoreMethod* method, cons
     return -1;
 }
 
+static bool qore_ir_is_string_pseudo_find(const QoreMethod* method, const QoreClass* qc) {
+    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "find");
+}
+
+static bool qore_ir_is_string_pseudo_substr(const QoreMethod* method, const QoreClass* qc) {
+    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "substr");
+}
+
 static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(const QoreMethod* method,
         const QoreClass* qc) {
     if (!method || !qc) {
@@ -10700,17 +10708,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(direct_inst->method, direct_inst->qc) : -1;
+            bool string_find_fast_path = direct_inst->pseudo
+                && direct_inst->pseudo_base_known_assigned_string
+                && direct_inst->pseudo_arg0_known_assigned_string
+                && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
+                && qore_ir_is_string_pseudo_find(direct_inst->method, direct_inst->qc);
+            bool string_substr_fast_path = direct_inst->pseudo
+                && direct_inst->pseudo_base_known_assigned_string
+                && direct_inst->pseudo_arg0_known_assigned_int
+                && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
+                && qore_ir_is_string_pseudo_substr(direct_inst->method, direct_inst->qc);
+            bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
+                || string_substr_fast_path;
             llvm::Value* args_array = nullptr;
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = llvm::ConstantPointerNull::get(
                     llvm::cast<llvm::PointerType>(ptr_type));
-            if (string_predicate_id < 0) {
+            auto fast_path_arg_needs_cleanup = [&]() {
+                for (int ai = 0; ai < nargs; ++ai) {
+                    if (invoke_alloca_map.find(inst->operands[1 + ai].id) != invoke_alloca_map.end()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
                 }
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
-            } else if (invoke_alloca_map.find(inst->operands[1].id) != invoke_alloca_map.end()) {
+            } else if (fast_path_arg_needs_cleanup()) {
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
             }
@@ -10741,6 +10769,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->method, direct_inst->qc,
                     direct_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
+            auto clear_fast_path_arg_cleanups = [&]() {
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+            };
             if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
@@ -10749,16 +10786,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper,
                     {base_boxed, arg_boxed, llvm::ConstantInt::get(i32_type, string_predicate_id), xsink_arg});
-                if (has_arg_cleanups) {
-                    auto clear_helper = module.getOrInsertFunction(
-                            "qore_rt_clear_arg_cleanups",
-                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-                    builder->CreateCall(clear_helper, {arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                }
+                clear_fast_path_arg_cleanups();
                 call_may_throw = true;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (string_find_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
+                llvm::Value* offset = llvm::ConstantInt::get(i64_type, 0);
+                if (nargs == 2) {
+                    auto* offset_val = getVal(inst->operands[2].id, error);
+                    if (!offset_val) { return false; }
+                    offset = ensureIntTypeInline(offset_val, inst->operands[2].id);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_find_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, arg_boxed, offset, xsink_arg});
+                clear_fast_path_arg_cleanups();
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (string_substr_fast_path) {
+                auto* start_val = getVal(inst->operands[1].id, error);
+                if (!start_val) { return false; }
+                llvm::Value* start = ensureIntTypeInline(start_val, inst->operands[1].id);
+                llvm::Value* length = llvm::ConstantInt::get(i64_type, 0);
+                if (nargs == 2) {
+                    auto* length_val = getVal(inst->operands[2].id, error);
+                    if (!length_val) { return false; }
+                    length = ensureIntTypeInline(length_val, inst->operands[2].id);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, start, length,
+                    llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});
+                clear_fast_path_arg_cleanups();
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = true;
             } else if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -10987,17 +11053,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->method, invoke_inst->qc) : -1;
+            bool string_find_fast_path = invoke_inst->pseudo
+                && invoke_inst->pseudo_base_known_assigned_string
+                && invoke_inst->pseudo_arg0_known_assigned_string
+                && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
+                && qore_ir_is_string_pseudo_find(invoke_inst->method, invoke_inst->qc);
+            bool string_substr_fast_path = invoke_inst->pseudo
+                && invoke_inst->pseudo_base_known_assigned_string
+                && invoke_inst->pseudo_arg0_known_assigned_int
+                && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
+                && qore_ir_is_string_pseudo_substr(invoke_inst->method, invoke_inst->qc);
+            bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
+                || string_substr_fast_path;
             llvm::Value* args_array = nullptr;
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = llvm::ConstantPointerNull::get(
                     llvm::cast<llvm::PointerType>(ptr_type));
-            if (string_predicate_id < 0) {
+            auto fast_path_arg_needs_cleanup = [&]() {
+                for (int ai = 0; ai < nargs; ++ai) {
+                    if (invoke_alloca_map.find(inst->operands[1 + ai].id) != invoke_alloca_map.end()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
                 }
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
-            } else if (invoke_alloca_map.find(inst->operands[1].id) != invoke_alloca_map.end()) {
+            } else if (fast_path_arg_needs_cleanup()) {
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
             }
@@ -11028,6 +11114,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? qore_ir_get_string_pseudo_xsink_helper(invoke_inst->method, invoke_inst->qc,
                     invoke_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
+            auto clear_fast_path_arg_cleanups = [&]() {
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+            };
             if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
@@ -11036,16 +11131,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper,
                     {base_boxed, arg_boxed, llvm::ConstantInt::get(i32_type, string_predicate_id), xsink_arg});
-                if (has_arg_cleanups) {
-                    auto clear_helper = module.getOrInsertFunction(
-                            "qore_rt_clear_arg_cleanups",
-                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-                    builder->CreateCall(clear_helper, {arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-                }
+                clear_fast_path_arg_cleanups();
                 call_may_throw = true;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (string_find_fast_path) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
+                llvm::Value* offset = llvm::ConstantInt::get(i64_type, 0);
+                if (nargs == 2) {
+                    auto* offset_val = getVal(inst->operands[2].id, error);
+                    if (!offset_val) { return false; }
+                    offset = ensureIntTypeInline(offset_val, inst->operands[2].id);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_find_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, arg_boxed, offset, xsink_arg});
+                clear_fast_path_arg_cleanups();
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (string_substr_fast_path) {
+                auto* start_val = getVal(inst->operands[1].id, error);
+                if (!start_val) { return false; }
+                llvm::Value* start = ensureIntTypeInline(start_val, inst->operands[1].id);
+                llvm::Value* length = llvm::ConstantInt::get(i64_type, 0);
+                if (nargs == 2) {
+                    auto* length_val = getVal(inst->operands[2].id, error);
+                    if (!length_val) { return false; }
+                    length = ensureIntTypeInline(length_val, inst->operands[2].id);
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_substr_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, start, length,
+                    llvm::ConstantInt::get(i32_type, nargs == 2 ? 1 : 0), xsink_arg});
+                clear_fast_path_arg_cleanups();
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = true;
             } else if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
