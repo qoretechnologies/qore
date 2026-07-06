@@ -13131,18 +13131,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value_aot(QoreAOTContext
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits,
         const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         int32_t invert_empty, ExceptionSink* xsink) {
-    QoreValue raw_base = fromBits(base_bits);
-    ValueEvalOptimizedRefHolder base_holder(xsink);
-    QoreValue base;
-    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
-        base = raw_base;
-    } else {
-        base_holder.eval(raw_base);
-        base = *base_holder;
-    }
-    if (xsink && *xsink) {
-        return toBits(QoreValue());
-    }
+    QoreValue base = fromBits(base_bits);
     if (base.getType() == NT_LIST) {
         bool empty = base.get<const QoreListNode>()->empty();
         return toBits(QoreValue(invert_empty ? !empty : empty));
@@ -13150,23 +13139,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bit
     if (base.isNothing()) {
         return toBits(QoreValue(!invert_empty));
     }
-    return qore_rt_dot_eval_pseudo_method_direct(toBits(base), method, qc, variant, nullptr, 0, xsink);
+    return qore_rt_dot_eval_pseudo_method_direct(base_bits, method, qc, variant, nullptr, 0, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, int32_t invert_empty, ExceptionSink* xsink) {
-    QoreValue raw_base = fromBits(base_bits);
-    ValueEvalOptimizedRefHolder base_holder(xsink);
-    QoreValue base;
-    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
-        base = raw_base;
-    } else {
-        base_holder.eval(raw_base);
-        base = *base_holder;
-    }
-    if (xsink && *xsink) {
-        return toBits(QoreValue());
-    }
+    QoreValue base = fromBits(base_bits);
     if (base.getType() == NT_LIST) {
         bool empty = base.get<const QoreListNode>()->empty();
         return toBits(QoreValue(invert_empty ? !empty : empty));
@@ -13174,7 +13152,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContex
     if (base.isNothing()) {
         return toBits(QoreValue(!invert_empty));
     }
-    return qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, toBits(base), nullptr, 0, xsink);
+    return qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, base_bits, nullptr, 0, xsink);
 }
 
 // ============================================================================
