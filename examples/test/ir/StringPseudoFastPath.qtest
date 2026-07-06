@@ -33,6 +33,37 @@ printf(\"unicode-lengths:%d:%d:%d:%d:%d:%d\\n\",
     u_short.size(), u_short.strlen(), u_short.length(),
     u_heap.size(), u_heap.strlen(), u_heap.length());
 
+string pred = \"éabcdef\";
+string pred_prefix = \"éa\";
+string pred_suffix = \"def\";
+string pred_middle = \"bcd\";
+printf(\"predicates:%y:%y:%y:%y:%y:%y\\n\",
+    pred.startsWith(pred_prefix), pred.endsWith(pred_suffix), pred.contains(pred_middle),
+    pred.startsWith(pred_suffix), pred.endsWith(pred_prefix), pred.contains(\"zz\"));
+printf(\"predicates.named:%y:%y:%y\\n\",
+    pred.startsWith(prefix: pred_prefix), pred.endsWith(suffix: pred_suffix),
+    pred.contains(substring: pred_middle));
+
+string pred_missing_arg;
+try {
+    printf(\"predicate.missing_arg:%y\\n\", pred.startsWith(pred_missing_arg));
+} catch (hash<auto> ex) {
+    printf(\"predicate.missing_arg:EX:%s\\n\", ex.err);
+}
+string pred_removed_arg = \"abc\";
+remove pred_removed_arg;
+try {
+    printf(\"predicate.removed_arg:%y\\n\", pred.contains(pred_removed_arg));
+} catch (hash<auto> ex) {
+    printf(\"predicate.removed_arg:EX:%s\\n\", ex.err);
+}
+string pred_missing_base;
+try {
+    printf(\"predicate.missing_base:%y\\n\", pred_missing_base.startsWith(pred_prefix));
+} catch (hash<auto> ex) {
+    printf(\"predicate.missing_base:EX:%s\\n\", ex.err);
+}
+
 string removed = \"removed\";
 remove removed;
 printf(\"removed.val:%y\\n\", removed.val());
@@ -89,6 +120,11 @@ sizep:True:True:True
 case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
+predicates:True:True:True:False:False:False
+predicates.named:True:True:True
+predicate.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
+predicate.removed_arg:EX:RUNTIME-OVERLOAD-ERROR
+predicate.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
 removed.val:False
 removed.empty:True
 removed.sizep:False

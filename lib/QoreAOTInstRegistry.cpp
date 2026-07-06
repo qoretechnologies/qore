@@ -1405,21 +1405,27 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
 // ============================================================================
 
 static uint8_t instRegistryPackDotEvalPseudoFlags(bool known_string, bool assigned_string,
-        bool safe_value_dispatch) {
+        bool arg0_known_string, bool arg0_assigned_string, bool safe_value_dispatch) {
     return (known_string ? 0x01 : 0)
         | (assigned_string ? 0x02 : 0)
+        | (arg0_known_string ? 0x08 : 0)
+        | (arg0_assigned_string ? 0x10 : 0)
         | (safe_value_dispatch ? 0x04 : 0);
 }
 
 static void instRegistryApplyDotEvalPseudoFlags(QoreIRDotEvalMethodDirectInstruction& inst, uint8_t flags) {
     inst.pseudo_base_known_string = (flags & 0x01) != 0;
     inst.pseudo_base_known_assigned_string = (flags & 0x02) != 0;
+    inst.pseudo_arg0_known_string = (flags & 0x08) != 0;
+    inst.pseudo_arg0_known_assigned_string = (flags & 0x10) != 0;
     inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
 }
 
 static void instRegistryApplyDotEvalPseudoFlags(QoreIRInvokeDotEvalMethodDirectInstruction& inst, uint8_t flags) {
     inst.pseudo_base_known_string = (flags & 0x01) != 0;
     inst.pseudo_base_known_assigned_string = (flags & 0x02) != 0;
+    inst.pseudo_arg0_known_string = (flags & 0x08) != 0;
+    inst.pseudo_arg0_known_assigned_string = (flags & 0x10) != 0;
     inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
 }
 
@@ -1442,6 +1448,7 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
         ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
             ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
+            ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
             ci->pseudo_base_safe_value_dispatch));
     }
     return true;
@@ -1505,6 +1512,7 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
         ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
             ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
+            ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
             ci->pseudo_base_safe_value_dispatch));
     }
     auto it_n = ctx.block_idx.find(ci->normal_target);

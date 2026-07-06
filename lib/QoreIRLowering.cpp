@@ -9836,6 +9836,45 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             bool pseudo_base_known_assigned_string = pseudo_base_known_string
                 && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+            bool pseudo_arg0_known_string = false;
+            bool pseudo_arg0_known_assigned_string = false;
+            if (m->isPseudo() && !lowered_args.empty()) {
+                QoreValue arg0;
+                bool have_arg0 = false;
+                const QoreParseListNode* parse_args = m->getParseArgs();
+                const QoreListNode* args = m->getArgs();
+                if (parse_args && parse_args->size()) {
+                    arg0 = parse_args->get(0);
+                    have_arg0 = true;
+                } else if (args && args->size()) {
+                    const qore_list_private* args_priv = qore_list_private::get(args);
+                    if (args_priv && args_priv->hasCallArgEvalMap()) {
+                        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+                        for (size_t si = 0; pos_map && si < pos_map->size(); ++si) {
+                            if (si && !(si % 100) && qore_check_cancel(nullptr,
+                                    "IR named pseudo call argument analysis")) {
+                                error = "IR named pseudo call argument analysis cancelled or interrupted";
+                                return QoreIRValue();
+                            }
+                            if ((*pos_map)[si] == 0) {
+                                arg0 = args->retrieveEntry(si);
+                                have_arg0 = true;
+                                break;
+                            }
+                        }
+                    } else {
+                        arg0 = args->retrieveEntry(0);
+                        have_arg0 = true;
+                    }
+                }
+                QoreParseAnalysis arg0_analysis;
+                pseudo_arg0_known_string = have_arg0 && getAnalysis(arg0, arg0_analysis)
+                    && arg0_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && QoreTypeInfo::isType(selectAnalysisType(arg0_analysis), NT_STRING);
+                pseudo_arg0_known_assigned_string = pseudo_arg0_known_string
+                    && (arg0_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || arg0_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+            }
             const QoreTypeInfo* pseudo_base_type = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
                 ? selectAnalysisType(base_analysis) : nullptr;
@@ -9864,6 +9903,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
+                inst->pseudo_arg0_known_string = pseudo_arg0_known_string;
+                inst->pseudo_arg0_known_assigned_string = pseudo_arg0_known_assigned_string;
                 inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 builder.setBlock(normal_block);
                 result = inst->result;
@@ -9874,6 +9915,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
+                inst->pseudo_arg0_known_string = pseudo_arg0_known_string;
+                inst->pseudo_arg0_known_assigned_string = pseudo_arg0_known_assigned_string;
                 inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 result = inst->result;
             }

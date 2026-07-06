@@ -13371,6 +13371,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_strp_noguard(uint64_t val_bi
     return toBits(QoreValue(v.isShortString() || v.getType() == NT_STRING));
 }
 
+//! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits,
+        uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    QoreValue arg = fromBits(arg_bits);
+    QoreStringValueHelper pattern(arg, str->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+
+    bool result = false;
+    switch (predicate) {
+        case 0:
+            result = str->startsWith(pattern->c_str());
+            break;
+        case 1:
+            result = str->endsWith(pattern->c_str());
+            break;
+        case 2:
+            result = str->find(pattern->c_str()) >= 0;
+            break;
+        default:
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR", "invalid string predicate fast-path id %d",
+                    static_cast<int>(predicate));
+            }
+            return toBits(QoreValue());
+    }
+    return toBits(QoreValue(result));
+}
+
 static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionSink* xsink, bool upper) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);

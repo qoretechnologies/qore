@@ -2114,6 +2114,8 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool pseudo_base_known_string = false;  //!< True if pseudo base is statically known as string/NOTHING
     bool pseudo_base_known_assigned_string = false; //!< True if pseudo base is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_string = false;  //!< True if pseudo argument 0 is statically known as string/NOTHING
+    bool pseudo_arg0_known_assigned_string = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING string
     bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
@@ -2157,6 +2159,8 @@ public:
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
     bool pseudo_base_known_string = false;      //!< True if pseudo base is statically known as string/NOTHING
     bool pseudo_base_known_assigned_string = false; //!< True if pseudo base is proven assigned/non-NOTHING string
+    bool pseudo_arg0_known_string = false;      //!< True if pseudo argument 0 is statically known as string/NOTHING
+    bool pseudo_arg0_known_assigned_string = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING string
     bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;

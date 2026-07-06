@@ -129,6 +129,23 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(const QoreM
     return {};
 }
 
+static int qore_ir_get_string_pseudo_predicate_id(const QoreMethod* method, const QoreClass* qc) {
+    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
+        return -1;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "startsWith")) {
+        return 0;
+    }
+    if (!strcmp(method_name, "endsWith")) {
+        return 1;
+    }
+    if (!strcmp(method_name, "contains")) {
+        return 2;
+    }
+    return -1;
+}
+
 static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(const QoreMethod* method,
         const QoreClass* qc) {
     if (!method || !qc) {
@@ -10677,14 +10694,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!base_val) { return false; }
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
 
-            llvm::Value* args_array;
-            int nargs;
-            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
-                return false;
-            }
+            int nargs = static_cast<int>(inst->operands.size()) - 1;
+            int string_predicate_id = (direct_inst->pseudo
+                    && direct_inst->pseudo_base_known_assigned_string
+                    && direct_inst->pseudo_arg0_known_assigned_string
+                    && nargs == 1)
+                ? qore_ir_get_string_pseudo_predicate_id(direct_inst->method, direct_inst->qc) : -1;
+            llvm::Value* args_array = nullptr;
             bool has_arg_cleanups = false;
-            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func,
-                    nargs, has_arg_cleanups);
+            llvm::Value* arg_cleanups = llvm::ConstantPointerNull::get(
+                    llvm::cast<llvm::PointerType>(ptr_type));
+            if (string_predicate_id < 0) {
+                if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            } else if (invoke_alloca_map.find(inst->operands[1].id) != invoke_alloca_map.end()) {
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            }
 
             llvm::Value* call_result;
             const QoreTypeParamInstantiation* explicit_inst =
@@ -10712,7 +10741,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->method, direct_inst->qc,
                     direct_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
-            if (string_noguard_helper) {
+            if (string_predicate_id >= 0) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_predicate_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {base_boxed, arg_boxed, llvm::ConstantInt::get(i32_type, string_predicate_id), xsink_arg});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed});
@@ -10934,14 +10981,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!base_val) { return false; }
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
 
-            llvm::Value* args_array;
-            int nargs;
-            if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
-                return false;
-            }
+            int nargs = static_cast<int>(inst->operands.size()) - 1;
+            int string_predicate_id = (invoke_inst->pseudo
+                    && invoke_inst->pseudo_base_known_assigned_string
+                    && invoke_inst->pseudo_arg0_known_assigned_string
+                    && nargs == 1)
+                ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->method, invoke_inst->qc) : -1;
+            llvm::Value* args_array = nullptr;
             bool has_arg_cleanups = false;
-            llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func,
-                    nargs, has_arg_cleanups);
+            llvm::Value* arg_cleanups = llvm::ConstantPointerNull::get(
+                    llvm::cast<llvm::PointerType>(ptr_type));
+            if (string_predicate_id < 0) {
+                if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
+                    return false;
+                }
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            } else if (invoke_alloca_map.find(inst->operands[1].id) != invoke_alloca_map.end()) {
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            }
 
             llvm::Value* call_result;
             const QoreTypeParamInstantiation* explicit_inst =
@@ -10969,7 +11028,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? qore_ir_get_string_pseudo_xsink_helper(invoke_inst->method, invoke_inst->qc,
                     invoke_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
-            if (string_noguard_helper) {
+            if (string_predicate_id >= 0) {
+                auto* arg_val = getVal(inst->operands[1].id, error);
+                if (!arg_val) { return false; }
+                llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_predicate_noguard",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {base_boxed, arg_boxed, llvm::ConstantInt::get(i32_type, string_predicate_id), xsink_arg});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed});
