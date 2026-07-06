@@ -9787,9 +9787,12 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 const char* method_name = pseudo_method ? pseudo_method->getName() : m->getName();
                 QoreParseAnalysis base_analysis;
                 bool have_base_analysis = getAnalysis(base_expr, base_analysis);
-                bool safe_to_bypass_name_dispatch = have_base_analysis
+                const QoreTypeInfo* base_analysis_type = have_base_analysis
                     && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-                    && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis.known_type);
+                    ? selectAnalysisType(base_analysis) : nullptr;
+                bool safe_to_bypass_name_dispatch = base_analysis_type
+                    && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && !qore_ir_type_may_require_dot_eval_name_dispatch(base_analysis_type);
                 if (pseudo_method && pseudo_method->getClass()
                         && !strcmp(pseudo_method->getClass()->getName(), "<list>")
                         && !strcmp(method_name, "size")) {
@@ -9833,6 +9836,11 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             bool pseudo_base_known_assigned_string = pseudo_base_known_string
                 && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
                     || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+            const QoreTypeInfo* pseudo_base_type = have_base_analysis
+                && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                ? selectAnalysisType(base_analysis) : nullptr;
+            bool pseudo_base_safe_value_dispatch = pseudo_base_type
+                && !qore_ir_type_may_require_dot_eval_name_dispatch(pseudo_base_type);
             // Ordinary object dot-eval must use runtime name dispatch: the parse-time
             // method pointer can be a containing method object whose overload set does
             // not match the runtime overload lookup exactly after AOT deserialization.
@@ -9856,6 +9864,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
+                inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
@@ -9865,6 +9874,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
                 inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
+                inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 result = inst->result;
             }
             return result;

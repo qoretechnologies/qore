@@ -1202,6 +1202,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Global slot records carry whether a global is a required AOT source-parse
     // import that must resolve from the final linked/loaded Program.
     flags |= QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS;
+    // Dot-eval pseudo direct records carry parse-analysis flags used by LLVM
+    // to select no-dispatch helper paths after source-stripped AOT reloads.
+    flags |= QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS;
     return flags;
 }
 

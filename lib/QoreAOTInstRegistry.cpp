@@ -1404,6 +1404,25 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
 // Group 14: DotEvalMethodDirect - Dot-notation method evaluation
 // ============================================================================
 
+static uint8_t instRegistryPackDotEvalPseudoFlags(bool known_string, bool assigned_string,
+        bool safe_value_dispatch) {
+    return (known_string ? 0x01 : 0)
+        | (assigned_string ? 0x02 : 0)
+        | (safe_value_dispatch ? 0x04 : 0);
+}
+
+static void instRegistryApplyDotEvalPseudoFlags(QoreIRDotEvalMethodDirectInstruction& inst, uint8_t flags) {
+    inst.pseudo_base_known_string = (flags & 0x01) != 0;
+    inst.pseudo_base_known_assigned_string = (flags & 0x02) != 0;
+    inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
+}
+
+static void instRegistryApplyDotEvalPseudoFlags(QoreIRInvokeDotEvalMethodDirectInstruction& inst, uint8_t flags) {
+    inst.pseudo_base_known_string = (flags & 0x01) != 0;
+    inst.pseudo_base_known_assigned_string = (flags & 0x02) != 0;
+    inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
+}
+
 static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(ctx.inst);
     // Write NOTHING for expr — dispatch info is in the DOT_EVAL_TARGET slot classification
@@ -1420,6 +1439,11 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     ctx.writer.writeStringRef(encoded_mname.c_str());
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
+        ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
+            ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
+            ci->pseudo_base_safe_value_dispatch));
+    }
     return true;
 }
 
@@ -1436,6 +1460,8 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
     InstRegistryMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
     bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint8_t pseudo_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
+        ? QoreAOTBinaryReader::readU8(ctx.ptr) : 0;
 
     const QoreClass* qc = instRegistryFindClassByPath(ctx.pgm, class_path, pseudo);
     const QoreMethod* method = instRegistryFindMethodByName(qc, method_ref.method_name);
@@ -1443,6 +1469,7 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         ctx.pgm, method, method_ref, pseudo);
     auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
     ci->has_ref_args = has_ref_args;
+    instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
     // Store method name for fallback dynamic dispatch when method ptr is null
     if (method_ref.method_name && *method_ref.method_name) {
         ci->fallback_method_name = strdup(method_ref.method_name);
@@ -1475,6 +1502,11 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     ctx.writer.writeStringRef(encoded_mname.c_str());
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0) {
+        ctx.writer.writeU8(instRegistryPackDotEvalPseudoFlags(
+            ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
+            ci->pseudo_base_safe_value_dispatch));
+    }
     auto it_n = ctx.block_idx.find(ci->normal_target);
     ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);
     auto it_e = ctx.block_idx.find(ci->exception_target);
@@ -1493,6 +1525,8 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
     InstRegistryMethodRef method_ref(ctx.reader.readStringRef(ctx.ptr));
     bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    uint8_t pseudo_flags = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
+        ? QoreAOTBinaryReader::readU8(ctx.ptr) : 0;
     uint16_t normal_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     uint16_t exception_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
 
@@ -1503,6 +1537,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
     auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
         pseudo, ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
     ci->has_ref_args = has_ref_args;
+    instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
     if (method_ref.method_name && *method_ref.method_name) {
         ci->fallback_method_name = strdup(method_ref.method_name);
     }

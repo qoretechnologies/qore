@@ -202,8 +202,9 @@ constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCA
 constexpr uint64_t QORE_AOT_FEAT_HASH_DEREF_TYPEINFO = 1ULL << 59; //!< HASH_DEREF records preserve parse-time result typeInfo
 constexpr uint64_t QORE_AOT_FEAT_GLOBAL_SLOT_FLAGS = 1ULL << 60; //!< SLOT_MAPS global records preserve required import flags
 constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_SLOT_ARGS = 1ULL << 61; //!< SLOT_MAPS SELF_METHOD_CALL records carry serialized call args (u8 num_args + N×expr), so AST/IR-interpreter fallback evaluation dispatches the self call with its arguments
+constexpr uint64_t QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS = 1ULL << 62; //!< DotEvalMethodDirect records preserve pseudo base analysis flags for safe LLVM fast paths
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

@@ -6972,6 +6972,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
             bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
+            uint8_t pseudo_flags =
+                (reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
+                    ? QoreAOTBinaryReader::readU8(ptr) : 0;
 
             const QoreClass* qc = findAOTClassByPath(pgm, class_path, pseudo);
             const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
@@ -6979,6 +6982,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 pgm, method, method_ref, pseudo);
             auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
             ci->has_ref_args = has_ref_args;
+            ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
+            ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
+            ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
             if (method_ref.method_name && *method_ref.method_name) {
                 ci->fallback_method_name = strdup(method_ref.method_name);
             }
@@ -6996,6 +7002,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
             bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
+            uint8_t pseudo_flags =
+                (reader.getHeader().feature_flags & QORE_AOT_FEAT_DOT_EVAL_PSEUDO_FLAGS) != 0
+                    ? QoreAOTBinaryReader::readU8(ptr) : 0;
             uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
             uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
 
@@ -7006,6 +7015,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
                 pseudo, resolveBlock(normal_idx), resolveBlock(exception_idx));
             ci->has_ref_args = has_ref_args;
+            ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
+            ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
+            ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
             if (method_ref.method_name && *method_ref.method_name) {
                 ci->fallback_method_name = strdup(method_ref.method_name);
             }
