@@ -24,6 +24,7 @@ printf(\"int:%y:%y:%y:%y:%y:%y\\n\", i.typeCode() == NT_INT, i.type(), i.empty()
     zero.val(), i.size());
 printf(\"string:%y:%y:%y:%y:%y:%y:%y:%y\\n\", s.typeCode() == NT_STRING, s.type(), s.empty(),
     s.val(), s.size(), empty_s.empty(), empty_s.val(), empty_s.size());
+printf(\"string-case:%y:%y\\n\", s.lwr(), s.upr());
 printf(\"list:%y:%y:%y:%y:%y:%y:%y:%y\\n\", l.typeCode() == NT_LIST, l.type(), l.empty(),
     l.val(), l.size(), empty_l.empty(), empty_l.val(), empty_l.size());
 printf(\"nothing:%y:%y:%y:%y:%y\\n\", NOTHING.typeCode() == NT_NOTHING, NOTHING.type(),

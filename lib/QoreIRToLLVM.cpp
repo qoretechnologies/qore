@@ -72,6 +72,12 @@ static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, cons
     return false;
 }
 
+struct QoreIRPseudoHelperInfo {
+    const char* symbol = nullptr;
+    bool result_needs_cleanup = false;
+    bool may_throw = false;
+};
+
 static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* method, const QoreClass* qc,
         bool base_never_nothing) {
     if (!method || !qc || strcmp(qc->getName(), "<string>")) {
@@ -96,10 +102,20 @@ static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* me
     return nullptr;
 }
 
-struct QoreIRPseudoHelperInfo {
-    const char* symbol = nullptr;
-    bool result_needs_cleanup = false;
-};
+static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(const QoreMethod* method, const QoreClass* qc,
+        bool base_never_nothing) {
+    if (!base_never_nothing || !method || !qc || strcmp(qc->getName(), "<string>")) {
+        return {};
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "lwr")) {
+        return {"qore_rt_pseudo_string_lwr_noguard", true, true};
+    }
+    if (!strcmp(method_name, "upr")) {
+        return {"qore_rt_pseudo_string_upr_noguard", true, true};
+    }
+    return {};
+}
 
 static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(const QoreMethod* method,
         const QoreClass* qc) {
@@ -10679,6 +10695,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->pseudo_base_safe_value_dispatch && nargs == 0)
                 ? qore_ir_get_safe_value_pseudo_helper(direct_inst->method, direct_inst->qc)
                 : QoreIRPseudoHelperInfo{};
+            QoreIRPseudoHelperInfo string_xsink_helper = (direct_inst->pseudo
+                    && direct_inst->pseudo_base_known_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->method, direct_inst->qc,
+                    direct_inst->pseudo_base_known_assigned_string)
+                : QoreIRPseudoHelperInfo{};
             if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -10717,6 +10738,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {base_boxed, method_ptr, qc_ptr, variant_ptr,
                          llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
                 }
+            } else if (string_xsink_helper.symbol) {
+                auto helper = module.getOrInsertFunction(string_xsink_helper.symbol,
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, xsink_arg});
+                call_may_throw = string_xsink_helper.may_throw;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = string_xsink_helper.result_needs_cleanup;
             } else if (safe_value_pseudo_helper.symbol) {
                 auto helper = module.getOrInsertFunction(safe_value_pseudo_helper.symbol,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -10924,6 +10952,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->pseudo_base_safe_value_dispatch && nargs == 0)
                 ? qore_ir_get_safe_value_pseudo_helper(invoke_inst->method, invoke_inst->qc)
                 : QoreIRPseudoHelperInfo{};
+            QoreIRPseudoHelperInfo string_xsink_helper = (invoke_inst->pseudo
+                    && invoke_inst->pseudo_base_known_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_xsink_helper(invoke_inst->method, invoke_inst->qc,
+                    invoke_inst->pseudo_base_known_assigned_string)
+                : QoreIRPseudoHelperInfo{};
             if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -10962,6 +10995,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {base_boxed, method_ptr, qc_ptr, variant_ptr,
                          llvm::ConstantInt::get(i32_type, invert_list_empty ? 1 : 0), xsink_arg});
                 }
+            } else if (string_xsink_helper.symbol) {
+                auto helper = module.getOrInsertFunction(string_xsink_helper.symbol,
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, xsink_arg});
+                call_may_throw = string_xsink_helper.may_throw;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = string_xsink_helper.result_needs_cleanup;
             } else if (safe_value_pseudo_helper.symbol) {
                 auto helper = module.getOrInsertFunction(safe_value_pseudo_helper.symbol,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));

@@ -13341,6 +13341,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_
     return qore_rt_pseudo_length(val_bits);
 }
 
+static uint64_t qore_rt_pseudo_string_case_noguard(uint64_t val_bits, ExceptionSink* xsink, bool upper) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
+    int rc = upper ? do_toupper(*(*rv), *str, xsink) : do_tolower(*(*rv), *str, xsink);
+    if (rc || *xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(rv.release());
+}
+
+//! Fast no-guard pseudo-method: <string>::lwr() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_lwr_noguard(uint64_t val_bits, ExceptionSink* xsink) {
+    return qore_rt_pseudo_string_case_noguard(val_bits, xsink, false);
+}
+
+//! Fast no-guard pseudo-method: <string>::upr() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsink) {
+    return qore_rt_pseudo_string_case_noguard(val_bits, xsink, true);
+}
+
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);

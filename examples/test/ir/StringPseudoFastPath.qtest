@@ -24,6 +24,7 @@ printf(\"assigned:%y:%y:%y:%y:%y:%y\\n\",
 
 string u_short = \"éx\";
 string u_heap = \"éabcdefghijklmnopqrstuvwxyz\";
+printf(\"case:%y:%y:%y:%y\\n\", short.lwr(), short.upr(), u_short.lwr(), u_short.upr());
 printf(\"lengths:%d:%d:%d:%d:%d:%d\\n\",
     short.size(), short.strlen(), short.length(),
     heap.size(), heap.strlen(), heap.length());
@@ -80,6 +81,7 @@ printf(\"looped:%y:%y:%d\\n\", looped.val(), looped.empty(), looped.size());
 
 string sub expectedOutput() {
     return "assigned:True:False:True:False:False:True
+case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
 removed.val:False
