@@ -102,6 +102,16 @@ extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
         uint64_t* args, int nargs, ExceptionSink* xsink);
 
+static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
+    const auto* call = expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    if (!call) {
+        return false;
+    }
+    const char* name = call->getName();
+    return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
+}
+
 static int qore_ir_interpreter_get_string_pseudo_predicate_id(const QoreMethod* method, const QoreClass* qc) {
     if (!method || !qc || strcmp(qc->getName(), "<string>")) {
         return -1;
@@ -3308,6 +3318,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
             }
             if (op != QoreIROpcode::CallIndirect) {
+                if ((op == QoreIROpcode::Call || op == QoreIROpcode::CallDirect)
+                        && inv->operands.size() == 1
+                        && qore_ir_interpreter_is_type_name_builtin_call(inv->expr)) {
+                    QoreValue arg = getIRValue(values, inv->operands[0]);
+                    return fromBits(qore_rt_pseudo_type(toBits(arg)));
+                }
                 const ParseNode* parse_node = nullptr;
                 if (inv->expr.hasNode()) {
                     parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
@@ -11865,11 +11881,13 @@ lvalue_path_unary_done:
                 auto* direct_inst = static_cast<QoreIRCallDirectInstruction*>(inst);
                 if (direct_inst->variant) {
                     int nargs = static_cast<int>(direct_inst->operands.size());
+                    bool type_name_fast_path = nargs == 1
+                        && qore_ir_interpreter_is_type_name_builtin_call(direct_inst->expr);
                     bool has_last_use_args = direct_inst->func && hasLastUseCallArgSlots(values,
                         direct_inst->operands, 0, value_use_counts);
                     bool prefer_inline_ir = has_last_use_args
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0;
-                    if (has_last_use_args && !prefer_inline_ir) {
+                    if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
                         ReferenceHolder<QoreListNode> arg_list(
                             buildArgList(values, direct_inst->operands, 0, xsink), xsink);
                         if (xsink && *xsink) {
@@ -11913,8 +11931,15 @@ lvalue_path_unary_done:
 
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
-                    bool used_inline_ir = tryExecuteInterpreterInlineIRFunction(direct_inst, pgm, nanboxed_args,
-                        nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    bool used_inline_ir = false;
+                    if (type_name_fast_path) {
+                        res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
+                        inline_may_invalidate_external_caches = false;
+                        used_inline_ir = true;
+                    } else {
+                        used_inline_ir = tryExecuteInterpreterInlineIRFunction(direct_inst, pgm, nanboxed_args,
+                            nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    }
                     if (!used_inline_ir) {
                         res = fromBits(qore_rt_call_fast(
                             direct_inst->func, direct_inst->variant, direct_inst->pgm,

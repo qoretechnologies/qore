@@ -1111,6 +1111,9 @@ uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsi
 //! Fast no-guard pseudo-method: <string>::toInt() for assigned string bases.
 uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink);
 
+//! Fast pseudo-method helper: type()/typename() returns the runtime type name.
+uint64_t qore_rt_pseudo_type(uint64_t val_bits);
+
 //! Name-based dot-eval method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint64_t base_bits, const char* method_name,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
