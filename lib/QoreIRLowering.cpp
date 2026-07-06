@@ -9825,11 +9825,12 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             bool should_invoke = !exception_stack.empty();
             QoreParseAnalysis base_analysis;
             bool have_base_analysis = m->isPseudo() && getAnalysis(base_expr, base_analysis);
-            bool pseudo_base_known_assigned_string = have_base_analysis
+            bool pseudo_base_known_string = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-                && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-                    || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
                 && QoreTypeInfo::isType(selectAnalysisType(base_analysis), NT_STRING);
+            bool pseudo_base_known_assigned_string = pseudo_base_known_string
+                && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
             // Ordinary object dot-eval must use runtime name dispatch: the parse-time
             // method pointer can be a containing method object whose overload set does
             // not match the runtime overload lookup exactly after AOT deserialization.
@@ -9851,6 +9852,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     operands, normal_block, handler, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
+                inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 builder.setBlock(normal_block);
                 result = inst->result;
@@ -9859,6 +9861,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     operands, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 inst->explicit_type_param_inst = m->getExplicitTypeParamInstantiation();
+                inst->pseudo_base_known_string = pseudo_base_known_string;
                 inst->pseudo_base_known_assigned_string = pseudo_base_known_assigned_string;
                 result = inst->result;
             }

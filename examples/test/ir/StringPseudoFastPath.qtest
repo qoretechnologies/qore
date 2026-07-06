@@ -44,6 +44,37 @@ printf(\"deleted.empty:%y\\n\", deleted.empty());
 string unassigned;
 printf(\"unassigned.val:%y\\n\", unassigned.val());
 printf(\"unassigned.empty:%y\\n\", unassigned.empty());
+
+bool sub choose() {
+    return False;
+}
+
+string conditional;
+if (choose()) {
+    conditional = \"abc\";
+}
+try {
+    printf(\"conditional.length:%d\\n\", conditional.length());
+} catch (hash<auto> ex) {
+    printf(\"conditional.length:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"conditional.strlen:%d\\n\", conditional.strlen());
+} catch (hash<auto> ex) {
+    printf(\"conditional.strlen:EX:%s\\n\", ex.err);
+}
+printf(\"conditional:%y:%y:%d\\n\", conditional.val(), conditional.empty(), conditional.size());
+
+string looped;
+while (choose()) {
+    looped = \"abc\";
+}
+try {
+    printf(\"looped.length:%d\\n\", looped.length());
+} catch (hash<auto> ex) {
+    printf(\"looped.length:EX:%s\\n\", ex.err);
+}
+printf(\"looped:%y:%y:%d\\n\", looped.val(), looped.empty(), looped.size());
 ";
 }
 
@@ -57,6 +88,11 @@ deleted.val:False
 deleted.empty:True
 unassigned.val:False
 unassigned.empty:True
+conditional.length:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+conditional.strlen:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+conditional:False:True:0
+looped.length:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+looped:False:True:0
 ";
 }
 

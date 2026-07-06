@@ -1289,3 +1289,74 @@ void NarrowedTypeHelper::mergeAndApply() {
         }
     }
 }
+
+static void qore_set_lvar_parse_assigned(LocalVar* lvar, bool assigned) {
+    if (assigned) {
+        lvar->parseAssigned();
+    } else {
+        lvar->parseUnassigned();
+    }
+}
+
+void AssignedStateHelper::saveState() {
+    saved_states.clear();
+    VNode* vnode = getVStack();
+    while (vnode) {
+        if (vnode->lvar) {
+            saved_states.push_back({vnode->lvar, vnode->lvar->isAssigned()});
+        }
+        vnode = vnode->nextSearch();
+    }
+}
+
+void AssignedStateHelper::restoreState() {
+    for (const auto& entry : saved_states) {
+        qore_set_lvar_parse_assigned(entry.first, entry.second);
+    }
+}
+
+void AssignedStateHelper::recordBranchAndRestore() {
+    state_map_t branch;
+    branch.reserve(saved_states.size());
+    for (const auto& entry : saved_states) {
+        branch.push_back({entry.first, entry.first->isAssigned()});
+    }
+    branch_states.push_back(std::move(branch));
+    restoreState();
+}
+
+void AssignedStateHelper::recordSavedAsImplicitBranch() {
+    branch_states.push_back(saved_states);
+}
+
+void AssignedStateHelper::mergeAndApply() {
+    if (branch_states.empty()) {
+        return;
+    }
+
+    for (const auto& saved_entry : saved_states) {
+        bool assigned_in_all_branches = true;
+        for (const auto& branch : branch_states) {
+            bool found = false;
+            bool assigned = false;
+            for (const auto& branch_entry : branch) {
+                if (branch_entry.first == saved_entry.first) {
+                    found = true;
+                    assigned = branch_entry.second;
+                    break;
+                }
+            }
+            if (!found || !assigned) {
+                assigned_in_all_branches = false;
+                break;
+            }
+        }
+        qore_set_lvar_parse_assigned(saved_entry.first, assigned_in_all_branches);
+    }
+}
+
+void AssignedStateHelper::markSavedUnassigned() {
+    for (const auto& saved_entry : saved_states) {
+        saved_entry.first->parseUnassigned();
+    }
+}

@@ -75,7 +75,9 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
     // narrowing predicate did not hold.  Mirrors
     // IfStatement::parseInitImpl's use of NarrowedTypeHelper.
     NarrowedTypeHelper nth;
+    AssignedStateHelper ash;
     nth.saveState();
+    ash.saveState();
 
     parse_context.typeInfo = nullptr;
     {
@@ -86,8 +88,9 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         left_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* leftTypeInfo = parse_context.typeInfo;
-    // Snapshot true-branch narrowing and reset for the false branch
+    // Snapshot true-branch facts and reset for the false branch
     nth.recordBranchAndRestore();
+    ash.recordBranchAndRestore();
 
     parse_context.typeInfo = nullptr;
     {
@@ -98,9 +101,11 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
-    // Snapshot false-branch narrowing and merge with the true branch
+    // Snapshot false-branch facts and merge with the true branch
     nth.recordBranchAndRestore();
+    ash.recordBranchAndRestore();
     nth.mergeAndApply();
+    ash.mergeAndApply();
 
     // see if all arguments are constant values, then eval immediately and substitute this node with the result
     if (!err && e[0].isValue() && e[1].isValue() && e[2].isValue()) {

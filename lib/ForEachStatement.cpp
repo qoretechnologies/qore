@@ -422,10 +422,25 @@ int ForEachStatement::parseInitImpl(QoreParseContext& parse_context) {
     }
 
     if (code) {
+        // The foreach body may not execute if the iterator is empty.
+        NarrowedTypeHelper nth;
+        AssignedStateHelper ash;
+        nth.saveState();
+        ash.saveState();
+
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
 
-        err = code->parseInitImpl(parse_context);
+        if (code->parseInitImpl(parse_context) && !err) {
+            err = -1;
+        }
+
+        nth.recordBranchAndRestore();
+        ash.recordBranchAndRestore();
+        nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
+        nth.mergeAndApply();
+        ash.mergeAndApply();
     }
 
     qore_type_t typ = list.getType();

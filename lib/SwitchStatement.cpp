@@ -264,9 +264,11 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     // overwrites parse_context.typeInfo
     const QoreTypeInfo* switch_type_info = parse_context.typeInfo;
 
-    // Track narrowed types across switch branches
+    // Track parse facts across switch branches
     NarrowedTypeHelper nth;
+    AssignedStateHelper ash;
     nth.saveState();
+    ash.saveState();
 
     CaseNode* w = head;
     ExceptionSink xsink;
@@ -354,8 +356,9 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             if (w->code->parseInitImpl(parse_context) && !err) {
                 err = -1;
             }
-            // Record narrowed types after this case block and restore for next case
+            // Record facts after this case block and restore for next case
             nth.recordBranchAndRestore();
+            ash.recordBranchAndRestore();
         }
         w = w->next;
     }
@@ -363,10 +366,12 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     // If there's no default case, the implicit "no match" path preserves original types
     if (!deflt) {
         nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
     }
 
-    // Merge types from all branches
+    // Merge facts from all branches
     nth.mergeAndApply();
+    ash.mergeAndApply();
 
     // warn if the switch is over an enum value, has no default case, and does not handle all
     // enum members (only when the switch parsed cleanly, to avoid noise on broken code)

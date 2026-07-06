@@ -182,34 +182,50 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
         }
         // FIXME: raise a parse warning if cond cannot be converted to a bool (i.e. always false)
     }
-    if (iterator) {
-        parse_context.typeInfo = nullptr;
-        QoreParseContextFlagHelper fh0(parse_context);
-        fh0.setFlags(PF_RETURN_VALUE_IGNORED);
-        err = parse_init_value(iterator, parse_context);
-        // enable optimizations when return value is ignored for operator expressions
-        ignore_return_value(iterator);
-    }
-    if (code) {
-        // Track narrowed types: loops may not execute, so narrowing from the loop
-        // body shouldn't persist outside. Use NarrowedTypeHelper to merge the
-        // "executed loop" branch with the "loop didn't execute" branch.
+    if (iterator || code) {
+        // The iterator and body may not execute, so facts from them must be
+        // merged with the pre-loop state.
         NarrowedTypeHelper nth;
+        AssignedStateHelper ash;
         nth.saveState();
+        ash.saveState();
 
-        QoreParseContextFlagHelper fh0(parse_context);
-        fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
-
-        if (code->parseInitImpl(parse_context) && !err) {
-            err = -1;
+        if (iterator) {
+            parse_context.typeInfo = nullptr;
+            QoreParseContextFlagHelper fh0(parse_context);
+            fh0.setFlags(PF_RETURN_VALUE_IGNORED);
+            if (parse_init_value(iterator, parse_context) && !err) {
+                err = -1;
+            }
+            // enable optimizations when return value is ignored for operator expressions
+            ignore_return_value(iterator);
         }
 
-        // Record the loop body branch and restore narrowing state
+        if (code) {
+            QoreParseContextFlagHelper fh0(parse_context);
+            fh0.setFlags(PF_BREAK_OK | PF_CONTINUE_OK);
+
+            if (code->parseInitImpl(parse_context) && !err) {
+                err = -1;
+            }
+        }
+
+        // Record the loop branch and restore parse state
         nth.recordBranchAndRestore();
         // The loop may not execute, so record the saved pre-loop state as implicit branch
         nth.recordSavedAsImplicitBranch();
-        // Merge narrowing from both branches (loop executed vs. loop didn't execute)
+        // Merge facts from both branches (loop executed vs. loop didn't execute)
         nth.mergeAndApply();
+        if (iterator && code) {
+            // Parse order is iterator then body, but runtime order is body then
+            // iterator. Without operation-level assignment deltas, keep this
+            // shape conservative for definitely-assigned analysis.
+            ash.markSavedUnassigned();
+        } else {
+            ash.recordBranchAndRestore();
+            ash.recordSavedAsImplicitBranch();
+            ash.mergeAndApply();
+        }
     }
 
     return err;

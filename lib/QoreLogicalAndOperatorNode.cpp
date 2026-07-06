@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
 
 QoreString QoreLogicalAndOperatorNode::logical_and_str("logical and (&&) operator expression");
 
@@ -74,6 +75,10 @@ int QoreLogicalAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         err = parse_init_value(left, parse_context);
         left_analysis = parse_context.analysis;
     }
+
+    AssignedStateHelper ash;
+    ash.saveState();
+
     parse_context.typeInfo = nullptr;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
@@ -82,6 +87,9 @@ int QoreLogicalAndOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         }
         right_analysis = parse_context.analysis;
     }
+    ash.recordBranchAndRestore();
+    ash.recordSavedAsImplicitBranch();
+    ash.mergeAndApply();
 
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {

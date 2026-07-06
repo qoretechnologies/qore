@@ -131,8 +131,14 @@ int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     int err = 0;
 
+    AssignedStateHelper ash;
+    ash.saveState();
+
     if (try_block) {
         err = try_block->parseInitImpl(parse_context);
+        ash.recordBranchAndRestore();
+    } else {
+        ash.recordSavedAsImplicitBranch();
     }
 
     // prepare catch block and params
@@ -170,7 +176,12 @@ int TryStatement::parseInitImpl(QoreParseContext& parse_context) {
         if (catch_block->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
+        ash.recordBranchAndRestore();
+    } else {
+        ash.recordSavedAsImplicitBranch();
     }
+
+    ash.mergeAndApply();
 
     // pop local param from stack
     if (param) {

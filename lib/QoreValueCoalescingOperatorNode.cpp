@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
+#include "qore/intern/StatementBlock.h"
 //#include <qore/intern/qore_program_private.h>
 
 QoreString QoreValueCoalescingOperatorNode::value_coalescing_str("value coalescing operator");
@@ -73,6 +74,9 @@ int QoreValueCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseCont
         left_analysis = parse_context.analysis;
     }
 
+    AssignedStateHelper ash;
+    ash.saveState();
+
     parse_context.typeInfo = nullptr;
     {
         QoreParseContextAnalysisHelper ah(parse_context);
@@ -81,6 +85,9 @@ int QoreValueCoalescingOperatorNode::parseInitImpl(QoreValue& val, QoreParseCont
         }
         right_analysis = parse_context.analysis;
     }
+    ash.recordBranchAndRestore();
+    ash.recordSavedAsImplicitBranch();
+    ash.mergeAndApply();
 
     parse_context.typeInfo = nullptr;
     set_coalescing_analysis_value(parse_context, left_analysis, right_analysis);

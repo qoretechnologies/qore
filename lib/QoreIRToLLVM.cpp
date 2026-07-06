@@ -72,7 +72,8 @@ static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, cons
     return false;
 }
 
-static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* method, const QoreClass* qc) {
+static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* method, const QoreClass* qc,
+        bool base_never_nothing) {
     if (!method || !qc || strcmp(qc->getName(), "<string>")) {
         return nullptr;
     }
@@ -83,11 +84,14 @@ static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* me
     if (!strcmp(method_name, "val")) {
         return "qore_rt_pseudo_string_val_noguard";
     }
-    if (!strcmp(method_name, "size") || !strcmp(method_name, "strlen")) {
+    if (!strcmp(method_name, "size")) {
         return "qore_rt_pseudo_string_size_noguard";
     }
+    if (!strcmp(method_name, "strlen")) {
+        return base_never_nothing ? "qore_rt_pseudo_string_size_noguard" : nullptr;
+    }
     if (!strcmp(method_name, "length")) {
-        return "qore_rt_pseudo_string_length_noguard";
+        return base_never_nothing ? "qore_rt_pseudo_string_length_noguard" : nullptr;
     }
     return nullptr;
 }
@@ -10629,8 +10633,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
             const char* string_noguard_helper = (direct_inst->pseudo
-                    && direct_inst->pseudo_base_known_assigned_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->method, direct_inst->qc)
+                    && direct_inst->pseudo_base_known_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->method, direct_inst->qc,
+                    direct_inst->pseudo_base_known_assigned_string)
                 : nullptr;
             if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,
@@ -10986,8 +10991,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
             const char* string_noguard_helper = (invoke_inst->pseudo
-                    && invoke_inst->pseudo_base_known_assigned_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->method, invoke_inst->qc)
+                    && invoke_inst->pseudo_base_known_string && nargs == 0)
+                ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->method, invoke_inst->qc,
+                    invoke_inst->pseudo_base_known_assigned_string)
                 : nullptr;
             if (string_noguard_helper) {
                 auto helper = module.getOrInsertFunction(string_noguard_helper,

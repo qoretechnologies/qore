@@ -106,34 +106,41 @@ int IfStatement::parseInitImpl(QoreParseContext& parse_context) {
         // FIXME: generate a warning here if the type cannot be converted to a bool (i.e. always false)
     }
 
-    // Track narrowed types across branches
+    // Track parse facts across branches
     NarrowedTypeHelper nth;
+    AssignedStateHelper ash;
     nth.saveState();
+    ash.saveState();
 
     if (if_code) {
         if (if_code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
-        // Record narrowed types after if branch and restore for else branch
+        // Record facts after if branch and restore for else branch
         nth.recordBranchAndRestore();
+        ash.recordBranchAndRestore();
     } else {
         // Empty if block (e.g., "if (cond) ;") - record saved state as this branch
         nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
     }
     if (else_code) {
         if (else_code->parseInitImpl(parse_context) && !err) {
             err = -1;
         }
-        // Record narrowed types after else branch
+        // Record facts after else branch
         nth.recordBranchAndRestore();
+        ash.recordBranchAndRestore();
     } else {
         // No else branch - the implicit else path preserves the original type
         // Record the saved state as an implicit branch
         nth.recordSavedAsImplicitBranch();
+        ash.recordSavedAsImplicitBranch();
     }
 
-    // Merge types from all branches
+    // Merge facts from all branches
     nth.mergeAndApply();
+    ash.mergeAndApply();
 
     return err;
 }

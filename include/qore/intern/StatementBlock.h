@@ -417,4 +417,31 @@ public:
     DLLLOCAL void recordSavedAsImplicitBranch();
 };
 
+//! Helper class to save and merge local-variable assignment state for branch tracking
+class AssignedStateHelper {
+private:
+    typedef std::vector<std::pair<LocalVar*, bool>> state_map_t;
+    state_map_t saved_states;
+    std::vector<state_map_t> branch_states;
+
+public:
+    //! Save the current assignment state of all visible local variables
+    DLLLOCAL void saveState();
+
+    //! Restore assignment state to the saved state
+    DLLLOCAL void restoreState();
+
+    //! Record current branch assignment state and restore to saved state
+    DLLLOCAL void recordBranchAndRestore();
+
+    //! Merge recorded branch states and apply only assignments common to all branches
+    DLLLOCAL void mergeAndApply();
+
+    //! Mark all saved local variables as not definitely assigned
+    DLLLOCAL void markSavedUnassigned();
+
+    //! Record the saved state as an implicit branch
+    DLLLOCAL void recordSavedAsImplicitBranch();
+};
+
 #endif // _QORE_STATEMENT_BLOCK_H
