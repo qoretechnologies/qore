@@ -1098,6 +1098,10 @@ uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg
 uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
     ExceptionSink* xsink);
 
+//! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
+uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
+    ExceptionSink* xsink);
+
 //! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
 uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits, int64_t start, int64_t length,
     int32_t has_length, ExceptionSink* xsink);

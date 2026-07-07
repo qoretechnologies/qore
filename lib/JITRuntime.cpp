@@ -13427,6 +13427,23 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bi
     return toBits(QoreValue(static_cast<int64_t>(result)));
 }
 
+//! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits,
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    QoreValue substring = fromBits(substring_bits);
+    QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    qore_offset_t result = str->rindex(**pattern, offset, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(static_cast<int64_t>(result)));
+}
+
 //! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits,
         int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {

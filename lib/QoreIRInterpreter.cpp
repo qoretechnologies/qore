@@ -133,6 +133,10 @@ static bool qore_ir_interpreter_is_string_pseudo_find(const QoreMethod* method, 
     return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "find");
 }
 
+static bool qore_ir_interpreter_is_string_pseudo_rfind(const QoreMethod* method, const QoreClass* qc) {
+    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "rfind");
+}
+
 static bool qore_ir_interpreter_is_string_pseudo_substr(const QoreMethod* method, const QoreClass* qc) {
     return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "substr");
 }
@@ -179,6 +183,13 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
         res = fromBits(qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink));
+        return true;
+    }
+
+    if (qore_ir_interpreter_is_string_pseudo_rfind(method, qc) && arg0_known_assigned_string
+            && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
+        int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : -1;
+        res = fromBits(qore_rt_pseudo_string_rfind_noguard(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 

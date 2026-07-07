@@ -146,8 +146,24 @@ static int qore_ir_get_string_pseudo_predicate_id(const QoreMethod* method, cons
     return -1;
 }
 
-static bool qore_ir_is_string_pseudo_find(const QoreMethod* method, const QoreClass* qc) {
-    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "find");
+struct QoreIRStringFindPseudoInfo {
+    const char* symbol = nullptr;
+    int64_t default_offset = 0;
+};
+
+static QoreIRStringFindPseudoInfo qore_ir_get_string_pseudo_find_info(const QoreMethod* method,
+        const QoreClass* qc) {
+    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
+        return {};
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "find")) {
+        return {"qore_rt_pseudo_string_find_noguard", 0};
+    }
+    if (!strcmp(method_name, "rfind")) {
+        return {"qore_rt_pseudo_string_rfind_noguard", -1};
+    }
+    return {};
 }
 
 static bool qore_ir_is_string_pseudo_substr(const QoreMethod* method, const QoreClass* qc) {
@@ -10735,11 +10751,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(direct_inst->method, direct_inst->qc) : -1;
+            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_pseudo_find_info(
+                direct_inst->method, direct_inst->qc);
             bool string_find_fast_path = direct_inst->pseudo
                 && direct_inst->pseudo_base_known_assigned_string
                 && direct_inst->pseudo_arg0_known_assigned_string
                 && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
-                && qore_ir_is_string_pseudo_find(direct_inst->method, direct_inst->qc);
+                && string_find_info.symbol;
             bool string_substr_fast_path = direct_inst->pseudo
                 && direct_inst->pseudo_base_known_assigned_string
                 && direct_inst->pseudo_arg0_known_assigned_int
@@ -10821,13 +10839,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
                 llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
-                llvm::Value* offset = llvm::ConstantInt::get(i64_type, 0);
+                llvm::Value* offset = llvm::ConstantInt::get(i64_type, string_find_info.default_offset);
                 if (nargs == 2) {
                     auto* offset_val = getVal(inst->operands[2].id, error);
                     if (!offset_val) { return false; }
                     offset = ensureIntTypeInline(offset_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_find_noguard",
+                auto helper = module.getOrInsertFunction(string_find_info.symbol,
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, arg_boxed, offset, xsink_arg});
                 clear_fast_path_arg_cleanups();
@@ -11080,11 +11098,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
                 ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->method, invoke_inst->qc) : -1;
+            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_pseudo_find_info(
+                invoke_inst->method, invoke_inst->qc);
             bool string_find_fast_path = invoke_inst->pseudo
                 && invoke_inst->pseudo_base_known_assigned_string
                 && invoke_inst->pseudo_arg0_known_assigned_string
                 && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
-                && qore_ir_is_string_pseudo_find(invoke_inst->method, invoke_inst->qc);
+                && string_find_info.symbol;
             bool string_substr_fast_path = invoke_inst->pseudo
                 && invoke_inst->pseudo_base_known_assigned_string
                 && invoke_inst->pseudo_arg0_known_assigned_int
@@ -11166,13 +11186,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
                 llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);
-                llvm::Value* offset = llvm::ConstantInt::get(i64_type, 0);
+                llvm::Value* offset = llvm::ConstantInt::get(i64_type, string_find_info.default_offset);
                 if (nargs == 2) {
                     auto* offset_val = getVal(inst->operands[2].id, error);
                     if (!offset_val) { return false; }
                     offset = ensureIntTypeInline(offset_val, inst->operands[2].id);
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_pseudo_string_find_noguard",
+                auto helper = module.getOrInsertFunction(string_find_info.symbol,
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, i64_type, ptr_type}, false));
                 call_result = builder->CreateCall(helper, {base_boxed, arg_boxed, offset, xsink_arg});
                 clear_fast_path_arg_cleanups();
