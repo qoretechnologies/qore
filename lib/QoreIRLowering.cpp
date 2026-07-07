@@ -10938,6 +10938,90 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
+    const char* string_find_method_name = nullptr;
+    if (func_name && !call->hasExplicitTypeArgs()) {
+        if (!strcmp(func_name, "index")) {
+            string_find_method_name = "find";
+        } else if (!strcmp(func_name, "rindex")) {
+            string_find_method_name = "rfind";
+        }
+    }
+    if (string_find_method_name) {
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
+        if (nargs == 2 || nargs == 3) {
+            std::vector<QoreValue> positional_args;
+            if (qore_ir_get_positional_call_args_no_holes(parse_args, args, nargs, positional_args)) {
+                QoreParseAnalysis base_analysis;
+                QoreParseAnalysis substring_analysis;
+                QoreParseAnalysis offset_analysis;
+                bool base_ok = getAnalysis(positional_args[0], base_analysis)
+                    && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                    && QoreTypeInfo::isType(selectAnalysisType(base_analysis), NT_STRING);
+                bool substring_ok = getAnalysis(positional_args[1], substring_analysis)
+                    && substring_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (substring_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || substring_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                    && QoreTypeInfo::isType(selectAnalysisType(substring_analysis), NT_STRING);
+                bool offset_ok = nargs == 2
+                    || (getAnalysis(positional_args[2], offset_analysis)
+                        && offset_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                        && (offset_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                            || offset_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                        && QoreTypeInfo::isType(selectAnalysisType(offset_analysis), NT_INT));
+                if (base_ok && substring_ok && offset_ok) {
+                    std::vector<QoreIRValue> operands;
+                    if (!lowerCallArgs(parse_args, args, operands, error)) {
+                        return QoreIRValue();
+                    }
+                    if (operands.size() == nargs) {
+                        QoreClass* qc = nullptr;
+                        const QoreMethod* method = pseudo_classes_find_method(NT_STRING, string_find_method_name, qc);
+                        if (method && qc) {
+                            QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
+                            QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
+                            if (!exception_stack.empty()) {
+                                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                                if (!normal_block) {
+                                    error = "IR builder failed to create invoke continuation block";
+                                    return QoreIRValue();
+                                }
+                                QoreIRBasicBlock* handler = exception_stack.back();
+                                invoke_inst = builder.createInvokeDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                    operands, normal_block, handler, call->loc);
+                                builder.setBlock(normal_block);
+                            } else {
+                                direct_inst = builder.createDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                    operands, call->loc);
+                            }
+
+                            auto set_pseudo_find_flags = [string_find_method_name, nargs](auto* inst) {
+                                inst->fallback_method_name = strdup(string_find_method_name);
+                                inst->pseudo_base_known_string = true;
+                                inst->pseudo_base_known_assigned_string = true;
+                                inst->pseudo_arg0_known_string = true;
+                                inst->pseudo_arg0_known_assigned_string = true;
+                                inst->pseudo_arg1_known_assigned_int = nargs == 3;
+                                inst->pseudo_base_safe_value_dispatch = true;
+                            };
+                            if (direct_inst) {
+                                set_pseudo_find_flags(direct_inst);
+                                never_nothing_values.insert(direct_inst->result.id);
+                                return direct_inst->result;
+                            }
+                            assert(invoke_inst);
+                            set_pseudo_find_flags(invoke_inst);
+                            never_nothing_values.insert(invoke_inst->result.id);
+                            return invoke_inst->result;
+                        }
+                    }
+                }
+            }
+        }
+    }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
