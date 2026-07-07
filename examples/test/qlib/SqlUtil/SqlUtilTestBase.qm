@@ -531,8 +531,11 @@ public class SqlTestBase inherits QUnit::Test {
         string sql;
         on_error printf("SQL: %s\n", sql);
 
-        foreach hash data in (insert_data)
-            assertEq(NOTHING, table.insert(data, \sql));
+        foreach hash data in (insert_data) {
+            hash<SqlResultInfo> info = table.insertWithInfo(data);
+            assertEq(Type::String, info.sql.type());
+            assertEq(data.size(), info.args.size());
+        }
     }
 
     selectTest() {

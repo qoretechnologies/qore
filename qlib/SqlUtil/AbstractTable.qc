@@ -3411,8 +3411,7 @@ table.insert(row);
         sql += ")";
 
         list<auto> exec_args = vh.values;
-        if (exists args)
-            args = exec_args;
+        args = exec_args;
 
         # check for a bulk insert in case the driver does not support array binding
         if (!hasArrayBind()) {
