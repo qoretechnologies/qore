@@ -10616,6 +10616,56 @@ static bool qore_ir_get_single_positional_call_arg(const QoreParseListNode* pars
     return true;
 }
 
+static bool qore_ir_get_positional_call_args_no_holes(const QoreParseListNode* parse_args,
+        const QoreListNode* args, size_t nargs, std::vector<QoreValue>& positional_args) {
+    positional_args.clear();
+    if (parse_args) {
+        if (parse_args->size() != nargs) {
+            return false;
+        }
+        positional_args.reserve(nargs);
+        for (size_t i = 0; i < nargs; ++i) {
+            positional_args.push_back(parse_args->get(i));
+        }
+        return true;
+    }
+    if (!args) {
+        return nargs == 0;
+    }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+        if (!pos_map || args_priv->getCallArgEvalResultSize() != nargs || args_priv->callArgEvalMapHasHoles()) {
+            return false;
+        }
+        assert(pos_map->size() == args->size());
+        positional_args.resize(nargs);
+        std::vector<bool> seen(nargs, false);
+        for (size_t i = 0; i < args->size(); ++i) {
+            size_t pos = (*pos_map)[i];
+            if (pos >= nargs || seen[pos]) {
+                return false;
+            }
+            positional_args[pos] = args->retrieveEntry(i);
+            seen[pos] = true;
+        }
+        for (bool s : seen) {
+            if (!s) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (args->size() != nargs) {
+        return false;
+    }
+    positional_args.reserve(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        positional_args.push_back(args->retrieveEntry(i));
+    }
+    return true;
+}
+
 static bool qore_ir_call_args_have_named_holes(const QoreListNode* args) {
     const qore_list_private* args_priv = qore_list_private::get(args);
     return args_priv && args_priv->callArgEvalMapHasHoles();
@@ -10809,6 +10859,81 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                     inst->pseudo_base_safe_value_dispatch = true;
                     never_nothing_values.insert(inst->result.id);
                     return inst->result;
+                }
+            }
+        }
+    }
+    if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
+        if (nargs == 2 || nargs == 3) {
+            std::vector<QoreValue> positional_args;
+            if (qore_ir_get_positional_call_args_no_holes(parse_args, args, nargs, positional_args)) {
+                QoreParseAnalysis base_analysis;
+                QoreParseAnalysis start_analysis;
+                QoreParseAnalysis length_analysis;
+                bool base_ok = getAnalysis(positional_args[0], base_analysis)
+                    && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                    && QoreTypeInfo::isType(selectAnalysisType(base_analysis), NT_STRING);
+                bool start_ok = getAnalysis(positional_args[1], start_analysis)
+                    && start_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (start_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || start_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                    && QoreTypeInfo::isType(selectAnalysisType(start_analysis), NT_INT);
+                bool length_ok = nargs == 2
+                    || (getAnalysis(positional_args[2], length_analysis)
+                        && length_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                        && (length_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                            || length_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                        && QoreTypeInfo::isType(selectAnalysisType(length_analysis), NT_INT));
+                if (base_ok && start_ok && length_ok) {
+                    std::vector<QoreIRValue> operands;
+                    if (!lowerCallArgs(parse_args, args, operands, error)) {
+                        return QoreIRValue();
+                    }
+                    if (operands.size() == nargs) {
+                        QoreClass* qc = nullptr;
+                        const QoreMethod* method = pseudo_classes_find_method(NT_STRING, func_name, qc);
+                        if (method && qc) {
+                            QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
+                            QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
+                            if (!exception_stack.empty()) {
+                                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                                if (!normal_block) {
+                                    error = "IR builder failed to create invoke continuation block";
+                                    return QoreIRValue();
+                                }
+                                QoreIRBasicBlock* handler = exception_stack.back();
+                                invoke_inst = builder.createInvokeDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                    operands, normal_block, handler, call->loc);
+                                builder.setBlock(normal_block);
+                            } else {
+                                direct_inst = builder.createDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                    operands, call->loc);
+                            }
+
+                            auto set_pseudo_substr_flags = [func_name, nargs](auto* inst) {
+                                inst->fallback_method_name = strdup(func_name);
+                                inst->pseudo_base_known_string = true;
+                                inst->pseudo_base_known_assigned_string = true;
+                                inst->pseudo_arg0_known_assigned_int = true;
+                                inst->pseudo_arg1_known_assigned_int = nargs == 3;
+                                inst->pseudo_base_safe_value_dispatch = true;
+                            };
+                            if (direct_inst) {
+                                set_pseudo_substr_flags(direct_inst);
+                                never_nothing_values.insert(direct_inst->result.id);
+                                return direct_inst->result;
+                            }
+                            assert(invoke_inst);
+                            set_pseudo_substr_flags(invoke_inst);
+                            never_nothing_values.insert(invoke_inst->result.id);
+                            return invoke_inst->result;
+                        }
+                    }
                 }
             }
         }
