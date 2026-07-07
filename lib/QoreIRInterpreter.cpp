@@ -164,6 +164,19 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
     return false;
 }
 
+static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool base_safe_value_dispatch,
+        const QoreMethod* method, const QoreClass* qc, const QoreValue& base, int nargs, QoreValue& res) {
+    if (!pseudo || !base_safe_value_dispatch || nargs || !method || !qc) {
+        return false;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "toNumber")) {
+        res = fromBits(qore_rt_pseudo_toNumber(toBits(base)));
+        return true;
+    }
+    return false;
+}
+
 static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_assigned_string,
         bool arg0_known_assigned_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
         const QoreMethod* method, const QoreClass* qc, const QoreValue& base, uint64_t* nanboxed_args,
@@ -12531,7 +12544,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (qore_ir_try_string_no_arg_pseudo_fast_path(direct_inst->pseudo,
+                    if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(direct_inst->pseudo,
+                            direct_inst->pseudo_base_safe_value_dispatch, pseudo_method, pseudo_qc,
+                            base, nargs, res)) {
+                        // Result produced by the inline safe <value> pseudo-method helper.
+                    } else if (qore_ir_try_string_no_arg_pseudo_fast_path(direct_inst->pseudo,
                             direct_inst->pseudo_base_known_assigned_string, pseudo_method, pseudo_qc,
                             base, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.
@@ -12712,7 +12729,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (qore_ir_try_string_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                    if (qore_ir_try_safe_value_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
+                            de_invoke_inst->pseudo_base_safe_value_dispatch, pseudo_method, pseudo_qc,
+                            base, nargs, res)) {
+                        // Result produced by the inline safe <value> pseudo-method helper.
+                    } else if (qore_ir_try_string_no_arg_pseudo_fast_path(de_invoke_inst->pseudo,
                             de_invoke_inst->pseudo_base_known_assigned_string, pseudo_method, pseudo_qc,
                             base, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.

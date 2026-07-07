@@ -13505,6 +13505,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     return toBits(QoreValue::makeStringValue(v.getTypeName()));
 }
 
+//! Fast pseudo-method: <value>::toNumber().
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_toNumber(uint64_t val_bits) {
+    QoreValue v = fromBits(val_bits);
+    return toBits(QoreValue(QoreNumberNode::toNumber(v)));
+}
+
 namespace {
 QoreValue doBackgroundWithLocation(const QoreProgramLocation* node_loc, QoreValue expr, ExceptionSink* xsink);
 }

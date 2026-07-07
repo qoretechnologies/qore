@@ -183,6 +183,9 @@ static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(const QoreMet
     if (!strcmp(method_name, "type")) {
         return {"qore_rt_pseudo_type", true};
     }
+    if (!strcmp(method_name, "toNumber")) {
+        return {"qore_rt_pseudo_toNumber", true};
+    }
     if (!strcmp(method_name, "empty")) {
         return strcmp(class_name, "<buffer>") ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_empty", false}
             : QoreIRPseudoHelperInfo{};

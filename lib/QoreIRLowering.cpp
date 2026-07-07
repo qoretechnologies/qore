@@ -11022,6 +11022,59 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
+    if (func_name && !strcmp(func_name, "number") && !call->hasExplicitTypeArgs()) {
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        QoreValue arg_expr;
+        QoreParseAnalysis arg_analysis;
+        if (qore_ir_get_single_positional_call_arg(parse_args, args, arg_expr)
+                && getAnalysis(arg_expr, arg_analysis)
+                && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)) {
+            const QoreTypeInfo* arg_type = selectAnalysisType(arg_analysis);
+            if (arg_type && !qore_ir_type_may_require_dot_eval_name_dispatch(arg_type)) {
+                std::vector<QoreIRValue> operands;
+                if (!lowerCallArgs(parse_args, args, operands, error)) {
+                    return QoreIRValue();
+                }
+                if (operands.size() == 1) {
+                    QoreClass* qc = nullptr;
+                    const QoreMethod* method = pseudo_classes_find_method(NT_NOTHING, "toNumber", qc);
+                    if (method && qc) {
+                        QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
+                        QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
+                        if (!exception_stack.empty()) {
+                            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                            if (!normal_block) {
+                                error = "IR builder failed to create invoke continuation block";
+                                return QoreIRValue();
+                            }
+                            QoreIRBasicBlock* handler = exception_stack.back();
+                            invoke_inst = builder.createInvokeDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                operands, normal_block, handler, call->loc);
+                            builder.setBlock(normal_block);
+                        } else {
+                            direct_inst = builder.createDotEvalMethodDirect(method, qc, nullptr, expr, true,
+                                operands, call->loc);
+                        }
+
+                        auto set_pseudo_to_number_flags = [](auto* inst) {
+                            inst->fallback_method_name = strdup("toNumber");
+                            inst->pseudo_base_safe_value_dispatch = true;
+                        };
+                        if (direct_inst) {
+                            set_pseudo_to_number_flags(direct_inst);
+                            never_nothing_values.insert(direct_inst->result.id);
+                            return direct_inst->result;
+                        }
+                        assert(invoke_inst);
+                        set_pseudo_to_number_flags(invoke_inst);
+                        never_nothing_values.insert(invoke_inst->result.id);
+                        return invoke_inst->result;
+                    }
+                }
+            }
+        }
+    }
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
