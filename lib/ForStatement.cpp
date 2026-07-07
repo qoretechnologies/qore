@@ -219,8 +219,16 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
         if (iterator && code) {
             // Parse order is iterator then body, but runtime order is body then
             // iterator. Without operation-level assignment deltas, keep this
-            // shape conservative for definitely-assigned analysis.
-            ash.markSavedUnassigned();
+            // shape conservative for definitely-assigned analysis by restoring
+            // the pre-loop assignment state: the loop body may not execute, so
+            // no assignment made inside it can be treated as definitely assigned
+            // afterwards. Restoring (rather than unconditionally unassigning) is
+            // required so that variables already assigned before the loop -- in
+            // particular reference/output parameters bound on entry -- keep their
+            // assigned state; otherwise a bound reference<T> parameter used after
+            // the loop would revert to its raw reference<T> type and fail to
+            // dereference to T at value-argument positions.
+            ash.restoreState();
         } else {
             ash.recordBranchAndRestore();
             ash.recordSavedAsImplicitBranch();
