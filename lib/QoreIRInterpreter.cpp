@@ -2407,6 +2407,8 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     return true;
 }
 
+static const AbstractQoreFunctionVariant* getSingleInterpreterMethodVariant(const QoreMethod* method);
+
 template <typename DirectMethodInst>
 static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const QoreMethod* method,
         QoreObject* self, const QoreTypeInfo* receiver_type_info, int8_t inline_state,
@@ -2434,7 +2436,17 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
-    ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
+    // Use the executing variant's class as the runtime class context (not
+    // method->getClass()): for a method injected/synthesized into a derived
+    // class to satisfy an abstract sibling slot, method->getClass() is the
+    // derived class, but the variant's body resolves private:internal members
+    // against the class where the variant is defined.  This mirrors
+    // UserMethodVariant::evalMethod(), which uses the variant's getClassPriv().
+    const AbstractQoreFunctionVariant* eval_variant = inst->variant
+        ? inst->variant : getSingleInterpreterMethodVariant(method);
+    const qore_class_private* method_ctx = eval_variant
+        ? METHV_const(eval_variant)->getClassPriv() : qore_class_private::get(*method->getClass());
+    ObjectSubstitutionHelper osh(self, method_ctx);
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
 

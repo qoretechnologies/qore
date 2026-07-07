@@ -7653,8 +7653,15 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     // determine call-stack depth for debugger introspection.
     ThreadFrameBoundaryHelper tfbh(true);
 
-    // Push self object onto the method call stack (for runtime_get_stack_object())
-    ObjectSubstitutionHelper osh(self, qore_class_private::get(*method->getClass()));
+    // Push self object onto the method call stack (for runtime_get_stack_object()).
+    // Use the variant's class as the runtime class context (not method->getClass()):
+    // for a method injected/synthesized into a derived class to satisfy an abstract
+    // sibling slot, method->getClass() is the derived class, but the variant's body
+    // resolves private:internal members against the class where the variant is
+    // defined.  This mirrors UserMethodVariant::evalMethod()'s use of getClassPriv().
+    const qore_class_private* method_ctx = variant
+        ? METHV_const(variant)->getClassPriv() : qore_class_private::get(*method->getClass());
+    ObjectSubstitutionHelper osh(self, method_ctx);
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
     const QoreIRFunction* ir = uvb->getCachedIR();
