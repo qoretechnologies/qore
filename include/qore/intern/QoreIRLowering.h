@@ -34,6 +34,7 @@
 
 #include <stack>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -363,6 +364,7 @@ private:
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const;
+    QoreIRValue findLoopInvariantListSize(LocalVar* local) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
@@ -576,6 +578,9 @@ private:
     //! DotEvalMethodDirect/HashKeyAccess).  Used by lowerMapNative to determine whether
     //! push/pop implicit arg calls are needed for the map body.
     int ast_delegate_count = 0;
+
+    //! Hoisted per-loop values for safe, invariant <list>.size() expressions.
+    std::vector<std::unordered_map<LocalVar*, QoreIRValue>> loop_invariant_list_sizes;
 };
 
 #endif
