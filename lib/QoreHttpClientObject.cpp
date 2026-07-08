@@ -4107,6 +4107,7 @@ int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  
         } else {
             rc = http_priv->setProxyUrlUnlocked(proxy, xsink);
         }
+        http_priv->resetConnMgr();
     }
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     return rc;
@@ -4132,8 +4133,14 @@ QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
 }
 
 void QoreHttpClientObject::clearProxyURL() {
-    SafeLocker sl(priv->m);
-    http_priv->proxy_connection.clear();
+    qore_socket_private* close_priv = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        http_priv->proxy_connection.clear();
+        http_priv->resetConnMgr();
+    }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
 QoreStringNode* QoreHttpClientObject::getUsername() const {
