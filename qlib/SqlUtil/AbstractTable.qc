@@ -5392,6 +5392,42 @@ string sql = table.getSelectSql(sh, \args);
         return opt.tablecode ? opt.tablecode(ds, table) : new Table(ds, table).getTable();
     }
 
+    private ensureColumnsForDpql() {
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+            getColumnsUnlocked();
+        }
+    }
+
+    private hash<string, hash<DataProviderExpressionInfo>> getDpqlExpressionInfoMap() {
+        return cast<hash<string, hash<DataProviderExpressionInfo>>>(
+            map {$1.key: $1.value.exp}, getExpressionMap().pairIterator());
+    }
+
+    private hash<QueryInfo> getDpqlExpressionQueryInfo() {
+        return <QueryInfo>{
+            "table": self,
+            "args": (),
+            "query_hash": {},
+            "pseudo_column_map": {} + getPseudoColumnHash(),
+            "expression_map": getExpressionMap(),
+
+            # backwards-compatibility
+            "where_operator_map": getWhereOperatorMap(),
+            "column_operator_map": getColumnOperatorMap(),
+        };
+    }
+
+    private hash<DataProviderExpression> parseDpqlExpressionIntern(string dpql, int role,
+            AbstractDataProviderType expected_type) {
+        hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(dpql, getDpqlExpressionInfoMap());
+        ensureColumnsForDpql();
+        hash<QueryInfo> qinfo = getDpqlExpressionQueryInfo();
+        getExpressionIntern(\qinfo, role, exp, expected_type);
+        return exp;
+    }
+
     string getExpressionArg(reference<hash<QueryInfo>> info, int role, auto arg,
             AbstractDataProviderType expected_type) {
         if (arg instanceof hash<DataProviderFieldReference>) {
@@ -5941,6 +5977,396 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
         return rv;
     }
 
+    #! Parses a DPQL search expression string for this table
+    /** @param dpql the DPQL search expression to parse; field references must match table columns
+
+        @return the parsed expression
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+        @throw SQLUTIL-EXPRESSION-ERROR invalid or unsupported expression
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<DataProviderExpression> parseDpqlSearchExpression(string dpql) {
+        return parseDpqlExpressionIntern(dpql, ER_Search, AbstractDataProviderTypeMap."bool");
+    }
+
+    #! Parses a DPQL field expression string for this table
+    /** @param dpql the DPQL field expression to parse; field references must match table columns
+        @param target_column optional target column for type validation, for example an update assignment target
+
+        @return the parsed expression
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+        @throw SQLUTIL-EXPRESSION-ERROR invalid or unsupported expression
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<DataProviderExpression> parseDpqlFieldExpression(string dpql, *string target_column) {
+        AbstractDataProviderType expected_type = target_column ? getColumnDataType(target_column)
+            : AbstractDataProviderTypeMap."any";
+        return parseDpqlExpressionIntern(dpql, ER_Field, expected_type);
+    }
+
+    #! Parses a hash of DPQL update assignment expressions for this table
+    /** @param set hash of target column names to DPQL field expression strings
+
+        @return a set hash suitable for @ref update() or @ref updateCommit()
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+        @throw SQLUTIL-EXPRESSION-ERROR invalid or unsupported expression
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<auto> parseDpqlUpdateSet(hash<string, string> set) {
+        hash<auto> rv = {};
+        HashIterator i(set);
+        while (i.next()) {
+            string key = i.getKey();
+            rv{key} = parseDpqlFieldExpression(i.getValue(), key);
+        }
+        return rv;
+    }
+
+    #! Parses a hash of aliased DPQL select expressions for this table
+    /** @param columns hash of output column aliases to DPQL field expression strings
+
+        @return a column list suitable for the \c "columns" key in a @ref select_option_hash "select option hash"
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+        @throw SQLUTIL-EXPRESSION-ERROR invalid or unsupported expression
+
+        @since %SqlUtil 3.0.0
+    */
+    list<auto> parseDpqlSelectColumns(hash<string, string> columns) {
+        list<auto> rv = ();
+        HashIterator i(columns);
+        while (i.next()) {
+            rv += <DataProviderExpression>{
+                "exp": COP_AS,
+                "args": (
+                    parseDpqlFieldExpression(i.getValue()),
+                    i.getKey(),
+                ),
+            };
+        }
+        return rv;
+    }
+
+    #! Converts DPQL select options into a regular select option hash
+    /** Converts the following optional keys:
+        - \c "columns_dpql": a hash of output column aliases to DPQL field expression strings
+        - \c "where_dpql": a DPQL search expression string
+
+        @param select_hash a select option hash with optional DPQL extension keys
+
+        @return a regular @ref select_option_hash "select option hash"
+
+        @throw OPTION-ERROR \c "columns_dpql" is combined with \c "columns" or \c "where_dpql" is combined with
+        \c "where"
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+        @throw SQLUTIL-EXPRESSION-ERROR invalid or unsupported expression
+
+        @since %SqlUtil 3.0.0
+    */
+    *hash<auto> prepareDpqlSelectHash(*hash<auto> select_hash) {
+        if (!select_hash) {
+            return NOTHING;
+        }
+
+        bool has_columns_dpql = select_hash.hasKey("columns_dpql");
+        bool has_where_dpql = select_hash.hasKey("where_dpql");
+        if (!has_columns_dpql && !has_where_dpql) {
+            return select_hash;
+        }
+        if (has_columns_dpql && select_hash.hasKey("columns")) {
+            throw "OPTION-ERROR", sprintf("%s: \"columns\" and \"columns_dpql\" select options are mutually "
+                "exclusive", getDesc());
+        }
+        if (has_where_dpql && select_hash.hasKey("where")) {
+            throw "OPTION-ERROR", sprintf("%s: \"where\" and \"where_dpql\" select options are mutually exclusive",
+                getDesc());
+        }
+
+        hash<auto> rv = {};
+        HashIterator i(select_hash);
+        while (i.next()) {
+            string key = i.getKey();
+            if (key != "columns_dpql" && key != "where_dpql") {
+                rv{key} = i.getValue();
+            }
+        }
+        if (has_columns_dpql) {
+            rv.columns = parseDpqlSelectColumns(cast<hash<string, string>>(select_hash.columns_dpql));
+        }
+        if (has_where_dpql) {
+            rv.where = parseDpqlSearchExpression(cast<string>(select_hash.where_dpql));
+        }
+        return rv;
+    }
+
+    #! returns a hash representing the row in the table that matches the DPQL select option hash; if more than one row would be returned an exception is raised
+    /** @par Example:
+        @code{.py}
+*hash<auto> h = table.selectRowDpql({
+    "columns_dpql": {"next_counter": "@counter + 1"},
+    "where_dpql": "@id == 1",
+});
+        @endcode
+
+        @param sh a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return a hash representing the row in the table that matches the argument hash; if more than one row would
+        be returned an exception is raised
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DBI-SELECT-ROW-ERROR more than 1 row retrieved from the server
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    *hash<auto> selectRowDpql(*hash<auto> sh, *hash<auto> opt) {
+        return selectRowIntern(prepareDpqlSelectHash(sh), NOTHING, opt);
+    }
+
+    #! returns a hash with a result representing the row in the table that matches the DPQL select option hash; if more than one row would be returned an exception is raised
+    /** @param select_hash a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return an info hash; the \c result key will contain a hash representing the row in the table that matches the
+        argument hash; if more than one row would be returned an exception is raised
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DBI-SELECT-ROW-ERROR more than 1 row retrieved from the server
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> selectRowDpqlWithInfo(*hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = selectRowIntern(prepareDpqlSelectHash(select_hash), \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
+    #! returns a list of hashes representing the rows in the table that match the DPQL select option hash
+    /** @param sh a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return a list of hashes representing the rows in the table that match the argument hash
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    *list<auto> selectRowsDpql(*hash<auto> sh, *hash<auto> opt) {
+        return selectRowsIntern(prepareDpqlSelectHash(sh), NOTHING, opt);
+    }
+
+    #! returns a hash with a result key assigned to a list of hashes representing the rows in the table that match the DPQL select option hash
+    /** @param select_hash a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return an info hash; the \c result key will contain a list of hashes representing the rows in the table that
+        match the argument hash
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> selectRowsDpqlWithInfo(*hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = selectRowsIntern(prepareDpqlSelectHash(select_hash), \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
+    #! returns a hash of lists representing the columns and rows in the table that match the DPQL select option hash
+    /** @param sh a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return a hash of lists representing the columns and rows in the table that match the argument hash
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    *hash<auto> selectDpql(*hash<auto> sh, *hash<auto> opt) {
+        return selectIntern(prepareDpqlSelectHash(sh), NOTHING, opt);
+    }
+
+    #! returns a hash with a \c result key assigned to a hash of lists representing the columns and rows in the table that match the DPQL select option hash
+    /** @param select_hash a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
+        more info
+
+        @return a hash with the \c result key assigned to a hash of lists representing the columns and rows in the
+        table that match the argument hash
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> selectDpqlWithInfo(*hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = selectIntern(prepareDpqlSelectHash(select_hash), \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
+    #! returns the SQL string to be executed corresponding to the DPQL select option hash with an output parameter for the select bind arguments
+    /** @param sh a select option hash with optional DPQL extension keys; see @ref prepareDpqlSelectHash()
+        @param args an optional reference to a list for any bind arguments
+
+        @return the SQL that can be used to execute a select on the database corresponding to the arguments; the
+        select bind arguments are returned in an output parameter
+
+        @throw OPTION-ERROR invalid or unsupported select option
+        @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and
+        \c 'offset' does not match any unique constraint
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    string getSelectDpqlSql(*hash<auto> sh, *reference<list<auto>> args) {
+        return getSelectSql(prepareDpqlSelectHash(sh), \args);
+    }
+
+    #! deletes rows in the table matching the given DPQL search expression; the transaction is committed if successful, if an error occurs then it is rolled back
+    /** @par Example:
+        @code{.py}
+int dcnt = table.delDpqlCommit('@status == "inactive"');
+        @endcode
+
+        @param cond DPQL search expression for the where clause
+        @param sql an optional reference to a string to return the generated SQL
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return the count of rows deleted
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @see delDpql()
+
+        @since %SqlUtil 3.0.0
+    */
+    int delDpqlCommit(string cond, reference<string> sql, hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return delIntern(parseDpqlSearchExpression(cond), \sql, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpqlCommit() variant
+    int delDpqlCommit(string cond, hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return delIntern(parseDpqlSearchExpression(cond), NOTHING, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpqlCommit() variant
+    int delDpqlCommit(string cond, reference<string> sql) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return delIntern(parseDpqlSearchExpression(cond), \sql);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpqlCommit() variant
+    int delDpqlCommit(string cond) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return delIntern(parseDpqlSearchExpression(cond));
+    }
+
+    #! deletes rows in the table matching the given DPQL search expression; no transaction management is performed with this method
+    /** @par Example:
+        @code{.py}
+int dcnt = table.delDpql('@status == "inactive"');
+        @endcode
+
+        @param cond DPQL search expression for the where clause
+        @param sql an optional reference to a string to return the generated SQL
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return the count of rows deleted
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @see delDpqlCommit()
+
+        @since %SqlUtil 3.0.0
+    */
+    int delDpql(string cond, reference<string> sql, hash<auto> opt) {
+        return delIntern(parseDpqlSearchExpression(cond), \sql, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpql() variant
+    int delDpql(string cond, hash<auto> opt) {
+        return delIntern(parseDpqlSearchExpression(cond), NOTHING, opt);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpql() variant
+    int delDpql(string cond, reference<string> sql) {
+        return delIntern(parseDpqlSearchExpression(cond), \sql);
+    }
+
+    #! @ref SqlUtil::AbstractTable::delDpql() variant
+    int delDpql(string cond) {
+        return delIntern(parseDpqlSearchExpression(cond));
+    }
+
+    #! deletes rows in the table matching the given DPQL search expression and returns execution info; no transaction management is performed with this method
+    /** @param cond DPQL search expression for the where clause
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return a hash where the \c result key is the count of rows deleted
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> delDpqlWithInfo(string cond, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = delIntern(parseDpqlSearchExpression(cond), \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
     #! A legacy @ref SqlUtil::AbstractTable::del() wrapper
     deprecated int delNoCommit(*hash<auto> cond, *reference<string> sql) {
         return del(cond, \sql);
@@ -6077,6 +6503,135 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
     hash<SqlResultInfo> updateWithInfo(hash<auto> set, hash<auto> cond, *hash<auto> opt) {
         hash<SqlResultInfo> rv();
         rv.result = updateIntern(set, cond, \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
+    #! updates rows in the table using DPQL assignment expressions and a DPQL search expression; the transaction is committed if successful, if an error occurs then it is rolled back
+    /** @par Example:
+        @code{.py}
+int ucnt = table.updateDpqlCommit({"counter": "@counter + 1"}, '@status == "active"');
+        @endcode
+
+        @param set hash of target column names to DPQL field expression strings
+        @param cond DPQL search expression for the where clause
+        @param sql an optional reference to a string to return the generated SQL
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return the count of rows updated
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @see updateDpql()
+
+        @since %SqlUtil 3.0.0
+    */
+    int updateDpqlCommit(hash<string, string> set, string cond, reference<string> sql, hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), \sql, opt);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpqlCommit() variant
+    int updateDpqlCommit(hash<string, string> set, string cond, reference<string> sql) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), \sql);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpqlCommit() variant
+    int updateDpqlCommit(hash<string, string> set, string cond, hash<auto> opt) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), NOTHING, opt);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpqlCommit() variant
+    int updateDpqlCommit(hash<string, string> set, string cond) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond));
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpqlCommit() variant that updates all rows
+    int updateDpqlCommit(hash<string, string> set) {
+        on_success ds.commit();
+        on_error ds.rollback();
+        return updateIntern(parseDpqlUpdateSet(set));
+    }
+
+    #! updates rows in the table using DPQL assignment expressions and a DPQL search expression; no transaction management is performed with this method
+    /** @par Example:
+        @code{.py}
+int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
+        @endcode
+
+        @param set hash of target column names to DPQL field expression strings
+        @param cond DPQL search expression for the where clause
+        @param sql an optional reference to a string to return the generated SQL
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return the count of rows updated
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @see updateDpqlCommit()
+
+        @since %SqlUtil 3.0.0
+    */
+    int updateDpql(hash<string, string> set, string cond, reference<string> sql, hash<auto> opt) {
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), \sql, opt);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpql() variant
+    int updateDpql(hash<string, string> set, string cond, reference<string> sql) {
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), \sql);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpql() variant
+    int updateDpql(hash<string, string> set, string cond, hash<auto> opt) {
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), NOTHING, opt);
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpql() variant
+    int updateDpql(hash<string, string> set, string cond) {
+        return updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond));
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpql() variant that updates all rows
+    int updateDpql(hash<string, string> set) {
+        return updateIntern(parseDpqlUpdateSet(set));
+    }
+
+    #! updates rows using DPQL assignment expressions and a DPQL search expression and returns execution info; no transaction management is performed with this method
+    /** @param set hash of target column names to DPQL field expression strings
+        @param cond DPQL search expression for the where clause
+        @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
+
+        @return an info hash where the \c result key is assigned to the count of rows updated
+
+        @throw DPQL-PARSE-ERROR invalid DPQL syntax
+        @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
+        @throw COLUMN-ERROR invalid column reference
+
+        @since %SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> updateDpqlWithInfo(hash<string, string> set, string cond, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = updateIntern(parseDpqlUpdateSet(set), parseDpqlSearchExpression(cond), \rv.sql, opt, \rv.args);
+        return rv;
+    }
+
+    #! A @ref SqlUtil::AbstractTable::updateDpqlWithInfo() variant that updates all rows
+    hash<SqlResultInfo> updateDpqlWithInfo(hash<string, string> set, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.result = updateIntern(parseDpqlUpdateSet(set), NOTHING, \rv.sql, opt, \rv.args);
         return rv;
     }
 

@@ -121,6 +121,9 @@ module SqlUtil {
       columns on PostgreSQL or any value on SQLite3).  Both the canonical \c (field, list) form and the
       variadic \c (field, v1, v2, ...) form produced by the DPQL parser are now accepted and generate
       correct SQL
+    - added DPQL helpers and execution wrappers for SQL select projections, search conditions, update
+      assignment expressions, and delete conditions in @ref SqlUtil::AbstractTable "AbstractTable";
+      canonical DPQL value and arithmetic expressions are now supported by the default SQL expression map
     - implemented support for specifying the columns to use for upserts separately from the row data
       (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
     - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
@@ -4672,6 +4675,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     + ")";
             },
         },
+        DP_EXPR_VALUE: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_EXPR_VALUE},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+            },
+        },
         OP_LT: {
             "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_LT},
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -5149,6 +5158,40 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
                 string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
                 return sprintf("%s * %s", exp0, exp1);
+            },
+        },
+        DP_OP_MINUS: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_MINUS},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
+                return sprintf("%s - %s", exp0, exp1);
+            },
+        },
+        DP_OP_PLUS: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_PLUS},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return "("
+                    + (foldl $1 + " + " + $2,
+                        (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args))
+                    + ")";
+            },
+        },
+        DP_OP_DIV: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_DIV},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
+                return sprintf("%s / %s", exp0, exp1);
+            },
+        },
+        DP_OP_MULT: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_MULT},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return "("
+                    + (foldl $1 + " * " + $2,
+                        (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args))
+                    + ")";
             },
         },
         COP_LENGTH: {
