@@ -48,6 +48,7 @@ class QoreParseContext;
 class QoreParseListNode;
 class QoreListNode;
 class QoreValue;
+class AbstractQoreNode;
 class VarRefNode;
 class AbstractStatement;
 class StatementBlock;
@@ -365,6 +366,7 @@ private:
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const;
     QoreIRValue findLoopInvariantListSize(LocalVar* local) const;
+    QoreIRValue findLoopInvariantValue(const QoreValue& expr) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc, std::string& error, bool has_ref_args = false);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,
@@ -581,6 +583,9 @@ private:
 
     //! Hoisted per-loop values for safe, invariant <list>.size() expressions.
     std::vector<std::unordered_map<LocalVar*, QoreIRValue>> loop_invariant_list_sizes;
+
+    //! Hoisted per-loop values for safe invariant expressions keyed by AST node.
+    std::vector<std::unordered_map<const AbstractQoreNode*, QoreIRValue>> loop_invariant_values;
 };
 
 #endif

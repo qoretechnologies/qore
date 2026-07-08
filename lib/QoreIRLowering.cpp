@@ -611,6 +611,14 @@ static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
     return type_info && QoreTypeInfo::isType(type_info, NT_LIST);
 }
 
+static bool qoreIrIsAssignedPlainStringLocal(LocalVar* local) {
+    if (!local || local->closureUse() || !local->isAssigned()) {
+        return false;
+    }
+    const QoreTypeInfo* type_info = local->parseGetTypeInfo();
+    return type_info && QoreTypeInfo::isType(type_info, NT_STRING);
+}
+
 static LocalVar* qoreIrGetHoistableListSizeLocal(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return nullptr;
@@ -639,6 +647,38 @@ static LocalVar* qoreIrGetHoistableListSizeLocal(const QoreValue& expr) {
     return qoreIrIsAssignedPlainListLocal(local) ? local : nullptr;
 }
 
+static bool qoreIrIsStringLengthMethodName(const char* name) {
+    return name && (!strcmp(name, "size") || !strcmp(name, "strlen") || !strcmp(name, "length"));
+}
+
+static LocalVar* qoreIrGetHoistableStringLengthLocal(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return nullptr;
+    }
+    if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        MethodCallNode* method_call = dot->getMethodCall();
+        if (!method_call || !method_call->isPseudo() || !qoreIrCallHasNoArgs(method_call)
+                || !qoreIrIsStringLengthMethodName(method_call->getName())) {
+            return nullptr;
+        }
+        const QoreMethod* method = method_call->getMethod();
+        if (method && method->getClass() && strcmp(method->getClass()->getName(), "<string>")) {
+            return nullptr;
+        }
+        const VarRefNode* base_var = qoreIrGetDirectLocalVarRef(dot->getExpression());
+        if (!base_var) {
+            return nullptr;
+        }
+        LocalVar* local = base_var->ref.id;
+        return qoreIrIsAssignedPlainStringLocal(local) ? local : nullptr;
+    }
+    return nullptr;
+}
+
 static bool qoreIrStatementBlockInvalidatesListSizeHoist(const StatementBlock* block,
         const std::unordered_set<LocalVar*>& candidates);
 
@@ -661,7 +701,7 @@ static bool qoreIrExpressionInvalidatesListSizeHoist(const QoreValue& expr,
     if (!node) {
         return false;
     }
-    if (qoreIrGetHoistableListSizeLocal(expr)) {
+    if (qoreIrGetHoistableListSizeLocal(expr) || qoreIrGetHoistableStringLengthLocal(expr)) {
         return false;
     }
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
@@ -705,12 +745,19 @@ static bool qoreIrExpressionInvalidatesListSizeHoist(const QoreValue& expr,
 }
 
 static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
-        std::unordered_set<LocalVar*>& candidates, bool& cancelled) {
+        std::unordered_set<LocalVar*>& list_candidates, std::unordered_set<LocalVar*>& invalidation_candidates,
+        std::vector<QoreValue>& value_candidates, bool& cancelled) {
     if (cancelled || !expr.hasNode()) {
         return;
     }
     if (LocalVar* local = qoreIrGetHoistableListSizeLocal(expr)) {
-        candidates.insert(local);
+        list_candidates.insert(local);
+        invalidation_candidates.insert(local);
+        return;
+    }
+    if (LocalVar* local = qoreIrGetHoistableStringLengthLocal(expr)) {
+        invalidation_candidates.insert(local);
+        value_candidates.push_back(expr);
         return;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
@@ -718,7 +765,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
         return;
     }
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(dot->getExpression(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(dot->getExpression(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         if (cancelled) {
             return;
         }
@@ -729,7 +777,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                         cancelled = true;
                         return;
                     }
-                    qoreIrCollectListSizeHoistCandidates(parse_args->get(i), candidates, cancelled);
+                    qoreIrCollectListSizeHoistCandidates(parse_args->get(i), list_candidates,
+                        invalidation_candidates, value_candidates, cancelled);
                     if (cancelled) {
                         return;
                     }
@@ -743,7 +792,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                         cancelled = true;
                         return;
                     }
-                    qoreIrCollectListSizeHoistCandidates(li.getValue(), candidates, cancelled);
+                    qoreIrCollectListSizeHoistCandidates(li.getValue(), list_candidates, invalidation_candidates,
+                        value_candidates, cancelled);
                     if (cancelled) {
                         return;
                     }
@@ -759,7 +809,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                     cancelled = true;
                     return;
                 }
-                qoreIrCollectListSizeHoistCandidates(parse_args->get(i), candidates, cancelled);
+                qoreIrCollectListSizeHoistCandidates(parse_args->get(i), list_candidates, invalidation_candidates,
+                    value_candidates, cancelled);
                 if (cancelled) {
                     return;
                 }
@@ -773,7 +824,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                     cancelled = true;
                     return;
                 }
-                qoreIrCollectListSizeHoistCandidates(li.getValue(), candidates, cancelled);
+                qoreIrCollectListSizeHoistCandidates(li.getValue(), list_candidates, invalidation_candidates,
+                    value_candidates, cancelled);
                 if (cancelled) {
                     return;
                 }
@@ -782,7 +834,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
         return;
     }
     if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(call->getExp(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(call->getExp(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         if (cancelled) {
             return;
         }
@@ -792,7 +845,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                     cancelled = true;
                     return;
                 }
-                qoreIrCollectListSizeHoistCandidates(parse_args->get(i), candidates, cancelled);
+                qoreIrCollectListSizeHoistCandidates(parse_args->get(i), list_candidates, invalidation_candidates,
+                    value_candidates, cancelled);
                 if (cancelled) {
                     return;
                 }
@@ -806,7 +860,8 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
                     cancelled = true;
                     return;
                 }
-                qoreIrCollectListSizeHoistCandidates(li.getValue(), candidates, cancelled);
+                qoreIrCollectListSizeHoistCandidates(li.getValue(), list_candidates, invalidation_candidates,
+                    value_candidates, cancelled);
                 if (cancelled) {
                     return;
                 }
@@ -815,30 +870,39 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
         return;
     }
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(binop->getLeft(), candidates, cancelled);
-        qoreIrCollectListSizeHoistCandidates(binop->getRight(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(binop->getLeft(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(binop->getRight(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         return;
     }
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(binop->getLeft(), candidates, cancelled);
-        qoreIrCollectListSizeHoistCandidates(binop->getRight(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(binop->getLeft(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(binop->getRight(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         return;
     }
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(unop->getExp(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(unop->getExp(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         return;
     }
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(unop->getExp(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(unop->getExp(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         return;
     }
     if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(sub->getLeft(), candidates, cancelled);
-        qoreIrCollectListSizeHoistCandidates(sub->getRight(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(sub->getLeft(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(sub->getRight(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
         return;
     }
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
-        qoreIrCollectListSizeHoistCandidates(hd->getLeft(), candidates, cancelled);
+        qoreIrCollectListSizeHoistCandidates(hd->getLeft(), list_candidates, invalidation_candidates,
+            value_candidates, cancelled);
     }
 }
 
@@ -884,7 +948,8 @@ static bool qoreIrStatementBlockInvalidatesListSizeHoist(const StatementBlock* b
 }
 
 static void qoreIrCollectListSizeHoistCandidatesFromBlock(const StatementBlock* block,
-        std::unordered_set<LocalVar*>& candidates, bool& cancelled) {
+        std::unordered_set<LocalVar*>& list_candidates, std::unordered_set<LocalVar*>& invalidation_candidates,
+        std::vector<QoreValue>& value_candidates, bool& cancelled) {
     if (cancelled || !block) {
         return;
     }
@@ -895,13 +960,18 @@ static void qoreIrCollectListSizeHoistCandidatesFromBlock(const StatementBlock* 
             return;
         }
         if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
-            qoreIrCollectListSizeHoistCandidates(expr_stmt->getExpression(), candidates, cancelled);
+            qoreIrCollectListSizeHoistCandidates(expr_stmt->getExpression(), list_candidates,
+                invalidation_candidates, value_candidates, cancelled);
         } else if (auto* return_stmt = dynamic_cast<const ReturnStatement*>(stmt)) {
-            qoreIrCollectListSizeHoistCandidates(return_stmt->getExpression(), candidates, cancelled);
+            qoreIrCollectListSizeHoistCandidates(return_stmt->getExpression(), list_candidates,
+                invalidation_candidates, value_candidates, cancelled);
         } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
-            qoreIrCollectListSizeHoistCandidates(if_stmt->getCond(), candidates, cancelled);
-            qoreIrCollectListSizeHoistCandidatesFromBlock(if_stmt->getIfCode(), candidates, cancelled);
-            qoreIrCollectListSizeHoistCandidatesFromBlock(if_stmt->getElseCode(), candidates, cancelled);
+            qoreIrCollectListSizeHoistCandidates(if_stmt->getCond(), list_candidates, invalidation_candidates,
+                value_candidates, cancelled);
+            qoreIrCollectListSizeHoistCandidatesFromBlock(if_stmt->getIfCode(), list_candidates,
+                invalidation_candidates, value_candidates, cancelled);
+            qoreIrCollectListSizeHoistCandidatesFromBlock(if_stmt->getElseCode(), list_candidates,
+                invalidation_candidates, value_candidates, cancelled);
         }
         if (cancelled) {
             return;
@@ -909,24 +979,38 @@ static void qoreIrCollectListSizeHoistCandidatesFromBlock(const StatementBlock* 
     }
 }
 
-static std::unordered_map<LocalVar*, QoreIRValue> qoreIrHoistLoopInvariantListSizes(
+struct QoreIRLoopInvariantHoists {
+    std::unordered_map<LocalVar*, QoreIRValue> list_sizes;
+    std::unordered_map<const AbstractQoreNode*, QoreIRValue> values;
+
+    bool empty() const {
+        return list_sizes.empty() && values.empty();
+    }
+};
+
+static QoreIRLoopInvariantHoists qoreIrHoistLoopInvariantValues(QoreIRLowering& lowering,
         QoreIRBuilder& builder, const QoreValue& cond, const StatementBlock* body,
-        const QoreValue& iter, const QoreProgramLocation* loc) {
-    std::unordered_set<LocalVar*> candidates;
+        const QoreValue& iter, const QoreProgramLocation* loc, std::string& error) {
+    std::unordered_set<LocalVar*> list_candidates;
+    std::unordered_set<LocalVar*> invalidation_candidates;
+    std::vector<QoreValue> value_candidates;
     bool cancelled = false;
-    qoreIrCollectListSizeHoistCandidates(cond, candidates, cancelled);
-    qoreIrCollectListSizeHoistCandidates(iter, candidates, cancelled);
-    qoreIrCollectListSizeHoistCandidatesFromBlock(body, candidates, cancelled);
-    if (cancelled || candidates.empty()) {
+    qoreIrCollectListSizeHoistCandidates(cond, list_candidates, invalidation_candidates, value_candidates,
+        cancelled);
+    qoreIrCollectListSizeHoistCandidates(iter, list_candidates, invalidation_candidates, value_candidates,
+        cancelled);
+    qoreIrCollectListSizeHoistCandidatesFromBlock(body, list_candidates, invalidation_candidates,
+        value_candidates, cancelled);
+    if (cancelled || (list_candidates.empty() && value_candidates.empty())) {
         return {};
     }
-    if (qoreIrExpressionInvalidatesListSizeHoist(cond, candidates)
-            || qoreIrExpressionInvalidatesListSizeHoist(iter, candidates)
-            || qoreIrStatementBlockInvalidatesListSizeHoist(body, candidates)) {
+    if (qoreIrExpressionInvalidatesListSizeHoist(cond, invalidation_candidates)
+            || qoreIrExpressionInvalidatesListSizeHoist(iter, invalidation_candidates)
+            || qoreIrStatementBlockInvalidatesListSizeHoist(body, invalidation_candidates)) {
         return {};
     }
 
-    std::vector<LocalVar*> ordered(candidates.begin(), candidates.end());
+    std::vector<LocalVar*> ordered(list_candidates.begin(), list_candidates.end());
     std::sort(ordered.begin(), ordered.end(), [](LocalVar* a, LocalVar* b) {
         const char* an = a ? a->getName() : "";
         const char* bn = b ? b->getName() : "";
@@ -939,11 +1023,42 @@ static std::unordered_map<LocalVar*, QoreIRValue> qoreIrHoistLoopInvariantListSi
         }
     }
 
-    std::unordered_map<LocalVar*, QoreIRValue> hoisted;
+    std::sort(value_candidates.begin(), value_candidates.end(), [](const QoreValue& a, const QoreValue& b) {
+        return a.getInternalNode() < b.getInternalNode();
+    });
+    value_candidates.erase(std::unique(value_candidates.begin(), value_candidates.end(),
+        [](const QoreValue& a, const QoreValue& b) {
+            return a.getInternalNode() == b.getInternalNode();
+        }), value_candidates.end());
+    for (size_t i = 0; i < value_candidates.size(); ++i) {
+        if (qoreIrListSizeHoistAnalysisCancelled(i)) {
+            return {};
+        }
+    }
+
+    QoreIRLoopInvariantHoists hoisted;
     builder.createPushTempMark(loc);
+    size_t local_count = 0;
     for (LocalVar* local : ordered) {
+        if (qoreIrListSizeHoistAnalysisCancelled(local_count++)) {
+            builder.createDiscardTemps(loc);
+            return {};
+        }
         QoreIRValue list_value = builder.createLoadLocal(local, loc)->result;
-        hoisted.emplace(local, builder.createListSize(list_value, loc)->result);
+        hoisted.list_sizes.emplace(local, builder.createListSize(list_value, loc)->result);
+    }
+    size_t value_count = 0;
+    for (const QoreValue& value_expr : value_candidates) {
+        if (qoreIrListSizeHoistAnalysisCancelled(value_count++)) {
+            builder.createDiscardTemps(loc);
+            return {};
+        }
+        QoreIRValue value = lowering.lowerExpression(value_expr, error);
+        if (!value.isValid()) {
+            builder.createDiscardTemps(loc);
+            return {};
+        }
+        hoisted.values.emplace(value_expr.getInternalNode(), value);
     }
     builder.createDiscardTemps(loc);
     return hoisted;
@@ -1456,19 +1571,34 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
-        std::unordered_map<LocalVar*, QoreIRValue> invariant_list_sizes;
+        QoreIRLoopInvariantHoists invariant_hoists;
         if (!blockHasTerminator(builder.getBlock())) {
-            invariant_list_sizes = qoreIrHoistLoopInvariantListSizes(builder, while_stmt->getCond(),
-                while_stmt->getCode(), QoreValue(), while_stmt->loc);
+            invariant_hoists = qoreIrHoistLoopInvariantValues(*this, builder, while_stmt->getCond(),
+                while_stmt->getCode(), QoreValue(), while_stmt->loc, error);
+            if (!error.empty()) {
+                return false;
+            }
         }
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
         }
-        bool pushed_invariant_list_sizes = !invariant_list_sizes.empty();
+        bool pushed_invariant_list_sizes = !invariant_hoists.list_sizes.empty();
+        bool pushed_invariant_values = !invariant_hoists.values.empty();
         if (pushed_invariant_list_sizes) {
-            loop_invariant_list_sizes.push_back(std::move(invariant_list_sizes));
+            loop_invariant_list_sizes.push_back(std::move(invariant_hoists.list_sizes));
         }
+        if (pushed_invariant_values) {
+            loop_invariant_values.push_back(std::move(invariant_hoists.values));
+        }
+        auto pop_invariant_hoists = [&]() {
+            if (pushed_invariant_values) {
+                loop_invariant_values.pop_back();
+            }
+            if (pushed_invariant_list_sizes) {
+                loop_invariant_list_sizes.pop_back();
+            }
+        };
 
         builder.setBlock(cond_block);
         // Bracket the condition with PushTempMark/DiscardTemps so per-iteration
@@ -1494,9 +1624,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
             QoreIRValue cond = lowerConditionValue(while_stmt->getCond(), error);
             if (!cond.isValid()) {
-                if (pushed_invariant_list_sizes) {
-                    loop_invariant_list_sizes.pop_back();
-                }
+                pop_invariant_hoists();
                 return false;
             }
             // Convert node values to scalar bool so the branch operand survives DiscardTemps.
@@ -1523,9 +1651,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             --loop_depth;
             current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
-            if (pushed_invariant_list_sizes) {
-                loop_invariant_list_sizes.pop_back();
-            }
+            pop_invariant_hoists();
             return false;
         }
         --loop_depth;
@@ -1547,9 +1673,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
             }
         }
-        if (pushed_invariant_list_sizes) {
-            loop_invariant_list_sizes.pop_back();
-        }
+        pop_invariant_hoists();
 
         return true;
     }
@@ -1573,19 +1697,34 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         QoreValue cond_expr = for_stmt->getCond();
         QoreValue iter_expr = for_stmt->getIterator();
-        std::unordered_map<LocalVar*, QoreIRValue> invariant_list_sizes;
+        QoreIRLoopInvariantHoists invariant_hoists;
         if (!blockHasTerminator(builder.getBlock())) {
-            invariant_list_sizes = qoreIrHoistLoopInvariantListSizes(builder, cond_expr,
-                for_stmt->getCode(), iter_expr, for_stmt->loc);
+            invariant_hoists = qoreIrHoistLoopInvariantValues(*this, builder, cond_expr,
+                for_stmt->getCode(), iter_expr, for_stmt->loc, error);
+            if (!error.empty()) {
+                return false;
+            }
         }
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
         }
-        bool pushed_invariant_list_sizes = !invariant_list_sizes.empty();
+        bool pushed_invariant_list_sizes = !invariant_hoists.list_sizes.empty();
+        bool pushed_invariant_values = !invariant_hoists.values.empty();
         if (pushed_invariant_list_sizes) {
-            loop_invariant_list_sizes.push_back(std::move(invariant_list_sizes));
+            loop_invariant_list_sizes.push_back(std::move(invariant_hoists.list_sizes));
         }
+        if (pushed_invariant_values) {
+            loop_invariant_values.push_back(std::move(invariant_hoists.values));
+        }
+        auto pop_invariant_hoists = [&]() {
+            if (pushed_invariant_values) {
+                loop_invariant_values.pop_back();
+            }
+            if (pushed_invariant_list_sizes) {
+                loop_invariant_list_sizes.pop_back();
+            }
+        };
 
         builder.setBlock(cond_block);
         // Try fused BranchIfLtLocalInt for int local < int local conditions
@@ -1607,9 +1746,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             } else {
                 cond_value = lowerConditionValue(cond_expr, error);
                 if (!cond_value.isValid()) {
-                    if (pushed_invariant_list_sizes) {
-                        loop_invariant_list_sizes.pop_back();
-                    }
+                    pop_invariant_hoists();
                     return false;
                 }
             }
@@ -1636,9 +1773,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             --loop_depth;
             current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
-            if (pushed_invariant_list_sizes) {
-                loop_invariant_list_sizes.pop_back();
-            }
+            pop_invariant_hoists();
             return false;
         }
         --loop_depth;
@@ -1652,9 +1787,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRValue lowered = lowerExpression(iter_expr, error);
             if (!lowered.isValid()) {
                 current_loop_exit = prev_loop_exit;
-                if (pushed_invariant_list_sizes) {
-                    loop_invariant_list_sizes.pop_back();
-                }
+                pop_invariant_hoists();
                 return false;
             }
         }
@@ -1678,9 +1811,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
             }
         }
-        if (pushed_invariant_list_sizes) {
-            loop_invariant_list_sizes.pop_back();
-        }
+        pop_invariant_hoists();
 
         return true;
     }
@@ -5936,6 +6067,23 @@ QoreIRValue QoreIRLowering::findLoopInvariantListSize(LocalVar* local) const {
     return QoreIRValue();
 }
 
+QoreIRValue QoreIRLowering::findLoopInvariantValue(const QoreValue& expr) const {
+    if (!expr.hasNode()) {
+        return QoreIRValue();
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return QoreIRValue();
+    }
+    for (auto it = loop_invariant_values.rbegin(); it != loop_invariant_values.rend(); ++it) {
+        auto found = it->find(node);
+        if (found != it->end()) {
+            return found->second;
+        }
+    }
+    return QoreIRValue();
+}
+
 const QoreTypeInfo* QoreIRLowering::getGuaranteedTypeForValue(const QoreValue* expr,
         const QoreTypeInfo* fallback) const {
     if (fallback) {
@@ -10153,6 +10301,9 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     auto* op = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
+    }
+    if (QoreIRValue hoisted = findLoopInvariantValue(expr); hoisted.isValid()) {
+        return hoisted;
     }
     MethodCallNode* m = op->getMethodCall();
     const QoreValue& base_expr = op->getExpression();
