@@ -15,6 +15,7 @@ public class OverloadDiagnosticsTest inherits QUnit::Test {
         addTestCase("single variant names diverging argument", \testSingleVariant());
         addTestCase("multiple variants list candidate signatures", \testMultiVariant());
         addTestCase("argument-count mismatch", \testArgCount());
+        addTestCase("runtime generic variants list substituted signatures", \testRuntimeGenericVariant());
         set_return_value(main());
     }
 
@@ -61,5 +62,25 @@ public class OverloadDiagnosticsTest inherits QUnit::Test {
         assertEq("PARSE-TYPE-ERROR", d[0].code);
         assertRegex("h\\(int, int, int\\)", d[0].message);
         assertRegex("h\\(int x\\)", d[0].message);
+    }
+
+    testRuntimeGenericVariant() {
+        Program p(PO_NEW_STYLE);
+        p.parse("T sub takes<T>(T a, int b) { return a; }", "runtime-generic-overload");
+
+        # Exercise both inline short-string QoreValue storage and heap-backed strings.
+        foreach string value in (("abc", "abcdefg")) {
+            *hash<ExceptionInfo> ex;
+            try {
+                p.callFunction("takes", value, value);
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+
+            assertEq(True, exists ex, "runtime overload error captured");
+            assertEq("RUNTIME-OVERLOAD-ERROR", ex.err);
+            assertRegex("takes\\(string, string\\)", ex.desc);
+            assertRegex("takes\\(string a, int b\\)", ex.desc);
+        }
     }
 }

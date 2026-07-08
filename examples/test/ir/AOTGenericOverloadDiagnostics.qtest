@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTGenericOverloadDiagnosticsTest
+
+class AOTGenericOverloadDiagnosticsTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTGenericOverloadDiagnosticsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("AOT qmod reports substituted generic overload signatures",
+            \testAOTQmodGenericOverloadDiagnostics());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTGenericOverloadDiagnosticsMod {
+    version = \"1.0\";
+    desc = \"AOT generic overload diagnostics regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTGenericOverloadDiagnosticsMod {
+public string sub verify() {
+    Program p(PO_NEW_STYLE);
+    p.parse(\"T sub takes<T>(T a, int b) { return a; }\", \"aot-generic-overload\");
+
+    string rv;
+    foreach string value in ((\"abc\", \"abcdefg\")) {
+        *hash<ExceptionInfo> ex;
+        try {
+            p.callFunction(\"takes\", value, value);
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+
+        if (!exists ex) {
+            rv += sprintf(\"%s:missing-error\\n\", value);
+            continue;
+        }
+
+        rv += sprintf(\"%s:%s:%s:%s\\n\", value, ex.err,
+            ex.desc =~ /takes[(]string, string[)]/ ? \"call\" : \"missing-call\",
+            ex.desc =~ /takes[(]string a, int b[)]/ ? \"candidate\" : \"missing-candidate\");
+    }
+    return rv;
+}
+}
+";
+    }
+
+    private string expectedOutput() {
+        return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
+            "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n";
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(module_dir), shellQuote(qore_bin), shellQuote(script_path)));
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    testAOTQmodGenericOverloadDiagnostics() {
+        TmpDir tmp("qore-aot-generic-overload-diagnostics-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTGenericOverloadDiagnosticsMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires AOTGenericOverloadDiagnosticsMod
+printf(\"%s\", AOTGenericOverloadDiagnosticsMod::verify());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTGenericOverloadDiagnosticsMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(qmod_path), shellQuote(qm_path)));
+        assertTrue(is_file(qmod_path), "compiled generic overload diagnostics module: " + compile_out);
+
+        assertEq(expectedOutput(), runModule(src_dir, script_path),
+            "source module generic overload diagnostics");
+        assertEq(expectedOutput(), runModule(qmod_dir, script_path),
+            "AOT qmod generic overload diagnostics");
+    }
+}
