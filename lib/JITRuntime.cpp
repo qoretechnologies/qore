@@ -13332,14 +13332,36 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_size_noguard(uint64_t val_bi
     return qore_rt_pseudo_size(val_bits);
 }
 
+static size_t qore_short_string_utf8_length(QoreValue v) {
+    assert(v.isShortString());
+    char buf[7];
+    v.getShortString(buf);
+
+    const char* p = buf;
+    const char* end = buf + v.shortStringLen();
+    size_t len = 0;
+    while (p < end) {
+        if (static_cast<unsigned char>(*p) < 0x80) {
+            ++p;
+            ++len;
+            continue;
+        }
+
+        qore_offset_t char_len = q_UTF8_get_char_len(p, end - p);
+        if (char_len <= 0) {
+            return len;
+        }
+        p += char_len;
+        ++len;
+    }
+    return len;
+}
+
 //! Fast no-guard pseudo-method: <string>::length() for bases proven to be assigned strings.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
-        char buf[7];
-        v.getShortString(buf);
-        QoreString str(buf, v.shortStringLen(), QCS_UTF8);
-        return toBits(QoreValue(static_cast<int64_t>(str.length())));
+        return toBits(QoreValue(static_cast<int64_t>(qore_short_string_utf8_length(v))));
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
@@ -13384,30 +13406,40 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t v
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue arg = fromBits(arg_bits);
+
+    auto eval_predicate = [&](const char* pattern_ptr) -> uint64_t {
+        bool result = false;
+        switch (predicate) {
+            case 0:
+                result = str->startsWith(pattern_ptr);
+                break;
+            case 1:
+                result = str->endsWith(pattern_ptr);
+                break;
+            case 2:
+                result = str->find(pattern_ptr) >= 0;
+                break;
+            default:
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR", "invalid string predicate fast-path id %d",
+                        static_cast<int>(predicate));
+                }
+                return toBits(QoreValue());
+        }
+        return toBits(QoreValue(result));
+    };
+
+    if (arg.isShortString() && str->getEncoding() == QCS_UTF8) {
+        char short_pattern[7];
+        arg.getShortString(short_pattern);
+        return eval_predicate(short_pattern);
+    }
+
     QoreStringValueHelper pattern(arg, str->getEncoding(), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-
-    bool result = false;
-    switch (predicate) {
-        case 0:
-            result = str->startsWith(pattern->c_str());
-            break;
-        case 1:
-            result = str->endsWith(pattern->c_str());
-            break;
-        case 2:
-            result = str->find(pattern->c_str()) >= 0;
-            break;
-        default:
-            if (xsink) {
-                xsink->raiseException("IR-EXEC-ERROR", "invalid string predicate fast-path id %d",
-                    static_cast<int>(predicate));
-            }
-            return toBits(QoreValue());
-    }
-    return toBits(QoreValue(result));
+    return eval_predicate(pattern->c_str());
 }
 
 //! Fast no-guard pseudo-method: <string>::find() for assigned string base and substring operands.
@@ -13487,6 +13519,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_
     QoreValue v = fromBits(val_bits);
     if (!v.isShortString() && v.getType() != NT_STRING) {
         return toBits(QoreValue(v.getAsBigInt()));
+    }
+    if (v.isShortString()) {
+        char buf[7];
+        v.getShortString(buf);
+        return toBits(QoreValue(strtoll(buf, nullptr, 10)));
     }
     QoreStringValueHelper str(v);
     if (!str->getEncoding()->isAsciiCompat()) {
