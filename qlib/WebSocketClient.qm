@@ -50,7 +50,7 @@
 %endtry
 
 module WebSocketClient {
-    version = "2.4";
+    version = "2.5";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -260,6 +260,15 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
     @section websocketclient_relnotes WebSocketClient Module Release History
+
+    @subsection wsc_v2_5 v2.5
+    - fixed a bug where a \c wss:// WebSocket connection in the default \c "auto" HTTP-version mode failed
+      instead of connecting when the server negotiated HTTP/2 or HTTP/3 but could not establish the
+      WebSocket over that connection (for example a reverse proxy such as nginx, which negotiates H2/H3 but
+      does not implement RFC 8441/9220 extended \c CONNECT).  The client now transparently falls back to a
+      standard HTTP/1.1 \c 101 Upgrade on a fresh HTTP/1.1 connection when the extended-\c CONNECT handshake
+      fails for any reason; the fallback is skipped only when a specific HTTP version was requested or when
+      HTTP/3 was explicitly required, and if the HTTP/1.1 attempt also fails its error is reported
 
     @subsection wsc_v2_4 v2.4
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
@@ -3136,192 +3145,16 @@ ws.setEventQueue();
         # or Upgrade (H1) based on what was negotiated.
         if (isUrlTls() && http_opts.http_version != "1.1"
                 && http_opts.http_version != "1.0") {
-            try {
-                return normalizeConnectResponse(connectViaHcioAuto(hdr, \info, reconnect));
-            } catch (hash<ExceptionInfo> ex) {
-                if (http_opts.http_version == "auto"
-                        && !isHttp3Required()
-                        && isHcioFallbackError(ex.err)) {
-                    logInfo("HttpClientIo WebSocket failed (%s: %s); falling back to HTTP/1.1",
-                        ex.err, ex.desc);
-                    remove hcio_stream;
-                    remove hcio_mgr;
-                    # Fall through to H1 path below
-                } else {
-                    rethrow;
-                }
-            }
+            # TLS "auto"/H2/H3: connectViaHcioAuto() negotiates the protocol and,
+            # in "auto" mode, transparently falls back to an HTTP/1.1 Upgrade if a
+            # WebSocket cannot be established over the negotiated H2/H3 connection
+            # (e.g. the server does not support RFC 8441/9220 extended CONNECT).
+            return normalizeConnectResponse(connectViaHcioAuto(hdr, \info, reconnect));
         }
 
-        # HTTP/1.1 path: plain ws:// or explicit "1.1" or TLS fallback
+        # HTTP/1.1 path: plain ws:// or explicit "1.1"/"1.0"
         # Uses HttpClientIo with PROTOCOL_SWITCHED for fully async H1 WS
         return normalizeConnectResponse(connectHttp1WebSocketViaHcio(hdr, \info, reconnect));
-    }
-
-    #! Returns True if the error warrants falling back from H2/H3 to H1
-    private bool isHcioFallbackError(string err) {
-        return err == "HTTP2-CONNECT-ERROR"
-            || err == "HTTP3-CONNECT-ERROR"
-            || err == "HTTPCLIENT-CONNECT-ERROR"
-            || err == "HTTPCLIENT-TIMEOUT"
-            || err == "WEBSOCKET-ERROR";
-    }
-
-    #! RFC 8441: HTTP/2 WebSocket handshake via HttpClientIo (fully async)
-    /** Uses HttpClientIo's connection manager for the H2 connection and
-        Http2ClientStreamHandle for bidirectional CONNECT streaming.
-        All I/O is async — no HTTPClient synchronous methods are called.
-
-        @since WebSocketClient 2.4
-    */
-    private hash<auto> connectHttp2WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
-            *bool reconnect) {
-        http2_websocket = True;
-        h2_stream_id = 0;
-        remove h2_frame_buf;
-        logDebug("Using HttpClientIo for HTTP/2 WebSocket handshake (RFC 8441)");
-
-        # Build the HTTPS URL from the WebSocket URL
-        string url = http_opts.url;
-        url =~ s/^ws:/http:/;
-        url =~ s/^wss:/https:/;
-
-        # Create connection manager if not yet created
-        ensureHcioMgr("h2");
-
-        # Build CONNECT headers with RFC 8441 protocol header
-        hdr = (http_opts.headers ?? {}) + hdr;
-        hdr.":protocol" = "websocket";
-
-        # Add Sec-WebSocket-Key for RFC 8441 handshake
-        string key = get_random_string(16).toBase64();
-        hdr."Sec-WebSocket-Key" = key;
-        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
-
-        # Add extension offers
-        if (offered_extensions) {
-            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
-            if (ext_header) {
-                hdr."Sec-WebSocket-Extensions" = ext_header;
-                logDebug("Offering extensions: %s", ext_header);
-            }
-        }
-
-        string path = getUrlPath();
-
-        # Acquire stream and start bidirectional CONNECT
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(url, "CONNECT", path, hdr, True);
-
-        # Read the CONNECT response headers
-        auto rh = hcio_stream.readData(timeout_ms);
-        if (!rh || rh.typeCode() != NT_HASH) {
-            raiseError("HttpClientIo H2 CONNECT to %y failed: no response received", url);
-        }
-
-        # Store stream ID
-        h2_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
-        logDebug("HttpClientIo: CONNECT accepted, stream_id=%d", h2_stream_id);
-
-        # Validate status code (200 OK)
-        int status_code = rh.status_code ?? rh.headers.":status".toInt();
-        if (status_code != 200) {
-            raiseError("HTTP/2 server at URL %y returned status code '%d' to our WebSocket CONNECT request; "
-                "expecting '200 OK' (RFC 8441)", url, status_code);
-        }
-
-        # Validate Sec-WebSocket-Accept
-        hash<auto> rhdr = rh.headers ?? rh;
-        if (!rhdr."sec-websocket-accept") {
-            raiseError("HTTP/2 server at URL %y did not return the Sec-WebSocket-Accept header", url);
-        }
-
-        {
-            string expected_key = ws_get_response_key(key);
-            if (rhdr."sec-websocket-accept" != expected_key) {
-                raiseError("HTTP/2 server at URL %y returned invalid Sec-WebSocket-Accept: %y; expecting %y",
-                    url, rhdr."sec-websocket-accept", expected_key);
-            }
-        }
-
-        processExtensions(rhdr);
-
-        use_hcio = True;
-        finishConnect();
-
-        return rh;
-    }
-
-    #! RFC 9220: HTTP/3 WebSocket handshake via HttpClientIo (fully async)
-    /** Uses HttpClientIo's connection manager for the H3 connection and
-        Http3ClientStreamHandle for bidirectional CONNECT streaming.
-        All I/O is async — no HTTPClient synchronous methods are called.
-
-        @since WebSocketClient 2.4
-    */
-    private hash<auto> connectHttp3WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
-            *bool reconnect) {
-        http3_websocket = True;
-        h3_stream_id = -1;
-        remove h3_frame_buf;
-        logDebug("Using HttpClientIo for HTTP/3 WebSocket handshake (RFC 9220)");
-
-        # Build the HTTPS URL from the WebSocket URL
-        string url = http_opts.url;
-        url =~ s/^ws:/http:/;
-        url =~ s/^wss:/https:/;
-
-        # Create connection manager if not yet created
-        ensureHcioMgr("h3");
-
-        # Build CONNECT headers with RFC 9220 protocol header
-        hdr = (http_opts.headers ?? {}) + hdr;
-        hdr.":protocol" = "websocket";
-
-        string key = get_random_string(16).toBase64();
-        hdr."Sec-WebSocket-Key" = key;
-        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
-
-        if (offered_extensions) {
-            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
-            if (ext_header) {
-                hdr."Sec-WebSocket-Extensions" = ext_header;
-            }
-        }
-
-        string path = getUrlPath();
-
-        # Acquire stream and start bidirectional CONNECT
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(url, "CONNECT", path, hdr, True);
-
-        # Read the CONNECT response headers
-        auto rh = hcio_stream.readData(timeout_ms);
-        if (!rh || rh.typeCode() != NT_HASH) {
-            raiseError("HttpClientIo H3 CONNECT to %y failed: no response received", url);
-        }
-
-        h3_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
-
-        int status_code = rh.status_code ?? rh.headers.":status".toInt();
-        if (status_code != 200) {
-            raiseError("HTTP/3 server at URL %y returned status code '%d' to our WebSocket CONNECT; "
-                "expecting '200 OK' (RFC 9220)", url, status_code);
-        }
-
-        hash<auto> rhdr = rh.headers ?? rh;
-        if (rhdr."sec-websocket-accept") {
-            string expected_key = ws_get_response_key(key);
-            if (rhdr."sec-websocket-accept" != expected_key) {
-                raiseError("HTTP/3 server at URL %y returned invalid Sec-WebSocket-Accept: %y; expecting %y",
-                    url, rhdr."sec-websocket-accept", expected_key);
-            }
-        }
-
-        processExtensions(rhdr);
-
-        use_hcio = True;
-        finishConnect();
-
-        return rh;
     }
 
     #! Process server's extension response (shared between HTTP/1.1, HTTP/2, and HTTP/3)
@@ -3403,7 +3236,7 @@ ws.setEventQueue();
 
     #! Returns the connection path from http_opts.url
     /** Parses the URL and returns the path component, defaulting to "/" if no
-        path is present.  Used by the connectViaHcio methods to avoid
+        path is present.  Used by the WebSocket handshake methods to avoid
         dependency on hc.getConnectionPath() (which requires hc.connect()).
     */
     private string getUrlPath() {
@@ -3485,7 +3318,31 @@ ws.setEventQueue();
 
         bool is_h3 = stream instanceof HttpClientIo::Http3ClientStreamHandle;
         logDebug("HCIO auto: negotiated %s, using CONNECT handshake", is_h3 ? "H3" : "H2");
-        return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
+        try {
+            return connectH2H3WebSocketOnStream(stream, hdr, \info, reconnect, is_h3);
+        } catch (hash<ExceptionInfo> ex) {
+            # The HTTP connection itself negotiated fine, but the RFC 8441/9220
+            # extended-CONNECT WebSocket handshake failed.  The usual cause is a
+            # server (e.g. nginx) that does not advertise
+            # SETTINGS_ENABLE_CONNECT_PROTOCOL and therefore cannot tunnel
+            # WebSocket over H2/H3: depending on the server this surfaces as a
+            # non-200 status, a reset stream (HTTP2-ERROR/HTTP3-ERROR), a receive
+            # error, or a timeout — so we fall back on *any* error rather than a
+            # fragile error-code whitelist.  In "auto" mode (and when H3 was not
+            # explicitly required) retry with a plain HTTP/1.1 101 Upgrade on a
+            # fresh H1-only connection.  If that attempt also fails, its error is
+            # surfaced instead, so a genuine failure is never masked.
+            if (http_opts.http_version != "auto" || isHttp3Required()) {
+                rethrow;
+            }
+            logInfo("WebSocket over %s failed (%s: %s); falling back to HTTP/1.1 Upgrade",
+                is_h3 ? "HTTP/3" : "HTTP/2", ex.err, ex.desc);
+            # discard the failed H2/H3 stream and manager so the H1 path opens a
+            # fresh H1-only connection (ensureHcioMgr() only creates one if unset)
+            remove hcio_stream;
+            remove hcio_mgr;
+            return connectHttp1WebSocketViaHcio(hdr, \info, reconnect);
+        }
     }
 
     #! Performs H1 WebSocket Upgrade handshake on an already-acquired HCIO stream
@@ -3603,7 +3460,12 @@ ws.setEventQueue();
                 is_h3 ? "HTTP/3" : "HTTP/2", http_opts.url, status_code);
         }
 
-        # Validate Sec-WebSocket-Accept
+        # Validate Sec-WebSocket-Accept only if the server sent it.  Per RFC 8441
+        # section 5 (and RFC 9220 for H3), the RFC 6455 Sec-WebSocket-Key/Accept
+        # handshake is superseded by the :protocol pseudo-header for WebSocket
+        # over HTTP/2 and HTTP/3, so a compliant server may legitimately omit
+        # Sec-WebSocket-Accept; a "200 OK" response to the extended CONNECT is
+        # itself the handshake acceptance.
         hash<auto> rhdr = rh.headers ?? rh;
         if (rhdr."sec-websocket-accept") {
             string expected_key = ws_get_response_key(key);
@@ -3627,104 +3489,6 @@ ws.setEventQueue();
         processExtensions(rhdr);
         use_hcio = True;
         finishConnect();
-        return rh;
-    }
-
-    #! Unified H2/H3 WebSocket handshake via HttpClientIo (RFC 8441 / RFC 9220)
-    /** Creates a single connection via the HttpClientIo manager, sends CONNECT
-        with :protocol websocket, and validates the response.  The manager
-        auto-selects H2 or H3 based on ALPN/Alt-Svc.
-
-        This replaces the separate connectHttp2WebSocketViaHcio() and
-        connectHttp3WebSocketViaHcio() methods, and eliminates the wasteful
-        hc.connect() → ALPN detection → second connection pattern.
-
-        @since WebSocketClient 2.5
-    */
-    private hash<auto> connectViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
-            *bool reconnect) {
-        logDebug("Using HttpClientIo for WebSocket CONNECT (auto protocol)");
-
-        # Reset protocol flags
-        http2_websocket = False;
-        http3_websocket = False;
-        h2_stream_id = 0;
-        h3_stream_id = -1;
-        remove h2_frame_buf;
-        remove h3_frame_buf;
-
-        ensureHcioMgr();
-
-        # Build CONNECT headers
-        hdr = (http_opts.headers ?? {}) + hdr;
-        hdr.":protocol" = "websocket";
-
-        string key = get_random_string(16).toBase64();
-        hdr."Sec-WebSocket-Key" = key;
-        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
-
-        if (offered_extensions) {
-            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
-            if (ext_header) {
-                hdr."Sec-WebSocket-Extensions" = ext_header;
-                logDebug("Offering extensions: %s", ext_header);
-            }
-        }
-
-        string path = getUrlPath();
-
-        # Acquire stream and start bidirectional CONNECT
-        hcio_stream = hcio_mgr.acquireAndStartStreaming(http_opts.url, "CONNECT", path, hdr,
-            True);
-
-        # Read the CONNECT response headers
-        auto rh = hcio_stream.readData(timeout_ms);
-        if (!rh || rh.typeCode() != NT_HASH) {
-            raiseError("HttpClientIo CONNECT to %y failed: no response received",
-                http_opts.url);
-        }
-
-        # Detect actual protocol from stream handle type
-        bool is_h3 = hcio_stream instanceof HttpClientIo::Http3ClientStreamHandle;
-
-        # Validate status code BEFORE setting protocol flags
-        int status_code = rh.status_code ?? rh.headers.":status".toInt();
-        if (status_code != 200) {
-            raiseError("%s server at URL %y returned status code '%d' to our WebSocket "
-                "CONNECT request; expecting '200 OK'", is_h3 ? "HTTP/3" : "HTTP/2",
-                http_opts.url, status_code);
-        }
-
-        # Validate Sec-WebSocket-Accept
-        hash<auto> rhdr = rh.headers ?? rh;
-        if (rhdr."sec-websocket-accept") {
-            string expected_key = ws_get_response_key(key);
-            if (rhdr."sec-websocket-accept" != expected_key) {
-                raiseError("Server at URL %y returned invalid Sec-WebSocket-Accept: %y; "
-                    "expecting %y", http_opts.url, rhdr."sec-websocket-accept", expected_key);
-            }
-        } else if (!is_h3) {
-            # H2 requires Sec-WebSocket-Accept per RFC 8441
-            raiseError("HTTP/2 server at URL %y did not return the Sec-WebSocket-Accept "
-                "header", http_opts.url);
-        }
-
-        # Set protocol flags AFTER successful validation
-        if (is_h3) {
-            http3_websocket = True;
-            h3_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
-            logDebug("HttpClientIo: H3 CONNECT accepted, stream_id=%d", h3_stream_id);
-        } else {
-            http2_websocket = True;
-            h2_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
-            logDebug("HttpClientIo: H2 CONNECT accepted, stream_id=%d", h2_stream_id);
-        }
-
-        processExtensions(rhdr);
-
-        use_hcio = True;
-        finishConnect();
-
         return rh;
     }
 
