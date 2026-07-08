@@ -42,6 +42,36 @@ int sub invariantSize() {
     return sum;
 }
 
+int sub invariantGlobalLength() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 7; ++i) {
+        sum += length(s);
+    }
+    return sum;
+}
+
+int sub invariantGlobalStrlen() {
+    string s = \"abc\\u2500\\u2501\";
+    int sum = 0;
+    for (int i = 0; i < 5; ++i) {
+        sum += strlen(s);
+    }
+    return sum;
+}
+
+int sub invariantNoArgPredicates() {
+    string s = \"abcdef\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (s.empty()) ++sum;
+        if (s.val()) ++sum;
+        if (s.strp()) ++sum;
+        if (s.intp()) ++sum;
+    }
+    return sum;
+}
+
 int sub reassignString() {
     string s = \"a\";
     int sum = 0;
@@ -52,11 +82,42 @@ int sub reassignString() {
     return sum;
 }
 
+int sub reassignNoArgPredicate() {
+    string s = \"\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (s.empty()) ++sum;
+        s += \"x\";
+    }
+    return sum;
+}
+
+int sub reassignGlobalString() {
+    string s = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += length(s);
+        s += \"b\";
+    }
+    return sum;
+}
+
 int sub removeAndAssign() {
     string s = \"abcd\";
     int sum = 0;
     for (int i = 0; i < 3; ++i) {
         sum += s.strlen();
+        remove s;
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+int sub removeAndAssignGlobal() {
+    string s = \"abcd\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += strlen(s);
         remove s;
         s = sprintf(\"%d\", i);
     }
@@ -80,8 +141,38 @@ int sub conditionalThenAssign() {
     return sum;
 }
 
-printf(\"%d:%d:%d:%d:%d:%d\\n\", invariantLength(), invariantStrlen(), invariantSize(), reassignString(),
-    removeAndAssign(), conditionalThenAssign());
+int sub conditionalThenAssignNoArgPredicate() {
+    string s;
+    if (choose()) {
+        s = \"abcd\";
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        if (s.val()) ++sum;
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+int sub conditionalThenAssignGlobal() {
+    string s;
+    if (choose()) {
+        s = \"abcd\";
+    }
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += length(s);
+        s = sprintf(\"%d\", i);
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    invariantLength(), invariantStrlen(), invariantSize(),
+    invariantGlobalLength(), invariantGlobalStrlen(), invariantNoArgPredicates(),
+    reassignString(), reassignNoArgPredicate(), reassignGlobalString(),
+    removeAndAssign(), removeAndAssignGlobal(),
+    conditionalThenAssign(), conditionalThenAssignNoArgPredicate(), conditionalThenAssignGlobal());
 ";
 }
 
@@ -115,7 +206,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-checkOutput("ast", "35:45:24:10:6:2\n", ast);
+checkOutput("ast", "35:45:24:35:45:8:10:1:10:6:6:2:2:2\n", ast);
 
 foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));

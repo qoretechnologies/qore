@@ -603,6 +603,38 @@ static const VarRefNode* qoreIrGetDirectLocalVarRef(const QoreValue& expr) {
     return isLocalNonClosureVar(var) ? var : nullptr;
 }
 
+static bool qoreIrGetSinglePositionalCallArgNoHoles(const FunctionCallBase* call, QoreValue& arg) {
+    if (!call) {
+        return false;
+    }
+    if (const QoreParseListNode* parse_args = call->getParseArgs()) {
+        if (parse_args->size() != 1) {
+            return false;
+        }
+        arg = parse_args->get(0);
+        return true;
+    }
+    const QoreListNode* args = call->getArgs();
+    if (!args) {
+        return false;
+    }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+        if (!pos_map || pos_map->size() != 1 || args_priv->getCallArgEvalResultSize() != 1
+                || args_priv->callArgEvalMapHasHoles() || (*pos_map)[0] != 0) {
+            return false;
+        }
+        arg = args->retrieveEntry(0);
+        return true;
+    }
+    if (args->size() != 1) {
+        return false;
+    }
+    arg = args->retrieveEntry(0);
+    return true;
+}
+
 static bool qoreIrIsAssignedPlainListLocal(LocalVar* local) {
     if (!local || local->closureUse() || !local->isAssigned()) {
         return false;
@@ -647,11 +679,17 @@ static LocalVar* qoreIrGetHoistableListSizeLocal(const QoreValue& expr) {
     return qoreIrIsAssignedPlainListLocal(local) ? local : nullptr;
 }
 
-static bool qoreIrIsStringLengthMethodName(const char* name) {
-    return name && (!strcmp(name, "size") || !strcmp(name, "strlen") || !strcmp(name, "length"));
+static bool qoreIrIsHoistableStringNoArgMethodName(const char* name) {
+    return name && (!strcmp(name, "size") || !strcmp(name, "strlen") || !strcmp(name, "length")
+        || !strcmp(name, "empty") || !strcmp(name, "val") || !strcmp(name, "sizep")
+        || !strcmp(name, "strp") || !strcmp(name, "intp"));
 }
 
-static LocalVar* qoreIrGetHoistableStringLengthLocal(const QoreValue& expr) {
+static bool qoreIrIsGlobalStringLengthName(const char* name) {
+    return name && (!strcmp(name, "strlen") || !strcmp(name, "length"));
+}
+
+static LocalVar* qoreIrGetHoistableStringNoArgLocal(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return nullptr;
     }
@@ -662,7 +700,7 @@ static LocalVar* qoreIrGetHoistableStringLengthLocal(const QoreValue& expr) {
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         MethodCallNode* method_call = dot->getMethodCall();
         if (!method_call || !method_call->isPseudo() || !qoreIrCallHasNoArgs(method_call)
-                || !qoreIrIsStringLengthMethodName(method_call->getName())) {
+                || !qoreIrIsHoistableStringNoArgMethodName(method_call->getName())) {
             return nullptr;
         }
         const QoreMethod* method = method_call->getMethod();
@@ -677,6 +715,26 @@ static LocalVar* qoreIrGetHoistableStringLengthLocal(const QoreValue& expr) {
         return qoreIrIsAssignedPlainStringLocal(local) ? local : nullptr;
     }
     return nullptr;
+}
+
+static LocalVar* qoreIrGetHoistableGlobalStringLengthLocal(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return nullptr;
+    }
+    auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    if (!call || call->hasExplicitTypeArgs() || !qoreIrIsGlobalStringLengthName(call->getName())) {
+        return nullptr;
+    }
+    QoreValue arg_expr;
+    if (!qoreIrGetSinglePositionalCallArgNoHoles(call, arg_expr)) {
+        return nullptr;
+    }
+    const VarRefNode* arg_var = qoreIrGetDirectLocalVarRef(arg_expr);
+    if (!arg_var) {
+        return nullptr;
+    }
+    LocalVar* local = arg_var->ref.id;
+    return qoreIrIsAssignedPlainStringLocal(local) ? local : nullptr;
 }
 
 static bool qoreIrStatementBlockInvalidatesListSizeHoist(const StatementBlock* block,
@@ -701,7 +759,9 @@ static bool qoreIrExpressionInvalidatesListSizeHoist(const QoreValue& expr,
     if (!node) {
         return false;
     }
-    if (qoreIrGetHoistableListSizeLocal(expr) || qoreIrGetHoistableStringLengthLocal(expr)) {
+    if (qoreIrGetHoistableListSizeLocal(expr)
+            || qoreIrGetHoistableStringNoArgLocal(expr)
+            || qoreIrGetHoistableGlobalStringLengthLocal(expr)) {
         return false;
     }
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
@@ -755,7 +815,12 @@ static void qoreIrCollectListSizeHoistCandidates(const QoreValue& expr,
         invalidation_candidates.insert(local);
         return;
     }
-    if (LocalVar* local = qoreIrGetHoistableStringLengthLocal(expr)) {
+    if (LocalVar* local = qoreIrGetHoistableStringNoArgLocal(expr)) {
+        invalidation_candidates.insert(local);
+        value_candidates.push_back(expr);
+        return;
+    }
+    if (LocalVar* local = qoreIrGetHoistableGlobalStringLengthLocal(expr)) {
         invalidation_candidates.insert(local);
         value_candidates.push_back(expr);
         return;
@@ -11409,6 +11474,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
     if (!call) {
         return QoreIRValue();
+    }
+    if (QoreIRValue hoisted = findLoopInvariantValue(expr); hoisted.isValid()) {
+        return hoisted;
     }
     const char* func_name = call->getName();
     if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
