@@ -470,7 +470,11 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static const char* getName(const QoreTypeInfo* ti) {
-        return ti ? ti->tname.c_str() : NO_TYPE_INFO;
+        if (!ti) {
+            return NO_TYPE_INFO;
+        }
+        const char* name = ti->tname.c_str();
+        return name && *name ? name : NO_TYPE_INFO;
     }
 
     // static version of method, checking for null pointer
@@ -483,7 +487,8 @@ public:
         if (!ti) {
             return NO_TYPE_INFO;
         }
-        return ti->getPathImpl();
+        const char* path = ti->getPathImpl();
+        return path && *path ? path : getName(ti);
     }
 
     // static version of method, checking for null pointer
