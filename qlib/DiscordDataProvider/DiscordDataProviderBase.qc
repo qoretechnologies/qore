@@ -137,9 +137,24 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow ex.err, sprintf("%s (HTTP response code: %y x-ratelimit-remaining: %y x-ratelimit-reset: %y)",
-                    ex.desc, info."response-headers".status_code, info."response-headers"."x-ratelimit-remaining",
-                    info."response-headers"."x-ratelimit-reset");
+                # only append response info that is actually present; on non-response errors (ex: OAuth2 token
+                # refresh failures) there are no response headers, so the bare exception is rethrown unchanged
+                # instead of a useless "(HTTP response code: null x-ratelimit-remaining: null ...)" suffix
+                *hash<auto> rh = info."response-headers";
+                list<string> parts;
+                if (exists rh.status_code) {
+                    parts += sprintf("HTTP response code: %y", rh.status_code);
+                }
+                if (exists rh."x-ratelimit-remaining") {
+                    parts += sprintf("x-ratelimit-remaining: %y", rh."x-ratelimit-remaining");
+                }
+                if (exists rh."x-ratelimit-reset") {
+                    parts += sprintf("x-ratelimit-reset: %y", rh."x-ratelimit-reset");
+                }
+                if (parts) {
+                    rethrow ex.err, sprintf("%s (%s)", ex.desc, join(" ", parts));
+                }
+                rethrow;
             }
         }
     }

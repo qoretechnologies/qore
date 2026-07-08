@@ -38,6 +38,7 @@ public class Main inherits QUnit::Test {
         addTestCase("discord sanity tests", \discordSanityTests());
         addTestCase("discord tests", \discordTests());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
+        addTestCase("rest command error formatting", \testRestCommandErrorFormatting());
 
         try {
             setupConnection();
@@ -101,6 +102,42 @@ public class Main inherits QUnit::Test {
         assertEq(Type::String, info.icon.type());
     }
 
+    #! Verifies that doRestCommand() only appends response info that is actually present
+    /** On a non-response error (ex: an OAuth2 token refresh failure) there are no response headers, so the bare
+        exception must be rethrown unchanged instead of appending a useless
+        "(HTTP response code: null x-ratelimit-remaining: null x-ratelimit-reset: null)" suffix.
+    */
+    testRestCommandErrorFormatting() {
+        # no response headers set: the error must be rethrown with its original description, unadorned
+        {
+            DiscordGuildsByNameDataProvider prov(new MockNoInfoRest());
+            hash<ExceptionInfo> ex;
+            try {
+                prov.getChildProviderNames();
+            } catch (hash<ExceptionInfo> ex1) {
+                ex = ex1;
+            }
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq("HTTP 400 response received", ex.desc);
+            assertFalse(ex.desc =~ /x-ratelimit/, "no rate-limit noise in message");
+            assertFalse(ex.desc =~ /null/, "no null placeholders in message");
+        }
+
+        # only a status code present: the message includes it, but not the absent rate-limit fields
+        {
+            DiscordGuildsByNameDataProvider prov(new MockStatusOnlyRest());
+            hash<ExceptionInfo> ex;
+            try {
+                prov.getChildProviderNames();
+            } catch (hash<ExceptionInfo> ex1) {
+                ex = ex1;
+            }
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq("HTTP 400 response received (HTTP response code: 400)", ex.desc);
+            assertFalse(ex.desc =~ /x-ratelimit/, "no absent rate-limit fields in message");
+        }
+    }
+
     testActionDataDependentOptions() {
         list<string> expected_actions = (
             "user-info", "guild-info",
@@ -142,5 +179,31 @@ public class Main inherits QUnit::Test {
             error("connection %y is type %y; expecting \"DiscordRestConnection\"", conn_name, conn.className());
         }
         ddp = conn.getDataProvider();
+    }
+}
+
+#! A non-connecting REST client whose doRequest() fails without populating any response info
+/** Simulates an OAuth2 token refresh failure, where the error is raised before any Discord API response is
+    received, so \c info has no "response-headers".
+*/
+class MockNoInfoRest inherits DiscordRestClient {
+    constructor() : DiscordRestClient({"url": "discord://discord.com/api", "token": "x"}, True) {
+    }
+
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        throw "REST-RESPONSE-ERROR", "HTTP 400 response received";
+    }
+}
+
+#! A non-connecting REST client whose doRequest() fails with only a status code (no rate-limit headers)
+class MockStatusOnlyRest inherits DiscordRestClient {
+    constructor() : DiscordRestClient({"url": "discord://discord.com/api", "token": "x"}, True) {
+    }
+
+    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        info."response-headers" = {"status_code": 400};
+        throw "REST-RESPONSE-ERROR", "HTTP 400 response received";
     }
 }
