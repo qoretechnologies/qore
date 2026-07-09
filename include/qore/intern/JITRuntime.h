@@ -949,6 +949,10 @@ uint64_t qore_rt_call_with_args_aot_consume_args(QoreAOTContext* ctx, int32_t sl
 uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! Resolve the callee AOT context for a pre-resolved direct function call slot.
+QoreAOTContext* qore_rt_get_aot_call_target_context(QoreAOTContext* ctx, int32_t slot,
+    ExceptionSink* xsink);
+
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);

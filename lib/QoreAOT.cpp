@@ -67,6 +67,7 @@
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRPrinter.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/OnBlockExitStatement.h"
@@ -526,45 +527,11 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
-//! Check if an AOT function is eligible for self-recursive Approach B fast entry.
-//! Criteria: has self-recursive calls, all params IR-only, no closures/references/varargs.
-static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
+//! Check if an AOT function can have an Approach B fast entry.
+//! Criteria: all params/body locals IR-only, no closures/references/varargs.
+static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
         const UserVariantBase* uvb) {
     if (!uvb || !uvb->isStaticallyFastCallEligible()) {
-        return false;
-    }
-
-    // Check for self-recursive CallDirect instructions
-    bool has_self_recursive = false;
-    for (const auto& block : ir_func->blocks) {
-        for (const auto& inst : block->instructions) {
-            if (inst->opcode == QoreIROpcode::CallDirect) {
-                auto* ci = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
-                if (ci->is_self_recursive) {
-                    has_self_recursive = true;
-                    break;
-                }
-            }
-            // Check Invoke-wrapped CallDirect via function name match
-            if (inst->opcode == QoreIROpcode::Invoke) {
-                auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
-                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    auto* call = dynamic_cast<const FunctionCallNode*>(
-                            inv->expr.getInternalNode());
-                    if (call && call->getFunction()
-                            && std::string(call->getFunction()->getName())
-                                == ir_func->name) {
-                        has_self_recursive = true;
-                        break;
-                    }
-                }
-            }
-        }
-        if (has_self_recursive) {
-            break;
-        }
-    }
-    if (!has_self_recursive) {
         return false;
     }
 
@@ -599,6 +566,46 @@ static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
         }
     }
     return true;
+}
+
+//! Check if an AOT function has self-recursive CallDirect instructions.
+static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
+    size_t inst_i = 0;
+    for (const auto& block : ir_func->blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst_i && !(inst_i % 100)
+                    && qore_check_cancel(nullptr, "AOT self-recursive fast-entry scan")) {
+                return false;
+            }
+            ++inst_i;
+            if (inst->opcode == QoreIROpcode::CallDirect) {
+                auto* ci = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                if (ci->is_self_recursive) {
+                    return true;
+                }
+            }
+            // Check Invoke-wrapped CallDirect via function name match.
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode());
+                    if (call && call->getFunction()
+                            && std::string(call->getFunction()->getName())
+                                == ir_func->name) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+//! Check if an AOT function is eligible for self-recursive Approach B fast entry.
+static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
+        const UserVariantBase* uvb) {
+    return isAOTFastEntryEligible(ir_func, uvb) && hasAOTSelfRecursiveCall(ir_func);
 }
 
 // Forward declaration
@@ -2946,6 +2953,122 @@ static void setAOTCompileFatal(std::string* fatal_error, const char* item_kind,
     }
 }
 
+static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
+        llvm::LLVMContext& ctx, llvm::Module& module,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
+        std::set<std::string>& declared_keys,
+        const char* compile_module,
+        const char* compile_file,
+        const std::unordered_set<std::string>* keep_modules,
+        const std::unordered_set<std::string>* compile_files) {
+    // Walk functions
+    size_t func_i = 0;
+    for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i, ++func_i) {
+        if (func_i && !(func_i % 100)
+                && qore_check_cancel(nullptr, "AOT batch fast-entry declaration")) {
+            return false;
+        }
+        FunctionEntry* fe = i->second;
+        QoreFunction* func = fe->getFunction();
+        if (!func) {
+            continue;
+        }
+
+        if (shouldSkipModuleItem(func->getModuleName(), compile_module, keep_modules)) {
+            continue;
+        }
+
+        QoreFunctionIterator vit(*func);
+        size_t variant_i = 0;
+        while (vit.next()) {
+            if (variant_i && !(variant_i % 100)
+                    && qore_check_cancel(nullptr, "AOT batch fast-entry variant declaration")) {
+                return false;
+            }
+            ++variant_i;
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+            if (!uvb || !uvb->hasBody()) {
+                continue;
+            }
+
+            if (hasCompileFileFilter(compile_file, compile_files)) {
+                const UserSignature* sig = uvb->getUserSignature();
+                const QoreProgramLocation* vloc = sig ? sig->getParseLocation() : nullptr;
+                if (shouldSkipByFile(vloc ? vloc->getFile() : nullptr,
+                        compile_file, compile_files)) {
+                    continue;
+                }
+            }
+
+            const char* fname = func->getName();
+            std::string function_name;
+            ns->getPath(function_name);
+            if (!function_name.empty()) {
+                function_name += "::";
+            }
+            function_name += fname;
+            std::string variant_key = getVariantKey(function_name.c_str(), variant);
+            if (!declared_keys.insert(variant_key).second) {
+                continue;
+            }
+
+            QoreIRFunction* ir_func = nullptr;
+            std::string lower_error;
+            int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
+            if (rc != 0 || !ir_func) {
+                delete ir_func;
+                continue;
+            }
+
+            ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
+            if (isAOTFastEntryEligible(ir_func, uvb)) {
+                const UserSignature* sig = uvb->getUserSignature();
+                unsigned num_params = sig->numParams();
+                std::string fast_entry_name = ir_func->name + "_fast";
+
+                llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                if (!fast_fn) {
+                    auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                    std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                    fast_params.push_back(ptr_ty);  // ctx
+                    fast_params.push_back(ptr_ty);  // xsink
+                    auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                    fast_fn = llvm::Function::Create(fast_fn_type,
+                            llvm::Function::InternalLinkage, fast_entry_name, module);
+                }
+                fast_fn->addFnAttr(llvm::Attribute::InlineHint);
+
+                BatchCalleeInfo info;
+                info.name = ir_func->name;
+                info.approach_b_eligible = true;
+                info.fast_name = fast_entry_name;
+                info.num_params = num_params;
+                aot_batch_callee_map[variant] = std::move(info);
+            }
+            delete ir_func;
+        }
+    }
+
+    size_t ns_i = 0;
+    for (auto& ni : ns->nsl.nsmap) {
+        if (ns_i && !(ns_i % 100)
+                && qore_check_cancel(nullptr, "AOT batch fast-entry namespace declaration")) {
+            return false;
+        }
+        ++ns_i;
+        if (ni.second) {
+            if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, ctx, module,
+                    aot_batch_callee_map, declared_keys, compile_module, compile_file,
+                    keep_modules, compile_files)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
@@ -2962,9 +3085,25 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         const AOTConstantReverseMap* init_base_const_reverse_map = nullptr,
         std::string* fatal_error = nullptr,
         const std::unordered_set<std::string>* keep_modules = nullptr,
-        const std::unordered_set<std::string>* compile_files = nullptr) {
+        const std::unordered_set<std::string>* compile_files = nullptr,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* aot_batch_callee_map = nullptr) {
     if (fatal_error && !fatal_error->empty()) {
         return;
+    }
+
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo> local_aot_batch_callee_map;
+    bool owns_aot_batch_callee_map = !aot_batch_callee_map;
+    if (!aot_batch_callee_map) {
+        aot_batch_callee_map = &local_aot_batch_callee_map;
+    }
+    if (!metadata_only && owns_aot_batch_callee_map) {
+        std::set<std::string> declared_fast_keys;
+        if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, *aot_batch_callee_map,
+                declared_fast_keys, compile_module, compile_file, keep_modules, compile_files)) {
+            setAOTCompileFatal(fatal_error, "namespace", "<batch-callee-fast-entry>",
+                "declaration", "cancelled");
+            return;
+        }
     }
 
     // Track compiled variant keys to skip duplicates from iterator yielding
@@ -3105,10 +3244,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
 
-                // Check for self-recursive Approach B eligibility
+                // Check for AOT Approach B fast-entry eligibility.  The
+                // batch map is populated only after the fast entry lowers
+                // successfully, so callers always have a valid fallback.
                 std::string fast_entry_name;
-                bool self_rec_eligible = isAOTSelfRecursiveEligible(ir_func, uvb);
-                if (!metadata_only && self_rec_eligible) {
+                bool fast_entry_eligible = !metadata_only && isAOTFastEntryEligible(ir_func, uvb);
+                bool self_rec_eligible = fast_entry_eligible && hasAOTSelfRecursiveCall(ir_func);
+                if (fast_entry_eligible) {
                     fast_entry_name = ir_func->name + "_fast";
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
@@ -3120,12 +3262,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     fast_params.push_back(ptr_ty);  // ctx
                     fast_params.push_back(ptr_ty);  // xsink
                     auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
-                    llvm::Function* fast_fn = llvm::Function::Create(fast_fn_type,
-                            llvm::Function::InternalLinkage, fast_entry_name, module);
+                    llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                    if (!fast_fn) {
+                        fast_fn = llvm::Function::Create(fast_fn_type,
+                                llvm::Function::InternalLinkage, fast_entry_name, module);
+                    }
                     fast_fn->addFnAttr(llvm::Attribute::InlineHint);
                     if (getenv("QORE_AOT_DEBUG")) {
-                        fprintf(stderr, "AOT: self-recursive fast entry '%s' (%u params)\n",
-                            fast_entry_name.c_str(), num_params);
+                        fprintf(stderr, "AOT: fast entry '%s' (%u params%s)\n",
+                            fast_entry_name.c_str(), num_params,
+                            self_rec_eligible ? ", self-recursive" : "");
                     }
                 }
 
@@ -3185,6 +3331,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // later constructors, assignments, or pseudo-method calls can
                     // observe uninitialized values and raise chained exceptions.
                     lowerer.setDeferredExceptionChecking(false);
+                    if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                        lowerer.setBatchCallees(aot_batch_callee_map);
+                    }
                     if (!fast_entry_name.empty()) {
                         // Pass FE so the self-recursion check in the
                         // lowerer compares pointer identity — base-name
@@ -3218,8 +3367,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                     std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
 
-                    // Compile fast entry for self-recursive Approach B
-                    if (std_entry_ok && self_rec_eligible) {
+                    // Compile fast entry for AOT Approach B.
+                    if (std_entry_ok && fast_entry_eligible) {
                         const UserSignature* sig = uvb->getUserSignature();
                         unsigned num_params = sig->numParams();
                         llvm::Function* fast_fn = module.getFunction(fast_entry_name);
@@ -3239,17 +3388,33 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         fast_lowerer.setDeferredExceptionChecking(false);
+                        if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                            fast_lowerer.setBatchCallees(aot_batch_callee_map);
+                        }
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
-                        fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
+                        if (self_rec_eligible) {
+                            fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
+                        }
                         std::string fast_error;
                         if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
-                            // Fast entry failure is non-fatal — standard entry still works
                             printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
                                 fast_entry_name.c_str(), fast_error.c_str());
                             if (getenv("QORE_AOT_DEBUG")) {
                                 fprintf(stderr, "AOT: fast entry '%s' lowering failed: %s\n",
                                     fast_entry_name.c_str(), fast_error.c_str());
                             }
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "function", variant_key,
+                                "fast-entry LLVM lowering", fast_error);
+                            delete ir_func;
+                            return;
+                        } else if (aot_batch_callee_map) {
+                            BatchCalleeInfo info;
+                            info.name = ir_func->name;
+                            info.approach_b_eligible = true;
+                            info.fast_name = fast_entry_name;
+                            info.num_params = num_params;
+                            (*aot_batch_callee_map)[variant] = std::move(info);
                         }
                     }
 
@@ -3969,7 +4134,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
                 compile_module, compile_file, metadata_only, pending_init_constant_fqns,
-                init_base_const_reverse_map, fatal_error, keep_modules, compile_files);
+                init_base_const_reverse_map, fatal_error, keep_modules, compile_files,
+                aot_batch_callee_map);
             if (fatal_error && !fatal_error->empty()) {
                 return;
             }

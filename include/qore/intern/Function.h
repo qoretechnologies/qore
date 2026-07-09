@@ -1056,6 +1056,11 @@ public:
         return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
     }
 
+    //! Returns the cached AOT context for direct AOT fast-entry dispatch.
+    DLLLOCAL QoreAOTContext* getCachedAOTContext() const {
+        return cached_aot_ctx;
+    }
+
     //! Returns true if argv is actually used in the function body
     DLLLOCAL bool usesArgv() const {
         return uses_argv;

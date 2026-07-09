@@ -332,6 +332,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot) },
     { "qore_rt_call_with_args_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args) },
+    { "qore_rt_get_aot_call_target_context",
+        reinterpret_cast<void*>(&qore_rt_get_aot_call_target_context) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -10791,6 +10793,31 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
     return qore_rt_missing_prelinked_call_target(ctx, slot, xsink,
         "qore_rt_call_direct_aot", "function", "missing pre-resolved direct call target");
+}
+
+extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
+        QoreAOTContext* ctx, int32_t slot, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets) {
+        if (xsink) {
+            xsink->raiseException("AOT-ERROR",
+                "invalid AOT direct-call slot %d while resolving callee context", slot);
+        }
+        return nullptr;
+    }
+
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    const UserVariantBase* uvb = target.uvb;
+    if (!uvb && target.variant) {
+        uvb = target.variant->getUserVariantBase();
+    }
+    if (!uvb || !uvb->isStaticallyFastCallEligible() || !uvb->hasCachedAOT()) {
+        if (xsink) {
+            xsink->raiseException("AOT-ERROR",
+                "missing cached AOT context for direct-call slot %d", slot);
+        }
+        return nullptr;
+    }
+    return uvb->getCachedAOTContext();
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

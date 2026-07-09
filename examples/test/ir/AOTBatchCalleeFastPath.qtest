@@ -1,0 +1,80 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+class Holder {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    string get() {
+        return value;
+    }
+}
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub nested_helper(int x) {
+    return leaf(x) + leaf(x + 1);
+}
+
+string sub method_helper(Holder h) {
+    return h.get();
+}
+
+string sub caller() {
+    Holder h(\"ctx-ok\");
+    return string(nested_helper(40)) + \":\" + method_helper(h);
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub runScript(string script_path) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+        libqore_dir, qore_bin, script_path));
+}
+
+string sub runAot(string script_path) {
+    string exe = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string script_path = "/tmp/qore-aot-batch-callee-fast-path-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runScript(script_path);
+string aot = runAot(script_path);
+if (ast != "83:ctx-ok\n" || aot != ast) {
+    printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
+    exit(2);
+}
