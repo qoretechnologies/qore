@@ -26,6 +26,7 @@ printf(\"sizep:%y:%y:%y\\n\", heap.sizep(), short.sizep(), empty.sizep());
 string u_short = \"éx\";
 string u_heap = \"éabcdefghijklmnopqrstuvwxyz\";
 printf(\"case:%y:%y:%y:%y\\n\", short.lwr(), short.upr(), u_short.lwr(), u_short.upr());
+printf(\"global-case:%y:%y:%y:%y\\n\", tolower(short), toupper(short), tolower(u_short), toupper(u_short));
 printf(\"lengths:%d:%d:%d:%d:%d:%d\\n\",
     short.size(), short.strlen(), short.length(),
     heap.size(), heap.strlen(), heap.length());
@@ -145,6 +146,7 @@ string sub expectedOutput() {
     return "assigned:True:False:True:False:False:True
 sizep:True:True:True
 case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
+global-case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
 global-lengths:3:3:2:3
