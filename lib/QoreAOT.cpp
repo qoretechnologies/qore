@@ -58,6 +58,7 @@
 #include <unistd.h>
 
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -2961,6 +2962,235 @@ static void setAOTCompileFatal(std::string* fatal_error, const char* item_kind,
     }
 }
 
+static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& expr,
+        const QoreParseListNode*& parse_args, const QoreListNode*& args) {
+    parse_args = nullptr;
+    args = nullptr;
+    if (!expr.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+        return &call->getParsedArgTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+        return &call->getParsedArgTypeInfo();
+    }
+    return nullptr;
+}
+
+static bool qore_aot_fast_entry_args_need_no_binding(
+        const AbstractQoreFunctionVariant* variant,
+        const QoreValue& expr, int arg_start, int nargs) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb || arg_start < 0 || nargs < 0) {
+        return false;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!sig) {
+        return false;
+    }
+    unsigned num_params = sig->numParams();
+    if (sig->hasVarargs() || static_cast<unsigned>(nargs) != num_params) {
+        return false;
+    }
+
+    const QoreParseListNode* parse_args = nullptr;
+    const QoreListNode* args = nullptr;
+    const type_vec_t* arg_types = qore_aot_get_call_parsed_arg_types(expr, parse_args, args);
+    if (parse_args) {
+        if (parse_args->hasNamedArgs() || parse_args->isVariableList()) {
+            return false;
+        }
+    } else if (args) {
+        const qore_list_private* args_priv = qore_list_private::get(args);
+        if (args_priv && args_priv->hasCallArgEvalMap()) {
+            return false;
+        }
+    } else if (nargs) {
+        return false;
+    }
+
+    if (nargs > 0) {
+        if (!arg_types || arg_types->size() < static_cast<size_t>(arg_start + nargs)) {
+            return false;
+        }
+        for (int i = 0; i < nargs; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT fast-entry context-free argument analysis")) {
+                return false;
+            }
+            const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+            if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
+                continue;
+            }
+            const QoreTypeInfo* arg_ti = (*arg_types)[arg_start + i];
+            if (!arg_ti || !QoreTypeInfo::isInputIdentical(param_ti, arg_ti)) {
+                return false;
+            }
+        }
+    }
+
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT fast-entry context-free default-argument analysis")) {
+            return false;
+        }
+        if (sig->hasDefaultArg(i)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return false;
+    }
+    const auto* call = dynamic_cast<const FunctionCallNode*>(expr.getInternalNode());
+    return call && call->getAOTDeferredSourceFunction();
+}
+
+static bool qore_aot_fast_entry_call_is_context_independent(
+        const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        const std::vector<QoreIRValue>& operands, bool has_ref_args,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
+        int arg_start = 0) {
+    if (!variant || has_ref_args) {
+        return false;
+    }
+    auto it = batch_callees.find(variant);
+    if (it == batch_callees.end() || !it->second.approach_b_eligible
+            || !it->second.context_independent_fast_entry) {
+        return false;
+    }
+    int total_operands = static_cast<int>(operands.size());
+    if (arg_start > total_operands) {
+        arg_start = total_operands;
+    }
+    int nargs = total_operands - arg_start;
+    return nargs <= static_cast<int>(it->second.num_params)
+        && qore_aot_fast_entry_args_need_no_binding(variant, expr, arg_start, nargs);
+}
+
+static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctionVariant* variant,
+        const QoreIRFunction& ir_func,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig) {
+        return false;
+    }
+
+    size_t inst_count = 0;
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++inst_count > 100 && !(inst_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT fast-entry context-free IR analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            switch (inst->opcode) {
+                case QoreIROpcode::ConstInt:
+                case QoreIROpcode::ConstFloat:
+                case QoreIROpcode::ConstBool:
+                case QoreIROpcode::ConstNothing:
+                case QoreIROpcode::ConstNull:
+                case QoreIROpcode::ConstEnum:
+                case QoreIROpcode::ConstChar:
+                case QoreIROpcode::AddInt:
+                case QoreIROpcode::SubInt:
+                case QoreIROpcode::MulInt:
+                case QoreIROpcode::DivInt:
+                case QoreIROpcode::ModInt:
+                case QoreIROpcode::EqInt:
+                case QoreIROpcode::NeInt:
+                case QoreIROpcode::LtInt:
+                case QoreIROpcode::LeInt:
+                case QoreIROpcode::GtInt:
+                case QoreIROpcode::GeInt:
+                case QoreIROpcode::ToInt:
+                case QoreIROpcode::GuardInt:
+                case QoreIROpcode::Phi:
+                case QoreIROpcode::Br:
+                case QoreIROpcode::BrIf:
+                case QoreIROpcode::Return:
+                case QoreIROpcode::ReturnNothing:
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::CheckException:
+                    break;
+                case QoreIROpcode::LoadLocal: {
+                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!linst->local || linst->is_closure || linst->is_ref) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallDirect: {
+                    const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+                    int arg_start = qore_aot_is_deferred_source_function_call(call->expr) ? 1 : 0;
+                    if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
+                            call->operands, call->has_ref_args, batch_callees, arg_start)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::CallStaticDirect: {
+                    const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+                    if (!qore_aot_fast_entry_call_is_context_independent(call->variant, call->expr,
+                            call->operands, call->has_ref_args, batch_callees)) {
+                        return false;
+                    }
+                    break;
+                }
+                default:
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
+static void resolveAOTBatchContextIndependentFastEntries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map) {
+    bool changed = true;
+    size_t pass = 0;
+    while (changed) {
+        if (pass++ && qore_check_cancel(nullptr,
+                "AOT batch context-independent fast-entry fixed-point")) {
+            return;
+        }
+        changed = false;
+        size_t candidate_i = 0;
+        for (const auto& candidate : candidates) {
+            if (candidate_i++ && !(candidate_i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT batch context-independent fast-entry fixed-point scan")) {
+                return;
+            }
+            auto it = aot_batch_callee_map.find(candidate.first);
+            if (it == aot_batch_callee_map.end() || it->second.context_independent_fast_entry) {
+                continue;
+            }
+            if (qore_aot_fast_entry_is_context_independent(candidate.first, *candidate.second,
+                    aot_batch_callee_map)) {
+                it->second.context_independent_fast_entry = true;
+                changed = true;
+            }
+        }
+    }
+}
+
 static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
@@ -2969,6 +3199,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         const char* compile_file,
         const std::unordered_set<std::string>* keep_modules,
         const std::unordered_set<std::string>* compile_files) {
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
+
     // Walk functions
     size_t func_i = 0;
     for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i, ++func_i) {
@@ -3054,6 +3286,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 info.fast_name = fast_entry_name;
                 info.num_params = num_params;
                 aot_batch_callee_map[variant] = std::move(info);
+                context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
+                ir_func = nullptr;
             }
             delete ir_func;
         }
@@ -3161,11 +3395,15 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
                     aot_batch_callee_map[variant] = std::move(info);
+                    context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
+                    ir_func = nullptr;
                 }
                 delete ir_func;
             }
         }
     }
+
+    resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
 
     size_t ns_i = 0;
     for (auto& ni : ns->nsl.nsmap) {
@@ -3526,6 +3764,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return;
                         } else if (aot_batch_callee_map) {
                             BatchCalleeInfo info;
+                            auto existing = aot_batch_callee_map->find(variant);
+                            if (existing != aot_batch_callee_map->end()) {
+                                info.context_independent_fast_entry =
+                                    existing->second.context_independent_fast_entry;
+                            }
                             info.name = ir_func->name;
                             info.approach_b_eligible = true;
                             info.fast_name = fast_entry_name;
@@ -3841,6 +4084,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 return;
                             } else if (aot_batch_callee_map) {
                                 BatchCalleeInfo info;
+                                auto existing = aot_batch_callee_map->find(variant);
+                                if (existing != aot_batch_callee_map->end()) {
+                                    info.context_independent_fast_entry =
+                                        existing->second.context_independent_fast_entry;
+                                }
                                 info.name = ir_func->name;
                                 info.approach_b_eligible = true;
                                 info.fast_name = fast_entry_name;

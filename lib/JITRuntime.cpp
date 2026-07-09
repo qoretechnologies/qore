@@ -334,6 +334,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args) },
     { "qore_rt_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_get_aot_call_target_context) },
+    { "qore_rt_try_get_aot_call_target_context",
+        reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -10818,6 +10820,11 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
         return nullptr;
     }
     return uvb->getCachedAOTContext();
+}
+
+extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
+        QoreAOTContext* ctx, int32_t slot) {
+    return qore_rt_get_aot_call_target_context(ctx, slot, nullptr);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

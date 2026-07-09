@@ -55,6 +55,10 @@ int sub nested_helper(int x) {
     return leaf(x) + leaf(x + 1);
 }
 
+int sub default_helper(int x = 7) {
+    return x * 3;
+}
+
 string sub method_helper(Holder h) {
     return h.get();
 }
@@ -62,7 +66,7 @@ string sub method_helper(Holder h) {
 string sub caller() {
     Holder h(\"ctx-ok\");
     return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
-        + \":\" + string(StaticHelper::comboTry(4));
+        + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper());
 }
 
 printf(\"%s\\n\", caller());
@@ -93,7 +97,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10\n" || aot != ast) {
+if (ast != "83:ctx-ok:10:10:21\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

@@ -550,6 +550,19 @@ private:
             llvm::Module& module, llvm::Function* llvm_func,
             const QoreIRInstruction* inst);
 
+    // AOT batch fast entries are only valid when the callee's own AOT context
+    // is cached at runtime.  Emit a guarded fast-entry call with a normal AOT
+    // helper fallback for linked/source-stripped cases where the fast entry is
+    // visible but the callee context is not cached.
+    llvm::Value* emitAotBatchFastEntryOrFallback(llvm::Module& module,
+            llvm::Function* llvm_func, const QoreIRInstruction* inst,
+            int32_t slot, llvm::Function* fast_fn,
+            const BatchCalleeInfo& callee_info,
+            const std::vector<llvm::Value*>& boxed_args,
+            llvm::Value* args_array, llvm::Value* arg_cleanups,
+            int nargs, bool has_arg_cleanups, const char* fallback_name,
+            const char* fallback_consume_name, std::string& error);
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 

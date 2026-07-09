@@ -69,6 +69,7 @@ DLLLOCAL bool qore_jit_deopt_requested();
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
+    bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     std::string fast_name;               //!< Fast entry function name (if eligible)
     unsigned num_params = 0;             //!< Number of parameters
 };
