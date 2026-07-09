@@ -49,6 +49,36 @@ int sub conditionalPlusEquals() {
     return total;
 }
 
+int sub knownAssignedMinusEquals() {
+    int total = 10;
+    for (int i = 0; i < 5; i++) {
+        total -= i;
+    }
+    return total;
+}
+
+int sub unassignedMinusEquals() {
+    int total;
+    total -= 7;
+    return total;
+}
+
+int sub removedMinusEquals() {
+    int total = 1;
+    remove total;
+    total -= 9;
+    return total;
+}
+
+int sub conditionalMinusEquals() {
+    int total;
+    if (choose()) {
+        total = 10;
+    }
+    total -= 4;
+    return total;
+}
+
 string sub hashAutoInitialPlusEquals() {
     hash<string, int> typed = {\"a\": 1};
     hash<auto> h;
@@ -77,9 +107,10 @@ string sub optionalListAutoInitialPlusEquals() {
     return l.fullType() + \":\" + string(l[0]) + \":\" + string(l[1]);
 }
 
-printf(\"%d:%d:%d:%d:%s:%s:%s:%s\\n\",
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%s:%s\\n\",
     knownAssignedPlusEquals(), unassignedPlusEquals(), removedPlusEquals(),
-    conditionalPlusEquals(), hashAutoInitialPlusEquals(),
+    conditionalPlusEquals(), knownAssignedMinusEquals(), unassignedMinusEquals(),
+    removedMinusEquals(), conditionalMinusEquals(), hashAutoInitialPlusEquals(),
     optionalHashAutoInitialPlusEquals(), listAutoInitialPlusEquals(),
     optionalListAutoInitialPlusEquals());
 ";
@@ -115,7 +146,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-checkOutput("ast", "10:7:9:4:hash<auto>:1:hash<auto>:1:list<auto>:1:2:list<auto>:1:2\n", ast);
+checkOutput("ast", "10:7:9:4:0:-7:-9:-4:hash<auto>:1:hash<auto>:1:list<auto>:1:2:list<auto>:1:2\n", ast);
 
 foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));

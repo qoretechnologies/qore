@@ -7143,7 +7143,13 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
 
     // Generic NOTHING→default coercion for typed variables (see lowerPlusEquals)
     const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
-    if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti)) {
+    bool left_local_known_assigned = parse_context
+        && left_var->getType() == VT_LOCAL
+        && left_var->ref.id
+        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
+        && lvar_ti
+        && QoreTypeInfo::parseReturns(lvar_ti, NT_NOTHING) == QTI_NOT_EQUAL;
+    if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti) && !left_local_known_assigned) {
         QoreIRBasicBlock* has_value_bb = createBlock("me.has_value");
         QoreIRBasicBlock* nothing_bb = createBlock("me.nothing");
         QoreIRBasicBlock* merge_bb = createBlock("me.merge");
