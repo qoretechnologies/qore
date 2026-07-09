@@ -12,6 +12,7 @@ class Test inherits QUnit::Test {
     constructor() : QUnit::Test("assignment operators += and -= with *hash, *date etc", "1.0", \ARGV) {
         addTestCase("x += NOTHING with implicit NOTHING in x", \plusEqImplicitNothing());
         addTestCase("x += NOTHING with explicit NOTHING in x", \plusEqExplicitNothing());
+        addTestCase("initial += strips narrowed hash/list value types", \plusEqInitialAssignmentStripsNarrowing());
         set_return_value(main());
     }
 
@@ -37,5 +38,38 @@ class Test inherits QUnit::Test {
         assertEq(NT_NOTHING, s.typeCode());
         i += NOTHING;
         assertEq(NT_NOTHING, i.typeCode());
+    }
+
+    plusEqInitialAssignmentStripsNarrowing() {
+        date d = 1970-01-01T00:00:01Z;
+
+        {
+            hash<auto> source = {"value": d};
+            hash<auto> h;
+            h += source;
+            h."value" = 1;
+            assertEq(1, h."value");
+        }
+        {
+            hash<auto> source = {"value": d};
+            *hash<auto> h;
+            h += source;
+            h."value" = 1;
+            assertEq(1, h."value");
+        }
+        {
+            list<auto> source = (d,);
+            list<auto> l;
+            l += source;
+            l[0] = 1;
+            assertEq(1, l[0]);
+        }
+        {
+            list<auto> source = (d,);
+            *list<auto> l;
+            l += source;
+            l[0] = 1;
+            assertEq(1, l[0]);
+        }
     }
 }

@@ -6859,6 +6859,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || QoreTypeInfo::getBaseType(ti) == NT_BINARY
                 || QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
+                || QoreTypeInfo::getBaseType(ti) == NT_DATE
                 || QoreTypeInfo::isReference(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
@@ -7066,6 +7067,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
+                || QoreTypeInfo::getBaseType(ti) == NT_DATE
                 || QoreTypeInfo::isReference(ti)
                 || QoreTypeInfo::isHashType(ti)
                 || QoreTypeInfo::getBaseType(ti) == NT_OBJECT) {

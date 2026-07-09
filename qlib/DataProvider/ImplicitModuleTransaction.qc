@@ -54,12 +54,38 @@ public class ImplicitModuleTransaction {
         }
     }
 
+    #! Internal helper used by static transaction methods
+    addImpl(code rb_code) {
+        rollback_list += rb_code;
+    }
+
+    #! Internal helper used by static transaction methods
+    int savepointImpl() {
+        return rollback_list.size();
+    }
+
+    #! Internal helper used by static transaction methods
+    rollbackImpl(int sp) {
+        if (sp < rollback_list.size()) {
+            list<code> to_rollback = rollback_list[sp..];
+            rollback_list = sp > 0 ? rollback_list[0..sp - 1] : new list<code>();
+            map $1(), to_rollback;
+        }
+    }
+
+    #! Internal helper used by static transaction methods
+    commitImpl(int sp) {
+        if (sp < rollback_list.size()) {
+            rollback_list = sp > 0 ? rollback_list[0..sp - 1] : new list<code>();
+        }
+    }
+
     #! Adds a rollback closure to be executed if there is an active exception in module initialization
     static add(code rb_code) {
         if (!rb) {
             rb = new ImplicitModuleTransaction();
         }
-        rb.rollback_list += rb_code;
+        rb.addImpl(rb_code);
     }
 
     #! Returns the current savepoint (number of rollback closures registered so far)
@@ -70,7 +96,7 @@ public class ImplicitModuleTransaction {
         if (!rb) {
             return 0;
         }
-        return rb.rollback_list.size();
+        return rb.savepointImpl();
     }
 
     #! Executes rollback closures added since the given savepoint and removes them
@@ -82,11 +108,7 @@ public class ImplicitModuleTransaction {
             return;
         }
         # execute closures added after the savepoint in reverse order
-        if (sp < rb.rollback_list.size()) {
-            list<code> to_rollback = rb.rollback_list[sp..];
-            rb.rollback_list = sp > 0 ? rb.rollback_list[0..sp - 1] : new list<code>();
-            map $1(), to_rollback;
-        }
+        rb.rollbackImpl(sp);
     }
 
     #! Discards rollback closures added since the given savepoint (module loaded successfully)
@@ -97,9 +119,7 @@ public class ImplicitModuleTransaction {
         if (!rb) {
             return;
         }
-        if (sp < rb.rollback_list.size()) {
-            rb.rollback_list = sp > 0 ? rb.rollback_list[0..sp - 1] : new list<code>();
-        }
+        rb.commitImpl(sp);
     }
 }
 }
