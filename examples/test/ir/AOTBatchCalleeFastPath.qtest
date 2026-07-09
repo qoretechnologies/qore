@@ -55,6 +55,25 @@ int sub nested_helper(int x) {
     return leaf(x) + leaf(x + 1);
 }
 
+int sub rec_sum(int x) {
+    if (x <= 0) {
+        return 0;
+    }
+    return x + rec_sum(x - 1);
+}
+
+float sub fscale(float x) {
+    return x * 1.5;
+}
+
+float sub fcombo(float x) {
+    return fscale(x) + fscale(2.0);
+}
+
+int sub float_check() {
+    return int(fcombo(4.0) * 10.0);
+}
+
 int sub default_helper(int x = 7) {
     return x * 3;
 }
@@ -66,10 +85,58 @@ string sub method_helper(Holder h) {
 string sub caller() {
     Holder h(\"ctx-ok\");
     return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
-        + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper());
+        + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
+        + \":\" + string(rec_sum(5)) + \":\" + string(float_check());
 }
 
 printf(\"%s\\n\", caller());
+";
+}
+
+string sub unassignedScriptCode() {
+    return "%modern
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub caller() {
+    int x;
+    return leaf(x);
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub assignedNothingScriptCode() {
+    return "%modern
+
+int sub leaf(int x) {
+    return x + 1;
+}
+
+int sub caller() {
+    auto x = NOTHING;
+    return leaf(x);
+}
+
+printf(\"%s\\n\", caller());
+";
+}
+
+string sub selfRecursiveUnassignedScriptCode() {
+    return "%modern
+
+int sub rec(int x) {
+    if (x <= 0) {
+        return 0;
+    }
+    int y;
+    return rec(y);
+}
+
+printf(\"%s\\n\", rec(1));
 ";
 }
 
@@ -97,7 +164,53 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21\n" || aot != ast) {
+if (ast != "83:ctx-ok:10:10:21:15:90\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
+    exit(2);
+}
+
+string unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-unassigned-" + string(getpid()) + ".qr";
+File unassigned_script();
+unassigned_script.open2(unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+unassigned_script.write(unassignedScriptCode());
+unassigned_script.close();
+
+string ast_unassigned = runScript(unassigned_path);
+string aot_unassigned = runAot(unassigned_path);
+if (!(ast_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_unassigned, aot_unassigned);
+    exit(2);
+}
+
+string assigned_nothing_path = "/tmp/qore-aot-batch-callee-fast-path-nothing-" + string(getpid()) + ".qr";
+File assigned_nothing_script();
+assigned_nothing_script.open2(assigned_nothing_path, O_WRONLY | O_CREAT | O_TRUNC);
+assigned_nothing_script.write(assignedNothingScriptCode());
+assigned_nothing_script.close();
+
+string ast_assigned_nothing = runScript(assigned_nothing_path);
+string aot_assigned_nothing = runAot(assigned_nothing_path);
+if (!(ast_assigned_nothing =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_assigned_nothing =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for assigned NOTHING lvalue\nAST:\n%sAOT:\n%s",
+        ast_assigned_nothing, aot_assigned_nothing);
+    exit(2);
+}
+
+string self_rec_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-rec-unassigned-"
+    + string(getpid()) + ".qr";
+File self_rec_unassigned_script();
+self_rec_unassigned_script.open2(self_rec_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+self_rec_unassigned_script.write(selfRecursiveUnassignedScriptCode());
+self_rec_unassigned_script.close();
+
+string ast_self_rec_unassigned = runScript(self_rec_unassigned_path);
+string aot_self_rec_unassigned = runAot(self_rec_unassigned_path);
+if (!(ast_self_rec_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_self_rec_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for self-recursive unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_self_rec_unassigned, aot_self_rec_unassigned);
     exit(2);
 }

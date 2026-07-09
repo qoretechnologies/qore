@@ -528,6 +528,11 @@ static bool aotEmitDebugInfo() {
     return !strip;
 }
 
+static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
+        llvm::Type* i64_ty, llvm::Type* double_ty) {
+    return kind == BatchCalleeParamKind::NativeFloat ? double_ty : i64_ty;
+}
+
 //! Check if an AOT function can have an Approach B fast entry.
 //! Criteria: all params/body locals IR-only, no closures/references/varargs.
 static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
@@ -3265,13 +3270,31 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             if (isAOTFastEntryEligible(ir_func, uvb)) {
                 const UserSignature* sig = uvb->getUserSignature();
                 unsigned num_params = sig->numParams();
+                std::vector<BatchCalleeParamKind> param_kinds =
+                    qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                std::vector<uint8_t> param_rejects_nothing =
+                    qore_ir_get_fast_entry_param_rejects_nothing(sig);
                 std::string fast_entry_name = ir_func->name + "_fast";
 
                 llvm::Function* fast_fn = module.getFunction(fast_entry_name);
                 if (!fast_fn) {
                     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                    auto* double_ty = llvm::Type::getDoubleTy(ctx);
                     auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                    std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                    std::vector<llvm::Type*> fast_params;
+                    fast_params.reserve(num_params + 2);
+                    for (unsigned i = 0; i < num_params; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT function fast-entry declaration parameter setup")) {
+                            delete ir_func;
+                            return false;
+                        }
+                        BatchCalleeParamKind kind = i < param_kinds.size()
+                            ? param_kinds[i] : BatchCalleeParamKind::Boxed;
+                        fast_params.push_back(qore_aot_fast_entry_param_type(
+                            kind, i64_ty, double_ty));
+                    }
                     fast_params.push_back(ptr_ty);  // ctx
                     fast_params.push_back(ptr_ty);  // xsink
                     auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
@@ -3285,6 +3308,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 info.approach_b_eligible = true;
                 info.fast_name = fast_entry_name;
                 info.num_params = num_params;
+                info.param_kinds = std::move(param_kinds);
+                info.param_rejects_nothing = std::move(param_rejects_nothing);
                 aot_batch_callee_map[variant] = std::move(info);
                 context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
                 ir_func = nullptr;
@@ -3374,13 +3399,31 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 if (isAOTFastEntryEligible(ir_func, uvb)) {
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
+                    std::vector<BatchCalleeParamKind> param_kinds =
+                        qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                    std::vector<uint8_t> param_rejects_nothing =
+                        qore_ir_get_fast_entry_param_rejects_nothing(sig);
                     std::string fast_entry_name = ir_func->name + "_fast";
 
                     llvm::Function* fast_fn = module.getFunction(fast_entry_name);
                     if (!fast_fn) {
                         auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                        auto* double_ty = llvm::Type::getDoubleTy(ctx);
                         auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                        std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                        std::vector<llvm::Type*> fast_params;
+                        fast_params.reserve(num_params + 2);
+                        for (unsigned i = 0; i < num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT static fast-entry declaration parameter setup")) {
+                                delete ir_func;
+                                return false;
+                            }
+                            BatchCalleeParamKind kind = i < param_kinds.size()
+                                ? param_kinds[i] : BatchCalleeParamKind::Boxed;
+                            fast_params.push_back(qore_aot_fast_entry_param_type(
+                                kind, i64_ty, double_ty));
+                        }
                         fast_params.push_back(ptr_ty);
                         fast_params.push_back(ptr_ty);
                         auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
@@ -3394,6 +3437,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     info.approach_b_eligible = true;
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
+                    info.param_kinds = std::move(param_kinds);
+                    info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
                     context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
@@ -3602,17 +3647,40 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // batch map is populated only after the fast entry lowers
                 // successfully, so callers always have a valid fallback.
                 std::string fast_entry_name;
+                std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
+                std::vector<uint8_t> fast_entry_param_rejects_nothing;
                 bool fast_entry_eligible = !metadata_only && isAOTFastEntryEligible(ir_func, uvb);
                 bool self_rec_eligible = fast_entry_eligible && hasAOTSelfRecursiveCall(ir_func);
                 if (fast_entry_eligible) {
                     fast_entry_name = ir_func->name + "_fast";
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
+                    fast_entry_param_kinds =
+                        qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                    fast_entry_param_rejects_nothing =
+                        qore_ir_get_fast_entry_param_rejects_nothing(sig);
 
-                    // Forward-declare fast entry: (i64 p1, ..., ptr ctx, ptr xsink) -> i64
+                    // Forward-declare fast entry: (params..., ptr ctx, ptr xsink) -> i64
                     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                    auto* double_ty = llvm::Type::getDoubleTy(ctx);
                     auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                    std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                    std::vector<llvm::Type*> fast_params;
+                    fast_params.reserve(num_params + 2);
+                    for (unsigned i = 0; i < num_params; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT function fast-entry parameter type setup")) {
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "function", variant_key,
+                                "fast-entry parameter type setup", "cancelled");
+                            delete ir_func;
+                            return;
+                        }
+                        BatchCalleeParamKind kind = i < fast_entry_param_kinds.size()
+                            ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
+                        fast_params.push_back(qore_aot_fast_entry_param_type(
+                            kind, i64_ty, double_ty));
+                    }
                     fast_params.push_back(ptr_ty);  // ctx
                     fast_params.push_back(ptr_ty);  // xsink
                     auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
@@ -3694,7 +3762,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // comparison mis-identifies cross-namespace
                         // calls to same-named wrappers as self-recursion
                         // (e.g. `OMQ::foo` → `Util::foo`).
-                        lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
+                        lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe,
+                                &fast_entry_param_kinds,
+                                &fast_entry_param_rejects_nothing);
                     }
                     // Debug: dump IR before LLVM lowering if requested
                     if (getenv("QORE_AOT_DUMP_IR")) {
@@ -3730,9 +3800,21 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                         // Build param mapping: LocalVar* → LLVM function arg value
                         std::unordered_map<const void*, llvm::Value*> param_map;
+                        std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
                         for (unsigned i = 0; i < num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT function fast-entry parameter mapping")) {
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "function", variant_key,
+                                    "fast-entry parameter mapping", "cancelled");
+                                delete ir_func;
+                                return;
+                            }
                             const void* key = reinterpret_cast<const void*>(sig->lv[i]);
                             param_map[key] = fast_fn->getArg(i);
+                            param_kind_map[key] = i < fast_entry_param_kinds.size()
+                                ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
                             fast_fn->getArg(i)->setName(
                                     std::string("arg") + std::to_string(i));
                         }
@@ -3745,9 +3827,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                             fast_lowerer.setBatchCallees(aot_batch_callee_map);
                         }
-                        fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
+                        fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
+                                &param_kind_map);
                         if (self_rec_eligible) {
-                            fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe);
+                            fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
+                                    fe, &fast_entry_param_kinds,
+                                    &fast_entry_param_rejects_nothing);
                         }
                         std::string fast_error;
                         if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
@@ -3773,6 +3858,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             info.approach_b_eligible = true;
                             info.fast_name = fast_entry_name;
                             info.num_params = num_params;
+                            info.param_kinds = fast_entry_param_kinds;
+                            info.param_rejects_nothing = fast_entry_param_rejects_nothing;
                             (*aot_batch_callee_map)[variant] = std::move(info);
                         }
                     }
@@ -3942,6 +4029,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     buildAOTSlotMap(*ir_func, slots);
 
                     std::string fast_entry_name;
+                    std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
+                    std::vector<uint8_t> fast_entry_param_rejects_nothing;
                     bool fast_entry_eligible = !metadata_only
                         && meth->isStatic()
                         && isFastMethodCallEligible(variant)
@@ -3950,10 +4039,31 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fast_entry_name = ir_func->name + "_fast";
                         const UserSignature* sig = uvb->getUserSignature();
                         unsigned num_params = sig->numParams();
+                        fast_entry_param_kinds =
+                            qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                        fast_entry_param_rejects_nothing =
+                            qore_ir_get_fast_entry_param_rejects_nothing(sig);
 
                         auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                        auto* double_ty = llvm::Type::getDoubleTy(ctx);
                         auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                        std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                        std::vector<llvm::Type*> fast_params;
+                        fast_params.reserve(num_params + 2);
+                        for (unsigned i = 0; i < num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT static method fast-entry parameter type setup")) {
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "method", variant_key,
+                                    "static fast-entry parameter type setup", "cancelled");
+                                delete ir_func;
+                                return;
+                            }
+                            BatchCalleeParamKind kind = i < fast_entry_param_kinds.size()
+                                ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
+                            fast_params.push_back(qore_aot_fast_entry_param_type(
+                                kind, i64_ty, double_ty));
+                        }
                         fast_params.push_back(ptr_ty);
                         fast_params.push_back(ptr_ty);
                         auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
@@ -4043,6 +4153,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             assert(fast_fn);
 
                             std::unordered_map<const void*, llvm::Value*> param_map;
+                            std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
                             for (unsigned i = 0; i < num_params; ++i) {
                                 if (i && !(i % 100)
                                         && qore_check_cancel(nullptr,
@@ -4055,6 +4166,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 }
                                 const void* key = reinterpret_cast<const void*>(sig->lv[i]);
                                 param_map[key] = fast_fn->getArg(i);
+                                param_kind_map[key] = i < fast_entry_param_kinds.size()
+                                    ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
                                 fast_fn->getArg(i)->setName(
                                         std::string("arg") + std::to_string(i));
                             }
@@ -4067,7 +4180,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                                 fast_lowerer.setBatchCallees(aot_batch_callee_map);
                             }
-                            fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
+                            fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
+                                    &param_kind_map);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
                                 printd(2, "AOT: static method fast entry '%s' lowering failed: %s\n",
@@ -4093,6 +4207,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 info.approach_b_eligible = true;
                                 info.fast_name = fast_entry_name;
                                 info.num_params = num_params;
+                                info.param_kinds = fast_entry_param_kinds;
+                                info.param_rejects_nothing = fast_entry_param_rejects_nothing;
                                 (*aot_batch_callee_map)[variant] = std::move(info);
                             }
                         }

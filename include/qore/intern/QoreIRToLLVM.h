@@ -55,6 +55,7 @@ class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
 struct BatchCalleeInfo;
+enum class BatchCalleeParamKind : uint8_t;
 
 class QoreIRToLLVM {
 public:
@@ -97,9 +98,11 @@ public:
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")
     //! @param args maps LocalVar* (as void*) → LLVM Value* for each parameter
     void setFastEntryMode(const std::string& name,
-            const std::unordered_map<const void*, llvm::Value*>* args) {
+            const std::unordered_map<const void*, llvm::Value*>* args,
+            const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr) {
         fast_entry_name = name;
         fast_entry_args = args;
+        fast_entry_arg_kinds = arg_kinds;
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -111,9 +114,15 @@ public:
     //! name, avoiding cross-namespace mis-matches (`OMQ::foo` → `Util::foo`
     //! previously tripped the self-recursion path because base names match).
     void setAOTSelfRecursiveFastEntry(const std::string& name,
-            const FunctionEntry* fe = nullptr) {
+            const FunctionEntry* fe = nullptr,
+            const std::vector<BatchCalleeParamKind>* param_kinds = nullptr,
+            const std::vector<uint8_t>* param_rejects_nothing = nullptr) {
         aot_self_recursive_fast_entry = name;
         aot_self_recursive_fe = fe;
+        aot_self_recursive_param_kinds = param_kinds ? *param_kinds
+            : std::vector<BatchCalleeParamKind>();
+        aot_self_recursive_param_rejects_nothing = param_rejects_nothing
+            ? *param_rejects_nothing : std::vector<uint8_t>();
     }
 
     //! Set shared debug info for multi-function module compilation (AOT/batch).
@@ -194,6 +203,7 @@ private:
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
     std::string fast_entry_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
+    const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -204,6 +214,8 @@ private:
     // same-named function in another namespace (e.g. `OMQ::foo` calling
     // `Util::foo`) is not mis-identified as self-recursion.
     const FunctionEntry* aot_self_recursive_fe = nullptr;
+    std::vector<BatchCalleeParamKind> aot_self_recursive_param_kinds;
+    std::vector<uint8_t> aot_self_recursive_param_rejects_nothing;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;
@@ -259,6 +271,14 @@ private:
     // Track which value IDs already contain NaN-boxed i64 (from Invoke, Call, CatchException,
     // make_string, .any ops, LoadLocal).  Values NOT in this set are raw typed values.
     std::unordered_set<uint32_t> nanboxed_values;
+
+    // Value IDs known not to be NOTHING.  This is intentionally narrower than
+    // assigned-state: only typed locals proven assigned on every load contribute
+    // here, so auto/any values assigned to NOTHING are not misclassified.
+    std::unordered_set<uint32_t> known_not_nothing_values;
+
+    // LocalVar* keys whose LoadLocal results can be marked known-not-NOTHING.
+    std::unordered_set<const void*> assigned_non_nothing_locals;
 
     // Set of LocalVar* (as void*) that are pre-instantiated by the caller (tiered
     // compilation); skip qore_rt_instantiate_local / qore_rt_uninstantiate_local for these.
@@ -558,10 +578,27 @@ private:
             llvm::Function* llvm_func, const QoreIRInstruction* inst,
             int32_t slot, llvm::Function* fast_fn,
             const BatchCalleeInfo& callee_info,
+            const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids,
             const std::vector<llvm::Value*>& boxed_args,
             llvm::Value* args_array, llvm::Value* arg_cleanups,
             int nargs, bool has_arg_cleanups, const char* fallback_name,
             const char* fallback_consume_name, std::string& error);
+
+    BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
+            unsigned index) const;
+    bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,
+            unsigned index) const;
+    BatchCalleeParamKind getFastEntryArgKind(const void* key) const;
+    llvm::Value* getFastEntryCallArgument(const BatchCalleeInfo& info,
+            unsigned index, const std::vector<llvm::Value*>& raw_args,
+            const std::vector<uint32_t>& raw_arg_ids,
+            const std::vector<llvm::Value*>& boxed_args,
+            llvm::Module& module);
+    bool fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& info,
+            const std::vector<uint32_t>& raw_arg_ids) const;
+    bool selfRecursiveFastEntryArgsNeedNothingGuard(
+            const std::vector<uint32_t>& raw_arg_ids) const;
 
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;

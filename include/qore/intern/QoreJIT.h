@@ -36,6 +36,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 #include <atomic>
 #include <unordered_map>
 #include <unordered_set>
@@ -52,6 +53,7 @@ class LocalVar;
 class QoreIRFunction;
 class AbstractQoreFunctionVariant;
 class UserVariantBase;
+class UserSignature;
 class QoreProgram;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -66,13 +68,35 @@ DLLLOCAL bool qore_jit_deopt_requested();
 
 //! Info about a batch callee for LLVM lowering (Approach B: direct LLVM arg passing).
 //! Used by QoreIRToLLVM to decide how to emit CallDirect instructions.
+enum class BatchCalleeParamKind : uint8_t {
+    Boxed = 0,
+    NativeInt = 1,
+    NativeFloat = 2,
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     std::string fast_name;               //!< Fast entry function name (if eligible)
     unsigned num_params = 0;             //!< Number of parameters
+    std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
+    std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
 };
+
+//! Derive fast-entry parameter ABI kinds from lowered IR local metadata.
+DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
+        const QoreIRFunction& ir_func, const UserSignature* sig);
+
+//! Derive fast-entry parameter NOTHING rejection metadata from the signature.
+DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig);
+
+//! Returns locals that cannot safely use native scalar storage because a load may
+//! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was
+//! cancelled. @p initially_assigned contains locals that are assigned on function
+//! entry, normally signature parameters.
+DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
+        const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned);
 
 class QoreJIT {
 public:
