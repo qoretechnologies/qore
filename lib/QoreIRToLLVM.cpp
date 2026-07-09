@@ -296,6 +296,9 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(const QoreValue&
     if (!strcmp(name, "strlen")) {
         return "qore_fast_strlen";
     }
+    if (!strcmp(name, "abs")) {
+        return "qore_fast_abs";
+    }
     return nullptr;
 }
 

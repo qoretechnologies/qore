@@ -38,6 +38,7 @@
 #include "qore/intern/QoreTransliterationOperatorNode.h"
 #include "qore/intern/QoreIterateOperatorNode.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/qore_number_private.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -6262,18 +6263,11 @@ extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xs
     // Equivalent to: number abs(number n) { return n < 0 ? -n : n; }
     QoreValue arg = fromBits(arg_bits);
 
-    // Handle null/nothing
-    if (!arg.hasNode()) {
-        return toBits(QoreValue());
-    }
-
     // Handle integers
     if (arg.getType() == QV_Int) {
         int64_t val = arg.getAsBigInt();
         return toBits(val < 0 ? -val : val);
     }
-
-    const AbstractQoreNode* node = arg.getInternalNode();
 
     // Handle floats
     if (arg.getType() == QV_Float) {
@@ -6281,9 +6275,16 @@ extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xs
         return toBits(val < 0.0 ? -val : val);
     }
 
+    // Handle null/nothing
+    if (!arg.hasNode()) {
+        return toBits(QoreValue());
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+
     // Handle number nodes
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
-        return toBits(num->sign() < 0 ? num->negate() : num);
+        return toBits(qore_number_private::doUnary(*num, mpfr_abs));
     }
 
     // Fallback for other numeric types: try conversion to int then float
