@@ -8380,6 +8380,37 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     return s->waitForQuicStreamDrain(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
+//! Flushes pending HTTP/3 write data through the async I/O controller
+/** Runs one QUIC timer/write cycle for the given session on the async I/O
+    controller thread and sends any generated packets on the UDP socket.
+
+    This is useful after enqueueing HTTP/3 stream data from a handler thread
+    when the peer is not expected to send another frame that would otherwise
+    wake the server poll loop promptly.
+
+    @param session_id the QUIC session ID
+
+    @return nothing
+
+    @throw QUIC-ERROR if no QUIC session with the given ID is active
+    @throw QUIC-SEND-ERROR if the UDP send fails
+
+    @since %Qore 3.0
+*/
+nothing Socket::flushQuicPendingData(int session_id) [flags=NAMED_ARGS] {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "flushQuicPendingData", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (session_id <= 0) {
+        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
+            static_cast<long long>(session_id));
+        return QoreValue();
+    }
+    s->flushQuicPendingData(session_id, xsink);
+    return QoreValue();
+}
+
 //! Submits an HTTP/3 extended CONNECT response (RFC 9220)
 /** Sends response headers without END_STREAM, keeping the stream open for
     bidirectional data transfer (WebSocket over HTTP/3). Subsequent data is sent

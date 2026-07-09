@@ -2343,15 +2343,23 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # (for example from getConnectionImpl() or registered()).
         {
             bool sent = False;
+            *AsyncSocketIo::AbstractStreamContext ctx;
+            *AsyncSocketIo::AbstractStreamContext sent_ctx;
             while (*binary d = wsc.pollDataImmediate()) {
-                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                ctx = wsc.getStreamContext();
                 if (ctx) {
                     ctx.sendData(d);
+                    sent_ctx = ctx;
                     sent = True;
                 }
             }
-            if (sent && async_ctrl) {
-                async_ctrl.wakeSocket(sock);
+            if (sent) {
+                if (sent_ctx) {
+                    sent_ctx.flushPendingData();
+                }
+                if (async_ctrl) {
+                    async_ctrl.wakeSocket(sock);
+                }
             }
         }
 

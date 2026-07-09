@@ -169,6 +169,16 @@ public class Http3StreamContext inherits AbstractStreamContext {
         }
     }
 
+    #! Flush pending HTTP/3 writes for this session through the async I/O controller
+    /** @return nothing
+
+        @throw QUIC-ERROR if no QUIC session with the context's session ID is active
+        @throw QUIC-SEND-ERROR if the UDP send fails
+    */
+    flushPendingData() {
+        sock.flushQuicPendingData(session_id);
+    }
+
     #! Attempts to send data on the QUIC stream without blocking on backpressure
     /** Performs a single non-blocking @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" call,
         which returns @c 1 (and discards the frame) when the stream send buffer is full, rather than looping and
