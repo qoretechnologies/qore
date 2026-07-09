@@ -459,6 +459,7 @@ extern "C" DLLEXPORT uint64_t qore_fast_abs(uint64_t arg_bits, ExceptionSink* xs
 extern "C" DLLEXPORT uint64_t qore_fast_first(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_last(uint64_t arg_bits, ExceptionSink* xsink);
 extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t key_bits, ExceptionSink* xsink);
+static size_t qore_short_string_utf8_length(QoreValue v);
 
 // Fast string comparison helper matching QoreString::compare() semantics
 // Returns: negative if l < r, 0 if equal, positive if l > r
@@ -5967,6 +5968,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args(uint64_t expr_bits,
 extern "C" DLLEXPORT uint64_t qore_fast_strlen(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
 
+    if (arg.isShortString()) {
+        return toBits(static_cast<int64_t>(arg.shortStringLen()));
+    }
+
     // Handle null/nothing
     if (!arg.hasNode()) {
         return toBits(0);
@@ -6030,6 +6035,10 @@ extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink*
     // Returns length of string or binary data
     // Equivalent to: int length(softstring str) { return str->length(); }
     QoreValue arg = fromBits(arg_bits);
+
+    if (arg.isShortString()) {
+        return toBits(static_cast<int64_t>(qore_short_string_utf8_length(arg)));
+    }
 
     // Handle null/nothing
     if (!arg.hasNode()) {

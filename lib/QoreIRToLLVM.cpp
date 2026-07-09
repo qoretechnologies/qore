@@ -280,6 +280,25 @@ static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
 }
 
+static const char* qore_llvm_get_single_arg_fast_builtin_helper(const QoreValue& expr) {
+    const auto* call = expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    if (!call || call->hasExplicitTypeArgs()) {
+        return nullptr;
+    }
+    const char* name = call->getName();
+    if (!name) {
+        return nullptr;
+    }
+    if (!strcmp(name, "length")) {
+        return "qore_fast_length";
+    }
+    if (!strcmp(name, "strlen")) {
+        return "qore_fast_strlen";
+    }
+    return nullptr;
+}
+
 // NaN-boxing constants matching QoreValue.h
 static constexpr uint64_t TAG_INT48          = 0xFFF9000000000000ULL;
 static constexpr uint64_t PAYLOAD_MASK       = 0x0000FFFFFFFFFFFFULL;
@@ -10103,6 +10122,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && batch_callees->at(direct_inst->variant).approach_b_eligible;
             bool type_name_fast_path = nargs == 1
                 && qore_llvm_is_type_name_builtin_call(direct_inst->expr);
+            const char* single_arg_fast_builtin_helper = nargs == 1 && !direct_inst->has_ref_args
+                ? qore_llvm_get_single_arg_fast_builtin_helper(direct_inst->expr) : nullptr;
 
             // Box args and optionally build args_array (skipped for Approach B)
             llvm::Value* args_array = nullptr;
@@ -10113,7 +10134,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!arg_val) { return false; }
                     boxed_args.push_back(boxValue(arg_val, inst->operands[arg_start + i].id));
                 }
-                if (!is_approach_b && !type_name_fast_path) {
+                if (!is_approach_b && !type_name_fast_path && !single_arg_fast_builtin_helper) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                             llvm_func->getEntryBlock().begin());
                     args_array = ab.CreateAlloca(i64_type,
@@ -10125,7 +10146,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
-            if (!args_array && !type_name_fast_path) {
+            if (!args_array && !type_name_fast_path && !single_arg_fast_builtin_helper) {
                 args_array = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type, 0), ptr_type);
             }
@@ -10139,6 +10160,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
                 call_result = builder->CreateCall(helper, {boxed_args[0]});
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                call_may_modify_runtime_locals = false;
+            } else if (single_arg_fast_builtin_helper) {
+                auto helper = module.getOrInsertFunction(single_arg_fast_builtin_helper,
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {boxed_args[0], xsink_arg});
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
