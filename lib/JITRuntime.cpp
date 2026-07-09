@@ -13172,6 +13172,40 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContex
     return qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, base_bits, nullptr, 0, xsink);
 }
 
+static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
+    QoreValue base = fromBits(base_bits);
+    const QoreListNode* list = base.get<const QoreListNode>();
+    size_t size = list->size();
+    if (!size) {
+        return toBits(QoreValue());
+    }
+
+    QoreValue result = list->retrieveEntry(last ? size - 1 : 0);
+    if (result.hasNode()) {
+        result.refSelf();
+    }
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits,
+        const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+        int32_t last, ExceptionSink* xsink) {
+    QoreValue base = fromBits(base_bits);
+    if (base.getType() == NT_LIST) {
+        return qore_rt_list_first_last(base_bits, last != 0);
+    }
+    return qore_rt_dot_eval_pseudo_method_direct(base_bits, method, qc, variant, nullptr, 0, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTContext* ctx, int32_t slot,
+        uint64_t base_bits, int32_t last, ExceptionSink* xsink) {
+    QoreValue base = fromBits(base_bits);
+    if (base.getType() == NT_LIST) {
+        return qore_rt_list_first_last(base_bits, last != 0);
+    }
+    return qore_rt_dot_eval_pseudo_method_direct_aot(ctx, slot, base_bits, nullptr, 0, xsink);
+}
+
 // ============================================================================
 // Phase 2: Optimized pseudo-method helpers for LLVM JIT (faster than dispatch)
 // ============================================================================

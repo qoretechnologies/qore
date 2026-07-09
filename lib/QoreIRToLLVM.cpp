@@ -72,6 +72,20 @@ static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, cons
     return false;
 }
 
+static int qore_ir_get_list_value_pseudo_fast_path(const QoreMethod* method, const QoreClass* qc) {
+    if (!method || !qc || strcmp(qc->getName(), "<list>")) {
+        return -1;
+    }
+    const char* method_name = method->getName();
+    if (!strcmp(method_name, "first")) {
+        return 0;
+    }
+    if (!strcmp(method_name, "last")) {
+        return 1;
+    }
+    return -1;
+}
+
 struct QoreIRPseudoHelperInfo {
     const char* symbol = nullptr;
     bool result_needs_cleanup = false;
@@ -10839,6 +10853,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool call_may_modify_runtime_locals = true;
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
+            int list_value_id = (direct_inst->pseudo && nargs == 0)
+                ? qore_ir_get_list_value_pseudo_fast_path(direct_inst->method, direct_inst->qc) : -1;
             const char* string_noguard_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->method, direct_inst->qc,
@@ -10916,6 +10932,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (list_value_id >= 0) {
+                if (aot_mode) {
+                    QoreValue expr_val = direct_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_value_guarded_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                         llvm::ConstantInt::get(i32_type, list_value_id), xsink_arg});
+                } else {
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
+                    llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->qc)), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_value_guarded",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed, method_ptr, qc_ptr, variant_ptr,
+                         llvm::ConstantInt::get(i32_type, list_value_id), xsink_arg});
+                }
             } else if (direct_inst->pseudo && nargs == 0
                     && qore_ir_is_list_bool_pseudo_fast_path(direct_inst->method, direct_inst->qc,
                         invert_list_empty)) {
@@ -11186,6 +11231,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool call_may_modify_runtime_locals = true;
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
+            int list_value_id = (invoke_inst->pseudo && nargs == 0)
+                ? qore_ir_get_list_value_pseudo_fast_path(invoke_inst->method, invoke_inst->qc) : -1;
             const char* string_noguard_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->method, invoke_inst->qc,
@@ -11263,6 +11310,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (list_value_id >= 0) {
+                if (aot_mode) {
+                    QoreValue expr_val = invoke_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_value_guarded_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), base_boxed,
+                         llvm::ConstantInt::get(i32_type, list_value_id), xsink_arg});
+                } else {
+                    llvm::Value* method_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->method)), ptr_type);
+                    llvm::Value* qc_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->qc)), ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_pseudo_list_value_guarded",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed, method_ptr, qc_ptr, variant_ptr,
+                         llvm::ConstantInt::get(i32_type, list_value_id), xsink_arg});
+                }
             } else if (invoke_inst->pseudo && nargs == 0
                     && qore_ir_is_list_bool_pseudo_fast_path(invoke_inst->method, invoke_inst->qc,
                         invert_list_empty)) {

@@ -1090,6 +1090,11 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args(uint64_t b
 uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, int32_t invert_empty, ExceptionSink* xsink);
 
+//! Guarded fast path for no-arg <list>::first() and <list>::last() pseudo-methods.
+//! Fast path handles list; all other values fall back to generic pseudo dispatch.
+uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, int32_t last, ExceptionSink* xsink);
+
 //! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
 uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg_bits, int32_t predicate,
     ExceptionSink* xsink);
@@ -1154,6 +1159,10 @@ uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(QoreAOTContext* 
 //! AOT guarded fast path for no-arg <list>::empty() and <list>::val() pseudo-methods.
 uint64_t qore_rt_pseudo_list_bool_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     int32_t invert_empty, ExceptionSink* xsink);
+
+//! AOT guarded fast path for no-arg <list>::first() and <list>::last() pseudo-methods.
+uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+    int32_t last, ExceptionSink* xsink);
 
 //! Direct static method call with pre-evaluated arguments — builds QoreListNode.
 //! Calls qore_method_private::eval() with nullptr for self.
