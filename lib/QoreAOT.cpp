@@ -568,6 +568,14 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
     return true;
 }
 
+static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
+    const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+    return mvb
+        ? mvb->isStaticallyFastMethodCallEligible()
+        : variant && variant->getUserVariantBase()
+            && variant->getUserVariantBase()->isStaticallyFastCallEligible();
+}
+
 //! Check if an AOT function has self-recursive CallDirect instructions.
 static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
     size_t inst_i = 0;
@@ -3051,6 +3059,114 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
+    // Walk classes for static methods.  Instance methods need a receiver/self
+    // ABI, but static methods can use the same direct-argument fast-entry ABI
+    // as functions.
+    ClassListIterator cli(ns->classList);
+    size_t class_i = 0;
+    while (cli.next()) {
+        if (class_i && !(class_i % 100)
+                && qore_check_cancel(nullptr, "AOT batch static-method fast-entry class declaration")) {
+            return false;
+        }
+        ++class_i;
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
+            continue;
+        }
+        if (shouldSkipByFile(qcp->loc ? qcp->loc->getFile() : nullptr,
+                compile_file, compile_files)) {
+            continue;
+        }
+
+        const char* class_path = qc->getPath();
+        const char* class_name = class_path;
+        if (class_name[0] == ':' && class_name[1] == ':') {
+            class_name += 2;
+        }
+
+        size_t method_i = 0;
+        for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi, ++method_i) {
+            if (method_i && !(method_i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT batch static-method fast-entry method declaration")) {
+                return false;
+            }
+            QoreMethod* meth = mi->second;
+            if (!meth || !meth->isUser()) {
+                continue;
+            }
+            qore_method_private* mp = qore_method_private::get(*meth);
+            MethodFunctionBase* mfb = mp->getFunction();
+
+            QoreFunctionIterator vit(*mfb);
+            size_t variant_i = 0;
+            while (vit.next()) {
+                if (variant_i && !(variant_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch static-method fast-entry variant declaration")) {
+                    return false;
+                }
+                ++variant_i;
+                const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                if (!isAOTCompilableMethodVariant(meth, variant)
+                        || !isFastMethodCallEligible(variant)) {
+                    continue;
+                }
+                UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
+                if (!uvb || !uvb->hasBody()) {
+                    continue;
+                }
+
+                std::string method_name = std::string(class_name) + "::_static_" + meth->getName();
+                std::string variant_key = getVariantKey(method_name.c_str(), variant);
+                if (!declared_keys.insert(variant_key).second) {
+                    continue;
+                }
+
+                QoreIRFunction* ir_func = nullptr;
+                std::string lower_error;
+                int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
+                if (rc != 0 || !ir_func) {
+                    delete ir_func;
+                    continue;
+                }
+
+                ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
+                if (isAOTFastEntryEligible(ir_func, uvb)) {
+                    const UserSignature* sig = uvb->getUserSignature();
+                    unsigned num_params = sig->numParams();
+                    std::string fast_entry_name = ir_func->name + "_fast";
+
+                    llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                    if (!fast_fn) {
+                        auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                        auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                        std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                        fast_params.push_back(ptr_ty);
+                        fast_params.push_back(ptr_ty);
+                        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                        fast_fn = llvm::Function::Create(fast_fn_type,
+                                llvm::Function::InternalLinkage, fast_entry_name, module);
+                    }
+                    fast_fn->addFnAttr(llvm::Attribute::InlineHint);
+
+                    BatchCalleeInfo info;
+                    info.name = ir_func->name;
+                    info.approach_b_eligible = true;
+                    info.fast_name = fast_entry_name;
+                    info.num_params = num_params;
+                    aot_batch_callee_map[variant] = std::move(info);
+                }
+                delete ir_func;
+            }
+        }
+    }
+
     size_t ns_i = 0;
     for (auto& ni : ns->nsl.nsmap) {
         if (ns_i && !(ns_i % 100)
@@ -3582,6 +3698,34 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
 
+                    std::string fast_entry_name;
+                    bool fast_entry_eligible = !metadata_only
+                        && meth->isStatic()
+                        && isFastMethodCallEligible(variant)
+                        && isAOTFastEntryEligible(ir_func, uvb);
+                    if (fast_entry_eligible) {
+                        fast_entry_name = ir_func->name + "_fast";
+                        const UserSignature* sig = uvb->getUserSignature();
+                        unsigned num_params = sig->numParams();
+
+                        auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                        auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+                        std::vector<llvm::Type*> fast_params(num_params, i64_ty);
+                        fast_params.push_back(ptr_ty);
+                        fast_params.push_back(ptr_ty);
+                        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                        llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                        if (!fast_fn) {
+                            fast_fn = llvm::Function::Create(fast_fn_type,
+                                    llvm::Function::InternalLinkage, fast_entry_name, module);
+                        }
+                        fast_fn->addFnAttr(llvm::Attribute::InlineHint);
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT: static method fast entry '%s' (%u params)\n",
+                                fast_entry_name.c_str(), num_params);
+                        }
+                    }
+
                     // Pre-register method parameters in the slot map (see comment above)
                     {
                         const UserSignature* pre_sig = uvb->getUserSignature();
@@ -3622,6 +3766,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         lowerer.setSharedDebugInfo(&di_builder, di_cu);
                         lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                         lowerer.setDeferredExceptionChecking(false);
+                        if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                            lowerer.setBatchCallees(aot_batch_callee_map);
+                        }
                         // Count total IR instructions and warn for large functions
                         size_t total_ir_insts = 0;
                         for (const auto& block : ir_func->blocks) {
@@ -3645,6 +3792,62 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
 
                         method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                        if (method_ok && fast_entry_eligible) {
+                            const UserSignature* sig = uvb->getUserSignature();
+                            unsigned num_params = sig->numParams();
+                            llvm::Function* fast_fn = module.getFunction(fast_entry_name);
+                            assert(fast_fn);
+
+                            std::unordered_map<const void*, llvm::Value*> param_map;
+                            for (unsigned i = 0; i < num_params; ++i) {
+                                if (i && !(i % 100)
+                                        && qore_check_cancel(nullptr,
+                                            "AOT static method fast-entry parameter mapping")) {
+                                    ++failed_count;
+                                    setAOTCompileFatal(fatal_error, "method", variant_key,
+                                        "static fast-entry parameter mapping", "cancelled");
+                                    delete ir_func;
+                                    return;
+                                }
+                                const void* key = reinterpret_cast<const void*>(sig->lv[i]);
+                                param_map[key] = fast_fn->getArg(i);
+                                fast_fn->getArg(i)->setName(
+                                        std::string("arg") + std::to_string(i));
+                            }
+
+                            QoreIRToLLVM fast_lowerer(ctx);
+                            fast_lowerer.setAOTMode(&slots);
+                            fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                            fast_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                            fast_lowerer.setDeferredExceptionChecking(false);
+                            if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                                fast_lowerer.setBatchCallees(aot_batch_callee_map);
+                            }
+                            fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
+                            std::string fast_error;
+                            if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
+                                printd(2, "AOT: static method fast entry '%s' lowering failed: %s\n",
+                                    fast_entry_name.c_str(), fast_error.c_str());
+                                if (getenv("QORE_AOT_DEBUG")) {
+                                    fprintf(stderr,
+                                        "AOT: static method fast entry '%s' lowering failed: %s\n",
+                                        fast_entry_name.c_str(), fast_error.c_str());
+                                }
+                                ++failed_count;
+                                setAOTCompileFatal(fatal_error, "method", variant_key,
+                                    "static fast-entry LLVM lowering", fast_error);
+                                delete ir_func;
+                                return;
+                            } else if (aot_batch_callee_map) {
+                                BatchCalleeInfo info;
+                                info.name = ir_func->name;
+                                info.approach_b_eligible = true;
+                                info.fast_name = fast_entry_name;
+                                info.num_params = num_params;
+                                (*aot_batch_callee_map)[variant] = std::move(info);
+                            }
+                        }
 
                         if (method_ok) {
                             for (const auto& loc : lowerer.getAOTLocTable()) {

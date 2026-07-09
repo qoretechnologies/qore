@@ -29,6 +29,24 @@ class Holder {
     }
 }
 
+class StaticHelper {
+    static int twice(int x) {
+        return x * 2;
+    }
+
+    static int combo(int x) {
+        return StaticHelper::twice(x) + StaticHelper::twice(1);
+    }
+
+    static int comboTry(int x) {
+        try {
+            return StaticHelper::combo(x);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+    }
+}
+
 int sub leaf(int x) {
     return x + 1;
 }
@@ -43,7 +61,8 @@ string sub method_helper(Holder h) {
 
 string sub caller() {
     Holder h(\"ctx-ok\");
-    return string(nested_helper(40)) + \":\" + method_helper(h);
+    return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
+        + \":\" + string(StaticHelper::comboTry(4));
 }
 
 printf(\"%s\\n\", caller());
@@ -74,7 +93,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok\n" || aot != ast) {
+if (ast != "83:ctx-ok:10:10\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }
