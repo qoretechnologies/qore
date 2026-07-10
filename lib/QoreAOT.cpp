@@ -574,7 +574,7 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
     return true;
 }
 
-static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
+static bool isAOTFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
     const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
     return mvb
         ? mvb->isStaticallyFastMethodCallEligible()
@@ -3373,7 +3373,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 ++variant_i;
                 const AbstractQoreFunctionVariant* variant = vit.getVariant();
                 if (!isAOTCompilableMethodVariant(meth, variant)
-                        || !isFastMethodCallEligible(variant)) {
+                        || !isAOTFastMethodCallEligible(variant)) {
                     continue;
                 }
                 UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase();
@@ -4033,7 +4033,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
                     bool fast_entry_eligible = !metadata_only
                         && meth->isStatic()
-                        && isFastMethodCallEligible(variant)
+                        && isAOTFastMethodCallEligible(variant)
                         && isAOTFastEntryEligible(ir_func, uvb);
                     if (fast_entry_eligible) {
                         fast_entry_name = ir_func->name + "_fast";
