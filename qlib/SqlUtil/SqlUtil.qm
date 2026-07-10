@@ -138,6 +138,8 @@ module SqlUtil {
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
     - added storage-shape validation and partition exchange APIs with equivalent empty-target semantics for
       Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
+    - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state
+      introspection and deterministic \c FINALIZE recovery
     - enforced exact datasource object identity for create-as-select and insert-select operations; added
       @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
       @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()

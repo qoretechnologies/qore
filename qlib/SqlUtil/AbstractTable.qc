@@ -7297,6 +7297,25 @@ table.clear();
         return supportsPartitions() && supportsPartitionDetachImpl();
     }
 
+    #! returns @ref True "True" if this table supports nontransactional concurrent partition detach
+    /** @par Example:
+        @code{.py}
+if (table.supportsConcurrentPartitionDetach()) {
+    AbstractTable archived = table.detachPartitionConcurrently("events_2026_06");
+}
+        @endcode
+
+        @return @ref True "True" only when the driver and server version support the dedicated
+            nontransactional concurrent-detach APIs
+
+        @note This capability does not add a commit companion; the operation cannot run in a transaction block.
+
+        @since SqlUtil 3.0.0
+    */
+    bool supportsConcurrentPartitionDetach() {
+        return supportsPartitionDetach() && supportsConcurrentPartitionDetachImpl();
+    }
+
     #! returns @ref True "True" if this table supports exchanging a partition with a standalone table
     /** @since SqlUtil 3.0.0
     */
@@ -7877,6 +7896,349 @@ table.clear();
         on_exit ds.commit();
         on_error ds.rollback();
         return detachPartition(spec, opt);
+    }
+
+    #! returns SQL to detach a partition concurrently outside a transaction
+    /** @par Example:
+        @code{.py}
+string sql = table.getDetachPartitionConcurrentlySql("events_2026_06");
+        @endcode
+
+        @param partition_name the canonical partition name
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the nontransactional concurrent-detach SQL
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach
+        @throw PARTITION-ERROR the partition does not exist, is already pending detach, or cannot be detached
+            concurrently in the current table state
+        @throw PARTITION-TRANSACTION-ERROR an executing callback is requested while the calling thread is in a
+            transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note SQL generation alone does not execute the operation unless an executing SQL callback is configured.
+
+        @since SqlUtil 3.0.0
+    */
+    string getDetachPartitionConcurrentlySql(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertConcurrentPartitionDetachSupportUnlocked();
+        if (partitionSqlExecutedByCallback(opt)) {
+            assertNontransactionalPartitionExecution();
+        }
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionConcurrentlySqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name, NOTHING, "concurrent detach");
+    }
+
+    #! returns SQL to detach a partition matching a specification concurrently outside a transaction
+    /** @par Example:
+        @code{.py}
+string sql = table.getDetachPartitionConcurrentlySql({"bound_from": 2026-06-01,
+    "bound_to": 2026-07-01});
+        @endcode
+
+        @param spec a structurally valid partition specification resolving to exactly one existing partition
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the nontransactional concurrent-detach SQL
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach
+        @throw PARTITION-ERROR the specification does not resolve uniquely or the partition cannot be detached
+            concurrently in the current table state
+        @throw PARTITION-TRANSACTION-ERROR an executing callback is requested while the calling thread is in a
+            transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note SQL generation alone does not execute the operation unless an executing SQL callback is configured.
+
+        @since SqlUtil 3.0.0
+    */
+    string getDetachPartitionConcurrentlySql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertConcurrentPartitionDetachSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        if (partitionSqlExecutedByCallback(opt)) {
+            assertNontransactionalPartitionExecution();
+        }
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionConcurrentlySqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name, NOTHING, "concurrent detach");
+    }
+
+    #! detaches a partition concurrently using a dedicated autocommit connection
+    /** @par Example:
+        @code{.py}
+AbstractTable archived = table.detachPartitionConcurrently("events_2026_06");
+        @endcode
+
+        This is deliberately a distinct nontransactional API with no commit companion.  It rejects a transaction
+        held by the calling thread and executes on a fresh autocommit datasource cloned from this table's datasource
+        configuration.  If the database operation is interrupted after marking the partition pending, call
+        finalizePartitionDetach().
+
+        @param partition_name the canonical partition name
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the detached standalone table
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach
+        @throw PARTITION-ERROR the partition does not exist, is already pending detach, or cannot be detached
+            concurrently in the current table state
+        @throw PARTITION-TRANSACTION-ERROR the calling thread is in a transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note The caller datasource is not acquired for the DDL; direct execution uses a fresh autocommit datasource.
+
+        @since SqlUtil 3.0.0
+    */
+    AbstractTable detachPartitionConcurrently(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+        assertNontransactionalPartitionExecution();
+
+        string detached_name;
+        string sql;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertConcurrentPartitionDetachSupportUnlocked();
+            detached_name = getDetachedTableNameImpl(partition_name);
+            sql = getDetachPartitionConcurrentlySqlImpl(partition_name, opt);
+        }
+
+        {
+            on_error clearPartitionCache();
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+                name, NOTHING, "concurrent detach");
+            if (!partitionSqlExecutedByCallback(opt)) {
+                execNontransactionalPartitionSql(sql);
+            }
+        }
+        clearPartitionCache();
+        return AbstractTable::getTable(ds, detached_name);
+    }
+
+    #! detaches a partition matching a specification concurrently using a dedicated autocommit connection
+    /** @par Example:
+        @code{.py}
+AbstractTable archived = table.detachPartitionConcurrently({"bound_from": 2026-06-01,
+    "bound_to": 2026-07-01});
+        @endcode
+
+        @param spec a structurally valid partition specification resolving to exactly one existing partition
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the detached standalone table
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach
+        @throw PARTITION-ERROR the specification does not resolve uniquely or the partition cannot be detached
+            concurrently in the current table state
+        @throw PARTITION-TRANSACTION-ERROR the calling thread is in a transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note This method has no commit companion and executes through the same nontransactional path as the
+            name overload.
+
+        @since SqlUtil 3.0.0
+    */
+    AbstractTable detachPartitionConcurrently(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        string partition_name;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertConcurrentPartitionDetachSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+        return detachPartitionConcurrently(partition_name, opt);
+    }
+
+    #! returns SQL to finalize an interrupted concurrent partition detach
+    /** @par Example:
+        @code{.py}
+string sql = table.getFinalizePartitionDetachSql("events_2026_06");
+        @endcode
+
+        @param partition_name the canonical name of a partition in the pending-detach state
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return SQL to finalize the pending concurrent detach
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach finalization
+        @throw PARTITION-ERROR the partition does not exist or is not pending concurrent detach
+        @throw PARTITION-TRANSACTION-ERROR an executing callback is requested while the calling thread is in a
+            transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note This is explicit recovery SQL; SqlUtil never retries or polls for pending detach state.
+
+        @since SqlUtil 3.0.0
+    */
+    string getFinalizePartitionDetachSql(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertConcurrentPartitionDetachSupportUnlocked();
+        if (partitionSqlExecutedByCallback(opt)) {
+            assertNontransactionalPartitionExecution();
+        }
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getFinalizePartitionDetachSqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name, NOTHING, "finalize concurrent detach");
+    }
+
+    #! returns SQL to finalize an interrupted concurrent detach matching a partition specification
+    /** @par Example:
+        @code{.py}
+string sql = table.getFinalizePartitionDetachSql({"bound_from": 2026-06-01,
+    "bound_to": 2026-07-01});
+        @endcode
+
+        @param spec a structurally valid specification resolving to one partition in the pending-detach state
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return SQL to finalize the pending concurrent detach
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach finalization
+        @throw PARTITION-ERROR the specification does not resolve uniquely or the partition is not pending detach
+        @throw PARTITION-TRANSACTION-ERROR an executing callback is requested while the calling thread is in a
+            transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note This is explicit recovery SQL; SqlUtil never retries or polls for pending detach state.
+
+        @since SqlUtil 3.0.0
+    */
+    string getFinalizePartitionDetachSql(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertConcurrentPartitionDetachSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        if (partitionSqlExecutedByCallback(opt)) {
+            assertNontransactionalPartitionExecution();
+        }
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getFinalizePartitionDetachSqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Modify, "partition", partition_name, name, NOTHING, "finalize concurrent detach");
+    }
+
+    #! finalizes an interrupted concurrent partition detach using a dedicated autocommit connection
+    /** @par Example:
+        @code{.py}
+AbstractTable archived = table.finalizePartitionDetach("events_2026_06");
+        @endcode
+
+        @param partition_name the canonical name of a partition in the pending-detach state
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the detached standalone table
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach finalization
+        @throw PARTITION-ERROR the partition does not exist or is not pending concurrent detach
+        @throw PARTITION-TRANSACTION-ERROR the calling thread is in a transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note This method has no commit companion and executes on a fresh autocommit datasource.
+
+        @since SqlUtil 3.0.0
+    */
+    AbstractTable finalizePartitionDetach(string partition_name, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+        assertNontransactionalPartitionExecution();
+
+        string detached_name;
+        string sql;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertConcurrentPartitionDetachSupportUnlocked();
+            detached_name = getDetachedTableNameImpl(partition_name);
+            sql = getFinalizePartitionDetachSqlImpl(partition_name, opt);
+        }
+
+        {
+            on_error clearPartitionCache();
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+                name, NOTHING, "finalize concurrent detach");
+            if (!partitionSqlExecutedByCallback(opt)) {
+                execNontransactionalPartitionSql(sql);
+            }
+        }
+        clearPartitionCache();
+        return AbstractTable::getTable(ds, detached_name);
+    }
+
+    #! finalizes an interrupted concurrent detach matching a partition specification
+    /** @par Example:
+        @code{.py}
+AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01,
+    "bound_to": 2026-07-01});
+        @endcode
+
+        @param spec a structurally valid specification resolving to one partition in the pending-detach state
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
+
+        @return the detached standalone table
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support concurrent detach finalization
+        @throw PARTITION-ERROR the specification does not resolve uniquely or the partition is not pending detach
+        @throw PARTITION-TRANSACTION-ERROR the calling thread is in a transaction
+        @throw OPTION-ERROR an invalid option is passed
+
+        @note This method has no commit companion and executes through the same nontransactional path as the
+            name overload.
+
+        @since SqlUtil 3.0.0
+    */
+    AbstractTable finalizePartitionDetach(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
+        string partition_name;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertConcurrentPartitionDetachSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+        return finalizePartitionDetach(partition_name, opt);
     }
 
     #! returns SQL to exchange a partition with a standalone table
@@ -8514,6 +8876,14 @@ string sql = table.getCreateTableSql();
         }
     }
 
+    private assertConcurrentPartitionDetachSupportUnlocked() {
+        assertPartitionDetachSupportUnlocked();
+        if (!supportsConcurrentPartitionDetachImpl()) {
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support concurrent partition "
+                "detach", getDesc(), ds.getDriverName());
+        }
+    }
+
     private assertPartitionExchangeSupportUnlocked() {
         assertPartitionSupportUnlocked();
         if (!supportsPartitionExchangeImpl()) {
@@ -8985,6 +9355,21 @@ string sql = table.getCreateTableSql();
         l.lock();
         on_exit l.unlock();
         clearPartitionsUnlocked();
+    }
+
+    private assertNontransactionalPartitionExecution() {
+        if (ds.currentThreadInTransaction()) {
+            throw "PARTITION-TRANSACTION-ERROR", sprintf("%s: concurrent partition maintenance cannot run while "
+                "the calling thread is in a transaction", getDesc());
+        }
+    }
+
+    private execNontransactionalPartitionSql(string sql) {
+        assertNontransactionalPartitionExecution();
+        Datasource exec_ds(ds.getConfigHash());
+        exec_ds.setAutoCommit(True);
+        exec_ds.open();
+        exec_ds.execRaw(sql);
     }
 
     private hash<auto> getAddPartitionOptions() {
@@ -10723,6 +11108,11 @@ on_exit printf("SQL> %s\n", sql);
         return False;
     }
 
+    #! returns @ref True "True" if the database supports nontransactional concurrent partition detach
+    private bool supportsConcurrentPartitionDetachImpl() {
+        return False;
+    }
+
     #! returns @ref True "True" if the database supports exchanging a partition with a standalone table
     private bool supportsPartitionExchangeImpl() {
         return False;
@@ -10863,6 +11253,18 @@ on_exit printf("SQL> %s\n", sql);
     private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
             ds.getDriverName());
+    }
+
+    #! returns SQL to detach a partition concurrently outside a transaction
+    private string getDetachPartitionConcurrentlySqlImpl(string partition_name, *hash<auto> opt) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support concurrent partition "
+            "detach", getDesc(), ds.getDriverName());
+    }
+
+    #! returns SQL to finalize an interrupted concurrent partition detach
+    private string getFinalizePartitionDetachSqlImpl(string partition_name, *hash<auto> opt) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support finalizing concurrent "
+            "partition detach", getDesc(), ds.getDriverName());
     }
 
     #! returns SQL to exchange a partition with a standalone table

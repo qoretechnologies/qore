@@ -3973,6 +3973,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return server_version_major >= 10;
     }
 
+    private bool supportsConcurrentPartitionDetachImpl() {
+        # ALTER TABLE ... DETACH PARTITION ... CONCURRENTLY was introduced in PostgreSQL 14
+        getServerVersion();
+        return server_version_major >= 14;
+    }
+
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
         *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' else pt.partstrat::text end "
             "method, string_agg(a.attname, ',' order by k.ord) columns from pg_catalog.pg_partitioned_table pt "
@@ -4007,8 +4013,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         }
         getColumnsUnlocked();
 
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
         *hash<auto> qh = ds.select("select cn.nspname as schema, c.relname as relation_name, "
-            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
+            + " as detach_pending "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4030,6 +4039,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
+                "driver": {"pgsql": {"detach_pending": row.detach_pending}},
             });
             populatePgPartitionBounds(\info);
             all += info;
@@ -4099,7 +4109,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
         hash<auto> rel = parsePartitionRelationName(partition_name);
-        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
+        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, " + pending_expr
+            + " as detach_pending "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4121,6 +4134,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "schema": row.schema,
             "relation_name": row.relation_name,
             "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
+            "driver": {"pgsql": {"detach_pending": row.detach_pending}},
         });
         return info;
     }
@@ -4143,6 +4157,34 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
+    }
+
+    private string getDetachPartitionConcurrentlySqlImpl(string partition_name, *hash<auto> opt) {
+        assertNoPgDefaultPartitionForConcurrentDetachUnlocked();
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is already pending detach; call "
+                "finalizePartitionDetach()", getDesc(), info.name);
+        }
+        return sprintf("alter table %s detach partition %s concurrently", getSqlName(), info.sql_name);
+    }
+
+    private string getFinalizePartitionDetachSqlImpl(string partition_name, *hash<auto> opt) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (!info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is not pending concurrent detach", getDesc(),
+                info.name);
+        }
+        return sprintf("alter table %s detach partition %s finalize", getSqlName(), info.sql_name);
+    }
+
+    private assertNoPgDefaultPartitionForConcurrentDetachUnlocked() {
+        foreach hash<PartitionInfo> info in (getPartitionsUnlocked().iterator()) {
+            if (info.is_default) {
+                throw "PARTITION-ERROR", sprintf("%s: PostgreSQL cannot detach a partition concurrently while "
+                    "default partition %y exists", getDesc(), info.name);
+            }
+        }
     }
 
     #! returns the canonical name of the standalone table that the detached partition becomes

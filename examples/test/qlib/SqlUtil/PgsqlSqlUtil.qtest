@@ -340,6 +340,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
             addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
             addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
             addTestCase("structured aggregate selection", \structuredAggregateSelectionTest());
@@ -1103,7 +1104,7 @@ class PgsqlTest inherits SqlTestBase {
         string child_name  = "pgsql_fk_order_child";
 
         # clean slate
-        code drop_if_exists = sub (string n) {
+        code<nothing(string)> drop_if_exists = sub (string n) {
             PgsqlTable t(ds, n);
             if (t.checkExistence()) {
                 t.dropCommit();
@@ -1557,6 +1558,127 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(2, recreated_parts.size(), "description recreates all exported partitions");
         assertEq(0, recreated_parts{p1}.bound_from, "recreated partition has the exported lower bound");
         assertEq(20, recreated_parts{p2}.bound_to, "recreated partition has the exported upper bound");
+    }
+
+    concurrentPartitionDetachTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        PgsqlTable capability_table(ds, "pgsql_test");
+        if (!capability_table.supportsConcurrentPartitionDetach()) {
+            testSkip("PostgreSQL server older than 14");
+        }
+
+        string parent = "pgsql_concurrent_detach";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string pdef = parent + "_default";
+        code drop_if_exists = sub (string n) {
+            PgsqlTable drop_table(ds, n);
+            if (drop_table.checkExistence()) {
+                drop_table.dropCommit();
+            }
+        };
+        code<nothing()> cleanup = sub () {
+            drop_if_exists(p1);
+            drop_if_exists(p2);
+            drop_if_exists(pdef);
+            drop_if_exists(parent);
+        };
+        cleanup();
+        on_exit cleanup();
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "value": {"qore_type": SqlUtil::VARCHAR, "size": 40},
+            },
+            "partition_strategy": {"method": "range", "columns": "id"},
+            "partitions": {
+                (p1): {"bound_from": 0, "bound_to": 10},
+                (p2): {"bound_from": 10, "bound_to": 20},
+            },
+        });
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+        assertTrue(t.supportsConcurrentPartitionDetach(), "PostgreSQL 14+ supports concurrent partition detach");
+        hash<string, PartitionInfo> parts = t.listPartitions();
+        assertFalse(parts{p1}.driver.pgsql.detach_pending,
+            "ordinary PostgreSQL partition is not pending concurrent detach");
+
+        list<hash<auto>> events = ();
+        list<string> callback_sql = ();
+        code<nothing(string, int, *string, *string, *string, *string, *string)> info_cb = sub (
+                string str, int ac, *string type, *string nm, *string tbl, *string nn, *string info) {
+            events += {"action": ac, "type": type, "name": nm, "table": tbl, "info": info};
+        };
+        code<nothing(string)> sql_cb = sub (string statement) {
+            callback_sql += statement;
+        };
+        string preview_sql = t.getDetachPartitionConcurrentlySql({"bound_from": 0, "bound_to": 10}, {
+            "info_callback": info_cb,
+            "sql_callback": sql_cb,
+        });
+        assertTrue(preview_sql =~ /detach partition .*pgsql_concurrent_detach_p1 concurrently/i,
+            "concurrent detach generator emits PostgreSQL syntax for a specification");
+        assertEq(1, events.size(), "concurrent detach preview emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action,
+            "concurrent detach preview uses the modify action");
+        assertEq("concurrent detach", events[0].info, "concurrent detach preview identifies the operation");
+        assertEq(1, callback_sql.size(), "concurrent detach preview emits one SQL callback");
+        assertTrue(t.listPartitions().hasKey(p1), "concurrent detach preview does not mutate the table");
+
+        ds.beginTransaction();
+        assertThrows("PARTITION-TRANSACTION-ERROR", "cannot run while the calling thread is in a transaction", sub () {
+            t.detachPartitionConcurrently(p1);
+        });
+        ds.rollback();
+        assertTrue(t.listPartitions().hasKey(p1), "rejected transactional detach leaves the partition attached");
+
+        t.addPartitionCommit({"name": pdef, "is_default": True});
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            t.getDetachPartitionConcurrentlySql(p1);
+        });
+        t.dropPartitionCommit(pdef);
+
+        assertThrows("PARTITION-ERROR", "is not pending concurrent detach", sub () {
+            t.getFinalizePartitionDetachSql({"bound_from": 0, "bound_to": 10});
+        });
+        assertThrows("PARTITION-ERROR", "is not pending concurrent detach", sub () {
+            t.finalizePartitionDetach(p1);
+        });
+
+        t.insertCommit({"id": 1, "value": "kept"});
+        t.insertCommit({"id": 11, "value": "callback kept"});
+        assertFalse(ds.currentThreadInTransaction(), "caller datasource is outside a transaction before detach");
+        AbstractTable detached = t.detachPartitionConcurrently({"bound_from": 0, "bound_to": 10});
+        assertEq(p1, detached.getName(), "concurrent detach returns the standalone partition table");
+        assertFalse(ds.currentThreadInTransaction(), "concurrent detach does not acquire the caller datasource");
+        assertFalse(t.listPartitions().hasKey(p1), "concurrently detached partition is removed from the parent");
+        assertEq("kept", detached.selectRow().value, "concurrently detached table keeps its data");
+
+        int executing_callback_count = 0;
+        code<nothing(string)> executing_cb = sub (string statement) {
+            ++executing_callback_count;
+            Datasource exec_ds(ds.getConfigHash());
+            exec_ds.setAutoCommit(True);
+            exec_ds.open();
+            exec_ds.execRaw(statement);
+        };
+        AbstractTable callback_detached = t.detachPartitionConcurrently(p2, {
+            "sql_callback": executing_cb,
+            "sql_callback_executed": True,
+        });
+        assertEq(1, executing_callback_count,
+            "executing concurrent detach callback is not followed by duplicate execution");
+        assertFalse(t.listPartitions().hasKey(p2),
+            "executing concurrent detach callback invalidates structural metadata");
+        assertEq("callback kept", callback_detached.selectRow().value,
+            "externally executed concurrent detach keeps partition data");
     }
 
     partitionLifecycleCallbackTest() {

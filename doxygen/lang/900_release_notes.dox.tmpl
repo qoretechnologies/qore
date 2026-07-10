@@ -1722,6 +1722,8 @@ foreach string module_name in (registry.getProcessModules()) {
       - added reusable table storage-shape validation and no-data-movement partition exchange APIs for Oracle
         \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION, with exact datasource identity and an
         equivalent empty-target contract
+      - added explicit nontransactional PostgreSQL 14+ \c DETACH \c PARTITION \c CONCURRENTLY APIs with
+        pending-state introspection and deterministic \c FINALIZE recovery without retries or polling
       - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
         structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data

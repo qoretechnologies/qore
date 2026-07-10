@@ -283,6 +283,7 @@ class MysqlTest inherits SqlTestBase {
         MysqlTable rt(ds, "mysql_partition_test");
         assertEq(True, rt.supportsPartitions());
         assertEq(False, rt.supportsPartitionDetach());
+        assertEq(False, rt.supportsConcurrentPartitionDetach());
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);

@@ -37,6 +37,7 @@ upper bounds. The following invariants are deliberate:
 | Range partition lifecycle | yes | yes | yes | yes | no |
 | Native auto materialization | no | yes (interval) | no | no | no |
 | Detach to standalone table | yes | no | no | no | no |
+| Concurrent nontransactional detach | yes (14+) | no | no | no | no |
 | Exchange to empty standalone table | no | yes | no | yes | no |
 | Default/catch-all range | yes | `MAXVALUE` | `MAXVALUE` | implicit edge ranges | no |
 | Composite range key | yes | yes | yes | no | no |
@@ -208,6 +209,16 @@ AbstractTable detachPartition(hash<auto> spec, *hash<auto> opt);
 AbstractTable detachPartitionCommit(string name, *hash<auto> opt);
 AbstractTable detachPartitionCommit(hash<auto> spec, *hash<auto> opt);
 
+bool supportsConcurrentPartitionDetach();
+string getDetachPartitionConcurrentlySql(string name, *hash<auto> opt);
+string getDetachPartitionConcurrentlySql(hash<auto> spec, *hash<auto> opt);
+AbstractTable detachPartitionConcurrently(string name, *hash<auto> opt);
+AbstractTable detachPartitionConcurrently(hash<auto> spec, *hash<auto> opt);
+string getFinalizePartitionDetachSql(string name, *hash<auto> opt);
+string getFinalizePartitionDetachSql(hash<auto> spec, *hash<auto> opt);
+AbstractTable finalizePartitionDetach(string name, *hash<auto> opt);
+AbstractTable finalizePartitionDetach(hash<auto> spec, *hash<auto> opt);
+
 hash<PartitionEnsureResult> ensurePartition(hash<auto> spec, *hash<auto> opt);
 hash<PartitionEnsureResult> ensurePartitionCommit(hash<auto> spec, *hash<auto> opt);
 
@@ -225,6 +236,14 @@ The bare executors do not manage transactions; `*Commit()` companions commit on 
 back on error. Oracle and MySQL DDL can commit implicitly, which is documented rather than hidden.
 Callbacks run exactly once per public operation. If an executing callback handles the SQL, the
 executor does not execute it again.
+
+PostgreSQL 14+ concurrent detach is deliberately separate from the transaction-managed lifecycle.
+Its executor rejects a caller-owned transaction, runs the DDL on a fresh autocommit datasource made
+from the same configuration, and has no `*Commit()` companion. PostgreSQL's
+`inhdetachpending` state is exposed as `PartitionInfo.driver.pgsql.detach_pending`. If an interrupted
+operation leaves that state set, `finalizePartitionDetach()` issues the explicit nontransactional
+`DETACH PARTITION ... FINALIZE`; SqlUtil never retries or polls. PostgreSQL's restriction on a
+concurrent detach while a default partition exists is checked before SQL generation.
 
 `ensurePartition()` resolves by comparable bounds, then canonical name when bounds are native-only,
 then automatic policy. Concurrent duplicate-create errors are recovered deterministically through a
@@ -246,6 +265,7 @@ engine validation.
 | drop | verify child, then `DROP TABLE child` | `DROP PARTITION` | `DROP PARTITION` | truncate physical partition + `MERGE RANGE` |
 | truncate | `TRUNCATE child` | `TRUNCATE PARTITION` | `TRUNCATE PARTITION` | `TRUNCATE TABLE ... WITH (PARTITIONS)` |
 | detach | `DETACH PARTITION` | unsupported | unsupported | unsupported |
+| concurrent detach | `DETACH PARTITION ... CONCURRENTLY` (14+) | unsupported | unsupported | unsupported |
 | exchange to empty table | unsupported | `EXCHANGE PARTITION ... WITH TABLE` | unsupported | `SWITCH PARTITION ... TO` |
 
 For Oracle and MySQL, lower bounds that are not present in DDL are still required where necessary for
@@ -274,5 +294,5 @@ databases before commit. Current integration coverage includes bounds/default/SQ
 composite keys, concurrency races, callbacks, cache invalidation, transaction companions, schema
 round-trip, reverse alignment, local/global indexes, and unsupported-driver errors.
 
-List/hash/subpartition methods, online PostgreSQL detach, generic read qualification, high-cardinality lookup,
-and optional data-dependent metadata remain in the deferred roadmap.
+List/hash/subpartition methods, generic read qualification, high-cardinality lookup, and optional
+data-dependent metadata remain in the deferred roadmap.

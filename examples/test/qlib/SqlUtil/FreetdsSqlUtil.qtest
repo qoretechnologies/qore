@@ -381,6 +381,7 @@ class FreetdsTest inherits SqlTestBase {
         AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");
         assertEq(True, rt.supportsPartitions());
         assertEq(False, rt.supportsPartitionDetach());
+        assertEq(False, rt.supportsConcurrentPartitionDetach());
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);
