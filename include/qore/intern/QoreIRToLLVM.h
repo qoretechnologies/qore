@@ -290,8 +290,8 @@ private:
     const std::unordered_set<const void*>* ir_only_locals_set = nullptr;
 
     // Original IR-only set used only for reload decisions. AOT may remove body
-    // locals from ir_only_locals_set so StoreLocal still syncs with the runtime
-    // stack for ownership, but those locals are still invisible to AST callbacks.
+    // locals that need runtime ownership from ir_only_locals_set so StoreLocal
+    // still syncs them, but those locals remain invisible to AST callbacks.
     const std::unordered_set<const void*>* reload_exempt_locals_set = nullptr;
 
     // Phase 4: True when ALL locals in the function are invisible to AST
@@ -310,15 +310,15 @@ private:
     // call path skips their instantiation when all body locals are IR-only).
     std::unordered_set<const void*> ir_only_body_locals;
 
-    // AOT body locals are pre-instantiated by the runtime frame wrapper with
-    // an initial NOTHING value. LLVM allocas can therefore start as NOTHING
-    // without an entry qore_rt_load_local_aot(); StoreLocal/lvalue mutation
-    // paths force a reload after publishing a real value to the runtime stack.
+    // AOT body locals are pre-instantiated by the runtime frame wrapper with an
+    // initial NOTHING value. LLVM allocas can therefore start at their default
+    // without an entry qore_rt_load_local_aot(); runtime-owned StoreLocal/lvalue
+    // mutation paths reload after publishing a real value to the runtime stack.
     std::unordered_set<const void*> aot_body_locals;
 
-    // AOT-adjusted IR-only set: removes pre-instantiated body locals from the
-    // IR-only set so that StoreLocal syncs them to the runtime stack (fixing
-    // double-free when body locals are pre-instantiated by evalTiered).
+    // AOT-adjusted IR-only set: removes pre-instantiated body locals that need
+    // runtime-stack ownership. Proven-assigned native int/float locals can stay
+    // IR-only because they carry no references and cannot trigger double-free.
     std::unordered_set<const void*> aot_adjusted_ir_only;
 
     // Lazy local-cache invalidation. Calls that can execute AST/Qore code bump

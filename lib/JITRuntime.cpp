@@ -6571,10 +6571,11 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     // are never accessed by AST callbacks).
     bool has_aot = uvb->hasCachedAOT();
     bool has_ir = uvb->getCachedIR() != nullptr;
-    // AOT lowering syncs non-closure body locals through the runtime local
-    // stack for ownership, so the stack slots must exist even when the IR
-    // classifier marks every body local IR-only.  The skip optimization only
-    // applies to in-process JIT/IR functions whose body locals stay alloca-only.
+    // AOT lowering syncs body locals that need ownership through the runtime
+    // local stack; proven native scalars can remain alloca-only, but AOT frame
+    // metadata does not encode a per-local instantiation subset. The stack slots
+    // therefore still exist for every non-closure body local. The skip
+    // optimization only applies to in-process JIT/IR functions.
     //
     // AST-only variants (no AOT and no IR cache) own their own LocalVarList via
     // the StatementBlock and instantiate it themselves on entry — pre-instantiating

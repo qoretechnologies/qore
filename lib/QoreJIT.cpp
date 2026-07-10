@@ -426,9 +426,127 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
         slot_to_key.emplace(entry.second, reinterpret_cast<const void*>(entry.first));
     }
 
+    std::unordered_set<const void*> assigned_universe = all_keys;
+    assigned_universe.insert(initially_assigned.begin(), initially_assigned.end());
     std::vector<std::unordered_set<const void*>> in_sets(ir_func.blocks.size());
     std::vector<std::unordered_set<const void*>> out_sets(ir_func.blocks.size());
-    std::unordered_set<const void*> unsafe;
+    for (size_t i = 0; i < out_sets.size(); ++i) {
+        if (i && !(i % 10)
+                && qore_check_cancel(nullptr, "IR native local lattice initialization")) {
+            return all_keys;
+        }
+        out_sets[i] = assigned_universe;
+    }
+
+    auto transfer_block = [&](size_t block_id,
+            std::unordered_set<const void*>& assigned,
+            std::unordered_set<const void*>* unsafe) -> bool {
+        size_t inst_count = 0;
+        for (const auto& inst_ptr : ir_func.blocks[block_id]->instructions) {
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            if (++inst_count % 100 == 0
+                    && qore_check_cancel(nullptr, "IR native local assigned-state transfer")) {
+                return false;
+            }
+
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                if (unsafe) {
+                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+                    const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key);
+                    if (key && !assigned.count(key)) {
+                        unsafe->insert(key);
+                    }
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLocal) {
+                const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key)) {
+                    assigned.insert(key);
+                }
+            } else if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key)) {
+                    assigned.erase(key);
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                const void* source_key = reinterpret_cast<const void*>(fused->source);
+                if (unsafe && source_key && !assigned.count(source_key)) {
+                    unsafe->insert(source_key);
+                }
+                if (fused->target) {
+                    assigned.insert(reinterpret_cast<const void*>(fused->target));
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+                if (fused->local) {
+                    assigned.insert(reinterpret_cast<const void*>(fused->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                if (unsafe) {
+                    const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                    const void* lhs_key = reinterpret_cast<const void*>(fused->lhs);
+                    const void* rhs_key = reinterpret_cast<const void*>(fused->rhs);
+                    if (lhs_key && !assigned.count(lhs_key)) {
+                        unsafe->insert(lhs_key);
+                    }
+                    if (rhs_key && !assigned.count(rhs_key)) {
+                        unsafe->insert(rhs_key);
+                    }
+                }
+            } else if (qore_ir_opcode_uses_expr_lvalue_mutation(inst->opcode)) {
+                if (unsafe) {
+                    unsafe->insert(all_keys.begin(), all_keys.end());
+                }
+                assigned.clear();
+            } else if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                const auto* lvalue = static_cast<const QoreIRLValuePathInstruction*>(inst);
+                if (const void* key = qore_ir_get_lvalue_path_root_key(*lvalue, slot_to_key)) {
+                    if (unsafe) {
+                        unsafe->insert(key);
+                    }
+                    assigned.erase(key);
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLValue
+                    || inst->opcode == QoreIROpcode::PreIncLValue
+                    || inst->opcode == QoreIROpcode::PreDecLValue
+                    || inst->opcode == QoreIROpcode::PostIncLValue
+                    || inst->opcode == QoreIROpcode::PostDecLValue
+                    || inst->opcode == QoreIROpcode::AddAssignLValue
+                    || inst->opcode == QoreIROpcode::SubAssignLValue
+                    || inst->opcode == QoreIROpcode::MulAssignLValue
+                    || inst->opcode == QoreIROpcode::DivAssignLValue
+                    || inst->opcode == QoreIROpcode::ModAssignLValue
+                    || inst->opcode == QoreIROpcode::AndAssignLValue
+                    || inst->opcode == QoreIROpcode::OrAssignLValue
+                    || inst->opcode == QoreIROpcode::XorAssignLValue
+                    || inst->opcode == QoreIROpcode::ShlAssignLValue
+                    || inst->opcode == QoreIROpcode::ShrAssignLValue
+                    || inst->opcode == QoreIROpcode::ShiftLValue
+                    || inst->opcode == QoreIROpcode::UnshiftLValue
+                    || inst->opcode == QoreIROpcode::SpliceLValue) {
+                const auto* lvalue = static_cast<const QoreIRLValueInstruction*>(inst);
+                if (const void* key = qore_ir_get_lvalue_instruction_key(*lvalue, slot_to_key)) {
+                    if (unsafe) {
+                        unsafe->insert(key);
+                    }
+                    assigned.erase(key);
+                }
+            }
+        }
+        return true;
+    };
+
+    // Definite assignment is a forward must-analysis. Start non-entry blocks at
+    // the top element and converge before inspecting reads; recording unsafe
+    // reads during convergence would permanently reject locals on loop
+    // backedges based on incomplete predecessor facts.
     bool changed = true;
     size_t iterations = 0;
     while (changed) {
@@ -451,101 +569,26 @@ std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
             if (in_sets[i] != assigned) {
                 in_sets[i] = assigned;
             }
-
-            size_t inst_count = 0;
-            for (const auto& inst_ptr : ir_func.blocks[i]->instructions) {
-                const QoreIRInstruction* inst = inst_ptr.get();
-                if (!inst) {
-                    continue;
-                }
-                if (++inst_count % 100 == 0
-                        && qore_check_cancel(nullptr, "IR native local assigned-state transfer")) {
-                    return all_keys;
-                }
-
-                if (inst->opcode == QoreIROpcode::LoadLocal) {
-                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
-                    const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key);
-                    if (key && !assigned.count(key)) {
-                        unsafe.insert(key);
-                    }
-                } else if (inst->opcode == QoreIROpcode::StoreLocal) {
-                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
-                    if (const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key)) {
-                        assigned.insert(key);
-                    }
-                } else if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
-                    const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
-                    if (const void* key = qore_ir_get_local_instruction_key(*linst, slot_to_key)) {
-                        assigned.erase(key);
-                    }
-                } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
-                    const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
-                    const void* source_key = reinterpret_cast<const void*>(fused->source);
-                    if (source_key && !assigned.count(source_key)) {
-                        unsafe.insert(source_key);
-                    }
-                    if (fused->target) {
-                        assigned.insert(reinterpret_cast<const void*>(fused->target));
-                    }
-                } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
-                    const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
-                    if (fused->local) {
-                        assigned.insert(reinterpret_cast<const void*>(fused->local));
-                    }
-                } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
-                    const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
-                    const void* lhs_key = reinterpret_cast<const void*>(fused->lhs);
-                    const void* rhs_key = reinterpret_cast<const void*>(fused->rhs);
-                    if (lhs_key && !assigned.count(lhs_key)) {
-                        unsafe.insert(lhs_key);
-                    }
-                    if (rhs_key && !assigned.count(rhs_key)) {
-                        unsafe.insert(rhs_key);
-                    }
-                } else if (qore_ir_opcode_uses_expr_lvalue_mutation(inst->opcode)) {
-                    unsafe.insert(all_keys.begin(), all_keys.end());
-                    assigned.clear();
-                } else if (inst->opcode == QoreIROpcode::LValuePathAssign
-                        || inst->opcode == QoreIROpcode::LValuePathCompound
-                        || inst->opcode == QoreIROpcode::LValuePathUnary
-                        || inst->opcode == QoreIROpcode::LValuePathBinaryMut
-                        || inst->opcode == QoreIROpcode::LValuePathTernary) {
-                    const auto* lvalue = static_cast<const QoreIRLValuePathInstruction*>(inst);
-                    if (const void* key = qore_ir_get_lvalue_path_root_key(*lvalue, slot_to_key)) {
-                        unsafe.insert(key);
-                        assigned.erase(key);
-                    }
-                } else if (inst->opcode == QoreIROpcode::StoreLValue
-                        || inst->opcode == QoreIROpcode::PreIncLValue
-                        || inst->opcode == QoreIROpcode::PreDecLValue
-                        || inst->opcode == QoreIROpcode::PostIncLValue
-                        || inst->opcode == QoreIROpcode::PostDecLValue
-                        || inst->opcode == QoreIROpcode::AddAssignLValue
-                        || inst->opcode == QoreIROpcode::SubAssignLValue
-                        || inst->opcode == QoreIROpcode::MulAssignLValue
-                        || inst->opcode == QoreIROpcode::DivAssignLValue
-                        || inst->opcode == QoreIROpcode::ModAssignLValue
-                        || inst->opcode == QoreIROpcode::AndAssignLValue
-                        || inst->opcode == QoreIROpcode::OrAssignLValue
-                        || inst->opcode == QoreIROpcode::XorAssignLValue
-                        || inst->opcode == QoreIROpcode::ShlAssignLValue
-                        || inst->opcode == QoreIROpcode::ShrAssignLValue
-                        || inst->opcode == QoreIROpcode::ShiftLValue
-                        || inst->opcode == QoreIROpcode::UnshiftLValue
-                        || inst->opcode == QoreIROpcode::SpliceLValue) {
-                    const auto* lvalue = static_cast<const QoreIRLValueInstruction*>(inst);
-                    if (const void* key = qore_ir_get_lvalue_instruction_key(*lvalue, slot_to_key)) {
-                        unsafe.insert(key);
-                        assigned.erase(key);
-                    }
-                }
+            if (!transfer_block(i, assigned, nullptr)) {
+                return all_keys;
             }
 
             if (out_sets[i] != assigned) {
                 out_sets[i] = std::move(assigned);
                 changed = true;
             }
+        }
+    }
+
+    std::unordered_set<const void*> unsafe;
+    for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr, "IR native local unsafe-use classification")) {
+            return all_keys;
+        }
+        std::unordered_set<const void*> assigned = in_sets[i];
+        if (!transfer_block(i, assigned, &unsafe)) {
+            return all_keys;
         }
     }
     return unsafe;

@@ -4950,18 +4950,50 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         ? nullptr : &func.ir_only_locals;
     reload_exempt_locals_set = ir_only_locals_set;
 
+    // Assigned-state analysis is required before selecting native AOT body
+    // locals: declared scalar types do not imply that a local currently has a
+    // value. Locals read before assignment or invalidated by lvalue operations
+    // must retain the boxed NOTHING-capable path.
+    std::unordered_set<const void*> initially_assigned_locals;
+    size_t initially_assigned_count = 0;
+    for (const auto& entry : func.param_local_vars) {
+        if (initially_assigned_count++ && !(initially_assigned_count % 100)
+                && qore_check_cancel(nullptr,
+                    "LLVM local assigned-state setup")) {
+            error = "cancelled during LLVM local assigned-state setup";
+            return false;
+        }
+        if (entry.second) {
+            initially_assigned_locals.insert(reinterpret_cast<const void*>(entry.second));
+        }
+    }
+    std::unordered_set<const void*> native_unsafe_locals
+        = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
+
     // In AOT mode, remove pre-instantiated body locals from the IR-only set.
     // evalTiered pre-instantiates ALL body locals from all_body_locals on the
     // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
     // adds a reference).  Without sync, the alloca holds the only reference while
     // the cleanup alloca also tracks the source value for decref → double-free on
-    // function exit.  Parameters and other non-body locals remain IR-only.
+    // function exit. Proven-assigned native int/float locals carry no references,
+    // so they can safely remain alloca-only and skip runtime synchronization.
+    // Parameters and other non-body locals remain IR-only.
     aot_adjusted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
+        static const bool native_aot_body_locals =
+            std::getenv("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS") == nullptr;
         for (LocalVar* lv : func.all_body_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
-            aot_adjusted_ir_only.erase(key);
+            const QoreTypeInfo* ti = lv->getTypeInfo();
+            bool native_scalar = native_aot_body_locals
+                && !native_unsafe_locals.count(key)
+                && ((QoreTypeInfo::isType(ti, NT_INT)
+                        && !QoreTypeInfo::getReturnEnum(ti))
+                    || QoreTypeInfo::isType(ti, NT_FLOAT));
+            if (!native_scalar) {
+                aot_adjusted_ir_only.erase(key);
+            }
         }
         ir_only_locals_set = aot_adjusted_ir_only.empty()
             ? nullptr : &aot_adjusted_ir_only;
@@ -4995,21 +5027,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Phase 3: Identify IR-only locals that can use native (unboxed) allocas.
     // Typed int/float locals that are IR-only skip boxing/unboxing overhead entirely.
-    std::unordered_set<const void*> initially_assigned_locals;
-    size_t initially_assigned_count = 0;
-    for (const auto& entry : func.param_local_vars) {
-        if (initially_assigned_count++ && !(initially_assigned_count % 100)
-                && qore_check_cancel(nullptr,
-                    "LLVM local assigned-state setup")) {
-            error = "cancelled during LLVM local assigned-state setup";
-            return false;
-        }
-        if (entry.second) {
-            initially_assigned_locals.insert(reinterpret_cast<const void*>(entry.second));
-        }
-    }
-    std::unordered_set<const void*> native_unsafe_locals
-        = qore_ir_get_native_unsafe_locals(func, initially_assigned_locals);
     native_int_locals.clear();
     native_float_locals.clear();
     if (ir_only_locals_set) {
