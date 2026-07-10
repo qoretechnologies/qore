@@ -2804,7 +2804,7 @@ public:
     // the IR function, so compute them once and reuse them across recursive and
     // hot call paths instead of rescanning the instruction stream per execute().
     mutable std::mutex interpreter_analysis_mutex;
-    mutable bool interpreter_analysis_ready = false;
+    mutable std::atomic<bool> interpreter_analysis_ready{false};
     mutable std::vector<uint32_t> interpreter_value_use_counts;
     mutable std::vector<uint8_t> interpreter_dot_eval_only_bases;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
@@ -2814,9 +2814,12 @@ public:
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
+    mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;
     mutable bool interpreter_needs_slot_cache_tls = false;
     mutable bool interpreter_has_non_ir_only_locals = false;
-    mutable bool interpreter_may_invalidate_external_caches = true;
+    mutable bool interpreter_local_may_invalidate_external_caches = true;
+    mutable std::atomic<bool> interpreter_may_invalidate_external_caches{true};
+    mutable std::atomic<bool> interpreter_effect_summary_ready{false};
 
 private:
     uint32_t next_value_id = 1;

@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+string code = "%modern
+
+int global_value = 1;
+
+int sub pureLeaf(int value) {
+    return value + 1;
+}
+
+int sub pureMiddle(int value) {
+    return pureLeaf(value) + 1;
+}
+
+int sub pureRecursive(int value) {
+    return value ? value + pureRecursive(value - 1) : 0;
+}
+
+int sub mutatingLeaf() {
+    return ++global_value;
+}
+
+int sub mutatingMiddle() {
+    return mutatingLeaf();
+}
+
+int sub referenceLeaf(reference<int> value) {
+    return ++value;
+}
+
+int sub referenceMiddle(reference<int> value) {
+    return referenceLeaf(\\value);
+}
+
+class Mutator {
+    int mutate() {
+        return ++global_value;
+    }
+}
+
+int sub methodMiddle(Mutator mutator) {
+    return mutator.mutate();
+}
+
+int local_value = 4;
+Mutator mutator();
+printf(\"pure:%d:%d\\n\", pureMiddle(10), global_value);
+printf(\"recursive:%d:%d\\n\", pureRecursive(5), global_value);
+printf(\"global:%d:%d:%d\\n\", global_value, mutatingMiddle(), global_value);
+printf(\"reference:%d:%d\\n\", referenceMiddle(\\local_value), local_value);
+printf(\"method:%d:%d:%d\\n\", global_value, methodMiddle(mutator), global_value);
+";
+
+string script_path = "/tmp/qore-ir-call-effect-summary-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "pure:12:1
+recursive:15:1
+global:1:2:2
+reference:5:5
+method:2:3:3
+";
+string ast = runMode("ast");
+if (ast != expected) {
+    printf("mismatch in ast\nexpected:\n%sactual:\n%s", expected, ast);
+    exit(2);
+}
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}

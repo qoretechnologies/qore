@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <typeinfo>
@@ -1766,6 +1767,11 @@ static bool instructionMayInvalidateCallerCaches(const QoreIRFunction& func, con
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
         case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::DotEvalAny:
         case QoreIROpcode::DotEvalInt:
         case QoreIROpcode::DotEvalFloat:
@@ -1836,15 +1842,19 @@ static bool instructionMayInvalidateCallerCaches(const QoreIRFunction& func, con
         case QoreIROpcode::LValuePathTernary:
             return lvaluePathMayInvalidateCallerCaches(func, static_cast<const QoreIRLValuePathInstruction*>(inst));
 
-        case QoreIROpcode::CallDirect: {
-            auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
-            return !direct_inst->is_self_recursive
-                && (!direct_inst->func || direct_inst->func != func.source_qf);
-        }
-
         default:
             return false;
     }
+}
+
+static bool interpreterEffectSummaryDisabled() {
+    static const bool disabled = std::getenv("QORE_DISABLE_IR_EFFECT_SUMMARY") != nullptr;
+    return disabled;
+}
+
+static bool interpreterEffectSummaryStatsEnabled() {
+    static const bool enabled = std::getenv("QORE_IR_EFFECT_SUMMARY_STATS") != nullptr;
+    return enabled;
 }
 
 static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
@@ -1859,6 +1869,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     std::vector<uint32_t> return_preserve_slot_ids;
     bool needs_slot_cache_tls = false;
     bool may_invalidate_external_caches = false;
+    std::vector<const QoreIRCallDirectInstruction*> direct_calls;
     size_t inst_count = 0;
     for (const auto& b : func.blocks) {
         for (const auto& inst_ptr : b->instructions) {
@@ -1883,7 +1894,14 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return_protected_slots[inst_ptr->result.id] = 1;
                 return_preserve_slot_ids.push_back(inst_ptr->result.id);
             }
-            if (!may_invalidate_external_caches
+            if (inst_ptr->opcode == QoreIROpcode::CallDirect) {
+                auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst_ptr.get());
+                if (direct_inst->has_ref_args) {
+                    may_invalidate_external_caches = true;
+                } else {
+                    direct_calls.push_back(direct_inst);
+                }
+            } else if (!may_invalidate_external_caches
                     && instructionMayInvalidateCallerCaches(func, inst_ptr.get())) {
                 may_invalidate_external_caches = true;
             }
@@ -1949,19 +1967,138 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
+    func.interpreter_direct_calls = std::move(direct_calls);
     func.interpreter_needs_slot_cache_tls = needs_slot_cache_tls;
     func.interpreter_has_non_ir_only_locals = has_non_ir_only_locals;
-    func.interpreter_may_invalidate_external_caches = may_invalidate_external_caches;
-    func.interpreter_analysis_ready = true;
+    func.interpreter_local_may_invalidate_external_caches = may_invalidate_external_caches;
+    func.interpreter_may_invalidate_external_caches.store(
+        may_invalidate_external_caches || !func.interpreter_direct_calls.empty(), std::memory_order_release);
+    func.interpreter_effect_summary_ready.store(
+        interpreterEffectSummaryDisabled() || may_invalidate_external_caches
+            || func.interpreter_direct_calls.empty(),
+        std::memory_order_release);
+    func.interpreter_analysis_ready.store(true, std::memory_order_release);
+    return true;
+}
+
+static bool ensureInterpreterLocalAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
+    if (func.interpreter_analysis_ready.load(std::memory_order_acquire)) {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(func.interpreter_analysis_mutex);
+    return func.interpreter_analysis_ready.load(std::memory_order_acquire)
+        || buildInterpreterAnalysis(func, xsink);
+}
+
+static const QoreIRFunction* getInterpreterDirectCallEffectCallee(
+        const QoreIRCallDirectInstruction& inst) {
+    if (!inst.variant) {
+        return nullptr;
+    }
+    const UserVariantBase* uvb = inst.cached_uvb ? inst.cached_uvb : inst.variant->getUserVariantBase();
+    return inst.cached_callee_ir ? inst.cached_callee_ir : (uvb ? uvb->getCachedIR() : nullptr);
+}
+
+static bool refineInterpreterEffectSummary(const QoreIRFunction& root, ExceptionSink* xsink) {
+    if (root.interpreter_effect_summary_ready.load(std::memory_order_acquire)) {
+        return true;
+    }
+
+    struct EffectNode {
+        const QoreIRFunction* func = nullptr;
+        std::vector<size_t> callers;
+        bool may_invalidate = false;
+    };
+
+    std::vector<EffectNode> nodes;
+    std::unordered_map<const QoreIRFunction*, size_t> node_ids;
+    auto addNode = [&](const QoreIRFunction* func) {
+        auto [it, inserted] = node_ids.emplace(func, nodes.size());
+        if (inserted) {
+            nodes.push_back({func});
+        }
+        return it->second;
+    };
+    addNode(&root);
+
+    size_t check_count = 0;
+    for (size_t node_id = 0; node_id < nodes.size(); ++node_id) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(xsink, "IR effect summary analysis")) {
+            return false;
+        }
+        const QoreIRFunction* func = nodes[node_id].func;
+        if (!ensureInterpreterLocalAnalysis(*func, xsink)) {
+            return false;
+        }
+        if (func->interpreter_effect_summary_ready.load(std::memory_order_acquire)) {
+            nodes[node_id].may_invalidate = func->interpreter_may_invalidate_external_caches.load(
+                std::memory_order_acquire);
+            continue;
+        }
+        nodes[node_id].may_invalidate = func->interpreter_local_may_invalidate_external_caches;
+        for (const QoreIRCallDirectInstruction* call : func->interpreter_direct_calls) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(xsink, "IR effect summary analysis")) {
+                return false;
+            }
+            if (!call) {
+                return true;
+            }
+            const QoreIRFunction* callee = getInterpreterDirectCallEffectCallee(*call);
+            if (!callee) {
+                return true;
+            }
+            size_t callee_id = addNode(callee);
+            nodes[callee_id].callers.push_back(node_id);
+        }
+    }
+
+    std::vector<size_t> worklist;
+    for (size_t node_id = 0; node_id < nodes.size(); ++node_id) {
+        if (nodes[node_id].may_invalidate) {
+            worklist.push_back(node_id);
+        }
+    }
+    while (!worklist.empty()) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(xsink, "IR effect summary analysis")) {
+            return false;
+        }
+        size_t callee_id = worklist.back();
+        worklist.pop_back();
+        for (size_t caller_id : nodes[callee_id].callers) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(xsink, "IR effect summary analysis")) {
+                return false;
+            }
+            if (!nodes[caller_id].may_invalidate) {
+                nodes[caller_id].may_invalidate = true;
+                worklist.push_back(caller_id);
+            }
+        }
+    }
+
+    for (const EffectNode& node : nodes) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(xsink, "IR effect summary analysis")) {
+            return false;
+        }
+        node.func->interpreter_may_invalidate_external_caches.store(
+            node.may_invalidate, std::memory_order_release);
+        node.func->interpreter_effect_summary_ready.store(true, std::memory_order_release);
+    }
+    if (interpreterEffectSummaryStatsEnabled()) {
+        std::fprintf(stderr, "IR effect summary: root=%p nodes=%zu may-invalidate=%d\n",
+            static_cast<const void*>(&root), nodes.size(),
+            root.interpreter_may_invalidate_external_caches.load(std::memory_order_acquire));
+    }
     return true;
 }
 
 static bool ensureInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* xsink) {
-    if (func.interpreter_analysis_ready) {
-        return true;
-    }
-    std::lock_guard<std::mutex> lock(func.interpreter_analysis_mutex);
-    return func.interpreter_analysis_ready || buildInterpreterAnalysis(func, xsink);
+    return ensureInterpreterLocalAnalysis(func, xsink)
+        && refineInterpreterEffectSummary(func, xsink);
 }
 
 static LocalVar* findIRSelfLocalForInterpreter(const QoreIRFunction* ir) {
@@ -2376,7 +2513,8 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
         result = ir_return_value;
     }
     if (may_invalidate_external_caches) {
-        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches.load(
+            std::memory_order_acquire);
     }
     return true;
 }
@@ -2464,7 +2602,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         result = ir_return_value;
     }
     if (may_invalidate_external_caches) {
-        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches.load(
+            std::memory_order_acquire);
     }
     return true;
 }
@@ -2665,7 +2804,8 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         result = ir_return_value;
     }
     if (may_invalidate_external_caches) {
-        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches.load(
+            std::memory_order_acquire);
     }
     return true;
 }
@@ -2896,7 +3036,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         result = ir_return_value;
     }
     if (may_invalidate_external_caches) {
-        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches;
+        *may_invalidate_external_caches = callee_ir->interpreter_may_invalidate_external_caches.load(
+            std::memory_order_acquire);
     }
     return true;
 }

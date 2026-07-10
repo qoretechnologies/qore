@@ -166,6 +166,18 @@ dispatch remains the fallback for unresolved or unsupported calls and retains
 precedence for objects and hash-like values whose members can override pseudo
 methods.
 
+The IR interpreter also computes a transitive external-cache effect summary for
+resolved direct user-function calls. Local writes to globals, thread-locals,
+closures, references, and unknown call forms remain immediately effectful.
+Known direct-call edges are solved to a fixed point, so pure recursive call
+components are recognized without recursive-analysis guesses. Missing callee
+IR, reference arguments, direct methods, and closures remain conservative. The
+summary is published atomically after the complete reachable call graph is
+known; until then callers invalidate caches as before.
+`QORE_DISABLE_IR_EFFECT_SUMMARY=1` keeps the conservative direct-call policy for
+same-binary comparisons, and `QORE_IR_EFFECT_SUMMARY_STATS=1` reports each
+resolved graph's size and result.
+
 ## Validated Registries
 
 The current implementation relies on explicit registries for extension safety:
