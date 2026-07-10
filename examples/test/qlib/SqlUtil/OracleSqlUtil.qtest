@@ -544,12 +544,16 @@ class OracleTest inherits SqlTestBase {
         AbstractDatasource ds = table.getDatasource();
         ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others then "
             "null; end;");
+        ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; exception when "
+            "others then null; end;");
         ds.commit();
 
         on_exit {
             try {
                 ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others "
                     "then null; end;");
+                ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; "
+                    "exception when others then null; end;");
                 ds.commit();
             } catch (hash<ExceptionInfo> ex) {
             }
@@ -595,6 +599,20 @@ class OracleTest inherits SqlTestBase {
         assertTrue(desc.partitions.p2.hasKey("bound_from"));
         assertFalse(desc.partitions.p2.hasKey("bound_sql"));
         assertTrue(rt.getCreateSql()[0] =~ /partition by range/i);
+
+        assertEq((), rt.getAlignSql(t), "table aligns with the schema used to create it");
+        OracleTable reverse_template(ds, "oracle_partition_test");
+        reverse_template.setupTable(desc);
+        assertEq((), rt.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        hash<auto> changed_strategy_desc = {} + desc;
+        changed_strategy_desc.partition_strategy = {} + desc.partition_strategy;
+        changed_strategy_desc.partition_strategy.auto = {"expression": "NUMTOYMINTERVAL(2, 'MONTH')"};
+        OracleTable changed_strategy(ds, "oracle_partition_test");
+        changed_strategy.setupTable(changed_strategy_desc);
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            rt.getAlignSql(changed_strategy);
+        });
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
             "bound_from": 2026-02-01,
@@ -666,6 +684,37 @@ class OracleTest inherits SqlTestBase {
                 "partition_strategy": {"method": "range", "columns": "d"},
                 "partitions": {"p1": {"bound_from": 2026-01-01, "bound_to": 2026-02-01}},
             });
+        });
+
+        OracleTable interval_template(ds, "oracle_partition_interval_alignment");
+        interval_template.setupTable({
+            "columns": {"d": {"qore_type": Type::Date, "notnull": True}},
+            "partition_strategy": {
+                "method": "range",
+                "columns": "d",
+                "auto": {"interval": "numtoyminterval(1, 'month')"},
+            },
+            "partitions": {
+                "p0": {"bound_sql": "values less than (TO_DATE('2026-01-01', 'YYYY-MM-DD'))"},
+            },
+        });
+        interval_template.createCommit();
+
+        OracleTable interval_actual(ds, "oracle_partition_interval_alignment");
+        assertEq((), interval_actual.getAlignSql(interval_template),
+            "equivalent declared and introspected Oracle interval policies align");
+        hash<auto> interval_desc = interval_actual.getDescriptionHash({"with_partitions": True});
+        OracleTable interval_reverse(ds, "oracle_partition_interval_alignment");
+        interval_reverse.setupTable(interval_desc);
+        assertEq((), interval_actual.getAlignSql(interval_reverse),
+            "reverse-engineered Oracle interval strategy aligns unchanged");
+
+        interval_desc.partition_strategy = {} + interval_desc.partition_strategy;
+        interval_desc.partition_strategy.auto = {"expression": "NUMTOYMINTERVAL(2, 'MONTH')"};
+        OracleTable changed_interval(ds, "oracle_partition_interval_alignment");
+        changed_interval.setupTable(interval_desc);
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            interval_actual.getAlignSql(changed_interval);
         });
 
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",

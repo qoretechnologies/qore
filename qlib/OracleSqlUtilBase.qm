@@ -4005,6 +4005,31 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return rv;
     }
 
+    private *hash<auto> normalizePartitionAutoPolicyForAlignmentImpl(*hash<auto> policy) {
+        if (!policy) {
+            return;
+        }
+
+        *string expression = policy.expression ?? policy.interval;
+        if (!expression) {
+            return {} + policy;
+        }
+        trim expression;
+        expression = regex_subst(expression, "\\s+", " ", RE_Global).upr();
+        expression = regex_subst(expression, "\\s*,\\s*", ",", RE_Global);
+        expression = regex_subst(expression, "\\(\\s+", "(", RE_Global);
+        expression = regex_subst(expression, "\\s+\\)", ")", RE_Global);
+        return {
+            "type": "interval",
+            "expression": expression,
+        };
+    }
+
+    #! Oracle interval configuration is represented by the normalized automatic-partition policy
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return;
+    }
+
     private hash<string, PartitionInfo> getPartitionsImpl() {
         hash<string, PartitionInfo> rv();
 

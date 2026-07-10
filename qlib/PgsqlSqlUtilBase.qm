@@ -3989,6 +3989,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return rv;
     }
 
+    #! PostgreSQL has no driver-specific RANGE strategy configuration exposed by SqlUtil
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return;
+    }
+
     private hash<string, PartitionInfo> getPartitionsImpl() {
         hash<string, PartitionInfo> rv();
 

@@ -334,6 +334,31 @@ class FreetdsTest inherits SqlTestBase {
         assertEq(strategy.driver.mssql.partition_function,
             desc.partitions.p2.driver.mssql.partition_function);
         assertEq(strategy.driver.mssql.partition_scheme, desc.partitions.p2.driver.mssql.partition_scheme);
+
+        assertEq((), rt.getAlignSql(t), "generated partition object names align with the creation schema");
+        AbstractTable reverse_template = AbstractTable::getTable(ds, "mssql_partition_test");
+        reverse_template.setupTable(desc);
+        assertEq((), rt.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        hash<auto> changed_strategy_desc = {} + desc;
+        changed_strategy_desc.partition_strategy = {} + desc.partition_strategy;
+        changed_strategy_desc.partition_strategy.driver = {
+            "mssql": {
+                "partition_function": "different_partition_function",
+                "partition_scheme": strategy.driver.mssql.partition_scheme,
+            },
+        };
+        assertEq("different_partition_function",
+            changed_strategy_desc.partition_strategy.driver.mssql.partition_function,
+            "changed SQL Server partition function is present in the input description");
+        AbstractTable changed_strategy = AbstractTable::getTable(ds, "mssql_partition_test");
+        changed_strategy.setupTable(changed_strategy_desc);
+        assertEq("different_partition_function",
+            changed_strategy.getPartitionStrategy().driver.mssql.partition_function,
+            "changed SQL Server partition function reaches the normalized strategy");
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            rt.getAlignSql(changed_strategy);
+        });
         assertThrows("PARTITION-ERROR", "does not support generic default partitions", sub () {
             rt.getAddPartitionSql({"name": "pmax", "is_default": True});
         });

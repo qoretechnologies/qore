@@ -1223,7 +1223,21 @@ bool b = table.empty();
         AbstractDatabase::checkDriverOptions(\desc.unique_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.foreign_constraints, drv);
         AbstractDatabase::checkDriverOptions(\desc.triggers, drv);
-        AbstractDatabase::checkDriverOptions(\desc.partition_strategy, drv);
+        # A partition strategy's driver hash can hold either normal multi-driver description overrides or
+        # structural driver configuration returned by introspection.  Apply an override only when the active
+        # datasource driver is explicitly present and the selected hash contains standard strategy keys;
+        # otherwise preserve the structural configuration.
+        *hash<auto> strategy_driver = desc.partition_strategy && desc.partition_strategy.driver
+            ? desc.partition_strategy.driver{drv} : NOTHING;
+        if (strategy_driver && (exists strategy_driver.method || exists strategy_driver.columns
+                || exists strategy_driver.auto || exists strategy_driver.driver)) {
+            *hash<auto> structural_driver = strategy_driver.driver;
+            desc.partition_strategy += strategy_driver - "driver";
+            delete desc.partition_strategy.driver;
+            if (structural_driver) {
+                desc.partition_strategy.driver = structural_driver;
+            }
+        }
 
         # process column definitions
         foreach string cn in (desc.columns.keyIterator()) {
@@ -8068,7 +8082,16 @@ string sql = table.getCreateTableSql();
     }
 
     private hash<PartitionStrategy> normalizePartitionStrategyUnlocked(hash<auto> strategy, string err) {
+        if (exists strategy.driver && strategy.driver.typeCode() != NT_HASH) {
+            throw err, sprintf("%s: partition strategy key %y must be a hash; got %y", getDesc(), "driver",
+                strategy.driver.type());
+        }
+        *hash<auto> driver = strategy.driver;
+        delete strategy.driver;
         validateOptionsIntern(err, PartitionStrategyOptions, \strategy);
+        if (driver) {
+            strategy.driver = driver;
+        }
 
         if (!strategy.method) {
             strategy.method = "range";
@@ -8453,17 +8476,46 @@ string sql = table.getCreateTableSql();
     }
 
     private validatePartitionStrategyAlignmentUnlocked(AbstractTable t) {
-        *PartitionStrategy source = getPartitionStrategyUnlocked();
-        *PartitionStrategy target = t.getPartitionStrategyUnlocked();
+        *hash<PartitionStrategy> source = normalizePartitionStrategyForAlignmentUnlocked(
+            getPartitionStrategyUnlocked());
+        *hash<PartitionStrategy> target = t.normalizePartitionStrategyForAlignmentUnlocked(
+            t.getPartitionStrategyUnlocked());
 
         if (!source && !target) {
             return;
         }
-        if (!source || !target || source.method != target.method || source.columns != target.columns
-            || source.auto != target.auto || source.driver != target.driver) {
-            throw "PARTITION-ERROR", sprintf("cannot align partition strategy for %s to %s; existing: %y; "
-                "template: %y", getDesc(), t.getDesc(), source, target);
+        if (source != target) {
+            throw "PARTITION-ERROR", sprintf("cannot align partition strategy for %s to %s; normalized existing: "
+                "%y; normalized desired: %y", getDesc(), t.getDesc(), source, target);
         }
+    }
+
+    #! returns the semantic partition strategy used for alignment comparison
+    /** Derived catalog metadata is excluded by the driver hook.  Ordered partition columns, the normalized
+        automatic-partition policy, and structurally meaningful driver configuration are retained.
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private *hash<PartitionStrategy> normalizePartitionStrategyForAlignmentUnlocked(*hash<PartitionStrategy> strategy) {
+        if (!strategy) {
+            return;
+        }
+
+        hash<PartitionStrategy> rv({
+            "method": strategy.method,
+            "columns": strategy.columns,
+        });
+        *hash<auto> auto_policy = normalizePartitionAutoPolicyForAlignmentImpl(strategy.auto);
+        if (auto_policy) {
+            rv.auto = auto_policy;
+        }
+        *hash<auto> driver = normalizePartitionStrategyDriverForAlignmentImpl(strategy);
+        if (driver) {
+            rv.driver = driver;
+        }
+        return rv;
     }
 
     #! returns a list of SQL strings required to align the table to the table given as an argument
@@ -10218,6 +10270,29 @@ on_exit printf("SQL> %s\n", sql);
         @since SqlUtil 3.0.0
     */
     private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
+    }
+
+    #! normalizes the automatic-partition policy for semantic alignment comparison
+    /** The default implementation preserves all declared keys.  Drivers can normalize equivalent policy
+        representations.
+
+        @since SqlUtil 3.0.0
+    */
+    private *hash<auto> normalizePartitionAutoPolicyForAlignmentImpl(*hash<auto> policy) {
+        if (!policy) {
+            return;
+        }
+        return {} + policy;
+    }
+
+    #! returns structurally meaningful driver partition configuration for semantic alignment comparison
+    /** The default implementation preserves the declared driver configuration.  Drivers should select only
+        configuration that affects the physical table structure and omit derived catalog metadata.
+
+        @since SqlUtil 3.0.0
+    */
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return strategy.driver;
     }
 
     #! returns recreatable driver-specific partition options for a table description

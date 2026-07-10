@@ -2607,6 +2607,20 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return rv;
     }
 
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        *hash<auto> mssql = strategy.driver ? strategy.driver.mssql : NOTHING;
+        string partition_function = mssql && mssql.partition_function
+            ? mssql.partition_function : getMssqlGeneratedPartitionObjectName("qore_pf");
+        string partition_scheme = mssql && mssql.partition_scheme
+            ? mssql.partition_scheme : getMssqlGeneratedPartitionObjectName("qore_ps");
+        return {
+            "mssql": {
+                "partition_function": partition_function,
+                "partition_scheme": partition_scheme,
+            },
+        };
+    }
+
     private hash<string, PartitionInfo> getPartitionsImpl() {
         hash<string, PartitionInfo> rv();
 
