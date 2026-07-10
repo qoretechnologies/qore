@@ -1339,6 +1339,10 @@ class PgsqlTest inherits SqlTestBase {
         hash<PartitionLookupResult> lookup = t.findPartitionBySpec({"bound_from": 0, "bound_to": 10});
         assertEq(PartitionLookupStatus::Found, lookup.status, "find partition by typed bounds");
         assertEq(p1, lookup.partition.name, "lookup returned p1");
+        lookup = t.findPartitionBySpec({"bound_from": 30, "bound_to": 40});
+        assertEq(PartitionLookupStatus::NotFound, lookup.status, "missing typed range returns NotFound");
+        lookup = t.findPartitionBySpec({"bound_sql": "from (30) to (40)"});
+        assertEq(PartitionLookupStatus::Uncomparable, lookup.status, "native-only range returns Uncomparable");
 
         hash<PartitionEnsureResult> ensure_existing = t.ensurePartition({
             "name": p1,
@@ -1356,6 +1360,8 @@ class PgsqlTest inherits SqlTestBase {
         });
         assertTrue(ensure_created.created, "ensure new creates");
         assertTrue(ensure_created.materialized, "ensure new is materialized");
+        assertEq(p3, ensure_created.partition.name, "ensure returns re-introspected partition metadata");
+        assertTrue(exists ensure_created.partition.sql_name, "created partition includes its actual SQL name");
         ds.commit();
 
         t.clear();
@@ -1442,7 +1448,19 @@ class PgsqlTest inherits SqlTestBase {
         t.addPartitionCommit({"name": parent + "_b", "bound_from": 200, "bound_to": 300});
         t.addPartitionCommit({"name": parent + "_a", "bound_from": 0, "bound_to": 100});
         t.addPartitionCommit({"name": parent + "_c", "bound_from": 100, "bound_to": 200});
+        assertThrows("PARTITION-ERROR", "bounds overlap existing partition", sub () {
+            t.getAddPartitionSql({"name": parent + "_overlap", "bound_from": 50, "bound_to": 150});
+        });
+        assertThrows("PARTITION-ERROR", "lower bound must be less than upper bound", sub () {
+            t.getAddPartitionSql({"name": parent + "_reversed", "bound_from": 500, "bound_to": 400});
+        });
+        assertThrows("PARTITION-ERROR", "already exists", sub () {
+            t.getAddPartitionSql({"name": parent + "_a", "bound_from": 300, "bound_to": 400});
+        });
         t.addPartitionCommit({"name": parent + "_def", "is_default": True});
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            t.getAddPartitionSql({"name": parent + "_def2", "is_default": True});
+        });
         t.clear();
 
         hash<string, PartitionInfo> parts = t.listPartitions();

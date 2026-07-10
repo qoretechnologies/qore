@@ -7166,9 +7166,7 @@ table.clear();
 
         assertPartitionSupportUnlocked();
         hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
-        if (!ps.name) {
-            throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
-        }
+        validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
         on_success if (opt.sql_callback_executed) {
             addPartitionToCacheUnlocked(ps);
         }
@@ -7182,16 +7180,15 @@ table.clear();
     hash<PartitionInfo> addPartition(hash<auto> spec, *hash<auto> opt) {
         string sql;
         hash<PartitionInfo> info;
+        hash<PartitionSpec> ps;
 
         {
             l.lock();
             on_exit l.unlock();
 
             assertPartitionSupportUnlocked();
-            hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
-            if (!ps.name) {
-                throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
-            }
+            ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
+            validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
             sql = getAddPartitionSqlImpl(ps);
             info = makePartitionInfoUnlocked(ps);
 
@@ -7208,7 +7205,7 @@ table.clear();
         on_exit l.unlock();
         clearPartitionsUnlocked();
 
-        return info;
+        return resolveCreatedPartitionUnlocked(ps);
     }
 
     #! adds a partition and commits the transaction
@@ -7646,7 +7643,8 @@ table.clear();
         }
         # success: release the savepoint explicitly (the destructor would otherwise do it when sp goes out of scope)
         delete sp;
-        return makePartitionEnsureResult(True, True, False, PartitionVerifiedBy::Bounds, info);
+        return makePartitionEnsureResult(True, True, False,
+            partitionSpecsHaveComparableBounds(ps) ? PartitionVerifiedBy::Bounds : PartitionVerifiedBy::Name, info);
     }
 
     #! resolves an already-existing partition for ensurePartition(), by typed bounds and then by canonical name
@@ -8211,7 +8209,7 @@ string sql = table.getCreateTableSql();
         if (has_typed) {
             validatePartitionBoundCardinalityUnlocked(ps.bound_from, ps.columns, err, "bound_from");
             validatePartitionBoundCardinalityUnlocked(ps.bound_to, ps.columns, err, "bound_to");
-            validatePartitionTypedBoundsUnlocked(ps, err);
+            validatePartitionTypedBoundsStructureUnlocked(ps, err);
         }
 
         hash<PartitionSpec> rv(ps);
@@ -8230,20 +8228,50 @@ string sql = table.getCreateTableSql();
         }
     }
 
-    private validatePartitionTypedBoundsUnlocked(hash<auto> ps, string err) {
+    private validatePartitionTypedBoundsStructureUnlocked(hash<auto> ps, string err) {
         if (!partitionBoundLess(ps.bound_from, ps.bound_to)) {
             throw err, sprintf("%s: partition %y lower bound must be less than upper bound", getDesc(), ps.name);
         }
+    }
 
-        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
-            if (pi.is_default || exists pi.bound_sql || exists pi.bound_from_sql || !exists pi.bound_from) {
-                continue;
+    #! validates a structurally-normalized partition specification for creation
+    /** This method is used only by table-creation and add-partition paths.  Lookup and lifecycle resolution use
+        structural normalization without duplicate, overlap, or placement checks.
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private validatePartitionCreationUnlocked(hash<PartitionSpec> ps, string err) {
+        if (!ps.name) {
+            throw err, sprintf("%s: partition name is required", getDesc());
+        }
+
+        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+        if (ph.hasKey(ps.name)) {
+            throw err, sprintf("%s: partition %y already exists", getDesc(), ps.name);
+        }
+
+        if (ps.is_default) {
+            foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                if (pi.is_default) {
+                    throw err, sprintf("%s: default partition %y already exists", getDesc(), pi.name);
+                }
             }
-            if (partitionBoundsOverlap(ps.bound_from, ps.bound_to, pi.bound_from, pi.bound_to)) {
-                throw err, sprintf("%s: partition %y bounds overlap existing partition %y", getDesc(), ps.name,
-                    pi.name);
+        } else if (partitionSpecsHaveComparableBounds(ps)) {
+            foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                # Prefer complete typed bounds even when diagnostic/native SQL bounds are also present.
+                if (pi.is_default || !exists pi.bound_from || !exists pi.bound_to) {
+                    continue;
+                }
+                if (partitionBoundsOverlap(ps.bound_from, ps.bound_to, pi.bound_from, pi.bound_to)) {
+                    throw err, sprintf("%s: partition %y bounds overlap existing partition %y", getDesc(), ps.name,
+                        pi.name);
+                }
             }
         }
+
+        validatePartitionCreationImpl(ps, err);
     }
 
     private static bool partitionBoundLess(auto left, auto right) {
@@ -8282,20 +8310,33 @@ string sql = table.getCreateTableSql();
     }
 
     private hash<PartitionInfo> addPartitionToCacheUnlocked(hash<PartitionSpec> ps) {
+        validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
         hash<PartitionInfo> info = makePartitionInfoUnlocked(ps);
-        if (partitions.hasKey(info.name)) {
-            throw "PARTITION-ERROR", sprintf("%s: partition %y already exists", getDesc(), info.name);
-        }
-        if (info.is_default) {
-            foreach hash<PartitionInfo> pi in (partitions.iterator()) {
-                if (pi.is_default) {
-                    throw "PARTITION-ERROR", sprintf("%s: default partition %y already exists", getDesc(), pi.name);
-                }
-            }
-        }
         partitions{info.name} = info;
         partitionsLoaded = True;
         return info;
+    }
+
+    #! resolves and returns partition metadata after a successful live creation
+    /** @note the table lock must be held and the partition cache must have been cleared before calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private hash<PartitionInfo> resolveCreatedPartitionUnlocked(hash<PartitionSpec> ps) {
+        hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
+        if (lookup.status == PartitionLookupStatus::Found) {
+            return lookup.partition;
+        }
+
+        if (ps.name) {
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (ph.hasKey(ps.name)) {
+                return ph{ps.name};
+            }
+        }
+
+        throw "PARTITION-ERROR", sprintf("%s: partition %y was created but could not be re-resolved by bounds or "
+            "canonical name", getDesc(), ps.name);
     }
 
     private hash<PartitionEnsureResult> makePartitionEnsureResult(bool created, bool materialized,
@@ -10169,6 +10210,14 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionDdlIsTransactionalImpl() {
         return False;
+    }
+
+    #! performs driver-specific partition creation validation
+    /** The default implementation accepts the structurally and generically validated specification.
+
+        @since SqlUtil 3.0.0
+    */
+    private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
     }
 
     #! returns recreatable driver-specific partition options for a table description

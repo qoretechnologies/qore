@@ -262,7 +262,7 @@ class MysqlTest inherits SqlTestBase {
             "primary_key": {"name": "mysql_partition_test_pk", "columns": ("id", "d")},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
-                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p1": {"name": "p1", "bound_sql": "values less than ('2026-02-01 00:00:00')"},
                 "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
             },
         });
@@ -298,6 +298,15 @@ class MysqlTest inherits SqlTestBase {
         });
         assertEq(PartitionLookupStatus::Found, lookup.status);
         assertEq("p2", lookup.partition.name);
+        assertThrows("PARTITION-ERROR", "must start at the preceding upper bound", sub () {
+            rt.getAddPartitionSql({"name": "pgap", "bound_from": 2026-03-15, "bound_to": 2026-04-01});
+        });
+        assertThrows("PARTITION-ERROR", "bounds overlap existing partition", sub () {
+            rt.getAddPartitionSql({"name": "poverlap", "bound_from": 2026-02-15, "bound_to": 2026-03-15});
+        });
+        assertThrows("PARTITION-ERROR", "lower bound must be less than upper bound", sub () {
+            rt.getAddPartitionSql({"name": "preversed", "bound_from": 2026-04-01, "bound_to": 2026-03-01});
+        });
 
         hash<PartitionEnsureResult> ensure = rt.ensurePartitionCommit({
             "name": "p3",
@@ -307,6 +316,9 @@ class MysqlTest inherits SqlTestBase {
         assertEq(True, ensure.created);
         assertEq(True, ensure.materialized);
         assertEq(PartitionVerifiedBy::Bounds, ensure.verified_by);
+        assertEq("p3", ensure.partition.name);
+        assertEq(2026-03-01, ensure.partition.bound_from);
+        assertEq(2026-04-01, ensure.partition.bound_to);
         assertEq(True, rt.listPartitions().hasKey("p3"));
 
         ds.execRaw("insert into mysql_partition_test values (3, '2026-03-15 00:00:00', 'x')");
@@ -333,6 +345,25 @@ class MysqlTest inherits SqlTestBase {
         assertEq(True, raced.materialized, "ensurePartition() race resolves to a materialized partition");
         rt.dropPartitionCommit("p4");
 
+        rt.addPartitionCommit({"name": "pmax", "is_default": True});
+        assertEq(PartitionLookupStatus::Found, rt.findPartitionBySpec({"is_default": True}).status);
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            rt.getAddPartitionSql({"name": "pmax2", "is_default": True});
+        });
+        assertThrows("PARTITION-ERROR", "catch-all partition", sub () {
+            rt.getAddPartitionSql({"name": "p5", "bound_from": 2026-03-01, "bound_to": 2026-04-01});
+        });
+        rt.dropPartitionCommit("pmax");
+
+        MysqlTable finite_first(ds, "mysql_partition_finite_first");
+        assertThrows("PARTITION-ERROR", "cannot declare finite lower bound", sub () {
+            finite_first.setupTable({
+                "columns": {"d": {"qore_type": Type::Date, "notnull": True}},
+                "partition_strategy": {"method": "range", "columns": "d"},
+                "partitions": {"p1": {"bound_from": 2026-01-01, "bound_to": 2026-02-01}},
+            });
+        });
+
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",
             sub() {
                 rt.detachPartition("p2");
@@ -347,7 +378,7 @@ class MysqlTest inherits SqlTestBase {
             "primary_key": {"name": "mysql_partition_test_bad_pk", "columns": ("id", "d")},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
-                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p1": {"name": "p1", "bound_sql": "values less than ('2026-02-01')"},
             },
         });
         assertThrows("PARTITION-ERROR", "does not allow \"timestamp\" columns in RANGE COLUMNS partition keys",

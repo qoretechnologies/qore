@@ -334,6 +334,9 @@ class FreetdsTest inherits SqlTestBase {
         assertEq(strategy.driver.mssql.partition_function,
             desc.partitions.p2.driver.mssql.partition_function);
         assertEq(strategy.driver.mssql.partition_scheme, desc.partitions.p2.driver.mssql.partition_scheme);
+        assertThrows("PARTITION-ERROR", "does not support generic default partitions", sub () {
+            rt.getAddPartitionSql({"name": "pmax", "is_default": True});
+        });
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
             "bound_from": 2026-02-01,

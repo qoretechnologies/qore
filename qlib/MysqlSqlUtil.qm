@@ -2722,6 +2722,99 @@ end";
             return sprintf("alter table %s add partition (%s)", getSqlName(), getMysqlPartitionDefinitionSql(spec));
         }
 
+        private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
+            if (spec.is_default) {
+                return;
+            }
+
+            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            if (!ph) {
+                # MySQL's first RANGE partition starts at MINVALUE.  Do not accept a finite lower bound that the
+                # generated VALUES LESS THAN clause cannot represent physically.
+                if (exists spec.bound_from) {
+                    throw err, sprintf("%s: first MySQL/MariaDB range partition %y cannot declare finite lower "
+                        "bound %y; use a native %y expression so its physical lower bound is MINVALUE", getDesc(),
+                        spec.name, spec.bound_from, "bound_sql");
+                }
+                if (exists spec.bound_from_sql
+                    && !(spec.bound_from_sql =~ /^\s*minvalue(?:\s*,\s*minvalue)*\s*$/i)) {
+                    throw err, sprintf("%s: first MySQL/MariaDB range partition %y must start at MINVALUE, got %y",
+                        getDesc(), spec.name, spec.bound_from_sql);
+                }
+                return;
+            }
+
+            if (exists spec.bound_from) {
+                *auto preceding;
+                foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                    if (pi.is_default) {
+                        continue;
+                    }
+                    *auto upper = getMysqlPartitionTypedUpperBoundUnlocked(pi);
+                    if (exists upper && (!exists preceding || preceding < upper)) {
+                        preceding = upper;
+                    }
+                }
+                if (!exists preceding) {
+                    throw err, sprintf("%s: cannot compare lower bound for MySQL/MariaDB partition %y with "
+                        "existing partition metadata", getDesc(), spec.name);
+                }
+                if (spec.bound_from != preceding) {
+                    throw err, sprintf("%s: MySQL/MariaDB partition %y must start at the preceding upper bound %y; "
+                        "got %y", getDesc(), spec.name, preceding, spec.bound_from);
+                }
+                return;
+            }
+
+            if (exists spec.bound_from_sql) {
+                *string preceding_sql = getLastMysqlPartitionUpperSqlUnlocked(ph);
+                string requested_sql = spec.bound_from_sql;
+                if (!preceding_sql) {
+                    throw err, sprintf("%s: cannot resolve the preceding MySQL/MariaDB partition upper SQL bound "
+                        "for %y", getDesc(), spec.name);
+                }
+                trim preceding_sql;
+                trim requested_sql;
+                if (requested_sql != preceding_sql) {
+                    throw err, sprintf("%s: MySQL/MariaDB partition %y must start at preceding upper SQL bound %y; "
+                        "got %y", getDesc(), spec.name, preceding_sql, requested_sql);
+                }
+                return;
+            }
+
+            throw err, sprintf("%s: cannot add MySQL/MariaDB partition %y with %y after existing partitions because "
+                "the logical lower bound cannot be verified", getDesc(), spec.name, "bound_sql");
+        }
+
+        private *auto getMysqlPartitionTypedUpperBoundUnlocked(hash<PartitionInfo> pi) {
+            if (exists pi.bound_to) {
+                return pi.bound_to;
+            }
+            *string sql = getMysqlPartitionUpperSqlUnlocked(pi);
+            return sql ? parseMysqlPartitionBoundValues(sql, pi.columns) : NOTHING;
+        }
+
+        private *string getMysqlPartitionUpperSqlUnlocked(hash<PartitionInfo> pi) {
+            if (exists pi.bound_to_sql) {
+                return pi.bound_to_sql;
+            }
+            if (exists pi.bound_sql) {
+                *string upper = (pi.bound_sql =~ x/^\s*values\s+less\s+than\s*\((.*)\)\s*$/i)[0];
+                return upper;
+            }
+            return;
+        }
+
+        private *string getLastMysqlPartitionUpperSqlUnlocked(hash<string, PartitionInfo> ph) {
+            *hash<PartitionInfo> last;
+            foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                if (!pi.is_default && (!last || pi.ordinal > last.ordinal)) {
+                    last = pi;
+                }
+            }
+            return last ? getMysqlPartitionUpperSqlUnlocked(last) : NOTHING;
+        }
+
         private string getDropPartitionSqlImpl(string partition_name) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
             return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
@@ -2758,7 +2851,7 @@ end";
             if (spec.bound_sql) {
                 string sql = spec.bound_sql;
                 trim sql;
-                if (sql =~ x/^values\s+less\s+than\b/i) {
+                if (sql =~ /^values\s+less\s+than\b/i) {
                     return sql;
                 }
                 return "values less than (" + sql + ")";
