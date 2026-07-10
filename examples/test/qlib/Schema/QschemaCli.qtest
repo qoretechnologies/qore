@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires Util
 %requires FsUtil
 
 %exec-class QschemaCliTest
