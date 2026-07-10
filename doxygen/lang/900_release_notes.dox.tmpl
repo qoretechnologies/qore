@@ -2511,6 +2511,11 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - @ref mysqlsqlutilintro "MysqlSqlUtil" module
+      - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
+        expressions no longer pass binary-character-set operands to MySQL's ICU regular-expression engine and
+        remain compatible with MySQL 5.7 and current MariaDB releases
+
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts

@@ -99,6 +99,9 @@ module MysqlSqlUtil {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
+    - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
+      explicit UTF-8 binary collation instead of a binary-character-set operand; the generated SQL remains
+      compatible with MySQL 5.7 and current MariaDB releases
     - added portable c LIST c COLUMNS partition creation, introspection, lookup, lifecycle, and schema round-trip
       support
     - added catalog-estimated row-count and allocated-size partition metadata
@@ -1798,12 +1801,10 @@ end";
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
                             AbstractDataProviderTypeMap."string");
-                        # Use REGEXP / REGEXP BINARY for broad MySQL version support
-                        # (regexp_like() requires MySQL 8.0+)
                         bool case_insensitive = exists args[2] && inlist("i", args[2]);
                         return case_insensitive
                             ? sprintf("%s REGEXP %s", exp0, exp1)
-                            : sprintf("%s REGEXP BINARY %s", exp0, exp1);
+                            : sprintf("convert(%s using utf8mb4) collate utf8mb4_bin REGEXP %s", exp0, exp1);
                     },
                 },
                 DP_OP_REGEX_NMATCH: DefaultExpressionMap{DP_OP_REGEX_NMATCH} + {
@@ -1815,7 +1816,7 @@ end";
                         bool case_insensitive = exists args[2] && inlist("i", args[2]);
                         return case_insensitive
                             ? sprintf("%s NOT REGEXP %s", exp0, exp1)
-                            : sprintf("%s NOT REGEXP BINARY %s", exp0, exp1);
+                            : sprintf("convert(%s using utf8mb4) collate utf8mb4_bin NOT REGEXP %s", exp0, exp1);
                     },
                 },
                 DP_OP_REGEX_SUBST: DefaultExpressionMap{DP_OP_REGEX_SUBST} + {

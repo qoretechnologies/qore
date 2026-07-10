@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MysqlSqlUtil
-%requires QUnit
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/MysqlSqlUtil.qmod
+%requires ../../../../qlib/QUnit.qmod
 
 %try-module mysql
 %define NoMysql
@@ -231,6 +231,20 @@ class MysqlExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
+        # the default table collation is case-insensitive; the operator must still enforce case sensitivity
+        rows = selectWhere(
+            expr(DP_OP_REGEX_MATCH, (fref("name"), "^hello")),
+        );
+        assertEq((), rows.id);
+
+        string sql = table.getSelectSql({
+            "columns": "id",
+            "where": expr(DP_OP_REGEX_MATCH, (fref("name"), "^Hello")),
+        });
+        assertTrue(sql =~ /convert\(name using utf8mb4\) collate utf8mb4_bin regexp/i,
+            "case-sensitive regex uses a text collation rather than a binary-character-set operand");
+        assertFalse(sql =~ /regexp\s+binary/i, "case-sensitive regex does not use MySQL-incompatible REGEXP BINARY");
+
         # case-insensitive regex
         rows = selectWhere(
             expr(DP_OP_REGEX_MATCH, (fref("name"), "^hello", ("i",))),
@@ -252,6 +266,11 @@ class MysqlExpressionTest inherits QUnit::Test {
             expr(DP_OP_REGEX_NMATCH, (fref("name"), "^Hello")),
         );
         assertEq((2, 3, 4), rows.id);
+
+        rows = selectWhere(
+            expr(DP_OP_REGEX_NMATCH, (fref("name"), "^hello")),
+        );
+        assertEq((1, 2, 3, 4), rows.id);
 
         # case-insensitive non-match
         rows = selectWhere(
