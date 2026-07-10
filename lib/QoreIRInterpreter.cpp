@@ -2440,6 +2440,119 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     return eligible_state;
 }
 
+static bool interpreterNativeIntLeafInlineDisabled() {
+    static const bool disabled = std::getenv("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE") != nullptr;
+    return disabled;
+}
+
+static bool ensureInterpreterNativeIntLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
+    if (interpreterNativeIntLeafInlineDisabled()) {
+        return false;
+    }
+    int8_t state = inst->native_int_leaf_state.load(std::memory_order_acquire);
+    if (state != 0) {
+        return state > 0;
+    }
+    int8_t expected = 0;
+    if (!inst->native_int_leaf_state.compare_exchange_strong(expected, -2,
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+        return expected > 0;
+    }
+    auto reject = [&]() {
+        inst->native_int_leaf_state.store(-1, std::memory_order_release);
+        return false;
+    };
+
+    const QoreIRFunction* callee_ir = inst->cached_callee_ir;
+    const UserVariantBase* uvb = inst->cached_uvb;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!callee_ir || !sig || nargs != 1 || sig->numParams() != 1
+            || inst->cached_return_type != bigIntTypeInfo
+            || callee_ir->blocks.size() != 1 || !callee_ir->blocks.front()
+            || callee_ir->blocks.front()->instructions.size() > 16) {
+        return reject();
+    }
+    auto param_it = callee_ir->param_local_vars.find(0);
+    if (param_it == callee_ir->param_local_vars.end() || !param_it->second
+            || param_it->second->getTypeInfo() != bigIntTypeInfo
+            || param_it->second->closureUse()) {
+        return reject();
+    }
+
+    const QoreIRLocalInstruction* load = nullptr;
+    const QoreIRConstInstruction* constant = nullptr;
+    const QoreIRInstruction* add = nullptr;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : callee_ir->blocks.front()->instructions) {
+        if (!inst_ptr) {
+            continue;
+        }
+        switch (inst_ptr->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                auto* candidate = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (load || candidate->local != param_it->second || candidate->exception_target) {
+                    return reject();
+                }
+                load = candidate;
+                break;
+            }
+            case QoreIROpcode::ConstInt:
+                if (constant || inst_ptr->exception_target) {
+                    return reject();
+                }
+                constant = static_cast<const QoreIRConstInstruction*>(inst_ptr.get());
+                break;
+            case QoreIROpcode::AddInt:
+                if (add || inst_ptr->exception_target) {
+                    return reject();
+                }
+                add = inst_ptr.get();
+                break;
+            case QoreIROpcode::Return:
+                if (ret || inst_ptr->exception_target) {
+                    return reject();
+                }
+                ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                break;
+            default:
+                return reject();
+        }
+    }
+    if (!load || !load->result.isValid() || !constant || !constant->result.isValid()
+            || !add || !add->result.isValid() || add->operands.size() != 2
+            || !ret || !ret->has_value || ret->value.id != add->result.id) {
+        return reject();
+    }
+    bool operands_match = (add->operands[0].id == load->result.id
+            && add->operands[1].id == constant->result.id)
+        || (add->operands[1].id == load->result.id
+            && add->operands[0].id == constant->result.id);
+    if (!operands_match) {
+        return reject();
+    }
+
+    inst->native_int_leaf_constant = constant->constant.int_value;
+    inst->native_int_leaf_state.store(1, std::memory_order_release);
+    return true;
+}
+
+static bool tryExecuteInterpreterNativeIntLeaf(QoreIRCallDirectInstruction* inst,
+        uint64_t* args, int nargs, QoreValue& result) {
+    if (!ensureInterpreterNativeIntLeafState(inst, nargs)) {
+        return false;
+    }
+    QoreValue arg = fromBits(args[0]);
+    if (arg.getType() != NT_INT) {
+        return false;
+    }
+    result = QoreValue(arg.getAsBigInt() + inst->native_int_leaf_constant);
+    return true;
+}
+
 static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -12061,6 +12174,12 @@ lvalue_path_unary_done:
                     bool used_inline_ir = false;
                     if (type_name_fast_path) {
                         res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
+                        inline_may_invalidate_external_caches = false;
+                        used_inline_ir = true;
+                    } else if (!debug_active
+                            && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
+                            && !direct_inst->cached_uvb->hasCachedFunction()
+                            && tryExecuteInterpreterNativeIntLeaf(direct_inst, nanboxed_args, nargs, res)) {
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;
                     } else {

@@ -2014,6 +2014,11 @@ public:
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
+
+    // Cached native integer leaf-call state. The release/acquire state publishes the
+    // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=param+constant.
+    mutable std::atomic<int8_t> native_int_leaf_state{0};
+    mutable int64_t native_int_leaf_constant = 0;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods

@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int calls;
+
+int sub addOne(int value) {
+    return value + 1;
+}
+
+int sub addOneWithEffect(int value) {
+    ++calls;
+    return value + 1;
+}
+
+int sub conditionalAdd(int value) {
+    if (value > 0) {
+        return value + 1;
+    }
+    return value;
+}
+
+int unassigned;
+int removed = 4;
+remove removed;
+int deleted = 5;
+delete deleted;
+
+printf(\"values:%d:%d:%d:%d:%d\\n\", addOne(4), addOne(-2),
+    addOne(9223372036854775807), addOneWithEffect(8), conditionalAdd(3));
+printf(\"effects:%d\\n\", calls);
+foreach hash<auto> test in ((\"name\": \"unassigned\", \"value\": unassigned),
+        (\"name\": \"removed\", \"value\": removed),
+        (\"name\": \"deleted\", \"value\": deleted)) {
+    try {
+        addOne(test.value);
+        printf(\"%s:accepted\\n\", test.name);
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s:%s\\n\", test.name, ex.err);
+    }
+}
+";
+
+string script_path = "/tmp/qore-ir-native-int-leaf-inline-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode, bool disabled = False) {
+    string disable = disabled ? "QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE=1 " : "";
+    return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        disable, libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-native-int-leaf-inline-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = runMode("ast");
+if (!expected.contains("values:5:-1:-9223372036854775808:9:4\neffects:1\n")
+        || !expected.contains("unassigned:RUNTIME-OVERLOAD-ERROR\n")
+        || !expected.contains("removed:RUNTIME-OVERLOAD-ERROR\n")
+        || !expected.contains("deleted:RUNTIME-OVERLOAD-ERROR\n")) {
+    printf("unexpected AST baseline:\n%s", expected);
+    exit(2);
+}
+foreach hash<auto> test in (("mode": "ir", "disabled": True),
+        ("mode": "ir", "disabled": False), ("mode": "tiered", "disabled": False),
+        ("mode": "jit", "disabled": False)) {
+    string actual = runMode(test.mode, test.disabled);
+    if (actual != expected) {
+        printf("mismatch in %s%s\nexpected:\n%sactual:\n%s", test.mode,
+            test.disabled ? " (disabled)" : "", expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}
