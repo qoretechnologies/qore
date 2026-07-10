@@ -316,6 +316,7 @@ public:
     /** Called by the controller after continuePoll() returns.
     */
     DLLLOCAL std::vector<int64_t> getAndClearDataReadyStreams() {
+        AutoLocker al(stream_lock);
         std::vector<int64_t> result;
         result.swap(data_ready_streams);
         return result;

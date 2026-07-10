@@ -1191,6 +1191,7 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_A
     ValueHolder listener(xsink);
     bool had_listeners = false;
     size_t listener_count = 0;
+    bool listener_found = false;
     {
         AutoLocker ml(priv->stream_member_lock);
         ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
@@ -1199,27 +1200,27 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_A
             listener_count = lhash->size();
             had_listeners = true;
             listener = lhash->getKeyValue(stream_key->c_str()).refSelf();
+            listener_found = !listener->isNullOrNothing() && listener->getType() == NT_OBJECT;
+        }
+        if (!listener_found) {
+            // Keep the listener lookup and pending publication atomic with
+            // registration, which takes stream_member_lock before consuming
+            // pending_stream_data.
+            priv->markStreamDataPending(stream_key->c_str());
         }
     }
 
-    if (*xsink || !had_listeners) {
-        priv->markStreamDataPending(stream_key->c_str());
+    if (*xsink || !listener_found) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_LISTENERS skey='%s' xsink=%d null=%d\n",
             stream_key->c_str(), (int)(*xsink ? 1 : 0),
             (int)(!had_listeners ? 1 : 0));
         return QoreValue();
     }
 
-    if (!listener->isNullOrNothing() && listener->getType() == NT_OBJECT) {
-        QoreObject* lobj = listener->get<QoreObject>();
-        ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NOTIFY skey='%s' listener=%p\n",
-            stream_key->c_str(), (void*)lobj);
-        ValueHolder rv(lobj->evalMethod("notifyIo", nullptr, xsink), xsink);
-    } else {
-        priv->markStreamDataPending(stream_key->c_str());
-        ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_MATCH skey='%s' listeners_keys=%zu\n",
-            stream_key->c_str(), listener_count);
-    }
+    QoreObject* lobj = listener->get<QoreObject>();
+    ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NOTIFY skey='%s' listener=%p listeners_keys=%zu\n",
+        stream_key->c_str(), (void*)lobj, listener_count);
+    ValueHolder rv(lobj->evalMethod("notifyIo", nullptr, xsink), xsink);
 }
 
 //! Returns and clears the list of stream keys with data available
