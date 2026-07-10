@@ -4121,22 +4121,22 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return info;
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
         return sprintf("create table %s partition of %s %s", getPartitionSqlName(spec), getSqlName(),
             getPgPartitionBoundSql(spec));
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("drop table %s", info.sql_name);
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s", info.sql_name);
     }
 
-    private string getDetachPartitionSqlImpl(string partition_name) {
+    private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
     }

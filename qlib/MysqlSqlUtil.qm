@@ -2722,7 +2722,7 @@ end";
             return ph{partition_name};
         }
 
-        private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+        private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
             assertNoMysqlDefaultPartitionForAddUnlocked(spec);
             return sprintf("alter table %s add partition (%s)", getSqlName(), getMysqlPartitionDefinitionSql(spec));
         }
@@ -2820,12 +2820,12 @@ end";
             return last ? getMysqlPartitionUpperSqlUnlocked(last) : NOTHING;
         }
 
-        private string getDropPartitionSqlImpl(string partition_name) {
+        private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
             return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
         }
 
-        private string getTruncatePartitionSqlImpl(string partition_name) {
+        private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
             hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
             return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
         }

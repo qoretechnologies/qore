@@ -2702,7 +2702,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
         validateMssqlPartitionSpecUnlocked(spec);
         auto split_value = getMssqlPartitionSplitValueUnlocked(spec);
         return sprintf("alter partition scheme %s next used %s;\nalter partition function %s() split range (%s)",
@@ -2710,14 +2710,14 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             getMssqlPartitionFunctionNameUnlocked(), getMssqlPartitionSqlValue(split_value));
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s with (partitions (%d));\nalter partition function %s() merge range (%s)",
             getSqlName(), info.driver.mssql.partition_number, getMssqlPartitionFunctionNameUnlocked(),
             getMssqlPartitionSqlValue(info.bound_to));
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s with (partitions (%d))", getSqlName(), info.driver.mssql.partition_number);
     }

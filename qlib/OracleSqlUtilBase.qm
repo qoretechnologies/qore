@@ -4100,7 +4100,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return ph{pname};
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
         assertNoOracleDefaultPartitionForAddUnlocked(spec);
         return sprintf("alter table %s add %s", getSqlName(), getOraclePartitionDefinitionSql(spec));
     }
@@ -4197,12 +4197,12 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return last ? getOraclePartitionUpperSqlUnlocked(last) : NOTHING;
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
     }

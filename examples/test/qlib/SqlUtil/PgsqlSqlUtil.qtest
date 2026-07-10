@@ -339,6 +339,8 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
+            addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
@@ -1420,6 +1422,268 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(2, recreated_parts.size(), "description recreates all exported partitions");
         assertEq(0, recreated_parts{p1}.bound_from, "recreated partition has the exported lower bound");
         assertEq(20, recreated_parts{p2}.bound_to, "recreated partition has the exported upper bound");
+    }
+
+    partitionLifecycleCallbackTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string parent = "pgsql_partition_callback_test";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string p3 = parent + "_p3";
+        string p4 = parent + "_p4";
+
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s cascade", table_name));
+            ds.commit();
+        };
+        drop_if_exists(parent);
+        drop_if_exists(p1);
+        on_exit {
+            drop_if_exists(p1);
+            drop_if_exists(parent);
+        }
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "partition_strategy": {"method": "range", "columns": "id"},
+            "partitions": {(p1): {"bound_from": 0, "bound_to": 10}},
+        });
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+        t.listPartitions();
+        list<hash<auto>> events = ();
+        list<string> callback_sql = ();
+        code info_cb = sub (string str, int ac, *string type, *string nm, *string tbl, *string nn, *string info) {
+            events += {"action": ac, "type": type, "name": nm, "table": tbl};
+        };
+        code sql_cb = sub (string statement) {
+            callback_sql += statement;
+        };
+        hash<auto> preview_opt = {"info_callback": info_cb, "sql_callback": sql_cb};
+
+        t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20}, preview_opt);
+        assertEq(1, events.size(), "add generator emits one info callback");
+        assertEq(1, callback_sql.size(), "add generator emits one SQL callback");
+        assertEq({"action": AbstractDatabase::AC_Add, "type": "partition", "name": p2, "table": parent},
+            events[0], "add generator callback metadata");
+        assertFalse(t.listPartitions().hasKey(p2), "add SQL preview does not mutate the partition cache");
+
+        events = ();
+        callback_sql = ();
+        t.getDropPartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "drop generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Drop, events[0].action, "drop generator action code");
+        assertEq(1, callback_sql.size(), "drop generator emits one SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.getTruncatePartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "truncate generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Truncate, events[0].action, "truncate generator action code");
+        assertEq(1, callback_sql.size(), "truncate generator emits one SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.getDetachPartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "detach generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action, "detach generator action code");
+        assertEq(1, callback_sql.size(), "detach generator emits one SQL callback");
+
+        t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20},
+            {"sql_callback_executed": True});
+        assertFalse(t.listPartitions().hasKey(p2),
+            "sql_callback_executed without a callback does not mark preview SQL as executed");
+
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getDropPartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getTruncatePartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getDetachPartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.addPartition({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.ensurePartition({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.dropPartition(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.truncatePartition(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.detachPartition(p1, {"force": True});
+        });
+
+        events = ();
+        callback_sql = ();
+        hash<PartitionInfo> added = t.addPartitionCommit({
+            "name": p2,
+            "bound_from": 10,
+            "bound_to": 20,
+        }, preview_opt);
+        assertEq(p2, added.name, "direct add returns the created partition");
+        assertEq(1, events.size(), "direct add emits one info callback");
+        assertEq(AbstractDatabase::AC_Add, events[0].action, "direct add action code");
+        assertEq(1, callback_sql.size(), "direct add emits one SQL callback while executing directly");
+
+        ds.execRaw(sprintf("insert into %s values (11)", parent));
+        ds.commit();
+        int cached_partition_count = t.listPartitions().size();
+        events = ();
+        callback_sql = ();
+        t.truncatePartitionCommit(p2, preview_opt);
+        assertEq(1, events.size(), "direct truncate emits one info callback");
+        assertEq(AbstractDatabase::AC_Truncate, events[0].action, "direct truncate action code");
+        assertEq(1, callback_sql.size(), "direct truncate emits one SQL callback");
+        assertEq(cached_partition_count, t.listPartitions().size(), "truncate retains structural partition metadata");
+        assertEq(0, ds.selectRow(sprintf("select count(*) c from %s", p2)).c, "truncate executed exactly once");
+
+        events = ();
+        callback_sql = ();
+        hash<PartitionEnsureResult> ensured = t.ensurePartitionCommit({
+            "name": p3,
+            "bound_from": 20,
+            "bound_to": 30,
+        }, preview_opt);
+        assertTrue(ensured.created, "ensure creates the missing partition");
+        assertEq(1, events.size(), "creating ensure emits one add callback");
+        events = ();
+        callback_sql = ();
+        ensured = t.ensurePartition({"name": p3, "bound_from": 20, "bound_to": 30}, preview_opt);
+        assertFalse(ensured.created, "ensure recognizes the existing partition");
+        assertEq(0, events.size(), "non-creating ensure emits no DDL callback");
+        assertEq(0, callback_sql.size(), "non-creating ensure emits no SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.dropPartitionCommit(p3, preview_opt);
+        assertEq(1, events.size(), "direct drop emits one info callback");
+        assertEq(AbstractDatabase::AC_Drop, events[0].action, "direct drop action code");
+        assertEq(1, callback_sql.size(), "direct drop emits one SQL callback");
+        assertFalse(t.listPartitions().hasKey(p3), "drop reloads structural metadata after success");
+
+        int external_calls = 0;
+        code executing_cb = sub (string statement) {
+            ++external_calls;
+            ds.execRaw(statement);
+        };
+        hash<auto> executing_opt = {
+            "sql_callback": executing_cb,
+            "sql_callback_executed": True,
+        };
+        t.addPartitionCommit({"name": p4, "bound_from": 20, "bound_to": 30}, executing_opt);
+        assertEq(1, external_calls, "executing add callback is not followed by duplicate direct execution");
+        assertTrue(t.listPartitions().hasKey(p4), "executing add callback clears and reloads partition metadata");
+        external_calls = 0;
+        t.dropPartitionCommit(p4, executing_opt);
+        assertEq(1, external_calls, "executing drop callback is not followed by duplicate direct execution");
+
+        code failing_cb = sub (string statement) {
+            throw "PARTITION-CALLBACK-ERROR", "intentional callback failure";
+        };
+        int error_callback_count = 0;
+        code error_cb = sub (int ac, string type, string nm, *string tbl, *string nn, *string info,
+                string statement, hash<ExceptionInfo> ex) {
+            ++error_callback_count;
+            assertEq(AbstractDatabase::AC_Add, ac, "error callback action code");
+            assertEq("partition", type, "error callback object type");
+            assertEq(p4, nm, "error callback object name");
+            assertEq(parent, tbl, "error callback table name");
+            assertEq("PARTITION-CALLBACK-ERROR", ex.err, "error callback receives the callback exception");
+        };
+        int before_failure = t.listPartitions().size();
+        assertThrows("PARTITION-CALLBACK-ERROR", "intentional callback failure", sub () {
+            t.addPartition({"name": p4, "bound_from": 20, "bound_to": 30}, {
+                "sql_callback": failing_cb,
+                "error_callback": error_cb,
+            });
+        });
+        assertEq(1, error_callback_count, "failing SQL callback invokes the error callback exactly once");
+        assertEq(before_failure, t.listPartitions().size(), "failed callback leaves the old partition cache valid");
+        assertFalse(t.listPartitions().hasKey(p4), "failed callback does not create or cache a partition");
+
+        code execute_then_fail_cb = sub (string statement) {
+            ds.execRaw(statement);
+            throw "PARTITION-CALLBACK-ERROR", "failure after execution";
+        };
+        assertThrows("PARTITION-CALLBACK-ERROR", "failure after execution", sub () {
+            t.addPartition({"name": p4, "bound_from": 20, "bound_to": 30}, {
+                "sql_callback": execute_then_fail_cb,
+                "sql_callback_executed": True,
+            });
+        });
+        assertTrue(t.listPartitions().hasKey(p4),
+            "executing callback failure invalidates cache before reloading uncertain database state");
+        ds.commit();
+        t.dropPartitionCommit(p4);
+
+        events = ();
+        callback_sql = ();
+        AbstractTable detached = t.detachPartitionCommit(p1, preview_opt);
+        assertEq(p1, detached.getName(), "direct detach returns the standalone relation");
+        assertEq(1, events.size(), "direct detach emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action, "direct detach action code");
+        assertEq(1, callback_sql.size(), "direct detach emits one SQL callback");
+        assertFalse(t.listPartitions().hasKey(p1), "detach reloads structural metadata after success");
+    }
+
+    insertFromSelectCallbackForwardingTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string source_name = "pgsql_insert_select_source";
+        string target_name = "pgsql_insert_select_target";
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.commit();
+        };
+        drop_if_exists(target_name);
+        drop_if_exists(source_name);
+        on_exit {
+            drop_if_exists(target_name);
+            drop_if_exists(source_name);
+        }
+
+        ds.execRaw(sprintf("create table %s (id integer not null)", source_name));
+        ds.execRaw(sprintf("create table %s (id integer not null)", target_name));
+        ds.execRaw(sprintf("insert into %s values (1), (2)", source_name));
+        ds.commit();
+
+        PgsqlTable source(ds, source_name);
+        PgsqlTable target(ds, target_name);
+        int callback_count = 0;
+        *string callback_sql;
+        *softlist<auto> callback_args;
+        code sqlarg_cb = sub (string statement, *softlist<auto> args) {
+            ++callback_count;
+            callback_sql = statement;
+            callback_args = args;
+        };
+        string sql;
+        int inserted = target.insertFromSelectCommit(("id",), source, {"where": {"id": 1}}, \sql,
+            {"sqlarg_callback": sqlarg_cb});
+        assertEq(1, inserted, "insert-select commit returns the inserted row count");
+        assertEq(1, callback_count, "insert-select commit forwards the callback option exactly once");
+        assertEq(sql, callback_sql, "insert-select callback receives the returned SQL");
+        assertEq((1,), callback_args, "insert-select callback receives bound select arguments");
+        assertEq(1, ds.selectRow(sprintf("select id from %s", target_name)).id,
+            "insert-select commit inserts the selected row");
     }
 
     partitionEnhancementsTest() {

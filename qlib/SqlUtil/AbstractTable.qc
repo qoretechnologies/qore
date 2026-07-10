@@ -210,6 +210,25 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "with_partitions": Type::Boolean,
         };
 
+        #! common partition DDL callback options
+        /** These options apply to partition SQL generators and direct executors.  A direct executor calls the
+            callbacks once and executes the returned SQL itself unless both \c sql_callback and
+            \c sql_callback_executed are set, which indicates that the callback performed the execution.
+
+            @since SqlUtil 3.0.0
+        */
+        const PartitionCallbackOptions = AbstractDatabase::CallbackOptions;
+
+        #! partition creation options; drivers can extend this contract
+        /** @since SqlUtil 3.0.0
+        */
+        const PartitionCreationOptions = PartitionCallbackOptions;
+
+        #! partition drop, truncate, and detach options; drivers can extend each operation's contract
+        /** @since SqlUtil 3.0.0
+        */
+        const PartitionLifecycleOptions = PartitionCallbackOptions;
+
         #! Column description options
         /** this option is made up of the following keys:
             - \c qore_type: (@ref string_type) a qore type string that will be converted to a native DB type with some default conversion
@@ -3551,7 +3570,7 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         on_success ds.commit();
         on_error ds.rollback();
 
-        return insertFromSelectIntern(cols, source, sh, \sql);
+        return insertFromSelectIntern(cols, source, sh, \sql, opt);
     }
 
     #! @ref SqlUtil::AbstractTable::insertFromSelectCommit() variant
@@ -7170,10 +7189,16 @@ table.clear();
     }
 
     #! returns SQL to add a partition
-    /** @since SqlUtil 3.0.0
+    /** @param spec partition specification to add
+        @param opt optional @ref PartitionCreationOptions "partition creation options"
+
+        @note callbacks are invoked by this SQL generator; the partition cache is invalidated only when an executing
+        SQL callback completes successfully
+
+        @since SqlUtil 3.0.0
     */
     string getAddPartitionSql(hash<auto> spec, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getAddPartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
@@ -7181,20 +7206,32 @@ table.clear();
         assertPartitionSupportUnlocked();
         hash<PartitionSpec> ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
         validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
-        on_success if (opt.sql_callback_executed) {
-            addPartitionToCacheUnlocked(ps);
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
         }
-        return AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(ps), AbstractDatabase::AC_Add,
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(ps, opt), AbstractDatabase::AC_Add,
             "partition", ps.name, name);
     }
 
     #! adds a partition without transaction management
-    /** @since SqlUtil 3.0.0
+    /** @param spec partition specification to add
+        @param opt optional @ref PartitionCreationOptions "partition creation options"
+
+        @note the executor invokes callbacks exactly once; it executes the SQL directly unless an executing SQL
+        callback is configured
+
+        @since SqlUtil 3.0.0
     */
     hash<PartitionInfo> addPartition(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAddPartitionOptions(), \opt);
+
         string sql;
         hash<PartitionInfo> info;
         hash<PartitionSpec> ps;
+        bool execute;
 
         {
             l.lock();
@@ -7203,22 +7240,31 @@ table.clear();
             assertPartitionSupportUnlocked();
             ps = normalizePartitionSpecUnlocked(spec, "PARTITION-ERROR");
             validatePartitionCreationUnlocked(ps, "PARTITION-ERROR");
-            sql = getAddPartitionSqlImpl(ps);
+            sql = getAddPartitionSqlImpl(ps, opt);
             info = makePartitionInfoUnlocked(ps);
-
-            if (!inDb) {
-                addPartitionToCacheUnlocked(ps);
-                manual = True;
-                return info;
-            }
+            execute = inDb;
         }
 
-        ds.execRaw(sql);
+        {
+            on_error if (partitionSqlExecutedByCallback(opt)) {
+                clearPartitionCache();
+            }
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Add, "partition", ps.name, name);
+        }
+        if (execute && !partitionSqlExecutedByCallback(opt)) {
+            on_error clearPartitionCache();
+            ds.execRaw(sql);
+        }
 
         l.lock();
         on_exit l.unlock();
-        clearPartitionsUnlocked();
+        if (!execute) {
+            addPartitionToCacheUnlocked(ps);
+            manual = True;
+            return info;
+        }
 
+        clearPartitionsUnlocked();
         return resolveCreatedPartitionUnlocked(ps);
     }
 
@@ -7235,23 +7281,26 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     string getDropPartitionSql(string partition_name, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDropPartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionSupportUnlocked();
-        on_success if (opt.sql_callback_executed) {
+        on_error if (partitionSqlExecutedByCallback(opt)) {
             clearPartitionsUnlocked();
         }
-        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name), AbstractDatabase::AC_Drop,
-            "partition", partition_name, name);
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Drop, "partition", partition_name, name);
     }
 
     #! returns SQL to drop a partition matching the given specification
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the SQL string required to drop the resolved partition
 
@@ -7262,25 +7311,28 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     string getDropPartitionSql(hash<auto> spec, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDropPartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionSupportUnlocked();
         string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
-        on_success if (opt.sql_callback_executed) {
+        on_error if (partitionSqlExecutedByCallback(opt)) {
             clearPartitionsUnlocked();
         }
-        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name), AbstractDatabase::AC_Drop,
-            "partition", partition_name, name);
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDropPartitionSqlImpl(partition_name, opt),
+            AbstractDatabase::AC_Drop, "partition", partition_name, name);
     }
 
     #! drops a partition without transaction management
     /** @since SqlUtil 3.0.0
     */
     dropPartition(string partition_name, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDropPartitionOptions(), \opt);
 
         string sql;
         bool execute;
@@ -7291,26 +7343,33 @@ table.clear();
 
             assertPartitionSupportUnlocked();
             execute = inDb;
-            if (execute) {
-                sql = getDropPartitionSqlImpl(partition_name);
-            } else {
-                clearPartitionsUnlocked();
-                manual = True;
-            }
+            sql = getDropPartitionSqlImpl(partition_name, opt);
         }
 
-        if (execute) {
+        {
+            on_error if (partitionSqlExecutedByCallback(opt)) {
+                clearPartitionCache();
+            }
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Drop, "partition", partition_name,
+                name);
+        }
+        if (execute && !partitionSqlExecutedByCallback(opt)) {
+            on_error clearPartitionCache();
             ds.execRaw(sql);
-            l.lock();
-            on_exit l.unlock();
-            clearPartitionsUnlocked();
+        }
+
+        l.lock();
+        on_exit l.unlock();
+        clearPartitionsUnlocked();
+        if (!execute) {
+            manual = True;
         }
     }
 
     #! drops a partition matching the given specification without transaction management
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
@@ -7319,6 +7378,8 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     dropPartition(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDropPartitionOptions(), \opt);
+
         string partition_name;
 
         {
@@ -7344,7 +7405,7 @@ table.clear();
     #! drops a partition matching the given specification and commits the transaction
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
@@ -7362,20 +7423,20 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     string getTruncatePartitionSql(string partition_name, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getTruncatePartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionSupportUnlocked();
-        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name),
+        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
 
     #! returns SQL to truncate a partition matching the given specification
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the SQL string required to truncate the resolved partition
 
@@ -7386,14 +7447,14 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     string getTruncatePartitionSql(hash<auto> spec, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getTruncatePartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionSupportUnlocked();
         string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
-        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name),
+        return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
 
@@ -7401,14 +7462,28 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     truncatePartition(string partition_name, *hash<auto> opt) {
-        string sql = getTruncatePartitionSql(partition_name, opt);
-        ds.execRaw(sql);
+        validateOptionsIntern("OPTION-ERROR", getTruncatePartitionOptions(), \opt);
+
+        string sql;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            sql = getTruncatePartitionSqlImpl(partition_name, opt);
+        }
+
+        sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Truncate, "partition", partition_name,
+            name);
+        if (!partitionSqlExecutedByCallback(opt)) {
+            ds.execRaw(sql);
+        }
     }
 
     #! truncates a partition matching the given specification without transaction management
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
@@ -7417,8 +7492,18 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     truncatePartition(hash<auto> spec, *hash<auto> opt) {
-        string sql = getTruncatePartitionSql(spec, opt);
-        ds.execRaw(sql);
+        validateOptionsIntern("OPTION-ERROR", getTruncatePartitionOptions(), \opt);
+
+        string partition_name;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+
+        truncatePartition(partition_name, opt);
     }
 
     #! truncates a partition and commits the transaction
@@ -7433,7 +7518,7 @@ table.clear();
     #! truncates a partition matching the given specification and commits the transaction
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
         @throw PARTITION-ERROR no matching partition exists or the specification cannot be resolved
@@ -7451,23 +7536,26 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     string getDetachPartitionSql(string partition_name, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionDetachSupportUnlocked();
-        on_success if (opt.sql_callback_executed) {
+        on_error if (partitionSqlExecutedByCallback(opt)) {
             clearPartitionsUnlocked();
         }
-        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Modify, "partition", partition_name, name);
     }
 
     #! returns SQL to detach a partition matching the given specification
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the SQL string required to detach the resolved partition
 
@@ -7478,17 +7566,20 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     string getDetachPartitionSql(hash<auto> spec, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
 
         l.lock();
         on_exit l.unlock();
 
         assertPartitionDetachSupportUnlocked();
         string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
-        on_success if (opt.sql_callback_executed) {
+        on_error if (partitionSqlExecutedByCallback(opt)) {
             clearPartitionsUnlocked();
         }
-        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name),
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        return AbstractDatabase::doCallback(opt, getDetachPartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Modify, "partition", partition_name, name);
     }
 
@@ -7497,7 +7588,7 @@ table.clear();
         data, without dropping the data (PostgreSQL @c ALTER @c TABLE @c ... @c DETACH @c PARTITION semantics).
 
         @param partition_name the name of the partition to detach
-        @param opt an optional hash of @ref alignment-options "alignment options"
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the detached relation as a standalone @ref AbstractTable object constructed against the same
         datasource; it is @b not added to any parent's @ref Tables cache, so the caller owns its lifecycle
@@ -7507,7 +7598,7 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     AbstractTable detachPartition(string partition_name, *hash<auto> opt) {
-        validateOptionsIntern("OPTION-ERROR", getAlignTableOptions(), \opt);
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
 
         string sql;
         bool execute;
@@ -7521,19 +7612,26 @@ table.clear();
             # resolve the detached relation's name while the partition still belongs to this table
             detached_name = getDetachedTableNameImpl(partition_name);
             execute = inDb;
-            if (execute) {
-                sql = getDetachPartitionSqlImpl(partition_name);
-            } else {
-                clearPartitionsUnlocked();
-                manual = True;
-            }
+            sql = getDetachPartitionSqlImpl(partition_name, opt);
         }
 
-        if (execute) {
+        {
+            on_error if (partitionSqlExecutedByCallback(opt)) {
+                clearPartitionCache();
+            }
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+                name);
+        }
+        if (execute && !partitionSqlExecutedByCallback(opt)) {
+            on_error clearPartitionCache();
             ds.execRaw(sql);
-            l.lock();
-            on_exit l.unlock();
-            clearPartitionsUnlocked();
+        }
+
+        l.lock();
+        on_exit l.unlock();
+        clearPartitionsUnlocked();
+        if (!execute) {
+            manual = True;
         }
 
         # return the detached relation as a standalone table; not added to this table's cache
@@ -7543,7 +7641,7 @@ table.clear();
     #! detaches a partition matching the given specification without transaction management
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
 
@@ -7554,6 +7652,8 @@ table.clear();
         @since SqlUtil 3.0.0
     */
     AbstractTable detachPartition(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getDetachPartitionOptions(), \opt);
+
         string partition_name;
 
         {
@@ -7583,7 +7683,7 @@ table.clear();
     #! detaches a partition matching the given specification and commits the transaction
     /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
             partition name
-        @param opt optional alignment and callback options
+        @param opt optional @ref PartitionLifecycleOptions "partition lifecycle options"
 
         @return the detached relation as a standalone @ref AbstractTable object; see detachPartition()
 
@@ -7603,6 +7703,8 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     hash<PartitionEnsureResult> ensurePartition(hash<auto> spec, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getAddPartitionOptions(), \opt);
+
         hash<PartitionSpec> ps;
 
         {
@@ -8473,6 +8575,32 @@ string sql = table.getCreateTableSql();
 
     private bool partitionSpecsHaveComparableBounds(hash<PartitionSpec> ps) {
         return !ps.is_default && exists ps.bound_from && exists ps.bound_to;
+    }
+
+    private bool partitionSqlExecutedByCallback(*hash<auto> opt) {
+        return opt && opt.sql_callback && opt.sql_callback_executed;
+    }
+
+    private clearPartitionCache() {
+        l.lock();
+        on_exit l.unlock();
+        clearPartitionsUnlocked();
+    }
+
+    private hash<auto> getAddPartitionOptions() {
+        return PartitionCreationOptions + getAddPartitionOptionsImpl();
+    }
+
+    private hash<auto> getDropPartitionOptions() {
+        return PartitionLifecycleOptions + getDropPartitionOptionsImpl();
+    }
+
+    private hash<auto> getTruncatePartitionOptions() {
+        return PartitionLifecycleOptions + getTruncatePartitionOptionsImpl();
+    }
+
+    private hash<auto> getDetachPartitionOptions() {
+        return PartitionLifecycleOptions + getDetachPartitionOptionsImpl();
     }
 
     private validatePartitionStrategyAlignmentUnlocked(AbstractTable t) {
@@ -9858,7 +9986,7 @@ on_exit printf("SQL> %s\n", sql);
 
         list<auto> l = ();
         foreach hash<PartitionInfo> pi in (partitions.iterator()) {
-            l += AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(pi), AbstractDatabase::AC_Add,
+            l += AbstractDatabase::doCallback(opt, getAddPartitionSqlImpl(pi, opt), AbstractDatabase::AC_Add,
                 "partition", pi.name, name);
         }
         return l;
@@ -10207,25 +10335,25 @@ on_exit printf("SQL> %s\n", sql);
     }
 
     #! returns SQL to add a partition
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support adding partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to drop a partition
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support dropping partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to truncate a partition
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support truncating partitions", getDesc(),
             ds.getDriverName());
     }
 
     #! returns SQL to detach a partition
-    private string getDetachPartitionSqlImpl(string partition_name) {
+    private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support detaching partitions", getDesc(),
             ds.getDriverName());
     }
@@ -10270,6 +10398,34 @@ on_exit printf("SQL> %s\n", sql);
         @since SqlUtil 3.0.0
     */
     private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
+    }
+
+    #! returns driver-specific add-partition option declarations
+    /** @since SqlUtil 3.0.0
+    */
+    private hash<auto> getAddPartitionOptionsImpl() {
+        return {};
+    }
+
+    #! returns driver-specific drop-partition option declarations
+    /** @since SqlUtil 3.0.0
+    */
+    private hash<auto> getDropPartitionOptionsImpl() {
+        return {};
+    }
+
+    #! returns driver-specific truncate-partition option declarations
+    /** @since SqlUtil 3.0.0
+    */
+    private hash<auto> getTruncatePartitionOptionsImpl() {
+        return {};
+    }
+
+    #! returns driver-specific detach-partition option declarations
+    /** @since SqlUtil 3.0.0
+    */
+    private hash<auto> getDetachPartitionOptionsImpl() {
+        return {};
     }
 
     #! normalizes the automatic-partition policy for semantic alignment comparison
