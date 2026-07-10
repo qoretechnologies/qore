@@ -1442,6 +1442,10 @@ class PgsqlTest inherits SqlTestBase {
         PgsqlTable t(ds, parent);
         assertTrue(t.supportsPartitions(), "pgsql supports partitions");
         assertTrue(t.supportsPartitionDetach(), "pgsql supports partition detach");
+        assertFalse(t.supportsPartitionExchange(), "pgsql does not expose non-equivalent partition exchange");
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support exchanging partitions", sub () {
+            t.getExchangePartitionSql(parent + "_p1", t);
+        });
 
         *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
         assertTrue(exists strategy, "partition strategy introspected");

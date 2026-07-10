@@ -1719,6 +1719,9 @@ foreach string module_name in (registry.getProcessModules()) {
         include SQL generators, transaction-managing variants, callback support, deterministic concurrent-create
         handling, and driver-aware key validation
       - added Oracle local/global partitioned index and constraint placement with tablespace and statistics options
+      - added reusable table storage-shape validation and no-data-movement partition exchange APIs for Oracle
+        \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION, with exact datasource identity and an
+        equivalent empty-target contract
       - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
         structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data

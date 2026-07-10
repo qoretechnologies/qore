@@ -1287,6 +1287,14 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
         const MssqlAlignTableOptions = AbstractTable::AlignTableOptions + MssqlTableCreationOptions;
 
+        #! SQL Server partition switch options
+        /** SQL Server always validates partition switch constraints, so c validate may be omitted or set to
+            @ref True "True"; @ref False "False" is rejected.
+
+            @since MssqlSqlUtilBase 3.0.0
+        */
+        const MssqlPartitionExchangeOptions = AbstractTable::PartitionExchangeOptions;
+
         #! select options supported by MssqlSqlUtilBase
         const MssqlSelectOptions = AbstractTable::SelectOptions + (
             "tablehint": "softstringlist",
@@ -2586,6 +2594,10 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return !is_sybase && getMssqlServerMajorYear() >= 2016;
     }
 
+    private bool supportsPartitionExchangeImpl() {
+        return supportsPartitionsImpl();
+    }
+
     #! initial SQL Server partition boundaries are emitted with the table-create DDL batch
     private bool createPartitionsInCreateTableImpl() {
         return True;
@@ -2744,6 +2756,17 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s with (partitions (%d))", getSqlName(), info.driver.mssql.partition_number);
+    }
+
+    private string getExchangePartitionSqlImpl(string partition_name, AbstractTable exchange_table,
+            *hash<auto> opt) {
+        if (exists opt.validate && !opt.validate) {
+            throw "OPTION-ERROR", sprintf("%s: SQL Server cannot disable validation for partition switch",
+                getDesc());
+        }
+        hash<PartitionInfo> info = resolveMssqlPartitionInfoUnlocked(partition_name);
+        return sprintf("alter table %s switch partition %d to %s", getSqlName(),
+            info.driver.mssql.partition_number, exchange_table.getSqlName());
     }
 
     #! MSSQL accepts non-unique orderby + offset/limit at the SQL level;

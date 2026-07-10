@@ -151,6 +151,7 @@ class FreetdsTest inherits SqlTestBase {
 
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition switch", \partitionExchangeTest());
             addTestCase("create as select", \createAsSelectTest());
             addTestCase("drop table options", \dropTableOptionsTest());
         }
@@ -493,6 +494,111 @@ class FreetdsTest inherits SqlTestBase {
                     },
                 });
             });
+    }
+
+    private cleanupPartitionExchangeTest(AbstractDatasource ds) {
+        string schema = ds.selectRow("select schema_name() as \"schema\"").schema;
+        foreach string table_name in (("mssql_partition_exchange_target", "mssql_partition_exchange")) {
+            ds.execRaw(sprintf("if object_id('%s.%s', 'U') is not null drop table %s.%s",
+                schema, table_name, schema, table_name));
+        }
+        string suffix = regex_subst(schema + "_mssql_partition_exchange", "[^A-Za-z0-9_]", "_", RE_Global);
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_schemes where name = 'qore_ps_%s') "
+            "drop partition scheme qore_ps_%s", suffix, suffix));
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_functions where name = 'qore_pf_%s') "
+            "drop partition function qore_pf_%s", suffix, suffix));
+        ds.commit();
+    }
+
+    private partitionExchangeTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        AbstractTable probe = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        if (!probe.supportsPartitions()) {
+            testSkip("SQL Server partition switch support requires SQL Server 2016 or newer");
+        }
+
+        cleanupPartitionExchangeTest(ds);
+        on_exit cleanupPartitionExchangeTest(ds);
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"native_type": "datetime2", "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20},
+        };
+        AbstractTable source = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        source.setupTable({
+            "columns": columns,
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p2": {"bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        source.createCommit();
+
+        AbstractTable target = AbstractTable::getTable(ds, "mssql_partition_exchange_target");
+        target.setupTable({"columns": columns});
+        target.createCommit();
+
+        AbstractTable actual_source = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        AbstractTable actual_target = AbstractTable::getTable(ds, "mssql_partition_exchange_target");
+        assertTrue(actual_source.supportsPartitionExchange(), "SQL Server supports partition switch");
+        actual_source.validateTableShape(actual_target);
+
+        ds.execRaw("insert into mssql_partition_exchange values (2, cast('2026-02-15' as datetime2), 'source')");
+        ds.commit();
+
+        string sql = actual_source.getExchangePartitionSql({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target);
+        assertTrue(sql =~ /alter table .*mssql_partition_exchange switch partition 3 to .*mssql_partition_exchange_target$/i,
+            "SQL Server switch SQL uses the resolved physical partition number");
+        assertThrows("OPTION-ERROR", "cannot disable validation", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"validate": False});
+        });
+
+        int executing_callback_count;
+        actual_source.exchangePartitionCommit("p2", actual_target, {
+            "sql_callback": sub (string callback_sql) {
+                ++executing_callback_count;
+                ds.execRaw(callback_sql);
+            },
+            "sql_callback_executed": True,
+        });
+        assertEq(1, executing_callback_count,
+            "executing SQL Server switch callback is invoked exactly once without duplicate execution");
+        assertEq(0, ds.selectRow("select count(*) c from mssql_partition_exchange where "
+            "d >= cast('2026-02-01' as datetime2) and d < cast('2026-03-01' as datetime2)").c,
+            "SQL Server switch leaves the source partition empty");
+        assertEq("source", actual_target.selectRow().v,
+            "SQL Server switch moves the partition rows to the standalone table");
+
+        assertThrows("PARTITION-ERROR", "must be empty", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target);
+        });
+
+        AbstractTable bad_target = AbstractTable::getTable(ds, "mssql_partition_exchange_bad");
+        bad_target.setupTable({"columns": columns + {"v": {"qore_type": Type::String, "size": 21}}});
+        assertThrows("PARTITION-ERROR", "not storage-compatible", sub () {
+            actual_source.getExchangePartitionSql("p2", bad_target);
+        });
+        assertThrows("PARTITION-ERROR", "cannot be exchanged with its parent", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_source);
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"unsupported": True});
+        });
+
+        Datasource other_ds = getDatasource();
+        AbstractTable other_target = AbstractTable::getTable(other_ds, "mssql_partition_exchange_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            actual_source.getExchangePartitionSql("p2", other_target);
+        });
     }
 
     private string getResultSetSql() {

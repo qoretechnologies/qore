@@ -264,6 +264,7 @@ class OracleTest inherits SqlTestBase {
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
             addTestCase("chained synonyms #2408", \testChainedSynonyms());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition exchange", \partitionExchangeTest());
             addTestCase("partition-local indexes and constraints", \partitionLocalIndexTest());
         }
 
@@ -748,6 +749,106 @@ class OracleTest inherits SqlTestBase {
             sub() {
                 rt.detachPartition("p2");
             });
+    }
+
+    private cleanupPartitionExchangeTest(AbstractDatasource ds) {
+        foreach string table_name in (("oracle_partition_exchange_target", "oracle_partition_exchange")) {
+            ds.execRaw("begin execute immediate 'drop table " + table_name
+                + " purge'; exception when others then if sqlcode != -942 then raise; end if; end;");
+        }
+        ds.commit();
+    }
+
+    private partitionExchangeTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        cleanupPartitionExchangeTest(ds);
+        on_exit cleanupPartitionExchangeTest(ds);
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"native_type": "date", "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20},
+        };
+        OracleTable source(ds, "oracle_partition_exchange");
+        source.setupTable({
+            "columns": columns,
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"bound_sql": "values less than (TO_DATE('2026-02-01', 'YYYY-MM-DD'))"},
+                "p2": {"bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        source.createCommit();
+
+        OracleTable target(ds, "oracle_partition_exchange_target");
+        target.setupTable({"columns": columns});
+        target.createCommit();
+
+        OracleTable actual_source(ds, "oracle_partition_exchange");
+        OracleTable actual_target(ds, "oracle_partition_exchange_target");
+        assertTrue(actual_source.supportsPartitionExchange(), "Oracle supports partition exchange");
+        actual_source.validateTableShape(actual_target);
+
+        ds.execRaw("insert into oracle_partition_exchange values (2, date '2026-02-15', 'source')");
+        ds.commit();
+
+        int callback_count;
+        string callback_sql;
+        code sql_callback = sub (string sql) {
+            ++callback_count;
+            callback_sql = sql;
+        };
+        string sql = actual_source.getExchangePartitionSql({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target, {"sql_callback": sql_callback});
+        assertEq(1, callback_count, "exchange SQL generator invokes its callback exactly once");
+        assertEq(sql, callback_sql, "exchange SQL callback receives the returned SQL");
+        assertTrue(sql =~ /exchange partition p2 with table .*oracle_partition_exchange_target/i,
+            "Oracle exchange SQL identifies both objects: " + sql);
+        assertTrue(sql =~ /excluding indexes with validation$/i,
+            "Oracle exchange retains safe validation and explicit index defaults");
+        assertTrue(actual_source.getExchangePartitionSql("p2", actual_target, {
+            "including_indexes": True,
+            "update_indexes": True,
+            "validate": False,
+        }) =~ /including indexes without validation update indexes$/i,
+            "Oracle exchange exposes explicit validation and index maintenance options");
+
+        actual_source.exchangePartitionCommit({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target);
+        assertEq(0, ds.selectRow("select count(*) c from oracle_partition_exchange partition (p2)").c,
+            "Oracle exchange leaves the source partition empty");
+        assertEq("source", actual_target.selectRow().v,
+            "Oracle exchange moves the partition rows to the standalone table");
+
+        assertThrows("PARTITION-ERROR", "must be empty", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target);
+        });
+
+        OracleTable bad_target(ds, "oracle_partition_exchange_bad");
+        bad_target.setupTable({"columns": columns + {"v": {"qore_type": Type::String, "size": 21}}});
+        assertThrows("PARTITION-ERROR", "not storage-compatible", sub () {
+            actual_source.getExchangePartitionSql("p2", bad_target);
+        });
+        assertThrows("PARTITION-ERROR", "cannot be exchanged with its parent", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_source);
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"unsupported": True});
+        });
+
+        Datasource other_ds = getDatasource();
+        OracleTable other_target(other_ds, "oracle_partition_exchange_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            actual_source.getExchangePartitionSql("p2", other_target);
+        });
     }
 
     private partitionLocalIndexTest() {

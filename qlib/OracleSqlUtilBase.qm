@@ -2247,6 +2247,19 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         const OracleAlignTableOptions = AbstractTable::AlignTableOptions + OracleTableCreationOptions;
 
+        #! Oracle partition exchange options
+        /** This constant extends @ref SqlUtil::AbstractTable::PartitionExchangeOptions with:
+            - \c including_indexes: use Oracle's \c INCLUDING \c INDEXES mode; omitted or @ref False "False" uses
+              \c EXCLUDING \c INDEXES
+            - \c update_indexes: append \c UPDATE \c INDEXES so usable global indexes are maintained
+
+            @since OracleSqlUtilBase 3.0.0
+        */
+        const OraclePartitionExchangeOptions = AbstractTable::PartitionExchangeOptions + {
+            "including_indexes": Type::Boolean,
+            "update_indexes": Type::Boolean,
+        };
+
         #! Oracle select options
         /** This constant extends @ref SqlUtil::AbstractTable::SelectOptions with the following options as returned by
             @ref OracleSqlUtilBase::OracleTable::getSelectOptions() :
@@ -4262,6 +4275,10 @@ group by p.index_name", schema.upr(), name.upr());
         return getOracleServerMajorVersion() >= 12;
     }
 
+    private bool supportsPartitionExchangeImpl() {
+        return getOracleServerMajorVersion() >= 12;
+    }
+
     private bool supportsAutoPartitioningImpl() {
         # Oracle interval (auto-create) range partitioning, enabled from 12c onwards
         return getOracleServerMajorVersion() >= 12;
@@ -4515,6 +4532,26 @@ group by p.index_name", schema.upr(), name.upr());
     private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
+    }
+
+    private string getExchangePartitionSqlImpl(string partition_name, AbstractTable exchange_table,
+            *hash<auto> opt) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        string sql = sprintf("alter table %s exchange partition %s with table %s", getSqlName(),
+            getColumnSqlName(info.name), exchange_table.getSqlName());
+        sql += opt.including_indexes ? " including indexes" : " excluding indexes";
+        sql += exists opt.validate && !opt.validate ? " without validation" : " with validation";
+        if (opt.update_indexes) {
+            sql += " update indexes";
+        }
+        return sql;
+    }
+
+    private hash<auto> getExchangePartitionOptionsImpl() {
+        return {
+            "including_indexes": Type::Boolean,
+            "update_indexes": Type::Boolean,
+        };
     }
 
     private bool partitionAutoStrategyCoversSpecImpl(hash<PartitionSpec> spec) {

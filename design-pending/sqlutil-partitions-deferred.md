@@ -18,6 +18,8 @@ Range partitioning is implemented for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
   tablespace, and `compute_statistics` round-trip;
 - exact datasource identity for CTAS/insert-select and structured aggregate coverage for archive
   conversion queries.
+- reusable storage-shape validation and equivalent empty-target partition transfer through Oracle
+  exchange and SQL Server switch.
 
 SQLite and Firebird correctly advertise no native partition support.
 
@@ -35,34 +37,21 @@ The main unresolved model choice is separate public hashdecls per method versus 
 `PartitionSpec` family. The choice must preserve strict cardinality/type validation and description
 round-trip.
 
-## 2. Exchange and switch
-
-Add one capability-gated generic operation only where the no-data-movement semantics can be made
-equivalent:
-
-- Oracle `ALTER TABLE ... EXCHANGE PARTITION ... WITH TABLE ...`;
-- SQL Server `ALTER TABLE ... SWITCH PARTITION ... TO ...`;
-- optional validation controls that retain safe backend defaults.
-
-The API must enforce exact datasource identity and validate source/target table shape before DDL.
-This operation must not be presented as `detachPartition()` because it requires a pre-existing target
-table and has different ownership semantics.
-
-## 3. Online PostgreSQL detach
+## 2. Online PostgreSQL detach
 
 `DETACH PARTITION ... CONCURRENTLY` reduces parent locking but cannot run inside a transaction block.
 It therefore needs an explicit non-transactional capability/entry point or an option rejected by the
 commit companion. The implementation must define recovery for PostgreSQL's pending-detach state and
 must not hide it behind retries or polling.
 
-## 4. Generic read-side partition qualification
+## 3. Generic read-side partition qualification
 
 Oracle currently exposes a driver-specific select option for reading a named partition. A generic
 read qualifier should be introduced only with explicit per-driver capability checks; it must not
 pretend that PostgreSQL child-table reads, Oracle partition clauses, and SQL Server partition
 functions are identical when they are not.
 
-## 5. High-cardinality targeted lookup
+## 4. High-cardinality targeted lookup
 
 Current metadata loading is O(n) in partition count and caches all `PartitionInfo` values. This is
 appropriate for hundreds or low thousands of partitions. Tables with tens of thousands need a
@@ -70,7 +59,7 @@ driver hook that can target canonical name or comparable bounds without first ma
 catalog. Generic behavior must remain deterministic and fall back to the current scan when a driver
 cannot perform a targeted lookup.
 
-## 6. Optional data-dependent metadata
+## 5. Optional data-dependent metadata
 
 Optional partition row-count and physical-size metadata may be useful for archive observability, but
 collecting it can be expensive or approximate. It must be opt-in, label exact versus estimated values,
@@ -79,12 +68,11 @@ cheap by default.
 
 ## Implementation order
 
-1. Exchange/switch for Oracle and SQL Server, including live validation.
-2. PostgreSQL concurrent detach with explicit non-transactional semantics.
-3. Generic read-side qualification with honest capabilities.
-4. Targeted lookup hooks for high partition counts.
-5. List/hash/subpartition type families and driver implementations.
-6. Optional row-count/size metadata.
+1. PostgreSQL concurrent detach with explicit non-transactional semantics.
+2. Generic read-side qualification with honest capabilities.
+3. Targeted lookup hooks for high partition counts.
+4. List/hash/subpartition type families and driver implementations.
+5. Optional row-count/size metadata.
 
 Each item requires SQL generation tests, negative/capability tests, live backend tests where
 available, documentation/release notes, and a passing full SqlUtil regression run before the next

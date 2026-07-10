@@ -37,6 +37,7 @@ upper bounds. The following invariants are deliberate:
 | Range partition lifecycle | yes | yes | yes | yes | no |
 | Native auto materialization | no | yes (interval) | no | no | no |
 | Detach to standalone table | yes | no | no | no | no |
+| Exchange to empty standalone table | no | yes | no | yes | no |
 | Default/catch-all range | yes | `MAXVALUE` | `MAXVALUE` | implicit edge ranges | no |
 | Composite range key | yes | yes | yes | no | no |
 
@@ -209,6 +210,15 @@ AbstractTable detachPartitionCommit(hash<auto> spec, *hash<auto> opt);
 
 hash<PartitionEnsureResult> ensurePartition(hash<auto> spec, *hash<auto> opt);
 hash<PartitionEnsureResult> ensurePartitionCommit(hash<auto> spec, *hash<auto> opt);
+
+bool supportsPartitionExchange();
+validateTableShape(AbstractTable table);
+string getExchangePartitionSql(string name, AbstractTable target, *hash<auto> opt);
+string getExchangePartitionSql(hash<auto> spec, AbstractTable target, *hash<auto> opt);
+exchangePartition(string name, AbstractTable target, *hash<auto> opt);
+exchangePartition(hash<auto> spec, AbstractTable target, *hash<auto> opt);
+exchangePartitionCommit(string name, AbstractTable target, *hash<auto> opt);
+exchangePartitionCommit(hash<auto> spec, AbstractTable target, *hash<auto> opt);
 ```
 
 The bare executors do not manage transactions; `*Commit()` companions commit on success and roll
@@ -221,6 +231,13 @@ then automatic policy. Concurrent duplicate-create errors are recovered determin
 savepoint on transactional-DDL drivers and a single metadata re-resolution; there is no retry loop or
 polling.
 
+Partition exchange has one portable outward-transfer contract: the target must be an empty,
+nonpartitioned table with the same ordered storage-column shape and exact datasource object. Oracle
+exchanges the partition segment with the empty table; SQL Server switches the resolved physical
+partition to it. Both leave the source partition empty and the target holding its former rows.
+Oracle supports explicit validation and index-maintenance options; SQL Server cannot disable its
+engine validation.
+
 ## Driver mapping
 
 | Operation | PostgreSQL | Oracle | MySQL/MariaDB | SQL Server |
@@ -229,6 +246,7 @@ polling.
 | drop | verify child, then `DROP TABLE child` | `DROP PARTITION` | `DROP PARTITION` | truncate physical partition + `MERGE RANGE` |
 | truncate | `TRUNCATE child` | `TRUNCATE PARTITION` | `TRUNCATE PARTITION` | `TRUNCATE TABLE ... WITH (PARTITIONS)` |
 | detach | `DETACH PARTITION` | unsupported | unsupported | unsupported |
+| exchange to empty table | unsupported | `EXCHANGE PARTITION ... WITH TABLE` | unsupported | `SWITCH PARTITION ... TO` |
 
 For Oracle and MySQL, lower bounds that are not present in DDL are still required where necessary for
 contiguity and overlap validation. SQL Server duplicate split recovery intentionally avoids a
@@ -256,5 +274,5 @@ databases before commit. Current integration coverage includes bounds/default/SQ
 composite keys, concurrency races, callbacks, cache invalidation, transaction companions, schema
 round-trip, reverse alignment, local/global indexes, and unsupported-driver errors.
 
-List/hash/subpartition methods, exchange/switch, online PostgreSQL detach, generic read qualification,
-high-cardinality lookup, and optional data-dependent metadata remain in the deferred roadmap.
+List/hash/subpartition methods, online PostgreSQL detach, generic read qualification, high-cardinality lookup,
+and optional data-dependent metadata remain in the deferred roadmap.

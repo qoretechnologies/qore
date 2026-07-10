@@ -229,6 +229,16 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         */
         const PartitionLifecycleOptions = PartitionCallbackOptions;
 
+        #! partition exchange options; drivers can extend this contract
+        /** The \c validate option defaults to @ref True "True".  Drivers that cannot disable validation reject
+            @ref False "False" rather than silently weakening or ignoring the request.
+
+            @since SqlUtil 3.0.0
+        */
+        const PartitionExchangeOptions = PartitionCallbackOptions + {
+            "validate": Type::Boolean,
+        };
+
         #! Column description options
         /** this option is made up of the following keys:
             - \c qore_type: (@ref string_type) a qore type string that will be converted to a native DB type with some default conversion
@@ -7287,11 +7297,39 @@ table.clear();
         return supportsPartitions() && supportsPartitionDetachImpl();
     }
 
+    #! returns @ref True "True" if this table supports exchanging a partition with a standalone table
+    /** @since SqlUtil 3.0.0
+    */
+    bool supportsPartitionExchange() {
+        return supportsPartitions() && supportsPartitionExchangeImpl();
+    }
+
     #! returns @ref True "True" if this table supports automatic partition materialization
     /** @since SqlUtil 3.0.0
     */
     bool supportsAutoPartitioning() {
         return supportsPartitions() && supportsAutoPartitioningImpl();
+    }
+
+    #! validates that another table has the same storage column shape
+    /** The reusable storage shape consists of column names and order, native SQL types (including size, precision,
+        scale, and driver-specific length semantics), and nullability.  Defaults and comments are excluded because
+        they do not affect the physical compatibility of existing rows.  Individual database engines may enforce
+        additional index, constraint, tablespace, or filegroup restrictions for specialized DDL operations.
+
+        @param table the table to compare with this table
+
+        @throw TABLE-SHAPE-ERROR the tables do not have identical storage column shapes
+
+        @since SqlUtil 3.0.0
+    */
+    validateTableShape(AbstractTable table) {
+        list<hash<auto>> source_shape = getTableStorageShape();
+        list<hash<auto>> target_shape = table.getTableStorageShape();
+        if (source_shape != target_shape) {
+            throw "TABLE-SHAPE-ERROR", sprintf("%s and %s do not have identical storage column shapes; source: "
+                "%y; target: %y", getDesc(), table.getDesc(), source_shape, target_shape);
+        }
     }
 
     #! returns this table's partitioning strategy or @ref nothing if the table is not partitioned
@@ -7841,6 +7879,143 @@ table.clear();
         return detachPartition(spec, opt);
     }
 
+    #! returns SQL to exchange a partition with a standalone table
+    /** The exchange target must use the exact same datasource object, must be nonpartitioned, and must pass
+        validateTableShape().  Database-specific index, constraint, and storage placement requirements are checked
+        by the driver or database engine.
+
+        @param partition_name the canonical partition name
+        @param exchange_table the standalone table whose data segment is exchanged with the partition
+        @param opt optional @ref PartitionExchangeOptions "partition exchange options"
+
+        @throw DATASOURCE-ERROR the exchange table uses a different datasource object
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support partition exchange
+        @throw PARTITION-ERROR the target is partitioned, incompatible, or the partition does not exist
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 3.0.0
+    */
+    string getExchangePartitionSql(string partition_name, AbstractTable exchange_table, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getExchangePartitionOptions(), \opt);
+        validatePartitionExchangeTarget(exchange_table);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionExchangeSupportUnlocked();
+        string sql = getExchangePartitionSqlImpl(partition_name, exchange_table, opt);
+        return AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+            name, exchange_table.getName(), "exchange");
+    }
+
+    #! returns SQL to exchange a partition matching a specification with a standalone table
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param exchange_table the standalone table whose data segment is exchanged with the partition
+        @param opt optional @ref PartitionExchangeOptions "partition exchange options"
+
+        @throw DATASOURCE-ERROR the exchange table uses a different datasource object
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support partition exchange
+        @throw PARTITION-ERROR the target is partitioned, incompatible, or no matching partition exists
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 3.0.0
+    */
+    string getExchangePartitionSql(hash<auto> spec, AbstractTable exchange_table, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getExchangePartitionOptions(), \opt);
+        validatePartitionExchangeTarget(exchange_table);
+
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionExchangeSupportUnlocked();
+        string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        string sql = getExchangePartitionSqlImpl(partition_name, exchange_table, opt);
+        return AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+            name, exchange_table.getName(), "exchange");
+    }
+
+    #! exchanges a partition with an empty standalone table without transaction management
+    /** This operation moves the partition's rows into the empty standalone table without row-by-row data movement,
+        leaving the partition empty.  Requiring an empty target gives Oracle exchange and SQL Server switch the same
+        observable contract.
+
+        @param partition_name the canonical partition name
+        @param exchange_table the standalone table whose data segment is exchanged with the partition
+        @param opt optional @ref PartitionExchangeOptions "partition exchange options"
+
+        @throw DATASOURCE-ERROR the exchange table uses a different datasource object
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support partition exchange
+        @throw PARTITION-ERROR the target is partitioned, incompatible, or the partition does not exist
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 3.0.0
+    */
+    exchangePartition(string partition_name, AbstractTable exchange_table, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getExchangePartitionOptions(), \opt);
+        validatePartitionExchangeTarget(exchange_table);
+
+        string sql;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionExchangeSupportUnlocked();
+            sql = getExchangePartitionSqlImpl(partition_name, exchange_table, opt);
+        }
+
+        sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Modify, "partition", partition_name,
+            name, exchange_table.getName(), "exchange");
+        if (!partitionSqlExecutedByCallback(opt)) {
+            ds.execRaw(sql);
+        }
+    }
+
+    #! exchanges a partition matching a specification with a standalone table without transaction management
+    /** @param spec a @ref SqlUtil::PartitionSpec "partition specification hash" used to resolve the current
+            partition name
+        @param exchange_table the standalone table whose data segment is exchanged with the partition
+        @param opt optional @ref PartitionExchangeOptions "partition exchange options"
+
+        @throw DATASOURCE-ERROR the exchange table uses a different datasource object
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support partition exchange
+        @throw PARTITION-ERROR the target is partitioned, incompatible, or no matching partition exists
+        @throw OPTION-ERROR invalid or unsupported option
+
+        @since SqlUtil 3.0.0
+    */
+    exchangePartition(hash<auto> spec, AbstractTable exchange_table, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getExchangePartitionOptions(), \opt);
+
+        string partition_name;
+        {
+            l.lock();
+            on_exit l.unlock();
+
+            assertPartitionExchangeSupportUnlocked();
+            partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        }
+        exchangePartition(partition_name, exchange_table, opt);
+    }
+
+    #! exchanges a partition with a standalone table and commits the transaction
+    /** @since SqlUtil 3.0.0
+    */
+    exchangePartitionCommit(string partition_name, AbstractTable exchange_table, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        exchangePartition(partition_name, exchange_table, opt);
+    }
+
+    #! exchanges a partition matching a specification with a standalone table and commits the transaction
+    /** @since SqlUtil 3.0.0
+    */
+    exchangePartitionCommit(hash<auto> spec, AbstractTable exchange_table, *hash<auto> opt) {
+        on_exit ds.commit();
+        on_error ds.rollback();
+        exchangePartition(spec, exchange_table, opt);
+    }
+
     #! ensures that a partition matching the given specification exists
     /** @since SqlUtil 3.0.0
     */
@@ -8339,6 +8514,14 @@ string sql = table.getCreateTableSql();
         }
     }
 
+    private assertPartitionExchangeSupportUnlocked() {
+        assertPartitionSupportUnlocked();
+        if (!supportsPartitionExchangeImpl()) {
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support exchanging partitions",
+                getDesc(), ds.getDriverName());
+        }
+    }
+
     private setupPartitionStrategyUnlocked(hash<auto> strategy) {
         if (!supportsPartitionsImpl()) {
             throw "DESCRIPTION-ERROR", sprintf("%s: database driver %y does not support table partitioning",
@@ -8818,6 +9001,57 @@ string sql = table.getCreateTableSql();
 
     private hash<auto> getDetachPartitionOptions() {
         return PartitionLifecycleOptions + getDetachPartitionOptionsImpl();
+    }
+
+    private hash<auto> getExchangePartitionOptions() {
+        return PartitionExchangeOptions + getExchangePartitionOptionsImpl();
+    }
+
+    private list<hash<auto>> getTableStorageShape() {
+        l.lock();
+        on_exit l.unlock();
+
+        getColumnsUnlocked();
+        list<hash<auto>> rv = ();
+        foreach AbstractColumn column in (columns.iterator()) {
+            string native_type = column.getNativeTypeString().lwr();
+            trim native_type;
+            native_type = regex_subst(native_type, "\\s+", " ", RE_Global);
+            rv += {
+                "name": column.name,
+                "native_type": native_type,
+                "nullable": column.nullable,
+            };
+        }
+        return rv;
+    }
+
+    private validatePartitionExchangeTarget(AbstractTable exchange_table) {
+        {
+            l.lock();
+            on_exit l.unlock();
+            assertPartitionExchangeSupportUnlocked();
+        }
+        if (exchange_table.getDatasource() != ds) {
+            throw "DATASOURCE-ERROR", sprintf("%s: partition exchange target %s must use the same "
+                "AbstractDatasource object", getDesc(), exchange_table.getDesc());
+        }
+        if (exchange_table == self) {
+            throw "PARTITION-ERROR", sprintf("%s: a partition cannot be exchanged with its parent table", getDesc());
+        }
+        if (exchange_table.getPartitionStrategy()) {
+            throw "PARTITION-ERROR", sprintf("%s: exchange target %s must be a standalone nonpartitioned table",
+                getDesc(), exchange_table.getDesc());
+        }
+        {
+            on_error rethrow "PARTITION-ERROR", sprintf("%s: exchange target %s is not storage-compatible: %s",
+                getDesc(), exchange_table.getDesc(), $1.desc), $1.arg;
+            validateTableShape(exchange_table);
+        }
+        if (!exchange_table.emptyData()) {
+            throw "PARTITION-ERROR", sprintf("%s: partition exchange target %s must be empty", getDesc(),
+                exchange_table.getDesc());
+        }
     }
 
     private validatePartitionStrategyAlignmentUnlocked(AbstractTable t) {
@@ -10489,6 +10723,11 @@ on_exit printf("SQL> %s\n", sql);
         return False;
     }
 
+    #! returns @ref True "True" if the database supports exchanging a partition with a standalone table
+    private bool supportsPartitionExchangeImpl() {
+        return False;
+    }
+
     #! returns @ref True "True" if the database supports automatic partitioning
     private bool supportsAutoPartitioningImpl() {
         return False;
@@ -10626,6 +10865,13 @@ on_exit printf("SQL> %s\n", sql);
             ds.getDriverName());
     }
 
+    #! returns SQL to exchange a partition with a standalone table
+    private string getExchangePartitionSqlImpl(string partition_name, AbstractTable exchange_table,
+            *hash<auto> opt) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support exchanging partitions",
+            getDesc(), ds.getDriverName());
+    }
+
     #! returns the name of the standalone table that a detached partition becomes
     /** detach-capable drivers override this to derive the standalone relation's name from the partition name;
         used by detachPartition() to construct the returned @ref AbstractTable
@@ -10693,6 +10939,13 @@ on_exit printf("SQL> %s\n", sql);
     /** @since SqlUtil 3.0.0
     */
     private hash<auto> getDetachPartitionOptionsImpl() {
+        return {};
+    }
+
+    #! returns driver-specific exchange-partition option declarations
+    /** @since SqlUtil 3.0.0
+    */
+    private hash<auto> getExchangePartitionOptionsImpl() {
         return {};
     }
 
