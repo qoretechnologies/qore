@@ -283,6 +283,8 @@ public class DataSchemaLoader {
         The column definition may use either of two forms:
         - the \c type shorthand (e.g. \c {type: varchar, size: 240}) — looked up in
           @ref Schema::ColumnTypeMap "ColumnTypeMap"
+        - an already-normalized GenericColumnInfo hash using \c qore_type or \c native_type, as emitted by
+          SchemaReverse and AbstractTable::getDescriptionHash()
         - a pure driver-override form (e.g. \c {driver: {pgsql: {native_type: vector, size: 1024}}})
           for columns that only exist on one driver
 
@@ -300,6 +302,14 @@ public class DataSchemaLoader {
                     table_name, col_name, col_def.type, ColumnTypeMap.keys());
             }
             result += base_type;
+        } else if (exists col_def.qore_type || col_def.native_type) {
+            # SchemaReverse and AbstractTable::getDescriptionHash() already emit GenericColumnInfo.  Preserve the
+            # complete hash verbatim so native types and driver-neutral options such as default_value_native survive
+            # a reverse -> data-schema loader -> setupTable round trip.
+            foreach hash<auto> pair in (col_def.pairIterator()) {
+                result{pair.key} = pair.value;
+            }
+            return result;
         } else if (!col_def.driver) {
             # a column must either have a 'type' or a pure-driver override — otherwise the
             # loader has no idea what kind of column to create

@@ -2666,6 +2666,14 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return rv;
     }
 
+    private *hash<auto> getPartitionDescriptionDriverOptionsImpl(hash<PartitionInfo> info) {
+        if (!info.driver || !info.driver.mssql) {
+            return;
+        }
+        hash<auto> mssql = info.driver.mssql{"partition_function", "partition_scheme"};
+        return mssql ? {"mssql": mssql} : NOTHING;
+    }
+
     private hash<PartitionInfo> resolveMssqlPartitionInfoUnlocked(string partition_name) {
         hash<string, PartitionInfo> ph = getPartitionsUnlocked();
         if (ph.hasKey(partition_name)) {

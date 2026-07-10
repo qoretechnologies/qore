@@ -2681,6 +2681,7 @@ end";
                 });
 
                 if (!info.is_default) {
+                    info.bound_sql = sprintf("values less than (%s)", pdesc);
                     info.bound_to_sql = pdesc;
                     if (exists prev_bound_sql) {
                         info.bound_from_sql = prev_bound_sql;

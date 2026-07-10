@@ -4038,6 +4038,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
             });
 
             if (!info.is_default) {
+                info.bound_sql = sprintf("values less than (%s)", high_value);
                 info.bound_to_sql = high_value;
                 if (exists prev_bound_sql) {
                     info.bound_from_sql = prev_bound_sql;

@@ -1327,6 +1327,14 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(desc_no_parts.hasKey("partitions"), "description omits partitions by default");
         hash<auto> desc_parts = t.getDescriptionHash({"with_partitions": True});
         assertTrue(desc_parts.partitions.hasKey(p1), "description includes partitions when requested");
+        assertFalse(exists desc_parts.partitions{p1}.name,
+            sprintf("partition key is the canonical name: %y", desc_parts.partitions{p1}));
+        assertFalse(desc_parts.partitions{p1}.hasKey("ordinal"), "description excludes catalog ordinal");
+        assertFalse(desc_parts.partitions{p1}.hasKey("sql_name"), "description excludes diagnostic SQL name");
+        assertFalse(desc_parts.partitions{p1}.hasKey("bound_sql"),
+            "typed bounds take precedence over native SQL bounds");
+        assertEq(0, desc_parts.partitions{p1}.bound_from, "description preserves typed lower bound");
+        assertEq(10, desc_parts.partitions{p1}.bound_to, "description preserves typed upper bound");
 
         hash<PartitionLookupResult> lookup = t.findPartitionBySpec({"bound_from": 0, "bound_to": 10});
         assertEq(PartitionLookupStatus::Found, lookup.status, "find partition by typed bounds");
@@ -1373,6 +1381,25 @@ class PgsqlTest inherits SqlTestBase {
         hash<auto> reversed = (new SchemaReverse::TableReverse(ds, parent, {"with_partitions": True})).toQore();
         assertTrue(reversed.hasKey("partition_strategy"), "SchemaReverse includes partition strategy");
         assertTrue(reversed.partitions.hasKey(p1), "SchemaReverse includes partitions with option");
+        assertFalse(reversed.partitions{p1}.hasKey("ordinal"), "SchemaReverse excludes partition runtime metadata");
+        hash<auto> loaded = Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "PartitionRoundTrip", "version": "1.0"},
+            "tables": {(parent): reversed},
+        }, False);
+        PgsqlTable loaded_table(ds, parent + "_loaded");
+        loaded_table.setupTable(loaded.tables{parent});
+        assertTrue(loaded_table.getCreateSqlString() =~ /partition by range \(id\)/i,
+            "SchemaReverse output passes through DataSchemaLoader and setupTable");
+
+        # prove that the emitted table description can recreate the physical table without manual filtering
+        t.dropCommit();
+        PgsqlTable recreated(ds, parent);
+        recreated.setupTable(desc_parts);
+        recreated.createCommit();
+        hash<string, PartitionInfo> recreated_parts = recreated.listPartitions();
+        assertEq(2, recreated_parts.size(), "description recreates all exported partitions");
+        assertEq(0, recreated_parts{p1}.bound_from, "recreated partition has the exported lower bound");
+        assertEq(20, recreated_parts{p2}.bound_to, "recreated partition has the exported upper bound");
     }
 
     partitionEnhancementsTest() {
@@ -1424,6 +1451,16 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(0, parts{parent + "_a"}.bound_from, "zero lower bound parsed (not discarded as false)");
         assertTrue(parts{parent + "_def"}.is_default, "default partition flagged is_default");
         assertFalse(parts{parent + "_a"}.is_default, "range partition not flagged is_default");
+        hash<auto> partition_desc = t.getDescriptionHash({"with_partitions": True});
+        assertTrue(partition_desc.partitions{parent + "_def"}.is_default,
+            "default partition description preserves is_default");
+        assertFalse(exists partition_desc.partitions{parent + "_def"}.bound_from,
+            "default partition description has no typed bounds");
+        assertFalse(exists partition_desc.partitions{parent + "_def"}.bound_sql,
+            "default partition description has no native bounds");
+        assertThrows("OPTION-ERROR", "unknown key \"unknown\"", sub () {
+            t.getDescriptionHash({"unknown": True});
+        });
 
         # --- detachPartition() returns the standalone table and keeps its data ---
         ds.execRaw(sprintf("insert into %s (id, val) values (5, 50)", parent));

@@ -326,6 +326,14 @@ class FreetdsTest inherits SqlTestBase {
 
         hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
         assertEq(2, desc.partitions.size());
+        assertFalse(desc.partitions.p2.hasKey("ordinal"));
+        assertFalse(desc.partitions.p2.hasKey("sql_name"));
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("partition_number"));
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("lower_boundary_id"));
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("upper_boundary_id"));
+        assertEq(strategy.driver.mssql.partition_function,
+            desc.partitions.p2.driver.mssql.partition_function);
+        assertEq(strategy.driver.mssql.partition_scheme, desc.partitions.p2.driver.mssql.partition_scheme);
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
             "bound_from": 2026-02-01,

@@ -587,6 +587,12 @@ class OracleTest inherits SqlTestBase {
 
         hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
         assertEq(2, desc.partitions.size());
+        assertFalse(desc.partitions.p1.hasKey("ordinal"));
+        assertFalse(desc.partitions.p1.hasKey("sql_name"));
+        assertTrue(desc.partitions.p1.hasKey("bound_sql"));
+        assertFalse(desc.partitions.p1.hasKey("bound_to_sql"));
+        assertTrue(desc.partitions.p2.hasKey("bound_from"));
+        assertFalse(desc.partitions.p2.hasKey("bound_sql"));
         assertTrue(rt.getCreateSql()[0] =~ /partition by range/i);
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({

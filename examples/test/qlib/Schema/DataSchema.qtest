@@ -488,6 +488,16 @@ class DataSchemaTest inherits QUnit::Test {
         # Reference data normalized to list-of-lists
         assertEq(3, result.reference_data.strict.roles.size());
         assertEq(2, result.reference_data.normal.app_version.size());
+
+        hash<auto> normalized_column = {
+            "qore_type": Type::String,
+            "native_type": "varchar",
+            "size": 42,
+            "notnull": True,
+            "default_value_native": True,
+        };
+        assertEq(normalized_column,
+            Schema::DataSchemaLoader::normalizeColumn("users", "already_normalized", normalized_column));
     }
 
     validationTests() {

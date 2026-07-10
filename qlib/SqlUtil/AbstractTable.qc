@@ -7764,7 +7764,7 @@ table.clear();
         }
 
         if (opt.with_partitions) {
-            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+            hash<string, PartitionSpec> ph = getPartitionDescriptionHashUnlocked();
             if (ph) {
                 rv.partitions = ph;
             }
@@ -8344,6 +8344,55 @@ string sql = table.getCreateTableSql();
             inDb = True;
         }
         return partitions;
+    }
+
+    #! returns the recreatable table-description representation of all physical partitions
+    /** Runtime catalog metadata is deliberately excluded.  The enclosing hash key is the canonical partition
+        name, so the returned PartitionSpec hashes do not repeat it.
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private hash<string, PartitionSpec> getPartitionDescriptionHashUnlocked() {
+        hash<string, PartitionSpec> rv();
+        foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
+            rv{pi.name} = getPartitionDescriptionUnlocked(pi);
+        }
+        return rv;
+    }
+
+    #! converts introspection-oriented partition information to a recreatable partition specification
+    /** Typed bounds take precedence when both are available, followed by paired native SQL bounds and then a
+        complete native bound expression.  Mutually-exclusive bound representations are never returned.
+
+        @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private hash<PartitionSpec> getPartitionDescriptionUnlocked(hash<PartitionInfo> pi) {
+        hash<PartitionSpec> rv();
+
+        if (pi.is_default) {
+            rv.is_default = True;
+        } else if (exists pi.bound_from && exists pi.bound_to) {
+            rv.bound_from = pi.bound_from;
+            rv.bound_to = pi.bound_to;
+        } else if (exists pi.bound_from_sql && exists pi.bound_to_sql) {
+            rv.bound_from_sql = pi.bound_from_sql;
+            rv.bound_to_sql = pi.bound_to_sql;
+        } else if (exists pi.bound_sql) {
+            rv.bound_sql = pi.bound_sql;
+        } else {
+            throw "PARTITION-ERROR", sprintf("%s: introspected partition %y has no complete recreatable bound "
+                "representation: %y", getDesc(), pi.name, pi);
+        }
+
+        *hash<auto> driver = getPartitionDescriptionDriverOptionsImpl(pi);
+        if (driver) {
+            rv.driver = driver;
+        }
+        return rv;
     }
 
     private ensurePartitionsHashUnlocked() {
@@ -10120,6 +10169,16 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionDdlIsTransactionalImpl() {
         return False;
+    }
+
+    #! returns recreatable driver-specific partition options for a table description
+    /** The default implementation returns no options.  Driver implementations must explicitly select
+        configuration from PartitionInfo::driver and must not return runtime catalog metadata.
+
+        @since SqlUtil 3.0.0
+    */
+    private *hash<auto> getPartitionDescriptionDriverOptionsImpl(hash<PartitionInfo> info) {
+        return;
     }
 
     #! Reimplement in subclasses to provide driver-specific create-as-select SQL
