@@ -2342,6 +2342,9 @@ public:
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }
 
+    //! Transfer the open reader after all deserialization work is complete.
+    QoreAOTBinaryReader takeReader() { return std::move(reader); }
+
     //! Expose the session's type resolver so the slot-map register
     //! phase can reuse its warmed cache (populated during
     //! deserializeFunctionsAndMethods).  Body-local slot resolutions

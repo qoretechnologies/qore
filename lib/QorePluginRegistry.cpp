@@ -100,6 +100,7 @@ struct GlobalPluginOperationRef {
 };
 std::map<uint32_t, GlobalPluginOperationRef> global_plugin_operations;
 uint32_t next_global_plugin_operation_id = 1;
+std::atomic<bool> plugin_operations_published{false};
 
 bool pluginRegisterTrace() {
     static const bool enabled = std::getenv("QORE_PLUGIN_REGISTER_TRACE") != nullptr;
@@ -1682,6 +1683,10 @@ static bool loweringClaimMatches(uint64_t claimed_node_kinds, qore_type_t node_t
     return !claimed_node_kinds || (node_type >= 0 && node_type < 64 && (claimed_node_kinds & (1ULL << node_type)));
 }
 
+bool qore_plugin_has_registered_operations() {
+    return plugin_operations_published.load(std::memory_order_acquire);
+}
+
 int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
         std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink) {
     infos.clear();
@@ -2128,7 +2133,11 @@ int qore_plugin_commit_module_init_registration(const QorePluginModuleHandle& ha
             + " to '" + module.module_name + "::" + op.operation_name + "'");
         ++n;
     }
+    bool has_operations = !module.operations.empty();
     plugin_modules.emplace(module.module_name, std::move(module));
+    if (has_operations) {
+        plugin_operations_published.store(true, std::memory_order_release);
+    }
     return 0;
 }
 

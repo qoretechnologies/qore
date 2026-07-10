@@ -122,8 +122,11 @@
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
 #include <qore/intern/VarRefNode.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
+#include <typeinfo>
+#include <unordered_map>
 
 template <typename T>
 static bool claimNode(const QoreValue& expr) {
@@ -422,6 +425,39 @@ const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[] = {
 #undef QORE_IR_EXPR_ENTRY
 
 const size_t QORE_IR_EXPR_REGISTRY_SIZE = sizeof(QORE_IR_EXPR_REGISTRY) / sizeof(QORE_IR_EXPR_REGISTRY[0]);
+
+static bool qoreIrExprClaimIsTypeCacheable(QoreIRExprClaimFn claim) {
+    // These predicates depend on QoreValue state or call metadata in addition
+    // to the node's dynamic type. All other predicates above are class tests.
+    return claim != claimConstant && claim != claimBuiltinTypeConversion && claim != claimFunctionCall;
+}
+
+const QoreIRExprHandlerInfo* qore_ir_find_expr_handler(const QoreValue& expr) {
+    using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
+    static thread_local HandlerCache handler_cache;
+    static const bool cache_enabled = std::getenv("QORE_DISABLE_IR_EXPR_HANDLER_CACHE") == nullptr;
+
+    const AbstractQoreNode* node = expr.hasNode() ? expr.getInternalNode() : nullptr;
+    const std::type_info* dynamic_type = node ? &typeid(*node) : nullptr;
+    if (cache_enabled && dynamic_type) {
+        auto i = handler_cache.find(dynamic_type);
+        if (i != handler_cache.end()) {
+            return i->second;
+        }
+    }
+
+    for (size_t i = 0; i < QORE_IR_EXPR_REGISTRY_SIZE; ++i) {
+        const QoreIRExprHandlerInfo& info = QORE_IR_EXPR_REGISTRY[i];
+        if (!info.claim(expr)) {
+            continue;
+        }
+        if (cache_enabled && dynamic_type && qoreIrExprClaimIsTypeCacheable(info.claim)) {
+            handler_cache.emplace(dynamic_type, &info);
+        }
+        return &info;
+    }
+    return nullptr;
+}
 
 bool qore_ir_validate_expr_registry(std::string& error) {
     for (size_t i = 0; i < QORE_IR_EXPR_REGISTRY_SIZE; ++i) {

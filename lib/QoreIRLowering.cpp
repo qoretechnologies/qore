@@ -1144,6 +1144,11 @@ QoreIRValue QoreIRLowering::tryPluginLowering(const QoreValue& expr, std::string
     if (!node) {
         return QoreIRValue();
     }
+    static const bool empty_fast_path_enabled =
+        std::getenv("QORE_DISABLE_IR_PLUGIN_EMPTY_FAST_PATH") == nullptr;
+    if (empty_fast_path_enabled && !qore_plugin_has_registered_operations()) {
+        return QoreIRValue();
+    }
 
     std::vector<QorePluginLoweringInfo> lowerers;
     if (qore_plugin_get_lowering_infos(parse_context ? parse_context->pgm : nullptr, node->getType(), lowerers,
@@ -4966,11 +4971,8 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     // Dispatch through explicitly claimed expression handlers. Once a handler
     // claims an expression shape, silent NotApplicable is an error: this keeps
     // future handlers/plugins from relying on ordering fallthrough.
-    for (size_t i = 0; i < QORE_IR_EXPR_REGISTRY_SIZE; ++i) {
-        const QoreIRExprHandlerInfo& info = QORE_IR_EXPR_REGISTRY[i];
-        if (!info.claim(expr)) {
-            continue;
-        }
+    if (const QoreIRExprHandlerInfo* claimed = qore_ir_find_expr_handler(expr)) {
+        const QoreIRExprHandlerInfo& info = *claimed;
         QoreIRExprCtx ctx{*this, expr, error};
         QoreIRValue result = info.handler(ctx);
         if (result.isValid() || !error.empty()) {

@@ -154,6 +154,7 @@ DLLLOCAL int qore_plugin_get_type_info(const char* module_name, uint16_t local_t
     QorePluginResolvedTypeInfo& info, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_get_llvm_codegen_info(uint32_t global_operation_id,
     QorePluginLLVMCodegenInfo& info, ExceptionSink* xsink);
+DLLLOCAL bool qore_plugin_has_registered_operations();
 DLLLOCAL int qore_plugin_get_lowering_infos(QoreProgram* pgm, qore_type_t node_type,
     std::vector<QorePluginLoweringInfo>& infos, ExceptionSink* xsink);
 DLLLOCAL int qore_plugin_resolve_program_operation_info(QoreProgram* pgm, const QoreTypeInfo* lhs_type,

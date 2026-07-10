@@ -10717,6 +10717,8 @@ struct AotModuleState {
     std::vector<std::string> reexport_deps;
     //! Serialized metadata for deferred init function processing in ns_init
     std::vector<uint8_t> metadata;
+    //! Reader opened during module_init and reused by deferred ns_init work.
+    std::shared_ptr<QoreAOTBinaryReader> init_reader;
     //! Init function descriptors (target type, ns path, item name) read during module_init
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     //! Target programs where init functions have completed for this module
@@ -10942,6 +10944,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
     std::vector<uint8_t> init_metadata;
+    std::shared_ptr<QoreAOTBinaryReader> cached_init_reader;
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     std::string mod_path;
 
@@ -10970,6 +10973,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         init_num_funcs = it->second.num_funcs;
         init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
         init_metadata = it->second.metadata;
+        cached_init_reader = it->second.init_reader;
         init_descriptors = it->second.init_descriptors;
         mod_path = it->second.path;
     }
@@ -11015,11 +11019,15 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         retryPendingAOTModuleInitsForProgram(init_ctx_pgm);
     }
 
-    QoreAOTBinaryReader init_reader;
-    std::string reader_error;
-    if (!init_reader.open(init_metadata.data(),
-            static_cast<uint32_t>(init_metadata.size()), reader_error)) {
-        return finish(false, true, std::string("metadata open failed: ") + reader_error);
+    QoreAOTBinaryReader fallback_init_reader;
+    const QoreAOTBinaryReader* init_reader = cached_init_reader.get();
+    if (!init_reader) {
+        std::string reader_error;
+        if (!fallback_init_reader.open(init_metadata.data(),
+                static_cast<uint32_t>(init_metadata.size()), reader_error)) {
+            return finish(false, true, std::string("metadata open failed: ") + reader_error);
+        }
+        init_reader = &fallback_init_reader;
     }
 
     RootQoreNamespace* mod_root = init_ctx_pgm->getRootNS();
@@ -11030,9 +11038,9 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     std::vector<AOTInitFuncExecInfo> init_func_contexts;
     int registered = 0;
     std::vector<std::string> registration_errors;
-    auto debug_metadata = makeAOTDebugMetadata(init_reader,
+    auto debug_metadata = makeAOTDebugMetadata(*init_reader,
         init_metadata.data(), static_cast<int>(init_metadata.size()));
-    registerAOTFunctionsFromSlotMaps(init_reader, init_root_priv,
+    registerAOTFunctionsFromSlotMaps(*init_reader, init_root_priv,
         init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
         &registration_errors, debug_metadata);
 
@@ -13438,6 +13446,13 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         // Store metadata copy for ns_init to build init function contexts
         if (!state.init_descriptors.empty()) {
             state.metadata.assign(metadata, metadata + metadata_len);
+            static const bool cache_init_reader =
+                std::getenv("QORE_DISABLE_AOT_INIT_READER_CACHE") == nullptr;
+            if (cache_init_reader) {
+                state.init_reader = std::make_shared<QoreAOTBinaryReader>(deserializer.takeReader());
+                state.init_reader->wrap_const_ref_in_rcr = false;
+                state.init_reader->defer_unresolved_const_refs = false;
+            }
         }
         aot_module_map[mod_name] = std::move(state);
     }
