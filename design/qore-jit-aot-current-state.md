@@ -131,6 +131,32 @@ AOT artifacts require complete serialized metadata. Source text can be embedded
 for diagnostics or inspection, but it is not a runtime fallback for missing AOT
 metadata.
 
+## IR Analysis And Optimization
+
+Lowered functions carry transient facts for each SSA value: known type,
+assigned state, NOTHING exclusion, and runtime representation. Assignment is a
+separate fact from the declared type. In particular, a typed lvalue is not
+assigned before its first write and becomes NOTHING again after remove/delete;
+reference parameters retain reference assignment semantics while value reads
+use the declared target type.
+
+`QoreIRAnalysis` provides normalized SSA-operand and normal-successor visitors,
+plus reusable reachability, predecessor/successor, dominator, and natural-loop
+analysis. The IR interpreter uses the normalized operand visitor for ownership
+use counts, preventing dedicated instruction fields from diverging from generic
+operand handling.
+
+The first generic optimization built on this layer is conservative scalar
+loop-invariant code motion. It moves only native scalar constants, proven
+assigned and non-NOTHING non-reference IR-only local loads, and non-throwing
+native scalar operations. A local written in the loop is never hoisted. Loops
+must have a unique unconditional preheader, and the preheader must precede the
+loop in IR block-list order while the LLVM emitter still resolves ordinary SSA
+operands in that order. The post-optimization verifier is mandatory for both
+runtime and AOT source lowering. `QORE_DISABLE_IR_OPT=1` disables the pass for
+same-binary diagnostics and performance comparisons; `QORE_IR_OPT_STATS=1`
+reports analyzed loops and hoisted instructions.
+
 ## Validated Registries
 
 The current implementation relies on explicit registries for extension safety:

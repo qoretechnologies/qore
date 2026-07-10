@@ -44,6 +44,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/IfStatement.h"
@@ -5397,6 +5398,30 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
                 }
             }
         }
+    }
+
+    QoreIROptimizationStats optimization_stats;
+    qore_ir_optimize(*func, &optimization_stats);
+    if (!QoreIRVerifier::verify(*func, error)) {
+        if (mark_failure) {
+            ir_lower_failed = true;
+        }
+        delete func;
+        printd(2, "UserVariantBase::attemptIRLowering() '%s' post-optimization verification failed: %s\n",
+            name, error.c_str());
+        if (pgm) {
+            pgm->recordIRFallback((std::string("optimization verification: ") + error).c_str());
+        }
+        if (raise_on_failure) {
+            parseException(*signature.getParseLocation(), "IR-COMPILATION-ERROR",
+                "optimized IR verification of '%s' failed: %s (silent AST fallback disabled)",
+                name ? name : "<fn>", error.c_str());
+        }
+        return nullptr;
+    }
+    if (getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu\n", name,
+            optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted);
     }
 
     // Conservative approach: assume argv and self are used if they exist

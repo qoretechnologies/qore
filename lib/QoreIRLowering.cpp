@@ -5950,6 +5950,38 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             error = std::string("unsupported variable reference for IR lowering (") + context + ")";
             return QoreIRValue();
     }
+    QoreParseAnalysis analysis;
+    if (getAnalysis(expr, analysis)) {
+        QoreIRValueFacts facts;
+        const QoreTypeInfo* declared_type = var->getType() == VT_LOCAL && var->ref.id
+            ? var->ref.id->getTypeInfo() : nullptr;
+        facts.type_info = analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            ? analysis.known_type : declared_type;
+        bool local_definitely_assigned = parse_context && var->getType() == VT_LOCAL && var->ref.id
+            && parse_context->isLocalDefinitelyAssigned(var->ref.id);
+        bool plain_local = declared_type && !QoreTypeInfo::getReferenceTarget(declared_type);
+        bool definitely_assigned = analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
+            || (local_definitely_assigned && plain_local);
+        facts.assigned_state = definitely_assigned
+            ? QoreIRAssignedState::Assigned : QoreIRAssignedState::MaybeAssigned;
+        facts.never_nothing = analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            || (definitely_assigned && facts.type_info
+                && QoreTypeInfo::parseReturns(facts.type_info, NT_NOTHING) == QTI_NOT_EQUAL);
+        if (facts.never_nothing && facts.type_info) {
+            if (QoreTypeInfo::isType(facts.type_info, NT_INT)) {
+                facts.representation = QoreIRValueRepresentation::NativeInt;
+            } else if (QoreTypeInfo::isType(facts.type_info, NT_FLOAT)) {
+                facts.representation = QoreIRValueRepresentation::NativeFloat;
+            } else if (QoreTypeInfo::isType(facts.type_info, NT_BOOLEAN)) {
+                facts.representation = QoreIRValueRepresentation::NativeBool;
+            } else {
+                facts.representation = QoreIRValueRepresentation::Boxed;
+            }
+        } else {
+            facts.representation = QoreIRValueRepresentation::Boxed;
+        }
+        builder.getFunction()->setValueFacts(result, facts);
+    }
     // NOTE: no guard here — consuming operators (lowerRange, storeVarRef, guardVarLValue, etc.)
     // emit their own guards with proper exception scope context
     return result;

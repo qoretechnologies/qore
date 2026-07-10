@@ -70,6 +70,7 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/QorePluginRegistry.h>
 #include <qore/intern/QoreAOTBinary.h>
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
@@ -1617,64 +1618,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 return false;
             }
             const QoreIRInstruction* inst = inst_uptr.get();
-            for (QoreIRValue operand : inst->operands) {
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
-            }
-            switch (inst->opcode) {
-                case QoreIROpcode::BrIf: {
-                    auto* br = static_cast<const QoreIRBranchIfInstruction*>(inst);
-                    countIRValueUse(counts, br->condition);
-                    markIRValueUse(non_dot_eval_uses, br->condition);
-                    break;
-                }
-                case QoreIROpcode::SwitchInt: {
-                    auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst);
-                    countIRValueUse(counts, sw->switch_val);
-                    markIRValueUse(non_dot_eval_uses, sw->switch_val);
-                    break;
-                }
-                case QoreIROpcode::SwitchString: {
-                    auto* sw = static_cast<const QoreIRSwitchStringInstruction*>(inst);
-                    countIRValueUse(counts, sw->switch_val);
-                    markIRValueUse(non_dot_eval_uses, sw->switch_val);
-                    break;
-                }
-                case QoreIROpcode::Phi: {
-                    auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
-                    for (const QoreIRPhiIncoming& incoming : phi->incoming) {
-                        countIRValueUse(counts, incoming.value);
-                        markIRValueUse(non_dot_eval_uses, incoming.value);
-                    }
-                    break;
-                }
-                case QoreIROpcode::Return: {
-                    auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
-                    if (ret->has_value) {
-                        countIRValueUse(counts, ret->value);
-                        markIRValueUse(non_dot_eval_uses, ret->value);
-                    }
-                    break;
-                }
-                case QoreIROpcode::IteratorCreate:
-                case QoreIROpcode::IteratorCreateIterate: {
-                    // IteratorCreateReverse is intentionally absent: it is built as a
-                    // plain QoreIRInstruction with its iterable in operands (already
-                    // counted above), so casting it to QoreIRIteratorCreateInstruction
-                    // here would read a non-existent field.
-                    auto* iter = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
-                    countIRValueUse(counts, iter->iterable);
-                    markIRValueUse(non_dot_eval_uses, iter->iterable);
-                    break;
-                }
-                case QoreIROpcode::IteratorNext: {
-                    auto* iter = static_cast<const QoreIRIteratorNextInstruction*>(inst);
-                    countIRValueUse(counts, iter->iterator);
-                    markIRValueUse(non_dot_eval_uses, iter->iterator);
-                    break;
-                }
-                default:
-                    break;
-            }
+            });
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
                 || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect;
@@ -1690,9 +1636,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     markIRValueUse(non_dot_eval_uses, inst->operands[i]);
                 }
             } else {
-                for (QoreIRValue operand : inst->operands) {
+                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
-                }
+                });
             }
         }
     }
@@ -1906,43 +1852,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     ++operand_use_counts[op.id];
                 }
             };
-            for (const auto& op : inst_ptr->operands) {
-                countOperand(op);
-            }
-            // Some instructions carry value operands in dedicated fields that are
-            // not present in inst->operands.  These must be counted here too, or a
-            // value whose only consumer is such a field (e.g. a call result used
-            // directly as a foreach/map iterable) is seen as having zero uses and
-            // is wrongly discarded as dead.  Mirror buildValueUseCounts(), but only
-            // for the fields that are *not* also mirrored into operands (Phi and
-            // IteratorCreateReverse already push their operands, so are skipped).
-            switch (inst_ptr->opcode) {
-                case QoreIROpcode::BrIf:
-                    countOperand(static_cast<const QoreIRBranchIfInstruction*>(inst_ptr.get())->condition);
-                    break;
-                case QoreIROpcode::SwitchInt:
-                    countOperand(static_cast<const QoreIRSwitchIntInstruction*>(inst_ptr.get())->switch_val);
-                    break;
-                case QoreIROpcode::SwitchString:
-                    countOperand(static_cast<const QoreIRSwitchStringInstruction*>(inst_ptr.get())->switch_val);
-                    break;
-                case QoreIROpcode::IteratorCreate:
-                case QoreIROpcode::IteratorCreateIterate:
-                    countOperand(static_cast<const QoreIRIteratorCreateInstruction*>(inst_ptr.get())->iterable);
-                    break;
-                case QoreIROpcode::IteratorNext:
-                    countOperand(static_cast<const QoreIRIteratorNextInstruction*>(inst_ptr.get())->iterator);
-                    break;
-                case QoreIROpcode::Return: {
-                    auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
-                    if (ret->has_value) {
-                        countOperand(ret->value);
-                    }
-                    break;
-                }
-                default:
-                    break;
-            }
+            qore_ir_visit_value_operands(*inst_ptr, countOperand);
         }
     }
     int max_param_idx = -1;

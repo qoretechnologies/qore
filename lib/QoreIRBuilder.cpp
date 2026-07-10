@@ -37,6 +37,54 @@
 #include <qore/intern/ScopedObjectCallNode.h>
 #include <qore/intern/VarRefNode.h>
 
+static void qore_ir_set_native_value_facts(QoreIRFunction* func, QoreIRValue value,
+        QoreIRValueRepresentation representation, const QoreTypeInfo* type_info) {
+    QoreIRValueFacts facts;
+    facts.type_info = type_info;
+    facts.assigned_state = QoreIRAssignedState::Assigned;
+    facts.representation = representation;
+    facts.never_nothing = true;
+    func->setValueFacts(value, facts);
+}
+
+static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue value, QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::CmpInt:
+        case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::UnaryMinusInt:
+            qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+            break;
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::UnaryMinusFloat:
+            qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
+            break;
+        case QoreIROpcode::EqInt:
+        case QoreIROpcode::EqFloat:
+        case QoreIROpcode::NeInt:
+        case QoreIROpcode::NeFloat:
+        case QoreIROpcode::LtInt:
+        case QoreIROpcode::LtFloat:
+        case QoreIROpcode::LeInt:
+        case QoreIROpcode::LeFloat:
+        case QoreIROpcode::GtInt:
+        case QoreIROpcode::GtFloat:
+        case QoreIROpcode::GeInt:
+        case QoreIROpcode::GeFloat:
+            qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
+            break;
+        default:
+            break;
+    }
+}
+
 static std::string qore_ir_new_object_class_path(const QoreClass* qc) {
     if (!qc) {
         return std::string();
@@ -168,6 +216,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstInt(int64_t value, const QoreP
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Int;
     inst->constant.int_value = value;
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
     return inst;
 }
 
@@ -178,6 +227,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstFloat(double value, const Qore
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Float;
     inst->constant.float_value = value;
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
     return inst;
 }
 
@@ -188,6 +238,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstBool(bool value, const QorePro
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Bool;
     inst->constant.bool_value = value;
+    qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
     return inst;
 }
 
@@ -410,6 +461,7 @@ QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lh
     inst->result = func->createValue();
     inst->operands.push_back(lhs);
     inst->operands.push_back(rhs);
+    qore_ir_set_opcode_value_facts(func, inst->result, op);
     return inst;
 }
 
@@ -442,6 +494,7 @@ QoreIRInstruction* QoreIRBuilder::createUnaryOp(QoreIROpcode op, QoreIRValue val
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(value);
+    qore_ir_set_opcode_value_facts(func, inst->result, op);
     return inst;
 }
 

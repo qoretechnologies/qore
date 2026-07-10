@@ -791,6 +791,33 @@ struct QoreIRValue {
     }
 };
 
+//! Assignment state at the program point where an SSA value was produced.
+/** This is deliberately independent of the declared type: a typed lvalue is
+    NOTHING before its first assignment and after remove/delete operations. */
+enum class QoreIRAssignedState : uint8_t {
+    Unknown,
+    Unassigned,
+    MaybeAssigned,
+    Assigned,
+};
+
+//! Runtime representation known for an SSA value.
+enum class QoreIRValueRepresentation : uint8_t {
+    Unknown,
+    Boxed,
+    NativeInt,
+    NativeFloat,
+    NativeBool,
+};
+
+//! Parse- and IR-derived facts attached to an SSA value.
+struct QoreIRValueFacts {
+    const QoreTypeInfo* type_info = nullptr;
+    QoreIRAssignedState assigned_state = QoreIRAssignedState::Unknown;
+    QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
+    bool never_nothing = false;
+};
+
 struct QoreIRConstant {
     enum class Kind {
         Int,
@@ -2539,7 +2566,31 @@ public:
     }
 
     QoreIRValue createValue() {
-        return QoreIRValue(next_value_id++);
+        QoreIRValue value(next_value_id++);
+        if (value_facts.size() <= value.id) {
+            value_facts.resize(static_cast<size_t>(value.id) + 1);
+        }
+        return value;
+    }
+
+    //! Attach facts to an SSA value.
+    //! @param value SSA value to annotate
+    //! @param facts facts valid at the value's definition point
+    void setValueFacts(QoreIRValue value, const QoreIRValueFacts& facts) {
+        if (!value.isValid()) {
+            return;
+        }
+        if (value_facts.size() <= value.id) {
+            value_facts.resize(static_cast<size_t>(value.id) + 1);
+        }
+        value_facts[value.id] = facts;
+    }
+
+    //! Return facts attached to an SSA value.
+    //! @param value SSA value to query
+    //! @return facts for @p value, or nullptr when no fact slot exists
+    const QoreIRValueFacts* getValueFacts(QoreIRValue value) const {
+        return value.isValid() && value.id < value_facts.size() ? &value_facts[value.id] : nullptr;
     }
 
     const std::string& getDisplayName() const {
@@ -2579,6 +2630,11 @@ public:
     //! lowering (independent of the #5352 debug context above). Null for AOT.
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreIRBasicBlock>> blocks;
+
+    //! Transient SSA facts used by IR optimization and native lowering.
+    /** AOT persists the optimized instruction stream; deserialized functions
+        can conservatively operate without these facts. */
+    std::vector<QoreIRValueFacts> value_facts{1};
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
     uint32_t max_value_id = 0;

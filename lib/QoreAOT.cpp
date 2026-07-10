@@ -66,6 +66,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
@@ -1748,6 +1749,22 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
     // Classify locals as IR-only vs AST-visible for optimization
     ir_func->computeIROnlyLocals();
+
+    QoreIROptimizationStats optimization_stats;
+    qore_ir_optimize(*ir_func, &optimization_stats);
+    if (!QoreIRVerifier::verify(*ir_func, error)) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT-LOWER: optimized IR verification failed for '%s': %s\n",
+                name, error.c_str());
+        }
+        delete ir_func;
+        ir_func = nullptr;
+        return -1;
+    }
+    if (getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu\n", name,
+            optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted);
+    }
 
     return 0;
 }
