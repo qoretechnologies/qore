@@ -575,6 +575,100 @@ struct QoreIRScalarCSEStats {
     size_t expressions_eliminated = 0;
 };
 
+static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, bool> constants;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            return 0;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+                return 0;
+            }
+            if (inst->opcode == QoreIROpcode::ConstBool && inst->result.isValid()) {
+                constants.emplace(inst->result.id,
+                    static_cast<const QoreIRConstInstruction&>(*inst).constant.bool_value);
+            }
+        }
+    }
+
+    struct Replacement {
+        std::unique_ptr<QoreIRInstruction>* slot = nullptr;
+        QoreIRBasicBlock* source = nullptr;
+        QoreIRBasicBlock* target = nullptr;
+        QoreIRBasicBlock* removed_target = nullptr;
+    };
+    std::vector<Replacement> replacements;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            return 0;
+        }
+        if (block->instructions.empty()) {
+            continue;
+        }
+        std::unique_ptr<QoreIRInstruction>& terminator = block->instructions.back();
+        if (terminator->opcode != QoreIROpcode::BrIf || terminator->exception_target) {
+            continue;
+        }
+        const auto& branch = static_cast<const QoreIRBranchIfInstruction&>(*terminator);
+        auto constant = constants.find(branch.condition.id);
+        if (constant == constants.end()) {
+            continue;
+        }
+        QoreIRBasicBlock* target = constant->second ? branch.true_target : branch.false_target;
+        QoreIRBasicBlock* removed_target = constant->second ? branch.false_target : branch.true_target;
+        replacements.push_back({&terminator, block.get(), target,
+            target == removed_target ? nullptr : removed_target});
+    }
+
+    size_t folded = 0;
+    std::unordered_map<QoreIRBasicBlock*, std::unordered_set<QoreIRBasicBlock*>> removed_predecessors;
+    for (const Replacement& replacement : replacements) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            break;
+        }
+        const QoreIRInstruction& original = **replacement.slot;
+        auto branch = std::make_unique<QoreIRBranchInstruction>();
+        branch->target = replacement.target;
+        branch->cached_start_line = original.cached_start_line;
+        branch->intrinsic = original.intrinsic;
+        branch->loc = original.loc;
+        branch->exception_target = original.exception_target;
+        branch->element_type = original.element_type;
+        branch->temp_scope_id = original.temp_scope_id;
+        *replacement.slot = std::move(branch);
+        if (replacement.removed_target) {
+            removed_predecessors[replacement.removed_target].insert(replacement.source);
+        }
+        ++folded;
+    }
+    // Branch replacement is already committed; finish all matching phi updates
+    // even after cancellation so the IR always has one incoming value per edge.
+    for (const auto& [target, predecessors] : removed_predecessors) {
+        (void)qore_ir_analysis_cancelled(check_count, "IR constant branch folding");
+        for (const auto& inst : target->instructions) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR constant branch folding");
+            if (inst->opcode != QoreIROpcode::Phi) {
+                continue;
+            }
+            auto& phi = static_cast<QoreIRPhiInstruction&>(*inst);
+            phi.incoming.erase(std::remove_if(phi.incoming.begin(), phi.incoming.end(),
+                [&](const QoreIRPhiIncoming& incoming) {
+                    (void)qore_ir_analysis_cancelled(check_count, "IR constant branch folding");
+                    return predecessors.count(incoming.block);
+                }), phi.incoming.end());
+            phi.operands.clear();
+            phi.operands.reserve(phi.incoming.size());
+            for (const QoreIRPhiIncoming& incoming : phi.incoming) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR constant branch folding");
+                phi.operands.push_back(incoming.value);
+            }
+        }
+    }
+    return folded;
+}
+
 static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFunction& func) {
     size_t check_count = 0;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
@@ -840,6 +934,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func);
         local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
         local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
+    }
+
+    if (!getenv("QORE_DISABLE_IR_CONST_FOLD")) {
+        local_stats.constant_branches_folded = qore_ir_fold_constant_branches(func);
     }
 
     if (stats) {

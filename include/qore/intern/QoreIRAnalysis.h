@@ -66,6 +66,7 @@ struct QoreIROptimizationStats {
     size_t instructions_hoisted = 0;
     size_t scalar_loads_forwarded = 0;
     size_t scalar_expressions_eliminated = 0;
+    size_t constant_branches_folded = 0;
 };
 
 //! Run conservative, semantics-preserving optimizations on a lowered function.

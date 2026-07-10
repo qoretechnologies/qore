@@ -169,6 +169,13 @@ and no definition is erased until all replacements have been selected. Set
 `QORE_IR_OPT_STATS=1` output includes forwarded-load and eliminated-expression
 counts.
 
+The optimizer also replaces a conditional branch whose SSA condition is a
+literal boolean with an unconditional branch. It deliberately leaves the
+unreachable block and phi structure intact; native backends remove that code,
+while the IR interpreter avoids repeated condition dispatch in constant-path
+loops. `QORE_DISABLE_IR_CONST_FOLD=1` retains the conditional form for
+same-binary comparisons, and optimization statistics report folded branches.
+
 Recognized builtin and pseudo-method operations also carry a stable
 `QoreIRIntrinsic` identity. The builder assigns the identity when it creates a
 resolved pseudo call, and artifact readers reconstruct it once from serialized
