@@ -104,6 +104,58 @@ int sub charLength(string value) {
     return value.length();
 }
 
+auto sub addDynamic(auto left, auto right) {
+    return left + right;
+}
+
+auto sub subtractDynamic(auto left, auto right) {
+    return left - right;
+}
+
+auto sub multiplyDynamic(auto left, auto right) {
+    return left * right;
+}
+
+bool sub lessDynamic(auto left, auto right) {
+    return left < right;
+}
+
+auto sub compareDynamic(auto left, auto right) {
+    return left <=> right;
+}
+
+auto sub bitAndDynamic(auto left, auto right) {
+    return left & right;
+}
+
+auto sub bitOrDynamic(auto left, auto right) {
+    return left | right;
+}
+
+auto sub bitXorDynamic(auto left, auto right) {
+    return left ^ right;
+}
+
+bool sub equalDynamic(auto left, auto right) {
+    return left == right;
+}
+
+bool sub notEqualDynamic(auto left, auto right) {
+    return left != right;
+}
+
+bool sub lessOrEqualDynamic(auto left, auto right) {
+    return left <= right;
+}
+
+bool sub greaterDynamic(auto left, auto right) {
+    return left > right;
+}
+
+bool sub greaterOrEqualDynamic(auto left, auto right) {
+    return left >= right;
+}
+
 int sub addOneWithEffect(int value) {
     ++calls;
     return value + 1;
@@ -137,6 +189,27 @@ printf(\"float:%.2f:%.2f:%.2f:%y:%y\\n\", addFloat(1.5, 2.25),
     floatGreaterOrEqual(2.0, 2.0));
 printf(\"string:%d:%d:%d:%d\\n\", byteSize(\"abcdef\"), charLength(\"abcdef\"),
     byteSize(\"Příliš\"), charLength(\"Příliš\"));
+printf(\"dynamic-arithmetic:%d:%d:%d:%.2f:%.2f:%.2f\\n\", addDynamic(4, 5),
+    subtractDynamic(9, 4), multiplyDynamic(9, 4), addDynamic(1.25, 2.5),
+    subtractDynamic(5.5, 2.25), multiplyDynamic(1.5, 2.0));
+printf(\"dynamic-bitwise:%d:%d:%d\\n\", bitAndDynamic(13, 6),
+    bitOrDynamic(13, 6), bitXorDynamic(13, 6));
+printf(\"dynamic-compare:%y:%y:%y:%y:%y:%y:%d\\n\", equalDynamic(4, 4),
+    notEqualDynamic(4, 5), lessDynamic(4, 5), lessOrEqualDynamic(5, 5),
+    greaterDynamic(6, 5), greaterOrEqualDynamic(5, 5), compareDynamic(4, 5));
+printf(\"dynamic-float-compare:%y:%y:%y:%y:%y:%y\\n\", equalDynamic(1.5, 1.5),
+    notEqualDynamic(1.5, 2.0), lessDynamic(1.5, 2.0), lessOrEqualDynamic(2.0, 2.0),
+    greaterDynamic(2.0, 1.5), greaterOrEqualDynamic(2.0, 2.0));
+printf(\"dynamic-fallback:%s:%.2f:%s\\n\", addDynamic(\"a\", \"b\"),
+    addDynamic(1, 2.5), addDynamic(1, unassigned));
+printf(\"dynamic-edges:%d:%y:%y\\n\", addDynamic(9223372036854775807, 1),
+    equalDynamic(@nan@, @nan@), lessDynamic(@nan@, 1.0));
+try {
+    compareDynamic(@nan@, 1.0);
+    printf(\"dynamic-nan-compare:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"dynamic-nan-compare:%s\\n\", ex.err);
+}
 printf(\"effects:%d\\n\", calls);
 foreach hash<auto> test in ((\"name\": \"unassigned\", \"value\": unassigned),
         (\"name\": \"removed\", \"value\": removed),
@@ -198,6 +271,13 @@ if (!expected.contains("values:5:-1:-9223372036854775808:9:4\n")
         || !expected.contains("compare:True:True:True:True:True:True:-1\n")
         || !expected.contains("float:3.75:3.25:3.00:True:True\n")
         || !expected.contains("string:6:6:9:6\n")
+        || !expected.contains("dynamic-arithmetic:9:5:36:3.75:3.25:3.00\n")
+        || !expected.contains("dynamic-bitwise:4:15:11\n")
+        || !expected.contains("dynamic-compare:True:True:True:True:True:True:-1\n")
+        || !expected.contains("dynamic-float-compare:True:True:True:True:True:True\n")
+        || !expected.contains("dynamic-fallback:ab:3.50:1\n")
+        || !expected.contains("dynamic-edges:-9223372036854775808:False:False\n")
+        || !expected.contains("dynamic-nan-compare:NAN-COMPARE-ERROR\n")
         || !expected.contains("effects:1\n")
         || !expected.contains("unassigned:RUNTIME-OVERLOAD-ERROR\n")
         || !expected.contains("removed:RUNTIME-OVERLOAD-ERROR\n")

@@ -2444,6 +2444,8 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
     static const bool all_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_LEAF_INLINE") != nullptr;
     static const bool int_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE") != nullptr;
     static const bool float_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_FLOAT_LEAF_INLINE") != nullptr;
+    static const bool dynamic_disabled =
+        std::getenv("QORE_DISABLE_IR_NATIVE_DYNAMIC_LEAF_INLINE") != nullptr;
     static const bool string_disabled = std::getenv("QORE_DISABLE_IR_NATIVE_STRING_LEAF_INLINE") != nullptr;
     if (all_disabled) {
         return true;
@@ -2453,6 +2455,8 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
             return int_disabled;
         case QoreIRCallDirectInstruction::NativeLeafKind::FloatBinary:
             return float_disabled;
+        case QoreIRCallDirectInstruction::NativeLeafKind::DynamicBinary:
+            return dynamic_disabled;
         case QoreIRCallDirectInstruction::NativeLeafKind::StringSize:
         case QoreIRCallDirectInstruction::NativeLeafKind::StringLength:
             return string_disabled;
@@ -2575,7 +2579,8 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
 
     bool is_int = param_type == bigIntTypeInfo;
     bool is_float = param_type == floatTypeInfo;
-    if (!is_int && !is_float) {
+    bool is_dynamic = param_type == autoTypeInfo;
+    if (!is_int && !is_float && !is_dynamic) {
         return reject();
     }
 
@@ -2598,7 +2603,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         operand_defs[operand_def_count++] = {id, param, int_constant, float_constant};
         return true;
     };
-    auto isSupportedBinary = [is_int](QoreIROpcode opcode) {
+    auto isSupportedBinary = [is_int, is_float, is_dynamic](QoreIROpcode opcode) {
         switch (opcode) {
             case QoreIROpcode::AddInt:
             case QoreIROpcode::SubInt:
@@ -2623,7 +2628,21 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
             case QoreIROpcode::LeFloat:
             case QoreIROpcode::GtFloat:
             case QoreIROpcode::GeFloat:
-                return !is_int;
+                return is_float;
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::SubAny:
+            case QoreIROpcode::MulAny:
+            case QoreIROpcode::AndAny:
+            case QoreIROpcode::OrAny:
+            case QoreIROpcode::XorAny:
+            case QoreIROpcode::EqAny:
+            case QoreIROpcode::NeAny:
+            case QoreIROpcode::LtAny:
+            case QoreIROpcode::LeAny:
+            case QoreIROpcode::GtAny:
+            case QoreIROpcode::GeAny:
+            case QoreIROpcode::CmpAny:
+                return is_dynamic;
             default:
                 return false;
         }
@@ -2696,13 +2715,21 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
         return reject();
     }
     bool returns_bool = binary->opcode == QoreIROpcode::EqInt || binary->opcode == QoreIROpcode::EqFloat
+        || binary->opcode == QoreIROpcode::EqAny
         || binary->opcode == QoreIROpcode::NeInt || binary->opcode == QoreIROpcode::NeFloat
+        || binary->opcode == QoreIROpcode::NeAny
         || binary->opcode == QoreIROpcode::LtInt || binary->opcode == QoreIROpcode::LtFloat
+        || binary->opcode == QoreIROpcode::LtAny
         || binary->opcode == QoreIROpcode::LeInt || binary->opcode == QoreIROpcode::LeFloat
+        || binary->opcode == QoreIROpcode::LeAny
         || binary->opcode == QoreIROpcode::GtInt || binary->opcode == QoreIROpcode::GtFloat
-        || binary->opcode == QoreIROpcode::GeInt || binary->opcode == QoreIROpcode::GeFloat;
-    const QoreTypeInfo* return_type = returns_bool ? boolTypeInfo : (is_int ? bigIntTypeInfo : floatTypeInfo);
-    if (inst->cached_return_type != return_type) {
+        || binary->opcode == QoreIROpcode::GtAny
+        || binary->opcode == QoreIROpcode::GeInt || binary->opcode == QoreIROpcode::GeFloat
+        || binary->opcode == QoreIROpcode::GeAny;
+    const QoreTypeInfo* return_type = returns_bool ? boolTypeInfo
+        : (is_int ? bigIntTypeInfo : (is_float ? floatTypeInfo : autoTypeInfo));
+    if (inst->cached_return_type != return_type
+            && !(is_dynamic && inst->cached_return_type == autoTypeInfo)) {
         return reject();
     }
 
@@ -2720,7 +2747,8 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     }
 
     auto kind = is_int ? QoreIRCallDirectInstruction::NativeLeafKind::IntBinary
-        : QoreIRCallDirectInstruction::NativeLeafKind::FloatBinary;
+        : (is_float ? QoreIRCallDirectInstruction::NativeLeafKind::FloatBinary
+                    : QoreIRCallDirectInstruction::NativeLeafKind::DynamicBinary);
     if (interpreterNativeLeafInlineDisabled(kind)) {
         return reject();
     }
@@ -2755,6 +2783,100 @@ static bool tryExecuteInterpreterNativeLeaf(QoreIRCallDirectInstruction* inst,
             inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::StringSize
                 ? str->strlen() : str->length()));
         return true;
+    }
+    if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::DynamicBinary) {
+        if (inst->native_leaf_lhs_param < 0 || inst->native_leaf_rhs_param < 0) {
+            return false;
+        }
+        QoreValue lhs_value = arg_values[inst->native_leaf_lhs_param];
+        QoreValue rhs_value = arg_values[inst->native_leaf_rhs_param];
+        qore_type_t type = lhs_value.getType();
+        if (rhs_value.getType() != type) {
+            return false;
+        }
+        if (type == NT_INT) {
+            int64_t lhs = lhs_value.getAsBigInt();
+            int64_t rhs = rhs_value.getAsBigInt();
+            switch (inst->native_leaf_opcode) {
+                case QoreIROpcode::AddAny:
+                    result = QoreValue(lhs + rhs);
+                    return true;
+                case QoreIROpcode::SubAny:
+                    result = QoreValue(lhs - rhs);
+                    return true;
+                case QoreIROpcode::MulAny:
+                    result = QoreValue(lhs * rhs);
+                    return true;
+                case QoreIROpcode::AndAny:
+                    result = QoreValue(lhs & rhs);
+                    return true;
+                case QoreIROpcode::OrAny:
+                    result = QoreValue(lhs | rhs);
+                    return true;
+                case QoreIROpcode::XorAny:
+                    result = QoreValue(lhs ^ rhs);
+                    return true;
+                case QoreIROpcode::EqAny:
+                    result = QoreValue(lhs == rhs);
+                    return true;
+                case QoreIROpcode::NeAny:
+                    result = QoreValue(lhs != rhs);
+                    return true;
+                case QoreIROpcode::LtAny:
+                    result = QoreValue(lhs < rhs);
+                    return true;
+                case QoreIROpcode::LeAny:
+                    result = QoreValue(lhs <= rhs);
+                    return true;
+                case QoreIROpcode::GtAny:
+                    result = QoreValue(lhs > rhs);
+                    return true;
+                case QoreIROpcode::GeAny:
+                    result = QoreValue(lhs >= rhs);
+                    return true;
+                case QoreIROpcode::CmpAny:
+                    result = QoreValue(static_cast<int64_t>((lhs > rhs) - (lhs < rhs)));
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        if (type == NT_FLOAT) {
+            double lhs = lhs_value.getAsFloat();
+            double rhs = rhs_value.getAsFloat();
+            switch (inst->native_leaf_opcode) {
+                case QoreIROpcode::AddAny:
+                    result = QoreValue(lhs + rhs);
+                    return true;
+                case QoreIROpcode::SubAny:
+                    result = QoreValue(lhs - rhs);
+                    return true;
+                case QoreIROpcode::MulAny:
+                    result = QoreValue(lhs * rhs);
+                    return true;
+                case QoreIROpcode::EqAny:
+                    result = QoreValue(lhs == rhs);
+                    return true;
+                case QoreIROpcode::NeAny:
+                    result = QoreValue(lhs != rhs);
+                    return true;
+                case QoreIROpcode::LtAny:
+                    result = QoreValue(lhs < rhs);
+                    return true;
+                case QoreIROpcode::LeAny:
+                    result = QoreValue(lhs <= rhs);
+                    return true;
+                case QoreIROpcode::GtAny:
+                    result = QoreValue(lhs > rhs);
+                    return true;
+                case QoreIROpcode::GeAny:
+                    result = QoreValue(lhs >= rhs);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        return false;
     }
     qore_type_t expected_type = inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::IntBinary
         ? NT_INT : NT_FLOAT;

@@ -1992,6 +1992,7 @@ public:
     enum class NativeLeafKind : uint8_t {
         IntBinary,
         FloatBinary,
+        DynamicBinary,
         StringSize,
         StringLength,
     };
