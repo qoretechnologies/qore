@@ -986,6 +986,7 @@ QoreIRDotEvalMethodDirectInstruction* QoreIRBuilder::createDotEvalMethodDirect(c
         bool pseudo, const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRDotEvalMethodDirectInstruction>(method, qc, variant, expr, pseudo);
     inst->loc = loc;
+    inst->intrinsic = pseudo ? qore_ir_resolve_pseudo_intrinsic(method, qc) : QoreIRIntrinsic::None;
     inst->result = func->createValue();
     inst->operands = operands;
     // Check if any argument is a reference type (may be modified by callee)
@@ -1001,6 +1002,7 @@ QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMe
     auto inst = block->appendInstruction<QoreIRInvokeDotEvalMethodDirectInstruction>(
             method, qc, variant, expr, pseudo, normal_target, exception_target);
     inst->loc = loc;
+    inst->intrinsic = pseudo ? qore_ir_resolve_pseudo_intrinsic(method, qc) : QoreIRIntrinsic::None;
     inst->result = func->createValue();
     inst->operands = operands;
     // Check if any argument is a reference type (may be modified by callee)

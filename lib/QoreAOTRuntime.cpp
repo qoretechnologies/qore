@@ -6982,6 +6982,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 pgm, method, method_ref, pseudo);
             auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
             ci->has_ref_args = has_ref_args;
+            ci->intrinsic = pseudo
+                ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+                : QoreIRIntrinsic::None;
             ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
             ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
             ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
@@ -7015,6 +7018,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
                 pseudo, resolveBlock(normal_idx), resolveBlock(exception_idx));
             ci->has_ref_args = has_ref_args;
+            ci->intrinsic = pseudo
+                ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+                : QoreIRIntrinsic::None;
             ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
             ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
             ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;

@@ -193,6 +193,44 @@ string sub runAot(string script_path) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
+string sub runLinkedAot() {
+    string base = "/tmp/qore-string-pseudo-fast-path-linked-" + string(getpid());
+    string qo_dir = base + "-qo";
+    string exe = base + "-exe";
+    string script_path = base + ".qr";
+    mkdir(qo_dir);
+
+    File script();
+    script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+    script.write("%modern
+
+int sub main() {
+    string value = \"éabcdef\";
+    string prefix = \"éa\";
+    string suffix = \"def\";
+    string middle = \"bcd\";
+    printf(\"%y:%y:%y:%d:%y\\n\", value.startsWith(prefix), value.endsWith(suffix),
+        value.contains(middle), value.find(middle), value.substr(2, 3));
+    return 0;
+}
+");
+    script.close();
+
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -c --output-dir=%s %s 2>&1",
+        libqore_dir, qcc_bin, qo_dir, script_path));
+    if (compile_out.find("script-context .qo") == -1) {
+        printf("linked AOT .qo compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    string link_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s/*.qo 2>&1",
+        libqore_dir, qcc_bin, exe, qo_dir));
+    if (!is_file(exe)) {
+        printf("linked AOT link failed:\n%s", link_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
 sub checkOutput(string label, string expected, string actual) {
     if (actual != expected) {
         printf("mismatch in %s\nexpected:\n%sactual:\n%s", label, expected, actual);
@@ -214,3 +252,4 @@ foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));
 }
 checkOutput("aot", ast, runAot(script_path));
+checkOutput("linked-aot", "True:True:True:2:\"bcd\"\n", runLinkedAot());

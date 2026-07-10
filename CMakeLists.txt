@@ -1589,6 +1589,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
     lib/QoreIRInterpreter.cpp
+    lib/QoreIRIntrinsic.cpp
     lib/QoreIRBuilder.cpp
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
@@ -2212,6 +2213,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreJIT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/JITRuntime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRIntrinsic.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRAnalysis.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
@@ -2589,6 +2591,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTInstRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRAnalysis.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRIntrinsic.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRBuilder.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
@@ -2609,6 +2612,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRAnalysis.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRIntrinsic.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp

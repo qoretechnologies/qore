@@ -1484,6 +1484,9 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         ctx.pgm, method, method_ref, pseudo);
     auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
     ci->has_ref_args = has_ref_args;
+    ci->intrinsic = pseudo
+        ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+        : QoreIRIntrinsic::None;
     instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
     // Store method name for fallback dynamic dispatch when method ptr is null
     if (method_ref.method_name && *method_ref.method_name) {
@@ -1554,6 +1557,9 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
     auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
         pseudo, ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
     ci->has_ref_args = has_ref_args;
+    ci->intrinsic = pseudo
+        ? qore_ir_resolve_pseudo_intrinsic(method, qc, method_ref.method_name)
+        : QoreIRIntrinsic::None;
     instRegistryApplyDotEvalPseudoFlags(*ci, pseudo_flags);
     if (method_ref.method_name && *method_ref.method_name) {
         ci->fallback_method_name = strdup(method_ref.method_name);

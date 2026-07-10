@@ -73,18 +73,15 @@ static bool qore_ir_is_list_bool_pseudo_fast_path(const QoreMethod* method, cons
     return false;
 }
 
-static int qore_ir_get_list_value_pseudo_fast_path(const QoreMethod* method, const QoreClass* qc) {
-    if (!method || !qc || strcmp(qc->getName(), "<list>")) {
-        return -1;
+static int qore_ir_get_list_value_pseudo_fast_path(QoreIRIntrinsic intrinsic) {
+    switch (intrinsic) {
+        case QoreIRIntrinsic::ListFirst:
+            return 0;
+        case QoreIRIntrinsic::ListLast:
+            return 1;
+        default:
+            return -1;
     }
-    const char* method_name = method->getName();
-    if (!strcmp(method_name, "first")) {
-        return 0;
-    }
-    if (!strcmp(method_name, "last")) {
-        return 1;
-    }
-    return -1;
 }
 
 struct QoreIRPseudoHelperInfo {
@@ -93,72 +90,58 @@ struct QoreIRPseudoHelperInfo {
     bool may_throw = false;
 };
 
-static const char* qore_ir_get_string_pseudo_noguard_helper(const QoreMethod* method, const QoreClass* qc,
+static const char* qore_ir_get_string_pseudo_noguard_helper(QoreIRIntrinsic intrinsic,
         bool base_never_nothing) {
-    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
-        return nullptr;
+    switch (intrinsic) {
+        case QoreIRIntrinsic::Empty:
+            return "qore_rt_pseudo_string_empty_noguard";
+        case QoreIRIntrinsic::Val:
+            return "qore_rt_pseudo_string_val_noguard";
+        case QoreIRIntrinsic::Size:
+            return "qore_rt_pseudo_string_size_noguard";
+        case QoreIRIntrinsic::StringStrlen:
+            return base_never_nothing ? "qore_rt_pseudo_string_size_noguard" : nullptr;
+        case QoreIRIntrinsic::StringLength:
+            return base_never_nothing ? "qore_rt_pseudo_string_length_noguard" : nullptr;
+        case QoreIRIntrinsic::StringSizeP:
+            return "qore_rt_pseudo_string_sizep_noguard";
+        case QoreIRIntrinsic::StringIntP:
+            return "qore_rt_pseudo_string_intp_noguard";
+        case QoreIRIntrinsic::StringStrP:
+            return "qore_rt_pseudo_string_strp_noguard";
+        default:
+            return nullptr;
     }
-    const char* method_name = method->getName();
-    if (!strcmp(method_name, "empty")) {
-        return "qore_rt_pseudo_string_empty_noguard";
-    }
-    if (!strcmp(method_name, "val")) {
-        return "qore_rt_pseudo_string_val_noguard";
-    }
-    if (!strcmp(method_name, "size")) {
-        return "qore_rt_pseudo_string_size_noguard";
-    }
-    if (!strcmp(method_name, "strlen")) {
-        return base_never_nothing ? "qore_rt_pseudo_string_size_noguard" : nullptr;
-    }
-    if (!strcmp(method_name, "length")) {
-        return base_never_nothing ? "qore_rt_pseudo_string_length_noguard" : nullptr;
-    }
-    if (!strcmp(method_name, "sizep")) {
-        return "qore_rt_pseudo_string_sizep_noguard";
-    }
-    if (!strcmp(method_name, "intp")) {
-        return "qore_rt_pseudo_string_intp_noguard";
-    }
-    if (!strcmp(method_name, "strp")) {
-        return "qore_rt_pseudo_string_strp_noguard";
-    }
-    return nullptr;
 }
 
-static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(const QoreMethod* method, const QoreClass* qc,
+static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
         bool base_never_nothing) {
-    if (!base_never_nothing || !method || !qc || strcmp(qc->getName(), "<string>")) {
+    if (!base_never_nothing) {
         return {};
     }
-    const char* method_name = method->getName();
-    if (!strcmp(method_name, "lwr")) {
-        return {"qore_rt_pseudo_string_lwr_noguard", true, true};
+    switch (intrinsic) {
+        case QoreIRIntrinsic::StringLower:
+            return {"qore_rt_pseudo_string_lwr_noguard", true, true};
+        case QoreIRIntrinsic::StringUpper:
+            return {"qore_rt_pseudo_string_upr_noguard", true, true};
+        case QoreIRIntrinsic::StringToInt:
+            return {"qore_rt_pseudo_string_to_int_noguard", false, true};
+        default:
+            return {};
     }
-    if (!strcmp(method_name, "upr")) {
-        return {"qore_rt_pseudo_string_upr_noguard", true, true};
-    }
-    if (!strcmp(method_name, "toInt")) {
-        return {"qore_rt_pseudo_string_to_int_noguard", false, true};
-    }
-    return {};
 }
 
-static int qore_ir_get_string_pseudo_predicate_id(const QoreMethod* method, const QoreClass* qc) {
-    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
-        return -1;
+static int qore_ir_get_string_pseudo_predicate_id(QoreIRIntrinsic intrinsic) {
+    switch (intrinsic) {
+        case QoreIRIntrinsic::StringStartsWith:
+            return 0;
+        case QoreIRIntrinsic::StringEndsWith:
+            return 1;
+        case QoreIRIntrinsic::StringContains:
+            return 2;
+        default:
+            return -1;
     }
-    const char* method_name = method->getName();
-    if (!strcmp(method_name, "startsWith")) {
-        return 0;
-    }
-    if (!strcmp(method_name, "endsWith")) {
-        return 1;
-    }
-    if (!strcmp(method_name, "contains")) {
-        return 2;
-    }
-    return -1;
 }
 
 struct QoreIRStringFindPseudoInfo {
@@ -166,59 +149,52 @@ struct QoreIRStringFindPseudoInfo {
     int64_t default_offset = 0;
 };
 
-static QoreIRStringFindPseudoInfo qore_ir_get_string_pseudo_find_info(const QoreMethod* method,
-        const QoreClass* qc) {
-    if (!method || !qc || strcmp(qc->getName(), "<string>")) {
-        return {};
+static QoreIRStringFindPseudoInfo qore_ir_get_string_pseudo_find_info(QoreIRIntrinsic intrinsic) {
+    switch (intrinsic) {
+        case QoreIRIntrinsic::StringFind:
+            return {"qore_rt_pseudo_string_find_noguard", 0};
+        case QoreIRIntrinsic::StringRFind:
+            return {"qore_rt_pseudo_string_rfind_noguard", -1};
+        default:
+            return {};
     }
-    const char* method_name = method->getName();
-    if (!strcmp(method_name, "find")) {
-        return {"qore_rt_pseudo_string_find_noguard", 0};
-    }
-    if (!strcmp(method_name, "rfind")) {
-        return {"qore_rt_pseudo_string_rfind_noguard", -1};
-    }
-    return {};
 }
 
-static bool qore_ir_is_string_pseudo_substr(const QoreMethod* method, const QoreClass* qc) {
-    return method && qc && !strcmp(qc->getName(), "<string>") && !strcmp(method->getName(), "substr");
+static bool qore_ir_is_string_pseudo_substr(QoreIRIntrinsic intrinsic) {
+    return intrinsic == QoreIRIntrinsic::StringSubstr;
 }
 
-static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(const QoreMethod* method,
+static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(QoreIRIntrinsic intrinsic,
         const QoreClass* qc) {
-    if (!method || !qc) {
+    if (!qc) {
         return {};
     }
-    const char* method_name = method->getName();
     const char* class_name = qc->getName();
-    if (!strcmp(method_name, "typeCode")) {
-        return {"qore_rt_pseudo_typeCode", false};
+    switch (intrinsic) {
+        case QoreIRIntrinsic::TypeCode:
+            return {"qore_rt_pseudo_typeCode", false};
+        case QoreIRIntrinsic::Type:
+            return {"qore_rt_pseudo_type", true};
+        case QoreIRIntrinsic::ToNumber:
+            return {"qore_rt_pseudo_toNumber", true};
+        case QoreIRIntrinsic::Empty:
+            return strcmp(class_name, "<buffer>")
+                ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_empty", false}
+                : QoreIRPseudoHelperInfo{};
+        case QoreIRIntrinsic::Val:
+            return strcmp(class_name, "<char>")
+                && strcmp(class_name, "<callref>")
+                && strcmp(class_name, "<buffer>")
+                ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_val", false}
+                : QoreIRPseudoHelperInfo{};
+        case QoreIRIntrinsic::Size:
+            return strcmp(class_name, "<char>")
+                && strcmp(class_name, "<buffer>")
+                ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_size", false}
+                : QoreIRPseudoHelperInfo{};
+        default:
+            return {};
     }
-    if (!strcmp(method_name, "type")) {
-        return {"qore_rt_pseudo_type", true};
-    }
-    if (!strcmp(method_name, "toNumber")) {
-        return {"qore_rt_pseudo_toNumber", true};
-    }
-    if (!strcmp(method_name, "empty")) {
-        return strcmp(class_name, "<buffer>") ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_empty", false}
-            : QoreIRPseudoHelperInfo{};
-    }
-    if (!strcmp(method_name, "val")) {
-        return strcmp(class_name, "<char>")
-            && strcmp(class_name, "<callref>")
-            && strcmp(class_name, "<buffer>")
-            ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_val", false}
-            : QoreIRPseudoHelperInfo{};
-    }
-    if (!strcmp(method_name, "size")) {
-        return strcmp(class_name, "<char>")
-            && strcmp(class_name, "<buffer>")
-            ? QoreIRPseudoHelperInfo{"qore_rt_pseudo_size", false}
-            : QoreIRPseudoHelperInfo{};
-    }
-    return {};
 }
 
 static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
@@ -11451,9 +11427,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->pseudo_base_known_assigned_string
                     && direct_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
-                ? qore_ir_get_string_pseudo_predicate_id(direct_inst->method, direct_inst->qc) : -1;
-            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_pseudo_find_info(
-                direct_inst->method, direct_inst->qc);
+                ? qore_ir_get_string_pseudo_predicate_id(direct_inst->intrinsic) : -1;
+            QoreIRStringFindPseudoInfo string_find_info =
+                qore_ir_get_string_pseudo_find_info(direct_inst->intrinsic);
             bool string_find_fast_path = direct_inst->pseudo
                 && direct_inst->pseudo_base_known_assigned_string
                 && direct_inst->pseudo_arg0_known_assigned_string
@@ -11463,7 +11439,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && direct_inst->pseudo_base_known_assigned_string
                 && direct_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && direct_inst->pseudo_arg1_known_assigned_int))
-                && qore_ir_is_string_pseudo_substr(direct_inst->method, direct_inst->qc);
+                && qore_ir_is_string_pseudo_substr(direct_inst->intrinsic);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
                 || string_substr_fast_path;
             llvm::Value* args_array = nullptr;
@@ -11502,19 +11478,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
             int list_value_id = (direct_inst->pseudo && nargs == 0)
-                ? qore_ir_get_list_value_pseudo_fast_path(direct_inst->method, direct_inst->qc) : -1;
+                ? qore_ir_get_list_value_pseudo_fast_path(direct_inst->intrinsic) : -1;
             const char* string_noguard_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->method, direct_inst->qc,
+                ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->intrinsic,
                     direct_inst->pseudo_base_known_assigned_string)
                 : nullptr;
             QoreIRPseudoHelperInfo safe_value_pseudo_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_safe_value_dispatch && nargs == 0)
-                ? qore_ir_get_safe_value_pseudo_helper(direct_inst->method, direct_inst->qc)
+                ? qore_ir_get_safe_value_pseudo_helper(direct_inst->intrinsic, direct_inst->qc)
                 : QoreIRPseudoHelperInfo{};
             QoreIRPseudoHelperInfo string_xsink_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->method, direct_inst->qc,
+                ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->intrinsic,
                     direct_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
             auto clear_fast_path_arg_cleanups = [&]() {
@@ -11829,9 +11805,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->pseudo_base_known_assigned_string
                     && invoke_inst->pseudo_arg0_known_assigned_string
                     && nargs == 1)
-                ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->method, invoke_inst->qc) : -1;
-            QoreIRStringFindPseudoInfo string_find_info = qore_ir_get_string_pseudo_find_info(
-                invoke_inst->method, invoke_inst->qc);
+                ? qore_ir_get_string_pseudo_predicate_id(invoke_inst->intrinsic) : -1;
+            QoreIRStringFindPseudoInfo string_find_info =
+                qore_ir_get_string_pseudo_find_info(invoke_inst->intrinsic);
             bool string_find_fast_path = invoke_inst->pseudo
                 && invoke_inst->pseudo_base_known_assigned_string
                 && invoke_inst->pseudo_arg0_known_assigned_string
@@ -11841,7 +11817,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && invoke_inst->pseudo_base_known_assigned_string
                 && invoke_inst->pseudo_arg0_known_assigned_int
                 && (nargs == 1 || (nargs == 2 && invoke_inst->pseudo_arg1_known_assigned_int))
-                && qore_ir_is_string_pseudo_substr(invoke_inst->method, invoke_inst->qc);
+                && qore_ir_is_string_pseudo_substr(invoke_inst->intrinsic);
             bool string_arg_fast_path = string_predicate_id >= 0 || string_find_fast_path
                 || string_substr_fast_path;
             llvm::Value* args_array = nullptr;
@@ -11880,19 +11856,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool result_needs_cleanup = true;
             bool invert_list_empty = false;
             int list_value_id = (invoke_inst->pseudo && nargs == 0)
-                ? qore_ir_get_list_value_pseudo_fast_path(invoke_inst->method, invoke_inst->qc) : -1;
+                ? qore_ir_get_list_value_pseudo_fast_path(invoke_inst->intrinsic) : -1;
             const char* string_noguard_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->method, invoke_inst->qc,
+                ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->intrinsic,
                     invoke_inst->pseudo_base_known_assigned_string)
                 : nullptr;
             QoreIRPseudoHelperInfo safe_value_pseudo_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_safe_value_dispatch && nargs == 0)
-                ? qore_ir_get_safe_value_pseudo_helper(invoke_inst->method, invoke_inst->qc)
+                ? qore_ir_get_safe_value_pseudo_helper(invoke_inst->intrinsic, invoke_inst->qc)
                 : QoreIRPseudoHelperInfo{};
             QoreIRPseudoHelperInfo string_xsink_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_string && nargs == 0)
-                ? qore_ir_get_string_pseudo_xsink_helper(invoke_inst->method, invoke_inst->qc,
+                ? qore_ir_get_string_pseudo_xsink_helper(invoke_inst->intrinsic,
                     invoke_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
             auto clear_fast_path_arg_cleanups = [&]() {

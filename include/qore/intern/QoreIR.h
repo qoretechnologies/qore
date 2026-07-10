@@ -704,6 +704,7 @@ static_assert(QORE_IR_MAX_OPCODE == 383, "QORE_IR_MAX_OPCODE changed — update 
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
 #include "qore/intern/QoreOpcodeRegistry.h"
+#include "qore/intern/QoreIRIntrinsic.h"
 
 //! PHASE 4: Opcode Coverage Documentation
 //!
@@ -864,6 +865,7 @@ public:
 
     QoreIROpcode opcode;
     int16_t cached_start_line;  // -1 = no loc, >=0 = loc->start_line (fills padding after opcode)
+    QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;

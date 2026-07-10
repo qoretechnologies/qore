@@ -157,6 +157,15 @@ runtime and AOT source lowering. `QORE_DISABLE_IR_OPT=1` disables the pass for
 same-binary diagnostics and performance comparisons; `QORE_IR_OPT_STATS=1`
 reports analyzed loops and hoisted instructions.
 
+Recognized builtin and pseudo-method operations also carry a stable
+`QoreIRIntrinsic` identity. The builder assigns the identity when it creates a
+resolved pseudo call, and artifact readers reconstruct it once from serialized
+method metadata. Interpreter and LLVM fast-path selection dispatch on this
+identity instead of repeatedly comparing class and method names. Runtime name
+dispatch remains the fallback for unresolved or unsupported calls and retains
+precedence for objects and hash-like values whose members can override pseudo
+methods.
+
 ## Validated Registries
 
 The current implementation relies on explicit registries for extension safety:
