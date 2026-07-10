@@ -1726,6 +1726,8 @@ foreach string module_name in (registry.getProcessModules()) {
         pending-state introspection and deterministic \c FINALIZE recovery without retries or polling
       - added a generic named-partition select qualifier for primary and joined Oracle/MySQL table references,
         with explicit capability checks and unsupported errors for non-equivalent backend mechanisms
+      - added targeted canonical-name partition metadata lookup for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
+        Server without loading complete high-cardinality partition catalogs
       - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
         structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data

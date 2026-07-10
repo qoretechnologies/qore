@@ -1443,6 +1443,7 @@ class PgsqlTest inherits SqlTestBase {
         PgsqlTable t(ds, parent);
         assertTrue(t.supportsPartitions(), "pgsql supports partitions");
         assertFalse(t.supportsPartitionRead(), "pgsql child-table reads are not generic partition qualification");
+        assertTrue(t.supportsTargetedPartitionLookup(), "pgsql supports targeted partition catalog lookup");
         assertTrue(t.supportsPartitionDetach(), "pgsql supports partition detach");
         assertFalse(t.supportsPartitionExchange(), "pgsql does not expose non-equivalent partition exchange");
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support exchanging partitions", sub () {
@@ -1456,6 +1457,30 @@ class PgsqlTest inherits SqlTestBase {
             partition_dp.searchSingleRecord(NOTHING, {"partition": p1});
         });
 
+        *hash<PartitionInfo> targeted_p1 = t.getPartition(p1);
+        assertTrue(exists targeted_p1, "pgsql targeted lookup returns the named child partition");
+        assertEq(-1, targeted_p1.ordinal, "pgsql marks targeted order unknown without loading the full catalog");
+        assertEq(0, targeted_p1.bound_from, "pgsql targeted lookup parses the lower bound");
+        assertEq(10, targeted_p1.bound_to, "pgsql targeted lookup parses the upper bound");
+        assertNothing(t.getPartition(parent + "_missing"),
+            "pgsql targeted lookup returns nothing for a relation outside the partition set");
+        hash<PartitionLookupResult> targeted_lookup = t.findPartitionBySpec({
+            "name": p1,
+            "bound_from": 0,
+            "bound_to": 10,
+        });
+        assertEq(PartitionLookupStatus::Found, targeted_lookup.status,
+            "pgsql verifies name-bearing comparable specs with targeted metadata");
+        hash<PartitionLookupResult> fallback_lookup = t.findPartitionBySpec({
+            "name": p1,
+            "bound_from": 10,
+            "bound_to": 20,
+        });
+        assertEq(PartitionLookupStatus::Found, fallback_lookup.status,
+            "pgsql falls back to the complete scan when targeted name and bounds disagree");
+        assertEq(p2, fallback_lookup.partition.name,
+            "pgsql deterministic fallback resolves the partition matching the requested bounds");
+
         *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
         assertTrue(exists strategy, "partition strategy introspected");
         assertEq("range", strategy.method, "partition method");
@@ -1463,6 +1488,9 @@ class PgsqlTest inherits SqlTestBase {
 
         hash<string, PartitionInfo> partitions = t.listPartitions();
         assertEq(2, partitions.size(), "initial partition count");
+        assertEq(0, partitions{p1}.ordinal, "full pgsql listing replaces the partial targeted cache");
+        assertEq(p1, t.getPartition("public." + p1).name,
+            "pgsql targeted lookup preserves explicitly qualified lifecycle names after a full listing");
         assertTrue(partitions.hasKey(p1), "partition p1 introspected");
         assertEq(0, partitions{p1}.bound_from, "p1 lower bound parsed");
         assertEq(10, partitions{p1}.bound_to, "p1 upper bound parsed");

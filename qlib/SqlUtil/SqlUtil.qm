@@ -142,6 +142,8 @@ module SqlUtil {
       introspection and deterministic \c FINALIZE recovery
     - added the generic \c partition select option and supportsPartitionRead() capability for validated
       single-partition reads on Oracle and MySQL primary and joined table references
+    - added supportsTargetedPartitionLookup() and getPartition() for canonical-name metadata queries that avoid
+      loading complete high-cardinality partition catalogs on supported drivers
     - enforced exact datasource object identity for create-as-select and insert-select operations; added
       @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
       @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
@@ -2358,7 +2360,7 @@ public namespace SqlUtil {
     /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionInfo inherits PartitionSpec {
-        #! Ordinal in the listPartitions() result
+        #! Ordinal in listPartitions(), or \c -1 for a targeted result when normalized list order is not known
         int ordinal;
     }
 

@@ -7329,6 +7329,19 @@ if (table.supportsPartitionRead()) {
         return supportsPartitions() && supportsPartitionReadImpl();
     }
 
+    #! returns @ref True "True" if canonical partition names can be resolved without loading the full partition list
+    /** @return @ref True "True" when getPartition() and name-bearing findPartitionBySpec() calls can use a
+            targeted catalog query
+
+        @note Bounds-only specifications can still require the complete catalog. A specification containing both
+            canonical name and comparable bounds uses the targeted result when the bounds match.
+
+        @since SqlUtil 3.0.0
+    */
+    bool supportsTargetedPartitionLookup() {
+        return supportsPartitions() && supportsTargetedPartitionLookupImpl();
+    }
+
     #! returns @ref True "True" if this table supports partition detach operations
     /** @since SqlUtil 3.0.0
     */
@@ -7413,6 +7426,37 @@ if (table.supportsConcurrentPartitionDetach()) {
         on_exit l.unlock();
 
         return getPartitionsUnlocked();
+    }
+
+    #! returns one partition by canonical name without loading the complete catalog when supported
+    /** @par Example:
+        @code{.py}
+*hash<PartitionInfo> june = table.getPartition("events_2026_06");
+if (june) {
+    printf("archive range: %y to %y\n", june.bound_from, june.bound_to);
+}
+        @endcode
+
+        @param partition_name the canonical physical partition name
+
+        @return the matching partition or @ref nothing when no partition with the given canonical name exists
+
+        @throw PARTITION-NOT-SUPPORTED the database driver does not support table partitioning
+
+        @note A targeted result is cached independently of the complete list. A later listPartitions() call still
+            loads and returns the complete catalog.
+
+        @note The \c ordinal field can be \c -1 when reproducing listPartitions() ordering would require loading the
+            complete catalog; listPartitions() always returns normalized nonnegative ordinals.
+
+        @since SqlUtil 3.0.0
+    */
+    *hash<PartitionInfo> getPartition(string partition_name) {
+        l.lock();
+        on_exit l.unlock();
+
+        assertPartitionSupportUnlocked();
+        return getPartitionByNameUnlocked(partition_name);
     }
 
     #! finds a partition matching the given specification
@@ -8496,9 +8540,9 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
         }
 
         if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
-            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-            if (ph.hasKey(ps.name)) {
-                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, ph{ps.name});
+            *hash<PartitionInfo> info = getPartitionByNameUnlocked(ps.name);
+            if (info) {
+                return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Name, info);
             }
         }
 
@@ -8513,9 +8557,9 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
         }
 
         if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
-            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-            if (ph.hasKey(ps.name)) {
-                return ph{ps.name}.name;
+            *hash<PartitionInfo> info = getPartitionByNameUnlocked(ps.name);
+            if (info) {
+                return info.name;
             }
         }
 
@@ -9263,9 +9307,9 @@ string sql = table.getCreateTableSql();
         }
 
         if (ps.name) {
-            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-            if (ph.hasKey(ps.name)) {
-                return ph{ps.name};
+            *hash<PartitionInfo> info = getPartitionByNameUnlocked(ps.name);
+            if (info) {
+                return info;
             }
         }
 
@@ -9319,6 +9363,30 @@ string sql = table.getCreateTableSql();
             inDb = True;
         }
         return partitions;
+    }
+
+    #! returns one partition by canonical name using a targeted driver query when available
+    /** @note the table lock must be held when calling this method
+
+        @since SqlUtil 3.0.0
+    */
+    private *hash<PartitionInfo> getPartitionByNameUnlocked(string partition_name) {
+        ensurePartitionsHashUnlocked();
+        if (partitions.hasKey(partition_name)) {
+            return partitions{partition_name};
+        }
+
+        if (!manual && supportsTargetedPartitionLookupImpl()) {
+            *hash<PartitionInfo> info = getPartitionByNameImpl(partition_name);
+            if (info) {
+                partitions{info.name} = info;
+                inDb = True;
+            }
+            return info;
+        }
+
+        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+        return ph.hasKey(partition_name) ? ph{partition_name} : NOTHING;
     }
 
     #! returns the recreatable table-description representation of all physical partitions
@@ -11147,6 +11215,11 @@ on_exit printf("SQL> %s\n", sql);
         return False;
     }
 
+    #! returns @ref True "True" if the driver implements targeted canonical-name partition lookup
+    private bool supportsTargetedPartitionLookupImpl() {
+        return False;
+    }
+
     #! returns @ref True "True" if the database supports detaching partitions
     private bool supportsPartitionDetachImpl() {
         return False;
@@ -11225,8 +11298,48 @@ on_exit printf("SQL> %s\n", sql);
         return rv;
     }
 
+    #! returns one partition by canonical name without loading the full partition catalog
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
+        return;
+    }
+
     #! finds a partition matching the given specification
     private hash<PartitionLookupResult> findPartitionBySpecImpl(hash<PartitionSpec> spec) {
+        if (!manual && !partitionsLoaded && supportsTargetedPartitionLookupImpl() && spec.name) {
+            *hash<PartitionInfo> info = getPartitionByNameUnlocked(spec.name);
+            if (info) {
+                if (spec.is_default && info.is_default) {
+                    hash<PartitionLookupResult> rv({
+                        "status": PartitionLookupStatus::Found,
+                        "partition": info,
+                    });
+                    return rv;
+                }
+                if (partitionSpecsHaveComparableBounds(spec)
+                    && exists info.bound_from && exists info.bound_to
+                    && info.bound_from == spec.bound_from && info.bound_to == spec.bound_to) {
+                    hash<PartitionLookupResult> rv({
+                        "status": PartitionLookupStatus::Found,
+                        "partition": info,
+                    });
+                    return rv;
+                }
+                if (!partitionSpecsHaveComparableBounds(spec)) {
+                    hash<PartitionLookupResult> rv({
+                        "status": PartitionLookupStatus::Uncomparable,
+                        "reason": "partition specification does not have typed comparable bounds",
+                    });
+                    return rv;
+                }
+            } else if (!partitionSpecsHaveComparableBounds(spec) && !spec.is_default) {
+                hash<PartitionLookupResult> rv({
+                    "status": PartitionLookupStatus::Uncomparable,
+                    "reason": "partition specification does not have typed comparable bounds",
+                });
+                return rv;
+            }
+        }
+
         if (spec.is_default) {
             foreach hash<PartitionInfo> pi in (getPartitionsUnlocked().iterator()) {
                 if (pi.is_default) {

@@ -114,6 +114,7 @@ module MssqlSqlUtilBase {
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
+    - added targeted logical partition-name metadata lookup without loading all partition-function boundaries
     - initial release
 */
 
@@ -2594,6 +2595,10 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return !is_sybase && getMssqlServerMajorYear() >= 2016;
     }
 
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
     private bool supportsPartitionExchangeImpl() {
         return supportsPartitionsImpl();
     }
@@ -2724,18 +2729,70 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return mssql ? {"mssql": mssql} : NOTHING;
     }
 
-    private hash<PartitionInfo> resolveMssqlPartitionInfoUnlocked(string partition_name) {
-        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-        if (ph.hasKey(partition_name)) {
-            return ph{partition_name};
-        }
-
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         *softint pnum = (partition_name =~ x/^p?([0-9]+)$/)[0];
-        if (exists pnum && ph.hasKey(sprintf("p%d", pnum))) {
-            return ph{sprintf("p%d", pnum)};
+        if (!exists pnum || pnum < 1) {
+            return;
         }
 
-        throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return;
+        }
+        validateMssqlPartitionStrategyUnlocked("PARTITION-ERROR");
+        getColumnsUnlocked();
+
+        *hash<auto> qh = ds.select("select prv.boundary_id, convert(varchar(128), prv.value, 126) value "
+            "from sys.partition_range_values prv "
+            "join sys.partition_functions pf on pf.function_id = prv.function_id "
+            "where pf.name = %v and prv.boundary_id in (%v, %v) order by prv.boundary_id",
+            getMssqlPartitionFunctionNameUnlocked(), pnum, pnum + 1);
+        list<hash<auto>> bounds = ();
+        foreach hash<auto> row in (qh.contextIterator()) {
+            bounds += row;
+        }
+        if (bounds.size() != 2 || bounds[0].boundary_id != pnum || bounds[1].boundary_id != pnum + 1) {
+            return;
+        }
+
+        AbstractColumn col = columns{strategy.columns[0]};
+        auto bound_from = normalizeMssqlPartitionBoundaryValue(bounds[0].value, col);
+        auto bound_to = normalizeMssqlPartitionBoundaryValue(bounds[1].value, col);
+        string pname = sprintf("p%d", pnum);
+        hash<PartitionInfo> info({
+            "name": pname,
+            "method": strategy.method,
+            "columns": strategy.columns,
+            "ordinal": pnum - 1,
+            "schema": schema,
+            "relation_name": pname,
+            "sql_name": sprintf("%s partition %d", getSqlName(), pnum + 1),
+            "is_default": False,
+            "bound_from": bound_from,
+            "bound_to": bound_to,
+            "bound_from_sql": getMssqlPartitionSqlValue(bound_from),
+            "bound_to_sql": getMssqlPartitionSqlValue(bound_to),
+            "bound_sql": sprintf("from (%s) to (%s)", getMssqlPartitionSqlValue(bound_from),
+                getMssqlPartitionSqlValue(bound_to)),
+            "driver": {
+                "mssql": {
+                    "partition_number": pnum + 1,
+                    "lower_boundary_id": bounds[0].boundary_id,
+                    "upper_boundary_id": bounds[1].boundary_id,
+                    "partition_function": getMssqlPartitionFunctionNameUnlocked(),
+                    "partition_scheme": getMssqlPartitionSchemeNameUnlocked(),
+                },
+            },
+        });
+        return info;
+    }
+
+    private hash<PartitionInfo> resolveMssqlPartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+        }
+        return info;
     }
 
     private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {

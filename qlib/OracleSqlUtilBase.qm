@@ -277,6 +277,7 @@ hash schema = (
     - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
       @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
+    - added targeted canonical-name partition metadata lookup with the preceding range bound
     - fixed a bug in the IN operator
       (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle
@@ -4272,6 +4273,10 @@ group by p.index_name", schema.upr(), name.upr());
         return True;
     }
 
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
     private bool supportsPartitionExchangeImpl() {
         return getOracleServerMajorVersion() >= 12;
     }
@@ -4415,13 +4420,69 @@ group by p.index_name", schema.upr(), name.upr());
         return rv;
     }
 
-    private hash<PartitionInfo> resolveOraclePartitionInfoUnlocked(string partition_name) {
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         string pname = native_case ? partition_name : partition_name.lwr();
-        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-        if (!ph.hasKey(pname)) {
+        *hash<auto> row = ds.selectRow("select partition_name, partition_position, high_value from "
+            + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
+            + " where table_owner = %v and table_name = %v and partition_name = %v",
+            schema.upr(), name.upr(), native_case ? pname : pname.upr());
+        if (!row) {
+            return;
+        }
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return;
+        }
+        getColumnsUnlocked();
+
+        pname = native_case ? row.partition_name : row.partition_name.lwr();
+        string high_value = row.high_value;
+        trim high_value;
+        hash<PartitionInfo> info({
+            "name": pname,
+            "method": strategy.method,
+            "columns": strategy.columns,
+            "ordinal": row.partition_position - 1,
+            "schema": schema,
+            "relation_name": pname,
+            "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(pname)),
+            "is_default": high_value =~ /^MAXVALUE$/i,
+        });
+
+        if (!info.is_default) {
+            info.bound_sql = sprintf("values less than (%s)", high_value);
+            info.bound_to_sql = high_value;
+            *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+            if (exists bound_to) {
+                info.bound_to = bound_to;
+            }
+
+            if (row.partition_position > 1) {
+                *hash<auto> prev = ds.selectRow("select high_value from "
+                    + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
+                    + " where table_owner = %v and table_name = %v and partition_position = %v",
+                    schema.upr(), name.upr(), row.partition_position - 1);
+                if (prev) {
+                    string prev_high_value = prev.high_value;
+                    trim prev_high_value;
+                    info.bound_from_sql = prev_high_value;
+                    *auto bound_from = parseOraclePartitionBoundValues(prev_high_value, info.columns);
+                    if (exists bound_from) {
+                        info.bound_from = bound_from;
+                    }
+                }
+            }
+        }
+        return info;
+    }
+
+    private hash<PartitionInfo> resolveOraclePartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
             throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
         }
-        return ph{pname};
+        return info;
     }
 
     private string getPartitionReadSqlNameImpl(string partition_name) {

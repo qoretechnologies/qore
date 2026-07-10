@@ -179,6 +179,7 @@ $function$
       \c pg_temp schema alias resolve to the backend's active temporary schema
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
       add, drop, truncate, and detach operations
+    - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -3963,6 +3964,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return server_version_major >= 10;
     }
 
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
     private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return True;
     }
@@ -4107,11 +4112,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return getQuotedPartitionSqlName(rel.schema, rel.name);
     }
 
-    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         hash<auto> rel = parsePartitionRelationName(partition_name);
         getServerVersion();
         string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
-        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, " + pending_expr
+        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
             + " as detach_pending "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
@@ -4121,8 +4127,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "where pn.nspname = %v and p.relname = %v and cn.nspname = %v and c.relname = %v",
             schema, name, rel.schema, rel.name);
         if (!row) {
-            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
-                partition_name);
+            return;
         }
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
@@ -4130,12 +4135,25 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "name": getCanonicalPartitionName(row.schema, row.relation_name),
             "method": strategy ? strategy.method : "range",
             "columns": strategy ? strategy.columns : (),
-            "ordinal": 0,
+            # listPartitions() applies typed-bound ordering that cannot be reproduced cheaply by a targeted query
+            "ordinal": -1,
             "schema": row.schema,
             "relation_name": row.relation_name,
             "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
+            "bound_sql": row.bound_sql,
+            "is_default": False,
             "driver": {"pgsql": {"detach_pending": row.detach_pending}},
         });
+        populatePgPartitionBounds(\info);
+        return info;
+    }
+
+    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
+            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
+                partition_name);
+        }
         return info;
     }
 

@@ -24,6 +24,8 @@ Range partitioning is implemented for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
   deterministic `FINALIZE` recovery without retries or polling.
 - generic validated named-partition reads for primary and joined Oracle/MySQL table references, with
   explicit unsupported errors for non-equivalent PostgreSQL and SQL Server mechanisms.
+- targeted canonical-name catalog lookup on PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server, with
+  partial-result caching that does not make `listPartitions()` appear complete.
 
 SQLite and Firebird correctly advertise no native partition support.
 
@@ -41,15 +43,7 @@ The main unresolved model choice is separate public hashdecls per method versus 
 `PartitionSpec` family. The choice must preserve strict cardinality/type validation and description
 round-trip.
 
-## 2. High-cardinality targeted lookup
-
-Current metadata loading is O(n) in partition count and caches all `PartitionInfo` values. This is
-appropriate for hundreds or low thousands of partitions. Tables with tens of thousands need a
-driver hook that can target canonical name or comparable bounds without first materializing the full
-catalog. Generic behavior must remain deterministic and fall back to the current scan when a driver
-cannot perform a targeted lookup.
-
-## 3. Optional data-dependent metadata
+## 2. Optional data-dependent metadata
 
 Optional partition row-count and physical-size metadata may be useful for archive observability, but
 collecting it can be expensive or approximate. It must be opt-in, label exact versus estimated values,
@@ -58,9 +52,8 @@ cheap by default.
 
 ## Implementation order
 
-1. Targeted lookup hooks for high partition counts.
-2. List/hash/subpartition type families and driver implementations.
-3. Optional row-count/size metadata.
+1. List/hash/subpartition type families and driver implementations.
+2. Optional row-count/size metadata.
 
 Each item requires SQL generation tests, negative/capability tests, live backend tests where
 available, documentation/release notes, and a passing full SqlUtil regression run before the next

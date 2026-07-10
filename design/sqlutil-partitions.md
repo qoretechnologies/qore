@@ -40,6 +40,7 @@ upper bounds. The following invariants are deliberate:
 | Concurrent nontransactional detach | yes (14+) | no | no | no | no |
 | Exchange to empty standalone table | no | yes | no | yes | no |
 | Named-partition reads | no | yes | yes | no | no |
+| Targeted canonical-name lookup | yes | yes | yes | yes | no |
 | Default/catch-all range | yes | `MAXVALUE` | `MAXVALUE` | implicit edge ranges | no |
 | Composite range key | yes | yes | yes | no | no |
 
@@ -110,8 +111,10 @@ public hashdecl PartitionEnsureResult {
 }
 ```
 
-`ordinal` is recomputed for each `listPartitions()` result and is only an ordering aid. Canonical
-`name`, or the `schema` and `relation_name` pair where exposed, is the identity.
+`ordinal` is recomputed for each `listPartitions()` result and is only an ordering aid. A targeted
+`getPartition()` result can use `-1` when reproducing normalized list ordering would require loading
+the full catalog. Canonical `name`, or the `schema` and `relation_name` pair where exposed, is the
+identity.
 
 Typed bounds are preferred. Native `bound_*_sql` and `bound_sql` fields preserve expressions that
 cannot be represented portably. Composite typed bounds must match the strategy column cardinality.
@@ -183,6 +186,8 @@ as one driver operation at the callback boundary:
 ```qore
 *hash<PartitionStrategy> getPartitionStrategy();
 hash<string, PartitionInfo> listPartitions();
+bool supportsTargetedPartitionLookup();
+*hash<PartitionInfo> getPartition(string canonical_name);
 hash<PartitionLookupResult> findPartitionBySpec(hash<auto> spec);
 
 string getAddPartitionSql(hash<auto> spec, *hash<auto> opt);
@@ -256,6 +261,12 @@ Server `$PARTITION` predicates have different semantics, so those drivers advert
 `supportsPartitionRead() == False` and raise `PARTITION-NOT-SUPPORTED` instead of silently ignoring
 the option.
 
+`getPartition()` uses a targeted catalog query on PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server.
+Targeted results are cached as a partial hash without setting the complete-list flag; a later
+`listPartitions()` call replaces the partial cache with the full normalized catalog. A name-bearing
+`findPartitionBySpec()` verifies comparable bounds against the targeted result and falls back to the
+complete deterministic scan if the name and requested bounds disagree.
+
 `ensurePartition()` resolves by comparable bounds, then canonical name when bounds are native-only,
 then automatic policy. Concurrent duplicate-create errors are recovered deterministically through a
 savepoint on transactional-DDL drivers and a single metadata re-resolution; there is no retry loop or
@@ -306,5 +317,4 @@ databases before commit. Current integration coverage includes bounds/default/SQ
 composite keys, concurrency races, callbacks, cache invalidation, transaction companions, schema
 round-trip, reverse alignment, local/global indexes, and unsupported-driver errors.
 
-List/hash/subpartition methods, high-cardinality lookup, and optional data-dependent metadata remain
-in the deferred roadmap.
+List/hash/subpartition methods and optional data-dependent metadata remain in the deferred roadmap.

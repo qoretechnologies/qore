@@ -102,6 +102,7 @@ module MysqlSqlUtil {
     - implemented MySQL/MariaDB range-partitioned table DDL, introspection, and lifecycle operations through the
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
+    - added targeted canonical-name partition metadata lookup with the preceding range bound
     - fixed the prepend and append column operators
       (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -2640,6 +2641,10 @@ end";
             return True;
         }
 
+        private bool supportsTargetedPartitionLookupImpl() {
+            return True;
+        }
+
         private bool partitionUniqueKeysRequireAllColumnsImpl() {
             return True;
         }
@@ -2732,12 +2737,65 @@ end";
             return rv;
         }
 
+        private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
+            *hash<auto> row = ds.selectRow("select partition_name, partition_description, "
+                "partition_ordinal_position from information_schema.partitions where table_schema = %v "
+                "and table_name = %v and partition_name = %v", schema, name, partition_name);
+            if (!row) {
+                return;
+            }
+
+            *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+            if (!strategy) {
+                return;
+            }
+            getColumnsUnlocked();
+
+            string pdesc = row.partition_description;
+            trim pdesc;
+            hash<PartitionInfo> info({
+                "name": row.partition_name,
+                "method": strategy.method,
+                "columns": strategy.columns,
+                "ordinal": row.partition_ordinal_position - 1,
+                "schema": schema,
+                "relation_name": row.partition_name,
+                "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(row.partition_name)),
+                "is_default": pdesc =~ /^MAXVALUE$/i,
+            });
+
+            if (!info.is_default) {
+                info.bound_sql = sprintf("values less than (%s)", pdesc);
+                info.bound_to_sql = pdesc;
+                *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
+                if (exists bound_to) {
+                    info.bound_to = bound_to;
+                }
+
+                if (row.partition_ordinal_position > 1) {
+                    *hash<auto> prev = ds.selectRow("select partition_description from "
+                        "information_schema.partitions where table_schema = %v and table_name = %v "
+                        "and partition_ordinal_position = %v", schema, name, row.partition_ordinal_position - 1);
+                    if (prev) {
+                        string prev_desc = prev.partition_description;
+                        trim prev_desc;
+                        info.bound_from_sql = prev_desc;
+                        *auto bound_from = parseMysqlPartitionBoundValues(prev_desc, info.columns);
+                        if (exists bound_from) {
+                            info.bound_from = bound_from;
+                        }
+                    }
+                }
+            }
+            return info;
+        }
+
         private hash<PartitionInfo> resolveMysqlPartitionInfoUnlocked(string partition_name) {
-            hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-            if (!ph.hasKey(partition_name)) {
+            *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+            if (!info) {
                 throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
             }
-            return ph{partition_name};
+            return info;
         }
 
         private string getPartitionReadSqlNameImpl(string partition_name) {

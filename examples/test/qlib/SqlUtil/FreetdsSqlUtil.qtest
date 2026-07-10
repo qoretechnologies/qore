@@ -381,6 +381,7 @@ class FreetdsTest inherits SqlTestBase {
         AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");
         assertEq(True, rt.supportsPartitions());
         assertEq(False, rt.supportsPartitionRead());
+        assertEq(True, rt.supportsTargetedPartitionLookup());
         assertEq(False, rt.supportsPartitionDetach());
         assertEq(False, rt.supportsConcurrentPartitionDetach());
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
@@ -391,6 +392,19 @@ class FreetdsTest inherits SqlTestBase {
             partition_dp.searchSingleRecord(NOTHING, {"partition": "p1"});
         });
 
+        *hash<PartitionInfo> targeted_p2 = rt.getPartition("p2");
+        assertTrue(exists targeted_p2, "SQL Server targeted lookup returns the logical partition name");
+        assertEq(2026-02-01, targeted_p2.bound_from, "SQL Server targeted lookup resolves the lower boundary");
+        assertEq(2026-03-01, targeted_p2.bound_to, "SQL Server targeted lookup resolves the upper boundary");
+        assertNothing(rt.getPartition("p999"), "SQL Server targeted lookup returns nothing for missing boundaries");
+        hash<PartitionLookupResult> targeted_lookup = rt.findPartitionBySpec({
+            "name": "p2",
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, targeted_lookup.status,
+            "SQL Server verifies name-bearing comparable specs with targeted metadata");
+
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);
         assertEq(1, strategy.columns.size());
@@ -398,6 +412,9 @@ class FreetdsTest inherits SqlTestBase {
 
         hash<string, PartitionInfo> parts = rt.listPartitions();
         assertEq(2, parts.size());
+        assertEq(0, parts.p1.ordinal, "full SQL Server listing replaces the partial targeted cache");
+        assertEq("p2", rt.getPartition("2").name,
+            "SQL Server targeted lookup preserves numeric lifecycle aliases after a full listing");
         assertEq(2026-02-01, parts.p2.bound_from);
         assertEq(2026-03-01, parts.p2.bound_to);
         assertEq(3, parts.p2.driver.mssql.partition_number);
