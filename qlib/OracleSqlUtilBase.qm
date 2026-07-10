@@ -3673,7 +3673,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         delete rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             if (!native_case)
-                map row.$1 = row.$1.lwr(), ("constraint_name", "column_name");
+                map row.$1 = row.$1.lwr(), ("constraint_name", "column_name", "index_name"), row.$1;
             reference<OracleUniqueConstraint> ch = \rv.(row.constraint_name);
             if (!ch) {
                 ch = new OracleUniqueConstraint(row.constraint_name, {}, row.status == "ENABLED");

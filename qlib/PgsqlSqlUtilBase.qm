@@ -3963,6 +3963,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return server_version_major >= 10;
     }
 
+    private bool partitionUniqueKeysRequireAllColumnsImpl() {
+        return True;
+    }
+
     private bool supportsPartitionDetachImpl() {
         # ALTER TABLE ... DETACH PARTITION was introduced in PostgreSQL 10
         getServerVersion();

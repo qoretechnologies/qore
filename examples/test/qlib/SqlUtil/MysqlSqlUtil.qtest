@@ -5,13 +5,13 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MysqlSqlUtil
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/MysqlSqlUtil.qmod
 
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %try-module mysql
 %define NoMysql
@@ -252,6 +252,18 @@ class MysqlTest inherits SqlTestBase {
             }
         }
 
+        assertThrows("DESCRIPTION-ERROR", "primary key", sub () {
+            MysqlTable bad_unique(ds, "mysql_partition_bad_unique");
+            bad_unique.setupTable({
+                "columns": {
+                    "id": {"qore_type": Type::Int, "notnull": True},
+                    "d": {"native_type": "datetime", "notnull": True},
+                },
+                "primary_key": {"name": "pk_mysql_partition_bad_unique", "columns": "id"},
+                "partition_strategy": {"method": "range", "columns": "d"},
+            });
+        });
+
         MysqlTable t(ds, "mysql_partition_test");
         t.setupTable({
             "columns": {
@@ -263,7 +275,7 @@ class MysqlTest inherits SqlTestBase {
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
                 "p1": {"name": "p1", "bound_sql": "values less than ('2026-02-01 00:00:00')"},
-                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
             },
         });
         t.createCommit();

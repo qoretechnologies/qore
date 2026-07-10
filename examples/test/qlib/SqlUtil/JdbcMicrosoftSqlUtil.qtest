@@ -4,15 +4,15 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MssqlSqlUtilBase
-%requires JdbcMicrosoftSqlUtil
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/MssqlSqlUtilBase.qmod
+%requires ../../../../qlib/JdbcMicrosoftSqlUtil.qmod
 
 %prepend-module-path "${SCRIPT_DIR}"
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %exec-class FreetdsTest
 
@@ -290,6 +290,67 @@ class FreetdsTest inherits SqlTestBase {
             }
         }
 
+        AbstractTable regular_clustered = AbstractTable::getTable(ds, "mssql_regular_clustered");
+        regular_clustered.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "indexes": {"mssql_regular_clustered_uk": {
+                "columns": "id", "unique": True, "method": "clustered",
+            }},
+        });
+        assertTrue(regular_clustered.getCreateSqlString() =~ /create unique clustered index/i,
+            "nonpartitioned unique clustered index remains supported");
+
+        AbstractTable bad_clustered = AbstractTable::getTable(ds, "mssql_partition_bad_clustered");
+        bad_clustered.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime2", "notnull": True},
+            },
+            "indexes": {"mssql_partition_bad_clustered_uk": {
+                "columns": "id", "unique": True, "method": "clustered",
+            }},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {"pmax": {"bound_from": "2026-01-01", "bound_to": "2026-02-01"}},
+        });
+        assertThrows("OPTION-ERROR", "must include partition column", sub () {
+            bad_clustered.getCreateSql();
+        });
+
+        # SQL Server accepts nonaligned unique keys that omit the partition column.  Materialize this mode first;
+        # partition-level TRUNCATE requires every index to be aligned, so the lifecycle table below is recreated
+        # with aligned keys after this independent DDL check.
+        AbstractTable nonaligned = AbstractTable::getTable(ds, "mssql_partition_test");
+        nonaligned.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime2", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "mssql_partition_test_pk", "columns": "id"},
+            "indexes": {"mssql_partition_test_uk": {"columns": ("id", "v"), "unique": True}},
+            "unique_constraints": {"mssql_partition_test_uc": {"columns": "v"}},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": "2026-01-01", "bound_to": "2026-02-01"},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
+            },
+        });
+        list<auto> create_sql = nonaligned.getCreateSql();
+        string all_create_sql = create_sql.join("\n");
+        assertTrue(all_create_sql =~ /primary key nonclustered\s*\(id\) on \[primary\]/i,
+            "nonaligned primary key is explicitly nonclustered: " + all_create_sql);
+        assertTrue(all_create_sql =~ /create unique index mssql_partition_test_uk on mssql_partition_test \(id, v\) on \[primary\]/i,
+            "nonaligned unique index uses a regular filegroup");
+        assertTrue(all_create_sql =~ /constraint mssql_partition_test_uc unique\s+\(v\) on \[primary\]/i,
+            "nonaligned unique constraint uses a regular filegroup");
+        nonaligned.createCommit();
+        AbstractTable nonaligned_rt = AbstractTable::getTable(ds, "mssql_partition_test");
+        assertTrue(nonaligned_rt.getIndexes().hasKey("mssql_partition_test_uk"),
+            "nonaligned unique index is materialized");
+        assertTrue(nonaligned_rt.getConstraints().hasKey("mssql_partition_test_uc"),
+            "nonaligned unique constraint is materialized");
+        nonaligned_rt.dropCommit();
+
         AbstractTable t = AbstractTable::getTable(ds, "mssql_partition_test");
         t.setupTable({
             "columns": {
@@ -298,15 +359,22 @@ class FreetdsTest inherits SqlTestBase {
                 "v": {"qore_type": Type::String, "size": 20},
             },
             "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d")},
+            "indexes": {"mssql_partition_test_aligned_uk": {"columns": ("d", "id"), "unique": True}},
+            "unique_constraints": {"mssql_partition_test_aligned_uc": {"columns": ("d", "v")}},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
-                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
-                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+                "p1": {"name": "p1", "bound_from": "2026-01-01", "bound_to": "2026-02-01"},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
             },
         });
-        list<auto> create_sql = t.getCreateSql();
+        create_sql = t.getCreateSql();
         assertTrue(create_sql[0] =~ /create partition function/i);
         assertTrue(create_sql[0] =~ /as range right/i);
+        all_create_sql = create_sql.join("\n");
+        assertTrue(all_create_sql =~ /create unique index mssql_partition_test_aligned_uk.*on qore_ps_/i,
+            "unique index containing the partition key is aligned");
+        assertTrue(all_create_sql =~ /constraint mssql_partition_test_aligned_uc unique.*on qore_ps_/i,
+            "unique constraint containing the partition key is aligned");
         t.createCommit();
 
         AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");

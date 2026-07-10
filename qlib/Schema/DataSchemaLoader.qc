@@ -231,16 +231,13 @@ public class DataSchemaLoader {
         if (table_def.foreign_constraints) {
             result.foreign_constraints = table_def.foreign_constraints;
         }
-        *hash<auto> partition_strategy;
         if (table_def.partition_strategy) {
             result.partition_strategy = table_def.partition_strategy;
-            if (table_def.partition_strategy.typeCode() == NT_HASH) {
-                partition_strategy = table_def.partition_strategy;
-            }
         }
         if (table_def.partitions) {
-            result.partitions = DataSchemaLoader::normalizePartitions(table_name, table_def.partitions,
-                partition_strategy, columns);
+            # Partition-bound coercion is datasource-specific and is therefore performed by AbstractTable after
+            # driver overrides have been applied and the effective partition columns are known.
+            result.partitions = table_def.partitions;
         }
 
         # Store auto_triggers for expansion at alignment time (driver-dependent)
@@ -404,124 +401,6 @@ public class DataSchemaLoader {
         }
 
         return result;
-    }
-
-    #! Normalizes partition definitions after column shorthand has been expanded
-    /** Converts string bounds for date partition columns to typed dates so JSON and YAML schemas
-        produce the same typed partition specifications as Qore schema modules.
-    */
-    private static auto normalizePartitions(string table_name, auto partitions, *hash<auto> partition_strategy,
-            hash<auto> columns) {
-        if (partitions.typeCode() != NT_HASH) {
-            return partitions;
-        }
-
-        hash<auto!> result();
-        foreach hash<auto> pair in (partitions.pairIterator()) {
-            if (pair.value.typeCode() != NT_HASH) {
-                result{pair.key} = pair.value;
-                continue;
-            }
-
-            hash<auto!> spec(pair.value);
-            list<string> pcols = DataSchemaLoader::getPartitionColumns(table_name, pair.key, spec,
-                partition_strategy);
-            foreach string key in (("bound_from", "bound_to")) {
-                if (exists spec{key}) {
-                    spec{key} = DataSchemaLoader::normalizePartitionBound(table_name, pair.key, key, spec{key},
-                        pcols, columns);
-                }
-            }
-            result{pair.key} = spec;
-        }
-
-        return result;
-    }
-
-    #! Returns the effective partition key columns for a partition specification
-    private static list<string> getPartitionColumns(string table_name, string partition_name, hash<auto> spec,
-            *hash<auto> partition_strategy) {
-        auto cols;
-        if (spec.columns) {
-            cols = spec.columns;
-        } else if (partition_strategy) {
-            cols = partition_strategy.columns;
-        }
-
-        list<string> result();
-        if (!cols) {
-            return result;
-        }
-
-        if (cols.typeCode() == NT_STRING) {
-            push result, cols;
-            return result;
-        }
-
-        if (cols.typeCode() != NT_LIST) {
-            throw "DATA-SCHEMA-ERROR", sprintf("table %y partition %y: columns must be a string or a list of "
-                "strings, got %y", table_name, partition_name, cols.type());
-        }
-
-        foreach auto col in (cols) {
-            if (col.typeCode() != NT_STRING) {
-                throw "DATA-SCHEMA-ERROR", sprintf("table %y partition %y: columns must contain only strings, "
-                    "got %y", table_name, partition_name, col.type());
-            }
-            push result, col;
-        }
-
-        return result;
-    }
-
-    #! Normalizes one range bound against the effective partition key columns
-    private static auto normalizePartitionBound(string table_name, string partition_name, string key, auto value,
-            list<string> pcols, hash<auto> columns) {
-        if (!pcols.size()) {
-            return value;
-        }
-
-        if (value.typeCode() == NT_LIST) {
-            if (value.size() != pcols.size()) {
-                throw "DATA-SCHEMA-ERROR", sprintf("table %y partition %y: %s has %d values for %d partition "
-                    "columns", table_name, partition_name, key, value.size(), pcols.size());
-            }
-
-            list<auto> result();
-            for (int i = 0; i < value.size(); ++i) {
-                push result, DataSchemaLoader::normalizePartitionScalarBound(table_name, partition_name, key,
-                    value[i], pcols[i], columns);
-            }
-            return result;
-        }
-
-        if (pcols.size() != 1) {
-            throw "DATA-SCHEMA-ERROR", sprintf("table %y partition %y: %s must be a list because the partition "
-                "key has %d columns", table_name, partition_name, key, pcols.size());
-        }
-
-        return DataSchemaLoader::normalizePartitionScalarBound(table_name, partition_name, key, value, pcols[0],
-            columns);
-    }
-
-    #! Converts scalar bounds that can be inferred safely from the normalized column definition
-    private static auto normalizePartitionScalarBound(string table_name, string partition_name, string key, auto value,
-            string col_name, hash<auto> columns) {
-        if (value.typeCode() != NT_STRING) {
-            return value;
-        }
-
-        *hash<auto> col = columns{col_name};
-        if (!col || col.qore_type != Type::Date) {
-            return value;
-        }
-
-        try {
-            return date(value);
-        } catch (hash<ExceptionInfo> ex) {
-            throw "DATA-SCHEMA-ERROR", sprintf("table %y partition %y: %s value %y cannot be parsed as a date "
-                "for partition column %y", table_name, partition_name, key, value, col_name);
-        }
     }
 
     #! Normalizes reference data from .ysm/.jsm format to Schema.qm format

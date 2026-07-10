@@ -4,21 +4,21 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires PgsqlSqlUtilBase
-%requires PgsqlSqlUtil
-%requires SchemaReverse
-%requires Schema
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+%requires ../../../../qlib/PgsqlSqlUtil.qmod
+%requires ../../../../qlib/SchemaReverse.qmod
+%requires ../../../../qlib/Schema/Schema.qmod
 
 %try-module yaml
 %define NoYaml
 %endtry
 
 %prepend-module-path "${SCRIPT_DIR}"
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -338,6 +338,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
             addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
+            addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
             addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
@@ -1256,6 +1257,135 @@ class PgsqlTest inherits SqlTestBase {
         }, ("force": True), tc);
         string joined = sql.join("\n");
         assertFalse(joined =~ /fk_pgsql_fk_column_order_child_parent/, joined);
+    }
+
+    partitionSchemaCoercionAndValidationTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        hash<auto> loaded = Schema::DataSchemaLoader::normalizeTable("pgsql_partition_coercion", {
+            "columns": {
+                "id": {"type": "int", "notnull": True},
+                "event_ts": {"type": "int", "notnull": True,
+                    "driver": {"pgsql": {"native_type": "date"}}},
+            },
+            "primary_key": {"name": "pk_pgsql_partition_coercion", "columns": ("id", "event_ts")},
+            "partition_strategy": {"method": "range", "columns": ("id",),
+                "driver": {"pgsql": {"columns": ("event_ts",)}}},
+            "partitions": {
+                "p1": {"bound_from": "2026-01-01", "bound_to": "2026-01-02T12:34:56.123456Z"},
+            },
+        });
+        assertEq(Type::String, loaded.partitions.p1.bound_from.type(),
+            "data schema loader leaves coercion until driver setup");
+
+        PgsqlTable coerced(ds, "pgsql_partition_coercion");
+        coerced.setupTable(loaded);
+        assertEq(("event_ts",), coerced.getPartitionStrategy().columns,
+            "driver override selects the effective partition key");
+        hash<string, PartitionInfo> parts = coerced.listPartitions();
+        assertEq(Type::Date, parts.p1.bound_from.type(), "generic date shorthand is coerced after driver overrides");
+        assertEq(Type::Date, parts.p1.bound_to.type(), "ISO datetime is coerced");
+        assertEq("2026-01-01 00:00:00.000000", parts.p1.bound_from.format("YYYY-MM-DD HH:mm:SS.us"));
+        assertEq("2026-01-02 12:34:56.123456", parts.p1.bound_to.format("YYYY-MM-DD HH:mm:SS.us"));
+
+        PgsqlTable composite(ds, "pgsql_partition_composite_coercion");
+        composite.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "event_ts": {"native_type": "timestamp", "notnull": True},
+            },
+            "primary_key": {"name": "pk_pgsql_partition_composite_coercion",
+                "columns": ("id", "event_ts")},
+            "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+            "partitions": {
+                "p1": {"bound_from": (1, "2026-02-01 01:02:03"),
+                    "bound_to": (2, "2026-02-02T01:02:03+01:00")},
+            },
+        });
+        parts = composite.listPartitions();
+        assertEq(1, parts.p1.bound_from[0], "non-date composite element remains unchanged");
+        assertEq(Type::Date, parts.p1.bound_from[1].type(),
+            "driver-native timestamp metadata coerces its composite element");
+        assertEq(Type::Date, parts.p1.bound_to[1].type());
+
+        PgsqlTable strings(ds, "pgsql_partition_string_bounds");
+        strings.setupTable({
+            "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+            "primary_key": {"name": "pk_pgsql_partition_string_bounds", "columns": "event_ts"},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+            "partitions": {"p1": {"bound_from": "alpha", "bound_to": "omega"}},
+        });
+        parts = strings.listPartitions();
+        assertEq("alpha", parts.p1.bound_from, "non-ISO string lower bound remains a string");
+        assertEq("omega", parts.p1.bound_to, "non-ISO string upper bound remains a string");
+
+        PgsqlTable native_sql(ds, "pgsql_partition_native_sql_bounds");
+        native_sql.setupTable({
+            "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+            "primary_key": {"name": "pk_pgsql_partition_native_sql_bounds", "columns": "event_ts"},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+            "partitions": {"p1": {"bound_from_sql": "date '2026-03-01'",
+                "bound_to_sql": "date '2026-04-01'"}},
+        });
+        parts = native_sql.listPartitions();
+        assertEq("date '2026-03-01'", parts.p1.bound_from_sql, "native lower SQL is never coerced");
+        assertEq("date '2026-04-01'", parts.p1.bound_to_sql, "native upper SQL is never coerced");
+
+        assertThrows("DESCRIPTION-ERROR", "not a valid ISO date", sub () {
+            PgsqlTable malformed(ds, "pgsql_partition_malformed_date");
+            malformed.setupTable({
+                "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+                "primary_key": {"name": "pk_pgsql_partition_malformed_date", "columns": "event_ts"},
+                "partition_strategy": {"method": "range", "columns": "event_ts"},
+                "partitions": {"p1": {"bound_from": "2026-02-30", "bound_to": "2026-03-01"}},
+            });
+        });
+
+        assertThrows("DESCRIPTION-ERROR", "must be a list", sub () {
+            PgsqlTable bad_scalar(ds, "pgsql_partition_bad_scalar");
+            bad_scalar.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}, "event_ts": {"native_type": "date"}},
+                "primary_key": {"name": "pk_pgsql_partition_bad_scalar", "columns": ("id", "event_ts")},
+                "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+                "partitions": {"p1": {"bound_from": 1, "bound_to": 2}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "has 1 value", sub () {
+            PgsqlTable bad_list(ds, "pgsql_partition_bad_list");
+            bad_list.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}, "event_ts": {"native_type": "date"}},
+                "primary_key": {"name": "pk_pgsql_partition_bad_list", "columns": ("id", "event_ts")},
+                "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+                "partitions": {"p1": {"bound_from": (1,), "bound_to": (2,)}},
+            });
+        });
+
+        hash<auto> unique_base = {
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True},
+                "event_ts": {"native_type": "date", "notnull": True}},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+        };
+        assertThrows("DESCRIPTION-ERROR", "primary key", sub () {
+            PgsqlTable bad_pk(ds, "pgsql_partition_bad_pk");
+            bad_pk.setupTable(unique_base + {
+                "primary_key": {"name": "pk_pgsql_partition_bad_pk", "columns": "id"},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "unique index", sub () {
+            PgsqlTable bad_ix(ds, "pgsql_partition_bad_ix");
+            bad_ix.setupTable(unique_base + {
+                "indexes": {"uk_pgsql_partition_bad_ix": {"columns": "id", "unique": True}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "unique constraint", sub () {
+            PgsqlTable bad_uk(ds, "pgsql_partition_bad_uk");
+            bad_uk.setupTable(unique_base + {
+                "unique_constraints": {"uk_pgsql_partition_bad_uk": {"columns": "id"}},
+            });
+        });
     }
 
     rangePartitionLifecycleTest() {

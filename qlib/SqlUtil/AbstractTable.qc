@@ -8180,7 +8180,9 @@ string sql = table.getCreateTableSql();
         }
         partitionStrategy = normalizePartitionStrategyUnlocked(strategy, "DESCRIPTION-ERROR");
         partitionStrategyLoaded = True;
-        validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
+        if (partitionUniqueKeysRequireAllColumnsImpl()) {
+            validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
+        }
     }
 
     private hash<PartitionStrategy> normalizePartitionStrategyUnlocked(hash<auto> strategy, string err) {
@@ -8334,6 +8336,8 @@ string sql = table.getCreateTableSql();
         if (has_typed) {
             validatePartitionBoundCardinalityUnlocked(ps.bound_from, ps.columns, err, "bound_from");
             validatePartitionBoundCardinalityUnlocked(ps.bound_to, ps.columns, err, "bound_to");
+            ps.bound_from = coercePartitionBoundUnlocked(ps.bound_from, ps.columns, err, "bound_from", ps.name);
+            ps.bound_to = coercePartitionBoundUnlocked(ps.bound_to, ps.columns, err, "bound_to", ps.name);
             validatePartitionTypedBoundsStructureUnlocked(ps, err);
         }
 
@@ -8350,6 +8354,44 @@ string sql = table.getCreateTableSql();
         } else if (pcols.size() != 1) {
             throw err, sprintf("%s: partition %y must be a list with %d value(s) for composite partition key %y",
                 getDesc(), key, pcols.size(), pcols);
+        }
+    }
+
+    #! Coerces a typed partition bound according to the effective driver-specific partition columns
+    /** Only documented ISO date and datetime strings are converted, and only when the final AbstractColumn metadata
+        identifies the corresponding partition column as a Qore date.  Other strings remain strings.
+    */
+    private auto coercePartitionBoundUnlocked(auto value, softlist<string> pcols, string err, string key,
+            *string partition_name) {
+        if (value.typeCode() != NT_LIST) {
+            return coercePartitionScalarBoundUnlocked(value, pcols[0], err, key, partition_name);
+        }
+
+        list<auto> rv();
+        for (int i = 0; i < value.size(); ++i) {
+            push rv, coercePartitionScalarBoundUnlocked(value[i], pcols[i], err, key, partition_name);
+        }
+        return rv;
+    }
+
+    #! Coerces one typed partition-bound value according to final column metadata
+    private auto coercePartitionScalarBoundUnlocked(auto value, string column_name, string err, string key,
+            *string partition_name) {
+        if (value.typeCode() != NT_STRING || columns{column_name}.qore_type != Type::Date) {
+            return value;
+        }
+
+        # Supported forms are YYYY-MM-DD and YYYY-MM-DD[T ]HH:mm:SS, with optional 1-6 digit fractional seconds
+        # and optional Z or +/-HH:mm timezone on datetime values.
+        if (!(value =~ /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/)) {
+            return value;
+        }
+
+        try {
+            return date(value);
+        } catch (hash<ExceptionInfo> ex) {
+            throw err, sprintf("%s: partition %y %s value %y is not a valid ISO date or datetime for column %y: "
+                "%s", getDesc(), partition_name, key, value, column_name, ex.desc);
         }
     }
 
@@ -8400,6 +8442,18 @@ string sql = table.getCreateTableSql();
     }
 
     private static bool partitionBoundLess(auto left, auto right) {
+        if (left.typeCode() == NT_LIST && right.typeCode() == NT_LIST) {
+            list<auto> ll = left;
+            list<auto> rl = right;
+            int size = min(ll.size(), rl.size());
+            for (int i = 0; i < size; ++i) {
+                if (ll[i] == rl[i]) {
+                    continue;
+                }
+                return partitionBoundLess(ll[i], rl[i]);
+            }
+            return ll.size() < rl.size();
+        }
         return left < right;
     }
 
@@ -8821,19 +8875,17 @@ list<auto> l = table.getAlignSql(table2);
                         }
                     } else {
                         # see if a unique or fk constraint with the same name and columns exists
+                        bool supporting_constraint;
                         foreach AbstractColumnConstraint csc in (getAllSupportingConstraints(ix.name)) {
                             if (csc.matchKeys(ix.columns) && csc.setIndexBase(ix.name)) {
                                 ix.setSupportingConstraint(csc);
-                                continue;
+                                supporting_constraint = True;
+                                break;
                             }
                         }
-                        /*
-                        *AbstractColumnSupportingConstraint csc = getSupportingConstraint(ix.name);
-                        if (csc && csc.matchKeys(ix.columns) && csc.setIndexBase(ix.name)) {
-                            ix.setSupportingConstraint(csc);
+                        if (supporting_constraint) {
                             continue;
                         }
-                        */
                     }
                     # see if the index is supporting a constraint that has to be dropped first
                     foreach AbstractColumnConstraint csc in (ix.getAllSupportingConstraints()) {
@@ -10005,6 +10057,7 @@ on_exit printf("SQL> %s\n", sql);
             getPartitionStrategyUnlocked();
             getPartitionsUnlocked();
         }
+        prepareCreateSqlOptionsImpl(\opt);
         list<auto> l += getCreateTableSqlUnlocked(opt);
         *list tl;
         tl = getCreatePartitionsSqlUnlocked(opt, cache); if (tl) l += tl;
@@ -10265,6 +10318,25 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns @ref True "True" if initial partitions are emitted inline in \c CREATE \c TABLE
     private bool createPartitionsInCreateTableImpl() {
+        return False;
+    }
+
+    #! Allows a driver to add internal options shared by every statement in full table creation SQL
+    /** The options are passed by reference so driver state derived while preparing the table statement is also
+        available to subsequent index and constraint generators.
+
+        @since SqlUtil 3.0.0
+    */
+    private prepareCreateSqlOptionsImpl(reference<hash<auto>> opt) {
+    }
+
+    #! returns @ref True "True" if every PK and unique key must contain all partition columns
+    /** Drivers where partitioned-table DDL requires every unique key to include all partition columns override this
+        method.  Drivers supporting global or nonaligned unique keys inherit @ref False "False".
+
+        @since SqlUtil 3.0.0
+    */
+    private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return False;
     }
 

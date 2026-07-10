@@ -226,9 +226,11 @@ tables:
 `partition_strategy.columns` defines the partition key. `partitions` is keyed by partition name;
 each partition can also set `name`, but it must match the hash key. `bound_from` is inclusive and
 `bound_to` is exclusive. Use scalar bounds for single-column keys and lists for multi-column keys.
-When the partition key column has type `date` or `timestamp`, string `bound_from` and `bound_to`
-values are normalized to typed dates by `DataSchemaLoader`; SQL expressions are not parsed and must
-use `bound_from_sql`, `bound_to_sql`, or `bound_sql`.
+When the effective driver-specific partition key column has type `date` or `timestamp`, string
+`bound_from` and `bound_to` values in `YYYY-MM-DD` or ISO datetime form
+(`YYYY-MM-DD[T ]HH:mm:SS[.ffffff][Z|+/-HH:mm]`) are normalized to typed dates when the table is set up.
+Other strings remain strings. SQL expressions are never parsed and must use `bound_from_sql`,
+`bound_to_sql`, or `bound_sql`.
 
 Partition metadata supports the same `driver` override pattern used elsewhere in schema hashes:
 

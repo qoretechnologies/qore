@@ -2626,6 +2626,10 @@ end";
             return ds.getServerVersion() >= 50700;
         }
 
+        private bool partitionUniqueKeysRequireAllColumnsImpl() {
+            return True;
+        }
+
         private bool createPartitionsInCreateTableImpl() {
             return True;
         }

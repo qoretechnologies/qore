@@ -228,11 +228,20 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
             sql += sprintf(" with (%s)", parts.join(", "));
         }
 
-        if (opt.mssql_partition_scheme && opt.mssql_partition_column) {
+        bool aligned = opt.mssql_partition_scheme && opt.mssql_partition_column
+            && (!unique || !opt.mssql_partition_key || columns.hasKey(opt.mssql_partition_key));
+        if (unique && opt.mssql_partition_scheme && !aligned && method && method.lwr() == "clustered") {
+            throw "OPTION-ERROR", sprintf("unique clustered index %y on partitioned table %y must include "
+                "partition column %y", name, table_name, opt.mssql_partition_key);
+        }
+        if (aligned) {
             sql += sprintf(" on %s (%s)", opt.mssql_partition_scheme, opt.mssql_partition_column);
         } else {
             *string ts = opt.index_tablespace ? opt.index_tablespace : (opt.index_filegroup ? opt.index_filegroup
                 : filegroup);
+            if (!ts && unique && opt.mssql_partition_scheme && !aligned) {
+                ts = "[PRIMARY]";
+            }
             if (ts)
                 sql += sprintf(" on %s", ts);
         }
@@ -467,11 +476,16 @@ public class MssqlUniqueConstraintCommon inherits SqlUtil::AbstractUniqueConstra
     #! adds index options onto the sql creation string
     getIndexSql(reference<string> sql, string name, *hash opts) {
         sql += sprintf(" (%s)", (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
-        if (opts.mssql_partition_scheme && opts.mssql_partition_column) {
+        if (opts.mssql_partition_scheme && opts.mssql_partition_column
+            && (!opts.mssql_partition_key || hasKey(opts.mssql_partition_key))) {
             sql += sprintf(" on %s (%s)", opts.mssql_partition_scheme, opts.mssql_partition_column);
         } else {
             *string ts = opts.index_tablespace ? opts.index_tablespace : (opts.index_filegroup ? opts.index_filegroup
                 : filegroup);
+            if (!ts && opts.mssql_partition_scheme && opts.mssql_partition_key
+                && !hasKey(opts.mssql_partition_key)) {
+                ts = "[PRIMARY]";
+            }
             if (ts) {
                 sql += sprintf(" on %s", ts);
             }
@@ -534,6 +548,7 @@ auto v = c.name;
     #! returns a string that can be used to rename the constraint
     string getCreateSql(string name, string table_name, *hash opts) {
         string sql = sprintf("alter table %s add constraint %s unique ", table_name, name);
+        getIndexSql(\sql, name, opts);
         return sql;
     }
 
@@ -581,7 +596,10 @@ auto v = c.name;
 
     #! returns a string that can be used to create the constraint
     string getCreateSql(string table_name, *hash opts) {
-        string sql = sprintf("alter table %s add constraint %s primary key", table_name, name);
+        bool nonaligned = opts.mssql_partition_scheme && opts.mssql_partition_key
+            && !hasKey(opts.mssql_partition_key);
+        string sql = sprintf("alter table %s add constraint %s primary key%s", table_name, name,
+            nonaligned ? " nonclustered" : "");
         getIndexSql(\sql, name, opts);
         return sql;
     }
@@ -2356,8 +2374,6 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         sql += "\n)";
 
         if (partitionStrategy) {
-            opt.mssql_partition_scheme = getMssqlPartitionSchemeNameUnlocked();
-            opt.mssql_partition_column = getColumnSqlName(partitionStrategy.columns[0]);
             sql = getMssqlPartitionCreatePrefix(opt) + "\n"
                 + sql + sprintf(" on %s (%s)", opt.mssql_partition_scheme, opt.mssql_partition_column);
         } else {
@@ -2367,6 +2383,14 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         }
 
         return sql;
+    }
+
+    private prepareCreateSqlOptionsImpl(reference<hash<auto>> opt) {
+        if (partitionStrategy) {
+            opt.mssql_partition_scheme = getMssqlPartitionSchemeNameUnlocked();
+            opt.mssql_partition_column = getColumnSqlName(partitionStrategy.columns[0]);
+            opt.mssql_partition_key = partitionStrategy.columns[0];
+        }
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {

@@ -5,13 +5,13 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires OracleSqlUtil
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/OracleSqlUtil.qmod
 
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %try-module oracle
 %define NoOracle
@@ -546,6 +546,8 @@ class OracleTest inherits SqlTestBase {
             "null; end;");
         ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; exception when "
             "others then null; end;");
+        ds.execRaw("begin execute immediate 'drop table oracle_partition_global_unique purge'; exception when "
+            "others then null; end;");
         ds.commit();
 
         on_exit {
@@ -554,6 +556,8 @@ class OracleTest inherits SqlTestBase {
                     "then null; end;");
                 ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; "
                     "exception when others then null; end;");
+                ds.execRaw("begin execute immediate 'drop table oracle_partition_global_unique purge'; exception "
+                    "when others then null; end;");
                 ds.commit();
             } catch (hash<ExceptionInfo> ex) {
             }
@@ -566,12 +570,14 @@ class OracleTest inherits SqlTestBase {
                 "d": {"qore_type": Type::Date, "notnull": True},
                 "v": {"qore_type": Type::String, "size": 20},
             },
-            "primary_key": {"name": "oracle_partition_test_pk", "columns": ("id", "d")},
+            # Oracle global PK/unique indexes do not have to contain the partition key.
+            "primary_key": {"name": "oracle_partition_test_pk", "columns": "id"},
+            "indexes": {"oracle_partition_test_uk": {"columns": ("id", "v"), "unique": True}},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
                 "p1": {"name": "p1",
                     "bound_sql": "values less than (TO_DATE('2026-02-01', 'YYYY-MM-DD'))"},
-                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
             },
         });
         t.createCommit();
@@ -604,6 +610,26 @@ class OracleTest inherits SqlTestBase {
         OracleTable reverse_template(ds, "oracle_partition_test");
         reverse_template.setupTable(desc);
         assertEq((), rt.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        # A global Oracle unique constraint is also valid without the partition key.  Exercise its actual DDL in a
+        # separate table because getDescriptionHash() intentionally does not export unique constraints.
+        OracleTable global_unique(ds, "oracle_partition_global_unique");
+        global_unique.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "date", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "oracle_partition_global_unique_pk", "columns": "id"},
+            "unique_constraints": {"oracle_partition_global_unique_uc": {"columns": "v"}},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {"pmax": {"bound_sql": "values less than (MAXVALUE)"}},
+        });
+        global_unique.createCommit();
+        OracleTable global_unique_rt(ds, "oracle_partition_global_unique");
+        assertTrue(global_unique_rt.getConstraints().hasKey("oracle_partition_global_unique_uc"),
+            "global unique constraint omitting the partition key is materialized");
+        global_unique_rt.dropCommit();
 
         hash<auto> changed_strategy_desc = {} + desc;
         changed_strategy_desc.partition_strategy = {} + desc.partition_strategy;
