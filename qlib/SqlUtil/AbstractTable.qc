@@ -1286,6 +1286,12 @@ bool b = table.empty();
             addColumnUnlocked(cn, oc + ch, nullable ? True : False);
         }
 
+        # The effective strategy must be available while constructing driver-specific indexes and constraints.
+        # Unique-key validation is deferred until all such objects have been added below.
+        if (desc.partition_strategy) {
+            setupPartitionStrategyUnlocked(desc.partition_strategy);
+        }
+
         # add indexes to table
         foreach string ixn in (desc.indexes.keyIterator()) {
             if (desc.indexes{ixn}.typeCode() != NT_HASH)
@@ -1317,8 +1323,9 @@ bool b = table.empty();
                 throw "DESCRIPTION-ERROR", sprintf("%s: missing string value for 'name' key in primary_key hash: %y",
                     getDesc(), desc.primary_key);
 
-            addPrimaryKeyUnlocked(desc.primary_key.name, desc.primary_key.columns,
-                opt.(getConstraintOptions().keys()));
+            hash<auto> pk_opt = opt.(getConstraintOptions().keys())
+                + (desc.primary_key - ("name", "columns"));
+            addPrimaryKeyUnlocked(desc.primary_key.name, desc.primary_key.columns, pk_opt);
         }
 
         # add unique constraints to table
@@ -1329,6 +1336,8 @@ bool b = table.empty();
 
             hash<auto> ch = desc.unique_constraints{un};
 
+            AbstractDatabase::checkDriverOptions(\ch, drv);
+
             if (!ch.columns || !inlist(ch.columns.typeCode(), (NT_LIST, NT_STRING)))
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to \"columns\" key for unique constraint %y "
                     "is not a list or a string, got type %y instead (%y)", getDesc(), un, ch.columns.type(),
@@ -1336,7 +1345,12 @@ bool b = table.empty();
 
             if (constraints.hasKey(un))
                 continue;
-            addUniqueConstraintUnlocked(un, ch.columns, opt.(getConstraintOptions().keys()));
+            hash<auto> uk_opt = opt.(getConstraintOptions().keys()) + (ch - "columns");
+            addUniqueConstraintUnlocked(un, ch.columns, uk_opt);
+        }
+
+        if (partitionStrategy && partitionUniqueKeysRequireAllColumnsImpl()) {
+            validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
         }
 
         # add foreign constraints to table
@@ -1382,10 +1396,6 @@ bool b = table.empty();
             string src = desc.triggers{tn};
 
             addTriggerUnlocked(tn, src, opt.(getTriggerOptions().keys()));
-        }
-
-        if (desc.partition_strategy) {
-            setupPartitionStrategyUnlocked(desc.partition_strategy);
         }
 
         foreach string pn in (desc.partitions.keyIterator()) {
@@ -7161,8 +7171,13 @@ table.clear();
     /** @since SqlUtil 3.0.0
     */
     *hash<PartitionStrategy> getPartitionStrategy() {
-        l.lock();
-        on_exit l.unlock();
+        bool lck = !l.lockOwner();
+        if (lck) {
+            l.lock();
+        }
+        on_exit if (lck) {
+            l.unlock();
+        }
 
         return getPartitionStrategyUnlocked();
     }
@@ -7847,6 +7862,10 @@ table.clear();
                 "name": primaryKey.getName(),
                 "columns": primaryKey.keys(),
             };
+            *hash<auto> driver_opt = getPrimaryKeyDescriptionOptionsImpl(primaryKey);
+            if (driver_opt) {
+                rv.primary_key.driver{ds.getDriverName()} = driver_opt;
+            }
         }
 
         # add indexes
@@ -7856,7 +7875,27 @@ table.clear();
                     "columns": i.value.columns.keys(),
                     "unique": i.value.unique ?? False,
                 };
+                *hash<auto> driver_opt = getIndexDescriptionOptionsImpl(i.value);
+                if (driver_opt) {
+                    ix.driver{ds.getDriverName()} = driver_opt;
+                }
                 rv.indexes{i.key} = ix;
+            }
+        }
+        # add unique constraints
+        if (constraints) {
+            foreach AbstractConstraint c in (constraints.iterator()) {
+                if (!(c instanceof AbstractUniqueConstraint)) {
+                    continue;
+                }
+                AbstractUniqueConstraint uk = cast<AbstractUniqueConstraint>(c);
+                hash<auto> desc;
+                desc.columns = uk.keys();
+                *hash<auto> driver_opt = getUniqueConstraintDescriptionOptionsImpl(uk);
+                if (driver_opt) {
+                    desc.driver = {ds.getDriverName(): driver_opt};
+                }
+                rv.unique_constraints{uk.getName()} = desc;
             }
         }
 
@@ -8180,9 +8219,6 @@ string sql = table.getCreateTableSql();
         }
         partitionStrategy = normalizePartitionStrategyUnlocked(strategy, "DESCRIPTION-ERROR");
         partitionStrategyLoaded = True;
-        if (partitionUniqueKeysRequireAllColumnsImpl()) {
-            validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
-        }
     }
 
     private hash<PartitionStrategy> normalizePartitionStrategyUnlocked(hash<auto> strategy, string err) {
@@ -10338,6 +10374,24 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return False;
+    }
+
+    #! returns recreatable driver-specific index options for a table description
+    /** @since SqlUtil 3.0.0
+    */
+    private *hash<auto> getIndexDescriptionOptionsImpl(AbstractIndex index) {
+    }
+
+    #! returns recreatable driver-specific primary-key options for a table description
+    /** @since SqlUtil 3.0.0
+    */
+    private *hash<auto> getPrimaryKeyDescriptionOptionsImpl(AbstractPrimaryKey primary_key) {
+    }
+
+    #! returns recreatable driver-specific unique-constraint options for a table description
+    /** @since SqlUtil 3.0.0
+    */
+    private *hash<auto> getUniqueConstraintDescriptionOptionsImpl(AbstractUniqueConstraint constraint) {
     }
 
     #! returns the table partitioning strategy or @ref nothing if the table is not partitioned

@@ -264,6 +264,7 @@ class OracleTest inherits SqlTestBase {
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
             addTestCase("chained synonyms #2408", \testChainedSynonyms());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition-local indexes and constraints", \partitionLocalIndexTest());
         }
 
         set_return_value(main());
@@ -747,6 +748,233 @@ class OracleTest inherits SqlTestBase {
             sub() {
                 rt.detachPartition("p2");
             });
+    }
+
+    private partitionLocalIndexTest() {
+        Datasource ds = getDatasource();
+        string table_name = "oracle_partition_local_index";
+        string tablespace = ds.selectRow("select default_tablespace from user_users").default_tablespace;
+
+        # Ensure deterministic recovery if a previous interrupted run left the integration fixture behind.
+        ds.execRaw("begin execute immediate 'drop table " + table_name
+            + " cascade constraints'; exception when others then if sqlcode != -942 then raise; end if; end;");
+        ds.commit();
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"qore_type": Type::Date, "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20, "notnull": True},
+            "u": {"qore_type": Type::String, "size": 20},
+        };
+        hash<auto> partition_strategy = {"method": "range", "columns": "d"};
+        hash<auto> partitions = {"pmax": {"bound_sql": "values less than (MAXVALUE)"}};
+
+        OracleTable desired(ds, table_name);
+        desired.setupTable({
+            "columns": columns,
+            "indexes": {
+                "olit_v": {
+                    "columns": "v",
+                    "driver": {"oracle": {
+                        "partition_scope": "local",
+                        "index_tablespace": tablespace,
+                        "compute_statistics": True,
+                    }},
+                },
+                "olit_ud": {
+                    "columns": ("u", "d"),
+                    "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                },
+                "ogit_v": {
+                    "columns": ("id", "v"),
+                    "unique": True,
+                    "driver": {"oracle": {"partition_scope": "global"}},
+                },
+            },
+            "primary_key": {
+                "name": "opli_pk",
+                "columns": ("id", "d"),
+                "driver": {"oracle": {
+                    "partition_scope": "local",
+                    "index_tablespace": tablespace,
+                    "compute_statistics": True,
+                }},
+            },
+            "unique_constraints": {
+                "opli_uk": {
+                    "columns": ("v", "d"),
+                    "driver": {"oracle": {
+                        "partition_scope": "local",
+                        "index_tablespace": tablespace,
+                        "compute_statistics": True,
+                    }},
+                },
+            },
+            "partition_strategy": partition_strategy,
+            "partitions": partitions,
+        });
+
+        hash<auto> manual_desc = desired.getDescriptionHash({"with_partitions": True});
+        assertEq("local", manual_desc.indexes.olit_v.driver.oracle.partition_scope,
+            "manual index description preserves local scope");
+        assertEq(True, manual_desc.indexes.olit_v.driver.oracle.compute_statistics,
+            "manual index description preserves compute_statistics");
+        assertEq(tablespace, manual_desc.indexes.olit_v.driver.oracle.index_tablespace,
+            "manual index description preserves its tablespace");
+        assertEq("local", manual_desc.primary_key.driver.oracle.partition_scope,
+            "manual primary-key description preserves local scope");
+        assertEq("local", manual_desc.unique_constraints.opli_uk.driver.oracle.partition_scope,
+            "manual unique-constraint description preserves local scope");
+
+        string index_sql = desired.getIndexes().olit_v.getCreateSql(table_name);
+        assertTrue(index_sql =~ /tablespace .* compute statistics local$/i,
+            "local index DDL orders tablespace, statistics, and scope clauses correctly");
+        string pk_sql = desired.getPrimaryKey().getCreateSql(table_name);
+        assertTrue(pk_sql =~ /using index tablespace .* compute statistics local$/i,
+            "local primary-key DDL emits an inline local index clause");
+        OracleUniqueConstraint desired_uk = cast<OracleUniqueConstraint>(
+            desired.getConstraints().opli_uk);
+        assertTrue(desired_uk.getCreateSql(table_name)
+            =~ /using index tablespace .* compute statistics local$/i,
+            "local unique-constraint DDL emits an inline local index clause");
+
+        assertThrows("INDEX-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_unique_index");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v", "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_pk");
+            invalid.setupTable({
+                "columns": columns,
+                "primary_key": {
+                    "name": "bad_pk", "columns": "id",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_uk");
+            invalid.setupTable({
+                "columns": columns,
+                "unique_constraints": {"bad_uk": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "nonpartitioned table", sub () {
+            OracleTable invalid(ds, "opli_invalid_nonpartitioned");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "invalid partition_scope", sub () {
+            OracleTable invalid(ds, "opli_invalid_scope");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "regional"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "bitmap index", sub () {
+            OracleTable invalid(ds, "opli_invalid_bitmap");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {"columns": "v", "method": "bitmap"}},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "do not match index", sub () {
+            OracleTable invalid(ds, "opli_invalid_named_index");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"support_ix": {
+                    "columns": ("v", "d"), "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "primary_key": {
+                    "name": "bad_pk", "columns": ("id", "d"),
+                    "driver": {"oracle": {"index": "support_ix"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "conflicts with", sub () {
+            OracleTable invalid(ds, "opli_invalid_named_scope");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"support_ix": {
+                    "columns": ("id", "d"), "unique": True,
+                    "driver": {"oracle": {"partition_scope": "global"}},
+                }},
+                "primary_key": {
+                    "name": "bad_pk", "columns": ("id", "d"),
+                    "driver": {"oracle": {"index": "support_ix", "partition_scope": "local"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+
+        desired.createCommit();
+        hash<auto> locality = ds.selectRow("select count(*) c, min(locality) locality from user_part_indexes "
+            "where index_name in ('OLIT_V', 'OLIT_UD', 'OPLI_PK', 'OPLI_UK')");
+        assertEq(4, locality.c, "all requested local index structures are physically partitioned");
+        assertEq("LOCAL", locality.locality, "all requested local index structures are local");
+        assertEq("NO", ds.selectRow("select partitioned from user_indexes where index_name = 'OGIT_V'").partitioned,
+            "the explicit global index is not partitioned");
+
+        OracleTable actual(ds, table_name);
+        Indexes actual_indexes = actual.getIndexes();
+        assertEq("local", cast<OracleIndex>(actual_indexes.olit_v).getEffectivePartitionScope(),
+            "catalog introspection identifies local indexes");
+        assertEq(tablespace.lwr(), cast<OracleIndex>(actual_indexes.olit_v).tablespace,
+            "catalog introspection preserves a uniform local-index tablespace");
+        assertEq("global", cast<OracleIndex>(actual_indexes.ogit_v).getEffectivePartitionScope(),
+            "catalog introspection identifies global indexes on partitioned tables");
+
+        hash<auto> desc = actual.getDescriptionHash({"with_partitions": True});
+        assertEq("local", desc.indexes.olit_v.driver.oracle.partition_scope,
+            "reverse description preserves local index scope");
+        assertEq("global", desc.indexes.ogit_v.driver.oracle.partition_scope,
+            "reverse description preserves global index scope");
+        assertEq("opli_pk", desc.primary_key.driver.oracle.index,
+            "reverse description links the primary key to its physical index");
+        assertTrue(desc.unique_constraints.hasKey("opli_uk"),
+            "reverse description exports unique constraints");
+        assertEq("opli_uk", desc.unique_constraints.opli_uk.driver.oracle.index,
+            "reverse description links a unique constraint to its physical index");
+
+        OracleTable reverse_template(ds, table_name);
+        reverse_template.setupTable(desc);
+        assertEq((), actual.getAlignSql(reverse_template),
+            "reverse-engineered local and global indexes align unchanged");
+
+        actual.dropCommit();
+        OracleTable recreated(ds, table_name);
+        recreated.setupTable(desc);
+        recreated.createCommit();
+        locality = ds.selectRow("select count(*) c, min(locality) locality from user_part_indexes "
+            "where index_name in ('OLIT_V', 'OLIT_UD', 'OPLI_PK', 'OPLI_UK')");
+        assertEq(4, locality.c, "reverse description recreates all local index structures");
+        assertEq("LOCAL", locality.locality, "reverse description recreates local physical scope");
+        recreated.dropCommit();
     }
 
     private string getResultSetSql() {
