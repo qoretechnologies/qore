@@ -1714,6 +1714,13 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref sqlutilintro "SqlUtil" module
       - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" (and the all-drivers variant)
         for standard created/modified-timestamp and sequence-ID triggers across PostgreSQL, Oracle, MySQL, MSSQL
+      - added portable range-partition strategy, introspection, lookup, add, ensure, drop, truncate, and detach APIs
+        with schema-description round-trip for PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server; lifecycle APIs
+        include SQL generators, transaction-managing variants, callback support, deterministic concurrent-create
+        handling, and driver-aware key validation
+      - added Oracle local/global partitioned index and constraint placement with tablespace and statistics options
+      - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
+        structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
       - fixed a foreign-key ordering bug in @ref SqlUtil::Tables::populate() "Tables::populate()" that left the
