@@ -136,6 +136,11 @@ module SqlUtil {
     - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
       lifecycle APIs for range-partitioned tables; driver support is advertised by
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
+    - enforced exact datasource object identity for create-as-select and insert-select operations; added
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
+      "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
+      added reliable target/source projection-cardinality validation
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -746,6 +751,25 @@ hash<auto> sh = {
     @endcode
     The \c "having" option allows for query results with aggregate SQL column operator functions to be filtered by user-defined criteria.
     The \c "having" hash key should be assigned to a hash where each key is a column specifier (optionally in dot notation) and the values are lists with two elements; the first element must be a @ref sql_cops "column operator code", and the second element is a column operator description normally provided by using a @ref sql_cop_funcs "column operator function" as in the above example.
+
+    Joins, computed aggregate columns, grouping, and aggregate filters can be combined in the same structured
+    select.  The c WithInfo variants return the generated SQL and bind arguments together with the result:
+    @code{.py}
+hash<SqlResultInfo> info = accounts.selectRowsWithInfo({
+    "alias": "a",
+    "columns": (
+        "a.region",
+        cop_as(cop_min("t.amount"), "min_amount"),
+        cop_as(cop_max("t.amount"), "max_amount"),
+    ),
+    "join": join_inner(transactions, "t", {"id": "account_id"}),
+    "groupby": "a.region",
+    "having": {"t.amount": (COP_MAX, op_ge(1000))},
+});
+    @endcode
+    In this example, c info.result contains the grouped rows, while c info.sql and c info.args provide the
+    executed statement and its ordered bind values.  The same select hash can be passed to create-as-select or
+    insert-select APIs without using raw SQL.
 
     @subsubsection select_option_superquery Select Option "superquery"
     <b>Superquery Example:</b>

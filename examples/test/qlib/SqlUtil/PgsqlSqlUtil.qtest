@@ -342,6 +342,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
             addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
+            addTestCase("structured aggregate selection", \structuredAggregateSelectionTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
@@ -1805,6 +1806,64 @@ class PgsqlTest inherits SqlTestBase {
             callback_sql = statement;
             callback_args = args;
         };
+
+        list<auto> preview_args;
+        string preview_sql = target.getInsertFromSelectSql(("id",), source, {"where": {"id": 2}},
+            \preview_args, {"sqlarg_callback": sqlarg_cb});
+        assertTrue(preview_sql =~ /^insert into .*pgsql_insert_select_target.*\(id\) select/i,
+            "insert-select preview returns SQL without executing it");
+        assertEq((2,), preview_args, "insert-select preview returns ordered bind arguments");
+        assertEq(0, callback_count, "non-executing insert-select preview does not invoke execution callbacks");
+        assertEq(0, ds.selectRow(sprintf("select count(*) c from %s", target_name)).c,
+            "insert-select preview does not modify the target");
+
+        hash<SqlResultInfo> preview_info = target.getInsertFromSelectSqlWithInfo(("id",), source,
+            {"columns": "id", "where": {"id": 2}});
+        assertTrue(preview_info.sql =~ /\(id\) select id from/i,
+            "WithInfo preview returns the generated projection SQL");
+        assertEq((2,), preview_info.args, "WithInfo preview returns ordered bind arguments");
+
+        int tablecode_count = 0;
+        code<AbstractTable(AbstractDatasource, string)> tablecode = AbstractTable sub (
+                AbstractDatasource resolved_ds, string resolved_name) {
+            ++tablecode_count;
+            assertEq(ds, resolved_ds, "insert-select tablecode receives the source datasource");
+            return new PgsqlTable(resolved_ds, resolved_name);
+        };
+        target.getInsertFromSelectSql(("id",), source, {
+            "alias": "s1",
+            "columns": "s1.id",
+            "join": join_inner(source_name, "s2", {"id": "id"}),
+        }, NOTHING, {"tablecode": tablecode});
+        assertEq(1, tablecode_count, "insert-select forwards tablecode while resolving source joins");
+
+        assertThrows("COLUMN-ERROR", "2 source select expressions", sub () {
+            target.getInsertFromSelectSql(("id",), source, {"columns": ("id", cop_value(1))});
+        });
+        assertThrows("COLUMN-ERROR", "duplicate insert-select target column", sub () {
+            target.getInsertFromSelectSql(("id", "id"), source, {"columns": ("id", "id")});
+        });
+        assertThrows("COLUMN-ERROR", "at least one target column", sub () {
+            target.getInsertFromSelectSql((), source, {"columns": "id"});
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            target.getInsertFromSelectSql(("id",), source, {"columns": "id"}, NOTHING,
+                {"unsupported": True});
+        });
+
+        AbstractDatasource other_ds = getDatasource();
+        PgsqlTable other_source(other_ds, source_name);
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            target.getInsertFromSelectSql(("id",), other_source, {"columns": "id"});
+        });
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            target.insertFromSelect(("id",), other_source, {"columns": "id"});
+        });
+        PgsqlTable ctas_target(ds, "pgsql_ctas_identity_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            ctas_target.getCreateAsSelectSql(other_source, {"columns": "id"});
+        });
+
         string sql;
         int inserted = target.insertFromSelectCommit(("id",), source, {"where": {"id": 1}}, \sql,
             {"sqlarg_callback": sqlarg_cb});
@@ -1814,6 +1873,53 @@ class PgsqlTest inherits SqlTestBase {
         assertEq((1,), callback_args, "insert-select callback receives bound select arguments");
         assertEq(1, ds.selectRow(sprintf("select id from %s", target_name)).id,
             "insert-select commit inserts the selected row");
+    }
+
+    structuredAggregateSelectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string parent_name = "pgsql_aggregate_parent";
+        string child_name = "pgsql_aggregate_child";
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.commit();
+        };
+        drop_if_exists(child_name);
+        drop_if_exists(parent_name);
+        on_exit {
+            drop_if_exists(child_name);
+            drop_if_exists(parent_name);
+        }
+
+        ds.execRaw(sprintf("create table %s (id integer primary key, region text not null)", parent_name));
+        ds.execRaw(sprintf("create table %s (parent_id integer not null, amount integer not null)", child_name));
+        ds.execRaw(sprintf("insert into %s values (1, 'A'), (2, 'B')", parent_name));
+        ds.execRaw(sprintf("insert into %s values (1, 5), (1, 15), (2, 3)", child_name));
+        ds.commit();
+
+        PgsqlTable parent(ds, parent_name);
+        PgsqlTable child(ds, child_name);
+        hash<SqlResultInfo> info = parent.selectRowsWithInfo({
+            "alias": "p",
+            "columns": (
+                "p.region",
+                cop_as(cop_min("c.amount"), "min_amount"),
+                cop_as(cop_max("c.amount"), "max_amount"),
+            ),
+            "join": join_inner(child, "c", {"id": "parent_id"}),
+            "groupby": "p.region",
+            "having": {"c.amount": (COP_MAX, op_gt(10))},
+        });
+        assertEq(1, info.result.size(), "aggregate having filter returns one grouped row");
+        assertEq("A", info.result[0].region, "aggregate query preserves the grouped join column");
+        assertEq(5, info.result[0].min_amount, "cop_min computes the grouped minimum over the join");
+        assertEq(15, info.result[0].max_amount, "cop_max computes the grouped maximum over the join");
+        assertEq((10,), info.args, "aggregate WithInfo result exposes the having bind argument");
+        assertTrue(info.sql =~ / join .* group by .* having /i,
+            "aggregate WithInfo result exposes structured join/group/having SQL");
     }
 
     partitionEnhancementsTest() {

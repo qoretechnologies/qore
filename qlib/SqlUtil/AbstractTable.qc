@@ -268,7 +268,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! generic SQL data operation callbacks
         /** The following keys can be set for this option:
             - \c sqlarg_callback: see @ref sqlarg_callback
-            - \c tablecode: a closure taking a string table name and returning an AbstractTable object for late resolution of table names in joins
+            - \c tablecode: a closure taking an AbstractDatasource and a string table name and returning an
+              AbstractTable object for late resolution of table names in joins
         */
         const hash<string, string> SqlDataCallbackOptions = {
             "sqlarg_callback": "code",
@@ -950,8 +951,8 @@ target.createAsSelectCommit(source, {
 });
         @endcode
 
-        @param source the source table for the select statement; this table must use the same datasource as the
-        current target table
+        @param source the source table for the select statement; this table must use the exact same datasource
+        object as the current target table
         @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
         hash" for information about this argument
         @param opt optional creation and data callback options; see
@@ -961,6 +962,7 @@ target.createAsSelectCommit(source, {
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
 
         @since SqlUtil 1.10
@@ -977,8 +979,8 @@ target.createAsSelectCommit(source, {
 target.createAsSelect(source, {"columns": ("id", "name")});
         @endcode
 
-        @param source the source table for the select statement; this table must use the same datasource as the
-        current target table
+        @param source the source table for the select statement; this table must use the exact same datasource
+        object as the current target table
         @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
         hash" for information about this argument
         @param opt optional creation and data callback options; see
@@ -988,6 +990,7 @@ target.createAsSelect(source, {"columns": ("id", "name")});
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
 
         @since SqlUtil 1.10
@@ -1007,8 +1010,8 @@ target.createAsSelect(source, {"columns": ("id", "name")});
 hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("id", "name")});
         @endcode
 
-        @param source the source table for the select statement; this table must use the same datasource as the
-        current target table
+        @param source the source table for the select statement; this table must use the exact same datasource
+        object as the current target table
         @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
         hash" for information about this argument
         @param opt optional creation and data callback options; see
@@ -1019,6 +1022,7 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
 
         @since SqlUtil 1.10
@@ -1040,7 +1044,8 @@ list<auto> args;
 string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \args);
         @endcode
 
-        @param source the source table for the select statement
+        @param source the source table for the select statement; it must use the exact same datasource object as the
+        current target table
         @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
         hash" for information about this argument
         @param args an optional reference to a list for any bind arguments
@@ -1051,6 +1056,7 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
 
         @since SqlUtil 1.10
@@ -1077,7 +1083,8 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
 hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns": ("id", "name")});
         @endcode
 
-        @param source the source table for the select statement
+        @param source the source table for the select statement; it must use the exact same datasource object as the
+        current target table
         @param select_hash a hash of conditions for the select statement; see @ref select_option_hash "select option
         hash" for information about this argument
         @param opt optional creation and data callback options; see
@@ -1087,6 +1094,7 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
 
         @since SqlUtil 1.10
@@ -3563,7 +3571,8 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @endcode
 
         @param cols the list of column names to use to insert in the current table
-        @param source the source table for the select statement
+        @param source the source table for the select statement; it must use the exact same datasource object as the
+        current target table
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
@@ -3572,6 +3581,7 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR unknown or invalid column in insert list
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
@@ -3622,7 +3632,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @endcode
 
         @param cols the list of column names to use to insert in the current table
-        @param source the source table for the select statement
+        @param source the source table for the select statement; it must use the exact same datasource object as the
+        current target table
         @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
@@ -3631,6 +3642,7 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
 
         @throw OPTION-ERROR invalid or unsupported option
         @throw COLUMN-ERROR unknown or invalid column in insert list
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
@@ -3671,6 +3683,12 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @return a hash giving the result of the operation and the SQL used for it; the \c result key will hold the
         integer number of rows inserted
 
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw COLUMN-ERROR unknown column, duplicate target column, or a reliably detectable source/target
+        projection cardinality mismatch
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
+        @throw SELECT-ERROR invalid select option or select statement
+
         @since SqlUtil 1.7
     */
     hash<SqlResultInfo> insertFromSelectWithInfo(list<auto> cols, AbstractTable source, hash<auto> select_hash,
@@ -3686,9 +3704,76 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         return insertFromSelectIntern(cols, source, sh, \sql, opt);
     }
 
+    #! returns insert-select SQL and bind arguments without executing the statement
+    /** @par Example:
+        @code{.py}
+list<auto> args;
+string sql = target.getInsertFromSelectSql(("id", "name"), source,
+    {"columns": ("customer_id", "customer_name"), "where": {"active": True}}, \args);
+        @endcode
+
+        @param cols the ordered target column names
+        @param source the source table; it must use the exact same datasource object as the target table
+        @param select_hash source select options; see @ref select_option_hash
+        @param args an optional reference receiving the ordered bind arguments
+        @param opt optional SQL data operation options used while resolving the structured source select; see
+        @ref AbstractTable::SqlDataCallbackOptions
+
+        @return the generated insert-select SQL
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw COLUMN-ERROR unknown column, duplicate target column, or a reliably detectable source/target
+        projection cardinality mismatch
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 3.0.0
+    */
+    string getInsertFromSelectSql(list<auto> cols, AbstractTable source, *hash<auto> select_hash,
+            *reference<list<auto>> args, *hash<auto> opt) {
+        list<auto> bind_args;
+        string rv = getInsertFromSelectSqlIntern(cols, source, select_hash, \bind_args, opt);
+        args = bind_args;
+        return rv;
+    }
+
+    #! returns insert-select SQL and bind arguments without executing the statement
+    /** @param cols the ordered target column names
+        @param source the source table; it must use the exact same datasource object as the target table
+        @param select_hash source select options; see @ref select_option_hash
+        @param opt optional SQL data operation options used while resolving the structured source select; see
+        @ref AbstractTable::SqlDataCallbackOptions
+
+        @return a hash containing generated \c sql and ordered \c args values
+
+        @throw OPTION-ERROR invalid or unsupported option
+        @throw COLUMN-ERROR unknown column, duplicate target column, or a reliably detectable source/target
+        projection cardinality mismatch
+        @throw DATASOURCE-ERROR source and target do not use the same datasource object
+        @throw SELECT-ERROR invalid select option or select statement
+
+        @since SqlUtil 3.0.0
+    */
+    hash<SqlResultInfo> getInsertFromSelectSqlWithInfo(list<auto> cols, AbstractTable source,
+            *hash<auto> select_hash, *hash<auto> opt) {
+        hash<SqlResultInfo> rv();
+        rv.sql = getInsertFromSelectSqlIntern(cols, source, select_hash, \rv.args, opt);
+        return rv;
+    }
+
     private int insertFromSelectIntern(list cols, AbstractTable source, *hash<auto> sh, *reference<string> sql,
             *hash<auto> opt, *reference<softlist<auto>> args) {
-        string ssql = source.getSelectSql(sh, \args);
+        list<auto> bind_args;
+        string statement = getInsertFromSelectSqlIntern(cols, source, sh, \bind_args, opt);
+        sql = statement;
+        args = bind_args;
+        return execData(opt, statement, bind_args);
+    }
+
+    private string getInsertFromSelectSqlIntern(list<auto> cols, AbstractTable source, *hash<auto> select_hash,
+            reference<list<auto>> args, *hash<auto> opt) {
+        validateOptionsIntern("OPTION-ERROR", getSqlDataCallbackOptions(), \opt);
+        validateSetOperationDatasource(source, "insert-select");
 
         # issue #3352: do not execute runtime DML while holding the lock
         if (!columns) {
@@ -3698,17 +3783,59 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
             getColumnsUnlocked();
         }
 
-        sql = sprintf("insert into %s (", getSqlName());
-
-        foreach string k in (cols) {
-            if (!columns.hasKey(k))
-                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)", getDesc(), k, cols);
+        if (!cols) {
+            throw "COLUMN-ERROR", sprintf("%s: insert-select requires at least one target column", getDesc());
         }
 
-        sql += (foldl $1 + "," + $2, getColumnSqlNames(cols));
-        sql += ") " + ssql;
+        hash<string, bool> seen;
+        foreach auto column in (cols) {
+            if (column.typeCode() != NT_STRING) {
+                throw "COLUMN-ERROR", sprintf("%s: insert-select target column %y has type %y; expected string",
+                    getDesc(), column, column.type());
+            }
+            if (!columns.hasKey(column)) {
+                throw "COLUMN-ERROR", sprintf("%s column %y is not a valid column (valid columns: %y)", getDesc(),
+                    column, columns.keys());
+            }
+            if (seen{column}) {
+                throw "COLUMN-ERROR", sprintf("%s: duplicate insert-select target column %y", getDesc(), column);
+            }
+            seen{column} = True;
+        }
 
-        return execData(opt, sql, args);
+        validateInsertFromSelectCardinality(cols, source, select_hash);
+        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "insert-select");
+        return sprintf("insert into %s (%s) %s", getSqlName(),
+            (foldl $1 + "," + $2, getColumnSqlNames(cols)), select_sql);
+    }
+
+    private validateInsertFromSelectCardinality(list<auto> target_columns, AbstractTable source,
+            *hash<auto> select_hash) {
+        if (select_hash.superquery) {
+            return;
+        }
+
+        if (select_hash.columns) {
+            softlist<auto> source_columns = select_hash.columns;
+            foreach auto column in (source_columns) {
+                if (column.typeCode() == NT_STRING && column =~ /(^|\.)\*$/) {
+                    return;
+                }
+            }
+            if (source_columns.size() != target_columns.size()) {
+                throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but %d source select "
+                    "expressions", getDesc(), target_columns.size(), source_columns.size());
+            }
+            return;
+        }
+
+        if (!select_hash.join) {
+            int source_column_count = source.describe().size();
+            if (source_column_count != target_columns.size()) {
+                throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but the source table has %d "
+                    "columns", getDesc(), target_columns.size(), source_column_count);
+            }
+        }
     }
 
     #! this method inserts data from the given iterator argument (whose @ref Qore::AbstractIterator::getValue() "getValue()" method must return a hash giving row values) into the current table; the transaction is committed if successful, if an error occurs then it is rolled back
@@ -10001,14 +10128,29 @@ on_exit printf("SQL> %s\n", sql);
         }
         validateOptionsIntern("OPTION-ERROR", getCreateAsSelectOptions(), \opt);
 
-        args = ();
-        string select_sql = source.getSelectSql(select_hash, \args);
+        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "create-as-select");
         string sql = AbstractDatabase::doCallback(opt, getCreateAsSelectSqlImpl(select_sql, opt),
             AbstractDatabase::AC_Create, "table", name);
         if (opt.sqlarg_callback) {
             opt.sqlarg_callback(sql, args);
         }
         return sql;
+    }
+
+    private string getSetOperationSelectSql(AbstractTable source, *hash<auto> select_hash,
+            reference<list<auto>> args, *hash<auto> opt, string operation) {
+        validateSetOperationDatasource(source, operation);
+
+        source.validateOptionsIntern("OPTION-ERROR", source.getSelectOptions(), \select_hash);
+        args = ();
+        return source.getSelectSqlStringIntern(select_hash, \args, opt);
+    }
+
+    private validateSetOperationDatasource(AbstractTable source, string operation) {
+        if (source.getDatasource() != ds) {
+            throw "DATASOURCE-ERROR", sprintf("%s: %s source %s must use the same AbstractDatasource object as "
+                "the target", getDesc(), operation, source.getDesc());
+        }
     }
 
     private *list<auto> getCreateIndexesSqlUnlocked(*hash<auto> opt, bool cache = True) {
