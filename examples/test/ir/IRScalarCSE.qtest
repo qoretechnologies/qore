@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub repeated(int value) {
+    int first = value + 7;
+    int second = value + 7;
+    int third = value + 7;
+    return first + second + third;
+}
+
+int sub mutations() {
+    int value = 1;
+    int before = value + 1;
+    value = 5;
+    int after = value + 1;
+    return before * 10 + after;
+}
+
+int sub bump(reference<int> value) {
+    return ++value;
+}
+
+int sub references() {
+    int value = 3;
+    int before = value + 1;
+    int bumped = bump(\\value);
+    int after = value + 1;
+    return before * 100 + bumped * 10 + after;
+}
+
+float sub repeatedFloat(float value) {
+    float first = value + 1.0;
+    float second = value + 1.0;
+    return first + second;
+}
+
+bool sub repeatedBool(bool value) {
+    bool first = !value;
+    bool second = !value;
+    return first == second;
+}
+
+int sub lvaluePathMetadata() {
+    hash<auto> data = (\"values\": (10, 20, 30));
+    int base = 0;
+    int first = base + 1;
+    int second = base + 1;
+    data.values[second] = first + 40;
+    return data.values[1];
+}
+
+int removed = 3;
+int removed_before = removed + 1;
+remove removed;
+int deleted = 4;
+int deleted_before = deleted + 1;
+delete deleted;
+int unassigned;
+
+printf(\"values:%d:%d:%d:%g:%y:%d\\n\", repeated(5), mutations(), references(),
+    repeatedFloat(2.5), repeatedBool(True), lvaluePathMetadata());
+printf(\"state:%d:%y:%d:%y:%y\\n\", removed_before, removed.typeCode() == NT_NOTHING,
+    deleted_before, deleted.typeCode() == NT_NOTHING, unassigned.typeCode() == NT_NOTHING);
+";
+
+string script_path = "/tmp/qore-ir-scalar-cse-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-scalar-cse-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "values:36:26:445:7.0:True:41
+state:4:True:5:True:True
+";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}

@@ -14,6 +14,7 @@
 #include <qore/intern/QoreJITIncludes.h>
 
 #include <algorithm>
+#include <bit>
 #include <cstdlib>
 #include <limits>
 #include <unordered_set>
@@ -360,6 +361,312 @@ static bool qore_ir_is_native_scalar_constant(QoreIROpcode opcode) {
         || opcode == QoreIROpcode::ConstBool;
 }
 
+static void qore_ir_rewrite_value(QoreIRValue& value,
+        const std::unordered_map<uint32_t, QoreIRValue>& replacements) {
+    auto it = replacements.find(value.id);
+    if (it != replacements.end()) {
+        value = it->second;
+    }
+}
+
+static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
+        const std::unordered_map<uint32_t, QoreIRValue>& replacements,
+        size_t& check_count, bool honor_cancellation) {
+    for (QoreIRValue& operand : inst.operands) {
+        if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")
+                && honor_cancellation) {
+            return false;
+        }
+        qore_ir_rewrite_value(operand, replacements);
+    }
+
+    switch (inst.opcode) {
+        case QoreIROpcode::BrIf:
+            qore_ir_rewrite_value(static_cast<QoreIRBranchIfInstruction&>(inst).condition, replacements);
+            break;
+        case QoreIROpcode::SwitchInt:
+            qore_ir_rewrite_value(static_cast<QoreIRSwitchIntInstruction&>(inst).switch_val, replacements);
+            break;
+        case QoreIROpcode::SwitchString:
+            qore_ir_rewrite_value(static_cast<QoreIRSwitchStringInstruction&>(inst).switch_val, replacements);
+            break;
+        case QoreIROpcode::IteratorCreate:
+        case QoreIROpcode::IteratorCreateIterate:
+            qore_ir_rewrite_value(static_cast<QoreIRIteratorCreateInstruction&>(inst).iterable, replacements);
+            break;
+        case QoreIROpcode::IteratorNext:
+            qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
+            break;
+        case QoreIROpcode::Phi: {
+            auto& phi = static_cast<QoreIRPhiInstruction&>(inst);
+            for (QoreIRPhiIncoming& incoming : phi.incoming) {
+                if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")
+                        && honor_cancellation) {
+                    return false;
+                }
+                qore_ir_rewrite_value(incoming.value, replacements);
+            }
+            break;
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary: {
+            auto& path = static_cast<QoreIRLValuePathInstruction&>(inst);
+            for (LVPathStep& step : path.path) {
+                if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")
+                        && honor_cancellation) {
+                    return false;
+                }
+                if (step.operand_idx != UINT32_MAX) {
+                    QoreIRValue operand(step.operand_idx);
+                    qore_ir_rewrite_value(operand, replacements);
+                    step.operand_idx = operand.id;
+                }
+                for (uint32_t& id : step.slice_operand_ids) {
+                    if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")
+                            && honor_cancellation) {
+                        return false;
+                    }
+                    QoreIRValue operand(id);
+                    qore_ir_rewrite_value(operand, replacements);
+                    id = operand.id;
+                }
+            }
+            break;
+        }
+        case QoreIROpcode::Return: {
+            auto& ret = static_cast<QoreIRReturnInstruction&>(inst);
+            if (ret.has_value) {
+                qore_ir_rewrite_value(ret.value, replacements);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+    return true;
+}
+
+struct QoreIRScalarExpressionKey {
+    QoreIROpcode opcode = QoreIROpcode::ConstNothing;
+    uint64_t constant_bits = 0;
+    std::vector<uint32_t> operands;
+
+    bool operator==(const QoreIRScalarExpressionKey& other) const {
+        return opcode == other.opcode && constant_bits == other.constant_bits
+            && operands == other.operands;
+    }
+};
+
+struct QoreIRScalarExpressionKeyHash {
+    size_t operator()(const QoreIRScalarExpressionKey& key) const {
+        size_t hash = static_cast<size_t>(key.opcode) * 0x9e3779b1U;
+        hash ^= static_cast<size_t>(key.constant_bits ^ (key.constant_bits >> 32));
+        for (uint32_t operand : key.operands) {
+            hash ^= static_cast<size_t>(operand) + 0x9e3779b9U + (hash << 6) + (hash >> 2);
+        }
+        return hash;
+    }
+};
+
+static QoreIRScalarExpressionKey qore_ir_get_scalar_expression_key(const QoreIRInstruction& inst) {
+    QoreIRScalarExpressionKey key;
+    key.opcode = inst.opcode;
+    key.operands.reserve(inst.operands.size());
+    for (QoreIRValue operand : inst.operands) {
+        key.operands.push_back(operand.id);
+    }
+    if (qore_ir_is_native_scalar_constant(inst.opcode)) {
+        const auto& constant = static_cast<const QoreIRConstInstruction&>(inst).constant;
+        if (inst.opcode == QoreIROpcode::ConstInt) {
+            key.constant_bits = static_cast<uint64_t>(constant.int_value);
+        } else if (inst.opcode == QoreIROpcode::ConstFloat) {
+            key.constant_bits = std::bit_cast<uint64_t>(constant.float_value);
+        } else {
+            key.constant_bits = constant.bool_value ? 1 : 0;
+        }
+    }
+    return key;
+}
+
+static bool qore_ir_is_forwardable_scalar_load(const QoreIRFunction& func,
+        const QoreIRInstruction& inst) {
+    if (inst.opcode != QoreIROpcode::LoadLocal) {
+        return false;
+    }
+    const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
+    if (!load.local || load.is_closure || load.is_ref
+            || !func.ir_only_locals.count(reinterpret_cast<const void*>(load.local))) {
+        return false;
+    }
+    const QoreIRValueFacts* facts = func.getValueFacts(inst.result);
+    if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned || !facts->never_nothing) {
+        return false;
+    }
+    return facts->representation == QoreIRValueRepresentation::NativeInt
+        || facts->representation == QoreIRValueRepresentation::NativeFloat
+        || facts->representation == QoreIRValueRepresentation::NativeBool;
+}
+
+static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::NewObject:
+        case QoreIROpcode::CreateParseRef:
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallDirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::OnBlockExit:
+        case QoreIROpcode::ScopeExit:
+        case QoreIROpcode::Backquote:
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::SpliceLValue:
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            return true;
+        default:
+            return false;
+    }
+}
+
+struct QoreIRScalarCSEStats {
+    size_t loads_forwarded = 0;
+    size_t expressions_eliminated = 0;
+};
+
+static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFunction& func) {
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    std::unordered_set<const QoreIRInstruction*> forwarded_loads;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
+            return {};
+        }
+        std::unordered_map<QoreIRScalarExpressionKey, QoreIRValue,
+            QoreIRScalarExpressionKeyHash> available;
+        std::unordered_map<const LocalVar*, QoreIRValue> available_loads;
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
+                return {};
+            }
+            QoreIRInstruction& inst = *inst_ptr;
+            if (!qore_ir_rewrite_value_operands(inst, replacements, check_count, true)) {
+                return {};
+            }
+
+            const LocalVar* written_local = nullptr;
+            if (inst.opcode == QoreIROpcode::StoreLocal
+                    || inst.opcode == QoreIROpcode::StoreClosure
+                    || inst.opcode == QoreIROpcode::InstantiateLocal
+                    || inst.opcode == QoreIROpcode::UninstantiateLocal) {
+                written_local = static_cast<const QoreIRLocalInstruction&>(inst).local;
+            } else if (inst.opcode == QoreIROpcode::AddAssignLocalInt) {
+                written_local = static_cast<const QoreIRAddAssignLocalIntInstruction&>(inst).target;
+            } else if (inst.opcode == QoreIROpcode::IncrementLocalInt) {
+                written_local = static_cast<const QoreIRIncrementLocalIntInstruction&>(inst).local;
+            }
+            if (written_local) {
+                available_loads.erase(written_local);
+            } else if (qore_ir_may_mutate_unknown_local(inst.opcode)) {
+                available_loads.clear();
+            }
+
+            if (qore_ir_is_forwardable_scalar_load(func, inst)) {
+                const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
+                auto [load_it, inserted] = available_loads.emplace(load.local, inst.result);
+                if (!inserted) {
+                    replacements.emplace(inst.result.id, load_it->second);
+                    eliminated.insert(&inst);
+                    forwarded_loads.insert(&inst);
+                }
+                continue;
+            }
+
+            bool candidate = inst.result.isValid() && !inst.exception_target
+                && (qore_ir_is_native_scalar_constant(inst.opcode)
+                    || qore_ir_is_native_scalar_pure_opcode(inst.opcode));
+            if (!candidate) {
+                continue;
+            }
+            QoreIRScalarExpressionKey key = qore_ir_get_scalar_expression_key(inst);
+            auto [available_it, inserted] = available.emplace(std::move(key), inst.result);
+            if (inserted) {
+                continue;
+            }
+            replacements.emplace(inst.result.id, available_it->second);
+            eliminated.insert(&inst);
+        }
+    }
+
+    if (eliminated.empty()) {
+        return {};
+    }
+
+    for (const auto& block : func.blocks) {
+        (void)qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination");
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            // Once commit starts, finish all rewrites even if cancellation is
+            // requested so no use can reference an erased definition.
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR scalar common-expression elimination");
+            }
+            if (eliminated.count(it->get())) {
+                it = instructions.erase(it);
+            } else {
+                (void)qore_ir_rewrite_value_operands(**it, replacements, check_count, false);
+                ++it;
+            }
+        }
+    }
+    return {
+        forwarded_loads.size(),
+        eliminated.size() - forwarded_loads.size(),
+    };
+}
+
 static bool qore_ir_collect_mutated_locals(const QoreIRNaturalLoop& loop, const QoreIRControlFlowGraph& cfg,
         std::unordered_set<const LocalVar*>& mutated, size_t& check_count) {
     for (size_t block_id : loop.blocks) {
@@ -527,6 +834,12 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
             ++insert_at;
             ++local_stats.instructions_hoisted;
         }
+    }
+
+    if (!getenv("QORE_DISABLE_IR_CSE")) {
+        QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func);
+        local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
+        local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
     }
 
     if (stats) {

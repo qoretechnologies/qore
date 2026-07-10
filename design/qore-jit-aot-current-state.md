@@ -157,6 +157,18 @@ runtime and AOT source lowering. `QORE_DISABLE_IR_OPT=1` disables the pass for
 same-binary diagnostics and performance comparisons; `QORE_IR_OPT_STATS=1`
 reports analyzed loops and hoisted instructions.
 
+After LICM, a same-basic-block scalar pass forwards repeated loads of IR-only
+locals and eliminates repeated native scalar constants and arithmetic or
+comparison expressions. Load forwarding requires the value facts to prove an
+assigned, non-NOTHING native `int`, `float`, or `bool`; declared type alone is
+not sufficient. Explicit local writes invalidate that local, while references,
+calls, lvalue operations, scope exits, and other operations that can mutate an
+unknown local invalidate all available loads. Discovery is cancellation-safe
+and no definition is erased until all replacements have been selected. Set
+`QORE_DISABLE_IR_CSE=1` to retain the unoptimized same-binary path; the
+`QORE_IR_OPT_STATS=1` output includes forwarded-load and eliminated-expression
+counts.
+
 Recognized builtin and pseudo-method operations also carry a stable
 `QoreIRIntrinsic` identity. The builder assigns the identity when it creates a
 resolved pseudo call, and artifact readers reconstruct it once from serialized
