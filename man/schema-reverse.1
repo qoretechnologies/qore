@@ -1,91 +1,38 @@
-.\" schema-reverse.1 - man page for schema-reverse
+.\" schema-reverse.1 - compatibility man page for qschema export
 .\"
 .\" Copyright (C) 2015 - 2026 Qore Technologies, s.r.o.
 .\"
 .TH SCHEMA-REVERSE 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
-schema\-reverse \- reverse-engineer databases to data-schema documents
+schema\-reverse \- compatibility alias for qschema export
 .SH SYNOPSIS
 .B schema\-reverse
 [\fIoptions\fP]
 \fIconnection\fP
 .SH DESCRIPTION
-\fBschema\-reverse\fR connects to a database and generates a complete Qore
-data-schema document in YAML (\fB.ysm\fP) or JSON (\fB.jsm\fP) format.
-It supports tables, sequences, materialized views, types, functions,
-procedures, and packages.
-Plain views cannot be exported because the data-schema format has no
-representation for them.
-.SH OPTIONS
-.TP
-.BR \-s ", " \-\-schema =\fIname\fP
-Set the schema name in the output (default: \fBExportedSchema\fP).
-.TP
-.BR \-o ", " \-\-output =\fIfile\fP
-Write the data-schema document to \fIfile\fP instead of standard output.
-.TP
-.B \-\-format =\fIformat\fP
-Set the output format to \fByaml\fP (default) or \fBjson\fP.
-.TP
-.B \-\-with\-partitions
-Include physical table partitions in the export.
-.TP
-.BR \-t ", " \-\-table [=\fIpattern\fP]
-Export matching tables.
-.TP
-.BR \-q ", " \-\-seq [=\fIpattern\fP]
-Export matching sequences.
-.TP
-.BR \-y ", " \-\-type [=\fIpattern\fP]
-Export matching types.
-.TP
-.BR \-m ", " \-\-mview [=\fIpattern\fP]
-Export matching materialized views.
-.TP
-.BR \-p ", " \-\-proc [=\fIpattern\fP]
-Export matching procedures.
-.TP
-.BR \-f ", " \-\-func [=\fIpattern\fP]
-Export matching functions.
-.TP
-.BR \-g ", " \-\-pkg [=\fIpattern\fP]
-Export matching packages.
-.TP
-.BR \-C ", " \-\-no\-color
-Disable colored status output.
-.TP
-.B \-\-verbose
-Write verbose status output to standard error.
-.TP
-.BR \-h ", " \-\-help
-Show help text and exit.
-.TP
-.BR \-V ", " \-\-version
-Show version information and exit.
+\fBschema\-reverse\fR invokes \fBqschema export\fR with the same arguments.
+It is retained for compatibility with existing scripts; new scripts should
+use \fBqschema export\fR directly.
 .PP
-Each object-selection \fIpattern\fP can be an exact name, a comma-separated
-list, or a regular expression.
-A selection option without a value selects all objects of that type.
-Selection options can be combined; if none is given, the whole schema is
-exported.
+The command reverse-engineers a database into a complete Qore data-schema
+document in YAML (\fB.ysm\fP) or JSON (\fB.jsm\fP) format.
+It is read-only and supports selecting object types or name patterns.
+.SH OPTIONS
+See \fBqschema\fR(1), particularly the \fBExport Options\fR section, for the
+complete option list.
 .SH EXAMPLES
 Export the full schema to a YAML file:
 .RS
 .B schema\-reverse \-s MySchema pgsql:user/pass@db \-o myschema.ysm
 .RE
 .PP
-Export specific tables as JSON:
+Equivalent canonical command:
 .RS
-.B schema\-reverse \-\-table='workflows,.*step.*' \-\-format json mydb
-.RE
-.PP
-Include physical partitions:
-.RS
-.B schema\-reverse \-\-with\-partitions oracle:user/pass@tns
+.B qschema export \-s MySchema pgsql:user/pass@db \-o myschema.ysm
 .RE
 .SH SEE ALSO
-.BR qore (1),
 .BR qschema (1),
+.BR qore (1),
 .BR sqlutil (1)
 .SH AUTHORS
 Qore Technologies, s.r.o.

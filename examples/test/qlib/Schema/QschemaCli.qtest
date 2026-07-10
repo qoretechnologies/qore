@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# qschema export and schema-reverse compatibility CLI tests
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class QschemaCliTest
+
+class QschemaCliTest inherits QUnit::Test {
+    private {
+        string qore_path;
+        string env_prefix;
+        string qschema_path;
+        string schema_reverse_path;
+        string tmp_dir;
+    }
+
+    constructor() : Test("qschema CLI", "1.0") {
+        qore_path = getQorePath();
+        string path = ENV.PATH ?? "";
+        if (qore_path != "qore") {
+            path = dirname(qore_path) + ":" + path;
+        }
+        env_prefix = sprintf("PATH=%s ", shellQuote(path));
+        if (ENV.LD_LIBRARY_PATH) {
+            env_prefix += sprintf("LD_LIBRARY_PATH=%s ", shellQuote(ENV.LD_LIBRARY_PATH));
+        }
+        if (ENV.QORE_MODULE_DIR) {
+            env_prefix += sprintf("QORE_MODULE_DIR=%s ", shellQuote(ENV.QORE_MODULE_DIR));
+        }
+
+        string bin_dir = normalize_dir(get_script_dir() + "/../../../../bin");
+        qschema_path = bin_dir + "/qschema";
+        schema_reverse_path = bin_dir + "/schema-reverse";
+        tmp_dir = make_tmp_dir();
+
+        addTestCase("export help exposes reverse-engineering options", \testExportHelp());
+        addTestCase("schema-reverse help delegates to qschema export", \testAliasHelp());
+        addTestCase("schema-reverse delegates version behavior", \testAliasVersion());
+        addTestCase("schema-reverse forwards errors and exit status", \testAliasErrors());
+        addTestCase("global help points to export help", \testGlobalHelp());
+
+        set_return_value(main());
+
+        if (is_dir(tmp_dir)) {
+            remove_tree(tmp_dir);
+        }
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private string getQorePath() {
+        if (ENV.QORE_PATH) {
+            return ENV.QORE_PATH;
+        }
+        foreach string dir in ("build", "build-ci", "build-debug") {
+            string path = normalize_dir(get_script_dir() + "/../../../../" + dir + "/qore");
+            if (is_file(path)) {
+                return path;
+            }
+        }
+        return "qore";
+    }
+
+    private hash<auto> runCommand(string command, string name) {
+        string stdout_path = tmp_dir + "/" + name + ".out";
+        string stderr_path = tmp_dir + "/" + name + ".err";
+        int rc = system(sprintf("%s%s > %s 2> %s", env_prefix, command, shellQuote(stdout_path),
+            shellQuote(stderr_path)));
+        return {
+            "rc": rc,
+            "stdout": is_file(stdout_path) ? ReadOnlyFile::readTextFile(stdout_path) : "",
+            "stderr": is_file(stderr_path) ? ReadOnlyFile::readTextFile(stderr_path) : "",
+        };
+    }
+
+    private hash<auto> runQschema(string args, string name) {
+        return runCommand(sprintf("%s %s %s", shellQuote(qore_path), shellQuote(qschema_path), args), name);
+    }
+
+    private hash<auto> runAlias(string args, string name) {
+        return runCommand(sprintf("%s %s", shellQuote(schema_reverse_path), args), name);
+    }
+
+    private testExportHelp() {
+        hash<auto> result = runQschema("export --help", "export-help");
+        assertEq(0, result.rc, "export help exit status");
+        assertTrue(result.stdout.contains("qschema export"), "export help identifies the canonical command");
+        assertTrue(result.stdout.contains("--schema"), "export help documents schema naming");
+        assertTrue(result.stdout.contains("--table"), "export help documents object filtering");
+        assertTrue(result.stdout.contains("--func"), "export help documents the conflicting -f export option");
+        assertTrue(result.stdout.contains("--with-partitions"), "export help documents partition export");
+        assertEq("", result.stderr, "export help has no stderr output");
+    }
+
+    private testAliasHelp() {
+        hash<auto> canonical = runQschema("export --help", "canonical-help");
+        hash<auto> alias = runAlias("--help", "alias-help");
+        assertEq(canonical.rc, alias.rc, "alias help exit status");
+        assertEq(canonical.stdout, alias.stdout, "alias help is canonical export help");
+        assertEq(canonical.stderr, alias.stderr, "alias help stderr matches");
+    }
+
+    private testAliasVersion() {
+        hash<auto> canonical = runQschema("export --version", "canonical-version");
+        hash<auto> alias = runAlias("--version", "alias-version");
+        assertEq(0, alias.rc, "alias version exit status");
+        assertEq(canonical.stdout, alias.stdout, "alias reports the qschema version");
+        assertEq(canonical.stderr, alias.stderr, "alias version stderr matches");
+    }
+
+    private testAliasErrors() {
+        hash<auto> canonical = runQschema("export -C --format toml dummy", "canonical-error");
+        hash<auto> alias = runAlias("-C --format toml dummy", "alias-error");
+        assertEq(1, alias.rc, "alias preserves export error status");
+        assertEq(canonical.stdout, alias.stdout, "alias error stdout matches");
+        assertEq(canonical.stderr, alias.stderr, "alias error stderr matches");
+        assertTrue(alias.stderr.contains("OPTION-ERROR"), "alias exposes the canonical validation error");
+
+        hash<auto> canonical_missing = runQschema("export -C", "canonical-missing");
+        hash<auto> alias_missing = runAlias("-C", "alias-missing");
+        assertEq(1, alias_missing.rc, "alias preserves missing-connection status");
+        assertEq(canonical_missing.stdout, alias_missing.stdout, "alias missing-connection stdout matches");
+        assertEq(canonical_missing.stderr, alias_missing.stderr, "alias missing-connection stderr matches");
+        assertTrue(alias_missing.stderr.contains("NO-CONNECTION-STRING"),
+            "alias exposes the canonical missing-connection error");
+    }
+
+    private testGlobalHelp() {
+        hash<auto> result = runQschema("--help", "global-help");
+        assertEq(0, result.rc, "global help exit status");
+        assertTrue(result.stdout.contains("qschema export --help"), "global help points to export help");
+    }
+}

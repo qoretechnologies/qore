@@ -1704,7 +1704,9 @@ foreach string module_name in (registry.getProcessModules()) {
       - added @ref Schema::DataSchema "DataSchema", @ref Schema::DataSchemaLoader "DataSchemaLoader", and
         @ref Schema::MigrationExecutor "MigrationExecutor" classes for data-driven schema definitions and
         migrations from YAML (\c .ysm) / JSON (\c .jsm) files
-      - added the \c qschema CLI tool (align, drop, diff, validate, info, export)
+      - added the \c qschema CLI tool (align, drop, diff, validate, info, export); \c qschema \c export is now the
+        canonical database reverse-engineering command with schema naming, object filtering, YAML/JSON output, and
+        physical-partition options; \c schema-reverse is retained as a compatibility alias
 
     - <a href="../../modules/SchemaReverse/html/index.html#schemareverseintro">SchemaReverse</a> module
       - added \c toYaml() and \c toJson() methods on \c AbstractReverseObject and \c SchemaReverse

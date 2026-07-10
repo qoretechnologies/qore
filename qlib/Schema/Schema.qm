@@ -718,20 +718,43 @@ module Schema {
 
     # Print to stdout
     $ qschema export mydb
+
+    # Export selected tables and set the output schema name
+    $ qschema export mydb --schema MyApp --table='users,orders_.*' -o selected.ysm
     @endcode
+
+    The legacy \c schema-reverse command is a compatibility alias for \c qschema \c export and accepts the same
+    options. New scripts should use \c qschema \c export directly.
 
     @subsection schema_qschema_options Options
 
     |!Option|!Description
-    |\c --data-ts \c <name>|Data tablespace name
-    |\c --index-ts \c <name>|Index tablespace name
-    |\c --access-level \c <level>|\c untrusted, \c trusted (default), or \c admin
+    |\c --data-ts \e name|Data tablespace name
+    |\c --index-ts \e name|Index tablespace name
+    |\c --access-level \e level|\c untrusted, \c trusted (default), or \c admin
     |\c -f, \c --force|Force operation
     |\c -n, \c --dry-run|Show SQL without executing (for \c align and \c drop)
     |\c -C, \c --no-color|Disable colorized output
     |\c -v, \c --verbose|Increase verbosity (repeatable)
-    |\c -o, \c --output \c <file>|Output file (for \c export)
+
+    Export-specific options:
+
+    |!Option|!Description
+    |\c -s, \c --schema \e name|Output schema name (default: \c ExportedSchema)
+    |\c -o, \c --output \e file|Output file (default: stdout)
     |\c --format \c yaml\|json|Export format (default: \c yaml)
+    |\c --with-partitions|Include physical table partitions
+    |\c -t, \c --table [\e pattern]|Select tables
+    |\c -q, \c --seq [\e pattern]|Select sequences
+    |\c -y, \c --type [\e pattern]|Select types
+    |\c -m, \c --mview [\e pattern]|Select materialized views
+    |\c -p, \c --proc [\e pattern]|Select procedures
+    |\c -f, \c --func [\e pattern]|Select functions
+    |\c -g, \c --pkg [\e pattern]|Select packages
+
+    Export patterns can be exact names, comma-separated lists, or regular expressions. A selection option without a
+    value selects all objects of that type; without any selection options, the whole schema is exported.
+    Plain views cannot be exported because the data-schema format has no representation for them.
 
     @subsection schema_qschema_workflow Typical Workflow
 
