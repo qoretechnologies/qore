@@ -2016,9 +2016,13 @@ public:
     mutable const QoreTypeInfo* cached_return_type = nullptr;
 
     // Cached native integer leaf-call state. The release/acquire state publishes the
-    // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=param+constant.
+    // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.
     mutable std::atomic<int8_t> native_int_leaf_state{0};
-    mutable int64_t native_int_leaf_constant = 0;
+    mutable QoreIROpcode native_int_leaf_opcode = QoreIROpcode::AddInt;
+    mutable int8_t native_int_leaf_lhs_param = -1;
+    mutable int8_t native_int_leaf_rhs_param = -1;
+    mutable int64_t native_int_leaf_lhs_constant = 0;
+    mutable int64_t native_int_leaf_rhs_constant = 0;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
