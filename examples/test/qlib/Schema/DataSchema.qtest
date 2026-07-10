@@ -118,6 +118,12 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(ms."$defs".hasKey("referenceData"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partition_strategy"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partitions"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("list"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("hash"));
+        assertTrue(ms."$defs".partitionStrategy.properties.hasKey("subpartition"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("values"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("modulus"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("subpartitions"));
     }
 
     columnNormalizationTests() {
@@ -276,6 +282,30 @@ class DataSchemaTest inherits QUnit::Test {
         assertEq("roles", result.foreign_constraints.fk_role.table);
         assertEq(("id",), result.partition_strategy.columns);
         assertEq(100, result.partitions.test_p1.bound_to);
+
+        hash<auto> method_families = Schema::DataSchemaLoader::normalizeTable("method_families", {
+            "columns": {
+                "id": {"type": "int"},
+                "region": {"type": "varchar", "size": 8},
+            },
+            "partition_strategy": {
+                "method": "list",
+                "columns": ("region",),
+                "subpartition": {"method": "hash", "columns": ("id",)},
+            },
+            "partitions": {
+                "eu": {
+                    "values": ("eu", "uk"),
+                    "subpartitions": {
+                        "eu_h0": {"method": "hash", "modulus": 2, "remainder": 0},
+                    },
+                },
+            },
+        });
+        assertEq("list", method_families.partition_strategy.method);
+        assertEq("hash", method_families.partition_strategy.subpartition.method);
+        assertEq(("eu", "uk"), method_families.partitions.eu.values);
+        assertEq(0, method_families.partitions.eu.subpartitions.eu_h0.remainder);
 
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);

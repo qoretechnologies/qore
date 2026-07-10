@@ -345,6 +345,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
             addTestCase("structured aggregate selection", \structuredAggregateSelectionTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
+            addTestCase("partition method families", \partitionMethodFamiliesTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
             addTestCase("drop PK constraint without backing index", \dropPkConstraintNoBackingIndexTest());
@@ -1462,6 +1463,9 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(-1, targeted_p1.ordinal, "pgsql marks targeted order unknown without loading the full catalog");
         assertEq(0, targeted_p1.bound_from, "pgsql targeted lookup parses the lower bound");
         assertEq(10, targeted_p1.bound_to, "pgsql targeted lookup parses the upper bound");
+        assertTrue(exists targeted_p1.estimated_row_count,
+            "pgsql targeted lookup exposes the catalog-estimated row count");
+        assertTrue(targeted_p1.size_bytes > 0, "pgsql targeted lookup exposes allocated partition bytes");
         assertNothing(t.getPartition(parent + "_missing"),
             "pgsql targeted lookup returns nothing for a relation outside the partition set");
         hash<PartitionLookupResult> targeted_lookup = t.findPartitionBySpec({
@@ -1505,6 +1509,10 @@ class PgsqlTest inherits SqlTestBase {
             sprintf("partition key is the canonical name: %y", desc_parts.partitions{p1}));
         assertFalse(desc_parts.partitions{p1}.hasKey("ordinal"), "description excludes catalog ordinal");
         assertFalse(desc_parts.partitions{p1}.hasKey("sql_name"), "description excludes diagnostic SQL name");
+        assertFalse(desc_parts.partitions{p1}.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc_parts.partitions{p1}.hasKey("size_bytes"),
+            "description excludes runtime storage statistics");
         assertFalse(desc_parts.partitions{p1}.hasKey("bound_sql"),
             "typed bounds take precedence over native SQL bounds");
         assertEq(0, desc_parts.partitions{p1}.bound_from, "description preserves typed lower bound");
@@ -1842,7 +1850,8 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(1, events.size(), "direct truncate emits one info callback");
         assertEq(AbstractDatabase::AC_Truncate, events[0].action, "direct truncate action code");
         assertEq(1, callback_sql.size(), "direct truncate emits one SQL callback");
-        assertEq(cached_partition_count, t.listPartitions().size(), "truncate retains structural partition metadata");
+        assertEq(cached_partition_count, t.listPartitions().size(),
+            "truncate refreshes statistics without changing structural partition metadata");
         assertEq(0, ds.selectRow(sprintf("select count(*) c from %s", p2)).c, "truncate executed exactly once");
 
         events = ();
@@ -2200,6 +2209,173 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(raced.created, "ensurePartition() race resolves the duplicate without creating");
         assertTrue(raced.materialized, "ensurePartition() race resolves to a materialized partition");
         assertEq(PartitionVerifiedBy::Bounds, raced.verified_by, "ensurePartition() race resolved by bounds");
+    }
+
+    partitionMethodFamiliesTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        list<string> names = ("pgsql_part_methods", "pgsql_part_methods_eu", "pgsql_part_methods_eu_h0",
+            "pgsql_part_methods_eu_h1", "pgsql_part_methods_us", "pgsql_part_methods_us_h0",
+            "pgsql_part_methods_us_h1", "pgsql_part_hash", "pgsql_part_hash_h0", "pgsql_part_hash_h1");
+        code cleanup = sub () {
+            # pgsql_part_mixed intentionally cannot be represented by PgsqlTable, so remove it natively
+            ds.execRaw("drop table if exists pgsql_part_mixed cascade");
+            ds.commit();
+            foreach string n in (names) {
+                PgsqlTable t(ds, n);
+                if (t.checkExistence()) {
+                    t.dropCommit();
+                }
+            }
+        };
+        cleanup();
+        on_exit cleanup();
+
+        PgsqlTable list_table(ds, "pgsql_part_methods");
+        list_table.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "region": {"qore_type": SqlUtil::VARCHAR, "size": 8, "notnull": True},
+            },
+            "partition_strategy": {
+                "method": "list",
+                "columns": "region",
+                "subpartition": {"method": "hash", "columns": "id"},
+            },
+            "partitions": {
+                "pgsql_part_methods_eu": {
+                    "values": ("eu", "e,u", "o'k"),
+                    "subpartitions": {
+                        "pgsql_part_methods_eu_h0": {"modulus": 2, "remainder": 0},
+                        "pgsql_part_methods_eu_h1": {"modulus": 2, "remainder": 1},
+                    },
+                },
+                "pgsql_part_methods_us": {
+                    "values": ("us",),
+                    "subpartitions": {
+                        "pgsql_part_methods_us_h0": {"modulus": 2, "remainder": 0},
+                        "pgsql_part_methods_us_h1": {"modulus": 2, "remainder": 1},
+                    },
+                },
+            },
+        });
+        assertTrue(list_table.supportsPartitionMethod("list"), "PostgreSQL supports portable list partitioning");
+        assertTrue(list_table.supportsPartitionMethod("hash", True),
+            "PostgreSQL supports portable hash subpartitioning");
+        assertThrows("DESCRIPTION-ERROR", "duplicate value", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_invalid_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {"p": {"values": ("eu", "eu")}},
+            });
+        });
+        assertThrows("PARTITION-ERROR", "already assigned", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_overlapping_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {
+                    "p1": {"values": ("eu",)},
+                    "p2": {"values": ("eu", "us")},
+                },
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "values cannot be empty", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_empty_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {"p": {"values": ()}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "0 <= remainder < modulus", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_invalid_hash");
+            invalid.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "hash", "columns": "id"},
+                "partitions": {"p": {"modulus": 2, "remainder": 2}},
+            });
+        });
+        assertTrue(list_table.getCreateSqlString() =~ /partition by list \(region\).*partition by hash \(id\)/is,
+            "nested list/hash DDL includes both partitioning levels");
+        list_table.createCommit();
+
+        PgsqlTable live(ds, "pgsql_part_methods");
+        hash<PartitionStrategy> strategy = live.getPartitionStrategy();
+        assertEq("list", strategy.method, "list strategy round-trips");
+        assertEq("hash", strategy.subpartition.method, "subpartition strategy round-trips");
+        hash<string, PartitionInfo> parts = live.listPartitions();
+        assertEq(("eu", "e,u", "o'k"), parts.pgsql_part_methods_eu.values,
+            "typed list values, including SQL punctuation, are introspected");
+        assertEq(2, parts.pgsql_part_methods_eu.subpartitions.size(), "nested partitions are introspected");
+        assertTrue(exists parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.size_bytes,
+            "nested partition storage metadata is introspected recursively");
+        assertEq(0, parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.remainder,
+            "hash remainder is introspected");
+        assertEq(2, parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.modulus,
+            "hash modulus is introspected");
+
+        live.insert({"id": 1, "region": "eu"});
+        live.insert({"id": 2, "region": "us"});
+        ds.commit();
+        assertEq(2, live.rowCount(), "nested partitions route inserted rows");
+        hash<PartitionLookupResult> lookup = live.findPartitionBySpec({"values": ("o'k", "eu", "e,u")});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "list partition lookup compares typed values");
+        assertEq("pgsql_part_methods_eu", lookup.partition.name, "list lookup returns the expected partition");
+        hash<PartitionEnsureResult> ensured = live.ensurePartition({
+            "name": "pgsql_part_methods_eu",
+            "values": ("eu", "e,u", "o'k"),
+        });
+        assertEq(PartitionVerifiedBy::Definition, ensured.verified_by,
+            "list ensure reports definition verification");
+
+        hash<auto> desc = live.getDescriptionHash({"with_partitions": True});
+        assertEq(("eu", "e,u", "o'k"), desc.partitions.pgsql_part_methods_eu.values,
+            "list values are recreatable in table descriptions");
+        assertEq(1, desc.partitions.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h1.remainder,
+            "nested hash definitions are recreatable");
+        PgsqlTable roundtrip(ds, "pgsql_part_methods_copy");
+        roundtrip.setupTable(desc);
+        assertTrue(roundtrip.getCreateSqlString() =~ /for values with \(modulus 2, remainder 1\)/i,
+            "round-tripped descriptions regenerate hash bucket DDL");
+
+        PgsqlTable hash_table(ds, "pgsql_part_hash");
+        hash_table.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "partition_strategy": {"method": "hash", "columns": "id"},
+            "partitions": {
+                "pgsql_part_hash_h0": {"modulus": 2, "remainder": 0},
+                "pgsql_part_hash_h1": {"modulus": 2, "remainder": 1},
+            },
+        });
+        hash_table.createCommit();
+        PgsqlTable live_hash(ds, "pgsql_part_hash");
+        hash<PartitionLookupResult> hash_lookup = live_hash.findPartitionBySpec({"modulus": 2, "remainder": 1});
+        assertEq(PartitionLookupStatus::Found, hash_lookup.status, "hash bucket lookup is semantic");
+        assertEq("pgsql_part_hash_h1", hash_lookup.partition.name, "hash lookup returns the expected bucket");
+        assertThrows("PARTITION-ERROR", "modulus", sub () {
+            live_hash.getAddPartitionSql({"name": "pgsql_part_hash_h2", "modulus": 4, "remainder": 2});
+        });
+        assertThrows("PARTITION-ERROR", "duplicates existing partition", sub () {
+            live_hash.getAddPartitionSql({"name": "pgsql_part_hash_dup", "modulus": 2, "remainder": 1});
+        });
+
+        ds.execRaw("create table pgsql_part_mixed (id int, region text) partition by range (id)");
+        ds.execRaw("create table pgsql_part_mixed_p0 partition of pgsql_part_mixed "
+            "for values from (0) to (100) partition by hash (region)");
+        ds.execRaw("create table pgsql_part_mixed_p1 partition of pgsql_part_mixed "
+            "for values from (100) to (200)");
+        ds.commit();
+        PgsqlTable mixed(ds, "pgsql_part_mixed");
+        assertThrows("PARTITION-ERROR", "non-uniform native subpartition hierarchy", sub () {
+            mixed.getPartitionStrategy();
+        });
     }
 
     partitionChildExclusionTest() {

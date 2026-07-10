@@ -1728,6 +1728,11 @@ foreach string module_name in (registry.getProcessModules()) {
         with explicit capability checks and unsupported errors for non-equivalent backend mechanisms
       - added targeted canonical-name partition metadata lookup for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
         Server without loading complete high-cardinality partition catalogs
+      - added portable list partitions on PostgreSQL, Oracle, and MySQL/MariaDB, explicit modulus/remainder hash
+        partitions and recursive subpartitions on PostgreSQL, plus capability-gated rejection on drivers without
+        equivalent semantics
+      - added introspection-only estimated row counts and allocated partition sizes where driver catalogs expose
+        equivalent metadata; recreatable descriptions exclude these runtime statistics
       - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
         structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data

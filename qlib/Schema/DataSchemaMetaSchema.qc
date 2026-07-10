@@ -262,9 +262,9 @@ public const DataSchemaJsonSchema = {
             "properties": {
                 "method": {
                     "type": "string",
-                    "enum": ("range",),
+                    "enum": ("range", "list", "hash"),
                     "default": "range",
-                    "description": "Partitioning method; Phase 1 supports range partitioning",
+                    "description": "Portable partitioning method, subject to driver capabilities",
                 },
                 "columns": {
                     "type": "array",
@@ -280,6 +280,10 @@ public const DataSchemaJsonSchema = {
                     "type": "object",
                     "description": "Driver-specific partition strategy overrides",
                 },
+                "subpartition": {
+                    "$ref": "#/$defs/partitionStrategy",
+                    "description": "Recursive child partition strategy",
+                },
             },
         },
         "partitionSpec": {
@@ -291,7 +295,7 @@ public const DataSchemaJsonSchema = {
                 },
                 "method": {
                     "type": "string",
-                    "enum": ("range",),
+                    "enum": ("range", "list", "hash"),
                     "default": "range",
                 },
                 "columns": {
@@ -317,6 +321,25 @@ public const DataSchemaJsonSchema = {
                     "type": "string",
                     "description": "Complete driver-native partition bound SQL",
                 },
+                "values": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Typed values assigned to a list partition",
+                },
+                "values_sql": {
+                    "type": "string",
+                    "description": "Driver-native list values when typed values cannot be reconstructed",
+                },
+                "modulus": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Explicit hash bucket modulus",
+                },
+                "remainder": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Explicit hash bucket remainder",
+                },
                 "is_default": {
                     "type": "boolean",
                     "default": False,
@@ -333,6 +356,13 @@ public const DataSchemaJsonSchema = {
                 "driver": {
                     "type": "object",
                     "description": "Driver-specific partition overrides",
+                },
+                "subpartitions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/partitionSpec",
+                    },
+                    "description": "Nested partition definitions keyed by canonical child name",
                 },
             },
         },

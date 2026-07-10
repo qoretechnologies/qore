@@ -187,8 +187,9 @@ tables:
 
 ## Table Partitioning
 
-Tables can declare range partitioning with `partition_strategy` and optional initial physical
-partitions with `partitions`. Phase 1 partition support covers range partitioning.
+Tables can declare portable range, list, or explicit hash partitioning with `partition_strategy`
+and optional initial physical partitions with `partitions`. A recursive `subpartition` strategy and
+matching `subpartitions` definitions are supported when the database advertises equivalent semantics.
 
 ```yaml
 tables:
@@ -231,6 +232,32 @@ When the effective driver-specific partition key column has type `date` or `time
 (`YYYY-MM-DD[T ]HH:mm:SS[.ffffff][Z|+/-HH:mm]`) are normalized to typed dates when the table is set up.
 Other strings remain strings. SQL expressions are never parsed and must use `bound_from_sql`,
 `bound_to_sql`, or `bound_sql`.
+
+List specs use exactly one of `values` (a nonempty typed list) or `values_sql`; a default list
+partition uses only `is_default: true`. Explicit hash specs use `modulus` and `remainder`, with
+`modulus > 0` and `0 <= remainder < modulus`. For example, PostgreSQL list-to-hash partitioning can
+be described as:
+
+```yaml
+partition_strategy:
+  method: list
+  columns: [region]
+  subpartition:
+    method: hash
+    columns: [customer_id]
+
+partitions:
+  region_eu:
+    values: [eu, uk]
+    subpartitions:
+      region_eu_h0: {method: hash, modulus: 2, remainder: 0}
+      region_eu_h1: {method: hash, modulus: 2, remainder: 1}
+```
+
+Portable method support is capability-gated: PostgreSQL supports range/list/hash and recursive
+subpartitions; Oracle and MySQL/MariaDB support range and list at the top level; SQL Server supports
+range only. Native hash algorithms on Oracle/MySQL are not treated as equivalent to explicit
+modulus/remainder placement.
 
 Partition metadata supports the same `driver` override pattern used elsewhere in schema hashes:
 

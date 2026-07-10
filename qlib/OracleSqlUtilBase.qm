@@ -274,6 +274,8 @@ hash schema = (
     @section ora_relnotes Release Notes
 
     @subsection oracle16 OracleSqlUtilBase v1.6
+    - added portable list-partition creation, introspection, lookup, lifecycle, and schema round-trip support
+    - added statistics-dependent estimated partition row counts to partition introspection
     - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
       @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
@@ -3952,18 +3954,13 @@ group by p.index_name", schema.upr(), name.upr());
         if (!partitionStrategy) {
             return "";
         }
-        if (partitionStrategy.method != "range") {
-            throw "PARTITION-ERROR", sprintf("%s: unsupported Oracle partition method %y", getDesc(),
-                partitionStrategy.method);
-        }
-
         getPartitionsUnlocked();
         if (partitions.empty()) {
-            throw "PARTITION-ERROR", sprintf("%s: Oracle range-partitioned tables require at least one partition "
-                "definition in the table description", getDesc());
+            throw "PARTITION-ERROR", sprintf("%s: Oracle %s-partitioned tables require at least one partition "
+                "definition in the table description", getDesc(), partitionStrategy.method);
         }
 
-        string sql = sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
+        string sql = sprintf(" partition by %s (%s)", partitionStrategy.method, (foldl $1 + ", " + $2,
             getColumnSqlNames(partitionStrategy.columns)));
         if (partitionStrategy.auto) {
             *string expr = partitionStrategy.auto.expression ?? partitionStrategy.auto.interval;
@@ -4269,6 +4266,10 @@ group by p.index_name", schema.upr(), name.upr());
         return getOracleServerMajorVersion() >= 12;
     }
 
+    private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+        return !subpartition && inlist(method, ("range", "list"));
+    }
+
     private bool supportsPartitionReadImpl() {
         return True;
     }
@@ -4304,7 +4305,7 @@ group by p.index_name", schema.upr(), name.upr());
         if (!row) {
             return;
         }
-        if (row.partitioning_type != "RANGE") {
+        if (!inlist(row.partitioning_type, ("RANGE", "LIST"))) {
             return;
         }
 
@@ -4322,10 +4323,10 @@ group by p.index_name", schema.upr(), name.upr());
         }
 
         hash<PartitionStrategy> rv({
-            "method": "range",
+            "method": row.partitioning_type.lwr(),
             "columns": cols,
         });
-        if (row.interval) {
+        if (row.partitioning_type == "RANGE" && row.interval) {
             rv.auto = {
                 "type": "interval",
                 "expression": row.interval,
@@ -4368,9 +4369,10 @@ group by p.index_name", schema.upr(), name.upr());
         }
         getColumnsUnlocked();
 
-        *hash<auto> qh = ds.select("select partition_name, partition_position, high_value from "
-            + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
-            + " where table_owner = %v and table_name = %v order by partition_position",
+        string dblink_suffix = dblink ? "@" + dblink : "";
+        *hash<auto> qh = ds.select("select p.partition_name, p.partition_position, p.high_value, "
+            "p.num_rows estimated_row_count from " + systemView("dba_tab_partitions") + dblink_suffix
+            + " p where p.table_owner = %v and p.table_name = %v order by p.partition_position",
             schema.upr(), name.upr());
 
         *string prev_bound_sql;
@@ -4388,29 +4390,37 @@ group by p.index_name", schema.upr(), name.upr());
                 "schema": schema,
                 "relation_name": pname,
                 "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
-                "is_default": high_value =~ /^MAXVALUE$/i,
+                "is_default": strategy.method == "range" ? high_value =~ /^MAXVALUE$/i
+                    : high_value =~ /^DEFAULT$/i,
             });
+            if (exists row.estimated_row_count) {
+                info.estimated_row_count = row.estimated_row_count;
+            }
 
             if (!info.is_default) {
-                info.bound_sql = sprintf("values less than (%s)", high_value);
-                info.bound_to_sql = high_value;
-                if (exists prev_bound_sql) {
-                    info.bound_from_sql = prev_bound_sql;
-                }
-
-                *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
-                if (exists bound_to) {
-                    info.bound_to = bound_to;
-                }
-                if (exists prev_bound) {
-                    info.bound_from = prev_bound;
-                }
-
-                prev_bound_sql = high_value;
-                if (exists bound_to) {
-                    prev_bound = bound_to;
+                if (strategy.method == "list") {
+                    populateOracleListPartitionValues(\info, high_value);
                 } else {
-                    delete prev_bound;
+                    info.bound_sql = sprintf("values less than (%s)", high_value);
+                    info.bound_to_sql = high_value;
+                    if (exists prev_bound_sql) {
+                        info.bound_from_sql = prev_bound_sql;
+                    }
+
+                    *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+                    if (exists bound_to) {
+                        info.bound_to = bound_to;
+                    }
+                    if (exists prev_bound) {
+                        info.bound_from = prev_bound;
+                    }
+
+                    prev_bound_sql = high_value;
+                    if (exists bound_to) {
+                        prev_bound = bound_to;
+                    } else {
+                        delete prev_bound;
+                    }
                 }
             }
 
@@ -4422,9 +4432,10 @@ group by p.index_name", schema.upr(), name.upr());
 
     private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         string pname = native_case ? partition_name : partition_name.lwr();
-        *hash<auto> row = ds.selectRow("select partition_name, partition_position, high_value from "
-            + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
-            + " where table_owner = %v and table_name = %v and partition_name = %v",
+        string dblink_suffix = dblink ? "@" + dblink : "";
+        *hash<auto> row = ds.selectRow("select p.partition_name, p.partition_position, p.high_value, "
+            "p.num_rows estimated_row_count from " + systemView("dba_tab_partitions") + dblink_suffix
+            + " p where p.table_owner = %v and p.table_name = %v and p.partition_name = %v",
             schema.upr(), name.upr(), native_case ? pname : pname.upr());
         if (!row) {
             return;
@@ -4447,29 +4458,37 @@ group by p.index_name", schema.upr(), name.upr());
             "schema": schema,
             "relation_name": pname,
             "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(pname)),
-            "is_default": high_value =~ /^MAXVALUE$/i,
+            "is_default": strategy.method == "range" ? high_value =~ /^MAXVALUE$/i
+                : high_value =~ /^DEFAULT$/i,
         });
+        if (exists row.estimated_row_count) {
+            info.estimated_row_count = row.estimated_row_count;
+        }
 
         if (!info.is_default) {
-            info.bound_sql = sprintf("values less than (%s)", high_value);
-            info.bound_to_sql = high_value;
-            *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
-            if (exists bound_to) {
-                info.bound_to = bound_to;
-            }
+            if (strategy.method == "list") {
+                populateOracleListPartitionValues(\info, high_value);
+            } else {
+                info.bound_sql = sprintf("values less than (%s)", high_value);
+                info.bound_to_sql = high_value;
+                *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+                if (exists bound_to) {
+                    info.bound_to = bound_to;
+                }
 
-            if (row.partition_position > 1) {
-                *hash<auto> prev = ds.selectRow("select high_value from "
-                    + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
-                    + " where table_owner = %v and table_name = %v and partition_position = %v",
-                    schema.upr(), name.upr(), row.partition_position - 1);
-                if (prev) {
-                    string prev_high_value = prev.high_value;
-                    trim prev_high_value;
-                    info.bound_from_sql = prev_high_value;
-                    *auto bound_from = parseOraclePartitionBoundValues(prev_high_value, info.columns);
-                    if (exists bound_from) {
-                        info.bound_from = bound_from;
+                if (row.partition_position > 1) {
+                    *hash<auto> prev = ds.selectRow("select high_value from "
+                        + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
+                        + " where table_owner = %v and table_name = %v and partition_position = %v",
+                        schema.upr(), name.upr(), row.partition_position - 1);
+                    if (prev) {
+                        string prev_high_value = prev.high_value;
+                        trim prev_high_value;
+                        info.bound_from_sql = prev_high_value;
+                        *auto bound_from = parseOraclePartitionBoundValues(prev_high_value, info.columns);
+                        if (exists bound_from) {
+                            info.bound_from = bound_from;
+                        }
                     }
                 }
             }
@@ -4496,7 +4515,7 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
-        if (spec.is_default) {
+        if (spec.method != "range" || spec.is_default) {
             return;
         }
 
@@ -4655,6 +4674,18 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     private string getOraclePartitionBoundSql(hash<PartitionSpec> spec) {
+        if (spec.method == "list") {
+            if (spec.is_default) {
+                return "values (default)";
+            }
+            if (spec.values_sql) {
+                string sql = spec.values_sql;
+                trim sql;
+                return sql =~ /^values\b/i ? sql : sprintf("values (%s)", sql);
+            }
+            return sprintf("values (%s)", (foldl $1 + ", " + $2,
+                map getOraclePartitionBoundValuesSql($1), spec.values));
+        }
         if (spec.is_default) {
             return "values less than (maxvalue)";
         }
@@ -4679,12 +4710,33 @@ group by p.index_name", schema.upr(), name.upr());
         return foldl $1 + ", " + $2, (map getSqlValue($1), value);
     }
 
+    private populateOracleListPartitionValues(reference<hash<PartitionInfo>> info, string sql) {
+        info.values_sql = sql;
+        list<auto> values = ();
+        foreach string part in (splitPartitionSqlValues(sql)) {
+            if (info.columns.size() > 1) {
+                trim part;
+                (*string tuple) = (part =~ x/^\((.*)\)$/);
+                if (!exists tuple) {
+                    return;
+                }
+                part = tuple;
+            }
+            *auto value = parseOraclePartitionBoundValues(part, info.columns);
+            if (!exists value) {
+                return;
+            }
+            values += value;
+        }
+        info.values = values;
+    }
+
     private *auto parseOraclePartitionBoundValues(string sql, softlist<string> pcols) {
         if (pcols.size() == 1) {
             return parseOraclePartitionBoundValue(sql, columns{pcols[0]});
         }
 
-        list<string> parts = sql.split(",");
+        list<string> parts = splitPartitionSqlValues(sql);
         if (parts.size() != pcols.size()) {
             return;
         }

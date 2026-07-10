@@ -188,6 +188,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "columns": "softstringlist",
             "auto": Type::Hash,
             "driver": Type::Hash,
+            "subpartition": Type::Hash,
         };
 
         #! partition specification options
@@ -202,7 +203,12 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "bound_from_sql": Type::String,
             "bound_to_sql": Type::String,
             "bound_sql": Type::String,
+            "values": Type::List,
+            "values_sql": Type::String,
+            "modulus": Type::Int,
+            "remainder": Type::Int,
             "is_default": Type::Boolean,
+            "subpartitions": Type::Hash,
             "schema": Type::String,
             "relation_name": Type::String,
             "sql_name": Type::String,
@@ -1374,7 +1380,8 @@ bool b = table.empty();
         }
 
         if (partitionStrategy && partitionUniqueKeysRequireAllColumnsImpl()) {
-            validatePartitionUniqueKeysUnlocked(partitionStrategy.columns, "DESCRIPTION-ERROR");
+            validatePartitionUniqueKeysUnlocked(getAllPartitionKeyColumnsUnlocked(partitionStrategy),
+                "DESCRIPTION-ERROR");
         }
 
         # add foreign constraints to table
@@ -7310,6 +7317,27 @@ table.clear();
         return supportsPartitionsImpl();
     }
 
+    #! returns @ref True "True" if the driver supports the given portable partition method
+    /** @param method \c "range", \c "list", or \c "hash"
+        @param subpartition set to @ref True "True" to query support for the method below a parent partition
+
+        @return @ref True "True" when the method has an equivalent driver implementation at the requested level
+
+        @throw DBI-ERROR if the driver must query the server version and capability discovery fails
+
+        @par Example:
+        @code{.py}
+if (table.supportsPartitionMethod("list")) {
+    table.ensurePartition({"name": "orders_eu", "values": ("CZ", "DE", "FR")});
+}
+        @endcode
+
+        @since SqlUtil 3.0.0
+    */
+    bool supportsPartitionMethod(string method, bool subpartition = False) {
+        return supportsPartitions() && supportsPartitionMethodImpl(method.lwr(), subpartition);
+    }
+
     #! returns @ref True "True" if selects can be restricted to one named physical partition
     /** @par Example:
         @code{.py}
@@ -7711,6 +7739,12 @@ if (june) {
         on_exit l.unlock();
 
         assertPartitionSupportUnlocked();
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
         return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
@@ -7736,6 +7770,12 @@ if (june) {
 
         assertPartitionSupportUnlocked();
         string partition_name = resolvePartitionNameForLifecycleSpecUnlocked(spec, "PARTITION-ERROR");
+        on_error if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
+        on_success if (partitionSqlExecutedByCallback(opt)) {
+            clearPartitionsUnlocked();
+        }
         return AbstractDatabase::doCallback(opt, getTruncatePartitionSqlImpl(partition_name, opt),
             AbstractDatabase::AC_Truncate, "partition", partition_name, name);
     }
@@ -7755,11 +7795,18 @@ if (june) {
             sql = getTruncatePartitionSqlImpl(partition_name, opt);
         }
 
-        sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Truncate, "partition", partition_name,
-            name);
+        {
+            on_error if (partitionSqlExecutedByCallback(opt)) {
+                clearPartitionCache();
+            }
+            sql = AbstractDatabase::doCallback(opt, sql, AbstractDatabase::AC_Truncate, "partition",
+                partition_name, name);
+        }
         if (!partitionSqlExecutedByCallback(opt)) {
+            on_error clearPartitionCache();
             ds.execRaw(sql);
         }
+        clearPartitionCache();
     }
 
     #! truncates a partition matching the given specification without transaction management
@@ -8522,7 +8569,7 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
         # success: release the savepoint explicitly (the destructor would otherwise do it when sp goes out of scope)
         delete sp;
         return makePartitionEnsureResult(True, True, False,
-            partitionSpecsHaveComparableBounds(ps) ? PartitionVerifiedBy::Bounds : PartitionVerifiedBy::Name, info);
+            getPartitionVerificationMethod(ps, info), info);
     }
 
     #! resolves an already-existing partition for ensurePartition(), by typed bounds and then by canonical name
@@ -8536,7 +8583,8 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
     private *hash<PartitionEnsureResult> resolveExistingPartitionUnlocked(hash<PartitionSpec> ps) {
         hash<PartitionLookupResult> lookup = findPartitionBySpecImpl(ps);
         if (lookup.status == PartitionLookupStatus::Found) {
-            return makePartitionEnsureResult(False, True, False, PartitionVerifiedBy::Bounds, lookup.partition);
+            return makePartitionEnsureResult(False, True, False,
+                getPartitionVerificationMethod(ps, lookup.partition), lookup.partition);
         }
 
         if (lookup.status == PartitionLookupStatus::Uncomparable && ps.name) {
@@ -8985,12 +9033,24 @@ string sql = table.getCreateTableSql();
     }
 
     private hash<PartitionStrategy> normalizePartitionStrategyUnlocked(hash<auto> strategy, string err) {
+        return normalizePartitionStrategyLevelUnlocked(strategy, err, False);
+    }
+
+    private hash<PartitionStrategy> normalizePartitionStrategyLevelUnlocked(hash<auto> strategy, string err,
+            bool subpartition) {
+        strategy = {} + strategy;
         if (exists strategy.driver && strategy.driver.typeCode() != NT_HASH) {
             throw err, sprintf("%s: partition strategy key %y must be a hash; got %y", getDesc(), "driver",
                 strategy.driver.type());
         }
+        if (exists strategy.subpartition && strategy.subpartition.typeCode() != NT_HASH) {
+            throw err, sprintf("%s: partition strategy key %y must be a hash; got %y", getDesc(), "subpartition",
+                strategy.subpartition.type());
+        }
         *hash<auto> driver = strategy.driver;
+        *hash<auto> substrategy = strategy.subpartition;
         delete strategy.driver;
+        delete strategy.subpartition;
         validateOptionsIntern(err, PartitionStrategyOptions, \strategy);
         if (driver) {
             strategy.driver = driver;
@@ -8999,9 +9059,14 @@ string sql = table.getCreateTableSql();
         if (!strategy.method) {
             strategy.method = "range";
         }
-        if (strategy.method != "range") {
-            throw err, sprintf("%s: partition method %y is not supported; Phase 1 supports only %y", getDesc(),
-                strategy.method, "range");
+        strategy.method = strategy.method.lwr();
+        if (!inlist(strategy.method, ("range", "list", "hash"))) {
+            throw err, sprintf("%s: unknown partition method %y; expected %y, %y, or %y", getDesc(),
+                strategy.method, "range", "list", "hash");
+        }
+        if (!supportsPartitionMethodImpl(strategy.method, subpartition)) {
+            throw err, sprintf("%s: database driver %y does not support portable %s partitioning%s", getDesc(),
+                ds.getDriverName(), strategy.method, subpartition ? " below a parent partition" : "");
         }
         if (!strategy.columns) {
             throw err, sprintf("%s: partition strategy is missing the required %y key", getDesc(), "columns");
@@ -9013,6 +9078,13 @@ string sql = table.getCreateTableSql();
         }
 
         validatePartitionColumnsUnlocked(pcols, err);
+        if (strategy.auto && strategy.method != "range") {
+            throw err, sprintf("%s: automatic partition policy is only supported with range partitioning",
+                getDesc());
+        }
+        if (substrategy) {
+            strategy.subpartition = normalizePartitionStrategyLevelUnlocked(substrategy, err, True);
+        }
         hash<PartitionStrategy> rv(strategy);
         return rv;
     }
@@ -9065,14 +9137,34 @@ string sql = table.getCreateTableSql();
         }
     }
 
-    private hash<PartitionSpec> normalizePartitionSpecUnlocked(hash<auto> spec, string err) {
-        hash<auto> ps = {} + spec;
-        validateOptionsIntern(err, PartitionSpecOptions, \ps);
+    private softlist<string> getAllPartitionKeyColumnsUnlocked(hash<PartitionStrategy> strategy) {
+        hash<string, bool> seen;
+        list<string> rv = ();
+        *hash<auto> current = strategy;
+        while (current) {
+            foreach string col in (current.columns) {
+                if (!seen{col}) {
+                    seen{col} = True;
+                    rv += col;
+                }
+            }
+            current = current.subpartition;
+        }
+        return rv;
+    }
 
+    private hash<PartitionSpec> normalizePartitionSpecUnlocked(hash<auto> spec, string err) {
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
         if (!strategy) {
             throw err, sprintf("%s: table has no partition strategy", getDesc());
         }
+        return normalizePartitionSpecForStrategyUnlocked(spec, strategy, err);
+    }
+
+    private hash<PartitionSpec> normalizePartitionSpecForStrategyUnlocked(hash<auto> spec,
+            hash<PartitionStrategy> strategy, string err) {
+        hash<auto> ps = {} + spec;
+        validateOptionsIntern(err, PartitionSpecOptions, \ps);
 
         if (!ps.method) {
             ps.method = strategy.method;
@@ -9080,10 +9172,6 @@ string sql = table.getCreateTableSql();
         if (ps.method != strategy.method) {
             throw err, sprintf("%s: partition method %y does not match table partition method %y", getDesc(),
                 ps.method, strategy.method);
-        }
-        if (ps.method != "range") {
-            throw err, sprintf("%s: partition method %y is not supported; Phase 1 supports only %y", getDesc(),
-                ps.method, "range");
         }
 
         if (!ps.columns) {
@@ -9104,40 +9192,129 @@ string sql = table.getCreateTableSql();
         bool has_bound_sql = exists ps.bound_sql;
         bool has_typed = has_typed_from || has_typed_to;
         bool has_sql_pair = has_sql_from || has_sql_to;
+        bool has_values = exists ps.values;
+        bool has_values_sql = exists ps.values_sql;
+        bool has_modulus = exists ps.modulus;
+        bool has_remainder = exists ps.remainder;
 
-        if (ps.is_default) {
-            if (has_typed || has_sql_pair || has_bound_sql) {
-                throw err, sprintf("%s: default partition %y cannot have range bounds", getDesc(), ps.name);
+        switch (ps.method) {
+            case "range": {
+                if (has_values || has_values_sql || has_modulus || has_remainder) {
+                    throw err, sprintf("%s: range partition %y cannot define list values or hash bucket fields",
+                        getDesc(), ps.name);
+                }
+                if (ps.is_default) {
+                    if (has_typed || has_sql_pair || has_bound_sql) {
+                        throw err, sprintf("%s: default range partition %y cannot have bounds", getDesc(), ps.name);
+                    }
+                    break;
+                }
+                if (has_bound_sql && (has_typed || has_sql_pair)) {
+                    throw err, sprintf("%s: partition %y cannot combine %y with typed or paired SQL bounds",
+                        getDesc(), ps.name, "bound_sql");
+                }
+                if (has_typed && has_sql_pair) {
+                    throw err, sprintf("%s: partition %y cannot combine typed bounds with SQL bounds", getDesc(),
+                        ps.name);
+                }
+                if (has_typed_from != has_typed_to) {
+                    throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name,
+                        "bound_from", "bound_to");
+                }
+                if (has_sql_from != has_sql_to) {
+                    throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name,
+                        "bound_from_sql", "bound_to_sql");
+                }
+                if (!has_bound_sql && !has_typed && !has_sql_pair) {
+                    throw err, sprintf("%s: partition %y must define range bounds", getDesc(), ps.name);
+                }
+                if (has_typed) {
+                    validatePartitionBoundCardinalityUnlocked(ps.bound_from, ps.columns, err, "bound_from");
+                    validatePartitionBoundCardinalityUnlocked(ps.bound_to, ps.columns, err, "bound_to");
+                    ps.bound_from = coercePartitionBoundUnlocked(ps.bound_from, ps.columns, err, "bound_from",
+                        ps.name);
+                    ps.bound_to = coercePartitionBoundUnlocked(ps.bound_to, ps.columns, err, "bound_to", ps.name);
+                    validatePartitionTypedBoundsStructureUnlocked(ps, err);
+                }
+                break;
             }
-            hash<PartitionSpec> rv(ps);
-            return rv;
+            case "list": {
+                if (has_typed || has_sql_pair || has_bound_sql || has_modulus || has_remainder) {
+                    throw err, sprintf("%s: list partition %y cannot define range bounds or hash bucket fields",
+                        getDesc(), ps.name);
+                }
+                if (ps.is_default) {
+                    if (has_values || has_values_sql) {
+                        throw err, sprintf("%s: default list partition %y cannot define values", getDesc(),
+                            ps.name);
+                    }
+                    break;
+                }
+                if (has_values == has_values_sql) {
+                    throw err, sprintf("%s: list partition %y must define exactly one of %y or %y", getDesc(),
+                        ps.name, "values", "values_sql");
+                }
+                if (has_values) {
+                    if (!ps.values) {
+                        throw err, sprintf("%s: list partition %y values cannot be empty", getDesc(), ps.name);
+                    }
+                    list<auto> values = ();
+                    hash<string, bool> seen;
+                    foreach auto value in (ps.values) {
+                        validatePartitionBoundCardinalityUnlocked(value, ps.columns, err, "values");
+                        value = coercePartitionBoundUnlocked(value, ps.columns, err, "values", ps.name);
+                        string key = getPartitionValueKey(value);
+                        if (seen{key}) {
+                            throw err, sprintf("%s: list partition %y contains duplicate value %y", getDesc(),
+                                ps.name, value);
+                        }
+                        seen{key} = True;
+                        values += value;
+                    }
+                    ps.values = values;
+                }
+                break;
+            }
+            case "hash": {
+                if (ps.is_default || has_typed || has_sql_pair || has_bound_sql || has_values || has_values_sql) {
+                    throw err, sprintf("%s: hash partition %y can define only modulus and remainder bucket fields",
+                        getDesc(), ps.name);
+                }
+                if (!has_modulus || !has_remainder) {
+                    throw err, sprintf("%s: hash partition %y requires both %y and %y", getDesc(), ps.name,
+                        "modulus", "remainder");
+                }
+                if (ps.modulus <= 0 || ps.remainder < 0 || ps.remainder >= ps.modulus) {
+                    throw err, sprintf("%s: hash partition %y requires modulus > 0 and 0 <= remainder < modulus; "
+                        "got modulus %d and remainder %d", getDesc(), ps.name, ps.modulus, ps.remainder);
+                }
+                break;
+            }
         }
 
-        if (has_bound_sql && (has_typed || has_sql_pair)) {
-            throw err, sprintf("%s: partition %y cannot combine %y with typed or paired SQL bounds", getDesc(),
-                ps.name, "bound_sql");
-        }
-        if (has_typed && has_sql_pair) {
-            throw err, sprintf("%s: partition %y cannot combine typed bounds with SQL bounds", getDesc(), ps.name);
-        }
-        if (has_typed_from != has_typed_to) {
-            throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name, "bound_from",
-                "bound_to");
-        }
-        if (has_sql_from != has_sql_to) {
-            throw err, sprintf("%s: partition %y must define both %y and %y", getDesc(), ps.name, "bound_from_sql",
-                "bound_to_sql");
-        }
-        if (!has_bound_sql && !has_typed && !has_sql_pair) {
-            throw err, sprintf("%s: partition %y must define range bounds", getDesc(), ps.name);
-        }
-
-        if (has_typed) {
-            validatePartitionBoundCardinalityUnlocked(ps.bound_from, ps.columns, err, "bound_from");
-            validatePartitionBoundCardinalityUnlocked(ps.bound_to, ps.columns, err, "bound_to");
-            ps.bound_from = coercePartitionBoundUnlocked(ps.bound_from, ps.columns, err, "bound_from", ps.name);
-            ps.bound_to = coercePartitionBoundUnlocked(ps.bound_to, ps.columns, err, "bound_to", ps.name);
-            validatePartitionTypedBoundsStructureUnlocked(ps, err);
+        if (ps.subpartitions) {
+            if (!strategy.subpartition) {
+                throw err, sprintf("%s: partition %y defines subpartitions but the table strategy does not",
+                    getDesc(), ps.name);
+            }
+            hash<PartitionStrategy> child_strategy(strategy.subpartition);
+            hash<string, hash<auto>> subpartitions;
+            foreach hash<auto> i in (ps.subpartitions.pairIterator()) {
+                if (i.value.typeCode() != NT_HASH) {
+                    throw err, sprintf("%s: subpartition %y of partition %y must be a hash; got %y", getDesc(),
+                        i.key, ps.name, i.value.type());
+                }
+                hash<auto> child = {} + i.value;
+                if (!child.name) {
+                    child.name = i.key;
+                } else if (child.name != i.key) {
+                    throw err, sprintf("%s: subpartition key %y has mismatched name %y", getDesc(), i.key,
+                        child.name);
+                }
+                subpartitions{i.key} = normalizePartitionSpecForStrategyUnlocked(child, child_strategy, err);
+            }
+            validatePartitionSiblingDefinitionsUnlocked(subpartitions, err, ps.name);
+            ps.subpartitions = subpartitions;
         }
 
         hash<PartitionSpec> rv(ps);
@@ -9224,15 +9401,59 @@ string sql = table.getCreateTableSql();
                     throw err, sprintf("%s: default partition %y already exists", getDesc(), pi.name);
                 }
             }
-        } else if (partitionSpecsHaveComparableBounds(ps)) {
-            foreach hash<PartitionInfo> pi in (ph.iterator()) {
-                # Prefer complete typed bounds even when diagnostic/native SQL bounds are also present.
-                if (pi.is_default || !exists pi.bound_from || !exists pi.bound_to) {
-                    continue;
+        } else {
+            switch (ps.method) {
+                case "range": {
+                    if (partitionSpecsHaveComparableBounds(ps)) {
+                        foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                            # Prefer complete typed bounds even when diagnostic/native SQL bounds are also present.
+                            if (pi.is_default || !exists pi.bound_from || !exists pi.bound_to) {
+                                continue;
+                            }
+                            if (partitionBoundsOverlap(ps.bound_from, ps.bound_to, pi.bound_from, pi.bound_to)) {
+                                throw err, sprintf("%s: partition %y bounds overlap existing partition %y",
+                                    getDesc(), ps.name, pi.name);
+                            }
+                        }
+                    }
+                    break;
                 }
-                if (partitionBoundsOverlap(ps.bound_from, ps.bound_to, pi.bound_from, pi.bound_to)) {
-                    throw err, sprintf("%s: partition %y bounds overlap existing partition %y", getDesc(), ps.name,
-                        pi.name);
+                case "list": {
+                    if (ps.values) {
+                        hash<string, string> existing_values;
+                        foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                            if (pi.is_default || !pi.values) {
+                                continue;
+                            }
+                            foreach auto value in (pi.values) {
+                                existing_values{getPartitionValueKey(value)} = pi.name;
+                            }
+                        }
+                        foreach auto value in (ps.values) {
+                            string key = getPartitionValueKey(value);
+                            if (existing_values.hasKey(key)) {
+                                throw err, sprintf("%s: list partition %y value %y is already assigned to "
+                                    "partition %y", getDesc(), ps.name, value, existing_values{key});
+                            }
+                        }
+                    }
+                    break;
+                }
+                case "hash": {
+                    foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                        if (!exists pi.modulus || !exists pi.remainder) {
+                            continue;
+                        }
+                        if (pi.modulus != ps.modulus) {
+                            throw err, sprintf("%s: hash partition %y modulus %d does not match existing "
+                                "partition %y modulus %d", getDesc(), ps.name, ps.modulus, pi.name, pi.modulus);
+                        }
+                        if (pi.remainder == ps.remainder) {
+                            throw err, sprintf("%s: hash partition %y bucket %d/%d duplicates existing "
+                                "partition %y", getDesc(), ps.name, ps.remainder, ps.modulus, pi.name);
+                        }
+                    }
+                    break;
                 }
             }
         }
@@ -9260,6 +9481,110 @@ string sql = table.getCreateTableSql();
         return partitionBoundLess(left_from, right_to) && partitionBoundLess(right_from, left_to);
     }
 
+    #! splits a driver-native comma-separated partition value list without splitting quoted strings or tuples
+    private static list<string> splitPartitionSqlValues(string sql) {
+        list<string> rv = ();
+        int start = 0;
+        int depth;
+        bool quoted;
+        for (int i = 0; i < sql.size(); ++i) {
+            if (sql[i] == "'") {
+                if (quoted && i + 1 < sql.size() && sql[i + 1] == "'") {
+                    ++i;
+                } else {
+                    quoted = !quoted;
+                }
+                continue;
+            }
+            if (quoted) {
+                continue;
+            }
+            if (sql[i] == "(") {
+                ++depth;
+            } else if (sql[i] == ")") {
+                --depth;
+            } else if (sql[i] == "," && !depth) {
+                rv += sql.substr(start, i - start);
+                start = i + 1;
+            }
+        }
+        rv += sql.substr(start);
+        return rv;
+    }
+
+    private validatePartitionSiblingDefinitionsUnlocked(hash<string, hash<auto>> specs, string err,
+            *string parent_name) {
+        *string default_name;
+        hash<string, string> list_value_owners;
+        *int hash_modulus;
+        hash<string, string> hash_remainder_owners;
+        list<hash<PartitionSpec>> ranges = ();
+        foreach hash<auto> raw in (specs.iterator()) {
+            hash<PartitionSpec> spec(raw);
+            if (!spec.name) {
+                throw err, sprintf("%s: every subpartition of %y requires a name", getDesc(), parent_name);
+            }
+            if (spec.is_default) {
+                if (default_name) {
+                    throw err, sprintf("%s: subpartitions %y and %y of %y are both default partitions", getDesc(),
+                        spec.name, default_name, parent_name);
+                }
+                default_name = spec.name;
+                continue;
+            }
+            switch (spec.method) {
+                case "range": {
+                    if (partitionSpecsHaveComparableBounds(spec)) {
+                        ranges += spec;
+                    }
+                    break;
+                }
+                case "list": {
+                    foreach auto value in (spec.values) {
+                        string key = getPartitionValueKey(value);
+                        if (list_value_owners.hasKey(key)) {
+                            throw err, sprintf("%s: list value %y is assigned to subpartitions %y and %y in "
+                                "partition %y", getDesc(), value, spec.name, list_value_owners{key}, parent_name);
+                        }
+                        list_value_owners{key} = spec.name;
+                    }
+                    break;
+                }
+                case "hash": {
+                    if (exists hash_modulus && spec.modulus != hash_modulus) {
+                        throw err, sprintf("%s: hash subpartition %y in partition %y uses modulus %d instead of "
+                            "%d", getDesc(), spec.name, parent_name, spec.modulus, hash_modulus);
+                    }
+                    hash_modulus = spec.modulus;
+                    string key = spec.remainder.toString();
+                    if (hash_remainder_owners.hasKey(key)) {
+                        throw err, sprintf("%s: hash subpartitions %y and %y in partition %y use duplicate "
+                            "bucket %d/%d", getDesc(), spec.name, hash_remainder_owners{key}, parent_name,
+                            spec.remainder, spec.modulus);
+                    }
+                    hash_remainder_owners{key} = spec.name;
+                    break;
+                }
+            }
+        }
+
+        ranges = sort(ranges, int sub (hash<PartitionSpec> left, hash<PartitionSpec> right) {
+            return partitionBoundLess(left.bound_from, right.bound_from) ? -1
+                : (partitionBoundLess(right.bound_from, left.bound_from) ? 1 : 0);
+        });
+        for (int i = 1; i < ranges.size(); ++i) {
+            if (partitionBoundsOverlap(ranges[i - 1].bound_from, ranges[i - 1].bound_to,
+                ranges[i].bound_from, ranges[i].bound_to)) {
+                throw err, sprintf("%s: subpartition %y bounds overlap sibling %y in partition %y", getDesc(),
+                    ranges[i].name, ranges[i - 1].name, parent_name);
+            }
+        }
+    }
+
+    private static string getPartitionValueKey(auto value) {
+        return sprintf("%y:%y", value.type(), value);
+    }
+
     private hash<PartitionInfo> makePartitionInfoUnlocked(hash<PartitionSpec> ps) {
         if (!ps.name) {
             throw "PARTITION-ERROR", sprintf("%s: partition name is required", getDesc());
@@ -9279,6 +9604,11 @@ string sql = table.getCreateTableSql();
         if (exists ps.bound_from_sql) info.bound_from_sql = ps.bound_from_sql;
         if (exists ps.bound_to_sql) info.bound_to_sql = ps.bound_to_sql;
         if (exists ps.bound_sql) info.bound_sql = ps.bound_sql;
+        if (exists ps.values) info.values = ps.values;
+        if (exists ps.values_sql) info.values_sql = ps.values_sql;
+        if (exists ps.modulus) info.modulus = ps.modulus;
+        if (exists ps.remainder) info.remainder = ps.remainder;
+        if (exists ps.subpartitions) info.subpartitions = ps.subpartitions;
         if (exists ps.schema) info.schema = ps.schema;
         if (exists ps.relation_name) info.relation_name = ps.relation_name;
         if (exists ps.sql_name) info.sql_name = ps.sql_name;
@@ -9415,20 +9745,59 @@ string sql = table.getCreateTableSql();
     */
     private hash<PartitionSpec> getPartitionDescriptionUnlocked(hash<PartitionInfo> pi) {
         hash<PartitionSpec> rv();
+        if (pi.method != "range") {
+            rv.method = pi.method;
+        }
 
         if (pi.is_default) {
             rv.is_default = True;
-        } else if (exists pi.bound_from && exists pi.bound_to) {
-            rv.bound_from = pi.bound_from;
-            rv.bound_to = pi.bound_to;
-        } else if (exists pi.bound_from_sql && exists pi.bound_to_sql) {
-            rv.bound_from_sql = pi.bound_from_sql;
-            rv.bound_to_sql = pi.bound_to_sql;
-        } else if (exists pi.bound_sql) {
-            rv.bound_sql = pi.bound_sql;
         } else {
-            throw "PARTITION-ERROR", sprintf("%s: introspected partition %y has no complete recreatable bound "
-                "representation: %y", getDesc(), pi.name, pi);
+            switch (pi.method) {
+                case "range": {
+                    if (exists pi.bound_from && exists pi.bound_to) {
+                        rv.bound_from = pi.bound_from;
+                        rv.bound_to = pi.bound_to;
+                    } else if (exists pi.bound_from_sql && exists pi.bound_to_sql) {
+                        rv.bound_from_sql = pi.bound_from_sql;
+                        rv.bound_to_sql = pi.bound_to_sql;
+                    } else if (exists pi.bound_sql) {
+                        rv.bound_sql = pi.bound_sql;
+                    } else {
+                        throw "PARTITION-ERROR", sprintf("%s: introspected range partition %y has no complete "
+                            "recreatable bound representation: %y", getDesc(), pi.name, pi);
+                    }
+                    break;
+                }
+                case "list": {
+                    if (pi.values) {
+                        rv.values = pi.values;
+                    } else if (pi.values_sql) {
+                        rv.values_sql = pi.values_sql;
+                    } else {
+                        throw "PARTITION-ERROR", sprintf("%s: introspected list partition %y has no recreatable "
+                            "value representation: %y", getDesc(), pi.name, pi);
+                    }
+                    break;
+                }
+                case "hash": {
+                    if (!exists pi.modulus || !exists pi.remainder) {
+                        throw "PARTITION-ERROR", sprintf("%s: introspected hash partition %y has no recreatable "
+                            "bucket definition: %y", getDesc(), pi.name, pi);
+                    }
+                    rv.modulus = pi.modulus;
+                    rv.remainder = pi.remainder;
+                    break;
+                }
+            }
+        }
+
+        if (pi.subpartitions) {
+            hash<string, hash<auto>> children;
+            foreach hash<auto> child in (pi.subpartitions.iterator()) {
+                hash<PartitionInfo> child_info(child);
+                children{child_info.name} = getPartitionDescriptionUnlocked(child_info);
+            }
+            rv.subpartitions = children;
         }
 
         *hash<auto> driver = getPartitionDescriptionDriverOptionsImpl(pi);
@@ -9452,6 +9821,55 @@ string sql = table.getCreateTableSql();
 
     private bool partitionSpecsHaveComparableBounds(hash<PartitionSpec> ps) {
         return !ps.is_default && exists ps.bound_from && exists ps.bound_to;
+    }
+
+    private bool partitionSpecsHaveComparableDefinition(hash<PartitionSpec> ps) {
+        return partitionSpecsHaveComparableBounds(ps) || (ps.method == "list" && ps.values)
+            || (ps.method == "hash" && exists ps.modulus && exists ps.remainder);
+    }
+
+    private bool partitionSpecsMatch(hash<PartitionSpec> left, hash<PartitionSpec> right) {
+        if (left.method != right.method || left.is_default != right.is_default) {
+            return False;
+        }
+        if (left.is_default) {
+            return True;
+        }
+        switch (left.method) {
+            case "range":
+                return partitionSpecsHaveComparableBounds(left) && partitionSpecsHaveComparableBounds(right)
+                    && left.bound_from == right.bound_from && left.bound_to == right.bound_to;
+            case "list": {
+                if (!left.values || !right.values || left.values.size() != right.values.size()) {
+                    return False;
+                }
+                hash<string, bool> right_values;
+                foreach auto value in (right.values) {
+                    right_values{getPartitionValueKey(value)} = True;
+                }
+                foreach auto value in (left.values) {
+                    if (!right_values.hasKey(getPartitionValueKey(value))) {
+                        return False;
+                    }
+                }
+                return True;
+            }
+            case "hash":
+                return exists left.modulus && exists left.remainder && exists right.modulus
+                    && exists right.remainder && left.modulus == right.modulus && left.remainder == right.remainder;
+        }
+        return False;
+    }
+
+    private PartitionVerifiedBy getPartitionVerificationMethod(hash<PartitionSpec> requested,
+            hash<PartitionInfo> actual) {
+        if (requested.method == "range" && partitionSpecsMatch(requested, actual)) {
+            return PartitionVerifiedBy::Bounds;
+        }
+        if (inlist(requested.method, ("list", "hash")) && partitionSpecsMatch(requested, actual)) {
+            return PartitionVerifiedBy::Definition;
+        }
+        return PartitionVerifiedBy::Name;
     }
 
     private bool partitionSqlExecutedByCallback(*hash<auto> opt) {
@@ -9585,6 +10003,10 @@ string sql = table.getCreateTableSql();
         *hash<auto> driver = normalizePartitionStrategyDriverForAlignmentImpl(strategy);
         if (driver) {
             rv.driver = driver;
+        }
+        if (strategy.subpartition) {
+            hash<PartitionStrategy> child(strategy.subpartition);
+            rv.subpartition = normalizePartitionStrategyForAlignmentUnlocked(child);
         }
         return rv;
     }
@@ -11210,6 +11632,11 @@ on_exit printf("SQL> %s\n", sql);
         return False;
     }
 
+    #! returns @ref True "True" if the driver supports the portable partition method at the requested level
+    private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+        return method == "range" && !subpartition;
+    }
+
     #! returns @ref True "True" if the database supports the generic named-partition select qualifier
     private bool supportsPartitionReadImpl() {
         return False;
@@ -11315,26 +11742,24 @@ on_exit printf("SQL> %s\n", sql);
                     });
                     return rv;
                 }
-                if (partitionSpecsHaveComparableBounds(spec)
-                    && exists info.bound_from && exists info.bound_to
-                    && info.bound_from == spec.bound_from && info.bound_to == spec.bound_to) {
+                if (partitionSpecsMatch(spec, info)) {
                     hash<PartitionLookupResult> rv({
                         "status": PartitionLookupStatus::Found,
                         "partition": info,
                     });
                     return rv;
                 }
-                if (!partitionSpecsHaveComparableBounds(spec)) {
+                if (!partitionSpecsHaveComparableDefinition(spec)) {
                     hash<PartitionLookupResult> rv({
                         "status": PartitionLookupStatus::Uncomparable,
-                        "reason": "partition specification does not have typed comparable bounds",
+                        "reason": "partition specification does not have a typed comparable definition",
                     });
                     return rv;
                 }
-            } else if (!partitionSpecsHaveComparableBounds(spec) && !spec.is_default) {
+            } else if (!partitionSpecsHaveComparableDefinition(spec) && !spec.is_default) {
                 hash<PartitionLookupResult> rv({
                     "status": PartitionLookupStatus::Uncomparable,
-                    "reason": "partition specification does not have typed comparable bounds",
+                    "reason": "partition specification does not have a typed comparable definition",
                 });
                 return rv;
             }
@@ -11356,10 +11781,10 @@ on_exit printf("SQL> %s\n", sql);
             return rv;
         }
 
-        if (!partitionSpecsHaveComparableBounds(spec)) {
+        if (!partitionSpecsHaveComparableDefinition(spec)) {
             hash<PartitionLookupResult> rv({
                 "status": PartitionLookupStatus::Uncomparable,
-                "reason": "partition specification does not have typed comparable bounds",
+                "reason": "partition specification does not have a typed comparable definition",
             });
             return rv;
         }
@@ -11369,11 +11794,11 @@ on_exit printf("SQL> %s\n", sql);
             if (pi.is_default) {
                 continue;
             }
-            if (!exists pi.bound_from || !exists pi.bound_to) {
+            if (!partitionSpecsHaveComparableDefinition(pi)) {
                 uncomparable = True;
                 continue;
             }
-            if (pi.bound_from == spec.bound_from && pi.bound_to == spec.bound_to) {
+            if (partitionSpecsMatch(pi, spec)) {
                 hash<PartitionLookupResult> rv({
                     "status": PartitionLookupStatus::Found,
                     "partition": pi,
@@ -11384,7 +11809,7 @@ on_exit printf("SQL> %s\n", sql);
 
         hash<PartitionLookupResult> rv({
             "status": uncomparable ? PartitionLookupStatus::Uncomparable : PartitionLookupStatus::NotFound,
-            "reason": uncomparable ? "one or more existing partitions have SQL-only bounds" : NOTHING,
+            "reason": uncomparable ? "one or more existing partitions have SQL-only definitions" : NOTHING,
         });
         return rv;
     }

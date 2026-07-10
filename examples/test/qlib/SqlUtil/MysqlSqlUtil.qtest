@@ -212,6 +212,7 @@ class MysqlTest inherits SqlTestBase {
             addTestCase("test create table with auto increment - negative", \testCreateTableWithAutoIncrementNegative());
             addTestCase("test create table with auto increment - positive", \testCreateTableWithAutoIncrementPositive());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("list partition lifecycle", \listPartitionLifecycleTest());
         }
 
         set_return_value(main());
@@ -291,6 +292,9 @@ class MysqlTest inherits SqlTestBase {
         assertTrue(exists targeted_p2, "MySQL targeted lookup returns the named partition");
         assertEq(2026-02-01, targeted_p2.bound_from, "MySQL targeted lookup resolves the preceding bound");
         assertEq(2026-03-01, targeted_p2.bound_to, "MySQL targeted lookup resolves the selected upper bound");
+        assertTrue(exists targeted_p2.estimated_row_count,
+            "MySQL targeted lookup exposes the catalog-estimated row count");
+        assertTrue(exists targeted_p2.size_bytes, "MySQL targeted lookup exposes allocated partition bytes");
         assertNothing(rt.getPartition("missing"), "MySQL targeted lookup returns nothing for a missing name");
         hash<PartitionLookupResult> targeted_lookup = rt.findPartitionBySpec({
             "name": "p2",
@@ -351,6 +355,9 @@ class MysqlTest inherits SqlTestBase {
         assertEq(2, desc.partitions.size());
         assertFalse(desc.partitions.p1.hasKey("ordinal"));
         assertFalse(desc.partitions.p1.hasKey("sql_name"));
+        assertFalse(desc.partitions.p1.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc.partitions.p1.hasKey("size_bytes"), "description excludes runtime storage statistics");
         assertTrue(desc.partitions.p1.hasKey("bound_sql"));
         assertFalse(desc.partitions.p1.hasKey("bound_to_sql"));
         assertTrue(desc.partitions.p2.hasKey("bound_from"));
@@ -463,7 +470,90 @@ class MysqlTest inherits SqlTestBase {
         assertThrows("PARTITION-ERROR", "does not allow \"timestamp\" columns in RANGE COLUMNS partition keys",
             sub() {
                 bad.getCreateSql();
+        });
+    }
+
+    private listPartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        code cleanup = sub () {
+            ds.execRaw("drop table if exists mysql_partition_list_test");
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        MysqlTable tmpl(ds, "mysql_partition_list_test");
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "region": {"qore_type": Type::String, "size": 8, "notnull": True},
+            },
+            "primary_key": {"name": "mysql_partition_list_pk", "columns": ("id", "region")},
+            "partition_strategy": {"method": "list", "columns": "region"},
+            "partitions": {
+                "p_eu": {"values": ("eu", "uk")},
+                "p_us": {"values": ("us",)},
+            },
+        });
+        assertTrue(tmpl.supportsPartitionMethod("list"), "MySQL supports portable list partitioning");
+        assertFalse(tmpl.supportsPartitionMethod("hash"),
+            "MySQL does not claim portable explicit modulus/remainder semantics");
+        assertFalse(tmpl.supportsPartitionMethod("list", True),
+            "MySQL does not claim the recursive portable subpartition contract");
+        assertThrows("DESCRIPTION-ERROR", "does not support portable hash partitioning", sub () {
+            MysqlTable bad(ds, "mysql_partition_hash_bad");
+            bad.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "hash", "columns": "id"},
+                "partitions": {"p": {"modulus": 2, "remainder": 0}},
             });
+        });
+        assertThrows("PARTITION-ERROR", "does not support a portable default list partition", sub () {
+            MysqlTable bad(ds, "mysql_partition_list_default_bad");
+            bad.setupTable({
+                "columns": {"region": {"qore_type": Type::String, "size": 8}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {"p": {"is_default": True}},
+            });
+        });
+        assertTrue(tmpl.getCreateSql()[0] =~ /partition by list columns \(region\)/i,
+            "MySQL LIST COLUMNS strategy is emitted in CREATE TABLE");
+        tmpl.createCommit();
+
+        MysqlTable live(ds, "mysql_partition_list_test");
+        assertEq("list", live.getPartitionStrategy().method, "MySQL list strategy is introspected");
+        hash<string, PartitionInfo> parts = live.listPartitions();
+        assertEq(("eu", "uk"), parts.p_eu.values, "MySQL list values are introspected as typed values");
+        hash<PartitionLookupResult> lookup = live.findPartitionBySpec({"values": ("uk", "eu")});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "MySQL list lookup is order-insensitive");
+        assertEq("p_eu", lookup.partition.name, "MySQL list lookup returns the expected partition");
+        hash<PartitionEnsureResult> ensured = live.ensurePartition({"name": "p_eu", "values": ("eu", "uk")});
+        assertEq(PartitionVerifiedBy::Definition, ensured.verified_by,
+            "MySQL list ensure reports definition verification");
+
+        live.insertCommit({"id": 1, "region": "eu"});
+        live.insertCommit({"id": 2, "region": "us"});
+        assertEq(1, live.selectRows({"partition": "p_eu"}).size(),
+            "MySQL list partition read returns only its values");
+        live.addPartitionCommit({"name": "p_apac", "values": ("apac", "au")});
+        assertEq(("apac", "au"), live.getPartition("p_apac").values,
+            "MySQL list partition can be added and targeted");
+        live.truncatePartitionCommit("p_eu");
+        assertEq(0, live.selectRows({"partition": "p_eu"}).size(), "MySQL list partition can be truncated");
+        live.dropPartitionCommit("p_apac");
+        assertNothing(live.getPartition("p_apac"), "MySQL list partition can be dropped");
+
+        hash<auto> desc = live.getDescriptionHash({"with_partitions": True});
+        assertEq("list", desc.partition_strategy.method, "MySQL list strategy is recreatable");
+        assertEq(("us",), desc.partitions.p_us.values, "MySQL list values are recreatable");
+        MysqlTable roundtrip(ds, "mysql_partition_list_copy");
+        roundtrip.setupTable(desc);
+        assertTrue(roundtrip.getCreateSql()[0] =~ /partition p_us values in \('us'\)/i,
+            "MySQL list description regenerates partition DDL");
     }
 
     private usageIntern() {

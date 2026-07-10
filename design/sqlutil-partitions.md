@@ -2,18 +2,19 @@
 
 ## Status
 
-Implemented in SqlUtil 3.0.0. This record describes the shipped range-partition contract and the
-reasons behind it. Public method and hashdecl documentation is generated from `qlib/SqlUtil`; future
-work is tracked only in
-[`design-pending/sqlutil-partitions-deferred.md`](../design-pending/sqlutil-partitions-deferred.md).
+Implemented in SqlUtil 3.0.0. This record describes the shipped partition contract and the
+reasons behind it. Public method and hashdecl documentation is generated from `qlib/SqlUtil`. The
+original partition roadmap is complete; there are currently no deferred portable partition phases.
 
 The implementation is covered by live PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server tests plus
 schema-loader, reverse-schema, callback, cache, concurrency, and negative tests.
 
 ## Scope and invariants
 
-The portable contract currently supports range partitioning with inclusive lower and exclusive
-upper bounds. The following invariants are deliberate:
+The portable contract supports range partitions with inclusive lower/exclusive upper bounds, list
+partitions with discrete value sets, explicit hash buckets with modulus/remainder definitions, and
+recursive subpartition strategies where a driver provides equivalent semantics. The following
+invariants are deliberate:
 
 1. `dropPartition()` removes the partition and its data on every supported backend.
 2. Non-equivalent operations are separate and capability-gated. PostgreSQL detach is exposed as
@@ -26,7 +27,7 @@ upper bounds. The following invariants are deliberate:
    with `PARTITION-ERROR`.
 6. Public names are identifiers, not SQL fragments. Drivers quote and validate them with their
    normal identifier helpers.
-7. Structural partition caches are cleared after successful DDL and on uncertain callback/DDL
+7. Partition caches are cleared after successful DDL and on uncertain callback/DDL
    failures. Cleanup uses scoped `on_error clearPartitionCache();` handlers where no translation is
    needed.
 
@@ -43,6 +44,11 @@ upper bounds. The following invariants are deliberate:
 | Targeted canonical-name lookup | yes | yes | yes | yes | no |
 | Default/catch-all range | yes | `MAXVALUE` | `MAXVALUE` | implicit edge ranges | no |
 | Composite range key | yes | yes | yes | no | no |
+| List partition lifecycle | yes | yes | yes (`LIST COLUMNS`) | no | no |
+| Explicit hash modulus/remainder | yes | no | no | no | no |
+| Recursive subpartition hierarchy | yes | no | no | no | no |
+| Estimated row count | yes | yes (statistics-dependent) | yes | yes | no |
+| Allocated bytes | yes | no | yes | yes | no |
 
 SQL Server uses partition functions and schemes rather than durable child objects. SqlUtil exposes
 logical finite ranges as `p1`, `p2`, and so on and records the physical partition number under
@@ -64,6 +70,7 @@ public enum PartitionLookupStatus : string {
 
 public enum PartitionVerifiedBy : string {
     Bounds = "bounds",
+    Definition = "definition",
     Name = "name",
     Auto = "auto",
 }
@@ -73,6 +80,7 @@ public hashdecl PartitionStrategy {
     softlist<string> columns;
     *hash<auto> auto;
     *hash<auto> driver;
+    *hash<auto> subpartition;
 }
 
 public hashdecl PartitionSpec {
@@ -84,7 +92,12 @@ public hashdecl PartitionSpec {
     *string bound_from_sql;
     *string bound_to_sql;
     *string bound_sql;
+    *list<auto> values;
+    *string values_sql;
+    *int modulus;
+    *int remainder;
     bool is_default = False;
+    *hash<string, hash<auto>> subpartitions;
     *string schema;
     *string relation_name;
     *string sql_name;
@@ -93,6 +106,8 @@ public hashdecl PartitionSpec {
 
 public hashdecl PartitionInfo inherits PartitionSpec {
     int ordinal;
+    *int estimated_row_count;
+    *int size_bytes;
 }
 
 public hashdecl PartitionLookupResult {
@@ -118,6 +133,22 @@ identity.
 
 Typed bounds are preferred. Native `bound_*_sql` and `bound_sql` fields preserve expressions that
 cannot be represented portably. Composite typed bounds must match the strategy column cardinality.
+List specs use exactly one of `values` or `values_sql`; typed lookup compares value sets without
+depending on their order. Hash specs require `modulus > 0` and
+`0 <= remainder < modulus`. `subpartition` recursively declares the child strategy and each parent
+spec supplies matching `subpartitions` keyed by canonical child name. The recursive strategy is
+uniform at each level. PostgreSQL can represent mixed native child layouts, but SqlUtil rejects such
+introspection with `PARTITION-ERROR` instead of emitting a portable description that would recreate
+a different hierarchy.
+
+`estimated_row_count` and `size_bytes` are runtime catalog metadata. Estimates depend on each
+engine's statistics refresh policy; `size_bytes` is allocated storage and can legitimately be zero
+for an empty or not-yet-materialized leaf. Oracle exposes only the statistics-dependent row estimate
+because segment-size views are privilege-sensitive. Neither field is emitted in recreatable table
+descriptions.
+The values are a snapshot cached with `PartitionInfo`. Structural lifecycle operations and truncate
+invalidate the snapshot; ordinary DML does not force a metadata query, so callers that need a fresh
+post-DML/statistics view call `clear()` before `listPartitions()` or `getPartition()`.
 
 ### Automatic policy representation
 
@@ -134,13 +165,17 @@ Partitioned table descriptions use:
 ```qore
 {
     "partition_strategy": {
-        "method": "range",
-        "columns": "created",
+        "method": "list",
+        "columns": "region",
+        "subpartition": {"method": "hash", "columns": "customer_id"},
     },
     "partitions": {
-        "y2026m07": {
-            "bound_from": 2026-07-01,
-            "bound_to": 2026-08-01,
+        "region_eu": {
+            "values": ("eu", "uk"),
+            "subpartitions": {
+                "region_eu_h0": {"method": "hash", "modulus": 2, "remainder": 0},
+                "region_eu_h1": {"method": "hash", "modulus": 2, "remainder": 1},
+            },
         },
     },
 }
@@ -164,9 +199,11 @@ Normalization is separated from creation validation so lookup specs are not reje
 creation-only fields. Creation validates:
 
 - strategy method and declared key columns;
-- typed/native bound exclusivity;
+- method-discriminated range bounds, list values, or hash bucket fields;
 - scalar/composite cardinality and exact ISO date coercion from JSON/YAML schemas;
 - lower-before-upper ordering, contiguity, overlap, duplicate name, and catch-all rules;
+- duplicate list values across siblings, consistent hash moduli, duplicate remainders, and recursive
+  subpartition definitions;
 - driver restrictions on primary keys, unique constraints, and unique indexes;
 - option and driver-override types.
 
@@ -187,6 +224,7 @@ as one driver operation at the callback boundary:
 *hash<PartitionStrategy> getPartitionStrategy();
 hash<string, PartitionInfo> listPartitions();
 bool supportsTargetedPartitionLookup();
+bool supportsPartitionMethod(string method, bool subpartition = False);
 *hash<PartitionInfo> getPartition(string canonical_name);
 hash<PartitionLookupResult> findPartitionBySpec(hash<auto> spec);
 
@@ -267,10 +305,11 @@ Targeted results are cached as a partial hash without setting the complete-list 
 `findPartitionBySpec()` verifies comparable bounds against the targeted result and falls back to the
 complete deterministic scan if the name and requested bounds disagree.
 
-`ensurePartition()` resolves by comparable bounds, then canonical name when bounds are native-only,
-then automatic policy. Concurrent duplicate-create errors are recovered deterministically through a
-savepoint on transactional-DDL drivers and a single metadata re-resolution; there is no retry loop or
-polling.
+`ensurePartition()` resolves by comparable range bounds or typed list/hash definitions, then
+canonical name when a definition is native-only, then automatic policy. A list/hash match reports
+`PartitionVerifiedBy::Definition`. Concurrent duplicate-create errors are recovered deterministically
+through a savepoint on transactional-DDL drivers and a single metadata re-resolution; there is no
+retry loop or polling.
 
 Partition exchange has one portable outward-transfer contract: the target must be an empty,
 nonpartitioned table with the same ordered storage-column shape and exact datasource object. Oracle
@@ -291,6 +330,12 @@ engine validation.
 | exchange to empty table | unsupported | `EXCHANGE PARTITION ... WITH TABLE` | unsupported | `SWITCH PARTITION ... TO` |
 | qualified read | unsupported | `table PARTITION (name)` | `table PARTITION (name)` | unsupported |
 
+PostgreSQL maps the generic methods directly to `PARTITION BY RANGE`, `LIST`, and `HASH`. Recursive
+creation is returned as one prepared `DO` statement so the public single-SQL-string and callback
+contracts remain intact. Oracle maps portable list specs to `PARTITION BY LIST`; MySQL maps them to
+`PARTITION BY LIST COLUMNS`. Oracle and MySQL native hash schemes do not expose the same explicit
+modulus/remainder placement contract and are therefore not advertised. SQL Server remains range-only.
+
 For Oracle and MySQL, lower bounds that are not present in DDL are still required where necessary for
 contiguity and overlap validation. SQL Server duplicate split recovery intentionally avoids a
 savepoint because a failed split can leave no corresponding open transaction while metadata remains
@@ -302,7 +347,8 @@ The complete schema pipeline understands partition metadata:
 
 - `DataSchemaLoader` preserves strategy/spec keys and coerces exact ISO dates according to normalized
   partition-column types;
-- `DataSchemaMetaSchema` validates the range strategy and spec shapes;
+- `DataSchemaMetaSchema` validates range/list/hash strategy and spec fields, including recursive
+  subpartition definitions;
 - `SchemaReverse` and `bin/schema-reverse` emit strategy by default and physical specs with
   `with_partitions` / `--with-partitions`;
 - `bin/qschema export --with-partitions` exposes the same opt-in behavior;
@@ -315,6 +361,8 @@ validation, semantic alignment, callback/cache lifecycle, driver key restriction
 indexes, and generic set-wise API hardening. Each slice was exercised against the affected live
 databases before commit. Current integration coverage includes bounds/default/SQL-only cases,
 composite keys, concurrency races, callbacks, cache invalidation, transaction companions, schema
-round-trip, reverse alignment, local/global indexes, and unsupported-driver errors.
-
-List/hash/subpartition methods and optional data-dependent metadata remain in the deferred roadmap.
+round-trip, reverse alignment, local/global indexes, list/hash definitions, recursive PostgreSQL
+subpartitions, catalog statistics, and unsupported-driver errors. `DbTableDataProvider` needs no
+method-specific action: its existing validated `partition` search option forwards canonical names to
+the method-independent SqlUtil read qualifier on Oracle and MySQL; administrative lifecycle and
+metadata APIs remain outside the CRUD action contract.

@@ -115,6 +115,7 @@ module MssqlSqlUtilBase {
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - added targeted logical partition-name metadata lookup without loading all partition-function boundaries
+    - added catalog-estimated row-count and allocated-size partition metadata
     - initial release
 */
 
@@ -2686,6 +2687,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         }
 
         AbstractColumn col = columns{strategy.columns[0]};
+        hash<string, hash<auto>> storage = getMssqlPartitionStorageMetadataUnlocked();
         for (int i = 0; i < bounds.size() - 1; ++i) {
             auto bound_from = normalizeMssqlPartitionBoundaryValue(bounds[i].value, col);
             auto bound_to = normalizeMssqlPartitionBoundaryValue(bounds[i + 1].value, col);
@@ -2715,6 +2717,11 @@ tc.constraint_name, c1.ordinal_position", schema, name);
                     },
                 },
             });
+            *hash<auto> stats = storage{(i + 2).toString()};
+            if (stats) {
+                info.estimated_row_count = stats.estimated_row_count;
+                info.size_bytes = stats.size_bytes;
+            }
             rv{pname} = info;
         }
 
@@ -2784,7 +2791,29 @@ tc.constraint_name, c1.ordinal_position", schema, name);
                 },
             },
         });
+        hash<string, hash<auto>> storage = getMssqlPartitionStorageMetadataUnlocked();
+        *hash<auto> stats = storage{(pnum + 1).toString()};
+        if (stats) {
+            info.estimated_row_count = stats.estimated_row_count;
+            info.size_bytes = stats.size_bytes;
+        }
         return info;
+    }
+
+    private hash<string, hash<auto>> getMssqlPartitionStorageMetadataUnlocked() {
+        hash<string, hash<auto>> rv;
+        *hash<auto> qh = ds.select("select dps.partition_number, dps.row_count estimated_row_count, "
+            "dps.reserved_page_count * 8192 size_bytes from sys.dm_db_partition_stats dps "
+            "join sys.tables t on t.object_id = dps.object_id "
+            "join sys.schemas s on s.schema_id = t.schema_id "
+            "where s.name = %v and t.name = %v and dps.index_id in (0, 1)", schema, name);
+        foreach hash<auto> row in (qh.contextIterator()) {
+            rv{row.partition_number.toString()} = {
+                "estimated_row_count": row.estimated_row_count,
+                "size_bytes": row.size_bytes,
+            };
+        }
+        return rv;
     }
 
     private hash<PartitionInfo> resolveMssqlPartitionInfoUnlocked(string partition_name) {

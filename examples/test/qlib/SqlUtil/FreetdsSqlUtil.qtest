@@ -282,6 +282,19 @@ class FreetdsTest inherits SqlTestBase {
         if (!probe.supportsPartitions()) {
             testSkip("SQL Server partition lifecycle support requires SQL Server 2016 or newer");
         }
+        assertTrue(probe.supportsPartitionMethod("range"), "SQL Server supports portable range partitioning");
+        assertFalse(probe.supportsPartitionMethod("list"),
+            "SQL Server does not claim non-equivalent list partitioning");
+        assertFalse(probe.supportsPartitionMethod("hash"),
+            "SQL Server does not claim non-equivalent hash partitioning");
+        assertThrows("DESCRIPTION-ERROR", "does not support portable list partitioning", sub () {
+            AbstractTable bad_method = AbstractTable::getTable(ds, "mssql_partition_bad_method");
+            bad_method.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "list", "columns": "id"},
+                "partitions": {"p": {"values": (1,)}},
+            });
+        });
 
         cleanupRangePartitionLifecycleTest(ds);
         on_exit {
@@ -396,6 +409,10 @@ class FreetdsTest inherits SqlTestBase {
         assertTrue(exists targeted_p2, "SQL Server targeted lookup returns the logical partition name");
         assertEq(2026-02-01, targeted_p2.bound_from, "SQL Server targeted lookup resolves the lower boundary");
         assertEq(2026-03-01, targeted_p2.bound_to, "SQL Server targeted lookup resolves the upper boundary");
+        assertTrue(exists targeted_p2.estimated_row_count,
+            "SQL Server targeted lookup exposes the catalog-estimated row count");
+        assertTrue(exists targeted_p2.size_bytes,
+            "SQL Server targeted lookup exposes allocated partition bytes");
         assertNothing(rt.getPartition("p999"), "SQL Server targeted lookup returns nothing for missing boundaries");
         hash<PartitionLookupResult> targeted_lookup = rt.findPartitionBySpec({
             "name": "p2",
@@ -423,6 +440,10 @@ class FreetdsTest inherits SqlTestBase {
         assertEq(2, desc.partitions.size());
         assertFalse(desc.partitions.p2.hasKey("ordinal"));
         assertFalse(desc.partitions.p2.hasKey("sql_name"));
+        assertFalse(desc.partitions.p2.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc.partitions.p2.hasKey("size_bytes"),
+            "description excludes runtime storage statistics");
         assertFalse(desc.partitions.p2.driver.mssql.hasKey("partition_number"));
         assertFalse(desc.partitions.p2.driver.mssql.hasKey("lower_boundary_id"));
         assertFalse(desc.partitions.p2.driver.mssql.hasKey("upper_boundary_id"));

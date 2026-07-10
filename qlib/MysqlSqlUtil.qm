@@ -99,6 +99,9 @@ module MysqlSqlUtil {
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
+    - added portable c LIST c COLUMNS partition creation, introspection, lookup, lifecycle, and schema round-trip
+      support
+    - added catalog-estimated row-count and allocated-size partition metadata
     - implemented MySQL/MariaDB range-partitioned table DDL, introspection, and lifecycle operations through the
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
     - implemented the generic validated named-partition select qualifier for primary and joined table references
@@ -2382,15 +2385,10 @@ end";
             if (!partitionStrategy) {
                 return "";
             }
-            if (partitionStrategy.method != "range") {
-                throw "PARTITION-ERROR", sprintf("%s: unsupported MySQL/MariaDB partition method %y", getDesc(),
-                    partitionStrategy.method);
-            }
-
             getPartitionsUnlocked();
             if (partitions.empty()) {
-                throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB range-partitioned tables require at least one "
-                    "partition definition in the table description", getDesc());
+                throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB %s-partitioned tables require at least one "
+                    "partition definition in the table description", getDesc(), partitionStrategy.method);
             }
             validateMysqlPartitionColumnsUnlocked();
 
@@ -2399,7 +2397,7 @@ end";
                 defs += "  " + getMysqlPartitionDefinitionSql(pi);
             }
 
-            return sprintf(" partition by range columns (%s) (\n%s\n)",
+            return sprintf(" partition by %s columns (%s) (\n%s\n)", partitionStrategy.method,
                 (foldl $1 + ", " + $2, getColumnSqlNames(partitionStrategy.columns)),
                 (foldl $1 + ",\n" + $2, defs));
         }
@@ -2408,8 +2406,8 @@ end";
             foreach string col in (partitionStrategy.columns) {
                 if (columns{col}.native_type == "timestamp") {
                     throw "PARTITION-ERROR", sprintf("%s: MySQL/MariaDB does not allow %y columns in "
-                        "RANGE COLUMNS partition keys; use a partitionable native type such as %y or %y",
-                        getDesc(), "timestamp", "datetime", "date");
+                        "%s COLUMNS partition keys; use a partitionable native type such as %y or %y",
+                        getDesc(), "timestamp", partitionStrategy.method.upr(), "datetime", "date");
                 }
             }
         }
@@ -2637,6 +2635,10 @@ end";
             return ds.getServerVersion() >= 50700;
         }
 
+        private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+            return !subpartition && inlist(method, ("range", "list"));
+        }
+
         private bool supportsPartitionReadImpl() {
             return True;
         }
@@ -2660,12 +2662,12 @@ end";
             if (!row) {
                 return;
             }
-            if (!(row.partition_method =~ /^RANGE/i)) {
+            if (!(row.partition_method =~ /^(RANGE|LIST)/i)) {
                 return;
             }
 
             hash<PartitionStrategy> rv({
-                "method": "range",
+                "method": row.partition_method =~ /^LIST/i ? "list" : "range",
                 "columns": parseMysqlPartitionColumns(row.partition_expression),
             });
             return rv;
@@ -2686,7 +2688,8 @@ end";
             getColumnsUnlocked();
 
             *hash<auto> qh = ds.select("select partition_name, partition_description, "
-                "partition_ordinal_position from information_schema.partitions where table_schema = %v "
+                "partition_ordinal_position, table_rows estimated_row_count, "
+                "data_length + index_length size_bytes from information_schema.partitions where table_schema = %v "
                 "and table_name = %v and partition_name is not null order by partition_ordinal_position",
                 schema, name);
 
@@ -2705,29 +2708,39 @@ end";
                     "schema": schema,
                     "relation_name": pname,
                     "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
-                    "is_default": pdesc =~ /^MAXVALUE$/i,
+                    "is_default": strategy.method == "range" && pdesc =~ /^MAXVALUE$/i,
                 });
+                if (exists row.estimated_row_count) {
+                    info.estimated_row_count = row.estimated_row_count;
+                }
+                if (exists row.size_bytes) {
+                    info.size_bytes = row.size_bytes;
+                }
 
                 if (!info.is_default) {
-                    info.bound_sql = sprintf("values less than (%s)", pdesc);
-                    info.bound_to_sql = pdesc;
-                    if (exists prev_bound_sql) {
-                        info.bound_from_sql = prev_bound_sql;
-                    }
-
-                    *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
-                    if (exists bound_to) {
-                        info.bound_to = bound_to;
-                    }
-                    if (exists prev_bound) {
-                        info.bound_from = prev_bound;
-                    }
-
-                    prev_bound_sql = pdesc;
-                    if (exists bound_to) {
-                        prev_bound = bound_to;
+                    if (strategy.method == "list") {
+                        populateMysqlListPartitionValues(\info, pdesc);
                     } else {
-                        delete prev_bound;
+                        info.bound_sql = sprintf("values less than (%s)", pdesc);
+                        info.bound_to_sql = pdesc;
+                        if (exists prev_bound_sql) {
+                            info.bound_from_sql = prev_bound_sql;
+                        }
+
+                        *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
+                        if (exists bound_to) {
+                            info.bound_to = bound_to;
+                        }
+                        if (exists prev_bound) {
+                            info.bound_from = prev_bound;
+                        }
+
+                        prev_bound_sql = pdesc;
+                        if (exists bound_to) {
+                            prev_bound = bound_to;
+                        } else {
+                            delete prev_bound;
+                        }
                     }
                 }
 
@@ -2739,7 +2752,8 @@ end";
 
         private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
             *hash<auto> row = ds.selectRow("select partition_name, partition_description, "
-                "partition_ordinal_position from information_schema.partitions where table_schema = %v "
+                "partition_ordinal_position, table_rows estimated_row_count, "
+                "data_length + index_length size_bytes from information_schema.partitions where table_schema = %v "
                 "and table_name = %v and partition_name = %v", schema, name, partition_name);
             if (!row) {
                 return;
@@ -2761,28 +2775,39 @@ end";
                 "schema": schema,
                 "relation_name": row.partition_name,
                 "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(row.partition_name)),
-                "is_default": pdesc =~ /^MAXVALUE$/i,
+                "is_default": strategy.method == "range" && pdesc =~ /^MAXVALUE$/i,
             });
+            if (exists row.estimated_row_count) {
+                info.estimated_row_count = row.estimated_row_count;
+            }
+            if (exists row.size_bytes) {
+                info.size_bytes = row.size_bytes;
+            }
 
             if (!info.is_default) {
-                info.bound_sql = sprintf("values less than (%s)", pdesc);
-                info.bound_to_sql = pdesc;
-                *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
-                if (exists bound_to) {
-                    info.bound_to = bound_to;
-                }
+                if (strategy.method == "list") {
+                    populateMysqlListPartitionValues(\info, pdesc);
+                } else {
+                    info.bound_sql = sprintf("values less than (%s)", pdesc);
+                    info.bound_to_sql = pdesc;
+                    *auto bound_to = parseMysqlPartitionBoundValues(pdesc, info.columns);
+                    if (exists bound_to) {
+                        info.bound_to = bound_to;
+                    }
 
-                if (row.partition_ordinal_position > 1) {
-                    *hash<auto> prev = ds.selectRow("select partition_description from "
-                        "information_schema.partitions where table_schema = %v and table_name = %v "
-                        "and partition_ordinal_position = %v", schema, name, row.partition_ordinal_position - 1);
-                    if (prev) {
-                        string prev_desc = prev.partition_description;
-                        trim prev_desc;
-                        info.bound_from_sql = prev_desc;
-                        *auto bound_from = parseMysqlPartitionBoundValues(prev_desc, info.columns);
-                        if (exists bound_from) {
-                            info.bound_from = bound_from;
+                    if (row.partition_ordinal_position > 1) {
+                        *hash<auto> prev = ds.selectRow("select partition_description from "
+                            "information_schema.partitions where table_schema = %v and table_name = %v "
+                            "and partition_ordinal_position = %v", schema, name,
+                            row.partition_ordinal_position - 1);
+                        if (prev) {
+                            string prev_desc = prev.partition_description;
+                            trim prev_desc;
+                            info.bound_from_sql = prev_desc;
+                            *auto bound_from = parseMysqlPartitionBoundValues(prev_desc, info.columns);
+                            if (exists bound_from) {
+                                info.bound_from = bound_from;
+                            }
                         }
                     }
                 }
@@ -2809,6 +2834,13 @@ end";
         }
 
         private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
+            if (spec.method == "list") {
+                if (spec.is_default) {
+                    throw err, sprintf("%s: MySQL/MariaDB does not support a portable default list partition",
+                        getDesc());
+                }
+                return;
+            }
             if (spec.is_default) {
                 return;
             }
@@ -2931,6 +2963,15 @@ end";
         }
 
         private string getMysqlPartitionBoundSql(hash<PartitionSpec> spec) {
+            if (spec.method == "list") {
+                if (spec.values_sql) {
+                    string sql = spec.values_sql;
+                    trim sql;
+                    return sql =~ /^values\s+in\b/i ? sql : sprintf("values in (%s)", sql);
+                }
+                return sprintf("values in (%s)", (foldl $1 + ", " + $2,
+                    map getMysqlPartitionBoundValuesSql($1), spec.values));
+            }
             if (spec.is_default) {
                 return "values less than (maxvalue)";
             }
@@ -2953,6 +2994,27 @@ end";
                 return getMysqlPartitionBoundValueSql(value);
             }
             return foldl $1 + ", " + $2, (map getMysqlPartitionBoundValueSql($1), value);
+        }
+
+        private populateMysqlListPartitionValues(reference<hash<PartitionInfo>> info, string sql) {
+            info.values_sql = sql;
+            list<auto> values = ();
+            foreach string part in (splitPartitionSqlValues(sql)) {
+                if (info.columns.size() > 1) {
+                    trim part;
+                    (*string tuple) = (part =~ x/^\((.*)\)$/);
+                    if (!exists tuple) {
+                        return;
+                    }
+                    part = tuple;
+                }
+                *auto value = parseMysqlPartitionBoundValues(part, info.columns);
+                if (!exists value) {
+                    return;
+                }
+                values += value;
+            }
+            info.values = values;
         }
 
         private string getMysqlPartitionBoundValueSql(auto value) {
@@ -2980,7 +3042,7 @@ end";
                 return parseMysqlPartitionBoundValue(sql, columns{pcols[0]});
             }
 
-            list<string> parts = sql.split(",");
+            list<string> parts = splitPartitionSqlValues(sql);
             if (parts.size() != pcols.size()) {
                 return;
             }

@@ -264,6 +264,7 @@ class OracleTest inherits SqlTestBase {
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
             addTestCase("chained synonyms #2408", \testChainedSynonyms());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("list partition lifecycle", \listPartitionLifecycleTest());
             addTestCase("partition exchange", \partitionExchangeTest());
             addTestCase("partition-local indexes and constraints", \partitionLocalIndexTest());
         }
@@ -667,6 +668,9 @@ class OracleTest inherits SqlTestBase {
         assertEq(1, strategy.columns.size());
         assertEq("d", strategy.columns[0]);
 
+        ds.execRaw("begin dbms_stats.gather_table_stats(user, 'ORACLE_PARTITION_TEST'); end;");
+        ds.commit();
+        rt.clear();
         hash<string, PartitionInfo> parts = rt.listPartitions();
         assertEq(2, parts.size());
         assertEq(0, parts.p1.ordinal, "full Oracle listing replaces the partial targeted cache");
@@ -674,11 +678,16 @@ class OracleTest inherits SqlTestBase {
             "Oracle targeted lookup preserves case-normalized lifecycle names after a full listing");
         assertEq(2026-02-01, parts.p2.bound_from);
         assertEq(2026-03-01, parts.p2.bound_to);
+        assertTrue(exists parts.p1.estimated_row_count,
+            "Oracle exposes the catalog-estimated partition row count after statistics collection");
 
         hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
         assertEq(2, desc.partitions.size());
         assertFalse(desc.partitions.p1.hasKey("ordinal"));
         assertFalse(desc.partitions.p1.hasKey("sql_name"));
+        assertFalse(desc.partitions.p1.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc.partitions.p1.hasKey("size_bytes"), "description excludes runtime storage statistics");
         assertTrue(desc.partitions.p1.hasKey("bound_sql"));
         assertFalse(desc.partitions.p1.hasKey("bound_to_sql"));
         assertTrue(desc.partitions.p2.hasKey("bound_from"));
@@ -834,6 +843,85 @@ class OracleTest inherits SqlTestBase {
                 + " purge'; exception when others then if sqlcode != -942 then raise; end if; end;");
         }
         ds.commit();
+    }
+
+    private listPartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        code cleanup = sub () {
+            ds.execRaw("begin execute immediate 'drop table oracle_partition_list_test purge'; exception when "
+                "others then if sqlcode != -942 then raise; end if; end;");
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        OracleTable tmpl(ds, "oracle_partition_list_test");
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "region": {"qore_type": Type::String, "size": 8, "notnull": True},
+            },
+            "primary_key": {"name": "oracle_part_list_pk", "columns": "id"},
+            "partition_strategy": {"method": "list", "columns": "region"},
+            "partitions": {
+                "p_eu": {"values": ("eu", "uk")},
+                "p_us": {"values": ("us",)},
+            },
+        });
+        assertTrue(tmpl.supportsPartitionMethod("list"), "Oracle supports portable list partitioning");
+        assertFalse(tmpl.supportsPartitionMethod("hash"), "Oracle does not claim explicit hash bucket semantics");
+        assertThrows("DESCRIPTION-ERROR", "does not support portable hash partitioning", sub () {
+            OracleTable bad(ds, "oracle_partition_hash_bad");
+            bad.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "hash", "columns": "id"},
+                "partitions": {"p": {"modulus": 2, "remainder": 0}},
+            });
+        });
+        assertTrue(tmpl.getCreateSql()[0] =~ /partition by list \(region\)/i,
+            "Oracle list strategy is emitted in CREATE TABLE");
+        tmpl.createCommit();
+
+        OracleTable live(ds, "oracle_partition_list_test");
+        assertEq("list", live.getPartitionStrategy().method, "Oracle list strategy is introspected");
+        hash<string, PartitionInfo> parts = live.listPartitions();
+        assertEq(("eu", "uk"), parts.p_eu.values, "Oracle list values are introspected as typed values");
+        hash<PartitionLookupResult> lookup = live.findPartitionBySpec({"values": ("uk", "eu")});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "Oracle list lookup is order-insensitive");
+        assertEq("p_eu", lookup.partition.name, "Oracle list lookup returns the expected partition");
+        hash<PartitionEnsureResult> ensured = live.ensurePartition({"name": "p_eu", "values": ("eu", "uk")});
+        assertEq(PartitionVerifiedBy::Definition, ensured.verified_by,
+            "Oracle list ensure reports definition verification");
+
+        live.insertCommit({"id": 1, "region": "eu"});
+        live.insertCommit({"id": 2, "region": "us"});
+        assertEq(1, live.selectRows({"partition": "p_eu"}).size(),
+            "Oracle list partition read returns only its values");
+        live.addPartitionCommit({"name": "p_apac", "values": ("apac", "au")});
+        assertEq(("apac", "au"), live.getPartition("p_apac").values,
+            "Oracle list partition can be added and targeted");
+        live.truncatePartitionCommit("p_eu");
+        assertEq(0, live.selectRows({"partition": "p_eu"}).size(), "Oracle list partition can be truncated");
+        live.dropPartitionCommit("p_apac");
+        assertNothing(live.getPartition("p_apac"), "Oracle list partition can be dropped");
+
+        hash<auto> desc = live.getDescriptionHash({"with_partitions": True});
+        assertEq("list", desc.partition_strategy.method, "Oracle list strategy is recreatable");
+        assertEq(("us",), desc.partitions.p_us.values, "Oracle list values are recreatable");
+        OracleTable roundtrip(ds, "oracle_partition_list_copy");
+        roundtrip.setupTable(desc);
+        assertTrue(roundtrip.getCreateSql()[0] =~ /partition p_us values \('us'\)/i,
+            "Oracle list description regenerates partition DDL");
+
+        live.addPartitionCommit({"name": "p_other", "is_default": True});
+        assertTrue(live.getPartition("p_other").is_default, "Oracle default list partition is introspected");
+        assertThrows("PARTITION-ERROR", "catch-all partition", sub () {
+            live.getAddPartitionSql({"name": "p_new", "values": ("new",)});
+        });
     }
 
     private partitionExchangeTest() {
