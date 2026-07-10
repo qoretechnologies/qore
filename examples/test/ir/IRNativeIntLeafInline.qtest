@@ -76,6 +76,34 @@ int sub intCompare(int left, int right) {
     return left <=> right;
 }
 
+float sub addFloat(float left, float right) {
+    return left + right;
+}
+
+float sub subtractFloat(float left, float right) {
+    return left - right;
+}
+
+float sub multiplyFloat(float left, float right) {
+    return left * right;
+}
+
+bool sub floatLess(float left, float right) {
+    return left < right;
+}
+
+bool sub floatGreaterOrEqual(float left, float right) {
+    return left >= right;
+}
+
+int sub byteSize(string value) {
+    return value.size();
+}
+
+int sub charLength(string value) {
+    return value.length();
+}
+
 int sub addOneWithEffect(int value) {
     ++calls;
     return value + 1;
@@ -89,6 +117,8 @@ int sub conditionalAdd(int value) {
 }
 
 int unassigned;
+float unassigned_float;
+string unassigned_string;
 int removed = 4;
 remove removed;
 int deleted = 5;
@@ -102,6 +132,11 @@ printf(\"bitwise:%d:%d:%d\\n\", bitAnd(13, 6), bitOr(13, 6), bitXor(13, 6));
 printf(\"compare:%y:%y:%y:%y:%y:%y:%d\\n\", equal(4, 4), notEqual(4, 5),
     lessThan(4, 5), lessOrEqual(5, 5), greaterThan(6, 5), greaterOrEqual(5, 5),
     intCompare(4, 5));
+printf(\"float:%.2f:%.2f:%.2f:%y:%y\\n\", addFloat(1.5, 2.25),
+    subtractFloat(5.5, 2.25), multiplyFloat(1.5, 2.0), floatLess(1.5, 2.0),
+    floatGreaterOrEqual(2.0, 2.0));
+printf(\"string:%d:%d:%d:%d\\n\", byteSize(\"abcdef\"), charLength(\"abcdef\"),
+    byteSize(\"Příliš\"), charLength(\"Příliš\"));
 printf(\"effects:%d\\n\", calls);
 foreach hash<auto> test in ((\"name\": \"unassigned\", \"value\": unassigned),
         (\"name\": \"removed\", \"value\": removed),
@@ -119,6 +154,18 @@ try {
 } catch (hash<ExceptionInfo> ex) {
     printf(\"binary-unassigned:rejected\\n\");
 }
+try {
+    addFloat(1.0, unassigned_float);
+    printf(\"float-unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"float-unassigned:rejected\\n\");
+}
+try {
+    byteSize(unassigned_string);
+    printf(\"string-unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"string-unassigned:rejected\\n\");
+}
 ";
 
 string script_path = "/tmp/qore-ir-native-int-leaf-inline-" + string(getpid()) + ".qr";
@@ -128,7 +175,7 @@ script.write(code);
 script.close();
 
 string sub runMode(string mode, bool disabled = False) {
-    string disable = disabled ? "QORE_DISABLE_IR_NATIVE_INT_LEAF_INLINE=1 " : "";
+    string disable = disabled ? "QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 " : "";
     return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
         disable, libqore_dir, qore_bin, mode, script_path));
 }
@@ -149,11 +196,15 @@ if (!expected.contains("values:5:-1:-9223372036854775808:9:4\n")
         || !expected.contains("arithmetic:13:5:6:36\n")
         || !expected.contains("bitwise:4:15:11\n")
         || !expected.contains("compare:True:True:True:True:True:True:-1\n")
+        || !expected.contains("float:3.75:3.25:3.00:True:True\n")
+        || !expected.contains("string:6:6:9:6\n")
         || !expected.contains("effects:1\n")
         || !expected.contains("unassigned:RUNTIME-OVERLOAD-ERROR\n")
         || !expected.contains("removed:RUNTIME-OVERLOAD-ERROR\n")
         || !expected.contains("deleted:RUNTIME-OVERLOAD-ERROR\n")
-        || !expected.contains("binary-unassigned:rejected\n")) {
+        || !expected.contains("binary-unassigned:rejected\n")
+        || !expected.contains("float-unassigned:rejected\n")
+        || !expected.contains("string-unassigned:rejected\n")) {
     printf("unexpected AST baseline:\n%s", expected);
     exit(2);
 }

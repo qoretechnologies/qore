@@ -1989,6 +1989,13 @@ public:
 //! Stores function/variant/program pointers resolved at parse time
 class QoreIRCallDirectInstruction : public QoreIRInstruction {
 public:
+    enum class NativeLeafKind : uint8_t {
+        IntBinary,
+        FloatBinary,
+        StringSize,
+        StringLength,
+    };
+
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
             QoreProgram* n_pgm, const QoreValue& n_expr)
             : QoreIRInstruction(QoreIROpcode::CallDirect),
@@ -2015,14 +2022,17 @@ public:
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
 
-    // Cached native integer leaf-call state. The release/acquire state publishes the
+    // Cached native leaf-call state. The release/acquire state publishes the
     // descriptor fields below: 0=unchecked, -2=analyzing, -1=ineligible, 1=eligible.
-    mutable std::atomic<int8_t> native_int_leaf_state{0};
-    mutable QoreIROpcode native_int_leaf_opcode = QoreIROpcode::AddInt;
-    mutable int8_t native_int_leaf_lhs_param = -1;
-    mutable int8_t native_int_leaf_rhs_param = -1;
-    mutable int64_t native_int_leaf_lhs_constant = 0;
-    mutable int64_t native_int_leaf_rhs_constant = 0;
+    mutable std::atomic<int8_t> native_leaf_state{0};
+    mutable NativeLeafKind native_leaf_kind = NativeLeafKind::IntBinary;
+    mutable QoreIROpcode native_leaf_opcode = QoreIROpcode::AddInt;
+    mutable int8_t native_leaf_lhs_param = -1;
+    mutable int8_t native_leaf_rhs_param = -1;
+    mutable int64_t native_leaf_lhs_int = 0;
+    mutable int64_t native_leaf_rhs_int = 0;
+    mutable double native_leaf_lhs_float = 0.0;
+    mutable double native_leaf_rhs_float = 0.0;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
