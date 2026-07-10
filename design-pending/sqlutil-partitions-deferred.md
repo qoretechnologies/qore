@@ -22,6 +22,8 @@ Range partitioning is implemented for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
   exchange and SQL Server switch.
 - explicit nontransactional PostgreSQL 14+ concurrent detach, pending-state introspection, and
   deterministic `FINALIZE` recovery without retries or polling.
+- generic validated named-partition reads for primary and joined Oracle/MySQL table references, with
+  explicit unsupported errors for non-equivalent PostgreSQL and SQL Server mechanisms.
 
 SQLite and Firebird correctly advertise no native partition support.
 
@@ -39,14 +41,7 @@ The main unresolved model choice is separate public hashdecls per method versus 
 `PartitionSpec` family. The choice must preserve strict cardinality/type validation and description
 round-trip.
 
-## 2. Generic read-side partition qualification
-
-Oracle currently exposes a driver-specific select option for reading a named partition. A generic
-read qualifier should be introduced only with explicit per-driver capability checks; it must not
-pretend that PostgreSQL child-table reads, Oracle partition clauses, and SQL Server partition
-functions are identical when they are not.
-
-## 3. High-cardinality targeted lookup
+## 2. High-cardinality targeted lookup
 
 Current metadata loading is O(n) in partition count and caches all `PartitionInfo` values. This is
 appropriate for hundreds or low thousands of partitions. Tables with tens of thousands need a
@@ -54,7 +49,7 @@ driver hook that can target canonical name or comparable bounds without first ma
 catalog. Generic behavior must remain deterministic and fall back to the current scan when a driver
 cannot perform a targeted lookup.
 
-## 4. Optional data-dependent metadata
+## 3. Optional data-dependent metadata
 
 Optional partition row-count and physical-size metadata may be useful for archive observability, but
 collecting it can be expensive or approximate. It must be opt-in, label exact versus estimated values,
@@ -63,10 +58,9 @@ cheap by default.
 
 ## Implementation order
 
-1. Generic read-side qualification with honest capabilities.
-2. Targeted lookup hooks for high partition counts.
-3. List/hash/subpartition type families and driver implementations.
-4. Optional row-count/size metadata.
+1. Targeted lookup hooks for high partition counts.
+2. List/hash/subpartition type families and driver implementations.
+3. Optional row-count/size metadata.
 
 Each item requires SQL generation tests, negative/capability tests, live backend tests where
 available, documentation/release notes, and a passing full SqlUtil regression run before the next

@@ -92,7 +92,12 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         const TriggerOptions = AbstractDatabase::CreationOptions;
 
         #! default possible select options; can be extended by driver-specific modules
-        /** @see @ref select_option_hash for more information on the default possible select options; see
+        /** The \c partition option accepts one canonical physical-partition name and restricts the table reference
+            to that partition on drivers advertising supportsPartitionRead(). Unsupported drivers raise
+            \c PARTITION-NOT-SUPPORTED rather than ignoring the qualifier. A partition qualifier cannot be applied
+            to the derived table reference created by \c superquery.
+
+            @see @ref select_option_hash for more information on the default possible select options; see
             driver-specific information for any additional select options supported by the driver-specific module
         */
         const hash<auto> SelectOptions = {
@@ -110,6 +115,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "having": Type::Hash,
             "superquery": Type::Hash,
             "forupdate": Type::Boolean,
+            "partition": Type::String,
         };
 
         #! alignment omission options
@@ -5560,6 +5566,10 @@ string sql = table.getSelectSql(sh, \args);
 
         if (info.query_hash.superquery) {
             validateOptionsIntern("OPTION-ERROR", getSelectOptions(), \info.query_hash.superquery);
+            if (exists info.query_hash.superquery.partition) {
+                throw "PARTITION-ERROR", sprintf("%s: the named partition select qualifier cannot be applied to "
+                    "a derived superquery table reference", getDesc());
+            }
             return getSelectSqlStringIntern(info.query_hash.superquery, sprintf("(%s) subquery", sql), \info.args,
                 subquery_column_map, opt, (map {$1: True}, keys info.pseudo_column_map));
         }
@@ -5699,7 +5709,17 @@ string sql = table.getSelectSql(sh, \args);
     }
 
     private string getSelectSqlName(*hash<auto> qh) {
-        return getSqlName();
+        if (!exists qh.partition) {
+            return getSqlName();
+        }
+        if (!supportsPartitionRead()) {
+            throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support named partition "
+                "qualification in selects", getDesc(), ds.getDriverName());
+        }
+
+        l.lock();
+        on_exit l.unlock();
+        return getPartitionReadSqlNameImpl(qh.partition);
     }
 
     private string getColumnExpressionIntern(reference<hash<QueryInfo>> info, auto cvc) {
@@ -7288,6 +7308,25 @@ table.clear();
     */
     bool supportsPartitions() {
         return supportsPartitionsImpl();
+    }
+
+    #! returns @ref True "True" if selects can be restricted to one named physical partition
+    /** @par Example:
+        @code{.py}
+if (table.supportsPartitionRead()) {
+    *list<auto> archived_rows = table.selectRows({"partition": "events_2026_06"});
+}
+        @endcode
+
+        @return @ref True "True" only when the driver implements the generic named-partition table qualifier
+
+        @note PostgreSQL child-table reads and SQL Server partition-function predicates are not advertised as this
+            capability because they do not have the same table-reference semantics.
+
+        @since SqlUtil 3.0.0
+    */
+    bool supportsPartitionRead() {
+        return supportsPartitions() && supportsPartitionReadImpl();
     }
 
     #! returns @ref True "True" if this table supports partition detach operations
@@ -11103,6 +11142,11 @@ on_exit printf("SQL> %s\n", sql);
         return False;
     }
 
+    #! returns @ref True "True" if the database supports the generic named-partition select qualifier
+    private bool supportsPartitionReadImpl() {
+        return False;
+    }
+
     #! returns @ref True "True" if the database supports detaching partitions
     private bool supportsPartitionDetachImpl() {
         return False;
@@ -11167,6 +11211,12 @@ on_exit printf("SQL> %s\n", sql);
 
     #! returns the table partitioning strategy or @ref nothing if the table is not partitioned
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
+    }
+
+    #! returns the table reference restricted to one validated physical partition
+    private string getPartitionReadSqlNameImpl(string partition_name) {
+        throw "PARTITION-NOT-SUPPORTED", sprintf("%s: database driver %y does not support named partition "
+            "qualification in selects", getDesc(), ds.getDriverName());
     }
 
     #! returns partition descriptions keyed by canonical partition name

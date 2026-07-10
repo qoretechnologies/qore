@@ -586,8 +586,67 @@ class OracleTest inherits SqlTestBase {
 
         OracleTable rt(ds, "oracle_partition_test");
         assertEq(True, rt.supportsPartitions());
+        assertEq(True, rt.supportsPartitionRead());
         assertEq(False, rt.supportsPartitionDetach());
         assertEq(False, rt.supportsConcurrentPartitionDetach());
+
+        rt.insertCommit({"id": 101, "d": 2026-01-15, "v": "p1 row"});
+        rt.insertCommit({"id": 102, "d": 2026-02-15, "v": "p2 row"});
+        *list<auto> p1_rows = rt.selectRows({"partition": "p1"});
+        assertEq(1, p1_rows.size(), "generic partition read restricts Oracle to one physical partition");
+        assertEq(101, p1_rows[0].id, "Oracle partition read returns the row from the named partition");
+        DbTableDataProvider partition_dp(rt);
+        assertTrue(partition_dp.getInfo().search_options.hasKey("partition"),
+            "DbTableDataProvider exposes the SqlUtil partition read option");
+        *hash<string, hash<ActionOptionInfo>> find_options = partition_dp.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx("Db", "find"), NOTHING);
+        assertTrue(find_options.hasKey("partition"), "the DB find action exposes the partition option");
+        *hash<string, hash<ActionOptionInfo>> find_single_options = partition_dp.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx("Db", "find_single"), NOTHING);
+        assertTrue(find_single_options.hasKey("partition"),
+            "the DB find_single action exposes the partition option");
+        assertEq(101, partition_dp.searchSingleRecord({"id": 101}, {"partition": "p1"}).id,
+            "DbTableDataProvider single-record reads forward the partition option");
+        *list<auto> provider_rows = map $1, partition_dp.searchRecords(NOTHING, {"partition": "p1"});
+        assertEq(1, provider_rows.size(), "DbTableDataProvider iterators forward the partition option");
+        {
+            AbstractDataProviderBulkRecordInterface bulk = partition_dp.getBulkRecordInterface(10,
+                {"partition": "p1"});
+            hash<auto> block = bulk.getValue();
+            assertEq((101,), block.id, "DbTableDataProvider bulk reads forward the partition option");
+        }
+        {
+            on_exit rt.rollback();
+            DbTableBulkRecordInterface bulk(10, rt, NOTHING, {
+                "partition": "p1",
+                "forupdate": True,
+                "requires_result": False,
+            });
+            assertFalse(bulk.implicitTransaction(),
+                "DbTableDataProvider bulk FOR UPDATE reads preserve the transaction lock");
+            assertEq((101,), bulk.getValue().id,
+                "DbTableDataProvider bulk FOR UPDATE reads preserve all SqlUtil options");
+        }
+        string partition_select_sql = rt.getSelectSql({"partition": "p2"});
+        assertTrue(partition_select_sql =~ /partition \(p2\)/i,
+            "generic partition read emits the Oracle partition extension");
+        assertThrows("PARTITION-ERROR", "partition \"missing\" does not exist", sub () {
+            rt.getSelectSql({"partition": "missing"});
+        });
+        assertThrows("PARTITION-ERROR", "partition \"\" does not exist", sub () {
+            rt.getSelectSql({"partition": ""});
+        });
+        assertThrows("PARTITION-ERROR", "cannot be applied to a derived superquery", sub () {
+            rt.getSelectSql({"partition": "p1", "superquery": {"partition": "p1"}});
+        });
+        *list<auto> joined_partition_rows = rt.selectRows({
+            "alias": "a",
+            "columns": "a.id",
+            "partition": "p1",
+            "join": join_inner(rt, "b", {"id": "id"}, NOTHING, {"partition": "p1"}),
+        });
+        assertEq(1, joined_partition_rows.size(),
+            "generic partition qualifier applies independently to Oracle join table references");
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);

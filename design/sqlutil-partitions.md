@@ -39,6 +39,7 @@ upper bounds. The following invariants are deliberate:
 | Detach to standalone table | yes | no | no | no | no |
 | Concurrent nontransactional detach | yes (14+) | no | no | no | no |
 | Exchange to empty standalone table | no | yes | no | yes | no |
+| Named-partition reads | no | yes | yes | no | no |
 | Default/catch-all range | yes | `MAXVALUE` | `MAXVALUE` | implicit edge ranges | no |
 | Composite range key | yes | yes | yes | no | no |
 
@@ -230,6 +231,9 @@ exchangePartition(string name, AbstractTable target, *hash<auto> opt);
 exchangePartition(hash<auto> spec, AbstractTable target, *hash<auto> opt);
 exchangePartitionCommit(string name, AbstractTable target, *hash<auto> opt);
 exchangePartitionCommit(hash<auto> spec, AbstractTable target, *hash<auto> opt);
+
+bool supportsPartitionRead();
+// All select/getSelectSql variants accept {"partition": canonical_name} when supported.
 ```
 
 The bare executors do not manage transactions; `*Commit()` companions commit on success and roll
@@ -244,6 +248,13 @@ from the same configuration, and has no `*Commit()` companion. PostgreSQL's
 operation leaves that state set, `finalizePartitionDetach()` issues the explicit nontransactional
 `DETACH PARTITION ... FINALIZE`; SqlUtil never retries or polls. PostgreSQL's restriction on a
 concurrent detach while a default partition exists is checked before SQL generation.
+
+The generic read qualifier is one canonical physical-partition name in the table reference. Oracle
+and MySQL implement the same `{"partition": name}` select option for primary and joined tables, with
+catalog membership validation and driver identifier quoting. PostgreSQL child-table reads and SQL
+Server `$PARTITION` predicates have different semantics, so those drivers advertise
+`supportsPartitionRead() == False` and raise `PARTITION-NOT-SUPPORTED` instead of silently ignoring
+the option.
 
 `ensurePartition()` resolves by comparable bounds, then canonical name when bounds are native-only,
 then automatic policy. Concurrent duplicate-create errors are recovered deterministically through a
@@ -267,6 +278,7 @@ engine validation.
 | detach | `DETACH PARTITION` | unsupported | unsupported | unsupported |
 | concurrent detach | `DETACH PARTITION ... CONCURRENTLY` (14+) | unsupported | unsupported | unsupported |
 | exchange to empty table | unsupported | `EXCHANGE PARTITION ... WITH TABLE` | unsupported | `SWITCH PARTITION ... TO` |
+| qualified read | unsupported | `table PARTITION (name)` | `table PARTITION (name)` | unsupported |
 
 For Oracle and MySQL, lower bounds that are not present in DDL are still required where necessary for
 contiguity and overlap validation. SQL Server duplicate split recovery intentionally avoids a
@@ -294,5 +306,5 @@ databases before commit. Current integration coverage includes bounds/default/SQ
 composite keys, concurrency races, callbacks, cache invalidation, transaction companions, schema
 round-trip, reverse alignment, local/global indexes, and unsupported-driver errors.
 
-List/hash/subpartition methods, generic read qualification, high-cardinality lookup, and optional
-data-dependent metadata remain in the deferred roadmap.
+List/hash/subpartition methods, high-cardinality lookup, and optional data-dependent metadata remain
+in the deferred roadmap.

@@ -380,8 +380,16 @@ class FreetdsTest inherits SqlTestBase {
 
         AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");
         assertEq(True, rt.supportsPartitions());
+        assertEq(False, rt.supportsPartitionRead());
         assertEq(False, rt.supportsPartitionDetach());
         assertEq(False, rt.supportsConcurrentPartitionDetach());
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            rt.getSelectSql({"partition": "p1"});
+        });
+        DbTableDataProvider partition_dp(rt);
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            partition_dp.searchSingleRecord(NOTHING, {"partition": "p1"});
+        });
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);

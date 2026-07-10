@@ -140,6 +140,8 @@ module SqlUtil {
       Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
     - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state
       introspection and deterministic \c FINALIZE recovery
+    - added the generic \c partition select option and supportsPartitionRead() capability for validated
+      single-partition reads on Oracle and MySQL primary and joined table references
     - enforced exact datasource object identity for create-as-select and insert-select operations; added
       @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
       @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
@@ -509,6 +511,8 @@ hash soh = (
     - @ref select_option_join "join": (@ref hash_type "hash") specifies any SQL join operations to return results from multiple tables
     - @ref select_option_groupby "groupby": (@ref list_type "list of strings") specifies grouping for aggregate column functions
     - @ref select_option_having "having": (@ref hash_type "hash") specifies filtering for results with aggregate column functions
+    - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
+      reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -774,6 +778,21 @@ hash<SqlResultInfo> info = accounts.selectRowsWithInfo({
     In this example, c info.result contains the grouped rows, while c info.sql and c info.args provide the
     executed statement and its ordered bind values.  The same select hash can be passed to create-as-select or
     insert-select APIs without using raw SQL.
+
+    @subsubsection select_option_partition Select Option "partition"
+    The \c "partition" option restricts a primary Oracle or MySQL table reference to one validated physical
+    partition. The same option can be passed in the \c opt argument to a join helper to qualify that joined table
+    independently:
+    @code{.py}
+*list<auto> rows = events.selectRows({
+    "partition": "events_2026_06",
+    "join": join_inner(details, "d", {"id": "event_id"}, NOTHING,
+        {"partition": "details_2026_06"}),
+});
+    @endcode
+    Call supportsPartitionRead() before using the option in portable code. Unsupported drivers raise
+    \c PARTITION-NOT-SUPPORTED; a missing or empty canonical name raises \c PARTITION-ERROR. The option cannot
+    qualify the derived table produced by \c "superquery".
 
     @subsubsection select_option_superquery Select Option "superquery"
     <b>Superquery Example:</b>

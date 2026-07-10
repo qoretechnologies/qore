@@ -121,10 +121,10 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
 
     @subsection ora_partitioning_select Partition Support in Selects
 
-    It's possible to select from a particular partition of a table with %OracleSqlUtilBase;
-    @ref OracleSqlUtilBase::OracleTable::OracleSelectOptions "OracleSelectOptions" defines the \c "partition" key which
-    can be added to a @ref select_option_hash "select option hash" to specify the partition to select from as in the
-    following example:
+    The generic @ref SqlUtil::AbstractTable::SelectOptions "select options" define the \c "partition" key;
+    %OracleSqlUtilBase advertises support through
+    @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and validates the canonical
+    partition name before generating Oracle's partition extension:
     @code{.py}
 *list<auto> rows = $table.selectRows(("created": op_gt(2012-05-01), "partition": "p1"));
     @endcode
@@ -276,6 +276,7 @@ hash schema = (
     @subsection oracle16 OracleSqlUtilBase v1.6
     - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
       @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
+    - implemented the generic validated named-partition select qualifier for primary and joined table references
     - fixed a bug in the IN operator
       (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle
@@ -2261,13 +2262,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         };
 
         #! Oracle select options
-        /** This constant extends @ref SqlUtil::AbstractTable::SelectOptions with the following options as returned by
-            @ref OracleSqlUtilBase::OracleTable::getSelectOptions() :
-            - \c partition: the partition name to use in a query (see @ref ora_partitioning_select)
+        /** This compatibility constant includes the generic \c partition option from
+            @ref SqlUtil::AbstractTable::SelectOptions and is returned by
+            @ref OracleSqlUtilBase::OracleTable::getSelectOptions().
         */
-        const OracleSelectOptions = AbstractTable::SelectOptions + {
-            "partition": Type::String,
-        };
+        const OracleSelectOptions = AbstractTable::SelectOptions;
 
         #! Oracle Expression map
         const OracleExpressionMap = DefaultExpressionMap + {
@@ -3907,12 +3906,6 @@ group by p.index_name", schema.upr(), name.upr());
         return c;
     }
 
-    private string getSelectSqlName(*hash qh) {
-        if (!qh.partition)
-            return getSqlName();
-        return sprintf("%s partition (%s)", getSqlName(), qh.partition);
-    }
-
     private Triggers getTriggersImpl() {
         if (!tablespace)
             setTableInfoIntern();
@@ -4275,6 +4268,10 @@ group by p.index_name", schema.upr(), name.upr());
         return getOracleServerMajorVersion() >= 12;
     }
 
+    private bool supportsPartitionReadImpl() {
+        return True;
+    }
+
     private bool supportsPartitionExchangeImpl() {
         return getOracleServerMajorVersion() >= 12;
     }
@@ -4425,6 +4422,11 @@ group by p.index_name", schema.upr(), name.upr());
             throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
         }
         return ph{pname};
+    }
+
+    private string getPartitionReadSqlNameImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        return sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(info.name));
     }
 
     private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {

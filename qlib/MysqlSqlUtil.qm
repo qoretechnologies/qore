@@ -87,11 +87,21 @@ module MysqlSqlUtil {
     where a trigger will set a default value for a column when a NULL is inserted, MySQL will raise an error if there is a NOT NULL
     constraint on the column.
 
+    @subsection mysql_partitioning_select Partition Support in Selects
+
+    %MysqlSqlUtil advertises @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and
+    supports the generic \c "partition" @ref select_option_hash "select option" for primary and joined table
+    references. The canonical name is validated against partition metadata before SQL is generated:
+    @code{.py}
+*list<auto> rows = table.selectRows({"partition": "p1"});
+    @endcode
+
     @section mysql_relnotes Release Notes
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - implemented MySQL/MariaDB range-partitioned table DDL, introspection, and lifecycle operations through the
       generic @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
+    - implemented the generic validated named-partition select qualifier for primary and joined table references
     - fixed the prepend and append column operators
       (<a href="https://github.com/qoretechnologies/qore/issues/4548">issue 4548</a>)
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -2626,6 +2636,10 @@ end";
             return ds.getServerVersion() >= 50700;
         }
 
+        private bool supportsPartitionReadImpl() {
+            return True;
+        }
+
         private bool partitionUniqueKeysRequireAllColumnsImpl() {
             return True;
         }
@@ -2724,6 +2738,11 @@ end";
                 throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
             }
             return ph{partition_name};
+        }
+
+        private string getPartitionReadSqlNameImpl(string partition_name) {
+            hash<PartitionInfo> info = resolveMysqlPartitionInfoUnlocked(partition_name);
+            return sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(info.name));
         }
 
         private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {

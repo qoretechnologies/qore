@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbTableDataProvider class definition
 
-/** DbTableDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** DbTableDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -230,6 +230,10 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             - \c forupdate: uses FOR UPDATE with the query to lock records selected; see
               <a href="../../SqlUtil/html/sql_operations.html#select_option_forupdate">SqlUtil select option forupdate</a>
               for more information on this argument
+            - \c partition: restricts reads to one physical partition; see
+              <a href="../../SqlUtil/html/sql_operations.html#select_option_partition">SqlUtil select option
+              partition</a> for more information on this argument; the table's \c supportsPartitionRead() API must
+              return @ref True
         */
         const SearchOptions = GenericRecordSearchOptions{"requires_result", "max_records"} + {
             "columns": <DataProviderOptionInfo>{
@@ -274,6 +278,14 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "short_desc": "Uses 'FOR UPDATE' with the query to lock records selected",
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "Uses `FOR UPDATE` with the query to lock records selected",
+            },
+            "partition": <DataProviderOptionInfo>{
+                "display_name": "Partition",
+                "short_desc": "Restrict reads to one physical table partition",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "The canonical physical partition name to read. The underlying SqlUtil table must support "
+                    "partition-qualified reads; check `supportsPartitionRead()` before using this option.",
+                "example_value": "events_2026_06",
             },
         };
 

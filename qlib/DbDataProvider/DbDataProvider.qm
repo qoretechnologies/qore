@@ -321,7 +321,9 @@ module DbDataProvider {
     "AbstractDataProviderBulkRecordInterface::getShapedValue()".  Compatibility callers can continue to use
     @ref DataProvider::AbstractDataProviderBulkRecordInterface::getValue() "getValue()", which returns a
     hash-of-lists view.  Table providers also accept \c ColumnarResult and hash-of-\c buffer<T> blocks for bulk
-    create and upsert operations.
+    create and upsert operations.  On drivers with equivalent native support, the table provider's read APIs and
+    \c find / \c find_single actions accept the SqlUtil \c partition search option to restrict reads to one physical
+    partition.
 
     The following classes are provided by this module:
     - @ref DbDataProvider::AbstractDbTableBulkOperation "AbstractDbTableBulkOperation"
@@ -344,6 +346,9 @@ module DbDataProvider {
     - added \c BufferColumns support for @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" bulk create
       and upsert operations, allowing \c ColumnarResult and hash-of-\c buffer<T> input to flow through
       @ref BulkSqlUtil::AbstractBulkOperation "BulkSqlUtil" bulk DML operations
+    - added the SqlUtil \c partition search option to
+      @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" reads and DB \c find / \c find_single actions;
+      bulk reads now forward all validated search options to SqlUtil
 
     @subsection dbdataprovider_v2_4 DbDataProvider v2.4
     - added the @ref DbDataProvider::DbVendorInfo "DbVendorInfo" hashdecl for per-vendor database app configuration
