@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QDBG 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH QDBG 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qdbg \- interactive debugger for Qore programs
 .br
@@ -16,7 +16,7 @@ qdbg-vsc-adapter \- VS Code Debug Adapter Protocol bridge
 [\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
 .PP
 .B qdbg-remote
-[\fIoptions\fP] \fIurl\fP
+[\fIoptions\fP] \fIurl\fP|\fIconnection\fP[/\fIpath\fP]
 .PP
 .B qdbg-server
 [\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
@@ -69,10 +69,12 @@ Force color output.
 .B \-\-no\-color
 Disable color output.
 .SH "QDBG-REMOTE OPTIONS"
-In addition to the options above:
 .TP
-.BR \-u ", " \-\-url =\fIurl\fP
-Debug server URL (\fBws://host:port/path\fP) or connection name.
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
 .TP
 .BR \-m ", " \-\-max\-redir =\fIN\fP
 Maximum number of HTTP redirects (default: 5).
@@ -91,7 +93,26 @@ Socket connection timeout in milliseconds.
 .TP
 .BR \-w ", " \-\-resp\-timeout =\fIms\fP
 WebSocket response timeout (default: 1500ms).
+.TP
+.BR \-y ", " \-\-history =\fIfile\fP
+Load command-line history from \fIfile\fP.
+Use \fB.\fP to disable history.
+.TP
+.BR \-s ", " \-\-session =\fIfile\fP
+Load a saved debug session from \fIfile\fP.
+.TP
+.B \-\-color
+Force color output.
+.TP
+.B \-\-no\-color
+Disable color output.
 .SH "QDBG-SERVER OPTIONS"
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
 .TP
 .BR \-l ", " \-\-listen =\fIaddr:port\fP
 Listen address and port (repeatable).
@@ -100,6 +121,62 @@ Default: dynamic port.
 .TP
 .BR \-p ", " \-\-path =\fIpath\fP
 URL path for the debug HTTP handler.
+.SH "QDBG-VSC-ADAPTER OPTIONS"
+.SS "Launch Options"
+.TP
+.BR \-D ", " \-\-define =\fIkey\fP[=\fIvalue\fP]
+Set a parse define.
+.TP
+.BR \-p ", " \-\-set\-parse\-option =\fIoption\fP
+Set a parse option for a launched program.
+.TP
+.BR \-z ", " \-\-time\-zone =\fIzone\fP
+Set the time zone for a launched program.
+.TP
+.BR \-g ", " \-\-program =\fIprogram\fP
+Use \fIprogram\fP unless a program is specified by the debug protocol.
+.SS "Attach Options"
+.TP
+.BR \-a ", " \-\-attach =\fIurl\fP
+Attach to a remote debug server.
+.TP
+.BR \-H ", " \-\-header =\fIkey=value\fP
+Custom HTTP header for the connection (repeatable).
+.TP
+.BR \-m ", " \-\-max\-redir =\fIN\fP
+Maximum number of HTTP redirects (default: 5).
+.TP
+.BR \-P ", " \-\-proxy =\fIURL\fP
+HTTP proxy URL.
+.TP
+.BR \-t ", " \-\-timeout =\fIms\fP
+Connection timeout in milliseconds.
+.TP
+.BR \-c ", " \-\-conn\-timeout =\fIms\fP
+Socket connection timeout in milliseconds.
+.TP
+.BR \-w ", " \-\-resp\-timeout =\fIms\fP
+WebSocket response timeout.
+.SS "Logging and General Options"
+.TP
+.BR \-l ", " \-\-logger\-filename =\fIfile\fP
+Write adapter logs to \fIfile\fP.
+.TP
+.BR \-A ", " \-\-append\-to\-log
+Append to the log file instead of replacing it.
+.TP
+.BR \-v ", " \-\-verbose
+Enable verbose logging.
+.TP
+.BR \-f ", " \-\-full\-exception
+Show full exception information.
+.TP
+.BR \-X ", " \-\-execute =\fIcommand\fP
+Execute an adapter command, print its result as JSON, and exit.
+The supported command is \fBpgmlist\fP, which lists all programs.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
 .SH EXAMPLES
 Debug a program locally:
 .RS

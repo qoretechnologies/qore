@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH SFREST 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH SFREST 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 sfrest \- Salesforce.com REST client
 .SH SYNOPSIS
@@ -117,7 +117,7 @@ Query an account:
 .PP
 SOQL query:
 .RS
-.B sfrest query?q="select id from account where name like 'test_%'"
+.B sfrest query?q=\(dqselect id from account where name like 'test_%'\(dq
 .RE
 .SH SEE ALSO
 .BR qore (1),

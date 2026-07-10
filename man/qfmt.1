@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2026 Qore Technologies, s.r.o.
 .\"
-.TH QFMT 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH QFMT 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qfmt \- canonical code formatter for Qore
 .SH SYNOPSIS
@@ -18,7 +18,7 @@ files are already formatted (for CI pipelines).
 When no files are given and stdin is not a terminal, \fBqfmt\fR reads from
 stdin and writes the formatted output to stdout.
 .PP
-The following file extensions are processed:
+When a directory is given, files with the following extensions are processed:
 \fB.qc\fP, \fB.qm\fP, \fB.qore\fP, \fB.qr\fP, \fB.qsd\fP, \fB.qfd\fP,
 \fB.qrd\fP, \fB.qtest\fP.
 .SH OPTIONS
@@ -46,7 +46,10 @@ Show help text and exit.
 All files are already formatted (with \fB\-c\fP), or formatting succeeded.
 .TP
 .B 1
-One or more files need formatting (with \fB\-c\fP), or an error occurred.
+One or more files need formatting (with \fB\-c\fP).
+.TP
+.B 2
+An input or formatting error occurred.
 .SH EXAMPLES
 Format a file in-place:
 .RS

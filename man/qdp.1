@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QDP 1 "2026 April 02" "Qore 3.0" "Qore Programming Language"
+.TH QDP 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qdp \- command-line interface for Qore data providers
 .SH SYNOPSIS
@@ -107,8 +107,8 @@ Show version information.
 .BR \-h ", " \-\-help
 Show help text.
 .SH COMMANDS
-Common commands include:
-\fBlist\fP, \fBinfo\fP, \fBsearch\fP, \fBcreate\fP, \fBupdate\fP,
+Common commands include \fBlist\fP for listing child providers, \fBinfo\fP,
+\fBsearch\fP, \fBcreate\fP, \fBupdate\fP,
 \fBdelete\fP, \fBupsert\fP, \fBdorequest\fP, \fBlisten\fP,
 \fBinteractive\fP, \fBpipeline\fP, and many more.
 .PP
@@ -127,14 +127,14 @@ An application action.
 .IB provider / child /...
 Navigate a provider hierarchy with path separators.
 .SH EXAMPLES
-List records from a database table:
+Search all records in a database table:
 .RS
-.B qdp mydb/mytable list
+.B qdp mydb/tables/mytable search
 .RE
 .PP
 Search with DPQL:
 .RS
-.B qdp \-q mydb/mytable search 'name = "foo"'
+.B qdp \-q mydb/tables/mytable search '@name == \(dqfoo\(dq'
 .RE
 .PP
 List available connections:

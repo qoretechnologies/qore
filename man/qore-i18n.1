@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE-I18N 1 "2026 May 16" "Qore 3.0" "Qore Programming Language"
+.TH QORE-I18N 1 "2026 July 10" "Qore 3.0" "Qore Programming Language"
 .SH NAME
 qore\-i18n \- manage Qore native internationalization catalogs
 .SH SYNOPSIS
@@ -31,6 +31,13 @@ Export one catalog locale to simple gettext PO interchange.
 .TP
 .B import-po
 Import a simple gettext PO file into a native JSON catalog.
+.SH GENERAL OPTIONS
+.TP
+.BR \-C ", " \-\-no\-color
+Disable colored output.
+.TP
+.BR \-h ", " \-\-help
+Show command-specific help and exit.
 .SH EXTRACT OPTIONS
 .TP
 .BR \-o ", " \-\-output =\fIfile\fP
@@ -44,6 +51,9 @@ Marker to extract; repeatable (default: \fBt\fP, \fBtn\fP, \fBtc\fP).
 .TP
 .BR \-\-fail\-dynamic
 Fail if a marker call uses a dynamic source or id argument.
+.TP
+.BR \-v ", " \-\-verbose
+Increase progress output.
 .SH STATS OPTIONS
 .TP
 .BR \-l ", " \-\-locale =\fIlocale\fP
