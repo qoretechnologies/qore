@@ -5631,96 +5631,113 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
-// Collect direct callees from an IR function's CallDirect instructions.
+// Collect direct and transitive callees from an IR function's CallDirect instructions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
-static std::vector<QoreJIT::BatchCallee> collectDirectCallees(const QoreIRFunction& func,
+static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunction& func,
         QoreProgram* root_pgm) {
+    constexpr size_t MAX_TRANSITIVE_BATCH_CALLEES = 64;
     std::vector<QoreJIT::BatchCallee> callees;
     std::unordered_set<const AbstractQoreFunctionVariant*> seen;
+    std::vector<const QoreIRFunction*> worklist{&func};
+    bool collect_transitive = getenv("QORE_DISABLE_JIT_TRANSITIVE_BATCH") == nullptr;
+    size_t check_count = 0;
 
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            const AbstractQoreFunctionVariant* variant = nullptr;
-            const char* callee_name = nullptr;
-
-            if (inst->opcode == QoreIROpcode::CallDirect) {
-                const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
-                variant = direct->variant;
-                if (direct->func) {
-                    callee_name = direct->func->getName();
+    for (size_t work_i = 0; work_i < worklist.size(); ++work_i) {
+        const QoreIRFunction* current = worklist[work_i];
+        for (const auto& block : current->blocks) {
+            for (const auto& inst : block->instructions) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr, "JIT transitive batch-callee collection")) {
+                    return callees;
                 }
-            } else if (inst->opcode == QoreIROpcode::Invoke) {
-                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
-                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
-                            inv->expr.getInternalNode());
-                    if (call) {
-                        variant = call->getVariant();
-                        if (call->getFunction()) {
-                            callee_name = call->getFunction()->getName();
+                const AbstractQoreFunctionVariant* variant = nullptr;
+                const char* callee_name = nullptr;
+
+                if (inst->opcode == QoreIROpcode::CallDirect) {
+                    const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
+                    variant = direct->variant;
+                    if (direct->func) {
+                        callee_name = direct->func->getName();
+                    }
+                } else if (inst->opcode == QoreIROpcode::Invoke) {
+                    const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst.get());
+                    if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                                inv->expr.getInternalNode());
+                        if (call) {
+                            variant = call->getVariant();
+                            if (call->getFunction()) {
+                                callee_name = call->getFunction()->getName();
+                            }
                         }
                     }
                 }
-            }
 
-            if (!variant || seen.count(variant)) {
-                continue;
-            }
-            seen.insert(variant);
-
-            // Check if the variant is a user function eligible for fast calls
-            const UserVariantBase* uvb = variant->getUserVariantBase();
-            if (!uvb || !uvb->isStaticallyFastCallEligible()) {
-                continue;
-            }
-
-            // If the callee doesn't have cached IR yet, attempt IR lowering now.
-            // This enables batch compilation even when the callee hasn't been called yet
-            // (common in --exec-mode=jit where the caller is compiled on first call).
-            const QoreIRFunction* callee_ir = uvb->getCachedIR();
-            if (!callee_ir && callee_name) {
-                // AOT-loaded callees from source-stripped qmods have no
-                // statements (no AST), so attemptIRLowering would assert.
-                // They will already have a cached AOT function if available
-                // or otherwise need to be invoked through the AST/JIT
-                // dispatch path; either way batch compilation can't fold
-                // them in here. Skip silently — the parent function will
-                // call them via the regular call helper.
-                if (!uvb->getStatementBlock()) {
+                if (!variant || seen.count(variant)) {
                     continue;
                 }
-                // Force IR lowering for the callee — must go through forceIRLowering
-                // which handles the call_once flag properly
-                uvb->forceIRLowering(callee_name);
-                callee_ir = uvb->getCachedIR();
+                seen.insert(variant);
+                if (work_i && callees.size() >= MAX_TRANSITIVE_BATCH_CALLEES) {
+                    continue;
+                }
+
+                // Check if the variant is a user function eligible for fast calls
+                const UserVariantBase* uvb = variant->getUserVariantBase();
+                if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+                    continue;
+                }
+
+                // If the callee doesn't have cached IR yet, attempt IR lowering now.
+                // This enables batch compilation even when the callee hasn't been called yet
+                // (common in --exec-mode=jit where the caller is compiled on first call).
+                const QoreIRFunction* callee_ir = uvb->getCachedIR();
+                if (!callee_ir && callee_name) {
+                    // AOT-loaded callees from source-stripped qmods have no
+                    // statements (no AST), so attemptIRLowering would assert.
+                    // They will already have a cached AOT function if available
+                    // or otherwise need to be invoked through the AST/JIT
+                    // dispatch path; either way batch compilation can't fold
+                    // them in here. Skip silently — the parent function will
+                    // call them via the regular call helper.
+                    if (!uvb->getStatementBlock()) {
+                        continue;
+                    }
+                    // Force IR lowering for the callee — must go through forceIRLowering
+                    // which handles the call_once flag properly
+                    uvb->forceIRLowering(callee_name);
+                    callee_ir = uvb->getCachedIR();
+                    if (!callee_ir) {
+                        continue;
+                    }
+                }
                 if (!callee_ir) {
                     continue;
                 }
+
+                // Skip self-recursion (the root function is already being compiled)
+                if (callee_ir->name == func.name) {
+                    continue;
+                }
+
+                // Include callees even if already JIT-compiled — the batch module
+                // can emit direct LLVM calls to the callee's in-module function,
+                // bypassing the qore_rt_call_fast() runtime dispatch overhead.
+
+                // Check Approach B eligibility (direct LLVM arg passing)
+                bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
+                unsigned num_params = uvb->getUserSignature()->numParams();
+
+                callees.push_back(QoreJIT::BatchCallee{
+                    callee_ir,
+                    uvb->getDeoptCounterPtr(),
+                    variant,
+                    approach_b,
+                    num_params
+                });
+                if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
+                    worklist.push_back(callee_ir);
+                }
             }
-            if (!callee_ir) {
-                continue;
-            }
-
-            // Skip self-recursion (the root function is already being compiled)
-            if (callee_ir->name == func.name) {
-                continue;
-            }
-
-            // Include callees even if already JIT-compiled — the batch module
-            // can emit direct LLVM calls to the callee's in-module function,
-            // bypassing the qore_rt_call_fast() runtime dispatch overhead.
-
-            // Check Approach B eligibility (direct LLVM arg passing)
-            bool approach_b = isApproachBEligible(uvb, callee_ir, root_pgm);
-            unsigned num_params = uvb->getUserSignature()->numParams();
-
-            callees.push_back(QoreJIT::BatchCallee{
-                callee_ir,
-                uvb->getDeoptCounterPtr(),
-                variant,
-                approach_b,
-                num_params
-            });
         }
     }
 
@@ -5756,7 +5773,7 @@ void UserVariantBase::attemptJITCompilation() const {
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
-    auto callees = collectDirectCallees(*cached_ir, pgm);
+    auto callees = collectBatchCallees(*cached_ir, pgm);
 
     if (!callees.empty()) {
         if (getenv("QORE_BATCH_DEBUG")) {

@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+string code = "%modern
+
+int effects;
+
+int sub leaf(int value) {
+    return value + 1;
+}
+
+int sub recursive(int value) {
+    return value > 0 ? value + recursive(value - 1) : 0;
+}
+
+int sub middle(int value) {
+    return leaf(value) + recursive(3);
+}
+
+int sub root(int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        result = middle(result);
+    }
+    return result;
+}
+
+int sub effectLeaf(int value) {
+    ++effects;
+    return value + 1;
+}
+
+int sub effectMiddle(int value) {
+    return effectLeaf(value);
+}
+
+root(1);
+sleep(200ms);
+printf(\"values:%d:%d:%d\\n\", root(10), effectMiddle(1), effectMiddle(2));
+printf(\"effects:%d\\n\", effects);
+int unassigned;
+try {
+    middle(unassigned);
+    printf(\"unassigned:accepted\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"unassigned:rejected\\n\");
+}
+";
+
+string script_path = "/tmp/qore-jit-transitive-batch-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode, bool disable_transitive = False) {
+    string disable = disable_transitive ? "QORE_DISABLE_JIT_TRANSITIVE_BATCH=1 " : "";
+    return backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        disable, libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "values:70:2:3\neffects:2\nunassigned:rejected\n";
+foreach hash<auto> test in (("mode": "ast", "disabled": False),
+        ("mode": "jit", "disabled": True), ("mode": "jit", "disabled": False)) {
+    string actual = runMode(test.mode, test.disabled);
+    if (actual != expected) {
+        printf("mismatch in %s%s\nexpected:\n%sactual:\n%s", test.mode,
+            test.disabled ? " (transitive disabled)" : "", expected, actual);
+        exit(2);
+    }
+}
