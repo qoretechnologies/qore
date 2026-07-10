@@ -23,38 +23,44 @@ static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
     return ++count % 100 == 0 && qore_check_cancel(nullptr, operation);
 }
 
-void qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor) {
-    for (QoreIRValue operand : inst.operands) {
+bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor,
+        size_t* check_count, const char* operation) {
+    auto visit = [&](QoreIRValue operand) {
+        if (check_count && qore_ir_analysis_cancelled(*check_count, operation)) {
+            return false;
+        }
         visitor(operand);
+        return true;
+    };
+    for (QoreIRValue operand : inst.operands) {
+        if (!visit(operand)) {
+            return false;
+        }
     }
 
     switch (inst.opcode) {
         case QoreIROpcode::BrIf:
-            visitor(static_cast<const QoreIRBranchIfInstruction&>(inst).condition);
-            break;
+            return visit(static_cast<const QoreIRBranchIfInstruction&>(inst).condition);
         case QoreIROpcode::SwitchInt:
-            visitor(static_cast<const QoreIRSwitchIntInstruction&>(inst).switch_val);
-            break;
+            return visit(static_cast<const QoreIRSwitchIntInstruction&>(inst).switch_val);
         case QoreIROpcode::SwitchString:
-            visitor(static_cast<const QoreIRSwitchStringInstruction&>(inst).switch_val);
-            break;
+            return visit(static_cast<const QoreIRSwitchStringInstruction&>(inst).switch_val);
         case QoreIROpcode::IteratorCreate:
         case QoreIROpcode::IteratorCreateIterate:
-            visitor(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
-            break;
+            return visit(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
         case QoreIROpcode::IteratorNext:
-            visitor(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
-            break;
+            return visit(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
         case QoreIROpcode::Return: {
             const auto& ret = static_cast<const QoreIRReturnInstruction&>(inst);
             if (ret.has_value) {
-                visitor(ret.value);
+                return visit(ret.value);
             }
             break;
         }
         default:
             break;
     }
+    return true;
 }
 
 static void qore_ir_visit_unique_successor(QoreIRBasicBlock* block,
@@ -359,6 +365,77 @@ static bool qore_ir_is_native_scalar_pure_opcode(QoreIROpcode opcode) {
 static bool qore_ir_is_native_scalar_constant(QoreIROpcode opcode) {
     return opcode == QoreIROpcode::ConstInt || opcode == QoreIROpcode::ConstFloat
         || opcode == QoreIROpcode::ConstBool;
+}
+
+struct QoreIRScalarUse {
+    const QoreIRInstruction* inst = nullptr;
+    size_t block_id = 0;
+};
+
+using QoreIRScalarUses = std::unordered_map<uint32_t, std::vector<QoreIRScalarUse>>;
+
+static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalarUses& uses,
+        size_t& check_count) {
+    uses.clear();
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR scalar use analysis")) {
+                return false;
+            }
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (operand.isValid()) {
+                    uses[operand.id].push_back({inst.get(), block_id});
+                }
+            }, &check_count, "IR scalar use analysis")) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool qore_ir_is_nonconsuming_scalar_use(const QoreIRFunction& func,
+        const QoreIRInstruction& inst, bool allow_ir_only_store) {
+    if (qore_ir_is_native_scalar_pure_opcode(inst.opcode)) {
+        return true;
+    }
+    switch (inst.opcode) {
+        case QoreIROpcode::BrIf:
+        case QoreIROpcode::SwitchInt:
+        case QoreIROpcode::AddAssignLocalInt:
+            return true;
+        case QoreIROpcode::StoreLocal: {
+            if (!allow_ir_only_store) {
+                return false;
+            }
+            const auto& store = static_cast<const QoreIRLocalInstruction&>(inst);
+            return store.local
+                && func.ir_only_locals.count(reinterpret_cast<const void*>(store.local));
+        }
+        default:
+            return false;
+    }
+}
+
+static bool qore_ir_has_only_nonconsuming_scalar_uses(const QoreIRFunction& func,
+        QoreIRValue result, const QoreIRScalarUses& uses, bool allow_ir_only_store,
+        size_t& check_count, bool& cancelled,
+        const std::unordered_set<size_t>* required_blocks = nullptr) {
+    auto use_it = uses.find(result.id);
+    if (use_it == uses.end() || use_it->second.empty()) {
+        return false;
+    }
+    for (const QoreIRScalarUse& use : use_it->second) {
+        if (qore_ir_analysis_cancelled(check_count, "IR scalar use validation")) {
+            cancelled = true;
+            return false;
+        }
+        if (!use.inst || (required_blocks && !required_blocks->count(use.block_id))
+                || !qore_ir_is_nonconsuming_scalar_use(func, *use.inst, allow_ir_only_store)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static void qore_ir_rewrite_value(QoreIRValue& value,
@@ -671,6 +748,11 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
 
 static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFunction& func) {
     size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return {};
+    }
+    bool cancelled = false;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_set<const QoreIRInstruction*> eliminated;
     std::unordered_set<const QoreIRInstruction*> forwarded_loads;
@@ -707,7 +789,9 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFu
                 available_loads.clear();
             }
 
-            if (qore_ir_is_forwardable_scalar_load(func, inst)) {
+            if (qore_ir_is_forwardable_scalar_load(func, inst)
+                    && qore_ir_has_only_nonconsuming_scalar_uses(func, inst.result, uses, true,
+                        check_count, cancelled)) {
                 const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
                 auto [load_it, inserted] = available_loads.emplace(load.local, inst.result);
                 if (!inserted) {
@@ -717,11 +801,19 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFu
                 }
                 continue;
             }
+            if (cancelled) {
+                return {};
+            }
 
             bool candidate = inst.result.isValid() && !inst.exception_target
                 && (qore_ir_is_native_scalar_constant(inst.opcode)
                     || qore_ir_is_native_scalar_pure_opcode(inst.opcode));
-            if (!candidate) {
+            if (!candidate
+                    || !qore_ir_has_only_nonconsuming_scalar_uses(func, inst.result, uses, true,
+                        check_count, cancelled)) {
+                if (cancelled) {
+                    return {};
+                }
                 continue;
             }
             QoreIRScalarExpressionKey key = qore_ir_get_scalar_expression_key(inst);
@@ -827,8 +919,18 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         return;
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
+    if (getenv("QORE_DISABLE_IR_LICM")) {
+        loops.clear();
+    }
     local_stats.loops_analyzed = loops.size();
     size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!loops.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        if (stats) {
+            *stats = local_stats;
+        }
+        return;
+    }
 
     for (const QoreIRNaturalLoop& loop : loops) {
         if (qore_ir_analysis_cancelled(check_count, "IR loop-invariant code motion")) {
@@ -856,6 +958,47 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         if (!qore_ir_collect_mutated_locals(loop, cfg, mutated, check_count)) {
             break;
         }
+        bool loop_may_invalidate_loads = false;
+        for (size_t block_id : loop.blocks) {
+            for (const auto& inst : cfg.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR loop invalidation analysis")) {
+                    if (stats) {
+                        *stats = local_stats;
+                    }
+                    return;
+                }
+                if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
+                    loop_may_invalidate_loads = true;
+                    break;
+                }
+            }
+            if (loop_may_invalidate_loads) {
+                break;
+            }
+        }
+        std::unordered_set<uint32_t> safe_repeated_values;
+        bool cancelled = false;
+        for (size_t block_id : loop.blocks) {
+            for (const auto& inst : cfg.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR loop use validation")) {
+                    if (stats) {
+                        *stats = local_stats;
+                    }
+                    return;
+                }
+                if (inst->result.isValid()
+                        && qore_ir_has_only_nonconsuming_scalar_uses(func, inst->result, uses, false,
+                            check_count, cancelled, &loop_blocks)) {
+                    safe_repeated_values.insert(inst->result.id);
+                }
+                if (cancelled) {
+                    if (stats) {
+                        *stats = local_stats;
+                    }
+                    return;
+                }
+            }
+        }
         std::unordered_set<const QoreIRInstruction*> selected;
         std::vector<QoreIRInstruction*> order;
         bool changed = true;
@@ -876,11 +1019,13 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
                     bool candidate = qore_ir_is_native_scalar_constant(inst->opcode)
                         || qore_ir_is_hoistable_load(func, *inst, mutated)
                         || qore_ir_is_native_scalar_pure_opcode(inst->opcode);
-                    if (!candidate) {
+                    if (!candidate
+                            || (inst->opcode == QoreIROpcode::LoadLocal && loop_may_invalidate_loads)
+                            || !safe_repeated_values.count(inst->result.id)) {
                         continue;
                     }
                     bool operands_invariant = true;
-                    qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                    if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                         auto def = definition_blocks.find(operand.id);
                         if (def == definition_blocks.end() || !loop_blocks.count(def->second)) {
                             return;
@@ -890,7 +1035,12 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
                         if (!defining_inst || !selected.count(defining_inst)) {
                             operands_invariant = false;
                         }
-                    });
+                    }, &check_count, "IR loop-invariant operand analysis")) {
+                        if (stats) {
+                            *stats = local_stats;
+                        }
+                        return;
+                    }
                     if (!operands_invariant) {
                         continue;
                     }

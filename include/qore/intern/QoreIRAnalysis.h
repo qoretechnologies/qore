@@ -24,7 +24,11 @@ using QoreIRBlockVisitor = std::function<void(QoreIRBasicBlock*)>;
 //! Visit every SSA operand exactly once, including dedicated instruction fields.
 //! @param inst instruction whose operands are visited
 //! @param visitor callback invoked once per operand
-void qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor);
+//! @param check_count optional shared cooperative-cancellation counter
+//! @param operation cancellation operation name when @a check_count is provided
+//! @return false when cancellation was requested
+bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor,
+    size_t* check_count = nullptr, const char* operation = nullptr);
 
 //! Visit every normal control-flow successor exactly once.
 //! @param inst control-flow instruction whose successors are visited

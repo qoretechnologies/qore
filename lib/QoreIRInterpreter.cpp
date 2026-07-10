@@ -1659,9 +1659,11 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 return false;
             }
             const QoreIRInstruction* inst = inst_uptr.get();
-            qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+            if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                 countIRValueUse(counts, operand);
-            });
+            }, &inst_count, "IR interpreter analysis")) {
+                return false;
+            }
 
             bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
                 || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect;
@@ -1674,12 +1676,18 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             if (dot_eval && !inst->operands.empty()) {
                 markIRValueUse(dot_eval_base_candidates, inst->operands[0]);
                 for (size_t i = 1; i < inst->operands.size(); ++i) {
+                    if (((++inst_count % 100) == 0)
+                            && qore_check_cancel(xsink, "IR interpreter analysis")) {
+                        return false;
+                    }
                     markIRValueUse(non_dot_eval_uses, inst->operands[i]);
                 }
             } else {
-                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                if (!qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     markIRValueUse(non_dot_eval_uses, operand);
-                });
+                }, &inst_count, "IR interpreter analysis")) {
+                    return false;
+                }
             }
         }
     }
@@ -1910,7 +1918,10 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     ++operand_use_counts[op.id];
                 }
             };
-            qore_ir_visit_value_operands(*inst_ptr, countOperand);
+            if (!qore_ir_visit_value_operands(*inst_ptr, countOperand, &inst_count,
+                    "IR interpreter analysis")) {
+                return false;
+            }
         }
     }
     int max_param_idx = -1;

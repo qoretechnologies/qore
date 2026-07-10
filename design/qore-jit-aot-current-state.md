@@ -142,9 +142,11 @@ use the declared target type.
 
 `QoreIRAnalysis` provides normalized SSA-operand and normal-successor visitors,
 plus reusable reachability, predecessor/successor, dominator, and natural-loop
-analysis. The IR interpreter uses the normalized operand visitor for ownership
-use counts, preventing dedicated instruction fields from diverging from generic
-operand handling.
+analysis. Generic operands carry phi inputs and dynamic lvalue-path and slice
+values, while the visitor also covers operands stored only in dedicated
+instruction fields. The IR interpreter uses it for ownership use counts,
+preventing dedicated instruction fields from diverging from generic operand
+handling.
 
 The first generic optimization built on this layer is conservative scalar
 loop-invariant code motion. It moves only native scalar constants, proven
@@ -152,10 +154,14 @@ assigned and non-NOTHING non-reference IR-only local loads, and non-throwing
 native scalar operations. A local written in the loop is never hoisted. Loops
 must have a unique unconditional preheader, and the preheader must precede the
 loop in IR block-list order while the LLVM emitter still resolves ordinary SSA
-operands in that order. The post-optimization verifier is mandatory for both
-runtime and AOT source lowering. `QORE_DISABLE_IR_OPT=1` disables the pass for
-same-binary diagnostics and performance comparisons; `QORE_IR_OPT_STATS=1`
-reports analyzed loops and hoisted instructions.
+operands in that order. Every hoisted result must have only repeated,
+non-consuming scalar users inside the loop. Loads are not hoisted across calls
+or other operations that can invalidate interpreter local slots. These rules
+preserve the runtime ownership and assigned-state lifetime represented by each
+SSA slot. The post-optimization verifier is mandatory for both runtime and AOT
+source lowering. `QORE_DISABLE_IR_LICM=1` disables only LICM, while
+`QORE_DISABLE_IR_OPT=1` disables all IR passes; `QORE_IR_OPT_STATS=1` reports
+analyzed loops and hoisted instructions.
 
 After LICM, a same-basic-block scalar pass forwards repeated loads of IR-only
 locals and eliminates repeated native scalar constants and arithmetic or
@@ -164,10 +170,12 @@ assigned, non-NOTHING native `int`, `float`, or `bool`; declared type alone is
 not sufficient. Explicit local writes invalidate that local, while references,
 calls, lvalue operations, scope exits, and other operations that can mutate an
 unknown local invalidate all available loads. Discovery is cancellation-safe
-and no definition is erased until all replacements have been selected. Set
-`QORE_DISABLE_IR_CSE=1` to retain the unoptimized same-binary path; the
-`QORE_IR_OPT_STATS=1` output includes forwarded-load and eliminated-expression
-counts.
+and no definition is erased until all replacements have been selected. A value
+is merged only when every consumer is a non-consuming scalar operation or an
+IR-only local store; call arguments, runtime-visible stores, phi inputs, and
+lvalue paths retain distinct SSA ownership. Set `QORE_DISABLE_IR_CSE=1` to
+retain the unoptimized same-binary path; the `QORE_IR_OPT_STATS=1` output
+includes forwarded-load and eliminated-expression counts.
 
 The optimizer also replaces a conditional branch whose SSA condition is a
 literal boolean with an unconditional branch. It deliberately leaves the

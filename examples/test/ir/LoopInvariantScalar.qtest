@@ -67,8 +67,24 @@ int sub removeAndAssign(int n) {
     return sum;
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d\\n\", invariant(0), invariant(1000), mutated(1000), nested(0, 100),
-    nested(100, 100), unassigned(100), removeAndAssign(100));
+int sub nestedAssignedState(int n) {
+    int found_count = 0;
+    for (int i = 0; i < n; ++i) {
+        bool found = False;
+        foreach int value in ((1, 2)) {
+            if (value == 2) {
+                found = True;
+            }
+        }
+        if (found) {
+            ++found_count;
+        }
+    }
+    return found_count;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d\\n\", invariant(0), invariant(1000), mutated(1000), nested(0, 100),
+    nested(100, 100), unassigned(100), removeAndAssign(100), nestedAssignedState(20));
 ";
 }
 
@@ -102,7 +118,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-checkOutput("ast", "0:407000:7028000:0:450000:0:0\n", ast);
+checkOutput("ast", "0:407000:7028000:0:450000:0:0:20\n", ast);
 
 foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));

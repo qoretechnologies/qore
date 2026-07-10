@@ -62,6 +62,14 @@ int sub lvaluePathMetadata() {
     return data.values[1];
 }
 
+bool sub boxedCallArguments() {
+    BinaryOutputStream output();
+    StreamWriter writer(output);
+    writer.writei8(0x1234abcd5678efab);
+    writer.writei8(0x1234abcd5678efab);
+    return output.getData() == <1234abcd5678efab1234abcd5678efab>;
+}
+
 int removed = 3;
 int removed_before = removed + 1;
 remove removed;
@@ -72,6 +80,7 @@ int unassigned;
 
 printf(\"values:%d:%d:%d:%g:%y:%d\\n\", repeated(5), mutations(), references(),
     repeatedFloat(2.5), repeatedBool(True), lvaluePathMetadata());
+printf(\"boxed:%y\\n\", boxedCallArguments());
 printf(\"state:%d:%y:%d:%y:%y\\n\", removed_before, removed.typeCode() == NT_NOTHING,
     deleted_before, deleted.typeCode() == NT_NOTHING, unassigned.typeCode() == NT_NOTHING);
 ";
@@ -99,6 +108,7 @@ string sub runAot() {
 }
 
 string expected = "values:36:26:445:7.0:True:41
+boxed:True
 state:4:True:5:True:True
 ";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
