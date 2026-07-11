@@ -2467,6 +2467,9 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref vertexairestclientintro "VertexAiRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://cloud.google.com/vertex-ai">Google Vertex AI</a>
+      - provider registry metadata advertises the same Gemini-specific tool-catalogue, dispatch, and payload-shaping
+        preferences as @ref geminirestclientintro "GeminiRestClient", matching their shared
+        @ref geminibodyshapeintro "GeminiBodyShape" request implementation
 
     - @ref voyagedataproviderintro "VoyageDataProvider" module
       - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
