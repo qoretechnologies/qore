@@ -5745,12 +5745,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return;
         }
         int32_t remaining_uses = func.interpreter_operand_use_counts[id];
-        if (remaining_uses > 0) {
-            if (!borrowed_temp_remaining[id]) {
-                ++borrowed_temp_active;
-            }
-            borrowed_temp_remaining[id] = remaining_uses;
+        if (remaining_uses <= 0) {
+            values[id] = QoreValue();
+            return;
         }
+        if (!borrowed_temp_remaining[id]) {
+            ++borrowed_temp_active;
+        }
+        borrowed_temp_remaining[id] = remaining_uses;
     };
 
     auto releaseBorrowedTemp = [&](uint32_t id) {
@@ -6334,6 +6336,9 @@ next_instruction:
                 }
                 if (inst->list_push_in_place) {
                     setValueSlotDirect(values, inst->result.id, result);
+                    if (result.hasNode()) {
+                        trackBorrowedTemp(inst->result.id);
+                    }
                 } else {
                     setValueSlot(values, inst->result.id, result, xsink);
                 }
@@ -8986,6 +8991,9 @@ load_local_done:
                 if (local_inst->redundant_store) {
                     if (local_inst->result.isValid()) {
                         setValueSlotDirect(values, local_inst->result.id, val);
+                        if (val.hasNode()) {
+                            trackBorrowedTemp(local_inst->result.id);
+                        }
                     }
                     ++ip;
                     break;

@@ -21,6 +21,18 @@ hash<auto> sub throughCall(hash<auto> value) {
 class BorrowedScopeMarker {
 }
 
+class BorrowedFuture {
+    hash<auto> get() {
+        return {\"value\": 1};
+    }
+}
+
+class BorrowedClient {
+    BorrowedFuture make() {
+        return new BorrowedFuture();
+    }
+}
+
 list<hash<auto>> sub safeIdentity(list<hash<auto>> input) {
     return map $1, input;
 }
@@ -47,6 +59,28 @@ int sub scopedBorrowedRead(list<hash<auto>> input) {
     return total;
 }
 
+int sub scopedInPlacePush() {
+    BorrowedScopeMarker marker();
+    list<hash<auto>> output = ();
+    for (int i = 0; i < 100; ++i) {
+        push output, {\"value\": i};
+    }
+    return output.size();
+}
+
+int sub scopedObjectPush() {
+    BorrowedClient client();
+    list<BorrowedFuture> futures = ();
+    for (int i = 0; i < 10; ++i) {
+        push futures, client.make();
+    }
+    int total = 0;
+    for (int i = 0; i < 10; ++i) {
+        total += futures[i].get().value;
+    }
+    return total;
+}
+
 list<hash<auto>> input = (
     {\"value\": 10, \"enabled\": True},
     {\"value\": 20, \"enabled\": False},
@@ -57,9 +91,11 @@ list<hash<auto>> selected = safeSelect(input);
 list<int> mapped = safeMap(input);
 list<hash<auto>> called = callBarrier(input);
 int scoped = scopedBorrowedRead(input);
+int pushed = scopedInPlacePush();
+int object_pushed = scopedObjectPush();
 input = ();
-printf(\"%d:%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
-    selected.size(), selected[1].value, mapped[2], called[1].value, scoped);
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
+    selected.size(), selected[1].value, mapped[2], called[1].value, scoped, pushed, object_pushed);
 ";
 
 string script_path = "/tmp/qore-ir-borrowed-list-read-" + string(getpid()) + ".qr";
@@ -84,7 +120,7 @@ string sub runAot() {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "10:30:2:30:31:20:1100\n";
+string expected = "10:30:2:30:31:20:1100:100:10\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
