@@ -3543,6 +3543,52 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
     return true;
 }
 
+//! Declare batch fast-entry symbols collected from a shared parse in one per-file LLVM module.
+/** Definitions are emitted only for variants selected by the normal per-file body filter.  External
+    linkage lets another object from the same batch call the fast entry directly; the standard entry
+    already uses the same stable variant-derived symbol namespace. */
+static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Module& module,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+    auto* double_ty = llvm::Type::getDoubleTy(ctx);
+    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+    size_t callee_i = 0;
+    for (const auto& entry : batch_callees) {
+        if (callee_i && !(callee_i % 100)
+                && qore_check_cancel(nullptr, "AOT shared fast-entry declaration")) {
+            return false;
+        }
+        ++callee_i;
+        const BatchCalleeInfo& info = entry.second;
+        if (!info.approach_b_eligible || info.fast_name.empty()) {
+            continue;
+        }
+        std::vector<llvm::Type*> params;
+        params.reserve(info.num_params + 2);
+        for (unsigned i = 0; i < info.num_params; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr, "AOT shared fast-entry parameter declaration")) {
+                return false;
+            }
+            BatchCalleeParamKind kind = i < info.param_kinds.size()
+                ? info.param_kinds[i] : BatchCalleeParamKind::Boxed;
+            params.push_back(qore_aot_fast_entry_param_type(kind, i64_ty, double_ty));
+        }
+        params.push_back(ptr_ty);
+        params.push_back(ptr_ty);
+        auto* fn_type = llvm::FunctionType::get(i64_ty, params, false);
+        llvm::Function* fn = module.getFunction(info.fast_name);
+        if (!fn) {
+            fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                info.fast_name, module);
+        }
+        fn->setVisibility(llvm::GlobalValue::HiddenVisibility);
+        fn->setDSOLocal(true);
+        fn->addFnAttr(llvm::Attribute::InlineHint);
+    }
+    return true;
+}
+
 //! Compile closure bodies referenced by one compiled body's expression slots.
 /** Closure entries are appended immediately after their owner.  This ordering lets
     runtime slot-map reconstruction create the closure variant from the owner's
@@ -3769,7 +3815,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         std::string* fatal_error = nullptr,
         const std::unordered_set<std::string>* keep_modules = nullptr,
         const std::unordered_set<std::string>* compile_files = nullptr,
-        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* aot_batch_callee_map = nullptr) {
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
+            aot_batch_callee_map = nullptr) {
     if (fatal_error && !fatal_error->empty()) {
         return;
     }
@@ -3781,7 +3828,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
     if (!metadata_only && owns_aot_batch_callee_map) {
         std::set<std::string> declared_fast_keys;
-        if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, *aot_batch_callee_map,
+        if (!declareAOTBatchFastEntries(ns, pgm, ctx, module, local_aot_batch_callee_map,
                 declared_fast_keys, compile_module, compile_file, keep_modules, compile_files)) {
             setAOTCompileFatal(fatal_error, "namespace", "<batch-callee-fast-entry>",
                 "declaration", "cancelled");
@@ -4131,20 +4178,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 "fast-entry LLVM lowering", fast_error);
                             delete ir_func;
                             return;
-                        } else if (aot_batch_callee_map) {
-                            BatchCalleeInfo info;
-                            auto existing = aot_batch_callee_map->find(variant);
-                            if (existing != aot_batch_callee_map->end()) {
-                                info.context_independent_fast_entry =
-                                    existing->second.context_independent_fast_entry;
-                            }
-                            info.name = ir_func->name;
-                            info.approach_b_eligible = true;
-                            info.fast_name = fast_entry_name;
-                            info.num_params = num_params;
-                            info.param_kinds = fast_entry_param_kinds;
-                            info.param_rejects_nothing = fast_entry_param_rejects_nothing;
-                            (*aot_batch_callee_map)[variant] = std::move(info);
                         }
                     }
 
@@ -4489,21 +4522,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     "fast-entry LLVM lowering", fast_error);
                                 delete ir_func;
                                 return;
-                            } else if (aot_batch_callee_map) {
-                                BatchCalleeInfo info;
-                                auto existing = aot_batch_callee_map->find(variant);
-                                if (existing != aot_batch_callee_map->end()) {
-                                    info.context_independent_fast_entry =
-                                        existing->second.context_independent_fast_entry;
-                                }
-                                info.name = ir_func->name;
-                                info.approach_b_eligible = true;
-                                info.implicit_self_method = implicit_self_fast_entry;
-                                info.fast_name = fast_entry_name;
-                                info.num_params = num_params;
-                                info.param_kinds = fast_entry_param_kinds;
-                                info.param_rejects_nothing = fast_entry_param_rejects_nothing;
-                                (*aot_batch_callee_map)[variant] = std::move(info);
                             }
                         }
 
@@ -9674,7 +9692,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         size_t module_cmd_begin = 0,
         size_t module_cmd_end = std::numeric_limits<size_t>::max(),
         int* compiled_count_out = nullptr,
-        bool report_artifact = true) {
+        bool report_artifact = true,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
+            shared_batch_callees = nullptr) {
     // Global LLVM target init is process-wide and not safe to call
     // concurrently; run it exactly once so this emit can be invoked from a
     // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
@@ -9713,12 +9733,19 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+    if (shared_batch_callees
+            && !declareAOTSharedFastEntryFunctions(ctx, *module, *shared_batch_callees)) {
+        error = "operation cancelled during AOT shared fast-entry declaration";
+        return false;
+    }
+
     std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error);
+        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error,
+        nullptr, nullptr, shared_batch_callees);
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
@@ -10233,6 +10260,38 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
+    // Discover fast-entry ABIs once across the shared parse.  Each per-file
+    // object receives declarations for this immutable map, while its normal
+    // source filter still emits only that file's definitions.
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
+        shared_batch_callees;
+    if (entries.size() > 1
+            && std::getenv("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES") == nullptr) {
+        std::unordered_set<std::string> batch_target_files;
+        batch_target_files.reserve(entries.size());
+        size_t target_i = 0;
+        for (const SrcEntry& e : entries) {
+            if (target_i && !(target_i % 100)
+                    && qore_check_cancel(nullptr, "AOT batch fast-entry target collection")) {
+                error = "operation cancelled during AOT batch fast-entry target collection";
+                return false;
+            }
+            batch_target_files.insert(e.canon);
+            ++target_i;
+        }
+        llvm::LLVMContext discovery_ctx;
+        llvm::Module discovery_module("qore_aot_batch_fast_entry_discovery",
+            discovery_ctx);
+        std::set<std::string> declared_fast_keys;
+        qore_ns_private* root_ns = qore_ns_private::get(*batch_pp->RootNS);
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+                discovery_module, shared_batch_callees, declared_fast_keys,
+                nullptr, nullptr, nullptr, &batch_target_files)) {
+            error = "operation cancelled during AOT batch fast-entry discovery";
+            return false;
+        }
+    }
+
     // Now emit one .qo per target using the shared parsed program.  Each
     // emit is independent — its own LLVMContext/Module, file-filtered codegen
     // (compile_file=e.canon), local result vectors, and a distinct output
@@ -10300,7 +10359,8 @@ bool QoreAOT::compileScriptFilesBatch(
             if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                     e.out_path, opt_level, target_triple, include_source,
                     per_err, e.module_cmd_begin, e.module_cmd_end,
-                    &per_file_compiled_count, report_artifacts)) {
+                    &per_file_compiled_count, report_artifacts,
+                    shared_batch_callees.empty() ? nullptr : &shared_batch_callees)) {
                 std::lock_guard<std::mutex> l(err_mutex);
                 if (first_error.empty()) {
                     first_error = per_err;

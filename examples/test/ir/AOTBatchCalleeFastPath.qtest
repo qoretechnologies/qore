@@ -251,6 +251,41 @@ printf(\"%s\\n\", leaf(x));
 ";
 }
 
+string sub crossFileLeafCode() {
+    return "%modern
+
+int sub cross_leaf(int x) {
+    return x + 1;
+}
+
+int sub cross_pair(int x) {
+    return cross_leaf(x) + cross_leaf(x + 1);
+}
+
+string sub cross_string(string value) {
+    return value + \"!\";
+}
+
+int sub cross_caught(int x) {
+    try {
+        return cross_pair(x);
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+}
+";
+}
+
+string sub crossFileMainCode() {
+    return "%modern
+
+int sub main() {
+    printf(\"%d:%s:%d\\n\", cross_leaf(4), cross_string(\"ok\"), cross_caught(5));
+    return 0;
+}
+";
+}
+
 string sub runScript(string script_path) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
         libqore_dir, qore_bin, script_path));
@@ -355,5 +390,29 @@ if (!(ast_closure_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_closure_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_closure_unassigned, aot_closure_unassigned);
+    exit(2);
+}
+
+string cross_leaf_path = "/tmp/qore-aot-cross-file-leaf-" + string(getpid()) + ".qr";
+string cross_main_path = "/tmp/qore-aot-cross-file-main-" + string(getpid()) + ".qr";
+string cross_exe_path = "/tmp/qore-aot-cross-file-" + string(getpid());
+File cross_leaf_script();
+cross_leaf_script.open2(cross_leaf_path, O_WRONLY | O_CREAT | O_TRUNC);
+cross_leaf_script.write(crossFileLeafCode());
+cross_leaf_script.close();
+File cross_main_script();
+cross_main_script.open2(cross_main_path, O_WRONLY | O_CREAT | O_TRUNC);
+cross_main_script.write(crossFileMainCode());
+cross_main_script.close();
+
+string cross_compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, cross_exe_path, cross_leaf_path, cross_main_path));
+if (!is_file(cross_exe_path)) {
+    printf("cross-file AOT compile failed:\n%s", cross_compile_out);
+    exit(2);
+}
+string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
+if (cross_out != "5:ok!:13\n") {
+    printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
