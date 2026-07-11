@@ -10846,6 +10846,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     return false;
                 }
+                call_may_modify_runtime_locals =
+                    aot_approach_b_callee->may_invalidate_external_caches;
             } else if (aot_mode && direct_inst->is_self_recursive
                     && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()

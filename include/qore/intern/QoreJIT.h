@@ -79,6 +79,7 @@ struct BatchCalleeInfo {
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
+    bool may_invalidate_external_caches = true; //!< Callee can mutate caller-visible runtime state
     std::string fast_name;               //!< Fast entry function name (if eligible)
     unsigned num_params = 0;             //!< Number of parameters
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds

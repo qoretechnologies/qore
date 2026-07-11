@@ -3250,6 +3250,40 @@ static void resolveAOTBatchContextIndependentFastEntries(
     }
 }
 
+static bool resolveAOTBatchFunctionEffectSummaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    if (std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
+        return true;
+    }
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>> functions;
+    functions.reserve(candidates.size());
+    size_t check_count = 0;
+    for (const auto& [variant, func] : candidates) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT batch function effect collection")) {
+            return false;
+        }
+        functions.emplace_back(variant, func.get());
+    }
+    std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary> summaries;
+    if (!qore_ir_compute_function_effect_summaries(functions, summaries)) {
+        return false;
+    }
+    for (const auto& [variant, summary] : summaries) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT batch function effect propagation")) {
+            return false;
+        }
+        auto callee_it = batch_callees.find(variant);
+        if (callee_it != batch_callees.end()) {
+            callee_it->second.may_invalidate_external_caches =
+                summary.may_invalidate_external_caches;
+        }
+    }
+    return true;
+}
+
 static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
@@ -3525,6 +3559,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
+    if (!resolveAOTBatchFunctionEffectSummaries(
+            context_candidates, aot_batch_callee_map)) {
+        return false;
+    }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
 
     size_t ns_i = 0;

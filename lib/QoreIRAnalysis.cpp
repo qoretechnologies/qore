@@ -23,6 +23,257 @@ static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
     return ++count % 100 == 0 && qore_check_cancel(nullptr, operation);
 }
 
+extern const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue);
+
+static bool qore_ir_local_write_may_invalidate_caller_caches(
+        const QoreIRFunction& func, const LocalVar* local) {
+    if (!local || !func.ir_only_locals.count(reinterpret_cast<const void*>(local))) {
+        return true;
+    }
+    return local->closureUse() || QoreTypeInfo::isReference(local->getTypeInfo());
+}
+
+static bool qore_ir_var_ref_write_may_invalidate_caller_caches(
+        const QoreIRFunction& func, const VarRefNode* var) {
+    if (!var) {
+        return true;
+    }
+    switch (var->getType()) {
+        case VT_LOCAL:
+            return qore_ir_local_write_may_invalidate_caller_caches(func, var->ref.id);
+        case VT_GLOBAL:
+        case VT_LOCAL_TS:
+        case VT_CLOSURE:
+        case VT_IMMEDIATE:
+        default:
+            return true;
+    }
+}
+
+static bool qore_ir_container_write_may_invalidate_caller_caches(
+        const QoreIRFunction& func, const VarRefNode* container,
+        const LocalVar* container_local) {
+    return container_local
+        ? qore_ir_local_write_may_invalidate_caller_caches(func, container_local)
+        : qore_ir_var_ref_write_may_invalidate_caller_caches(func, container);
+}
+
+static bool qore_ir_lvalue_path_may_invalidate_caller_caches(
+        const QoreIRFunction& func, const QoreIRLValuePathInstruction* inst) {
+    if (!inst || inst->path.empty()) {
+        return true;
+    }
+    const LVPathStep& root = inst->path.front();
+    switch (root.kind) {
+        case LVPathStepKind::LocalVar: {
+            auto* local = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            return qore_ir_local_write_may_invalidate_caller_caches(func, local)
+                || (root.type_info && QoreTypeInfo::isReference(root.type_info));
+        }
+        case LVPathStepKind::SelfMember:
+            return false;
+        case LVPathStepKind::ClosureVar:
+        case LVPathStepKind::GlobalVar:
+        case LVPathStepKind::ThreadLocalVar:
+        case LVPathStepKind::StaticVar:
+        default:
+            return true;
+    }
+}
+
+bool qore_ir_instruction_may_invalidate_caller_caches(
+        const QoreIRFunction& func, const QoreIRInstruction* inst) {
+    if (!inst) {
+        return true;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::StoreClosure:
+        case QoreIROpcode::StoreGlobal:
+        case QoreIROpcode::StoreThreadLocal:
+        case QoreIROpcode::NewObject:
+        case QoreIROpcode::CreateParseRef:
+        case QoreIROpcode::Call:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallMethod:
+        case QoreIROpcode::CallStatic:
+        case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallMethodDirect:
+        case QoreIROpcode::InvokeMethodDirect:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallClosureDirect:
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::BackgroundInt:
+        case QoreIROpcode::Invoke:
+        case QoreIROpcode::InvokeSimError:
+        case QoreIROpcode::OnBlockExit:
+        case QoreIROpcode::ScopeExit:
+        case QoreIROpcode::Backquote:
+            return true;
+
+        case QoreIROpcode::StoreLocal: {
+            auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst);
+            return qore_ir_local_write_may_invalidate_caller_caches(func, local_inst->local);
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            auto* add_inst = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            return !add_inst->target_ir_only
+                || qore_ir_local_write_may_invalidate_caller_caches(func, add_inst->target);
+        }
+        case QoreIROpcode::IncrementLocalInt: {
+            auto* inc_inst = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            return !inc_inst->ir_only
+                || qore_ir_local_write_may_invalidate_caller_caches(func, inc_inst->local);
+        }
+        case QoreIROpcode::HashKeyStore: {
+            auto* store_inst = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            return qore_ir_container_write_may_invalidate_caller_caches(
+                func, store_inst->container, store_inst->container_lv);
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            auto* store_inst = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            return qore_ir_container_write_may_invalidate_caller_caches(
+                func, store_inst->container, store_inst->container_lv);
+        }
+        case QoreIROpcode::ListIndexStore: {
+            auto* store_inst = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            return qore_ir_var_ref_write_may_invalidate_caller_caches(func, store_inst->container);
+        }
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::SpliceLValue: {
+            auto* lvalue_inst = static_cast<const QoreIRLValueInstruction*>(inst);
+            return qore_ir_var_ref_write_may_invalidate_caller_caches(
+                func, extractLValueBaseVarRef(lvalue_inst->lvalue));
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            return qore_ir_lvalue_path_may_invalidate_caller_caches(
+                func, static_cast<const QoreIRLValuePathInstruction*>(inst));
+        default:
+            return false;
+    }
+}
+
+bool qore_ir_compute_function_effect_summaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries) {
+    struct FunctionEffects {
+        const AbstractQoreFunctionVariant* variant = nullptr;
+        bool local_may_invalidate = false;
+        std::vector<const AbstractQoreFunctionVariant*> callees;
+    };
+
+    summaries.clear();
+    std::unordered_map<const AbstractQoreFunctionVariant*, size_t> function_ids;
+    std::vector<FunctionEffects> effects;
+    effects.reserve(functions.size());
+    size_t check_count = 0;
+    for (const auto& [variant, func] : functions) {
+        if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
+            return false;
+        }
+        if (!variant || !func || function_ids.count(variant)) {
+            continue;
+        }
+        size_t function_id = effects.size();
+        function_ids.emplace(variant, function_id);
+        effects.push_back({variant});
+        FunctionEffects& effect = effects.back();
+        for (const auto& block : func->blocks) {
+            if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
+                return false;
+            }
+            for (const auto& inst_ptr : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
+                    return false;
+                }
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst && inst->opcode == QoreIROpcode::CallDirect) {
+                    auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+                    if (call->has_ref_args || !call->variant) {
+                        effect.local_may_invalidate = true;
+                    } else {
+                        effect.callees.push_back(call->variant);
+                    }
+                } else if (qore_ir_instruction_may_invalidate_caller_caches(*func, inst)) {
+                    effect.local_may_invalidate = true;
+                }
+            }
+        }
+    }
+
+    std::vector<std::vector<size_t>> callers(effects.size());
+    std::vector<size_t> worklist;
+    for (size_t function_id = 0; function_id < effects.size(); ++function_id) {
+        if (qore_ir_analysis_cancelled(check_count, "IR function effect graph construction")) {
+            return false;
+        }
+        const FunctionEffects& effect = effects[function_id];
+        bool may_invalidate = effect.local_may_invalidate;
+        for (const AbstractQoreFunctionVariant* callee : effect.callees) {
+            if (qore_ir_analysis_cancelled(check_count, "IR function effect graph construction")) {
+                return false;
+            }
+            auto callee_it = function_ids.find(callee);
+            if (callee_it == function_ids.end()) {
+                may_invalidate = true;
+            } else {
+                callers[callee_it->second].push_back(function_id);
+            }
+        }
+        summaries[effect.variant].may_invalidate_external_caches = may_invalidate;
+        if (may_invalidate) {
+            worklist.push_back(function_id);
+        }
+    }
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count, "IR function effect propagation")) {
+            return false;
+        }
+        size_t callee_id = worklist.back();
+        worklist.pop_back();
+        for (size_t caller_id : callers[callee_id]) {
+            if (qore_ir_analysis_cancelled(check_count, "IR function effect propagation")) {
+                return false;
+            }
+            QoreIRFunctionEffectSummary& caller_summary = summaries[effects[caller_id].variant];
+            if (!caller_summary.may_invalidate_external_caches) {
+                caller_summary.may_invalidate_external_caches = true;
+                worklist.push_back(caller_id);
+            }
+        }
+    }
+    return true;
+}
+
 bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor,
         size_t* check_count, const char* operation) {
     auto visit = [&](QoreIRValue operand) {

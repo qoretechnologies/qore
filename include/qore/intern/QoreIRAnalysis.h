@@ -16,6 +16,7 @@
 
 #include <functional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 using QoreIRValueVisitor = std::function<void(QoreIRValue)>;
@@ -74,6 +75,26 @@ struct QoreIROptimizationStats {
     size_t borrowed_list_reads = 0;
     size_t in_place_list_pushes = 0;
 };
+
+//! Conservative interprocedural effects used to preserve caller-side caches.
+struct QoreIRFunctionEffectSummary {
+    bool may_invalidate_external_caches = true;
+};
+
+//! Return true when one instruction can mutate state visible to its caller.
+//! Direct function calls without reference arguments are handled by the
+//! interprocedural fixed-point analysis and therefore return false here.
+bool qore_ir_instruction_may_invalidate_caller_caches(
+    const QoreIRFunction& func, const QoreIRInstruction* inst);
+
+//! Compute conservative fixed-point effect summaries for a closed function set.
+//! Unknown callees and calls with reference arguments are treated as mutating.
+//! @param functions variant-to-IR pairs in the analyzed compilation group
+//! @param summaries output summaries keyed by function variant
+//! @return false when cooperative cancellation was requested
+bool qore_ir_compute_function_effect_summaries(
+    const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
+    std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries);
 
 //! Run conservative, semantics-preserving optimizations on a lowered function.
 //! @param func function to optimize in place

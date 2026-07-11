@@ -4,6 +4,7 @@
 %modern
 
 int context_offset = 3;
+list<int> context_values = (3,);
 
 int sub pureLeaf(int value) {
     return value + 1;
@@ -15,6 +16,10 @@ int sub pureMiddle(int value) {
 
 int sub contextLeaf(int value) {
     return value + context_offset;
+}
+
+int sub contextListLeaf(int value) {
+    return value + context_values[0];
 }
 
 int sub mutatingLeaf(int value) {
@@ -45,6 +50,15 @@ int sub benchContext(int rounds) {
     on_exit checksum += 0;
     for (int i = 0; i < rounds; ++i) {
         checksum += contextLeaf(i);
+    }
+    return checksum;
+}
+
+int sub benchContextList(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += contextListLeaf(i);
     }
     return checksum;
 }
@@ -81,6 +95,9 @@ switch (kernel) {
         break;
     case "context":
         checksum = benchContext(rounds);
+        break;
+    case "context-list":
+        checksum = benchContextList(rounds);
         break;
     case "mutating":
         checksum = benchMutating(rounds);
