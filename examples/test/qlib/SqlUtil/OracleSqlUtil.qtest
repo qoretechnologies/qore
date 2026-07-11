@@ -5,13 +5,13 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires OracleSqlUtil
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/OracleSqlUtil.qmod
 
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %try-module oracle
 %define NoOracle
@@ -264,6 +264,9 @@ class OracleTest inherits SqlTestBase {
             addTestCase("custom column operators #2314", \testCustomColumnOperators());
             addTestCase("chained synonyms #2408", \testChainedSynonyms());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("list partition lifecycle", \listPartitionLifecycleTest());
+            addTestCase("partition exchange", \partitionExchangeTest());
+            addTestCase("partition-local indexes and constraints", \partitionLocalIndexTest());
         }
 
         set_return_value(main());
@@ -544,12 +547,20 @@ class OracleTest inherits SqlTestBase {
         AbstractDatasource ds = table.getDatasource();
         ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others then "
             "null; end;");
+        ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; exception when "
+            "others then null; end;");
+        ds.execRaw("begin execute immediate 'drop table oracle_partition_global_unique purge'; exception when "
+            "others then null; end;");
         ds.commit();
 
         on_exit {
             try {
                 ds.execRaw("begin execute immediate 'drop table oracle_partition_test purge'; exception when others "
                     "then null; end;");
+                ds.execRaw("begin execute immediate 'drop table oracle_partition_interval_alignment purge'; "
+                    "exception when others then null; end;");
+                ds.execRaw("begin execute immediate 'drop table oracle_partition_global_unique purge'; exception "
+                    "when others then null; end;");
                 ds.commit();
             } catch (hash<ExceptionInfo> ex) {
             }
@@ -562,32 +573,160 @@ class OracleTest inherits SqlTestBase {
                 "d": {"qore_type": Type::Date, "notnull": True},
                 "v": {"qore_type": Type::String, "size": 20},
             },
-            "primary_key": {"name": "oracle_partition_test_pk", "columns": ("id", "d")},
+            # Oracle global PK/unique indexes do not have to contain the partition key.
+            "primary_key": {"name": "oracle_partition_test_pk", "columns": "id"},
+            "indexes": {"oracle_partition_test_uk": {"columns": ("id", "v"), "unique": True}},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
-                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
-                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+                "p1": {"name": "p1",
+                    "bound_sql": "values less than (TO_DATE('2026-02-01', 'YYYY-MM-DD'))"},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
             },
         });
         t.createCommit();
 
         OracleTable rt(ds, "oracle_partition_test");
         assertEq(True, rt.supportsPartitions());
+        assertEq(True, rt.supportsPartitionRead());
+        assertEq(True, rt.supportsTargetedPartitionLookup());
         assertEq(False, rt.supportsPartitionDetach());
+        assertEq(False, rt.supportsConcurrentPartitionDetach());
+
+        *hash<PartitionInfo> targeted_p2 = rt.getPartition("p2");
+        assertTrue(exists targeted_p2, "Oracle targeted lookup returns the named partition");
+        assertEq(2026-02-01, targeted_p2.bound_from, "Oracle targeted lookup resolves the preceding bound");
+        assertEq(2026-03-01, targeted_p2.bound_to, "Oracle targeted lookup resolves the selected upper bound");
+        assertNothing(rt.getPartition("missing"), "Oracle targeted lookup returns nothing for a missing name");
+        hash<PartitionLookupResult> targeted_lookup = rt.findPartitionBySpec({
+            "name": "p2",
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, targeted_lookup.status,
+            "Oracle verifies name-bearing comparable specs with targeted metadata");
+
+        rt.insertCommit({"id": 101, "d": 2026-01-15, "v": "p1 row"});
+        rt.insertCommit({"id": 102, "d": 2026-02-15, "v": "p2 row"});
+        *list<auto> p1_rows = rt.selectRows({"partition": "p1"});
+        assertEq(1, p1_rows.size(), "generic partition read restricts Oracle to one physical partition");
+        assertEq(101, p1_rows[0].id, "Oracle partition read returns the row from the named partition");
+        DbTableDataProvider partition_dp(rt);
+        assertTrue(partition_dp.getInfo().search_options.hasKey("partition"),
+            "DbTableDataProvider exposes the SqlUtil partition read option");
+        *hash<string, hash<ActionOptionInfo>> find_options = partition_dp.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx("Db", "find"), NOTHING);
+        assertTrue(find_options.hasKey("partition"), "the DB find action exposes the partition option");
+        *hash<string, hash<ActionOptionInfo>> find_single_options = partition_dp.tryGetActionOptionsWithOptions(
+            DataProviderActionCatalog::getAppActionEx("Db", "find_single"), NOTHING);
+        assertTrue(find_single_options.hasKey("partition"),
+            "the DB find_single action exposes the partition option");
+        assertEq(101, partition_dp.searchSingleRecord({"id": 101}, {"partition": "p1"}).id,
+            "DbTableDataProvider single-record reads forward the partition option");
+        *list<auto> provider_rows = map $1, partition_dp.searchRecords(NOTHING, {"partition": "p1"});
+        assertEq(1, provider_rows.size(), "DbTableDataProvider iterators forward the partition option");
+        {
+            AbstractDataProviderBulkRecordInterface bulk = partition_dp.getBulkRecordInterface(10,
+                {"partition": "p1"});
+            hash<auto> block = bulk.getValue();
+            assertEq((101,), block.id, "DbTableDataProvider bulk reads forward the partition option");
+        }
+        {
+            on_exit rt.rollback();
+            DbTableBulkRecordInterface bulk(10, rt, NOTHING, {
+                "partition": "p1",
+                "forupdate": True,
+                "requires_result": False,
+            });
+            assertFalse(bulk.implicitTransaction(),
+                "DbTableDataProvider bulk FOR UPDATE reads preserve the transaction lock");
+            assertEq((101,), bulk.getValue().id,
+                "DbTableDataProvider bulk FOR UPDATE reads preserve all SqlUtil options");
+        }
+        string partition_select_sql = rt.getSelectSql({"partition": "p2"});
+        assertTrue(partition_select_sql =~ /partition \(p2\)/i,
+            "generic partition read emits the Oracle partition extension");
+        assertThrows("PARTITION-ERROR", "partition \"missing\" does not exist", sub () {
+            rt.getSelectSql({"partition": "missing"});
+        });
+        assertThrows("PARTITION-ERROR", "partition \"\" does not exist", sub () {
+            rt.getSelectSql({"partition": ""});
+        });
+        assertThrows("PARTITION-ERROR", "cannot be applied to a derived superquery", sub () {
+            rt.getSelectSql({"partition": "p1", "superquery": {"partition": "p1"}});
+        });
+        *list<auto> joined_partition_rows = rt.selectRows({
+            "alias": "a",
+            "columns": "a.id",
+            "partition": "p1",
+            "join": join_inner(rt, "b", {"id": "id"}, NOTHING, {"partition": "p1"}),
+        });
+        assertEq(1, joined_partition_rows.size(),
+            "generic partition qualifier applies independently to Oracle join table references");
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);
         assertEq(1, strategy.columns.size());
         assertEq("d", strategy.columns[0]);
 
+        ds.execRaw("begin dbms_stats.gather_table_stats(user, 'ORACLE_PARTITION_TEST'); end;");
+        ds.commit();
+        rt.clear();
         hash<string, PartitionInfo> parts = rt.listPartitions();
         assertEq(2, parts.size());
+        assertEq(0, parts.p1.ordinal, "full Oracle listing replaces the partial targeted cache");
+        assertEq("p2", rt.getPartition("P2").name,
+            "Oracle targeted lookup preserves case-normalized lifecycle names after a full listing");
         assertEq(2026-02-01, parts.p2.bound_from);
         assertEq(2026-03-01, parts.p2.bound_to);
+        assertTrue(exists parts.p1.estimated_row_count,
+            "Oracle exposes the catalog-estimated partition row count after statistics collection");
 
         hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
         assertEq(2, desc.partitions.size());
+        assertFalse(desc.partitions.p1.hasKey("ordinal"));
+        assertFalse(desc.partitions.p1.hasKey("sql_name"));
+        assertFalse(desc.partitions.p1.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc.partitions.p1.hasKey("size_bytes"), "description excludes runtime storage statistics");
+        assertTrue(desc.partitions.p1.hasKey("bound_sql"));
+        assertFalse(desc.partitions.p1.hasKey("bound_to_sql"));
+        assertTrue(desc.partitions.p2.hasKey("bound_from"));
+        assertFalse(desc.partitions.p2.hasKey("bound_sql"));
         assertTrue(rt.getCreateSql()[0] =~ /partition by range/i);
+
+        assertEq((), rt.getAlignSql(t), "table aligns with the schema used to create it");
+        OracleTable reverse_template(ds, "oracle_partition_test");
+        reverse_template.setupTable(desc);
+        assertEq((), rt.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        # A global Oracle unique constraint is also valid without the partition key.  Exercise its actual DDL in a
+        # separate table because getDescriptionHash() intentionally does not export unique constraints.
+        OracleTable global_unique(ds, "oracle_partition_global_unique");
+        global_unique.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "date", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "oracle_partition_global_unique_pk", "columns": "id"},
+            "unique_constraints": {"oracle_partition_global_unique_uc": {"columns": "v"}},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {"pmax": {"bound_sql": "values less than (MAXVALUE)"}},
+        });
+        global_unique.createCommit();
+        OracleTable global_unique_rt(ds, "oracle_partition_global_unique");
+        assertTrue(global_unique_rt.getConstraints().hasKey("oracle_partition_global_unique_uc"),
+            "global unique constraint omitting the partition key is materialized");
+        global_unique_rt.dropCommit();
+
+        hash<auto> changed_strategy_desc = {} + desc;
+        changed_strategy_desc.partition_strategy = {} + desc.partition_strategy;
+        changed_strategy_desc.partition_strategy.auto = {"expression": "NUMTOYMINTERVAL(2, 'MONTH')"};
+        OracleTable changed_strategy(ds, "oracle_partition_test");
+        changed_strategy.setupTable(changed_strategy_desc);
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            rt.getAlignSql(changed_strategy);
+        });
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
             "bound_from": 2026-02-01,
@@ -595,6 +734,15 @@ class OracleTest inherits SqlTestBase {
         });
         assertEq(PartitionLookupStatus::Found, lookup.status);
         assertEq("p2", lookup.partition.name);
+        assertThrows("PARTITION-ERROR", "must start at the preceding upper bound", sub () {
+            rt.getAddPartitionSql({"name": "pgap", "bound_from": 2026-03-15, "bound_to": 2026-04-01});
+        });
+        assertThrows("PARTITION-ERROR", "bounds overlap existing partition", sub () {
+            rt.getAddPartitionSql({"name": "poverlap", "bound_from": 2026-02-15, "bound_to": 2026-03-15});
+        });
+        assertThrows("PARTITION-ERROR", "lower bound must be less than upper bound", sub () {
+            rt.getAddPartitionSql({"name": "preversed", "bound_from": 2026-04-01, "bound_to": 2026-03-01});
+        });
 
         hash<PartitionEnsureResult> ensure = rt.ensurePartitionCommit({
             "name": "p3",
@@ -604,6 +752,9 @@ class OracleTest inherits SqlTestBase {
         assertEq(True, ensure.created);
         assertEq(True, ensure.materialized);
         assertEq(PartitionVerifiedBy::Bounds, ensure.verified_by);
+        assertEq("p3", ensure.partition.name);
+        assertEq(2026-03-01, ensure.partition.bound_from);
+        assertEq(2026-04-01, ensure.partition.bound_to);
         assertEq(True, rt.listPartitions().hasKey("p3"));
 
         ds.execRaw("insert into oracle_partition_test values (3, timestamp '2026-03-15 00:00:00', 'x')");
@@ -630,10 +781,466 @@ class OracleTest inherits SqlTestBase {
         assertEq(True, raced.materialized, "ensurePartition() race resolves to a materialized partition");
         rt.dropPartitionCommit("p4");
 
+        rt.addPartitionCommit({"name": "pmax", "is_default": True});
+        assertEq(PartitionLookupStatus::Found, rt.findPartitionBySpec({"is_default": True}).status);
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            rt.getAddPartitionSql({"name": "pmax2", "is_default": True});
+        });
+        assertThrows("PARTITION-ERROR", "catch-all partition", sub () {
+            rt.getAddPartitionSql({"name": "p5", "bound_from": 2026-03-01, "bound_to": 2026-04-01});
+        });
+        rt.dropPartitionCommit("pmax");
+
+        OracleTable finite_first(ds, "oracle_partition_finite_first");
+        assertThrows("PARTITION-ERROR", "cannot declare finite lower bound", sub () {
+            finite_first.setupTable({
+                "columns": {"d": {"qore_type": Type::Date, "notnull": True}},
+                "partition_strategy": {"method": "range", "columns": "d"},
+                "partitions": {"p1": {"bound_from": 2026-01-01, "bound_to": 2026-02-01}},
+            });
+        });
+
+        OracleTable interval_template(ds, "oracle_partition_interval_alignment");
+        interval_template.setupTable({
+            "columns": {"d": {"qore_type": Type::Date, "notnull": True}},
+            "partition_strategy": {
+                "method": "range",
+                "columns": "d",
+                "auto": {"interval": "numtoyminterval(1, 'month')"},
+            },
+            "partitions": {
+                "p0": {"bound_sql": "values less than (TO_DATE('2026-01-01', 'YYYY-MM-DD'))"},
+            },
+        });
+        interval_template.createCommit();
+
+        OracleTable interval_actual(ds, "oracle_partition_interval_alignment");
+        assertEq((), interval_actual.getAlignSql(interval_template),
+            "equivalent declared and introspected Oracle interval policies align");
+        hash<auto> interval_desc = interval_actual.getDescriptionHash({"with_partitions": True});
+        OracleTable interval_reverse(ds, "oracle_partition_interval_alignment");
+        interval_reverse.setupTable(interval_desc);
+        assertEq((), interval_actual.getAlignSql(interval_reverse),
+            "reverse-engineered Oracle interval strategy aligns unchanged");
+
+        interval_desc.partition_strategy = {} + interval_desc.partition_strategy;
+        interval_desc.partition_strategy.auto = {"expression": "NUMTOYMINTERVAL(2, 'MONTH')"};
+        OracleTable changed_interval(ds, "oracle_partition_interval_alignment");
+        changed_interval.setupTable(interval_desc);
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            interval_actual.getAlignSql(changed_interval);
+        });
+
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support detaching partitions",
             sub() {
                 rt.detachPartition("p2");
             });
+    }
+
+    private cleanupPartitionExchangeTest(AbstractDatasource ds) {
+        foreach string table_name in (("oracle_partition_exchange_target", "oracle_partition_exchange")) {
+            ds.execRaw("begin execute immediate 'drop table " + table_name
+                + " purge'; exception when others then if sqlcode != -942 then raise; end if; end;");
+        }
+        ds.commit();
+    }
+
+    private listPartitionLifecycleTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        code cleanup = sub () {
+            ds.execRaw("begin execute immediate 'drop table oracle_partition_list_test purge'; exception when "
+                "others then if sqlcode != -942 then raise; end if; end;");
+            ds.commit();
+        };
+        cleanup();
+        on_exit cleanup();
+
+        OracleTable tmpl(ds, "oracle_partition_list_test");
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "region": {"qore_type": Type::String, "size": 8, "notnull": True},
+            },
+            "primary_key": {"name": "oracle_part_list_pk", "columns": "id"},
+            "partition_strategy": {"method": "list", "columns": "region"},
+            "partitions": {
+                "p_eu": {"values": ("eu", "uk")},
+                "p_us": {"values": ("us",)},
+            },
+        });
+        assertTrue(tmpl.supportsPartitionMethod("list"), "Oracle supports portable list partitioning");
+        assertFalse(tmpl.supportsPartitionMethod("hash"), "Oracle does not claim explicit hash bucket semantics");
+        assertThrows("DESCRIPTION-ERROR", "does not support portable hash partitioning", sub () {
+            OracleTable bad(ds, "oracle_partition_hash_bad");
+            bad.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "hash", "columns": "id"},
+                "partitions": {"p": {"modulus": 2, "remainder": 0}},
+            });
+        });
+        assertTrue(tmpl.getCreateSql()[0] =~ /partition by list \(region\)/i,
+            "Oracle list strategy is emitted in CREATE TABLE");
+        tmpl.createCommit();
+
+        OracleTable live(ds, "oracle_partition_list_test");
+        assertEq("list", live.getPartitionStrategy().method, "Oracle list strategy is introspected");
+        hash<string, PartitionInfo> parts = live.listPartitions();
+        assertEq(("eu", "uk"), parts.p_eu.values, "Oracle list values are introspected as typed values");
+        hash<PartitionLookupResult> lookup = live.findPartitionBySpec({"values": ("uk", "eu")});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "Oracle list lookup is order-insensitive");
+        assertEq("p_eu", lookup.partition.name, "Oracle list lookup returns the expected partition");
+        hash<PartitionEnsureResult> ensured = live.ensurePartition({"name": "p_eu", "values": ("eu", "uk")});
+        assertEq(PartitionVerifiedBy::Definition, ensured.verified_by,
+            "Oracle list ensure reports definition verification");
+
+        live.insertCommit({"id": 1, "region": "eu"});
+        live.insertCommit({"id": 2, "region": "us"});
+        assertEq(1, live.selectRows({"partition": "p_eu"}).size(),
+            "Oracle list partition read returns only its values");
+        live.addPartitionCommit({"name": "p_apac", "values": ("apac", "au")});
+        assertEq(("apac", "au"), live.getPartition("p_apac").values,
+            "Oracle list partition can be added and targeted");
+        live.truncatePartitionCommit("p_eu");
+        assertEq(0, live.selectRows({"partition": "p_eu"}).size(), "Oracle list partition can be truncated");
+        live.dropPartitionCommit("p_apac");
+        assertNothing(live.getPartition("p_apac"), "Oracle list partition can be dropped");
+
+        hash<auto> desc = live.getDescriptionHash({"with_partitions": True});
+        assertEq("list", desc.partition_strategy.method, "Oracle list strategy is recreatable");
+        assertEq(("us",), desc.partitions.p_us.values, "Oracle list values are recreatable");
+        OracleTable roundtrip(ds, "oracle_partition_list_copy");
+        roundtrip.setupTable(desc);
+        assertTrue(roundtrip.getCreateSql()[0] =~ /partition p_us values \('us'\)/i,
+            "Oracle list description regenerates partition DDL");
+
+        live.addPartitionCommit({"name": "p_other", "is_default": True});
+        assertTrue(live.getPartition("p_other").is_default, "Oracle default list partition is introspected");
+        assertThrows("PARTITION-ERROR", "catch-all partition", sub () {
+            live.getAddPartitionSql({"name": "p_new", "values": ("new",)});
+        });
+    }
+
+    private partitionExchangeTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        cleanupPartitionExchangeTest(ds);
+        on_exit cleanupPartitionExchangeTest(ds);
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"native_type": "date", "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20},
+        };
+        OracleTable source(ds, "oracle_partition_exchange");
+        source.setupTable({
+            "columns": columns,
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"bound_sql": "values less than (TO_DATE('2026-02-01', 'YYYY-MM-DD'))"},
+                "p2": {"bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        source.createCommit();
+
+        OracleTable target(ds, "oracle_partition_exchange_target");
+        target.setupTable({"columns": columns});
+        target.createCommit();
+
+        OracleTable actual_source(ds, "oracle_partition_exchange");
+        OracleTable actual_target(ds, "oracle_partition_exchange_target");
+        assertTrue(actual_source.supportsPartitionExchange(), "Oracle supports partition exchange");
+        actual_source.validateTableShape(actual_target);
+
+        ds.execRaw("insert into oracle_partition_exchange values (2, date '2026-02-15', 'source')");
+        ds.commit();
+
+        int callback_count;
+        string callback_sql;
+        code sql_callback = sub (string sql) {
+            ++callback_count;
+            callback_sql = sql;
+        };
+        string sql = actual_source.getExchangePartitionSql({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target, {"sql_callback": sql_callback});
+        assertEq(1, callback_count, "exchange SQL generator invokes its callback exactly once");
+        assertEq(sql, callback_sql, "exchange SQL callback receives the returned SQL");
+        assertTrue(sql =~ /exchange partition p2 with table .*oracle_partition_exchange_target/i,
+            "Oracle exchange SQL identifies both objects: " + sql);
+        assertTrue(sql =~ /excluding indexes with validation$/i,
+            "Oracle exchange retains safe validation and explicit index defaults");
+        assertTrue(actual_source.getExchangePartitionSql("p2", actual_target, {
+            "including_indexes": True,
+            "update_indexes": True,
+            "validate": False,
+        }) =~ /including indexes without validation update indexes$/i,
+            "Oracle exchange exposes explicit validation and index maintenance options");
+
+        actual_source.exchangePartitionCommit({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target);
+        assertEq(0, ds.selectRow("select count(*) c from oracle_partition_exchange partition (p2)").c,
+            "Oracle exchange leaves the source partition empty");
+        assertEq("source", actual_target.selectRow().v,
+            "Oracle exchange moves the partition rows to the standalone table");
+
+        assertThrows("PARTITION-ERROR", "must be empty", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target);
+        });
+
+        OracleTable bad_target(ds, "oracle_partition_exchange_bad");
+        bad_target.setupTable({"columns": columns + {"v": {"qore_type": Type::String, "size": 21}}});
+        assertThrows("PARTITION-ERROR", "not storage-compatible", sub () {
+            actual_source.getExchangePartitionSql("p2", bad_target);
+        });
+        assertThrows("PARTITION-ERROR", "cannot be exchanged with its parent", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_source);
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"unsupported": True});
+        });
+
+        Datasource other_ds = getDatasource();
+        OracleTable other_target(other_ds, "oracle_partition_exchange_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            actual_source.getExchangePartitionSql("p2", other_target);
+        });
+    }
+
+    private partitionLocalIndexTest() {
+        Datasource ds = getDatasource();
+        string table_name = "oracle_partition_local_index";
+        string tablespace = ds.selectRow("select default_tablespace from user_users").default_tablespace;
+
+        # Ensure deterministic recovery if a previous interrupted run left the integration fixture behind.
+        ds.execRaw("begin execute immediate 'drop table " + table_name
+            + " cascade constraints'; exception when others then if sqlcode != -942 then raise; end if; end;");
+        ds.commit();
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"qore_type": Type::Date, "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20, "notnull": True},
+            "u": {"qore_type": Type::String, "size": 20},
+        };
+        hash<auto> partition_strategy = {"method": "range", "columns": "d"};
+        hash<auto> partitions = {"pmax": {"bound_sql": "values less than (MAXVALUE)"}};
+
+        OracleTable desired(ds, table_name);
+        desired.setupTable({
+            "columns": columns,
+            "indexes": {
+                "olit_v": {
+                    "columns": "v",
+                    "driver": {"oracle": {
+                        "partition_scope": "local",
+                        "index_tablespace": tablespace,
+                        "compute_statistics": True,
+                    }},
+                },
+                "olit_ud": {
+                    "columns": ("u", "d"),
+                    "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                },
+                "ogit_v": {
+                    "columns": ("id", "v"),
+                    "unique": True,
+                    "driver": {"oracle": {"partition_scope": "global"}},
+                },
+            },
+            "primary_key": {
+                "name": "opli_pk",
+                "columns": ("id", "d"),
+                "driver": {"oracle": {
+                    "partition_scope": "local",
+                    "index_tablespace": tablespace,
+                    "compute_statistics": True,
+                }},
+            },
+            "unique_constraints": {
+                "opli_uk": {
+                    "columns": ("v", "d"),
+                    "driver": {"oracle": {
+                        "partition_scope": "local",
+                        "index_tablespace": tablespace,
+                        "compute_statistics": True,
+                    }},
+                },
+            },
+            "partition_strategy": partition_strategy,
+            "partitions": partitions,
+        });
+
+        hash<auto> manual_desc = desired.getDescriptionHash({"with_partitions": True});
+        assertEq("local", manual_desc.indexes.olit_v.driver.oracle.partition_scope,
+            "manual index description preserves local scope");
+        assertEq(True, manual_desc.indexes.olit_v.driver.oracle.compute_statistics,
+            "manual index description preserves compute_statistics");
+        assertEq(tablespace, manual_desc.indexes.olit_v.driver.oracle.index_tablespace,
+            "manual index description preserves its tablespace");
+        assertEq("local", manual_desc.primary_key.driver.oracle.partition_scope,
+            "manual primary-key description preserves local scope");
+        assertEq("local", manual_desc.unique_constraints.opli_uk.driver.oracle.partition_scope,
+            "manual unique-constraint description preserves local scope");
+
+        string index_sql = desired.getIndexes().olit_v.getCreateSql(table_name);
+        assertTrue(index_sql =~ /tablespace .* compute statistics local$/i,
+            "local index DDL orders tablespace, statistics, and scope clauses correctly");
+        string pk_sql = desired.getPrimaryKey().getCreateSql(table_name);
+        assertTrue(pk_sql =~ /using index tablespace .* compute statistics local$/i,
+            "local primary-key DDL emits an inline local index clause");
+        OracleUniqueConstraint desired_uk = cast<OracleUniqueConstraint>(
+            desired.getConstraints().opli_uk);
+        assertTrue(desired_uk.getCreateSql(table_name)
+            =~ /using index tablespace .* compute statistics local$/i,
+            "local unique-constraint DDL emits an inline local index clause");
+
+        assertThrows("INDEX-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_unique_index");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v", "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_pk");
+            invalid.setupTable({
+                "columns": columns,
+                "primary_key": {
+                    "name": "bad_pk", "columns": "id",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "must include partition key", sub () {
+            OracleTable invalid(ds, "opli_invalid_uk");
+            invalid.setupTable({
+                "columns": columns,
+                "unique_constraints": {"bad_uk": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "nonpartitioned table", sub () {
+            OracleTable invalid(ds, "opli_invalid_nonpartitioned");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "invalid partition_scope", sub () {
+            OracleTable invalid(ds, "opli_invalid_scope");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v",
+                    "driver": {"oracle": {"partition_scope": "regional"}},
+                }},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "bitmap index", sub () {
+            OracleTable invalid(ds, "opli_invalid_bitmap");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {"columns": "v", "method": "bitmap"}},
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "do not match index", sub () {
+            OracleTable invalid(ds, "opli_invalid_named_index");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"support_ix": {
+                    "columns": ("v", "d"), "unique": True,
+                    "driver": {"oracle": {"partition_scope": "local"}},
+                }},
+                "primary_key": {
+                    "name": "bad_pk", "columns": ("id", "d"),
+                    "driver": {"oracle": {"index": "support_ix"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+        assertThrows("CONSTRAINT-OPTION-ERROR", "conflicts with", sub () {
+            OracleTable invalid(ds, "opli_invalid_named_scope");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"support_ix": {
+                    "columns": ("id", "d"), "unique": True,
+                    "driver": {"oracle": {"partition_scope": "global"}},
+                }},
+                "primary_key": {
+                    "name": "bad_pk", "columns": ("id", "d"),
+                    "driver": {"oracle": {"index": "support_ix", "partition_scope": "local"}},
+                },
+                "partition_strategy": partition_strategy,
+            });
+        });
+
+        desired.createCommit();
+        hash<auto> locality = ds.selectRow("select count(*) c, min(locality) locality from user_part_indexes "
+            "where index_name in ('OLIT_V', 'OLIT_UD', 'OPLI_PK', 'OPLI_UK')");
+        assertEq(4, locality.c, "all requested local index structures are physically partitioned");
+        assertEq("LOCAL", locality.locality, "all requested local index structures are local");
+        assertEq("NO", ds.selectRow("select partitioned from user_indexes where index_name = 'OGIT_V'").partitioned,
+            "the explicit global index is not partitioned");
+
+        OracleTable actual(ds, table_name);
+        Indexes actual_indexes = actual.getIndexes();
+        assertEq("local", cast<OracleIndex>(actual_indexes.olit_v).getEffectivePartitionScope(),
+            "catalog introspection identifies local indexes");
+        assertEq(tablespace.lwr(), cast<OracleIndex>(actual_indexes.olit_v).tablespace,
+            "catalog introspection preserves a uniform local-index tablespace");
+        assertEq("global", cast<OracleIndex>(actual_indexes.ogit_v).getEffectivePartitionScope(),
+            "catalog introspection identifies global indexes on partitioned tables");
+
+        hash<auto> desc = actual.getDescriptionHash({"with_partitions": True});
+        assertEq("local", desc.indexes.olit_v.driver.oracle.partition_scope,
+            "reverse description preserves local index scope");
+        assertEq("global", desc.indexes.ogit_v.driver.oracle.partition_scope,
+            "reverse description preserves global index scope");
+        assertEq("opli_pk", desc.primary_key.driver.oracle.index,
+            "reverse description links the primary key to its physical index");
+        assertTrue(desc.unique_constraints.hasKey("opli_uk"),
+            "reverse description exports unique constraints");
+        assertEq("opli_uk", desc.unique_constraints.opli_uk.driver.oracle.index,
+            "reverse description links a unique constraint to its physical index");
+
+        OracleTable reverse_template(ds, table_name);
+        reverse_template.setupTable(desc);
+        assertEq((), actual.getAlignSql(reverse_template),
+            "reverse-engineered local and global indexes align unchanged");
+
+        actual.dropCommit();
+        OracleTable recreated(ds, table_name);
+        recreated.setupTable(desc);
+        recreated.createCommit();
+        locality = ds.selectRow("select count(*) c, min(locality) locality from user_part_indexes "
+            "where index_name in ('OLIT_V', 'OLIT_UD', 'OPLI_PK', 'OPLI_UK')");
+        assertEq(4, locality.c, "reverse description recreates all local index structures");
+        assertEq("LOCAL", locality.locality, "reverse description recreates local physical scope");
+        recreated.dropCommit();
     }
 
     private string getResultSetSql() {

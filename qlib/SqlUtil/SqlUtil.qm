@@ -136,6 +136,24 @@ module SqlUtil {
     - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
       lifecycle APIs for range-partitioned tables; driver support is advertised by
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
+    - added storage-shape validation and partition exchange APIs with equivalent empty-target semantics for
+      Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
+    - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state
+      introspection and deterministic \c FINALIZE recovery
+    - added the generic \c partition select option and supportsPartitionRead() capability for validated
+      single-partition reads on Oracle and MySQL primary and joined table references
+    - added supportsTargetedPartitionLookup() and getPartition() for canonical-name metadata queries that avoid
+      loading complete high-cardinality partition catalogs on supported drivers
+    - added the discriminated list/hash/subpartition spec family and supportsPartitionMethod(); PostgreSQL supports
+      portable range, list, explicit modulus/remainder hash, and recursive subpartition strategies, while Oracle
+      and MySQL/MariaDB support portable list lifecycle operations in addition to range
+    - added optional introspection-only partition statistics with explicitly estimated row counts and allocated
+      byte sizes where equivalent catalog metadata is available
+    - enforced exact datasource object identity for create-as-select and insert-select operations; added
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
+      "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
+      added reliable target/source projection-cardinality validation
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -500,6 +518,8 @@ hash soh = (
     - @ref select_option_join "join": (@ref hash_type "hash") specifies any SQL join operations to return results from multiple tables
     - @ref select_option_groupby "groupby": (@ref list_type "list of strings") specifies grouping for aggregate column functions
     - @ref select_option_having "having": (@ref hash_type "hash") specifies filtering for results with aggregate column functions
+    - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
+      reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -746,6 +766,40 @@ hash<auto> sh = {
     @endcode
     The \c "having" option allows for query results with aggregate SQL column operator functions to be filtered by user-defined criteria.
     The \c "having" hash key should be assigned to a hash where each key is a column specifier (optionally in dot notation) and the values are lists with two elements; the first element must be a @ref sql_cops "column operator code", and the second element is a column operator description normally provided by using a @ref sql_cop_funcs "column operator function" as in the above example.
+
+    Joins, computed aggregate columns, grouping, and aggregate filters can be combined in the same structured
+    select.  The c WithInfo variants return the generated SQL and bind arguments together with the result:
+    @code{.py}
+hash<SqlResultInfo> info = accounts.selectRowsWithInfo({
+    "alias": "a",
+    "columns": (
+        "a.region",
+        cop_as(cop_min("t.amount"), "min_amount"),
+        cop_as(cop_max("t.amount"), "max_amount"),
+    ),
+    "join": join_inner(transactions, "t", {"id": "account_id"}),
+    "groupby": "a.region",
+    "having": {"t.amount": (COP_MAX, op_ge(1000))},
+});
+    @endcode
+    In this example, c info.result contains the grouped rows, while c info.sql and c info.args provide the
+    executed statement and its ordered bind values.  The same select hash can be passed to create-as-select or
+    insert-select APIs without using raw SQL.
+
+    @subsubsection select_option_partition Select Option "partition"
+    The \c "partition" option restricts a primary Oracle or MySQL table reference to one validated physical
+    partition. The same option can be passed in the \c opt argument to a join helper to qualify that joined table
+    independently:
+    @code{.py}
+*list<auto> rows = events.selectRows({
+    "partition": "events_2026_06",
+    "join": join_inner(details, "d", {"id": "event_id"}, NOTHING,
+        {"partition": "details_2026_06"}),
+});
+    @endcode
+    Call supportsPartitionRead() before using the option in portable code. Unsupported drivers raise
+    \c PARTITION-NOT-SUPPORTED; a missing or empty canonical name raises \c PARTITION-ERROR. The option cannot
+    qualify the derived table produced by \c "superquery".
 
     @subsubsection select_option_superquery Select Option "superquery"
     <b>Superquery Example:</b>
@@ -2255,6 +2309,8 @@ public namespace SqlUtil {
     public enum PartitionVerifiedBy : string {
         #! The partition was verified by comparing partition bounds
         Bounds = "bounds",
+        #! The partition was verified by a non-range definition such as list values or a hash bucket
+        Definition = "definition",
         #! The partition was verified by canonical partition name
         Name = "name",
         #! The partition was covered by automatic partitioning
@@ -2265,7 +2321,7 @@ public namespace SqlUtil {
     /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionStrategy {
-        #! Partitioning method; Phase 1 supports \c "range"
+        #! Partitioning method: \c "range", \c "list", or \c "hash" when supported by the driver
         string method = "range";
         #! Partition key columns in declaration order
         softlist<string> columns;
@@ -2273,6 +2329,8 @@ public namespace SqlUtil {
         *hash<auto> auto;
         #! Optional driver-specific configuration
         *hash<auto> driver;
+        #! Optional recursively nested partition strategy
+        *hash<auto> subpartition;
     }
 
     #! Partition definition or lookup specification hash
@@ -2281,7 +2339,7 @@ public namespace SqlUtil {
     public hashdecl PartitionSpec {
         #! Canonical partition name
         *string name;
-        #! Partitioning method; Phase 1 supports \c "range"
+        #! Partitioning method: \c "range", \c "list", or \c "hash"
         string method = "range";
         #! Optional partition key columns; defaults to the table strategy columns
         *softlist<string> columns;
@@ -2295,8 +2353,18 @@ public namespace SqlUtil {
         *string bound_to_sql;
         #! Complete driver-native bound SQL expression
         *string bound_sql;
+        #! Discrete typed values assigned to a list partition
+        *list<auto> values;
+        #! Driver-native list value SQL when typed values cannot be reconstructed
+        *string values_sql;
+        #! Hash modulus for an explicitly mapped hash bucket
+        *int modulus;
+        #! Hash remainder for an explicitly mapped hash bucket
+        *int remainder;
         #! True if this is the default partition
         bool is_default = False;
+        #! Nested partition definitions keyed by canonical child name
+        *hash<string, hash<auto>> subpartitions;
         #! Schema name when available
         *string schema;
         #! Unqualified relation name when available
@@ -2311,8 +2379,12 @@ public namespace SqlUtil {
     /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionInfo inherits PartitionSpec {
-        #! Ordinal in the listPartitions() result
+        #! Ordinal in listPartitions(), or \c -1 for a targeted result when normalized list order is not known
         int ordinal;
+        #! Catalog-estimated row count when the driver exposes partition statistics
+        *int estimated_row_count;
+        #! Allocated partition storage in bytes when the driver exposes physical size metadata
+        *int size_bytes;
     }
 
     #! Partition lookup result hash

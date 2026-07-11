@@ -38,6 +38,9 @@
     - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
       artifacts by default for better startup and runtime performance (see
       @ref exec_mode_aot "AOT Compilation")
+    - explicit <tt>.qmod</tt> paths now fall back to the complete separated source module directory when the binary
+      artifact is missing or cannot be loaded, ensuring sibling <tt>.qc</tt> and <tt>.ql</tt> component files are
+      parsed along with the main <tt>.qm</tt> file
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
@@ -1726,6 +1729,27 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref sqlutilintro "SqlUtil" module
       - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" (and the all-drivers variant)
         for standard created/modified-timestamp and sequence-ID triggers across PostgreSQL, Oracle, MySQL, MSSQL
+      - added portable range-partition strategy, introspection, lookup, add, ensure, drop, truncate, and detach APIs
+        with schema-description round-trip for PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server; lifecycle APIs
+        include SQL generators, transaction-managing variants, callback support, deterministic concurrent-create
+        handling, and driver-aware key validation
+      - added Oracle local/global partitioned index and constraint placement with tablespace and statistics options
+      - added reusable table storage-shape validation and no-data-movement partition exchange APIs for Oracle
+        \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION, with exact datasource identity and an
+        equivalent empty-target contract
+      - added explicit nontransactional PostgreSQL 14+ \c DETACH \c PARTITION \c CONCURRENTLY APIs with
+        pending-state introspection and deterministic \c FINALIZE recovery without retries or polling
+      - added a generic named-partition select qualifier for primary and joined Oracle/MySQL table references,
+        with explicit capability checks and unsupported errors for non-equivalent backend mechanisms
+      - added targeted canonical-name partition metadata lookup for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
+        Server without loading complete high-cardinality partition catalogs
+      - added portable list partitions on PostgreSQL, Oracle, and MySQL/MariaDB, explicit modulus/remainder hash
+        partitions and recursive subpartitions on PostgreSQL, plus capability-gated rejection on drivers without
+        equivalent semantics
+      - added introspection-only estimated row counts and allocated partition sizes where driver catalogs expose
+        equivalent metadata; recreatable descriptions exclude these runtime statistics
+      - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
+        structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
       - fixed a foreign-key ordering bug in @ref SqlUtil::Tables::populate() "Tables::populate()" that left the
@@ -2458,6 +2482,9 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref vertexairestclientintro "VertexAiRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://cloud.google.com/vertex-ai">Google Vertex AI</a>
+      - provider registry metadata advertises the same Gemini-specific tool-catalogue, dispatch, and payload-shaping
+        preferences as @ref geminirestclientintro "GeminiRestClient", matching their shared
+        @ref geminibodyshapeintro "GeminiBodyShape" request implementation
 
     - @ref voyagedataproviderintro "VoyageDataProvider" module
       - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
@@ -2502,6 +2529,11 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - @ref mysqlsqlutilintro "MysqlSqlUtil" module
+      - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
+        expressions no longer pass binary-character-set operands to MySQL's ICU regular-expression engine and
+        remain compatible with MySQL 5.7 and current MariaDB releases
+
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts

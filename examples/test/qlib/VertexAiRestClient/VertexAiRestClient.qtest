@@ -16,6 +16,7 @@
 %requires QoreLlmUtils
 %requires GcpAuth
 %requires GeminiBodyShape
+%requires GeminiRestClient
 %requires VertexAiRestClient
 
 %try-module json >= 1.11
@@ -103,6 +104,7 @@ public class VertexAiTest inherits QUnit::Test {
 
     constructor() : Test("VertexAi Test", "1.0") {
         addTestCase("factory + getInfo",                  \factoryTest());
+        addTestCase("registry Gemini shaping metadata",  \registryShapingMetadataTest());
         addTestCase("Gemini-on-Vertex chat round-trip",   \chatTest());
         addTestCase("OpenAI tool_choice maps to toolConfig", \toolChoiceConversionTest());
         addTestCase("complete() helper",                  \completeTest());
@@ -168,6 +170,39 @@ public class VertexAiTest inherits QUnit::Test {
         assertTrue(info.supports_structured_output);
         assertTrue(info.supports_multimodal);
         assertTrue(info.supports_reasoning_token_budget);
+    }
+
+    #! The Vertex and native Gemini providers share GeminiBodyShape, so registry
+    #! consumers must receive identical Gemini-specific shaping preferences.
+    private registryShapingMetadataTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory vertex_factory =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("vertex-ai");
+        QoreLlmUtils::AbstractLlmProviderFactory gemini_factory =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("gemini");
+        hash<QoreLlmUtils::LlmProviderInfo> vertex = vertex_factory.getInfo();
+        hash<QoreLlmUtils::LlmProviderInfo> gemini = gemini_factory.getInfo();
+
+        assertTrue(vertex.prefers_narrow_tool_catalogue,
+            "Vertex advertises the Gemini narrow tool-catalogue preference");
+        assertEq(8, vertex.preferred_max_tool_count,
+            "Vertex advertises the Gemini conservative tool-count cap");
+        assertTrue(vertex.prefers_single_tool_dispatch,
+            "Vertex advertises the Gemini single-dispatch preference");
+        assertTrue(vertex.prefers_stringified_tool_payloads,
+            "Vertex advertises the Gemini stringified-payload preference");
+
+        assertEq(gemini.prefers_narrow_tool_catalogue,
+            vertex.prefers_narrow_tool_catalogue,
+            "Vertex and Gemini narrow-catalogue metadata match");
+        assertEq(gemini.preferred_max_tool_count,
+            vertex.preferred_max_tool_count,
+            "Vertex and Gemini tool-count metadata match");
+        assertEq(gemini.prefers_single_tool_dispatch,
+            vertex.prefers_single_tool_dispatch,
+            "Vertex and Gemini dispatch metadata match");
+        assertEq(gemini.prefers_stringified_tool_payloads,
+            vertex.prefers_stringified_tool_payloads,
+            "Vertex and Gemini payload metadata match");
     }
 
     #! Regression: the OpenAI-compatible adapter path must translate tool_choice

@@ -19,6 +19,10 @@ class ExplicitQmodFallbackTest inherits QUnit::Test {
             \testExplicitQmodPathFallbackLoadModule());
         addTestCase("explicit qmod path fallback works from requires",
             \testExplicitQmodPathFallbackRequires());
+        addTestCase("explicit separated qmod path loads component sources",
+            \testExplicitSeparatedQmodPathFallback());
+        addTestCase("missing explicit separated qmod path loads component sources from requires",
+            \testMissingExplicitSeparatedQmodPathFallbackRequires());
         set_return_value(main());
     }
 
@@ -142,5 +146,106 @@ public namespace ExplicitFallbackRequiresTest {
         );
 
         assertEq(5167, p.callFunction("get_value"));
+    }
+
+    testExplicitSeparatedQmodPathFallback() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        const string Name = "ExplicitSeparatedFallback";
+        string module_dir = tmp_dir + "/" + Name;
+        mkdir(module_dir, 0755);
+
+        string qm_path = module_dir + "/" + Name + ".qm";
+        string qc_path = module_dir + "/ExplicitSeparatedFallbackValue.qc";
+        string qmod_path = module_dir + "/" + Name + ".qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module ExplicitSeparatedFallback {
+    version = \"1.0\";
+    desc = \"explicit separated qmod fallback test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+    init = sub () {
+        ExplicitSeparatedFallbackTest::value();
+    };
+}
+");
+        f.close();
+
+        f.open2(qc_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("public namespace ExplicitSeparatedFallbackTest {
+    public int sub value() {
+        return 5168;
+    }
+}
+");
+        f.close();
+
+        f.open2(qmod_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("not a qmod\n");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        hash<ExceptionInfo> warning = p.loadModuleWarn(qmod_path, WARN_MODULES);
+        assertEq("BINARY-MODULE-SOURCE-FALLBACK", warning.err);
+        assertRegex("ExplicitSeparatedFallback/ExplicitSeparatedFallback\\.qmod", warning.desc);
+        assertRegex("ExplicitSeparatedFallback/ExplicitSeparatedFallback\\.qm", warning.desc);
+
+        p.parse("int sub get_value() { return ExplicitSeparatedFallbackTest::value(); }\n",
+            "explicit-separated-qmod-fallback");
+        assertEq(5168, p.callFunction("get_value"));
+    }
+
+    testMissingExplicitSeparatedQmodPathFallbackRequires() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        const string Name = "MissingExplicitSeparatedFallback";
+        string module_dir = tmp_dir + "/" + Name;
+        mkdir(module_dir, 0755);
+
+        string qm_path = module_dir + "/" + Name + ".qm";
+        string qc_path = module_dir + "/MissingExplicitSeparatedFallbackValue.qc";
+        string qmod_path = module_dir + "/" + Name + ".qmod";
+
+        File f();
+        f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module MissingExplicitSeparatedFallback {
+    version = \"1.0\";
+    desc = \"missing explicit separated qmod fallback test\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"http://qore.org\";
+    license = \"MIT\";
+    init = sub () {
+        MissingExplicitSeparatedFallbackTest::value();
+    };
+}
+");
+        f.close();
+
+        f.open2(qc_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("public namespace MissingExplicitSeparatedFallbackTest {
+    public int sub value() {
+        return 5169;
+    }
+}
+");
+        f.close();
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.parse(
+            "%requires " + qmod_path + "\n"
+            "int sub get_value() { return MissingExplicitSeparatedFallbackTest::value(); }\n",
+            "missing-explicit-separated-qmod-fallback-requires"
+        );
+
+        assertEq(5169, p.callFunction("get_value"));
     }
 }

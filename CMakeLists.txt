@@ -3456,7 +3456,8 @@ add_custom_target(install-qore-qlib-aot
 # missing/incorrect symlink from the already-built qmods, both on (re)configure
 # and as an always-run build step after all qmod targets.
 get_property(_qore_source_qmod_link_targets GLOBAL PROPERTY QORE_SOURCE_QMOD_LINK_TARGETS)
-if (_qore_source_qmod_link_targets)
+if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES
+        AND _qore_source_qmod_link_targets)
     add_custom_target(qore-ensure-source-qmod-symlinks ALL
         COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
@@ -3471,7 +3472,11 @@ if (_qore_source_qmod_link_targets)
         execute_process(COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
             -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
-            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake)
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+            RESULT_VARIABLE _qore_ensure_qmod_links_result)
+        if (NOT _qore_ensure_qmod_links_result EQUAL 0)
+            message(FATAL_ERROR "Could not ensure in-tree source qmod symlinks")
+        endif()
     endif()
 endif()
 

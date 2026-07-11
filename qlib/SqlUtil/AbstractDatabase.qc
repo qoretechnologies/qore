@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDatabase class definition
 
-/** AbstractDatabase.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDatabase.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,11 +48,13 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             - \c info_callback: see @ref info_callback
             - \c sql_callback: see @ref sql_callback
             - \c sql_callback_executed: see @ref sql_callback_executed
+            - \c error_callback: see @ref error_callback
         */
         const hash<auto> CallbackOptions = (
             "info_callback": "code",
             "sql_callback": "code",
             "sql_callback_executed": Type::Boolean,
+            "error_callback": "code",
         );
 
         /** @defgroup info_actions Info Callback Action Codes

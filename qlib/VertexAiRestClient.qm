@@ -147,6 +147,9 @@ hash<ChatResponse> r = p.chat((
       to Vertex's \c toolConfig, \c response_format \c json_schema is routed to the
       request output schema, and passthrough \c generationConfig options are
       deep-merged — matching GeminiRestClient
+    - provider registry metadata now advertises the same Gemini-specific tool
+      catalogue, dispatch, and payload-shaping preferences as GeminiRestClient;
+      both providers use the same GeminiBodyShape request implementation
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
@@ -382,6 +385,10 @@ public class VertexAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "supports_structured_output": True,
             "supports_multimodal": True,
             "supports_reasoning_token_budget": True,
+            "prefers_narrow_tool_catalogue": True,
+            "preferred_max_tool_count": 8,
+            "prefers_single_tool_dispatch": True,
+            "prefers_stringified_tool_payloads": True,
         };
     }
 }

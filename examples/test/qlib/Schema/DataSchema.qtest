@@ -4,10 +4,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Schema
-%requires SqlUtil
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
 
-%requires QUnit
+%requires ../../../../qlib/QUnit.qmod
 
 %exec-class DataSchemaTest
 
@@ -118,6 +118,12 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(ms."$defs".hasKey("referenceData"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partition_strategy"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partitions"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("list"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("hash"));
+        assertTrue(ms."$defs".partitionStrategy.properties.hasKey("subpartition"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("values"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("modulus"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("subpartitions"));
     }
 
     columnNormalizationTests() {
@@ -277,6 +283,30 @@ class DataSchemaTest inherits QUnit::Test {
         assertEq(("id",), result.partition_strategy.columns);
         assertEq(100, result.partitions.test_p1.bound_to);
 
+        hash<auto> method_families = Schema::DataSchemaLoader::normalizeTable("method_families", {
+            "columns": {
+                "id": {"type": "int"},
+                "region": {"type": "varchar", "size": 8},
+            },
+            "partition_strategy": {
+                "method": "list",
+                "columns": ("region",),
+                "subpartition": {"method": "hash", "columns": ("id",)},
+            },
+            "partitions": {
+                "eu": {
+                    "values": ("eu", "uk"),
+                    "subpartitions": {
+                        "eu_h0": {"method": "hash", "modulus": 2, "remainder": 0},
+                    },
+                },
+            },
+        });
+        assertEq("list", method_families.partition_strategy.method);
+        assertEq("hash", method_families.partition_strategy.subpartition.method);
+        assertEq(("eu", "uk"), method_families.partitions.eu.values);
+        assertEq(0, method_families.partitions.eu.subpartitions.eu_h0.remainder);
+
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);
 
@@ -316,10 +346,9 @@ class DataSchemaTest inherits QUnit::Test {
         };
 
         hash<auto> result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
-        assertEq(Type::Date, result.partitions.events_p202601.bound_from.type());
-        assertEq(Type::Date, result.partitions.events_p202601.bound_to.type());
-        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from));
-        assertEq("2026-02-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_to));
+        assertEq("2026-01-01", result.partitions.events_p202601.bound_from,
+            "loader preserves typed-bound candidates until a datasource driver is known");
+        assertEq("2026-02-01", result.partitions.events_p202601.bound_to);
         assertEq("date '2026-03-01'", result.partitions.events_psql.bound_from_sql);
         assertEq("date '2026-04-01'", result.partitions.events_psql.bound_to_sql);
         assertTrue(result.partitions.events_default.is_default);
@@ -330,32 +359,16 @@ class DataSchemaTest inherits QUnit::Test {
         };
         result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
         assertEq(1, result.partitions.events_p202601.bound_from[0]);
-        assertEq(Type::Date, result.partitions.events_p202601.bound_from[1].type());
-        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from[1]));
+        assertEq("2026-01-01", result.partitions.events_p202601.bound_from[1]);
 
-        assertThrows("DATA-SCHEMA-ERROR", "cannot be parsed as a date", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("created",)},
-                "partitions": {"bad": {"bound_from": "not-a-date", "bound_to": "2026-02-01"}},
-            });
+        # Validation and coercion require final driver overrides and therefore belong to AbstractTable::setupTable().
+        result = Schema::DataSchemaLoader::normalizeTable("events", {
+            "columns": {"created": {"type": "date"}},
+            "partition_strategy": {"method": "range", "columns": ("created",)},
+            "partitions": {"raw": {"bound_from": "not-a-date", "bound_to": "2026-02-30"}},
         });
-
-        assertThrows("DATA-SCHEMA-ERROR", "has 1 values for 2 partition columns", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("id", "created")},
-                "partitions": {"bad": {"bound_from": (1,), "bound_to": (2,)}},
-            });
-        });
-
-        assertThrows("DATA-SCHEMA-ERROR", "must be a list", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("id", "created")},
-                "partitions": {"bad": {"bound_from": 1, "bound_to": 2}},
-            });
-        });
+        assertEq("not-a-date", result.partitions.raw.bound_from);
+        assertEq("2026-02-30", result.partitions.raw.bound_to);
     }
 
     referenceDataTests() {
@@ -488,6 +501,16 @@ class DataSchemaTest inherits QUnit::Test {
         # Reference data normalized to list-of-lists
         assertEq(3, result.reference_data.strict.roles.size());
         assertEq(2, result.reference_data.normal.app_version.size());
+
+        hash<auto> normalized_column = {
+            "qore_type": Type::String,
+            "native_type": "varchar",
+            "size": 42,
+            "notnull": True,
+            "default_value_native": True,
+        };
+        assertEq(normalized_column,
+            Schema::DataSchemaLoader::normalizeColumn("users", "already_normalized", normalized_column));
     }
 
     validationTests() {

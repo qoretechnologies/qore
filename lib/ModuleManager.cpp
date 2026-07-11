@@ -179,7 +179,9 @@ static bool qore_find_user_module_source(const std::string& dir, const char* nam
     return false;
 }
 
-static bool qore_find_explicit_qmod_source(const char* path, QoreString& source_path) {
+static bool qore_find_explicit_qmod_source(const char* path, const char* feature, QoreString& source_path,
+        QoreString& separated_path) {
+    separated_path.clear();
     size_t len = strlen(path);
     if (len <= 5 || strcasecmp(path + len - 5, ".qmod")) {
         return false;
@@ -190,7 +192,24 @@ static bool qore_find_explicit_qmod_source(const char* path, QoreString& source_
     source_path.concat(".qm");
 
     struct stat sb;
-    return !stat(source_path.c_str(), &sb) && S_ISREG(sb.st_mode);
+    if (stat(source_path.c_str(), &sb) || !S_ISREG(sb.st_mode)) {
+        return false;
+    }
+
+    // An explicit path such as `<module-dir>/<feature>/<feature>.qmod`
+    // refers to a separated module. The source fallback must load the parent
+    // directory so that all sibling .qc and .ql files are parsed as well.
+    // Loading only the sibling .qm entry file leaves the module incomplete.
+    const char* sep = q_find_last_path_sep(source_path.c_str());
+    if (sep) {
+        separated_path = source_path;
+        separated_path.terminate(sep - source_path.c_str());
+        if (strcmp(q_basenameptr(separated_path.c_str()), feature)
+                || !has_separated_module_main(separated_path.c_str(), feature)) {
+            separated_path.clear();
+        }
+    }
+    return true;
 }
 
 ModuleReExportHelper::ModuleReExportHelper(QoreAbstractModule* mi, bool reexp) : m(set_reexport(mi, reexp, reexport)) {
@@ -1308,10 +1327,16 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 load_opt, mod_desc_func);
             if (binary_xsink) {
                 QoreString source_path;
+                QoreString separated_path;
                 if (qore_binary_load_error_can_fallback_to_source(binary_xsink)
-                        && qore_find_explicit_qmod_source(raw_path, source_path)) {
-                    mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
-                        load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                        && qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path)) {
+                    if (separated_path.size()) {
+                        mi = loadSeparatedModule(xsink, wsink, separated_path.c_str(), name, pgm, reexport, nullptr,
+                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    } else {
+                        mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
+                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    }
                     if (mi && !xsink) {
                         qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name, raw_path,
                             source_path.c_str(), binary_xsink);

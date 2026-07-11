@@ -179,6 +179,9 @@ $function$
       \c pg_temp schema alias resolve to the backend's active temporary schema
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
       add, drop, truncate, and detach operations
+    - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
+    - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
+      introspection, and catalog-estimated row-count / allocated-size metadata
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -3760,12 +3763,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         sql += "\n)";
 
         if (partitionStrategy) {
-            if (partitionStrategy.method != "range") {
-                throw "PARTITION-ERROR", sprintf("%s: unsupported PostgreSQL partition method %y", getDesc(),
-                    partitionStrategy.method);
-            }
-            sql += sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
-                getColumnSqlNames(partitionStrategy.columns)));
+            sql += " " + getPgPartitionStrategySql(partitionStrategy);
         }
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
@@ -3963,20 +3961,44 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return server_version_major >= 10;
     }
 
+    private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+        return inlist(method, ("range", "list", "hash"));
+    }
+
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
+    private bool partitionUniqueKeysRequireAllColumnsImpl() {
+        return True;
+    }
+
     private bool supportsPartitionDetachImpl() {
         # ALTER TABLE ... DETACH PARTITION was introduced in PostgreSQL 10
         getServerVersion();
         return server_version_major >= 10;
     }
 
+    private bool supportsConcurrentPartitionDetachImpl() {
+        # ALTER TABLE ... DETACH PARTITION ... CONCURRENTLY was introduced in PostgreSQL 14
+        getServerVersion();
+        return server_version_major >= 14;
+    }
+
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
-        *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' else pt.partstrat::text end "
+        return getPgPartitionStrategyForRelation(schema, name, True);
+    }
+
+    private *hash<PartitionStrategy> getPgPartitionStrategyForRelation(string table_schema, string table_name,
+            bool include_subpartition) {
+        *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' when 'l' then 'list' "
+            "when 'h' then 'hash' else pt.partstrat::text end "
             "method, string_agg(a.attname, ',' order by k.ord) columns from pg_catalog.pg_partitioned_table pt "
             "join pg_catalog.pg_class c on c.oid = pt.partrelid "
             "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
             "join unnest(pt.partattrs) with ordinality as k(attnum, ord) on true "
             "join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = k.attnum "
-            "where n.nspname = %v and c.relname = %v group by pt.partstrat", schema, name);
+            "where n.nspname = %v and c.relname = %v group by pt.partstrat", table_schema, table_name);
         if (!row) {
             return;
         }
@@ -3986,26 +4008,91 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "method": row.method,
             "columns": cols,
         });
+        if (include_subpartition) {
+            *hash<auto> child = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+                "from pg_catalog.pg_inherits i "
+                "join pg_catalog.pg_class p on p.oid = i.inhparent "
+                "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+                "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+                "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+                "join pg_catalog.pg_partitioned_table cpt on cpt.partrelid = c.oid "
+                "where pn.nspname = %v and p.relname = %v order by i.inhseqno limit 1", table_schema,
+                table_name);
+            if (child) {
+                # The portable recursive model declares one child strategy for every direct partition.  PostgreSQL
+                # permits native hierarchies where only some children are partitioned or their strategies differ;
+                # do not silently reverse such a hierarchy into a materially different portable description.
+                *hash<auto> child_rows = ds.select("select cn.nspname as schema, c.relname as relation_name, "
+                    "cpt.partrelid is not null as is_partitioned from pg_catalog.pg_inherits i "
+                    "join pg_catalog.pg_class p on p.oid = i.inhparent "
+                    "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+                    "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+                    "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+                    "left join pg_catalog.pg_partitioned_table cpt on cpt.partrelid = c.oid "
+                    "where pn.nspname = %v and p.relname = %v order by i.inhseqno", table_schema, table_name);
+                list<hash<auto>> partitioned_children = ();
+                bool has_leaf;
+                foreach hash<auto> child_row in (child_rows.contextIterator()) {
+                    if (child_row.is_partitioned) {
+                        partitioned_children += child_row;
+                    } else {
+                        has_leaf = True;
+                    }
+                }
+                if (has_leaf) {
+                    throw "PARTITION-ERROR", sprintf("PostgreSQL table %s.%s has a non-uniform native "
+                        "subpartition hierarchy: every direct partition must use the same recursive strategy",
+                        table_schema, table_name);
+                }
+
+                *hash<PartitionStrategy> substrategy;
+                foreach hash<auto> child_row in (partitioned_children) {
+                    hash<PartitionStrategy> candidate = getPgPartitionStrategyForRelation(child_row.schema,
+                        child_row.relation_name, True);
+                    if (!substrategy) {
+                        substrategy = candidate;
+                    } else if (substrategy != candidate) {
+                        throw "PARTITION-ERROR", sprintf("PostgreSQL table %s.%s has a non-uniform native "
+                            "subpartition hierarchy: direct partition strategies differ", table_schema,
+                            table_name);
+                    }
+                }
+                if (substrategy) {
+                    rv.subpartition = substrategy;
+                }
+            }
+        }
         return rv;
     }
 
-    private hash<string, PartitionInfo> getPartitionsImpl() {
-        hash<string, PartitionInfo> rv();
+    #! PostgreSQL has no driver-specific RANGE strategy configuration exposed by SqlUtil
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return;
+    }
 
+    private hash<string, PartitionInfo> getPartitionsImpl() {
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
-        if (!strategy) {
-            return rv;
-        }
+        return strategy ? getPgPartitionsForRelation(schema, name, strategy) : {};
+    }
+
+    private hash<string, PartitionInfo> getPgPartitionsForRelation(string table_schema, string table_name,
+            hash<PartitionStrategy> strategy) {
+        hash<string, PartitionInfo> rv();
         getColumnsUnlocked();
 
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
         *hash<auto> qh = ds.select("select cn.nspname as schema, c.relname as relation_name, "
-            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
+            + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
             "join pg_catalog.pg_class c on c.oid = i.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
-            "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
+            "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", table_schema,
+            table_name);
 
         # build the partition list in the catalog (inhseqno) order first
         list<hash<PartitionInfo>> all = ();
@@ -4021,8 +4108,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
+                "driver": {"pgsql": {"detach_pending": row.detach_pending}},
             });
+            info.estimated_row_count = row.estimated_row_count;
+            info.size_bytes = row.size_bytes;
             populatePgPartitionBounds(\info);
+            if (strategy.subpartition) {
+                hash<PartitionStrategy> child_strategy(strategy.subpartition);
+                info.subpartitions = getPgPartitionsForRelation(row.schema, row.relation_name, child_strategy);
+            }
             all += info;
         }
 
@@ -4031,7 +4125,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         list<hash<PartitionInfo>> ranged = ();
         list<hash<PartitionInfo>> other = ();
         foreach hash<PartitionInfo> info in (all) {
-            if (!info.is_default && exists info.bound_from && info.bound_from.typeCode() != NT_LIST) {
+            if (strategy.method == "range" && !info.is_default && exists info.bound_from
+                && info.bound_from.typeCode() != NT_LIST) {
                 ranged += info;
             } else {
                 other += info;
@@ -4088,9 +4183,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return getQuotedPartitionSqlName(rel.schema, rel.name);
     }
 
-    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         hash<auto> rel = parsePartitionRelationName(partition_name);
-        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
+        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
+            + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4099,8 +4199,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "where pn.nspname = %v and p.relname = %v and cn.nspname = %v and c.relname = %v",
             schema, name, rel.schema, rel.name);
         if (!row) {
-            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
-                partition_name);
+            return;
         }
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
@@ -4108,32 +4207,104 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "name": getCanonicalPartitionName(row.schema, row.relation_name),
             "method": strategy ? strategy.method : "range",
             "columns": strategy ? strategy.columns : (),
-            "ordinal": 0,
+            # listPartitions() applies typed-bound ordering that cannot be reproduced cheaply by a targeted query
+            "ordinal": -1,
             "schema": row.schema,
             "relation_name": row.relation_name,
             "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
+            "bound_sql": row.bound_sql,
+            "is_default": False,
+            "driver": {"pgsql": {"detach_pending": row.detach_pending}},
         });
+        info.estimated_row_count = row.estimated_row_count;
+        info.size_bytes = row.size_bytes;
+        populatePgPartitionBounds(\info);
         return info;
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
-        return sprintf("create table %s partition of %s %s", getPartitionSqlName(spec), getSqlName(),
-            getPgPartitionBoundSql(spec));
+    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
+            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
+                partition_name);
+        }
+        return info;
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        @assert(strategy);
+        string sql = getPgAddPartitionSql(spec, getSqlName(), strategy);
+        if (spec.subpartitions) {
+            return sprintf("do $qore_sqlutil$ begin\n%s;\nend $qore_sqlutil$", sql);
+        }
+        return sql;
+    }
+
+    private string getPgAddPartitionSql(hash<PartitionSpec> spec, string parent_sql,
+            hash<PartitionStrategy> strategy) {
+        string child_sql = getPartitionSqlName(spec);
+        string sql = sprintf("create table %s partition of %s %s", child_sql, parent_sql,
+            getPgPartitionBoundSql(spec));
+        if (strategy.subpartition) {
+            hash<PartitionStrategy> child_strategy(strategy.subpartition);
+            sql += " " + getPgPartitionStrategySql(child_strategy);
+            if (spec.subpartitions) {
+                foreach hash<auto> raw in (spec.subpartitions.iterator()) {
+                    hash<PartitionSpec> child(raw);
+                    sql += ";\n" + getPgAddPartitionSql(child, child_sql, child_strategy);
+                }
+            }
+        }
+        return sql;
+    }
+
+    private string getPgPartitionStrategySql(hash<PartitionStrategy> strategy) {
+        return sprintf("partition by %s (%s)", strategy.method,
+            (foldl $1 + ", " + $2, getColumnSqlNames(strategy.columns)));
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("drop table %s", info.sql_name);
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s", info.sql_name);
     }
 
-    private string getDetachPartitionSqlImpl(string partition_name) {
+    private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
+    }
+
+    private string getDetachPartitionConcurrentlySqlImpl(string partition_name, *hash<auto> opt) {
+        assertNoPgDefaultPartitionForConcurrentDetachUnlocked();
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is already pending detach; call "
+                "finalizePartitionDetach()", getDesc(), info.name);
+        }
+        return sprintf("alter table %s detach partition %s concurrently", getSqlName(), info.sql_name);
+    }
+
+    private string getFinalizePartitionDetachSqlImpl(string partition_name, *hash<auto> opt) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (!info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is not pending concurrent detach", getDesc(),
+                info.name);
+        }
+        return sprintf("alter table %s detach partition %s finalize", getSqlName(), info.sql_name);
+    }
+
+    private assertNoPgDefaultPartitionForConcurrentDetachUnlocked() {
+        foreach hash<PartitionInfo> info in (getPartitionsUnlocked().iterator()) {
+            if (info.is_default) {
+                throw "PARTITION-ERROR", sprintf("%s: PostgreSQL cannot detach a partition concurrently while "
+                    "default partition %y exists", getDesc(), info.name);
+            }
+        }
     }
 
     #! returns the canonical name of the standalone table that the detached partition becomes
@@ -4150,6 +4321,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
         if (spec.is_default) {
             return "default";
+        }
+        if (spec.method == "list") {
+            if (spec.values_sql) {
+                string sql = spec.values_sql;
+                trim sql;
+                return sql =~ /^for\s+values\s+in\b/i ? sql : sprintf("for values in (%s)", sql);
+            }
+            return sprintf("for values in (%s)", (foldl $1 + ", " + $2,
+                map getPgPartitionBoundValuesSql($1), spec.values));
+        }
+        if (spec.method == "hash") {
+            return sprintf("for values with (modulus %d, remainder %d)", spec.modulus, spec.remainder);
         }
         if (spec.bound_sql) {
             string sql = spec.bound_sql;
@@ -4183,6 +4366,42 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return;
         }
 
+        if (info.method == "list") {
+            *string values_sql = (bound_sql =~ x/^for\s+values\s+in\s*\((.*)\)$/i)[0];
+            if (!exists values_sql) {
+                return;
+            }
+            info.values_sql = values_sql;
+            list<auto> values = ();
+            foreach string part in (splitPartitionSqlValues(values_sql)) {
+                if (info.columns.size() > 1) {
+                    trim part;
+                    (*string tuple) = (part =~ x/^\((.*)\)$/);
+                    if (!exists tuple) {
+                        return;
+                    }
+                    part = tuple;
+                }
+                *auto value = parsePgPartitionBoundValues(part, info.columns);
+                if (!exists value) {
+                    return;
+                }
+                values += value;
+            }
+            info.values = values;
+            return;
+        }
+
+        if (info.method == "hash") {
+            (*string modulus, *string remainder) = (bound_sql =~
+                x/^for\s+values\s+with\s*\(modulus\s+(\d+)\s*,\s*remainder\s+(\d+)\s*\)$/i);
+            if (exists modulus && exists remainder) {
+                info.modulus = modulus.toInt();
+                info.remainder = remainder.toInt();
+            }
+            return;
+        }
+
         (*string bound_from_sql, *string bound_to_sql) = (bound_sql =~ x/^for\s+values\s+from\s*\((.*)\)\s+to\s*\((.*)\)$/i);
         # NOTE: use "exists" rather than a boolean test; a bound value of "0" (or "") is a valid bound but is
         # false in a boolean context, so "!bound_from_sql" would incorrectly discard zero/empty bounds
@@ -4206,7 +4425,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return parsePgPartitionBoundValue(sql, columns{pcols[0]});
         }
 
-        list<string> parts = sql.split(",");
+        list<string> parts = splitPartitionSqlValues(sql);
         if (parts.size() != pcols.size()) {
             return;
         }
