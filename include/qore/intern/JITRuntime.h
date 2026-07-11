@@ -784,6 +784,12 @@ int64_t qore_rt_list_get_int(uint64_t list_val, int64_t index);
 //! Get float element at index; returns 0.0 if not a list or index out of bounds.
 double qore_rt_list_get_float(uint64_t list_val, int64_t index);
 
+//! Get an int element when the compiler has proven list type and index bounds.
+int64_t qore_rt_list_get_int_unchecked(uint64_t list_val, int64_t index);
+
+//! Get a float element when the compiler has proven list type and index bounds.
+double qore_rt_list_get_float_unchecked(uint64_t list_val, int64_t index);
+
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
 uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);

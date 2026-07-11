@@ -775,6 +775,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // list_get_float: (i64, i64) -> double
     module.getOrInsertFunction("qore_rt_list_get_float",
             llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_list_get_int_unchecked",
+            llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_list_get_float_unchecked",
+            llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
     // list_get_value: (i64, i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_list_get_value",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
@@ -13092,7 +13096,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!idx) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_get_int",
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_int_unchecked",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
             values[inst->result.id] = result;
@@ -13106,7 +13110,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!idx) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_get_float",
+            auto helper = module.getOrInsertFunction("qore_rt_list_get_float_unchecked",
                     llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
             values[inst->result.id] = result;
@@ -19064,7 +19068,8 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
     llvm::Value* one = llvm::ConstantInt::get(i64_type, 1);
 
     llvm::Type* elem_type = is_float ? double_type : i64_type;
-    const char* get_name = is_float ? "qore_rt_list_get_float" : "qore_rt_list_get_int";
+    const char* get_name = is_float
+        ? "qore_rt_list_get_float_unchecked" : "qore_rt_list_get_int_unchecked";
     llvm::Type* get_ret_type = elem_type;
     auto get_helper = module.getOrInsertFunction(get_name,
             llvm::FunctionType::get(get_ret_type, {i64_type, i64_type}, false));
@@ -19280,7 +19285,8 @@ bool QoreIRToLLVM::emitFoldReverseLoop(const QoreIRInstruction* inst, llvm::Modu
     llvm::Value* two = llvm::ConstantInt::get(i64_type, 2);
 
     llvm::Type* elem_type = is_float ? double_type : i64_type;
-    const char* get_name = is_float ? "qore_rt_list_get_float" : "qore_rt_list_get_int";
+    const char* get_name = is_float
+        ? "qore_rt_list_get_float_unchecked" : "qore_rt_list_get_int_unchecked";
     auto get_helper = module.getOrInsertFunction(get_name,
             llvm::FunctionType::get(elem_type, {i64_type, i64_type}, false));
 
