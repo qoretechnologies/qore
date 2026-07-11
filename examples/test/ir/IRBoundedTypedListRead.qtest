@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub boundedInt() {
+    list<int> values = (1, 2, 3, 4);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+float sub boundedFloat() {
+    list<float> values = (1.5, 2.5, 3.5);
+    float total = 0.0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+auto sub negativeStart() {
+    list<int> values = (5, 6);
+    auto first;
+    for (int i = -1; i < values.size(); ++i) {
+        if (i == -1) {
+            first = values[i];
+        }
+    }
+    return first;
+}
+
+int sub mutatedList() {
+    list<int> values = (7, 8);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[0] = values[0];
+        total += values[i];
+    }
+    return total;
+}
+
+int sub maybeAssigned(bool assign_value) {
+    *list<int> values;
+    if (assign_value) {
+        values = (9, 10);
+    }
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub removedList() {
+    list<int> values = (11, 12);
+    remove values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub deletedList() {
+    list<int> values = (13, 14);
+    delete values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+auto sub outOfRange() {
+    list<int> values = (15, 16);
+    return values[values.size()];
+}
+
+printf(\"%d:%.1f:%y:%d:%d:%d:%d:%y\\n\", boundedInt(), boundedFloat(), negativeStart(),
+    mutatedList(), maybeAssigned(False), removedList(), deletedList(), outOfRange());
+";
+
+string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot() {
+    string exe = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid());
+    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "10:7.5:6:15:0:0:0:null\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot();
+if (aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: boundedFloat:.*bounded-list=1/) {
+    printf("missing bounded typed-list optimization:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
+        || stats !~ /IR-OPT: mutatedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: maybeAssigned:.*bounded-list=0/
+        || stats !~ /IR-OPT: removedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: deletedList:.*bounded-list=0/
+        || stats !~ /IR-OPT: outOfRange:.*bounded-list=0/) {
+    printf("unsafe bounded typed-list selection:\n%s", stats);
+    exit(2);
+}

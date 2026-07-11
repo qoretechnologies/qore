@@ -1788,13 +1788,14 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu branches=%zu borrowed-list=%zu inplace-push=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu branches=%zu borrowed-list=%zu bounded-list=%zu inplace-push=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
             optimization_stats.scalar_expressions_eliminated,
             optimization_stats.constant_branches_folded,
             optimization_stats.borrowed_list_reads,
+            optimization_stats.bounded_typed_list_reads,
             optimization_stats.in_place_list_pushes);
     }
 
