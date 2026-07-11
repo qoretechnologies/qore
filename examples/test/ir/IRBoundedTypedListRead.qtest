@@ -32,6 +32,48 @@ float sub boundedFloat() {
     return total;
 }
 
+int sub parameterInt(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+float sub parameterFloat(list<float> values) {
+    float total = 0.0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub optionalParameter(*list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub mutatedParameter(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        values[0] = values[0];
+        total += values[i];
+    }
+    return total;
+}
+
+int sub removedParameter(list<int> values) {
+    remove values;
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        total += values[i];
+    }
+    return total;
+}
+
 int sub cachedBoundInt() {
     list<int> values = (4, 5, 6);
     int bound = values.size();
@@ -153,10 +195,11 @@ auto sub staleCachedBound() {
     return last;
 }
 
-printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y\\n\", boundedInt(), boundedFloat(),
-    cachedBoundInt(), cachedBoundFloat(), inclusiveBound(), negativeStart(), mutatedList(),
+printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y:%d:%.1f:%d:%d:%d\\n\", boundedInt(),
+    boundedFloat(), cachedBoundInt(), cachedBoundFloat(), inclusiveBound(), negativeStart(), mutatedList(),
     maybeAssigned(False), removedList(), deletedList(), outOfRange(), oversizedCachedBound(),
-    reassignedCachedBound(), staleCachedBound());
+    reassignedCachedBound(), staleCachedBound(), parameterInt((1, 2, 3)), parameterFloat((1.5, 2.5)),
+    optionalParameter(NOTHING), mutatedParameter((4, 5)), removedParameter((6, 7)));
 ";
 
 string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
@@ -181,7 +224,7 @@ string sub runAot() {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null\n";
+string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null:6:4.0:0:9:0\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -201,7 +244,9 @@ if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
         || stats !~ /IR-OPT: boundedFloat:.*bounded-list=1/
         || stats !~ /IR-OPT: cachedBoundInt:.*bounded-list=1/
         || stats !~ /IR-OPT: cachedBoundFloat:.*bounded-list=1/
-        || stats !~ /IR-OPT: inclusiveBound:.*bounded-list=1/) {
+        || stats !~ /IR-OPT: inclusiveBound:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterFloat:.*bounded-list=1/) {
     printf("missing bounded typed-list optimization:\n%s", stats);
     exit(2);
 }
@@ -213,7 +258,10 @@ if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
         || stats !~ /IR-OPT: outOfRange:.*bounded-list=0/
         || stats !~ /IR-OPT: oversizedCachedBound:.*bounded-list=0/
         || stats !~ /IR-OPT: reassignedCachedBound:.*bounded-list=0/
-        || stats !~ /IR-OPT: staleCachedBound:.*bounded-list=0/) {
+        || stats !~ /IR-OPT: staleCachedBound:.*bounded-list=0/
+        || stats !~ /IR-OPT: optionalParameter:.*bounded-list=0/
+        || stats !~ /IR-OPT: mutatedParameter:.*bounded-list=0/
+        || stats !~ /IR-OPT: removedParameter:.*bounded-list=0/) {
     printf("unsafe bounded typed-list selection:\n%s", stats);
     exit(2);
 }

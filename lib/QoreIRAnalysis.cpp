@@ -1708,6 +1708,20 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         size_t assignment_offset = 0;
         size_t assignments = 0;
         bool assigned_non_nothing = false;
+        bool list_parameter = false;
+        size_t parameter_count = 0;
+        for (const auto& [index, parameter] : func.param_local_vars) {
+            if (parameter_count++ && !(parameter_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "IR bounded list parameter analysis")) {
+                return changed;
+            }
+            if (index >= 0 && parameter == list_local) {
+                list_parameter = QoreTypeInfo::parseReturns(
+                    list_local->getTypeInfo(), NT_NOTHING) == QTI_NOT_EQUAL;
+                break;
+            }
+        }
         for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
             for (size_t offset = 0; offset < cfg.blocks[block_id]->instructions.size(); ++offset) {
                 QoreIRInstruction* inst = cfg.blocks[block_id]->instructions[offset].get();
@@ -1727,16 +1741,18 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 }
             }
         }
-        if (assignments != 1 || !assigned_non_nothing
-                || !cfg.dominates(assignment_block, loop.header)) {
+        bool stable_initial_list = assignments == 1 && assigned_non_nothing
+            && cfg.dominates(assignment_block, loop.header);
+        if (!stable_initial_list && !(assignments == 0 && list_parameter)) {
             continue;
         }
         bool assignment_invalidated = false;
         for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
             for (size_t offset = 0; offset < cfg.blocks[block_id]->instructions.size(); ++offset) {
                 QoreIRInstruction* inst = cfg.blocks[block_id]->instructions[offset].get();
-                bool after_assignment = block_id == assignment_block
-                    ? offset > assignment_offset : cfg.dominates(assignment_block, block_id);
+                bool after_assignment = list_parameter
+                    || (block_id == assignment_block
+                        ? offset > assignment_offset : cfg.dominates(assignment_block, block_id));
                 if (!after_assignment || !cfg.dominates(block_id, loop.header)) {
                     continue;
                 }

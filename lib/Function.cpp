@@ -5319,11 +5319,12 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
 
-    // Keep signature-owned slots reserved after lowering as well.  This is
-    // normally a no-op because the slots were reserved before lowering, but it
-    // is deliberately safe if another partial slot pass has already run.
+    // Keep signature-owned slots reserved after lowering and expose parameter
+    // assignment/type metadata before IR optimization. Slot IDs are populated
+    // later and remain independent of this map.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
         func->reserveLocalSlot(signature.lv[i]);
+        func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
     }
     func->reserveLocalSlot(signature.argvid);
     func->reserveLocalSlot(signature.selfid);
@@ -5481,7 +5482,6 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         auto it = func->local_var_slots.find(signature.lv[i]);
         if (it != func->local_var_slots.end()) {
             func->param_slot_ids[static_cast<int>(i)] = it->second;
-            func->param_local_vars[static_cast<int>(i)] = signature.lv[i];
         } else {
             // Param only used in fused instructions — no slot_id, can't pre-populate cache
             all_params_have_slots = false;
