@@ -11123,7 +11123,11 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
 QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left,
         QoreIRValue right, const QoreProgramLocation* loc, std::string& error) {
     QoreIRValue result;
-    bool should_invoke = !exception_stack.empty() && expressionCanThrow(expr);
+    // AddAssignInt is selected only when both operands are proven assigned
+    // integers; its native add cannot raise an exception.  Keep all dynamic
+    // and zero-checking arithmetic on the normal exception-edge path.
+    bool should_invoke = !exception_stack.empty()
+        && op != QoreIROpcode::AddAssignInt && expressionCanThrow(expr);
     if (should_invoke) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {
@@ -11417,6 +11421,30 @@ bool QoreIRLowering::callArgsMayPassReferences(const QoreParseListNode* parse_ar
     }
     for (size_t i = 0; i < args->size(); ++i) {
         if (callArgumentMayPassReference(args->retrieveEntry(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool qore_ir_direct_variant_has_reference_params(
+        const AbstractQoreFunctionVariant* variant) {
+    if (!variant) {
+        return true;
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig) {
+        return true;
+    }
+    for (size_t i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "IR direct-call reference parameter analysis")) {
+            return true;
+        }
+        const QoreTypeInfo* pinfo = sig->getParamTypeInfo(i);
+        if (pinfo && QoreTypeInfo::isReference(pinfo)) {
             return true;
         }
     }
@@ -11864,7 +11892,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             // which can be cleared by codegen time for runtime-created closures (#null-func-crash).
             assert(func);
             inst->func = func;
-            inst->has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
+            inst->has_ref_args = qore_ir_direct_variant_has_reference_params(
+                    call->getVariant());
             builder.setBlock(normal_block);
             return inst->result;
         }
@@ -12011,7 +12040,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* invoke_inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
             invoke_inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
-            invoke_inst->has_ref_args = callArgsMayPassReferences(call->getParseArgs(), call->getArgs());
+            invoke_inst->has_ref_args = qore_ir_direct_variant_has_reference_params(variant);
             // Phase 3: Try to cache the callee IR for inlining
             auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
             if (call_static_inst) {

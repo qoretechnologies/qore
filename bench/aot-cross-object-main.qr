@@ -3,6 +3,16 @@
 
 %modern
 
+int sub sameObjectLeaf(int value) {
+    return value + 1;
+}
+
+class SameObjectMath {
+    static int leaf(int value) {
+        return value + 1;
+    }
+}
+
 int sub benchCrossObjectLeaf(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -27,6 +37,54 @@ int sub benchCrossObjectStatic(int rounds) {
     return checksum;
 }
 
+int sub benchCrossObjectCaught(int rounds) {
+    int checksum = 0;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += crossObjectLeaf(i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
+int sub benchCrossObjectStaticCaught(int rounds) {
+    int checksum = 0;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += CrossObjectMath::leaf(i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
+int sub benchSameObjectCaught(int rounds) {
+    int checksum = 0;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += sameObjectLeaf(i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
+int sub benchSameObjectStaticCaught(int rounds) {
+    int checksum = 0;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += SameObjectMath::leaf(i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
 nothing sub leafMain() {
     printf("%d\n", benchCrossObjectLeaf(10000000));
 }
@@ -37,4 +95,20 @@ nothing sub chainMain() {
 
 nothing sub staticMain() {
     printf("%d\n", benchCrossObjectStatic(10000000));
+}
+
+nothing sub caughtMain() {
+    printf("%d\n", benchCrossObjectCaught(10000000));
+}
+
+nothing sub staticCaughtMain() {
+    printf("%d\n", benchCrossObjectStaticCaught(10000000));
+}
+
+nothing sub sameCaughtMain() {
+    printf("%d\n", benchSameObjectCaught(10000000));
+}
+
+nothing sub sameStaticCaughtMain() {
+    printf("%d\n", benchSameObjectStaticCaught(10000000));
 }

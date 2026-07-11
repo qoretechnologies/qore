@@ -45,6 +45,35 @@ class StaticHelper {
             return -1;
         }
     }
+
+    static nothing bump(reference<int> x) {
+        ++x;
+    }
+
+    static int refTry() {
+        int x = 4;
+        try {
+            StaticHelper::bump(\\x);
+        } catch (hash<auto> ex) {
+            return -1;
+        }
+        return x;
+    }
+
+    static int fail(int x) {
+        if (x < 0) {
+            throw \"STATIC-FAST-TEST\", \"expected\";
+        }
+        return x;
+    }
+
+    static int failTry() {
+        try {
+            return StaticHelper::fail(-1);
+        } catch (hash<auto> ex) {
+            return ex.err == \"STATIC-FAST-TEST\" ? 12 : -1;
+        }
+    }
 }
 
 final class SelfHelper {
@@ -110,6 +139,45 @@ int sub nested_helper(int x) {
     return leaf(x) + leaf(x + 1);
 }
 
+nothing sub bump_ref(reference<int> x) {
+    ++x;
+}
+
+int sub ref_try() {
+    int x = 4;
+    try {
+        bump_ref(\\x);
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return x;
+}
+
+int sub fail_if_negative(int x) {
+    if (x < 0) {
+        throw \"FUNCTION-FAST-TEST\", \"expected\";
+    }
+    return x;
+}
+
+int sub fail_try() {
+    try {
+        return fail_if_negative(-1);
+    } catch (hash<auto> ex) {
+        return ex.err == \"FUNCTION-FAST-TEST\" ? 11 : -1;
+    }
+}
+
+int sub compound_try() {
+    int x = 1;
+    try {
+        x += 2;
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+    return x;
+}
+
 int sub rec_sum(int x) {
     if (x <= 0) {
         return 0;
@@ -166,7 +234,9 @@ string sub caller() {
     return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
         + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
         + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
-        + \":\" + closure_leaf_checks();
+        + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
+        + \":\" + string(StaticHelper::refTry()) + \":\" + string(StaticHelper::failTry())
+        + \":\" + string(compound_try());
 }
 
 printf(\"%s\\n\", caller());
@@ -310,7 +380,8 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9\n" || aot != ast) {
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:5:11:5:12:3\n"
+        || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

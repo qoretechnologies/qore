@@ -8953,11 +8953,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 int nargs = total_operands - arg_start;
 
-                // Hoist alloca to entry block to avoid stack overflow in loops
-                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                        llvm_func->getEntryBlock().begin());
-                llvm::Value* args_array = ab.CreateAlloca(i64_type,
-                        llvm::ConstantInt::get(i32_type, nargs));
+                const FunctionCallNode* aot_invoke_direct_call = nullptr;
+                const StaticMethodCallNode* aot_invoke_static_call = nullptr;
+                const BatchCalleeInfo* aot_invoke_context_independent_callee = nullptr;
+                llvm::Function* aot_invoke_context_independent_fn = nullptr;
+                if (aot_mode && batch_callees && !inv->has_ref_args) {
+                    const AbstractQoreNode* expr_node = inv->expr.getInternalNode();
+                    const AbstractQoreFunctionVariant* variant = nullptr;
+                    bool method_call = false;
+                    if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                        aot_invoke_direct_call = dynamic_cast<const FunctionCallNode*>(expr_node);
+                        if (aot_invoke_direct_call) {
+                            variant = aot_invoke_direct_call->getVariant();
+                        }
+                    } else if (inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                        aot_invoke_static_call = dynamic_cast<const StaticMethodCallNode*>(expr_node);
+                        if (aot_invoke_static_call) {
+                            variant = aot_invoke_static_call->getVariant();
+                            method_call = true;
+                        }
+                    }
+                    auto it = variant ? batch_callees->find(variant) : batch_callees->end();
+                    if (it != batch_callees->end()
+                            && it->second.approach_b_eligible
+                            && it->second.context_independent_fast_entry
+                            && nargs <= static_cast<int>(it->second.num_params)
+                            && (method_call ? isFastMethodCallEligible(variant)
+                                            : isFastFunctionCallEligible(variant))
+                            && qore_ir_fast_entry_args_need_no_binding(
+                                variant, inv->expr, arg_start, nargs)) {
+                        llvm::Function* fast_fn = module.getFunction(it->second.fast_name);
+                        if (fast_fn) {
+                            aot_invoke_context_independent_callee = &it->second;
+                            aot_invoke_context_independent_fn = fast_fn;
+                        }
+                    }
+                }
+
                 std::vector<llvm::Value*> raw_args;
                 std::vector<uint32_t> raw_arg_ids;
                 std::vector<llvm::Value*> boxed_args;
@@ -8975,12 +9007,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!arg_val) { return false; }
                     raw_args.push_back(arg_val);
                     raw_arg_ids.push_back(inv->operands[arg_start + i].id);
-                    llvm::Value* arg_boxed = boxValue(arg_val,
-                            inv->operands[arg_start + i].id);
-                    boxed_args.push_back(arg_boxed);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                            llvm::ConstantInt::get(i32_type, i));
-                    builder->CreateStore(arg_boxed, gep);
+                }
+                bool aot_context_independent_fast_entry_call =
+                    aot_invoke_context_independent_callee
+                    && !fastEntryNativeArgsNeedNothingGuard(
+                        *aot_invoke_context_independent_callee, raw_arg_ids);
+                bool selective_aot_boxing = aot_context_independent_fast_entry_call
+                    && std::getenv("QORE_DISABLE_AOT_INVOKE_FAST_ENTRY") == nullptr;
+                if (!selective_aot_boxing) {
+                    aot_context_independent_fast_entry_call = false;
+                }
+
+                for (int i = 0; i < nargs; ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "LLVM invoke direct argument boxing")) {
+                        error = "cancelled during LLVM invoke direct argument boxing";
+                        return false;
+                    }
+                    bool needs_boxed = !selective_aot_boxing
+                        || getFastEntryParamKind(*aot_invoke_context_independent_callee,
+                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed;
+                    boxed_args.push_back(needs_boxed
+                        ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
+                }
+
+                llvm::Value* args_array = nullptr;
+                if (!aot_context_independent_fast_entry_call) {
+                    // Hoist alloca to entry block to avoid stack overflow in loops.
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                            llvm_func->getEntryBlock().begin());
+                    args_array = ab.CreateAlloca(i64_type,
+                            llvm::ConstantInt::get(i32_type, nargs));
+                    for (int i = 0; i < nargs; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM invoke direct argument array setup")) {
+                            error = "cancelled during LLVM invoke direct argument array setup";
+                            return false;
+                        }
+                        llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                                llvm::ConstantInt::get(i32_type, i));
+                        builder->CreateStore(boxed_args[i], gep);
+                    }
                 }
                 bool has_arg_cleanups = false;
                 llvm::Value* arg_cleanups = buildArgCleanupArray(inst, arg_start,
@@ -9104,8 +9173,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // FunctionEntry (FE) held by the FunctionCallNode
                     // uniquely identifies the resolved target; compare FE
                     // pointer to the current function's FE.
-                    const FunctionCallNode* aot_call = dynamic_cast<const FunctionCallNode*>(
-                            inv->expr.getInternalNode());
+                    const FunctionCallNode* aot_call = aot_invoke_direct_call
+                        ? aot_invoke_direct_call
+                        : dynamic_cast<const FunctionCallNode*>(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_approach_b_callee = nullptr;
                     llvm::Function* aot_approach_b_fn = nullptr;
                     if (batch_callees && aot_call && aot_call->getVariant()
@@ -9132,7 +9202,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             is_self_rec = true;
                         }
                     }
-                    if (aot_approach_b_callee) {
+                    if (aot_context_independent_fast_entry_call
+                            && aot_approach_b_callee == aot_invoke_context_independent_callee) {
+                        std::vector<llvm::Value*> call_args;
+                        call_args.reserve(aot_approach_b_callee->num_params + 2);
+                        for (unsigned i = 0; i < aot_approach_b_callee->num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT invoke context-independent fast-entry argument lowering")) {
+                                error = "cancelled during AOT invoke context-independent fast-entry argument lowering";
+                                return false;
+                            }
+                            call_args.push_back(getFastEntryCallArgument(
+                                    *aot_approach_b_callee, i, raw_args,
+                                    raw_arg_ids, boxed_args, module));
+                        }
+                        call_args.push_back(aot_ctx_arg);
+                        call_args.push_back(xsink_arg);
+                        result = builder->CreateCall(
+                                aot_invoke_context_independent_fn, call_args);
+                        if (has_arg_cleanups) {
+                            auto clear_helper = module.getOrInsertFunction(
+                                    "qore_rt_clear_arg_cleanups",
+                                    llvm::FunctionType::get(void_type,
+                                        {ptr_type, i32_type, ptr_type}, false));
+                            builder->CreateCall(clear_helper, {arg_cleanups,
+                                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        }
+                    } else if (aot_approach_b_callee) {
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
                                 expr_bits);
                         result = emitAotBatchFastEntryOrFallback(module, llvm_func,
@@ -9247,8 +9344,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    const StaticMethodCallNode* static_call =
-                        dynamic_cast<const StaticMethodCallNode*>(inv->expr.getInternalNode());
+                    const StaticMethodCallNode* static_call = aot_invoke_static_call
+                        ? aot_invoke_static_call
+                        : dynamic_cast<const StaticMethodCallNode*>(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_static_batch_callee = nullptr;
                     llvm::Function* aot_static_batch_fn = nullptr;
                     if (batch_callees && static_call && static_call->getVariant()
@@ -9266,7 +9364,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             }
                         }
                     }
-                    if (aot_static_batch_callee) {
+                    if (aot_context_independent_fast_entry_call
+                            && aot_static_batch_callee == aot_invoke_context_independent_callee) {
+                        std::vector<llvm::Value*> call_args;
+                        call_args.reserve(aot_static_batch_callee->num_params + 2);
+                        for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT static invoke context-independent argument lowering")) {
+                                error = "cancelled during AOT static invoke context-independent argument lowering";
+                                return false;
+                            }
+                            call_args.push_back(getFastEntryCallArgument(
+                                    *aot_static_batch_callee, i, raw_args,
+                                    raw_arg_ids, boxed_args, module));
+                        }
+                        call_args.push_back(aot_ctx_arg);
+                        call_args.push_back(xsink_arg);
+                        result = builder->CreateCall(
+                                aot_invoke_context_independent_fn, call_args);
+                        if (has_arg_cleanups) {
+                            auto clear_helper = module.getOrInsertFunction(
+                                    "qore_rt_clear_arg_cleanups",
+                                    llvm::FunctionType::get(void_type,
+                                        {ptr_type, i32_type, ptr_type}, false));
+                            builder->CreateCall(clear_helper, {arg_cleanups,
+                                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                        }
+                    } else if (aot_static_batch_callee) {
                         result = emitAotBatchFastEntryOrFallback(module, llvm_func,
                                 inst, slot, aot_static_batch_fn,
                                 *aot_static_batch_callee, raw_args, raw_arg_ids,
