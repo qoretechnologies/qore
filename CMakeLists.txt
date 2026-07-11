@@ -3419,6 +3419,31 @@ add_custom_target(install-qore-qlib-aot
     USES_TERMINAL
     VERBATIM)
 
+# Keep the source-tree links available even when a previous cleanup removed
+# them without making the qmod output itself stale. CI test jobs also invoke
+# this script directly after unpacking the prebuilt build/ artifact.
+if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES)
+    add_custom_target(qore-ensure-source-qmod-symlinks ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+        DEPENDS qore-qlib-aot
+        COMMENT "Ensuring in-tree source qmod symlinks"
+        VERBATIM)
+
+    if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/qlib-qmod")
+        execute_process(COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+            RESULT_VARIABLE _qore_ensure_qmod_links_result)
+        if (NOT _qore_ensure_qmod_links_result EQUAL 0)
+            message(FATAL_ERROR "Could not ensure in-tree source qmod symlinks")
+        endif()
+    endif()
+endif()
+
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)
         # Build TAGFILES string from collected module names
