@@ -830,6 +830,10 @@ struct IROnBlockExitHandler {
 struct IRCallFrame {
     std::vector<QoreValue> values;
     std::vector<uint32_t> cleanup;
+    // Remaining uses for borrowed SSA values. Indexed by value ID so hot
+    // list-element reads avoid hash-table traffic; storage is pooled per frame.
+    std::vector<int32_t> borrowed_temp_remaining;
+    uint32_t borrowed_temp_active = 0;
     std::vector<QoreValue> locals_slot_cache;
     std::vector<LocalVarValue*> locals_lvar_cache;
     std::unordered_set<const LocalVar*> instantiated_locals;
@@ -903,6 +907,13 @@ struct IRCallFrame {
         values.clear();
         values.resize(reserve_size);
         cleanup.clear();
+        if (borrowed_temp_active) {
+            std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
+            borrowed_temp_active = 0;
+        }
+        if (borrowed_temp_remaining.size() < reserve_size) {
+            borrowed_temp_remaining.resize(reserve_size, 0);
+        }
         if (local_slot_count > 0) {
             for (auto& val : locals_slot_cache) {
                 val.discard(nullptr);
@@ -5679,6 +5690,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     int last_ephemeral_line = -1;
 
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
+    auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
+    auto& borrowed_temp_active = frame.borrowed_temp_active;
 
     auto releaseWeakLoadTemp = [&](uint32_t id) {
         if (id >= values.size()) {
@@ -5694,6 +5707,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             return;
         }
         bool had_borrowed_value = weak_load_temp_slots.erase(id) > 0;
+        if (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0) {
+            borrowed_temp_remaining[id] = 0;
+            --borrowed_temp_active;
+            had_borrowed_value = true;
+        }
         bool had_cleanup = removeAllCleanupEntries(cleanup, id);
         if (had_cleanup && !had_borrowed_value) {
             values[id].discard(xsink);
@@ -5718,6 +5736,42 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         if (--it->second <= 0) {
             releaseWeakLoadTemp(id);
+        }
+    };
+
+    auto trackBorrowedTemp = [&](uint32_t id) {
+        if (id >= func.interpreter_operand_use_counts.size()
+                || id >= borrowed_temp_remaining.size()) {
+            return;
+        }
+        int32_t remaining_uses = func.interpreter_operand_use_counts[id];
+        if (remaining_uses > 0) {
+            if (!borrowed_temp_remaining[id]) {
+                ++borrowed_temp_active;
+            }
+            borrowed_temp_remaining[id] = remaining_uses;
+        }
+    };
+
+    auto releaseBorrowedTemp = [&](uint32_t id) {
+        if (id >= borrowed_temp_remaining.size() || borrowed_temp_remaining[id] <= 0) {
+            return false;
+        }
+        borrowed_temp_remaining[id] = 0;
+        --borrowed_temp_active;
+        if (id < values.size()) {
+            values[id] = QoreValue();
+        }
+        return true;
+    };
+
+    auto consumeBorrowedTemp = [&](uint32_t id) {
+        if (id >= borrowed_temp_remaining.size() || borrowed_temp_remaining[id] <= 0) {
+            return;
+        }
+        if (--borrowed_temp_remaining[id] == 0) {
+            --borrowed_temp_active;
+            values[id] = QoreValue();
         }
     };
 
@@ -6376,6 +6430,9 @@ next_instruction:
                 }
                 setValueSlotDirect(values, inst->result.id, result);
                 // Do NOT add to cleanup — no owned reference (borrowed from list)
+                if (result.hasNode()) {
+                    trackBorrowedTemp(inst->result.id);
+                }
                 ++ip;
                 break;
             }
@@ -9434,6 +9491,11 @@ load_local_done:
                                                     "keep-return-peer");
                                                 continue;
                                             }
+                                            if (releaseBorrowedTemp(static_cast<uint32_t>(vi))) {
+                                                traceIRRef(inst, "uninst.local-value-scan", vi, QoreValue(),
+                                                    "clear-borrowed");
+                                                continue;
+                                            }
                                             traceIRRef(inst, "uninst.local-value-scan", vi, values[vi], "discard");
                                             values[vi].discard(xsink);
                                             values[vi] = QoreValue();
@@ -9465,6 +9527,11 @@ load_local_done:
                                             if (local_owned_slots.count(vi)) {
                                                 traceIRRef(inst, "uninst.container-scan", vi, values[vi],
                                                     "keep-local-owned");
+                                                continue;
+                                            }
+                                            if (releaseBorrowedTemp(static_cast<uint32_t>(vi))) {
+                                                traceIRRef(inst, "uninst.container-scan", vi, QoreValue(),
+                                                    "clear-borrowed");
                                                 continue;
                                             }
                                             if (needs_scan(values[vi].getInternalNode())) {
@@ -13883,9 +13950,14 @@ lvalue_path_unary_done:
                 return false;
         }
 
-        if (!weak_load_temp_slots.empty()) {
+        if (borrowed_temp_active || !weak_load_temp_slots.empty()) {
             for (const auto& op : inst->operands) {
-                consumeOperandUse(op.id);
+                if (borrowed_temp_active) {
+                    consumeBorrowedTemp(op.id);
+                }
+                if (!weak_load_temp_slots.empty()) {
+                    consumeOperandUse(op.id);
+                }
             }
         }
 

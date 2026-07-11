@@ -18,6 +18,9 @@ hash<auto> sub throughCall(hash<auto> value) {
     return value;
 }
 
+class BorrowedScopeMarker {
+}
+
 list<hash<auto>> sub safeIdentity(list<hash<auto>> input) {
     return map $1, input;
 }
@@ -34,6 +37,16 @@ list<hash<auto>> sub callBarrier(list<hash<auto>> input) {
     return map throughCall($1), input;
 }
 
+int sub scopedBorrowedRead(list<hash<auto>> input) {
+    int total = 0;
+    for (int i = 0; i < 100; ++i) {
+        BorrowedScopeMarker marker();
+        list<int> mapped = map $1.value + 1, input;
+        total += mapped[0];
+    }
+    return total;
+}
+
 list<hash<auto>> input = (
     {\"value\": 10, \"enabled\": True},
     {\"value\": 20, \"enabled\": False},
@@ -43,9 +56,10 @@ list<hash<auto>> identity = safeIdentity(input);
 list<hash<auto>> selected = safeSelect(input);
 list<int> mapped = safeMap(input);
 list<hash<auto>> called = callBarrier(input);
+int scoped = scopedBorrowedRead(input);
 input = ();
-printf(\"%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
-    selected.size(), selected[1].value, mapped[2], called[1].value);
+printf(\"%d:%d:%d:%d:%d:%d:%d\\n\", identity[0].value, identity[2].value,
+    selected.size(), selected[1].value, mapped[2], called[1].value, scoped);
 ";
 
 string script_path = "/tmp/qore-ir-borrowed-list-read-" + string(getpid()) + ".qr";
@@ -70,7 +84,7 @@ string sub runAot() {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "10:30:2:30:31:20\n";
+string expected = "10:30:2:30:31:20:1100\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -88,7 +102,8 @@ string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b -
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: safeIdentity:.*borrowed-list=1/
         || stats !~ /IR-OPT: safeSelect:.*borrowed-list=1/
-        || stats !~ /IR-OPT: safeMap:.*borrowed-list=1/) {
+        || stats !~ /IR-OPT: safeMap:.*borrowed-list=1/
+        || stats !~ /IR-OPT: scopedBorrowedRead:.*borrowed-list=1/) {
     printf("missing borrowed-list optimization:\n%s", stats);
     exit(2);
 }
