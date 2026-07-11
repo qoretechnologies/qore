@@ -45,6 +45,15 @@ int sub benchPureChain(int rounds) {
     return checksum;
 }
 
+int sub benchPureNested(int rounds) {
+    int checksum = 0;
+    on_exit checksum += 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += pureLeaf(pureLeaf(i));
+    }
+    return checksum;
+}
+
 int sub benchContext(int rounds) {
     int checksum = 0;
     on_exit checksum += 0;
@@ -92,6 +101,9 @@ switch (kernel) {
         break;
     case "pure-chain":
         checksum = benchPureChain(rounds);
+        break;
+    case "pure-nested":
+        checksum = benchPureNested(rounds);
         break;
     case "context":
         checksum = benchContext(rounds);

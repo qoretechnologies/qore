@@ -25,6 +25,18 @@ int sub pureRecursive(int value) {
     return value > 0 ? value + pureRecursive(value - 1) : 0;
 }
 
+int sub pureNested(int value) {
+    return pureLeaf(pureLeaf(value));
+}
+
+auto sub maybeNothing(bool assign_value) {
+    auto value;
+    if (assign_value) {
+        value = 7;
+    }
+    return value;
+}
+
 int sub mutatingLeaf(int value) {
     global_value += value;
     return global_value;
@@ -48,7 +60,7 @@ int sub caller() {
     return pure * 10000 + recursive * 100 + mutated * 10 + referenced;
 }
 
-printf(\"%d:%d\\n\", caller(), global_value);
+printf(\"%d:%d:%d:%y\\n\", caller(), global_value, pureNested(4), maybeNothing(False));
 ";
 
 string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
@@ -67,7 +79,7 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-if (ast != "71055:5\n" || aot != ast) {
+if (ast != "71055:5:10:null\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

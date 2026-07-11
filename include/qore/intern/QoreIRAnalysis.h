@@ -79,6 +79,7 @@ struct QoreIROptimizationStats {
 //! Conservative interprocedural effects used to preserve caller-side caches.
 struct QoreIRFunctionEffectSummary {
     bool may_invalidate_external_caches = true;
+    bool never_returns_nothing = false;
 };
 
 //! Return true when one instruction can mutate state visible to its caller.

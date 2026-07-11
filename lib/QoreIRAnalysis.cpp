@@ -188,6 +188,8 @@ bool qore_ir_compute_function_effect_summaries(
     struct FunctionEffects {
         const AbstractQoreFunctionVariant* variant = nullptr;
         bool local_may_invalidate = false;
+        bool local_never_returns_nothing = true;
+        bool saw_return = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
     };
 
@@ -216,6 +218,18 @@ bool qore_ir_compute_function_effect_summaries(
                     return false;
                 }
                 const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst && inst->opcode == QoreIROpcode::Return) {
+                    auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                    effect.saw_return = true;
+                    const QoreIRValueFacts* facts = ret->has_value
+                        ? func->getValueFacts(ret->value) : nullptr;
+                    if (!facts || !facts->never_nothing) {
+                        effect.local_never_returns_nothing = false;
+                    }
+                } else if (inst && inst->opcode == QoreIROpcode::ReturnNothing) {
+                    effect.saw_return = true;
+                    effect.local_never_returns_nothing = false;
+                }
                 if (inst && inst->opcode == QoreIROpcode::CallDirect) {
                     auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     if (call->has_ref_args || !call->variant) {
@@ -250,6 +264,8 @@ bool qore_ir_compute_function_effect_summaries(
             }
         }
         summaries[effect.variant].may_invalidate_external_caches = may_invalidate;
+        summaries[effect.variant].never_returns_nothing =
+            effect.saw_return && effect.local_never_returns_nothing;
         if (may_invalidate) {
             worklist.push_back(function_id);
         }

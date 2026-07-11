@@ -11069,6 +11069,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
+            if (aot_approach_b_callee
+                    && aot_approach_b_callee->never_returns_nothing) {
+                known_not_nothing_values.insert(inst->result.id);
+            }
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;

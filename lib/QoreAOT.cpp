@@ -3279,6 +3279,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         if (callee_it != batch_callees.end()) {
             callee_it->second.may_invalidate_external_caches =
                 summary.may_invalidate_external_caches;
+            callee_it->second.never_returns_nothing =
+                summary.never_returns_nothing;
         }
     }
     return true;
