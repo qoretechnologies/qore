@@ -744,8 +744,16 @@ uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSi
 //! Look up a key for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key, ExceptionSink* xsink);
 
+//! Constant-key hash lookup using hashes calculated by IR/AOT lowering.
+uint64_t qore_rt_hash_key_access_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_for_call_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
 //! Look up a key known to have an int value; returns NOTHING if unavailable.
 uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
+uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32);
 
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.

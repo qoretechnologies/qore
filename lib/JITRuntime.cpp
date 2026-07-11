@@ -232,6 +232,11 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum) },
     { "qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access) },
     { "qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call) },
+    { "qore_rt_hash_key_access_prehashed", reinterpret_cast<void*>(&qore_rt_hash_key_access_prehashed) },
+    { "qore_rt_hash_key_access_for_call_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call_prehashed) },
+    { "qore_rt_hash_key_access_int_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_key_access_int_prehashed) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
@@ -4005,8 +4010,23 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_mode_throwi
 
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
-static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key, ExceptionSink* xsink,
-        bool preserve_weak_result) {
+static size_t qore_rt_select_precomputed_hash(uint64_t hash64, uint32_t hash32) {
+#if TARGET_BITS == 64
+    return static_cast<size_t>(hash64);
+#else
+    return static_cast<size_t>(hash32);
+#endif
+}
+
+static QoreValue qore_rt_get_hash_key_value(const QoreHashNode* h, const char* key,
+        size_t key_hash, bool prehashed, ExceptionSink* xsink) {
+    return prehashed
+        ? qore_hash_private::get(*h)->getKeyValuePrehashed(key, key_hash, xsink)
+        : h->getKeyValue(key, xsink);
+}
+
+static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
+        size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result) {
     QoreValue raw_v = fromBits(hash_val);
     ValueEvalOptimizedRefHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
@@ -4037,7 +4057,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (!h) {
             return toBits(QoreValue());
         }
-        QoreValue result = h->getKeyValue(key, xsink);
+        QoreValue result = qore_rt_get_hash_key_value(h, key, key_hash, prehashed, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -4056,7 +4076,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
     }
     if (v.getType() == NT_HASH) {
         const QoreHashNode* h = v.get<const QoreHashNode>();
-        QoreValue result = h->getKeyValue(key, xsink);
+        QoreValue result = qore_rt_get_hash_key_value(h, key, key_hash, prehashed, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -4092,12 +4112,24 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
-    return qore_rt_hash_key_access_impl(hash_val, key, xsink, false);
+    return qore_rt_hash_key_access_impl(hash_val, key, 0, false, xsink, false);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key,
         ExceptionSink* xsink) {
-    return qore_rt_hash_key_access_impl(hash_val, key, xsink, true);
+    return qore_rt_hash_key_access_impl(hash_val, key, 0, false, xsink, true);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    return qore_rt_hash_key_access_impl(hash_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_for_call_prehashed(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    return qore_rt_hash_key_access_impl(hash_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
@@ -4112,6 +4144,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
         const QoreHashNode* h = v.get<const QoreHashNode>();
         bool exists = false;
         QoreValue val = h->getKeyValueExistence(key, exists);
+        if (exists) {
+            return toBits(val.getAsBigInt());
+        }
+    }
+    return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32) {
+    ExceptionSink xsink;
+    QoreValue raw_v = fromBits(hash_val);
+    ValueEvalOptimizedRefHolder vh(raw_v, &xsink);
+    if (xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue v = *vh;
+    if (v.getType() == NT_HASH) {
+        const QoreHashNode* h = v.get<const QoreHashNode>();
+        bool exists = false;
+        QoreValue val = qore_hash_private::get(*h)->getKeyValueExistencePrehashedIntern(key,
+            qore_rt_select_precomputed_hash(hash64, hash32), exists);
         if (exists) {
             return toBits(val.getAsBigInt());
         }
@@ -4536,6 +4589,27 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_for_call_throwing(
         uint64_t hash_val, const char* key, ExceptionSink* xsink) {
     uint64_t result = qore_rt_hash_key_access_for_call(hash_val, key, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_prehashed_throwing(
+        uint64_t hash_val, const char* key, uint64_t hash64, uint32_t hash32,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_access_prehashed(hash_val, key, hash64, hash32, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_hash_key_access_for_call_prehashed_throwing(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_access_for_call_prehashed(
+        hash_val, key, hash64, hash32, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

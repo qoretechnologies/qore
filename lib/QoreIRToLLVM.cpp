@@ -40,6 +40,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QorePluginRegistry.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/xxhash.h"
 
 #include <qore/QorePluginLLVM.h>
 
@@ -49,6 +50,23 @@
 static_assert(QORE_IR_MAX_OPCODE == 383,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
+
+struct QoreIRPrecomputedStringHash {
+    uint64_t hash64;
+    uint32_t hash32;
+};
+
+static QoreIRPrecomputedStringHash qore_ir_precompute_string_hash(const std::string& value) {
+    return {
+        XXH64(value.data(), value.size(), 0),
+        XXH32(value.data(), value.size(), 0),
+    };
+}
+
+static bool qore_ir_use_prehashed_keys() {
+    static const bool enabled = std::getenv("QORE_DISABLE_AOT_PREHASHED_KEYS") == nullptr;
+    return enabled;
+}
 
 // Pseudo dot-eval helpers such as size()/className() cannot be blindly inlined:
 // AST semantics first check object methods and hash member callrefs, then fall
@@ -9374,11 +9392,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
                 llvm::Constant* key_const = builder->CreateGlobalString(inv->invoke_key_name,
                         "hash_key");
+                bool prehashed = qore_ir_use_prehashed_keys();
                 const char* helper_name = dot_eval_only_bases.count(inst->result.id)
-                        ? "qore_rt_hash_key_access_for_call" : "qore_rt_hash_key_access";
-                auto helper = module.getOrInsertFunction(helper_name,
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {base_boxed, key_const, xsink_arg});
+                        ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
+                            : "qore_rt_hash_key_access_for_call")
+                        : (prehashed ? "qore_rt_hash_key_access_prehashed"
+                            : "qore_rt_hash_key_access");
+                if (prehashed) {
+                    QoreIRPrecomputedStringHash key_hash =
+                        qore_ir_precompute_string_hash(inv->invoke_key_name);
+                    auto helper = module.getOrInsertFunction(helper_name,
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {base_boxed, key_const,
+                        llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                        llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction(helper_name,
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {base_boxed, key_const, xsink_arg});
+                }
                 // HashKeyAccess doesn't modify locals — no reload needed
 
             } else if (inv->invoke_opcode == QoreIROpcode::LoadSelfMember) {
@@ -13481,17 +13515,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
             llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
                     "hash_key");
-            auto hka_ft = llvm::FunctionType::get(i64_type,
-                    {i64_type, ptr_type, ptr_type}, false);
+            bool prehashed = qore_ir_use_prehashed_keys();
             const char* helper_name = dot_eval_only_bases.count(inst->result.id)
-                    ? "qore_rt_hash_key_access_for_call" : "qore_rt_hash_key_access";
+                    ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
+                        : "qore_rt_hash_key_access_for_call")
+                    : (prehashed ? "qore_rt_hash_key_access_prehashed"
+                        : "qore_rt_hash_key_access");
             const char* helper_throwing_name = dot_eval_only_bases.count(inst->result.id)
-                    ? "qore_rt_hash_key_access_for_call_throwing" : "qore_rt_hash_key_access_throwing";
-            auto helper = module.getOrInsertFunction(helper_name, hka_ft);
-            auto helper_throwing = module.getOrInsertFunction(
-                    helper_throwing_name, hka_ft);
-            values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
-                    {base_boxed, key_const, xsink_arg}, module, llvm_func, inst);
+                    ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed_throwing"
+                        : "qore_rt_hash_key_access_for_call_throwing")
+                    : (prehashed ? "qore_rt_hash_key_access_prehashed_throwing"
+                        : "qore_rt_hash_key_access_throwing");
+            if (prehashed) {
+                auto hka_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(helper_name, hka_ft);
+                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, hka_ft);
+                QoreIRPrecomputedStringHash key_hash =
+                    qore_ir_precompute_string_hash(hka_inst->key_name);
+                values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
+                        {base_boxed, key_const,
+                         llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                         llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg},
+                        module, llvm_func, inst);
+            } else {
+                auto hka_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(helper_name, hka_ft);
+                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, hka_ft);
+                values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
+                        {base_boxed, key_const, xsink_arg}, module, llvm_func, inst);
+            }
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(values[inst->result.id], inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
@@ -13506,9 +13560,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
             llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
                     "hash_key_int");
-            auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {base_boxed, key_const});
+            llvm::Value* result;
+            if (qore_ir_use_prehashed_keys()) {
+                QoreIRPrecomputedStringHash key_hash =
+                    qore_ir_precompute_string_hash(hka_inst->key_name);
+                auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int_prehashed",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, i64_type, i32_type}, false));
+                result = builder->CreateCall(helper, {base_boxed, key_const,
+                    llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                    llvm::ConstantInt::get(i32_type, key_hash.hash32)});
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_int",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {base_boxed, key_const});
+            }
             values[inst->result.id] = result;
             // Result is now nanboxed (may be NOTHING for missing keys)
             nanboxed_values.insert(inst->result.id);
@@ -18179,10 +18245,19 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
     // Create global constant for the key string
     llvm::Constant* key_const = builder->CreateGlobalString(key_str, "hash_key");
 
-    // Call qore_rt_hash_key_access(obj_boxed, key_ptr, xsink)
-    auto helper = module.getOrInsertFunction("qore_rt_hash_key_access",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(helper, {obj_boxed, key_const, xsink_arg});
+    if (qore_ir_use_prehashed_keys()) {
+        QoreIRPrecomputedStringHash key_hash = qore_ir_precompute_string_hash(key_str);
+        auto helper = module.getOrInsertFunction("qore_rt_hash_key_access_prehashed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
+        values[inst->result.id] = builder->CreateCall(helper, {obj_boxed, key_const,
+            llvm::ConstantInt::get(i64_type, key_hash.hash64),
+            llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+    } else {
+        auto helper = module.getOrInsertFunction("qore_rt_hash_key_access",
+                llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+        values[inst->result.id] = builder->CreateCall(helper, {obj_boxed, key_const, xsink_arg});
+    }
     return true;
 }
 

@@ -171,6 +171,12 @@ public:
 
     DLLLOCAL QoreValue getKeyValueIntern(const char* key) const;
 
+    DLLLOCAL QoreValue getKeyValuePrehashed(const char* key, size_t hash, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue getKeyValueExistencePrehashed(const char* key, size_t hash,
+            bool& exists, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue getKeyValueExistencePrehashedIntern(const char* key, size_t hash,
+            bool& exists) const;
+
     DLLLOCAL QoreValue getKeyValueExistence(const char* key, bool& exists, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getKeyValueExistenceIntern(const char* key, bool& exists) const;
