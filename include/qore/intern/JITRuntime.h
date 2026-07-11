@@ -407,6 +407,10 @@ uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits, c
 uint64_t qore_rt_list_push_by_type_path_throwing(uint64_t list_bits, uint64_t val_bits,
         const char* element_type_path, ExceptionSink* xsink);
 
+//! Push to a proven assigned list and return the same borrowed list value.
+uint64_t qore_rt_list_push_in_place(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
+uint64_t qore_rt_list_push_in_place_throwing(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
+
 // --- Statement execution helpers ---
 
 //! Execute a statement (foreach, on_block_exit, context, etc.)

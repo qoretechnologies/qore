@@ -871,6 +871,8 @@ public:
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
+    bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
+    bool redundant_store = false;  // Transient: store-back paired with list_push_in_place
 
     // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set
     // by the IR builder in correctly-nested call order during lowering, so the

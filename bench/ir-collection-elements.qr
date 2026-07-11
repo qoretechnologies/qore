@@ -49,6 +49,42 @@ int sub benchHashMap(list<hash<auto>> data, int rounds) {
     return checksum;
 }
 
+int sub benchPushInt(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, j;
+        }
+        checksum += values[DATA_SIZE - 1];
+    }
+    return checksum;
+}
+
+int sub benchPushSoft(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<softint> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, "1";
+        }
+        checksum += values.size();
+    }
+    return checksum;
+}
+
+int sub benchConstruct(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<hash<auto>> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, {"value": j, "enabled": j % 2 == 0};
+        }
+        checksum += values[DATA_SIZE - 1].value;
+    }
+    return checksum;
+}
+
 string kernel = ARGV.size() ? ARGV[0] : "map";
 int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : DEFAULT_ROUNDS;
 list<hash<auto>> data = makeData();
@@ -65,6 +101,15 @@ switch (kernel) {
         break;
     case "hash-map":
         checksum = benchHashMap(data, rounds);
+        break;
+    case "push-int":
+        checksum = benchPushInt(rounds);
+        break;
+    case "push-soft":
+        checksum = benchPushSoft(rounds);
+        break;
+    case "construct":
+        checksum = benchConstruct(rounds);
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

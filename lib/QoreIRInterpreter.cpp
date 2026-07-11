@@ -6408,9 +6408,7 @@ next_instruction:
                 if (list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     l->push(push_val.refSelf(), xsink);
-                    // refSelf: result shares same list pointer as operand; both are in
-                    // cleanup, so both need their own reference
-                    result = list_val.refSelf();
+                    result = inst->list_push_in_place ? list_val : list_val.refSelf();
                 } else if (list_val.isNothing()) {
                     // Use element type from instruction (set by lowerPush) for proper
                     // coercion (e.g., list<softint> converts "3" to 3)
@@ -6432,8 +6430,12 @@ next_instruction:
                     cleanupLocalCaches();
                     return false;
                 }
-                setValueSlot(values, inst->result.id, result, xsink);
-                if (result.hasNode()) {
+                if (inst->list_push_in_place) {
+                    setValueSlotDirect(values, inst->result.id, result);
+                } else {
+                    setValueSlot(values, inst->result.id, result, xsink);
+                }
+                if (!inst->list_push_in_place && result.hasNode()) {
                     cleanup.push_back(inst->result.id);
                 }
                 ++ip;
@@ -9076,6 +9078,13 @@ load_local_done:
                 }
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
+                if (local_inst->redundant_store) {
+                    if (local_inst->result.isValid()) {
+                        setValueSlotDirect(values, local_inst->result.id, val);
+                    }
+                    ++ip;
+                    break;
+                }
                 ValueHolder weak_eval_holder(xsink);
                 bool normalized_weak_ref = !local_inst->weak
                     && normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);

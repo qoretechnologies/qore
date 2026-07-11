@@ -7070,6 +7070,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
+            if (inst->redundant_store) {
+                if (inst->result.isValid()) {
+                    values[inst->result.id] = val;
+                    nanboxed_values.insert(inst->result.id);
+                }
+                return true;
+            }
             auto key = reinterpret_cast<const void*>(linst->local);
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
@@ -13014,6 +13021,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
+            if (inst->list_push_in_place) {
+                auto push_ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, ptr_type}, false);
+                auto push_fn = module.getOrInsertFunction("qore_rt_list_push_in_place", push_ft);
+                auto push_fn_throwing = module.getOrInsertFunction(
+                        "qore_rt_list_push_in_place_throwing", push_ft);
+                llvm::Value* result = emitMaybeInvoke(push_fn, push_fn_throwing,
+                        {list_boxed, val_boxed, xsink_arg}, module, llvm_func, inst);
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             llvm::Value* type_arg = aot_mode
                 ? getTypePathArg(inst->element_type) : getTypeInfoPointerArg(inst->element_type);
             const char* helper_name = aot_mode ? "qore_rt_list_push_by_type_path" : "qore_rt_list_push_typed";

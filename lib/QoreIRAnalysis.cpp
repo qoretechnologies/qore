@@ -1027,6 +1027,212 @@ static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg
     return changed;
 }
 
+static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
+        const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
+        size_t& check_count) {
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    std::unordered_set<LocalVar*> candidate_locals;
+    for (const auto& block : cfg.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR in-place list push definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions[inst->result.id] = inst.get();
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+                if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure
+                        && func.ir_only_locals.count(
+                            reinterpret_cast<const void*>(local_inst->local))) {
+                    candidate_locals.insert(local_inst->local);
+                }
+            }
+        }
+    }
+
+    auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
+        auto def_it = definitions.find(value.id);
+        if (def_it == definitions.end() || def_it->second->opcode != QoreIROpcode::LoadLocal) {
+            return nullptr;
+        }
+        auto* load = static_cast<QoreIRLocalInstruction*>(def_it->second);
+        return load->is_ref || load->is_closure ? nullptr : load->local;
+    };
+    auto get_paired_push_store = [&](const QoreIRInstruction& push,
+            LocalVar* local) -> const QoreIRLocalInstruction* {
+        if (push.opcode != QoreIROpcode::ListPush || push.operands.size() != 2
+                || !push.result.isValid() || get_loaded_local(push.operands[0]) != local) {
+            return nullptr;
+        }
+        auto use_it = uses.find(push.result.id);
+        if (use_it == uses.end() || use_it->second.size() != 1 || !use_it->second[0].inst
+                || use_it->second[0].inst->opcode != QoreIROpcode::StoreLocal) {
+            return nullptr;
+        }
+        auto* store = static_cast<const QoreIRLocalInstruction*>(use_it->second[0].inst);
+        return store->local == local && !store->weak && store->operands.size() == 1
+                && store->operands[0].id == push.result.id ? store : nullptr;
+    };
+    auto is_exclusive_fresh_store = [&](const QoreIRLocalInstruction& store) {
+        if (store.weak || store.operands.size() != 1) {
+            return false;
+        }
+        auto def_it = definitions.find(store.operands[0].id);
+        if (def_it == definitions.end()
+                || (def_it->second->opcode != QoreIROpcode::MakeList
+                    && def_it->second->opcode != QoreIROpcode::CreateEmptyList
+                    && def_it->second->opcode != QoreIROpcode::CreateSizedList)) {
+            return false;
+        }
+        auto use_it = uses.find(def_it->second->result.id);
+        return use_it != uses.end() && use_it->second.size() == 1
+            && use_it->second[0].inst == &store;
+    };
+    auto is_read_only_list_use = [](const QoreIRInstruction& inst, QoreIRValue value) {
+        if (inst.operands.empty() || inst.operands[0].id != value.id) {
+            return false;
+        }
+        switch (inst.opcode) {
+            case QoreIROpcode::ListSize:
+            case QoreIROpcode::ListGetInt:
+            case QoreIROpcode::ListGetFloat:
+            case QoreIROpcode::ListGetValue:
+            case QoreIROpcode::ListGetValueNoRef:
+            case QoreIROpcode::ListIndexDynamic:
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    using FreshLocalSet = std::unordered_set<LocalVar*>;
+    bool cancelled = false;
+    auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
+            size_t& changed) -> FreshLocalSet {
+        for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR in-place list push escape analysis")) {
+                cancelled = true;
+                return state;
+            }
+            QoreIRInstruction& inst = *inst_ptr;
+            if (!qore_ir_visit_value_operands(inst, [&](QoreIRValue operand) {
+                LocalVar* local = get_loaded_local(operand);
+                if (!local || !candidate_locals.count(local)) {
+                    return;
+                }
+                bool preserves_freshness = is_read_only_list_use(inst, operand)
+                    || (inst.opcode == QoreIROpcode::ListPush
+                        && !inst.operands.empty() && inst.operands[0].id == operand.id
+                        && get_paired_push_store(inst, local));
+                if (!preserves_freshness) {
+                    state.erase(local);
+                }
+            }, &check_count, "IR in-place list push escape analysis")) {
+                cancelled = true;
+                return state;
+            }
+            if (inst.opcode == QoreIROpcode::ListPush && inst.operands.size() == 2) {
+                LocalVar* local = get_loaded_local(inst.operands[0]);
+                const QoreIRLocalInstruction* store = local
+                    ? get_paired_push_store(inst, local) : nullptr;
+                const QoreIRValueFacts* facts = func.getValueFacts(inst.operands[0]);
+                if (mark && store && state.count(local) && facts
+                        && facts->assigned_state == QoreIRAssignedState::Assigned
+                        && facts->never_nothing && QoreTypeInfo::isListType(facts->type_info)) {
+                    inst.list_push_in_place = true;
+                    const_cast<QoreIRLocalInstruction*>(store)->redundant_store = true;
+                    ++changed;
+                }
+            }
+            if (inst.opcode == QoreIROpcode::StoreLocal) {
+                auto& store = static_cast<QoreIRLocalInstruction&>(inst);
+                if (store.local && candidate_locals.count(store.local)) {
+                    if (is_exclusive_fresh_store(store)) {
+                        state.insert(store.local);
+                    } else {
+                        auto def_it = store.operands.empty()
+                            ? definitions.end() : definitions.find(store.operands[0].id);
+                        if (def_it == definitions.end()
+                                || !get_paired_push_store(*def_it->second, store.local)) {
+                            state.erase(store.local);
+                        }
+                    }
+                }
+            }
+        }
+        return state;
+    };
+
+    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), candidate_locals);
+    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), candidate_locals);
+    std::vector<size_t> worklist;
+    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (cfg.reachable[block_id]) {
+            worklist.push_back(block_id);
+            queued[block_id] = 1;
+        }
+    }
+    size_t ignored_changed = 0;
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place list push dataflow")) {
+            return 0;
+        }
+        size_t block_id = worklist.back();
+        worklist.pop_back();
+        queued[block_id] = 0;
+        FreshLocalSet input;
+        if (block_id) {
+            bool first = true;
+            for (size_t predecessor : cfg.predecessors[block_id]) {
+                if (!cfg.reachable[predecessor]) {
+                    continue;
+                }
+                if (first) {
+                    input = fresh_out[predecessor];
+                    first = false;
+                    continue;
+                }
+                for (auto it = input.begin(); it != input.end();) {
+                    if (!fresh_out[predecessor].count(*it)) {
+                        it = input.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+        }
+        fresh_in[block_id] = input;
+        FreshLocalSet output = transfer_block(block_id, input, false, ignored_changed);
+        if (cancelled) {
+            return 0;
+        }
+        if (output == fresh_out[block_id]) {
+            continue;
+        }
+        fresh_out[block_id] = std::move(output);
+        for (size_t successor : cfg.successors[block_id]) {
+            if (!queued[successor]) {
+                queued[successor] = 1;
+                worklist.push_back(successor);
+            }
+        }
+    }
+
+    size_t changed = 0;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (cfg.reachable[block_id]) {
+            transfer_block(block_id, fresh_in[block_id], true, changed);
+            if (cancelled) {
+                return changed;
+            }
+        }
+    }
+    return changed;
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     QoreIROptimizationStats local_stats;
     if (getenv("QORE_DISABLE_IR_OPT")) {
@@ -1044,8 +1250,29 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
     size_t check_count = 0;
+    bool has_list_push = false;
+    if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
+        for (const QoreIRBasicBlock* block : cfg.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR list push discovery")) {
+                    if (stats) {
+                        *stats = local_stats;
+                    }
+                    return;
+                }
+                if (inst->opcode == QoreIROpcode::ListPush) {
+                    has_list_push = true;
+                    break;
+                }
+            }
+            if (has_list_push) {
+                break;
+            }
+        }
+    }
     QoreIRScalarUses uses;
-    if (!loops.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
+    if ((!loops.empty() || has_list_push)
+            && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
         if (stats) {
             *stats = local_stats;
         }
@@ -1054,6 +1281,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     if (!getenv("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
         local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
             cfg, loops, uses, check_count);
+    }
+    if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
+        local_stats.in_place_list_pushes = qore_ir_mark_in_place_list_pushes(
+            func, cfg, uses, check_count);
     }
     if (getenv("QORE_DISABLE_IR_LICM")) {
         loops.clear();

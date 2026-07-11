@@ -3450,6 +3450,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val
     return qore_rt_list_push_typed(list_bits, val_bits, autoTypeInfo, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
+        uint64_t val_bits, ExceptionSink* xsink) {
+    QoreValue list_val = fromBits(list_bits);
+    if (list_val.getType() != NT_LIST) {
+        xsink->raiseException("PUSH-ERROR",
+            "the lvalue argument to push is type \"%s\"; expecting \"list\"",
+            list_val.getTypeName());
+        return toBits(QoreValue());
+    }
+    list_val.get<QoreListNode>()->push(fromBits(val_bits).refSelf(), xsink);
+    return xsink && *xsink ? toBits(QoreValue()) : list_bits;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits,
         const char* element_type_path, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);
@@ -4680,6 +4693,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_typed_
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_by_type_path_throwing(
         uint64_t list_bits, uint64_t val_bits, const char* element_type_path, ExceptionSink* xsink) {
     uint64_t result = qore_rt_list_push_by_type_path(list_bits, val_bits, element_type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_in_place_throwing(
+        uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_push_in_place(list_bits, val_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

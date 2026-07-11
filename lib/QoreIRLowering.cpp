@@ -9362,9 +9362,10 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             }
 
             // Load current list
-            QoreIRValue list_val = is_closure
-                ? builder.createLoadClosure(var->ref.id, op->loc)->result
-                : builder.createLoadLocal(var->ref.id, op->loc)->result;
+            QoreIRValue list_val = lowerExpression(left_expr, error);
+            if (!list_val.isValid()) {
+                return QoreIRValue();
+            }
 
             if (!exception_stack.empty()) {
                 // Invoke path: ListPush can throw (type errors, etc.)

@@ -72,6 +72,7 @@ struct QoreIROptimizationStats {
     size_t scalar_expressions_eliminated = 0;
     size_t constant_branches_folded = 0;
     size_t borrowed_list_reads = 0;
+    size_t in_place_list_pushes = 0;
 };
 
 //! Run conservative, semantics-preserving optimizations on a lowered function.
