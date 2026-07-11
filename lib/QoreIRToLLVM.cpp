@@ -10827,6 +10827,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(clear_helper, {arg_cleanups,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
+                call_may_modify_runtime_locals = false;
             } else if (aot_approach_b_callee) {
                 // AOT Approach B batch callee: direct LLVM call to the
                 // same-module fast entry.  The fast entry has AOT signature
