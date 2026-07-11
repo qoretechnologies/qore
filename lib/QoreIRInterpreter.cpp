@@ -6524,7 +6524,7 @@ next_instruction:
                         result = l->retrieveEntry(static_cast<size_t>(index));
                     }
                 }
-                setValueSlot(values, inst->result.id, result, xsink);
+                setValueSlotDirect(values, inst->result.id, result);
                 // Do NOT add to cleanup — no owned reference (borrowed from list)
                 ++ip;
                 break;

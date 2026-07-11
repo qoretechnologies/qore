@@ -903,6 +903,130 @@ static bool qore_ir_is_hoistable_load(const QoreIRFunction& func, const QoreIRIn
         || facts->representation == QoreIRValueRepresentation::NativeBool;
 }
 
+static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& inst,
+        uint32_t value_id) {
+    switch (inst.opcode) {
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::EqHard:
+        case QoreIROpcode::NeHard:
+        case QoreIROpcode::ToBool:
+            return true;
+        case QoreIROpcode::ListAppend:
+            return inst.operands.size() == 2 && inst.operands[1].id == value_id;
+        case QoreIROpcode::ListSetValue:
+            return inst.operands.size() == 3 && inst.operands[2].id == value_id;
+        case QoreIROpcode::HashSetKeyValue:
+            return inst.operands.size() == 3
+                && (inst.operands[1].id == value_id || inst.operands[2].id == value_id);
+        default:
+            return false;
+    }
+}
+
+struct QoreIRBorrowedLoopSafety {
+    bool may_mutate_unknown = false;
+    std::unordered_set<uint32_t> mutated_lists;
+};
+
+static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
+        const QoreIRControlFlowGraph& cfg, QoreIRBorrowedLoopSafety& safety,
+        size_t& check_count) {
+    for (size_t block_id : loop.blocks) {
+        for (const auto& inst : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR borrowed list source analysis")) {
+                return false;
+            }
+            if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
+                safety.may_mutate_unknown = true;
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::ListAppend:
+                case QoreIROpcode::ListSetInt:
+                case QoreIROpcode::ListSetFloat:
+                case QoreIROpcode::ListSetValue:
+                    if (!inst->operands.empty()) {
+                        safety.mutated_lists.insert(inst->operands[0].id);
+                    }
+                    break;
+                case QoreIROpcode::ListPush:
+                    // A separately loaded local can alias the source list.
+                    safety.may_mutate_unknown = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+    return true;
+}
+
+static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg,
+        const std::vector<QoreIRNaturalLoop>& loops,
+        const QoreIRScalarUses& uses, size_t& check_count) {
+    std::unordered_map<uint32_t, size_t> definition_blocks;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        for (const auto& inst : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR borrowed list definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definition_blocks[inst->result.id] = block_id;
+            }
+        }
+    }
+
+    size_t changed = 0;
+    for (const QoreIRNaturalLoop& loop : loops) {
+        QoreIRBorrowedLoopSafety safety;
+        if (!qore_ir_collect_borrowed_loop_safety(loop, cfg, safety, check_count)) {
+            return changed;
+        }
+        if (safety.may_mutate_unknown) {
+            continue;
+        }
+        std::unordered_set<size_t> loop_blocks(loop.blocks.begin(), loop.blocks.end());
+        for (size_t block_id : loop.blocks) {
+            for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count, "IR borrowed list read analysis")) {
+                    return changed;
+                }
+                QoreIRInstruction& inst = *inst_ptr;
+                if (inst.opcode != QoreIROpcode::ListGetValue || inst.operands.size() != 2
+                        || !inst.result.isValid()) {
+                    continue;
+                }
+                uint32_t source_id = inst.operands[0].id;
+                auto source_def = definition_blocks.find(source_id);
+                if (source_def != definition_blocks.end() && loop_blocks.count(source_def->second)) {
+                    continue;
+                }
+                auto use_it = uses.find(inst.result.id);
+                if (use_it == uses.end() || use_it->second.empty()) {
+                    continue;
+                }
+                bool safe_uses = true;
+                for (const QoreIRScalarUse& use : use_it->second) {
+                    if (qore_ir_analysis_cancelled(check_count, "IR borrowed list use analysis")) {
+                        return changed;
+                    }
+                    if (!use.inst || !loop_blocks.count(use.block_id)
+                            || !qore_ir_is_borrowed_list_element_consumer(*use.inst, inst.result.id)) {
+                        safe_uses = false;
+                        break;
+                    }
+                }
+                if (!safe_uses || safety.mutated_lists.count(source_id)) {
+                    continue;
+                }
+                inst.opcode = QoreIROpcode::ListGetValueNoRef;
+                ++changed;
+            }
+        }
+    }
+    return changed;
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     QoreIROptimizationStats local_stats;
     if (getenv("QORE_DISABLE_IR_OPT")) {
@@ -919,10 +1043,6 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         return;
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
-    if (getenv("QORE_DISABLE_IR_LICM")) {
-        loops.clear();
-    }
-    local_stats.loops_analyzed = loops.size();
     size_t check_count = 0;
     QoreIRScalarUses uses;
     if (!loops.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
@@ -931,6 +1051,14 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         }
         return;
     }
+    if (!getenv("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
+        local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
+            cfg, loops, uses, check_count);
+    }
+    if (getenv("QORE_DISABLE_IR_LICM")) {
+        loops.clear();
+    }
+    local_stats.loops_analyzed = loops.size();
 
     for (const QoreIRNaturalLoop& loop : loops) {
         if (qore_ir_analysis_cancelled(check_count, "IR loop-invariant code motion")) {
