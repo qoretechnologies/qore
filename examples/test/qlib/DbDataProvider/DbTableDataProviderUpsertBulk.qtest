@@ -88,6 +88,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         addTestCase("upsertRecordsBulk explicit strategy", \testUpsertBulkExplicitStrategy());
         addTestCase("upsertRecordsBulk insert then upsert", \testUpsertBulkInsertThenUpsert());
         addTestCase("columnar bulk shapes", \testColumnarBulkShapes());
+        addTestCase("transactional mutation limits", \testTransactionalMutationLimits());
 
         set_return_value(main());
     }
@@ -245,6 +246,40 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         assertEq(250, rows[1].value, "bob value should be updated");
         assertEq("carol", rows[2].name, "carol should be inserted");
         assertEq(300, rows[2].value, "carol value should be correct");
+    }
+
+    private testTransactionalMutationLimits() {
+        Datasource ds;
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "SKIP") {
+                testSkip(ex.desc);
+            }
+            rethrow;
+        }
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        provider.upsertRecordsBulk((
+            {"id": 1, "name": "same", "value": 10},
+            {"id": 2, "name": "same", "value": 20},
+            {"id": 3, "name": "other", "value": 30},
+        ));
+
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", "the update has been rolled back", sub () {
+            provider.updateSingleRecord({"value": 99}, {"name": "same"});
+        });
+        assertEq((10, 20, 30), map $1.value, table.selectRows({"orderby": "id"}));
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the delete has been rolled back", sub () {
+            provider.deleteRecords({}, {"max_records": 2});
+        });
+        assertEq((1, 2, 3), map $1.id, table.selectRows({"orderby": "id"}));
     }
 
     #! Test that DB providers expose and consume native columnar bulk shapes

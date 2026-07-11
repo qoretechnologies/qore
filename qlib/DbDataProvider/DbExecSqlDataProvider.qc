@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbExecSqlDataProvider class definition
 
-/** DbExecSqlDataProvider.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** DbExecSqlDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -77,8 +77,7 @@ public class DbExecSqlDataProvider inherits DbDataProviderBase {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         AbstractDatasource ds = db.getDatasource();
-        on_error ds.rollback();
-        on_success ds.commit();
+        DbOperationTransactionHelper trans(ds);
         return {
             "result": ds.vexec(req.sql, req.args),
         };
@@ -110,10 +109,10 @@ public class ExecSqlRequestType inherits HashDataType {
             "sql": {
                 "display_name": "SQL",
                 "short_desc": "The SQL statement to execute including any placeholders for bind arguments as '%v'; "
-                    "the statement is automatically committed",
+                    "the statement is automatically committed when no caller transaction is active",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The SQL statement to execute including any placeholders for bind arguments "
-                    "as `%v`; the statement is automatically committed",
+                    "as `%v`; the statement is automatically committed when no caller transaction is active",
             },
             "args": {
                 "display_name": "Arguments",

@@ -1220,6 +1220,8 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_5 DataProvider v3.5
+    - record update and delete APIs now enforce c max_records against affected-row counts and preserve
+      c MAX-RECORDS-EXCEEDED instead of wrapping it in a generic mutation error
     - bulk record-shape validation now rejects heterogeneous record field sets and unequal list or buffer column
       lengths before provider mutation; scalar hash-of-lists values remain supported as row broadcasts
     - fixed the generic \c "in" expression to accept both the canonical \c (field, list) form and the

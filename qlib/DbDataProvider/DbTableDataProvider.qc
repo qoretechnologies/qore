@@ -621,11 +621,19 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
-        int rows = updateRecordsImpl(set, where_cond, search_options);
+        DbOperationTransactionHelper trans(table);
+        AbstractSavepointHelper sp = table.getSavepointHelper();
+        int rows;
+        try {
+            rows = table.update(set, where_cond);
+        } catch (hash<ExceptionInfo> ex) {
+            sp.rollback();
+            rethrow;
+        }
         if (rows > 1) {
-            bool in_trans = table.getDatasource().currentThreadInTransaction();
-            throw "UPDATE-SINGLE-RECORD-ERROR", sprintf("%d record(s) were updated; %ssearch args: %y (set: %y)", rows,
-                (!in_trans ? "the update has been rolled back; " : ""), search_options, set);
+            sp.rollback();
+            throw "UPDATE-SINGLE-RECORD-ERROR", sprintf("%d records matched; the update has been rolled back; "
+                "search args: %y (set: %y)", rows, search_options, set);
         }
         return rows.toBool();
     }
@@ -641,6 +649,24 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
+        int max_records = search_options.max_records;
+        if (max_records > 0) {
+            DbOperationTransactionHelper trans(table);
+            AbstractSavepointHelper sp = table.getSavepointHelper();
+            int rows;
+            try {
+                rows = table.update(set, where_cond);
+            } catch (hash<ExceptionInfo> ex) {
+                sp.rollback();
+                rethrow;
+            }
+            if (rows > max_records) {
+                sp.rollback();
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded by an update affecting %d records; the update has been rolled back", max_records, rows);
+            }
+            return rows;
+        }
         DbTableTransactionHelper db(table);
         return db.update(set, where_cond);
     }
@@ -658,6 +684,24 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+        int max_records = search_options.max_records;
+        if (max_records > 0) {
+            DbOperationTransactionHelper trans(table);
+            AbstractSavepointHelper sp = table.getSavepointHelper();
+            int rows;
+            try {
+                rows = table.del(where_cond);
+            } catch (hash<ExceptionInfo> ex) {
+                sp.rollback();
+                rethrow;
+            }
+            if (rows > max_records) {
+                sp.rollback();
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded by a delete affecting %d records; the delete has been rolled back", max_records, rows);
+            }
+            return rows;
+        }
         DbTableTransactionHelper db(table);
         return db.del(where_cond);
     }

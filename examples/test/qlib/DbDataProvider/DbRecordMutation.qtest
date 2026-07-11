@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/DbDataProvider
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class DbRecordMutationTest
+
+class DbRecordMutationTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        *Sqlite3Table table;
+        *DbTableDataProvider provider;
+
+        const TableName = "db_record_mutation_test";
+    }
+
+    constructor() : Test("DbRecordMutation", "1.0") {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:@:memory:");
+        ds.open();
+        ds.execRaw("create table " + TableName
+            + " (id integer primary key, group_name text not null, value integer not null)");
+        ds.commit();
+        table = new Sqlite3Table(ds, TableName);
+        provider = new DbTableDataProvider(table);
+%endif
+
+        addTestCase("single update rollback", \testSingleUpdateRollback());
+        addTestCase("bounded update rollback", \testBoundedUpdateRollback());
+        addTestCase("bounded delete rollback", \testBoundedDeleteRollback());
+        addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
+        addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    private requireSqlite() {
+        if (!provider) {
+            testSkip("no sqlite3 module");
+        }
+    }
+
+    private resetRows() {
+        ds.execRaw("delete from " + TableName);
+        ds.execRaw("insert into " + TableName + " values "
+            "(1, 'a', 10), (2, 'a', 20), (3, 'b', 30)");
+        ds.commit();
+    }
+
+    private list<hash<auto>> getRows() {
+        return table.selectRows({"orderby": "id"});
+    }
+
+    private testSingleUpdateRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", "the update has been rolled back", sub () {
+            provider.updateSingleRecord({"value": 99}, {"group_name": "a"});
+        });
+        assertEq((10, 20, 30), map $1.value, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testBoundedUpdateRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the update has been rolled back", sub () {
+            provider.updateRecords({"value": 99}, {}, {"max_records": 2});
+        });
+        assertEq((10, 20, 30), map $1.value, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq(2, provider.updateRecords({"value": 88}, {"group_name": "a"}, {"max_records": 2}));
+        assertEq((88, 88, 30), map $1.value, getRows());
+    }
+
+    private testBoundedDeleteRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the delete has been rolled back", sub () {
+            provider.deleteRecords({}, {"max_records": 2});
+        });
+        assertEq((1, 2, 3), map $1.id, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq(2, provider.deleteRecords({"group_name": "a"}, {"max_records": 2}));
+        assertEq((3,), map $1.id, getRows());
+    }
+
+    private testCallerTransactionPreservation() {
+        requireSqlite();
+        resetRows();
+
+        ds.execRaw("insert into " + TableName + " values (4, 'c', 40)");
+        assertTrue(ds.currentThreadInTransaction());
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", sub () {
+            provider.updateSingleRecord({"value": 99}, {"group_name": "a"});
+        });
+        assertTrue(ds.currentThreadInTransaction());
+        assertEq((10, 20, 30, 40), map $1.value, getRows());
+
+        ds.rollback();
+        assertEq((1, 2, 3), map $1.id, getRows());
+    }
+
+    private testExecSqlTransactionOwnership() {
+        requireSqlite();
+        resetRows();
+        DbExecSqlDataProvider exec_provider(ds);
+
+        ds.execRaw("insert into " + TableName + " values (4, 'c', 40)");
+        assertTrue(ds.currentThreadInTransaction());
+        exec_provider.doRequest({
+            "sql": "insert into " + TableName + " values (5, 'd', 50)",
+            "args": (),
+        });
+        assertTrue(ds.currentThreadInTransaction());
+        ds.rollback();
+        assertEq((1, 2, 3), map $1.id, getRows());
+
+        exec_provider.doRequest({
+            "sql": "insert into " + TableName + " values (6, 'e', 60)",
+            "args": (),
+        });
+        assertFalse(ds.currentThreadInTransaction());
+        ds.rollback();
+        assertEq((1, 2, 3, 6), map $1.id, getRows());
+    }
+}
