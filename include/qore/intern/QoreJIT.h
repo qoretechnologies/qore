@@ -85,6 +85,7 @@ struct BatchCalleeInfo {
     unsigned num_params = 0;             //!< Number of parameters
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
+    std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.

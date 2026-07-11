@@ -97,12 +97,16 @@ public:
     //! arguments instead of being loaded from the thread-local variable stack.
     //! @param name the LLVM function name for the fast entry (e.g., "fname_fast")
     //! @param args maps LocalVar* (as void*) → LLVM Value* for each parameter
+    //! @param arg_kinds maps parameters to their native or boxed ABI representation
+    //! @param borrowed_args boxed parameters proven not to escape the call
     void setFastEntryMode(const std::string& name,
             const std::unordered_map<const void*, llvm::Value*>* args,
-            const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr) {
+            const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
+            const std::unordered_set<const void*>* borrowed_args = nullptr) {
         fast_entry_name = name;
         fast_entry_args = args;
         fast_entry_arg_kinds = arg_kinds;
+        fast_entry_borrowed_args = borrowed_args;
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -208,6 +212,8 @@ private:
     std::string fast_entry_name;
     const std::unordered_map<const void*, llvm::Value*>* fast_entry_args = nullptr;
     const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
+    //! Proven noescape boxed parameters that borrow the caller's reference.
+    const std::unordered_set<const void*>* fast_entry_borrowed_args = nullptr;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.

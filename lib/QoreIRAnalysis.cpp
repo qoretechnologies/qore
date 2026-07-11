@@ -191,6 +191,8 @@ bool qore_ir_compute_function_effect_summaries(
         bool local_never_returns_nothing = true;
         bool saw_return = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
+        std::vector<uint8_t> param_noescape;
+        std::vector<std::vector<std::pair<const AbstractQoreFunctionVariant*, size_t>>> param_callees;
     };
 
     summaries.clear();
@@ -209,6 +211,26 @@ bool qore_ir_compute_function_effect_summaries(
         function_ids.emplace(variant, function_id);
         effects.push_back({variant});
         FunctionEffects& effect = effects.back();
+        size_t param_count = 0;
+        for (const auto& [index, local] : func->param_local_vars) {
+            if (index >= 0 && local) {
+                param_count = std::max(param_count, static_cast<size_t>(index) + 1);
+            }
+        }
+        effect.param_noescape.assign(param_count, true);
+        effect.param_callees.resize(param_count);
+        std::unordered_map<const LocalVar*, size_t> param_indexes;
+        for (const auto& [index, local] : func->param_local_vars) {
+            if (index < 0 || !local || static_cast<size_t>(index) >= param_count) {
+                continue;
+            }
+            size_t param_index = static_cast<size_t>(index);
+            param_indexes[local] = param_index;
+            if (local->closureUse() || QoreTypeInfo::isReference(local->getTypeInfo())) {
+                effect.param_noescape[param_index] = false;
+            }
+        }
+        std::unordered_map<uint32_t, size_t> loaded_params;
         for (const auto& block : func->blocks) {
             if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
                 return false;
@@ -218,6 +240,13 @@ bool qore_ir_compute_function_effect_summaries(
                     return false;
                 }
                 const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst && inst->opcode == QoreIROpcode::LoadLocal) {
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                    auto param_it = param_indexes.find(load->local);
+                    if (param_it != param_indexes.end() && inst->result.isValid()) {
+                        loaded_params[inst->result.id] = param_it->second;
+                    }
+                }
                 if (inst && inst->opcode == QoreIROpcode::Return) {
                     auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
                     effect.saw_return = true;
@@ -240,6 +269,98 @@ bool qore_ir_compute_function_effect_summaries(
                 } else if (qore_ir_instruction_may_invalidate_caller_caches(*func, inst)) {
                     effect.local_may_invalidate = true;
                 }
+            }
+        }
+        for (const auto& block : func->blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR function parameter noescape analysis")) {
+                    return false;
+                }
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                const LocalVar* written_local = nullptr;
+                if (inst->opcode == QoreIROpcode::StoreLocal
+                        || inst->opcode == QoreIROpcode::StoreClosure
+                        || inst->opcode == QoreIROpcode::InstantiateLocal
+                        || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                    written_local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                    written_local = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)->target;
+                } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                    written_local = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local;
+                } else if (inst->opcode == QoreIROpcode::StoreLValue
+                        || inst->opcode == QoreIROpcode::PreIncLValue
+                        || inst->opcode == QoreIROpcode::PreDecLValue
+                        || inst->opcode == QoreIROpcode::PostIncLValue
+                        || inst->opcode == QoreIROpcode::PostDecLValue
+                        || inst->opcode == QoreIROpcode::AddAssignLValue
+                        || inst->opcode == QoreIROpcode::SubAssignLValue
+                        || inst->opcode == QoreIROpcode::MulAssignLValue
+                        || inst->opcode == QoreIROpcode::DivAssignLValue
+                        || inst->opcode == QoreIROpcode::ModAssignLValue
+                        || inst->opcode == QoreIROpcode::AndAssignLValue
+                        || inst->opcode == QoreIROpcode::OrAssignLValue
+                        || inst->opcode == QoreIROpcode::XorAssignLValue
+                        || inst->opcode == QoreIROpcode::ShlAssignLValue
+                        || inst->opcode == QoreIROpcode::ShrAssignLValue
+                        || inst->opcode == QoreIROpcode::ShiftLValue
+                        || inst->opcode == QoreIROpcode::UnshiftLValue
+                        || inst->opcode == QoreIROpcode::PopAny
+                        || inst->opcode == QoreIROpcode::PushAny
+                        || inst->opcode == QoreIROpcode::SpliceLValue) {
+                    const auto* lvalue_inst = static_cast<const QoreIRLValueInstruction*>(inst);
+                    const VarRefNode* base = extractLValueBaseVarRef(lvalue_inst->lvalue);
+                    if (base && base->getType() == VT_LOCAL) {
+                        written_local = base->ref.id;
+                    }
+                } else if (inst->opcode == QoreIROpcode::LValuePathAssign
+                        || inst->opcode == QoreIROpcode::LValuePathCompound
+                        || inst->opcode == QoreIROpcode::LValuePathUnary
+                        || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                        || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                    const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst);
+                    if (!path_inst->path.empty()
+                            && path_inst->path.front().kind == LVPathStepKind::LocalVar) {
+                        written_local = reinterpret_cast<const LocalVar*>(
+                            path_inst->path.front().ref_ptr);
+                    }
+                }
+                if (written_local) {
+                    auto param_it = param_indexes.find(written_local);
+                    if (param_it != param_indexes.end()) {
+                        effect.param_noescape[param_it->second] = false;
+                    }
+                }
+                qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
+                    auto loaded_it = loaded_params.find(operand.id);
+                    if (loaded_it == loaded_params.end()) {
+                        return;
+                    }
+                    size_t param_index = loaded_it->second;
+                    if (!effect.param_noescape[param_index]) {
+                        return;
+                    }
+                    if (inst->opcode == QoreIROpcode::Return) {
+                        return;
+                    }
+                    if (inst->opcode == QoreIROpcode::CallDirect) {
+                        const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+                        if (!call->variant || call->has_ref_args) {
+                            effect.param_noescape[param_index] = false;
+                            return;
+                        }
+                        for (size_t arg = 0; arg < call->operands.size(); ++arg) {
+                            if (call->operands[arg].id == operand.id) {
+                                effect.param_callees[param_index].emplace_back(call->variant, arg);
+                            }
+                        }
+                        return;
+                    }
+                    effect.param_noescape[param_index] = false;
+                });
             }
         }
     }
@@ -266,6 +387,7 @@ bool qore_ir_compute_function_effect_summaries(
         summaries[effect.variant].may_invalidate_external_caches = may_invalidate;
         summaries[effect.variant].never_returns_nothing =
             effect.saw_return && effect.local_never_returns_nothing;
+        summaries[effect.variant].param_noescape = effect.param_noescape;
         if (may_invalidate) {
             worklist.push_back(function_id);
         }
@@ -284,6 +406,32 @@ bool qore_ir_compute_function_effect_summaries(
             if (!caller_summary.may_invalidate_external_caches) {
                 caller_summary.may_invalidate_external_caches = true;
                 worklist.push_back(caller_id);
+            }
+        }
+    }
+    bool noescape_changed = true;
+    while (noescape_changed) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR function parameter noescape propagation")) {
+            return false;
+        }
+        noescape_changed = false;
+        for (const FunctionEffects& effect : effects) {
+            auto& summary = summaries[effect.variant];
+            for (size_t param = 0; param < summary.param_noescape.size(); ++param) {
+                if (!summary.param_noescape[param]) {
+                    continue;
+                }
+                for (const auto& [callee, callee_param] : effect.param_callees[param]) {
+                    auto callee_it = summaries.find(callee);
+                    if (callee_it == summaries.end()
+                            || callee_param >= callee_it->second.param_noescape.size()
+                            || !callee_it->second.param_noescape[callee_param]) {
+                        summary.param_noescape[param] = false;
+                        noescape_changed = true;
+                        break;
+                    }
+                }
             }
         }
     }

@@ -81,6 +81,9 @@ struct QoreIROptimizationStats {
 struct QoreIRFunctionEffectSummary {
     bool may_invalidate_external_caches = true;
     bool never_returns_nothing = false;
+    //! True for parameters whose value is only observed during the call.
+    //! A returned value is allowed because return lowering takes an owning ref.
+    std::vector<uint8_t> param_noescape;
 };
 
 //! Return true when one instruction can mutate state visible to its caller.

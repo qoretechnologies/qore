@@ -1775,6 +1775,15 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
     // Classify locals as IR-only vs AST-visible for optimization
     ir_func->computeIROnlyLocals();
+    if (sig) {
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            ir_func->param_local_vars[static_cast<int>(i)] = sig->lv[i];
+            auto slot_it = ir_func->local_var_slots.find(sig->lv[i]);
+            if (slot_it != ir_func->local_var_slots.end()) {
+                ir_func->param_slot_ids[static_cast<int>(i)] = slot_it->second;
+            }
+        }
+    }
 
     QoreIROptimizationStats optimization_stats;
     qore_ir_optimize(*ir_func, &optimization_stats);
@@ -3271,6 +3280,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
     if (!qore_ir_compute_function_effect_summaries(functions, summaries)) {
         return false;
     }
+    const bool disable_noescape_params = std::getenv("QORE_DISABLE_AOT_NOESCAPE_PARAMS");
     for (const auto& [variant, summary] : summaries) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT batch function effect propagation")) {
@@ -3282,6 +3292,9 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 summary.may_invalidate_external_caches;
             callee_it->second.never_returns_nothing =
                 summary.never_returns_nothing;
+            if (!disable_noescape_params) {
+                callee_it->second.param_noescape = summary.param_noescape;
+            }
         }
     }
     return true;
@@ -4175,6 +4188,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // Build param mapping: LocalVar* → LLVM function arg value
                         std::unordered_map<const void*, llvm::Value*> param_map;
                         std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
+                        std::unordered_set<const void*> borrowed_param_map;
                         for (unsigned i = 0; i < num_params; ++i) {
                             if (i && !(i % 100)
                                     && qore_check_cancel(nullptr,
@@ -4189,6 +4203,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             param_map[key] = fast_fn->getArg(i);
                             param_kind_map[key] = i < fast_entry_param_kinds.size()
                                 ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
+                            auto callee_it = aot_batch_callee_map->find(variant);
+                            if (callee_it != aot_batch_callee_map->end()
+                                    && i < callee_it->second.param_noescape.size()
+                                    && callee_it->second.param_noescape[i]
+                                    && param_kind_map[key] == BatchCalleeParamKind::Boxed) {
+                                borrowed_param_map.insert(key);
+                            }
                             fast_fn->getArg(i)->setName(
                                     std::string("arg") + std::to_string(i));
                         }
@@ -4202,7 +4223,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             fast_lowerer.setBatchCallees(aot_batch_callee_map);
                         }
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                &param_kind_map);
+                                &param_kind_map, &borrowed_param_map);
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
@@ -4523,6 +4544,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                             std::unordered_map<const void*, llvm::Value*> param_map;
                             std::unordered_map<const void*, BatchCalleeParamKind> param_kind_map;
+                            std::unordered_set<const void*> borrowed_param_map;
                             for (unsigned i = 0; i < num_params; ++i) {
                                 if (i && !(i % 100)
                                         && qore_check_cancel(nullptr,
@@ -4537,6 +4559,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 param_map[key] = fast_fn->getArg(i);
                                 param_kind_map[key] = i < fast_entry_param_kinds.size()
                                     ? fast_entry_param_kinds[i] : BatchCalleeParamKind::Boxed;
+                                auto callee_it = aot_batch_callee_map->find(variant);
+                                if (callee_it != aot_batch_callee_map->end()
+                                        && i < callee_it->second.param_noescape.size()
+                                        && callee_it->second.param_noescape[i]
+                                        && param_kind_map[key] == BatchCalleeParamKind::Boxed) {
+                                    borrowed_param_map.insert(key);
+                                }
                                 fast_fn->getArg(i)->setName(
                                         std::string("arg") + std::to_string(i));
                             }
@@ -4550,7 +4579,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 fast_lowerer.setBatchCallees(aot_batch_callee_map);
                             }
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                    &param_kind_map);
+                                    &param_kind_map, &borrowed_param_map);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
                                 printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",

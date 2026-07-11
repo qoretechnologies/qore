@@ -16,6 +16,21 @@ string code = "%modern
 
 int global_value = 2;
 list<int> offsets = (3,);
+hash<auto> escaped;
+
+class EffectHolder {
+    private {
+        int value;
+    }
+
+    constructor(int v) {
+        value = v;
+    }
+
+    int get() {
+        return value;
+    }
+}
 
 int sub pureLeaf(int value) {
     return value + offsets[0];
@@ -50,6 +65,24 @@ int sub referenceLeaf(reference<int> value) {
     return ++value;
 }
 
+hash<auto> sub recursiveIdentity(hash<auto> value, int depth) {
+    return depth ? recursiveIdentity(value, depth - 1) : value;
+}
+
+hash<auto> sub reassigned(hash<auto> value) {
+    value = {\"number\": 9};
+    return value;
+}
+
+hash<auto> sub escaping(hash<auto> value) {
+    escaped = value;
+    return value;
+}
+
+EffectHolder sub objectIdentity(EffectHolder value) {
+    return value;
+}
+
 int sub caller() {
     int local = 4;
     on_exit local += 0;
@@ -60,7 +93,11 @@ int sub caller() {
     return pure * 10000 + recursive * 100 + mutated * 10 + referenced;
 }
 
-printf(\"%d:%d:%d:%y\\n\", caller(), global_value, pureNested(4), maybeNothing(False));
+hash<auto> input = {\"number\": 7};
+EffectHolder holder = objectIdentity(new EffectHolder(11));
+printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
+    recursiveIdentity(input, 5).number, reassigned(input).number, escaping(input).number, escaped.number,
+    holder.get());
 ";
 
 string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
@@ -79,7 +116,7 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-if (ast != "71055:5:10:null\n" || aot != ast) {
+if (ast != "71055:5:10:null:7:9:7:7:11\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

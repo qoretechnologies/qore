@@ -1507,6 +1507,12 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     continue;
                 }
 
+                if (fast_entry_borrowed_args && fast_entry_borrowed_args->count(key)) {
+                    alloca_builder.CreateStore(arg_val, alloca);
+                    local_allocas[key] = alloca;
+                    continue;
+                }
+
                 // Increment refcount: the callee borrows from the caller but needs its own ref
                 // for cleanup safety (Return does incref, cleanup does decref).
                 auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
