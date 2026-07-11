@@ -77,55 +77,55 @@ constexpr OpcodeInfo OPCODE_REGISTRY[384] = {
     { "ListSetInt"                    , false, false, false,  3, "ListSetInt", false, true , "ParseNode", false, false, false, false, false }, // 16
     { "ListSetFloat"                  , false, false, false,  3, "ListSetFloat", false, true , "ParseNode", false, false, false, false, false }, // 17
     { "ListSetValue"                  , false, false, false,  3, "ListSetValue", false, true , "ParseNode", false, false, false, false, false }, // 18
-    { "AddInt"                        , false, true , false,  2, "AddInt", false, true , "ParseNode", true , false, true , false, true  }, // 19
-    { "AddFloat"                      , false, true , false,  2, "AddFloat", false, true , "ParseNode", true , false, true , false, true  }, // 20
+    { "AddInt"                        , false, true , false,  2, "AddInt", false, false, "ParseNode", true , false, true , false, true  }, // 19
+    { "AddFloat"                      , false, true , false,  2, "AddFloat", false, false, "ParseNode", true , false, true , false, true  }, // 20
     { "AddAny"                        , false, false, false,  2, "AddAny", false, true , "ParseNode", true , false, true , false, true  }, // 21
     { "AddString"                     , false, false, false,  2, "AddString", false, true , "ParseNode", true , false, false, false, false }, // 22
     { "StringConcat"                  , false, false, false, -1, "StringConcat", false, true , "ParseNode", true , false, false, false, false }, // 23
-    { "SubInt"                        , false, true , false,  2, "SubInt", false, true , "ParseNode", true , false, true , false, true  }, // 24
-    { "SubFloat"                      , false, true , false,  2, "SubFloat", false, true , "ParseNode", true , false, true , false, true  }, // 25
+    { "SubInt"                        , false, true , false,  2, "SubInt", false, false, "ParseNode", true , false, true , false, true  }, // 24
+    { "SubFloat"                      , false, true , false,  2, "SubFloat", false, false, "ParseNode", true , false, true , false, true  }, // 25
     { "SubAny"                        , false, false, false,  2, "SubAny", false, true , "ParseNode", true , false, true , false, true  }, // 26
-    { "MulInt"                        , false, true , false,  2, "MulInt", false, true , "ParseNode", true , false, true , false, true  }, // 27
-    { "MulFloat"                      , false, true , false,  2, "MulFloat", false, true , "ParseNode", true , false, true , false, true  }, // 28
+    { "MulInt"                        , false, true , false,  2, "MulInt", false, false, "ParseNode", true , false, true , false, true  }, // 27
+    { "MulFloat"                      , false, true , false,  2, "MulFloat", false, false, "ParseNode", true , false, true , false, true  }, // 28
     { "MulAny"                        , false, false, false,  2, "MulAny", false, true , "ParseNode", true , false, true , false, true  }, // 29
     { "DivInt"                        , false, true , false,  2, "DivInt", false, true , "ParseNode", true , false, true , false, true  }, // 30
     { "DivFloat"                      , false, true , false,  2, "DivFloat", false, true , "ParseNode", true , false, true , false, true  }, // 31
     { "DivAny"                        , false, false, false,  2, "DivAny", false, true , "ParseNode", true , false, true , false, true  }, // 32
     { "ModInt"                        , false, true , false,  2, "ModInt", false, true , "ParseNode", true , false, true , false, true  }, // 33
     { "ModAny"                        , false, false, false,  2, "ModAny", false, true , "ParseNode", true , false, true , false, true  }, // 34
-    { "AndInt"                        , false, true , false,  2, "AndInt", false, true , "ParseNode", true , false, true , false, true  }, // 35
+    { "AndInt"                        , false, true , false,  2, "AndInt", false, false, "ParseNode", true , false, true , false, true  }, // 35
     { "AndAny"                        , false, false, false,  2, "AndAny", false, true , "ParseNode", true , false, true , false, true  }, // 36
-    { "OrInt"                         , false, true , false,  2, "OrInt", false, true , "ParseNode", true , false, true , false, true  }, // 37
+    { "OrInt"                         , false, true , false,  2, "OrInt", false, false, "ParseNode", true , false, true , false, true  }, // 37
     { "OrAny"                         , false, false, false,  2, "OrAny", false, true , "ParseNode", true , false, true , false, true  }, // 38
-    { "XorInt"                        , false, true , false,  2, "XorInt", false, true , "ParseNode", true , false, true , false, true  }, // 39
+    { "XorInt"                        , false, true , false,  2, "XorInt", false, false, "ParseNode", true , false, true , false, true  }, // 39
     { "XorAny"                        , false, false, false,  2, "XorAny", false, true , "ParseNode", true , false, true , false, true  }, // 40
-    { "ShlInt"                        , false, true , false,  2, "ShlInt", false, true , "ParseNode", true , false, true , false, true  }, // 41
+    { "ShlInt"                        , false, true , false,  2, "ShlInt", false, false, "ParseNode", true , false, true , false, true  }, // 41
     { "ShlAny"                        , false, false, false,  2, "ShlAny", false, true , "ParseNode", true , false, true , false, true  }, // 42
-    { "ShrInt"                        , false, true , false,  2, "ShrInt", false, true , "ParseNode", true , false, true , false, true  }, // 43
+    { "ShrInt"                        , false, true , false,  2, "ShrInt", false, false, "ParseNode", true , false, true , false, true  }, // 43
     { "ShrAny"                        , false, false, false,  2, "ShrAny", false, true , "ParseNode", true , false, true , false, true  }, // 44
-    { "ShlAssignInt"                  , false, true , false,  2, "ShlAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 45
+    { "ShlAssignInt"                  , false, true , false,  2, "ShlAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 45
     { "ShlAssignAny"                  , false, false, false,  2, "ShlAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 46
-    { "ShrAssignInt"                  , false, true , false,  2, "ShrAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 47
+    { "ShrAssignInt"                  , false, true , false,  2, "ShrAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 47
     { "ShrAssignAny"                  , false, false, false,  2, "ShrAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 48
-    { "AddAssignInt"                  , false, true , false,  2, "AddAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 49
-    { "AddAssignFloat"                , false, true , false,  2, "AddAssignFloat", false, true , "ParseNode", true , false, true , false, true  }, // 50
+    { "AddAssignInt"                  , false, true , false,  2, "AddAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 49
+    { "AddAssignFloat"                , false, true , false,  2, "AddAssignFloat", false, false, "ParseNode", true , false, true , false, true  }, // 50
     { "AddAssignAny"                  , false, false, false,  2, "AddAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 51
-    { "SubAssignInt"                  , false, true , false,  2, "SubAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 52
-    { "SubAssignFloat"                , false, true , false,  2, "SubAssignFloat", false, true , "ParseNode", true , false, true , false, true  }, // 53
+    { "SubAssignInt"                  , false, true , false,  2, "SubAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 52
+    { "SubAssignFloat"                , false, true , false,  2, "SubAssignFloat", false, false, "ParseNode", true , false, true , false, true  }, // 53
     { "SubAssignAny"                  , false, false, false,  2, "SubAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 54
-    { "MulAssignInt"                  , false, true , false,  2, "MulAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 55
-    { "MulAssignFloat"                , false, true , false,  2, "MulAssignFloat", false, true , "ParseNode", true , false, true , false, true  }, // 56
+    { "MulAssignInt"                  , false, true , false,  2, "MulAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 55
+    { "MulAssignFloat"                , false, true , false,  2, "MulAssignFloat", false, false, "ParseNode", true , false, true , false, true  }, // 56
     { "MulAssignAny"                  , false, false, false,  2, "MulAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 57
     { "DivAssignInt"                  , false, true , false,  2, "DivAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 58
     { "DivAssignFloat"                , false, true , false,  2, "DivAssignFloat", false, true , "ParseNode", true , false, true , false, true  }, // 59
     { "DivAssignAny"                  , false, false, false,  2, "DivAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 60
     { "ModAssignInt"                  , false, true , false,  2, "ModAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 61
     { "ModAssignAny"                  , false, false, false,  2, "ModAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 62
-    { "AndAssignInt"                  , false, true , false,  2, "AndAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 63
+    { "AndAssignInt"                  , false, true , false,  2, "AndAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 63
     { "AndAssignAny"                  , false, false, false,  2, "AndAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 64
-    { "OrAssignInt"                   , false, true , false,  2, "OrAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 65
+    { "OrAssignInt"                   , false, true , false,  2, "OrAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 65
     { "OrAssignAny"                   , false, false, false,  2, "OrAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 66
-    { "XorAssignInt"                  , false, true , false,  2, "XorAssignInt", false, true , "ParseNode", true , false, true , false, true  }, // 67
+    { "XorAssignInt"                  , false, true , false,  2, "XorAssignInt", false, false, "ParseNode", true , false, true , false, true  }, // 67
     { "XorAssignAny"                  , false, false, false,  2, "XorAssignAny", false, true , "ParseNode", true , false, true , false, true  }, // 68
     { "LoadLValue"                    , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 69
     { "StoreLValue"                   , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 70

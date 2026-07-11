@@ -85,6 +85,34 @@ int sub benchSameObjectStaticCaught(int rounds) {
     return checksum;
 }
 
+int sub benchCaughtNativeIntOps(int rounds) {
+    int checksum = 1;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum -= -1;
+            checksum *= 1;
+            checksum ^= i & 1;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return checksum;
+}
+
+float sub benchCaughtNativeFloatOps(int rounds) {
+    float checksum = 0.0;
+    try {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += 1.0;
+            checksum -= 0.5;
+            checksum *= 1.0;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return -1.0;
+    }
+    return checksum;
+}
+
 nothing sub leafMain() {
     printf("%d\n", benchCrossObjectLeaf(10000000));
 }
@@ -111,4 +139,12 @@ nothing sub sameCaughtMain() {
 
 nothing sub sameStaticCaughtMain() {
     printf("%d\n", benchSameObjectStaticCaught(10000000));
+}
+
+nothing sub caughtNativeIntMain() {
+    printf("%d\n", benchCaughtNativeIntOps(10000000));
+}
+
+nothing sub caughtNativeFloatMain() {
+    printf("%g\n", benchCaughtNativeFloatOps(10000000));
 }

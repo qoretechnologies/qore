@@ -11123,11 +11123,10 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
 QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left,
         QoreIRValue right, const QoreProgramLocation* loc, std::string& error) {
     QoreIRValue result;
-    // AddAssignInt is selected only when both operands are proven assigned
-    // integers; its native add cannot raise an exception.  Keep all dynamic
-    // and zero-checking arithmetic on the normal exception-edge path.
+    // Native opcodes are selected only after operand type and assigned-state
+    // proofs. Keep dynamic and zero-checking arithmetic on exception edges.
     bool should_invoke = !exception_stack.empty()
-        && op != QoreIROpcode::AddAssignInt && expressionCanThrow(expr);
+        && getOpcodeMayThrowException(static_cast<int>(op)) && expressionCanThrow(expr);
     if (should_invoke) {
         QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
         if (!normal_block) {

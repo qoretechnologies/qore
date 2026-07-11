@@ -107,12 +107,50 @@ string sub optionalListAutoInitialPlusEquals() {
     return l.fullType() + \":\" + string(l[0]) + \":\" + string(l[1]);
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%s:%s\\n\",
+int sub nativeIntOpsInTry() {
+    int value = 3;
+    try {
+        value -= 1;
+        value *= 2;
+        value &= 7;
+        value |= 8;
+        value ^= 3;
+        value <<= 1;
+        value >>= 1;
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+    return value;
+}
+
+float sub nativeFloatOpsInTry() {
+    float value = 3.0;
+    try {
+        value += 1.5;
+        value -= 0.5;
+        value *= 2.0;
+    } catch (hash<ExceptionInfo> ex) {
+        return -1.0;
+    }
+    return value;
+}
+
+int sub divisionStillThrows() {
+    int zero = 0;
+    try {
+        return 1 / zero;
+    } catch (hash<ExceptionInfo> ex) {
+        return 9;
+    }
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%s:%s:%s:%s:%d:%g:%d\\n\",
     knownAssignedPlusEquals(), unassignedPlusEquals(), removedPlusEquals(),
     conditionalPlusEquals(), knownAssignedMinusEquals(), unassignedMinusEquals(),
     removedMinusEquals(), conditionalMinusEquals(), hashAutoInitialPlusEquals(),
     optionalHashAutoInitialPlusEquals(), listAutoInitialPlusEquals(),
-    optionalListAutoInitialPlusEquals());
+    optionalListAutoInitialPlusEquals(), nativeIntOpsInTry(),
+    nativeFloatOpsInTry(), divisionStillThrows());
 ";
 }
 
@@ -146,7 +184,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-checkOutput("ast", "10:7:9:4:0:-7:-9:-4:hash<auto>:1:hash<auto>:1:list<auto>:1:2:list<auto>:1:2\n", ast);
+checkOutput("ast", "10:7:9:4:0:-7:-9:-4:hash<auto>:1:hash<auto>:1:list<auto>:1:2:list<auto>:1:2:15:8.0:9\n", ast);
 
 foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));
