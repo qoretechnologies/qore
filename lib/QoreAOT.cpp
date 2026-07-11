@@ -8554,6 +8554,33 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
 }
 
 //! Link an object file into a shared library
+static std::string createAOTModuleVersionScript(const std::string& so_path, std::string& error) {
+#ifdef __ELF__
+    if (getenv("QORE_AOT_EXPORT_INTERNAL_SYMBOLS")) {
+        return {};
+    }
+    std::string path = so_path + ".exports." + std::to_string(getpid());
+    FILE* fp = fopen(path.c_str(), "w");
+    if (!fp) {
+        error = "failed to create AOT module export map '" + path + "': " + strerror(errno);
+        return {};
+    }
+    int write_rc = fputs("{ global: *_qore_module_desc; local: *; };\n", fp);
+    int close_rc = fclose(fp);
+    bool ok = write_rc >= 0 && close_rc == 0;
+    if (!ok) {
+        error = "failed to write AOT module export map '" + path + "'";
+        remove(path.c_str());
+        return {};
+    }
+    return path;
+#else
+    (void)so_path;
+    (void)error;
+    return {};
+#endif
+}
+
 static bool linkSharedLib(const std::string& obj_path, const std::string& so_path, std::string& error,
         const char* target_triple = nullptr) {
     if (target_triple) {
@@ -8573,12 +8600,22 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     std::string cmd = config.cxx + " -shared -o " + tmp_so_path + " " + obj_path
         + " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    std::string version_script = createAOTModuleVersionScript(so_path, error);
+    if (!error.empty()) {
+        return false;
+    }
+    if (!version_script.empty()) {
+        cmd += " -Wl,--version-script," + version_script;
+    }
     if (!config.dynamic_libs.empty()) {
         cmd += " " + config.dynamic_libs;
     }
 
     printd(2, "AOT: link shared lib command: %s\n", cmd.c_str());
     int rc = system(cmd.c_str());
+    if (!version_script.empty()) {
+        remove(version_script.c_str());
+    }
     if (rc != 0) {
         error = "linker command failed with exit code " + std::to_string(rc);
         remove(tmp_so_path.c_str());
@@ -12196,12 +12233,22 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     }
     cmd += " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    std::string version_script = createAOTModuleVersionScript(so_path, error);
+    if (!error.empty()) {
+        return false;
+    }
+    if (!version_script.empty()) {
+        cmd += " -Wl,--version-script," + version_script;
+    }
     if (!config.dynamic_libs.empty()) {
         cmd += " " + config.dynamic_libs;
     }
 
     printd(2, "AOT: link shared lib (multi) command: %s\n", cmd.c_str());
     int rc = system(cmd.c_str());
+    if (!version_script.empty()) {
+        remove(version_script.c_str());
+    }
     if (rc != 0) {
         error = "linker command failed with exit code " + std::to_string(rc);
         remove(tmp_so_path.c_str());
