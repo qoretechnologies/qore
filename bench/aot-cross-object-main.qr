@@ -28,6 +28,21 @@ final class ReadOnlySelfMath {
         }
         return checksum + read_checksum();
     }
+
+    int runCaught(int rounds) {
+        int checksum = 0;
+        code<int()> read_checksum = int sub () {
+            return checksum;
+        };
+        try {
+            for (int i = 0; i < rounds; ++i) {
+                checksum = self.leaf(checksum);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return -1;
+        }
+        return checksum + read_checksum();
+    }
 }
 
 int sub benchCrossObjectLeaf(int rounds) {
@@ -169,4 +184,9 @@ nothing sub caughtNativeFloatMain() {
 nothing sub selfReadOnlyMain() {
     ReadOnlySelfMath math();
     printf("%d\n", math.run(10000000));
+}
+
+nothing sub selfReadOnlyCaughtMain() {
+    ReadOnlySelfMath math();
+    printf("%d\n", math.runCaught(10000000));
 }

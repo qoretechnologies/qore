@@ -11445,9 +11445,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::InvokeMethodDirect: {
             const auto* invoke_inst = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
 
+            int nargs = static_cast<int>(inst->operands.size());
+            const BatchCalleeInfo* aot_self_batch_callee = nullptr;
+            llvm::Function* aot_self_batch_fn = nullptr;
+            if (aot_mode && batch_callees && invoke_inst->variant
+                    && invoke_inst->method && invoke_inst->qc
+                    && invoke_inst->qc->isFinal()
+                    && invoke_inst->method->getClass() == invoke_inst->qc
+                    && !invoke_inst->has_ref_args) {
+                auto it = batch_callees->find(invoke_inst->variant);
+                if (it != batch_callees->end()
+                        && it->second.approach_b_eligible
+                        && it->second.implicit_self_method
+                        && nargs <= static_cast<int>(it->second.num_params)
+                        && isFastMethodCallEligible(invoke_inst->variant)
+                        && qore_ir_fast_entry_operands_need_no_binding(
+                            invoke_inst->variant, invoke_inst->expr, current_ir_func,
+                            inst->operands, 0, nargs)) {
+                    aot_self_batch_fn = module.getFunction(it->second.fast_name);
+                    if (aot_self_batch_fn) {
+                        aot_self_batch_callee = &it->second;
+                    }
+                }
+            }
+
             // Build args array from operands
             llvm::Value* args_array;
-            int nargs;
             if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
                 return false;
             }
@@ -11455,7 +11478,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
                     nargs, has_arg_cleanups);
 
+            std::vector<llvm::Value*> raw_args;
+            std::vector<uint32_t> raw_arg_ids;
+            std::vector<llvm::Value*> boxed_args;
+            if (aot_self_batch_callee) {
+                raw_args.reserve(nargs);
+                raw_arg_ids.reserve(nargs);
+                boxed_args.reserve(nargs);
+                for (int i = 0; i < nargs; ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT invoke self method fast-entry argument setup")) {
+                        error = "cancelled during AOT invoke self method fast-entry argument setup";
+                        return false;
+                    }
+                    uint32_t value_id = inst->operands[i].id;
+                    llvm::Value* raw = getVal(value_id, error);
+                    if (!raw) {
+                        return false;
+                    }
+                    raw_args.push_back(raw);
+                    raw_arg_ids.push_back(value_id);
+                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                        llvm::ConstantInt::get(i32_type, i));
+                    boxed_args.push_back(builder->CreateLoad(i64_type, gep));
+                }
+            }
+
             llvm::Value* call_result;
+            bool call_may_modify_runtime_locals = true;
             if (aot_mode && invoke_inst->expr) {
                 // AOT mode: use expression slot to look up the class and method at runtime
                 QoreValue expr_val = invoke_inst->expr;
@@ -11463,47 +11514,61 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 
-                // Use fast path if variant is compile-time known and eligible.
-                bool use_fast_helper = false;
-                if (invoke_inst->variant) {
-                    const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
-                    if (uvb && isFastMethodCallEligible(invoke_inst->variant)) {
-                        use_fast_helper = true;
+                if (aot_self_batch_callee) {
+                    call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
+                        inst, slot, aot_self_batch_fn, *aot_self_batch_callee,
+                        raw_args, raw_arg_ids, boxed_args, args_array, arg_cleanups,
+                        nargs, has_arg_cleanups,
+                        "qore_rt_call_method_fast_aot",
+                        "qore_rt_call_method_fast_aot_consume_args", error);
+                    if (!call_result) {
+                        return false;
                     }
-                }
-
-                const char* helper_name = use_fast_helper
-                    ? (has_arg_cleanups
-                        ? "qore_rt_call_method_fast_aot_consume_args"
-                        : "qore_rt_call_method_fast_aot")
-                    : (has_arg_cleanups
-                        ? "qore_rt_call_method_direct_aot_consume_args"
-                        : "qore_rt_call_method_direct_aot");
-                const char* helper_name_throwing = use_fast_helper
-                    ? (has_arg_cleanups
-                        ? "qore_rt_call_method_fast_aot_consume_args_throwing"
-                        : "qore_rt_call_method_fast_aot_throwing")
-                    : (has_arg_cleanups
-                        ? "qore_rt_call_method_direct_aot_consume_args_throwing"
-                        : "qore_rt_call_method_direct_aot_throwing");
-
-                auto ft = has_arg_cleanups
-                    ? llvm::FunctionType::get(i64_type,
-                        {ptr_type, i32_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
-                    : llvm::FunctionType::get(i64_type,
-                        {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction(helper_name, ft);
-                auto helper_throwing = module.getOrInsertFunction(helper_name_throwing, ft);
-                if (has_arg_cleanups) {
-                    call_result = emitMaybeInvoke(helper, helper_throwing,
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
-                             arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
-                            module, llvm_func, inst);
+                    call_may_modify_runtime_locals =
+                        aot_self_batch_callee->may_invalidate_external_caches;
                 } else {
-                    call_result = emitMaybeInvoke(helper, helper_throwing,
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
-                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
-                            module, llvm_func, inst);
+                    // Use fast path if variant is compile-time known and eligible.
+                    bool use_fast_helper = false;
+                    if (invoke_inst->variant) {
+                        const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
+                        if (uvb && isFastMethodCallEligible(invoke_inst->variant)) {
+                            use_fast_helper = true;
+                        }
+                    }
+
+                    const char* helper_name = use_fast_helper
+                        ? (has_arg_cleanups
+                            ? "qore_rt_call_method_fast_aot_consume_args"
+                            : "qore_rt_call_method_fast_aot")
+                        : (has_arg_cleanups
+                            ? "qore_rt_call_method_direct_aot_consume_args"
+                            : "qore_rt_call_method_direct_aot");
+                    const char* helper_name_throwing = use_fast_helper
+                        ? (has_arg_cleanups
+                            ? "qore_rt_call_method_fast_aot_consume_args_throwing"
+                            : "qore_rt_call_method_fast_aot_throwing")
+                        : (has_arg_cleanups
+                            ? "qore_rt_call_method_direct_aot_consume_args_throwing"
+                            : "qore_rt_call_method_direct_aot_throwing");
+
+                    auto ft = has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(helper_name, ft);
+                    auto helper_throwing = module.getOrInsertFunction(helper_name_throwing, ft);
+                    if (has_arg_cleanups) {
+                        call_result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
+                                 arg_cleanups, llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                                module, llvm_func, inst);
+                    } else {
+                        call_result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
+                                 llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
+                                module, llvm_func, inst);
+                    }
                 }
             } else {
                 // JIT mode: use pointer constants (valid within same process)
@@ -11567,10 +11632,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
+            if (call_may_modify_runtime_locals) {
+                reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
+            }
 
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
+            if (aot_self_batch_callee
+                    && aot_self_batch_callee->never_returns_nothing) {
+                known_not_nothing_values.insert(inst->result.id);
+            }
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
 
             // Check for exception and branch accordingly (like Invoke)
