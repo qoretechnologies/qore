@@ -1527,12 +1527,95 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
             return changed;
         }
         QoreIRBasicBlock* header = cfg.blocks[loop.header];
-        if (header->instructions.empty() || header->instructions.back()->opcode != QoreIROpcode::BrIf) {
+        if (header->instructions.empty()) {
             continue;
         }
-        auto* branch = static_cast<QoreIRBranchIfInstruction*>(header->instructions.back().get());
-        auto true_id = cfg.block_ids.find(branch->true_target);
-        auto false_id = cfg.block_ids.find(branch->false_target);
+        QoreIRInstruction* terminator = header->instructions.back().get();
+        QoreIRBasicBlock* true_target = nullptr;
+        QoreIRBasicBlock* false_target = nullptr;
+        LocalVar* index_local = nullptr;
+        LocalVar* list_local = nullptr;
+        LocalVar* bound_local = nullptr;
+        size_t bound_assignment_block = cfg.blocks.size();
+        size_t bound_assignment_offset = 0;
+
+        if (terminator->opcode == QoreIROpcode::BrIf) {
+            auto* branch = static_cast<QoreIRBranchIfInstruction*>(terminator);
+            true_target = branch->true_target;
+            false_target = branch->false_target;
+            QoreIRInstruction* condition = get_definition(branch->condition);
+            if (!condition || condition->operands.size() != 2
+                    || (condition->opcode != QoreIROpcode::LtInt
+                        && condition->opcode != QoreIROpcode::LeInt)) {
+                continue;
+            }
+            index_local = get_loaded_local(condition->operands[0]);
+            QoreIRValue size_value = condition->operands[1];
+            if (condition->opcode == QoreIROpcode::LeInt) {
+                QoreIRInstruction* subtract = get_definition(size_value);
+                int64_t adjustment = 0;
+                if (!subtract || subtract->opcode != QoreIROpcode::SubInt
+                        || subtract->operands.size() != 2
+                        || !get_const_int(subtract->operands[1], adjustment)
+                        || adjustment != 1) {
+                    continue;
+                }
+                size_value = subtract->operands[0];
+            }
+            QoreIRInstruction* size = get_definition(size_value);
+            if (!index_local || !size || size->opcode != QoreIROpcode::ListSize
+                    || size->operands.size() != 1) {
+                continue;
+            }
+            list_local = get_raw_loaded_local(size->operands[0]);
+        } else if (terminator->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+            auto* branch = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(terminator);
+            true_target = branch->true_target;
+            false_target = branch->false_target;
+            index_local = branch->lhs;
+            bound_local = branch->rhs;
+            if (!index_local || !bound_local || index_local == bound_local
+                    || index_local->closureUse() || bound_local->closureUse()
+                    || QoreTypeInfo::isReference(index_local->getTypeInfo())
+                    || QoreTypeInfo::isReference(bound_local->getTypeInfo())) {
+                continue;
+            }
+            size_t bound_assignments = 0;
+            for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+                for (size_t offset = 0; offset < cfg.blocks[block_id]->instructions.size(); ++offset) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR cached bounded list assignment analysis")) {
+                        return changed;
+                    }
+                    QoreIRInstruction* inst = cfg.blocks[block_id]->instructions[offset].get();
+                    if (inst->opcode != QoreIROpcode::StoreLocal
+                            || static_cast<QoreIRLocalInstruction*>(inst)->local != bound_local) {
+                        continue;
+                    }
+                    ++bound_assignments;
+                    if (inst->operands.size() != 1) {
+                        continue;
+                    }
+                    QoreIRInstruction* size = get_definition(inst->operands[0]);
+                    if (!size || size->opcode != QoreIROpcode::ListSize
+                            || size->operands.size() != 1) {
+                        continue;
+                    }
+                    list_local = get_raw_loaded_local(size->operands[0]);
+                    bound_assignment_block = block_id;
+                    bound_assignment_offset = offset;
+                }
+            }
+            if (bound_assignments != 1 || !list_local
+                    || !cfg.dominates(bound_assignment_block, loop.header)) {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        auto true_id = cfg.block_ids.find(true_target);
+        auto false_id = cfg.block_ids.find(false_target);
         if (true_id == cfg.block_ids.end() || false_id == cfg.block_ids.end()) {
             continue;
         }
@@ -1541,17 +1624,6 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
             continue;
         }
 
-        QoreIRInstruction* condition = get_definition(branch->condition);
-        if (!condition || condition->opcode != QoreIROpcode::LtInt || condition->operands.size() != 2) {
-            continue;
-        }
-        LocalVar* index_local = get_loaded_local(condition->operands[0]);
-        QoreIRInstruction* size = get_definition(condition->operands[1]);
-        if (!index_local || !size || size->opcode != QoreIROpcode::ListSize
-                || size->operands.size() != 1) {
-            continue;
-        }
-        LocalVar* list_local = get_raw_loaded_local(size->operands[0]);
         const QoreTypeInfo* element_type = list_local
             ? QoreTypeInfo::getUniqueReturnComplexList(list_local->getTypeInfo()) : nullptr;
         QoreIROpcode specialized_opcode;
@@ -1565,7 +1637,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         } else {
             continue;
         }
-        if (!list_local || list_local == index_local) {
+        if (!list_local || list_local == index_local || list_local == bound_local) {
             continue;
         }
 
@@ -1622,6 +1694,47 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         }
         if (assignment_invalidated) {
             continue;
+        }
+
+        if (bound_local) {
+            bool bound_invalidated = false;
+            for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+                for (size_t offset = 0; offset < cfg.blocks[block_id]->instructions.size(); ++offset) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR cached bounded list invalidation analysis")) {
+                        return changed;
+                    }
+                    QoreIRInstruction* inst = cfg.blocks[block_id]->instructions[offset].get();
+                    bool after_bound_assignment = block_id == bound_assignment_block
+                        ? offset > bound_assignment_offset
+                        : cfg.dominates(bound_assignment_block, block_id);
+                    if (!after_bound_assignment || !cfg.dominates(block_id, loop.header)) {
+                        continue;
+                    }
+                    if (qore_ir_may_mutate_unknown_local(inst->opcode)
+                            || qore_ir_may_mutate_list(inst->opcode)
+                            || (inst->opcode == QoreIROpcode::IncrementLocalInt
+                                && static_cast<QoreIRIncrementLocalIntInstruction*>(inst)->local
+                                    == bound_local)
+                            || (inst->opcode == QoreIROpcode::AddAssignLocalInt
+                                && static_cast<QoreIRAddAssignLocalIntInstruction*>(inst)->target
+                                    == bound_local)
+                            || ((inst->opcode == QoreIROpcode::StoreLocal
+                                    || inst->opcode == QoreIROpcode::StoreClosure
+                                    || inst->opcode == QoreIROpcode::InstantiateLocal
+                                    || inst->opcode == QoreIROpcode::UninstantiateLocal)
+                                && static_cast<QoreIRLocalInstruction*>(inst)->local == bound_local)) {
+                        bound_invalidated = true;
+                        break;
+                    }
+                }
+                if (bound_invalidated) {
+                    break;
+                }
+            }
+            if (bound_invalidated) {
+                continue;
+            }
         }
 
         bool nonnegative_initial_value = false;
@@ -1699,7 +1812,8 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                         || inst->opcode == QoreIROpcode::InstantiateLocal
                         || inst->opcode == QoreIROpcode::UninstantiateLocal) {
                     auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
-                    if (local_inst->local == index_local || local_inst->local == list_local) {
+                    if (local_inst->local == index_local || local_inst->local == list_local
+                            || local_inst->local == bound_local) {
                         invalidated = true;
                         break;
                     }
