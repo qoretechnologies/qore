@@ -326,6 +326,55 @@ for (int i = 0; i < %d; ++i) {
 printf(\"%%d\\n\", sum);
 ", iterations / 10);
 
+    # ==========================================================================
+    # Test 16: noncapturing scalar closure - typed direct-closure candidate
+    # ==========================================================================
+    string closure_noncapturing_code = sprintf("%%modern
+code<int(int)> increment = int sub(int x) { return x + 2; };
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += increment(i);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    # ==========================================================================
+    # Tests 17-18: equivalent nonleaf direct function and closure bodies
+    # ==========================================================================
+    string function_noncapturing_branch_code = sprintf("%%modern
+int sub transform(int x) {
+    int value = x + 1;
+    if (value %% 2) {
+        value *= 3;
+    } else {
+        value += 7;
+    }
+    return value * value - x;
+}
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += transform(i %% 1000);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
+    string closure_noncapturing_branch_code = sprintf("%%modern
+code<int(int)> transform = int sub(int x) {
+    int value = x + 1;
+    if (value %% 2) {
+        value *= 3;
+    } else {
+        value += 7;
+    }
+    return value * value - x;
+};
+int sum = 0;
+for (int i = 0; i < %d; ++i) {
+    sum += transform(i %% 1000);
+}
+printf(\"%%d\\n\", sum);
+", iterations / 10);
+
     hash<string, string> tests = {
         "loop": loop_code,
         "fibonacci": fib_code,
@@ -342,6 +391,9 @@ printf(\"%%d\\n\", sum);
         "closure_writeback": closure_writeback_code,
         "closure_loop_var": closure_loop_var_code,
         "closure_callback": closure_callback_code,
+        "closure_noncapturing": closure_noncapturing_code,
+        "function_noncapturing_branch": function_noncapturing_branch_code,
+        "closure_noncapturing_branch": closure_noncapturing_branch_code,
     };
 
     string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";

@@ -67,6 +67,7 @@
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreIRAnalysis.h"
+#include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
@@ -480,6 +481,8 @@ static void qore_aot_record_module_deps(QoreProgram* pgm) {
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
+extern void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
+        const LVarSet* vlist);
 
 static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
 
@@ -1234,6 +1237,7 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // CallClosureDirect and invoke-form closure calls carry whether their
     // arguments can invalidate caller local caches through reference writes.
     flags |= QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS;
+    flags |= QORE_AOT_FEAT_NATIVE_CLOSURE_BODY;
     // Phi instructions preserve whether the merged value is a QoreValue or a
     // native representation such as a loop counter.
     flags |= QORE_AOT_FEAT_TYPED_PHI;
@@ -3539,6 +3543,215 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
     return true;
 }
 
+//! Compile closure bodies referenced by one compiled body's expression slots.
+/** Closure entries are appended immediately after their owner.  This ordering lets
+    runtime slot-map reconstruction create the closure variant from the owner's
+    CLOSURE_CREATE record before registering the native body on that variant.
+*/
+static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm,
+        llvm::LLVMContext& ctx, llvm::Module& module,
+        llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
+        std::vector<AOTCompiledFunc>& compiled_funcs,
+        int& total_funcs, int& compiled_count, size_t& total_ir_insts_all,
+        const AOTConstantReverseMap* const_reverse_map,
+        const char* compile_module, bool metadata_only,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* aot_batch_callee_map,
+        std::string* fatal_error) {
+    if (std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr) {
+        return true;
+    }
+
+    const size_t num_exprs = compiled_funcs[owner_index].slot_ids.exprs.size();
+    for (size_t expr_index = 0; expr_index < num_exprs; ++expr_index) {
+        if (expr_index && !(expr_index % 100)
+                && qore_check_cancel(nullptr, "AOT native closure compilation")) {
+            setAOTCompileFatal(fatal_error, "closure", compiled_funcs[owner_index].name,
+                "native closure compilation", "cancelled");
+            return false;
+        }
+
+        AOTExprSlotId& owner_expr = compiled_funcs[owner_index].slot_ids.exprs[expr_index];
+        if (owner_expr.kind != AOTExprKind::CLOSURE_CREATE || !owner_expr.closure_func) {
+            continue;
+        }
+
+        const UserClosureFunction* ucf = owner_expr.closure_func;
+        auto* variant = static_cast<UserClosureVariant*>(
+            const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
+        if (!variant) {
+            continue;
+        }
+
+        std::string native_key = "__aot_closure::" + compiled_funcs[owner_index].name
+            + "::" + std::to_string(expr_index);
+        std::string llvm_symbol = aotLLVMSymbolName(compile_module, native_key);
+        if (llvm::Function* existing = module.getFunction(llvm_symbol);
+                existing && !existing->empty()) {
+            continue;
+        }
+
+        QoreIRFunction* ir_func = nullptr;
+        std::string lower_error;
+        if (tryLowerFunction(variant, native_key.c_str(), pgm, ir_func, lower_error) != 0
+                || !ir_func) {
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: native closure '%s' IR lowering skipped: %s\n",
+                    native_key.c_str(), lower_error.c_str());
+            }
+            continue;
+        }
+
+        const UserSignature* sig = variant->getUserSignature();
+        qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
+            const_cast<UserClosureFunction*>(ucf)->getVList());
+        if (sig) {
+            for (unsigned p = 0; p < sig->numParams(); ++p) {
+                if (p && !(p % 100)
+                        && qore_check_cancel(nullptr, "AOT native closure parameter analysis")) {
+                    delete ir_func;
+                    setAOTCompileFatal(fatal_error, "closure", native_key,
+                        "native closure parameter analysis", "cancelled");
+                    return false;
+                }
+                ir_func->param_local_vars[static_cast<int>(p)] = sig->lv[p];
+            }
+        }
+        if (sig && qore_ir_is_native_leaf(ir_func, variant,
+                static_cast<int>(sig->numParams()))) {
+            // The direct native leaf executor avoids the generic closure frame and
+            // is materially faster for these small typed bodies.  Keep serialized
+            // IR for that path instead of emitting a larger, slower AOT body.
+            delete ir_func;
+            continue;
+        }
+        ir_func->name = llvm_symbol;
+
+        AOTSlotMap slots;
+        buildAOTSlotMap(*ir_func, slots);
+        if (sig) {
+            for (unsigned p = 0; p < sig->numParams(); ++p) {
+                if (p && !(p % 100)
+                        && qore_check_cancel(nullptr, "AOT native closure parameter slots")) {
+                    delete ir_func;
+                    setAOTCompileFatal(fatal_error, "closure", native_key,
+                        "native closure parameter slots", "cancelled");
+                    return false;
+                }
+                slots.getLocalSlot(reinterpret_cast<const void*>(sig->lv[p]));
+            }
+            if (sig->selfid) {
+                slots.getLocalSlot(reinterpret_cast<const void*>(sig->selfid));
+            }
+            if (sig->argvid) {
+                slots.getLocalSlot(reinterpret_cast<const void*>(sig->argvid));
+            }
+        }
+
+        bool lowered = true;
+        std::string llvm_error;
+        std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
+        if (metadata_only) {
+            auto* i64_t = llvm::Type::getInt64Ty(ctx);
+            auto* ptr_t = llvm::PointerType::get(ctx, 0);
+            auto* fn_type = llvm::FunctionType::get(i64_t, {ptr_t, ptr_t}, false);
+            if (!module.getFunction(llvm_symbol)) {
+                llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
+                    llvm_symbol, module);
+            }
+        } else {
+            QoreIRToLLVM lowerer(ctx);
+            lowerer.setAOTMode(&slots);
+            lowerer.setSharedDebugInfo(&di_builder, di_cu);
+            lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+            lowerer.setDeferredExceptionChecking(false);
+            if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                lowerer.setBatchCallees(aot_batch_callee_map);
+            }
+            lowered = lowerer.lowerFunction(*ir_func, module, llvm_error);
+            if (lowered) {
+                const auto& loc_table = lowerer.getAOTLocTable();
+                for (size_t loc_index = 0; loc_index < loc_table.size(); ++loc_index) {
+                    if (loc_index && !(loc_index % 100)
+                            && qore_check_cancel(nullptr, "AOT native closure location collection")) {
+                        delete ir_func;
+                        setAOTCompileFatal(fatal_error, "closure", native_key,
+                            "native closure location collection", "cancelled");
+                        return false;
+                    }
+                    const auto& loc = loc_table[loc_index];
+                    AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                    entry.start_line = static_cast<int16_t>(loc.start_line);
+                    entry.end_line = static_cast<int16_t>(loc.end_line);
+                    entry.file = loc.file;
+                    aot_locs.push_back(std::move(entry));
+                }
+            }
+        }
+
+        if (!lowered) {
+            if (getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr, "AOT: native closure '%s' LLVM lowering skipped: %s\n",
+                    native_key.c_str(), llvm_error.c_str());
+            }
+            if (llvm::Function* fn = module.getFunction(llvm_symbol)) {
+                fn->eraseFromParent();
+            }
+            delete ir_func;
+            continue;
+        }
+
+        AOTCompiledFunc cf;
+        cf.name = native_key;
+        cf.llvm_symbol = llvm_symbol;
+        cf.num_locals = static_cast<int>(slots.local_slots.size());
+        cf.num_globals = static_cast<int>(slots.global_slots.size());
+        cf.num_exprs = static_cast<int>(slots.expr_slots.size());
+        cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
+        cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+        cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+        extractAOTSlotIdentities(*ir_func, slots, variant, cf.slot_ids,
+            const_reverse_map, pgm);
+        cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
+        cf.num_locals = static_cast<int>(cf.slot_ids.locals.size());
+        cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
+        if (!slots.stmt_slots.empty()) {
+            cf.handler_irs = extractHandlerIRs(*ir_func, slots);
+        }
+        cf.aot_locs = std::move(aot_locs);
+        cf.feature_flags = scanIRFeatureFlags(*ir_func);
+        ir_func->name = native_key;
+        ir_func->display_name = "<anonymous closure>";
+        cf.debug_ir.reset(ir_func);
+
+        owner_expr.ref3 = native_key;
+        const size_t closure_index = compiled_funcs.size();
+        compiled_funcs.push_back(std::move(cf));
+        ++total_funcs;
+        ++compiled_count;
+        const auto& closure_blocks = compiled_funcs[closure_index].debug_ir->blocks;
+        for (size_t block_index = 0; block_index < closure_blocks.size(); ++block_index) {
+            if (block_index && !(block_index % 100)
+                    && qore_check_cancel(nullptr, "AOT native closure instruction accounting")) {
+                setAOTCompileFatal(fatal_error, "closure", native_key,
+                    "native closure instruction accounting", "cancelled");
+                return false;
+            }
+            total_ir_insts_all += closure_blocks[block_index]->instructions.size();
+        }
+        if (getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+            fprintf(stderr, "AOT: compiled native closure '%s'\n", native_key.c_str());
+        }
+
+        if (!compileAOTClosureBodiesForOwner(closure_index, pgm, ctx, module,
+                di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
+                total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
+                aot_batch_callee_map, fatal_error)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
@@ -3981,8 +4194,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
                     cf.debug_ir.reset(ir_func);
                     ir_func = nullptr;
+                    const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                            di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
+                            total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
+                            aot_batch_callee_map, fatal_error)) {
+                        return;
+                    }
                     printd(2, "AOT: compiled function '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
                         variant_key.c_str(), (int)slots.local_slots.size(), (int)slots.global_slots.size(),
                         (int)slots.expr_slots.size(), (int)slots.stmt_slots.size());
@@ -4330,8 +4550,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
                         cf.debug_ir.reset(ir_func);
                         ir_func = nullptr;
+                        const size_t owner_index = compiled_funcs.size();
                         compiled_funcs.push_back(std::move(cf));
                         ++compiled_count;
+                        if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, module,
+                                di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
+                                total_ir_insts_all, const_reverse_map, compile_module, metadata_only,
+                                aot_batch_callee_map, fatal_error)) {
+                            return;
+                        }
                         if (getenv("QORE_AOT_DEBUG")) {
                             fprintf(stderr, "AOT: compiled method '%s' to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
                                 variant_key.c_str(), (int)slots.local_slots.size(),
@@ -6392,8 +6619,17 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                    const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
+                    if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, *module,
+                            di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
+                            total_ir_insts_all, &const_reverse_map, "", false, nullptr,
+                            &fatal_lowering_error)) {
+                        delete ir_func;
+                        error = fatal_lowering_error;
+                        return false;
+                    }
                     toplevel_ok = true;
                     printd(2, "AOT: compiled _toplevel to LLVM IR (locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
                         (int)slots.local_slots.size(), (int)slots.global_slots.size(),

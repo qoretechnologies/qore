@@ -1325,6 +1325,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Read flags
     const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
     const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+        ctx.reader.readStringRef(ctx.ptr);  // native body key; fallback IR does not register it here
+    }
 
     bool is_lambda = false, is_in_method = false;
     if (flags_str) {

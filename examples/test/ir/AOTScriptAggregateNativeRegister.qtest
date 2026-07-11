@@ -57,14 +57,17 @@ class AOTScriptAggregateNativeRegisterTest inherits QUnit::Test {
 
         write(provider, "%modern
 class NativeRegisterProvider {
-    static int add(int a, int b) {
-        return a + b;
+    static code<int(int)> makeAdder(int base) {
+        return int sub (int value) {
+            return base + value;
+        };
     }
 }
 ");
         write(consumer, "%modern
 int sub main() {
-    printf(\"%d\\n\", NativeRegisterProvider::add(19, 23));
+    code<int(int)> add = NativeRegisterProvider::makeAdder(19);
+    printf(\"%d\\n\", add(23));
     return 0;
 }
 ");
@@ -128,7 +131,11 @@ int main(int, char**) {
             glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe));
         assertTrue(is_file(exe), "linked native-register aggregate host: " + link_out);
 
-        string out = run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
-        assertEq("42\n", out, "aggregate metadata plus per-file native registers run cross-file call");
+        string out = run(sprintf(
+            "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+        assertTrue(out.find("registered native closure") != -1,
+            "aggregate metadata binds the per-file native closure body: " + out);
+        assertTrue(out.find("42\n") != -1,
+            "aggregate metadata plus per-file native registers run cross-file closure call: " + out);
     }
 }

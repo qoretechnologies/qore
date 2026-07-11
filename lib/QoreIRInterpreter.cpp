@@ -2775,6 +2775,18 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     return true;
 }
 
+bool qore_ir_is_native_leaf(const QoreIRFunction* ir, const UserVariantBase* uvb, int nargs) {
+    if (!ir || !uvb) {
+        return false;
+    }
+    QoreIRCallDirectInstruction descriptor(nullptr, nullptr, nullptr, QoreValue());
+    descriptor.cached_callee_ir = ir;
+    descriptor.cached_uvb = uvb;
+    const UserSignature* sig = uvb->getUserSignature();
+    descriptor.cached_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
+    return ensureInterpreterNativeLeafState(&descriptor, nargs);
+}
+
 bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result) {
     if (!ensureInterpreterNativeLeafState(inst, nargs)) {

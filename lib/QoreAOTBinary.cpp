@@ -10904,6 +10904,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 const QoreTypeInfo* cti = ucf->getClassType();
                 writeTypePathRef(writer, cti);
 
+                if ((writer.feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+                    // Inline closure records embedded in fallback IR do not own a
+                    // native slot-map entry.  The owning compiled body's expression
+                    // slot carries the native key when one is available.
+                    writer.writeStringRef("");
+                }
+
                 // Write return type
                 writeTypePathRef(writer, sig->getReturnTypeInfo());
 

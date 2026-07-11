@@ -109,5 +109,8 @@ DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right
 //! body or runtime argument types require normal call semantics.
 DLLLOCAL bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result);
+//! Return true when the IR body is covered by the direct native leaf executor.
+DLLLOCAL bool qore_ir_is_native_leaf(const QoreIRFunction* ir,
+        const UserVariantBase* uvb, int nargs);
 
 #endif

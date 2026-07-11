@@ -2440,12 +2440,16 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
-    // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref) + return_type(stringref)
+    // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref)
+    //   + optional native_body_key(stringref) + return_type(stringref)
     //   + num_params(u16) + params + varargs flags + num_captured(u16) + captured
     //   + has_ir(u8) + [ir_size(u32) + ir_data]
     if (ek == AOTExprKind::CLOSURE_CREATE) {
         rdr.readStringRef(p);  // flags
         rdr.readStringRef(p);  // class_type_path
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+            rdr.readStringRef(p);  // native body key
+        }
         rdr.readStringRef(p);  // return type
         uint16_t np = QoreAOTBinaryReader::readU16(p);
         for (uint16_t i = 0; i < np; ++i) {
@@ -3335,6 +3339,15 @@ size_t qore_aot_collect_backtrace_locs(std::vector<const QoreProgramLocation*>& 
     return out.size();
 }
 
+struct AOTClosureRuntimeBinding {
+    UserVariantBase* uvb = nullptr;
+    std::vector<LocalVar*> local_slots;
+    const qore_class_private* class_ctx = nullptr;
+};
+
+using AOTClosureRuntimeBindingMap =
+    std::unordered_map<std::string, AOTClosureRuntimeBinding>;
+
 static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
@@ -3345,7 +3358,9 @@ static QoreAOTContext* buildContextFromSlotMap(
         std::string* build_error = nullptr,
         std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
         const uint8_t* slot_maps_start = nullptr,
-        const qore_class_private* variant_class_ctx = nullptr) {
+        const qore_class_private* variant_class_ctx = nullptr,
+        const std::vector<LocalVar*>* direct_local_slots = nullptr,
+        AOTClosureRuntimeBindingMap* closure_bindings = nullptr) {
     const uint8_t* entry_payload_start = ptr;
     auto setBuildError = [name, build_error](const std::string& msg) {
         if (build_error && build_error->empty()) {
@@ -3501,18 +3516,19 @@ static QoreAOTContext* buildContextFromSlotMap(
         uint32_t body_ordinal = has_local_decl_ordinal
             ? QoreAOTBinaryReader::readU32(ptr) : UINT32_MAX;
 
-        LocalVar* lv = nullptr;
-        if (lflags & 0x04) {
+        LocalVar* lv = direct_local_slots && static_cast<size_t>(i) < direct_local_slots->size()
+            ? (*direct_local_slots)[i] : nullptr;
+        if (!lv && (lflags & 0x04)) {
             // is_self
             if (sig) {
                 lv = sig->selfid;
             }
-        } else if (lflags & 0x08) {
+        } else if (!lv && (lflags & 0x08)) {
             // is_argv
             if (sig) {
                 lv = sig->argvid;
             }
-        } else if (lflags & 0x01) {
+        } else if (!lv && (lflags & 0x01)) {
             // is_param — resolve by index first, fall back to name match
             if (sig && param_idx < sig->lv.size()) {
                 lv = sig->lv[param_idx];
@@ -3530,7 +3546,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                 }
             }
-        } else {
+        } else if (!lv) {
             // Body local — try to find the actual LocalVar* from the function's AST
             // first, then fall back to creating a new one (toplevel case).
             // New AOT records carry the source body-local ordinal so duplicate
@@ -5407,6 +5423,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Read flags
                 const char* flags_str = reader.readStringRef(ptr);
                 const char* class_type_path = reader.readStringRef(ptr);
+                const char* native_body_key = nullptr;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+                    native_body_key = reader.readStringRef(ptr);
+                }
 
                 bool is_lambda = false, is_in_method = false;
                 if (flags_str) {
@@ -5727,6 +5747,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_ir->computeSlotIdsAndEmbed();
                 closure_variant->setCachedIR(closure_ir.release());
                 closure_variant->pgm = pgm;
+
+                if (closure_bindings && native_body_key && *native_body_key) {
+                    AOTClosureRuntimeBinding binding;
+                    binding.uvb = closure_variant;
+                    binding.local_slots = closure_locals_vec;
+                    binding.class_ctx = closure_class
+                        ? qore_class_private::get(*const_cast<QoreClass*>(closure_class)) : nullptr;
+                    (*closure_bindings)[native_body_key] = std::move(binding);
+                    if (getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+                        fprintf(stderr, "AOT: resolved native closure '%s'\n", native_body_key);
+                    }
+                }
 
                 // Set class type if in a method context
                 if (class_type_path && *class_type_path) {
@@ -8293,7 +8325,8 @@ static void registerAOTFunctionsFromSlotMaps(
         std::vector<std::string>* registration_errors = nullptr,
         std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata = nullptr,
         bool allow_unlinked_native_inputs = false,
-        int* ignored_unlinked_functions = nullptr) {
+        int* ignored_unlinked_functions = nullptr,
+        AOTClosureRuntimeBindingMap* external_closure_bindings = nullptr) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
@@ -8337,6 +8370,9 @@ static void registerAOTFunctionsFromSlotMaps(
     std::string last_class_name;
     const QoreClass* last_qc = nullptr;
     const char* trace_slot_reg_env = getenv("QORE_AOT_TRACE_SLOT_REG");
+    AOTClosureRuntimeBindingMap local_closure_bindings;
+    AOTClosureRuntimeBindingMap& closure_bindings = external_closure_bindings
+        ? *external_closure_bindings : local_closure_bindings;
 
     for (uint32_t f = 0; f < num_funcs; ++f) {
         const uint8_t* entry_start = ptr;
@@ -8420,6 +8456,7 @@ static void registerAOTFunctionsFromSlotMaps(
         }
         const QoreAOTFunc* aot_func = it->second;
         std::string native_func_name = it->first;
+        const bool is_native_closure = !strncmp(func_name, "__aot_closure::", 15);
 
         // Find the UserVariantBase in the namespace tree
         // Function names can be "funcName(types)" or "ClassName::methodName(types)"
@@ -8760,6 +8797,36 @@ static void registerAOTFunctionsFromSlotMaps(
             }
         }
 
+        const AOTClosureRuntimeBinding* closure_binding = nullptr;
+        std::vector<LocalVar*> closure_local_slots;
+        if (is_native_closure) {
+            auto binding_it = closure_bindings.find(func_name);
+            if (binding_it != closure_bindings.end()) {
+                closure_binding = &binding_it->second;
+                uvb = closure_binding->uvb;
+                variant_class_ctx = closure_binding->class_ctx;
+                // Context reconstruction can discover nested closures and rehash
+                // closure_bindings.  Keep a stable local copy while resolving this body.
+                closure_local_slots = closure_binding->local_slots;
+            }
+            if (std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr) {
+                ++registered;
+                func_map.erase(native_func_name);
+                ptr = entry_end;
+                continue;
+            }
+            if (!closure_binding || !uvb) {
+                std::string msg = "native closure body '";
+                msg += func_name;
+                msg += "' has no reconstructed closure variant";
+                if (registration_errors) {
+                    registration_errors->push_back(std::move(msg));
+                }
+                ptr = entry_end;
+                continue;
+            }
+        }
+
         // If the variant already has a cached AOT context (e.g., registered during
         // initial module loading and shared via qore_class_private), skip building a
         // duplicate context — the existing one is already correct and the variant is
@@ -8801,7 +8868,9 @@ static void registerAOTFunctionsFromSlotMaps(
         std::string build_error;
         QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func,
             func_name, entry_end, shared_type_resolver, &build_error, debug_metadata,
-            slot_maps_start, variant_class_ctx);
+            slot_maps_start, variant_class_ctx,
+            closure_binding ? &closure_local_slots : nullptr,
+            &closure_bindings);
         // Trace init-function context construction at high debug levels.
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
@@ -8814,6 +8883,9 @@ static void registerAOTFunctionsFromSlotMaps(
             // Remove from func_map so any registration gap is reported precisely.
             func_map.erase(native_func_name);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
+            if (is_native_closure && getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
+                fprintf(stderr, "AOT: registered native closure '%s'\n", func_name);
+            }
         } else if (ctx) {
             // Check if this is an init function (for constants/static vars)
             bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
@@ -10529,6 +10601,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             bool toplevel_registered = false;
             std::vector<std::string> registration_errors;
+            AOTClosureRuntimeBindingMap native_closure_bindings;
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
                 metadata, metadata_len);
 
@@ -10556,7 +10629,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
                                     nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base);
+                                    nullptr, &build_error, debug_metadata, sm_base,
+                                    nullptr, nullptr, &native_closure_bindings);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
@@ -10584,7 +10658,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered,
                 &init_func_contexts, deserializer.getTypeResolver(), &registration_errors,
-                debug_metadata);
+                debug_metadata, false, nullptr, &native_closure_bindings);
             printd(2, "AOT v2: after slot map registration: %d registered, %d remaining, "
                 "%d init functions\n",
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
@@ -10644,7 +10718,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
                                     nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base);
+                                    nullptr, &build_error, debug_metadata, sm_base,
+                                    nullptr, nullptr, &native_closure_bindings);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
@@ -11471,6 +11546,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             bool toplevel_registered = false;
             std::vector<std::string> registration_errors;
+            AOTClosureRuntimeBindingMap native_closure_bindings;
             auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
                 metadata, metadata_len);
 
@@ -11498,7 +11574,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
                                     nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base);
+                                    nullptr, &build_error, debug_metadata, sm_base,
+                                    nullptr, nullptr, &native_closure_bindings);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
@@ -11526,7 +11603,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             registerAOTFunctionsFromSlotMaps(
                 deserializer.getReader(), root_ns, *qpgm, func_map, registered,
                 &init_func_contexts, deserializer.getTypeResolver(), &registration_errors,
-                debug_metadata);
+                debug_metadata, false, nullptr, &native_closure_bindings);
             printd(2, "AOT v3: after slot map registration: %d registered, %d remaining, "
                 "%d init functions\n",
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
@@ -11586,7 +11663,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
                                     nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end,
-                                    nullptr, &build_error, debug_metadata, sm_base);
+                                    nullptr, &build_error, debug_metadata, sm_base,
+                                    nullptr, nullptr, &native_closure_bindings);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);

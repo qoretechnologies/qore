@@ -4782,7 +4782,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
     static const bool disabled =
         std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE") != nullptr;
-    if (disabled || !node || !uvb || uvb->hasCachedFunction() || arg_cleanups
+    if (disabled || !node || !uvb || arg_cleanups
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }

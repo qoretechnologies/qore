@@ -1063,6 +1063,9 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     // Write flags and class type path
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());  // "lambda,in_method"
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());  // class_type_path
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0) {
+        ctx.writer.writeStringRef(ctx.expr.ref3.c_str());  // native AOT body key
+    }
 
     // Serialize closure signature metadata
     const UserClosureFunction* ucf = ctx.expr.closure_func;
