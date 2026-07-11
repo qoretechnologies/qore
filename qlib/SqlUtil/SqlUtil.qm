@@ -115,6 +115,8 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_0_0 SqlUtil v3.0.0
+    - corrected the expression metadata for \c contains, \c startsWith, and \c endsWith so the optional
+      case-insensitive argument and its default case-sensitive behavior match the implementation
     - fixed the advanced-expression \c "in" and \c "not in" operators to bind each value to its own
       placeholder; previously a \c (field, list) value list was bound to a single placeholder, which
       failed or silently mismatched on backends without native list-bind support (for example numeric
@@ -6106,11 +6108,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "contains",
                 "short_desc": "Returns True if the string contains the given substring",
                 "desc": "Returns True if the first argument contains the second as a substring; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "contains",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6131,11 +6133,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "starts with",
                 "short_desc": "Returns True if the string starts with the given characters",
                 "desc": "Returns True if the first argument starts with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "startsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6156,11 +6158,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "ends with",
                 "short_desc": "Returns True if the string ends with the given characters",
                 "desc": "Returns True if the first argument ends with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "endsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {

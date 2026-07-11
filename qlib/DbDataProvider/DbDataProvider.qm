@@ -341,6 +341,11 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - database table providers now advertise expression pushdown capabilities dynamically from the active
+      database-specific SqlUtil expression map
+    - added the opt-in \c allow_client_side_filter search option for predicates without a native SQL
+      implementation; pushdownable conjunctions run in SQL and residual filtering, projection, paging, and
+      cardinality checks run in the provider with deterministic transaction cleanup
     - corrected raw SQL provider metadata and record typing: generic search expressions are no longer advertised
       when only SQL-side filtering is supported, result aliases retain their exact spelling, nullable statement
       columns remain nullable, and missing native metadata falls back safely

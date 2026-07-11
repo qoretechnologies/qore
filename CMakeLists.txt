@@ -3102,7 +3102,7 @@ qore_user_module("qlib/FileDataProvider" "file-logo-white.svg;file-logo-black.sv
 qore_user_module("qlib/FtpClientDataProvider" "ftp-logo-white.svg;ftp-logo-black.svg")
 qore_user_module("qlib/HttpClientDataProvider")
 qore_user_module("qlib/ServerSentEventHandler")
-qore_user_module("qlib/SqlUtil" "SqlUtil-Full.svg")
+qore_user_module("qlib/SqlUtil" "../../doxygen/SqlUtil-Full.svg")
 qore_user_module("qlib/ConnectionProvider")
 qore_user_module("qlib/CsvUtil")
 qore_user_module("qlib/FixedLengthUtil")

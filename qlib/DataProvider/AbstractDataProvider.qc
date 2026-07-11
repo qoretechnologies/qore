@@ -771,6 +771,14 @@ public hashdecl DataProviderExpressionInfo {
     */
     int role = ER_All;
 
+    #! Whether the expression can be pushed down to the provider backend
+    /** Set to @ref False for expressions that are available for generic client-side evaluation but have no native
+        backend implementation in the current provider context.
+
+        @since DataProvider 3.5
+    */
+    bool supports_pushdown = True;
+
     #! Any template to render the expression
     /** Placeholders are:
         - $symbol: the expression symbol

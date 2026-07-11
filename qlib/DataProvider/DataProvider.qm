@@ -1220,6 +1220,12 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_5 DataProvider v3.5
+    - added explicit expression pushdown capability metadata so action sessions and database providers can
+      distinguish backend-native expressions from generic client implementations
+    - added template context, template value, and template type-resolution forwarding methods to the public
+      @ref DataProvider::DataProvider "DataProvider" facade
+    - made limited and exhausted @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" instances
+      release wrapped iterators immediately, including their database transaction resources
     - preserved compatibility with providers that do not return affected-row counts from update and delete
       implementations; \c max_records is enforced by the framework when a count is available and can still be
       enforced transactionally by the provider

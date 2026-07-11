@@ -39,6 +39,19 @@
 
 %exec-class DbRecordMutationTest
 
+#! SQLite table variant used to exercise metadata-only expression fallback
+class MetadataOnlySqliteTable inherits Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    hash<auto> getExpressionMap() {
+        return Sqlite3Table::getExpressionMap() + {
+            DP_OP_REGEX_MATCH: SqlUtil::DefaultExpressionMap{DP_OP_REGEX_MATCH},
+            DP_OP_REGEX_NMATCH: SqlUtil::DefaultExpressionMap{DP_OP_REGEX_NMATCH},
+        };
+    }
+}
+
 class DbRecordMutationTest inherits QUnit::Test {
     private {
         *Datasource ds;
@@ -68,6 +81,8 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("row to bulk iterator adapter", \testRowToBulkIteratorAdapter());
         addTestCase("raw SQL provider metadata", \testRawSqlProviderMetadata());
         addTestCase("raw SQL record typing", \testRawSqlRecordTyping());
+        addTestCase("residual expression filtering", \testResidualExpressionFiltering());
+        addTestCase("SQLite string expression semantics", \testSqliteStringExpressionSemantics());
 
         set_return_value(main());
     }
@@ -93,6 +108,14 @@ class DbRecordMutationTest inherits QUnit::Test {
 
     private list<hash<auto>> getRows() {
         return table.selectRows({"orderby": "id"});
+    }
+
+    private list<int> getIteratorIds(AbstractDataProviderRecordIterator<hash<auto>> i) {
+        list<int> ids;
+        while (i.next()) {
+            ids += i.getValue().id;
+        }
+        return ids;
     }
 
     private testSingleUpdateRollback() {
@@ -317,6 +340,120 @@ class DbRecordMutationTest inherits QUnit::Test {
         assertThrows("DBSELECT-ERROR", sub () {
             raw_provider.searchRecords({"RecordID": 1}, search_options);
         });
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testResidualExpressionFiltering() {
+        requireSqlite();
+        resetRows();
+        ds.execRaw("update " + TableName + " set group_name = 'Alpha' where id = 3");
+        ds.commit();
+
+        MetadataOnlySqliteTable metadata_table(ds, TableName);
+        DbTableDataProvider metadata_provider(metadata_table);
+        hash<string, hash<DataProviderExpressionInfo>> expressions = metadata_provider.getExpressionsWithOptions();
+        assertFalse(expressions{DP_OP_REGEX_MATCH}.supports_pushdown);
+        assertTrue(expressions{DP_SEARCH_OP_GT}.supports_pushdown);
+
+        assertThrows("CLIENT-SIDE-FILTER-DISABLED", sub () {
+            metadata_provider.searchRecords('@group_name =~ /a/i', {"orderby": "id"});
+        });
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq((1, 2, 3), getIteratorIds(metadata_provider.searchRecords('@group_name =~ /a/i', {
+            "orderby": "id",
+            "allow_client_side_filter": True,
+        })));
+        assertFalse(ds.currentThreadInTransaction());
+
+        # The native id predicate is pushed down, while paging and projection occur after the residual regex.
+        AbstractDataProviderRecordIterator<hash<auto>> paged = metadata_provider.searchRecords(
+            '@id > 0 && @group_name =~ /a/i', {
+                "orderby": "id",
+                "offset": 1,
+                "limit": 1,
+                "columns": ("id",),
+                "allow_client_side_filter": True,
+            });
+        assertTrue(paged.next());
+        assertEq({"id": 2}, paged.getValue());
+        assertFalse(paged.next());
+        assertFalse(ds.currentThreadInTransaction());
+
+        AbstractDataProviderBulkRecordInterface bulk = metadata_provider.searchRecordsBulk(2,
+            '@group_name =~ /a/i', {
+                "orderby": "id",
+                "allow_client_side_filter": True,
+            });
+        assertEq(DataProviderShape::HashOfLists, bulk.getValueShape());
+        list<int> bulk_ids;
+        while (*hash<auto> block = bulk.getValue()) {
+            bulk_ids += block.id;
+        }
+        assertEq((1, 2, 3), bulk_ids);
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertThrows("MULTIPLE-RECORDS-ERROR", sub () {
+            metadata_provider.searchSingleRecord('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+            });
+        });
+        assertThrows("CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED", sub () {
+            metadata_provider.searchRecords('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+                "groupby": "group_name",
+            });
+        });
+        assertThrows("CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED", sub () {
+            hash<DataProviderFieldReference> field = <DataProviderFieldReference>{"field": "group_name"};
+            metadata_provider.searchRecords('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+                "columns": (<DataProviderExpression>{"exp": DP_OP_TO_UPPER, "args": (field,)}),
+            });
+        });
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testSqliteStringExpressionSemantics() {
+        requireSqlite();
+        resetRows();
+        ds.execRaw("update " + TableName + " set group_name = 'Alpha' where id = 3");
+        ds.execRaw("insert into " + TableName + " values (4, 'a*literal', 40)");
+        ds.commit();
+
+        hash<DataProviderFieldReference> field = <DataProviderFieldReference>{"field": "group_name"};
+        hash<DataProviderExpression> like_sensitive = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a%", False),
+        };
+        hash<DataProviderExpression> like_insensitive = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a%", True),
+        };
+        hash<DataProviderExpression> literal_glob = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a*%", False),
+        };
+        hash<DataProviderExpression> contains_sensitive = <DataProviderExpression>{
+            "exp": DP_OP_CONTAINS,
+            "args": (field, "A", False),
+        };
+        hash<DataProviderExpression> contains_insensitive = <DataProviderExpression>{
+            "exp": DP_OP_CONTAINS,
+            "args": (field, "A", True),
+        };
+        hash<DataProviderExpression> ends_empty = <DataProviderExpression>{
+            "exp": DP_OP_ENDS_WITH,
+            "args": (field, "", False),
+        };
+
+        assertEq((1, 2, 4), getIteratorIds(provider.searchRecords(like_sensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4), getIteratorIds(provider.searchRecords(like_insensitive, {"orderby": "id"})));
+        assertEq((4,), getIteratorIds(provider.searchRecords(literal_glob, {"orderby": "id"})));
+        assertEq((3,), getIteratorIds(provider.searchRecords(contains_sensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4),
+            getIteratorIds(provider.searchRecords(contains_insensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4), getIteratorIds(provider.searchRecords(ends_empty, {"orderby": "id"})));
         assertFalse(ds.currentThreadInTransaction());
     }
 }

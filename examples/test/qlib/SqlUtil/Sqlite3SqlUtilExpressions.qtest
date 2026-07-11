@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires Sqlite3SqlUtil
-%requires QUnit
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -322,12 +322,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # NOTE: SQLite LIKE is case-insensitive for ASCII by default, so
-        # "case-sensitive" LIKE still matches case-insensitively
+        # explicit case-sensitive behavior overrides SQLite's default ASCII behavior
         rows = selectWhere(
             expr(DP_OP_LIKE, (fref("name"), "%world%", False)),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
     }
 
     testDpOpContains() {
@@ -339,11 +338,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # SQLite LIKE is case-insensitive for ASCII — "world" matches "World"
+        # the case option is optional and defaults to case-sensitive matching
         rows = selectWhere(
-            expr(DP_OP_CONTAINS, (fref("name"), "world", False)),
+            expr(DP_OP_CONTAINS, (fref("name"), "world")),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
 
         # substring in middle
         rows = selectWhere(
@@ -367,11 +366,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # SQLite LIKE is case-insensitive for ASCII — "hello" matches "Hello"
+        # explicit case-sensitive behavior overrides SQLite's default ASCII behavior
         rows = selectWhere(
             expr(DP_OP_STARTS_WITH, (fref("name"), "hello", False)),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
     }
 
     testDpOpEndsWith() {
