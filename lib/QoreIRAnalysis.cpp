@@ -937,6 +937,9 @@ static bool qore_ir_collect_borrowed_loop_safety(const QoreIRNaturalLoop& loop,
         const QoreIRControlFlowGraph& cfg, QoreIRBorrowedLoopSafety& safety,
         size_t& check_count) {
     for (size_t block_id : loop.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR borrowed list source analysis")) {
+            return false;
+        }
         for (const auto& inst : cfg.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR borrowed list source analysis")) {
                 return false;
@@ -970,6 +973,9 @@ static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg
         const QoreIRScalarUses& uses, size_t& check_count) {
     std::unordered_map<uint32_t, size_t> definition_blocks;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count, "IR borrowed list definition analysis")) {
+            return 0;
+        }
         for (const auto& inst : cfg.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR borrowed list definition analysis")) {
                 return 0;
@@ -982,6 +988,9 @@ static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg
 
     size_t changed = 0;
     for (const QoreIRNaturalLoop& loop : loops) {
+        if (qore_ir_analysis_cancelled(check_count, "IR borrowed list read analysis")) {
+            return changed;
+        }
         QoreIRBorrowedLoopSafety safety;
         if (!qore_ir_collect_borrowed_loop_safety(loop, cfg, safety, check_count)) {
             return changed;
@@ -991,6 +1000,9 @@ static size_t qore_ir_mark_borrowed_list_reads(const QoreIRControlFlowGraph& cfg
         }
         std::unordered_set<size_t> loop_blocks(loop.blocks.begin(), loop.blocks.end());
         for (size_t block_id : loop.blocks) {
+            if (qore_ir_analysis_cancelled(check_count, "IR borrowed list read analysis")) {
+                return changed;
+            }
             for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count, "IR borrowed list read analysis")) {
                     return changed;
@@ -1037,6 +1049,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
     for (const auto& block : cfg.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place list push definition analysis")) {
+            return 0;
+        }
         for (const auto& inst : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR in-place list push definition analysis")) {
                 return 0;
@@ -1174,6 +1189,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
     std::vector<size_t> worklist;
     std::vector<uint8_t> queued(cfg.blocks.size(), 0);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place list push dataflow")) {
+            return 0;
+        }
         if (cfg.reachable[block_id]) {
             worklist.push_back(block_id);
             queued[block_id] = 1;
@@ -1191,6 +1209,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         if (block_id) {
             bool first = true;
             for (size_t predecessor : cfg.predecessors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count, "IR in-place list push dataflow")) {
+                    return 0;
+                }
                 if (!cfg.reachable[predecessor]) {
                     continue;
                 }
@@ -1200,6 +1221,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
                     continue;
                 }
                 for (auto it = input.begin(); it != input.end();) {
+                    if (qore_ir_analysis_cancelled(check_count, "IR in-place list push dataflow")) {
+                        return 0;
+                    }
                     if (!fresh_out[predecessor].count(*it)) {
                         it = input.erase(it);
                     } else {
@@ -1218,6 +1242,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         }
         fresh_out[block_id] = std::move(output);
         for (size_t successor : cfg.successors[block_id]) {
+            if (qore_ir_analysis_cancelled(check_count, "IR in-place list push dataflow")) {
+                return 0;
+            }
             if (!queued[successor]) {
                 queued[successor] = 1;
                 worklist.push_back(successor);
@@ -1227,6 +1254,9 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
 
     size_t changed = 0;
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count, "IR in-place list push escape analysis")) {
+            return changed;
+        }
         if (cfg.reachable[block_id]) {
             transfer_block(block_id, fresh_in[block_id], true, changed);
             if (cancelled) {
@@ -1257,6 +1287,12 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     bool has_list_push = false;
     if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
         for (const QoreIRBasicBlock* block : cfg.blocks) {
+            if (qore_ir_analysis_cancelled(check_count, "IR list push discovery")) {
+                if (stats) {
+                    *stats = local_stats;
+                }
+                return;
+            }
             for (const auto& inst : block->instructions) {
                 if (qore_ir_analysis_cancelled(check_count, "IR list push discovery")) {
                     if (stats) {
