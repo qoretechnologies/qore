@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
+%modern
 %enable-all-warnings
 %require-types
 %strict-args
@@ -81,6 +81,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("BulkInsert", \bulkInsertTest());
         addTestCase("BulkColumnarInsert", \bulkColumnarInsertTest());
         addTestCase("BulkHashOfBuffersInsert", \bulkHashOfBuffersInsertTest());
+        addTestCase("BulkInputValidation", \bulkInputValidationTest());
 %ifndef NoDataFrame
         addTestCase("BulkDataFrameInsert", \bulkDataFrameInsertTest());
 %endif
@@ -145,6 +146,54 @@ public class SqlTestBase inherits QUnit::Test {
             testSkip("covered by pgsql bulk tests");
 
         runSimpleColumnarInsert("qore_bulk_buffers_test", getSimpleBufferColumns());
+    }
+
+    bulkInputValidationTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "record 2/2 has a different field set", sub () {
+                insert.queueData(({"id": 1}, {"id": 2, "id_": 2}));
+            });
+            assertEq(0, insert.size());
+            assertEq(NOTHING, insert.queueData(({"id": 1, "id_": 2}, {"id_": 3, "id": 2})));
+            assertEq(2, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "field \"id_\" has 1 values", sub () {
+                insert.queueData({"id": (1, 2), "id_": (2,)});
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "field \"id_\" has 1 values", sub () {
+                insert.queueData({
+                    "id": new buffer<int64>((1, 2)),
+                    "id_": new buffer<int64>((2,)),
+                });
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "record 2/2 is type", sub () {
+                insert.queueData(({"id": 1}, 2));
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
     }
 
 %ifndef NoDataFrame

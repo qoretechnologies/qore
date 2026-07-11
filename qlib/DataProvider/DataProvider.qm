@@ -1220,6 +1220,8 @@ if (errors) {
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_5 DataProvider v3.5
+    - bulk record-shape validation now rejects heterogeneous record field sets and unequal list or buffer column
+      lengths before provider mutation; scalar hash-of-lists values remain supported as row broadcasts
     - fixed the generic \c "in" expression to accept both the canonical \c (field, list) form and the
       variadic \c (field, v1, v2, ...) form produced by the DPQL parser, and to compare each value
       individually; previously the variadic form was rejected as having too many arguments and the

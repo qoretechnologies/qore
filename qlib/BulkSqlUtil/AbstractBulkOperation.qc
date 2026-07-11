@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractBulkOperation class definition
 
-/*  AbstractBulkOperation.qc Copyright 2015 - 2025 Qore Technologies, s.r.o.
+/*  AbstractBulkOperation.qc Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -116,6 +116,12 @@ on_error ds.rollback();
 
             #! list of "returning" columns
             list ret_args = ();
+
+            #! input field names from the first queued record or record block
+            list<string> input_keys;
+
+            #! True when input_keys has been initialized, including by an empty record
+            bool input_template_set = False;
         }
 
         #! creates the object from the supplied arguments
@@ -186,8 +192,8 @@ on_error ds.rollback();
             for such keys and use the values given in the first call.
 
             @note
-            - the first row passed is taken as a template row; every other row must always have the same keys in the
-              same order, otherwise the results are unpredictable
+            - the first row passed is taken as a template row; every other row must have the same field set; field order
+              is not significant
             - if any @ref sql_iop_funcs are used, then they are assumed to be identical in every row
             - make sure to call flush() before committing the transaction or discard() before rolling back the
               transaction or destroying the object when using this method
@@ -199,8 +205,10 @@ on_error ds.rollback();
             - discard()
         */
         queueData(hash data) {
-            if (isHashOfBuffers(data)) {
-                queueBufferColumns(data, data.firstValue().lsize());
+            *int rows = validateColumnLengths(data);
+            validateInputKeys(data);
+            if (exists rows && hasBufferColumn(data)) {
+                queueBufferColumns(data, rows);
                 return;
             }
 
@@ -264,7 +272,8 @@ on_error ds.rollback();
             @param l a list of hashes representing the input row data; each hash represents a row (keys are column names and values are column values); when inserting, @ref sql_iop_funcs can also be used
 
             @note
-            - the first row passed is taken as a template row; every other row must always have the same keys in the same order, otherwise the results are unpredictable
+            - the first row passed is taken as a template row; every other row must have the same field set; field order
+              is not significant
             - if any @ref sql_iop_funcs are used, then they are assumed to be identical in every row
             - make sure to call flush() before committing the transaction or discard() before rolling back the transaction or destroying the object when using this method
             - flush() or discard() needs to be executed individually for each bulk operation object used in the block whereas the DB transaction needs to be committed or rolled back once per datasource
@@ -274,8 +283,24 @@ on_error ds.rollback();
             - discard()
         */
         queueData(list<auto> l) {
-            if (l.empty())
+            if (l.empty()) {
                 return;
+            }
+
+            list<string> block_keys;
+            for (int row = 0; row < l.size(); ++row) {
+                auto record = l[row];
+                if (record.typeCode() != NT_HASH) {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("record %d/%d is type %y; expected a hash",
+                        row + 1, l.size(), record.fullType());
+                }
+                if (!row) {
+                    block_keys = keys record;
+                } else {
+                    validateFieldSet(record, block_keys, row + 1, l.size());
+                }
+            }
+            validateInputKeys(l[0]);
 
             # prepare buffer hash if necessary
             if (!hbuf)
@@ -317,11 +342,14 @@ on_error ds.rollback();
         */
         queueData(auto data) {
             if (data.typeCode() == NT_OBJECT && data.className() == "ColumnarResult") {
-                queueBufferColumns(data.toColumnHash(), data.numRows());
-                return;
-            }
-            if (isHashOfBuffers(data)) {
-                queueBufferColumns(data, data.firstValue().lsize());
+                hash<auto> columns = data.toColumnHash();
+                *int rows = validateColumnLengths(columns);
+                if (!exists rows || rows != data.numRows()) {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("ColumnarResult reports %d rows but its columns have "
+                        "%d values", data.numRows(), rows ?? 0);
+                }
+                validateInputKeys(columns);
+                queueBufferColumns(columns, rows);
                 return;
             }
             if (data.typeCode() == NT_OBJECT && data.fullType() == "object<DataFrame>") {
@@ -388,12 +416,51 @@ on_error ds.rollback();
             map hbuf.$1 = (), keys row;
         }
 
-        #! Returns True if the value is a hash of dense column buffers
-        private bool isHashOfBuffers(auto data) {
-            if (data.typeCode() != NT_HASH || !data) {
-                return False;
+        #! Validates the field set against the first queued record or block
+        private validateInputKeys(hash<auto> data, int row = 1, int rows = 1) {
+            if (!input_template_set) {
+                input_keys = keys data;
+                input_template_set = True;
+                return;
             }
-            return all $1.typeCode() == NT_BUFFER, data.iterator();
+
+            validateFieldSet(data, input_keys, row, rows);
+        }
+
+        #! Validates a record against an expected field set without modifying operation state
+        private validateFieldSet(hash<auto> data, list<string> expected_keys, int row, int rows) {
+            hash<string, bool> expected = map {$1: True}, expected_keys;
+            hash<string, bool> actual = map {$1: True}, keys data;
+            *hash<string, bool> missing = expected - keys actual;
+            *hash<string, bool> extra = actual - keys expected;
+            if (missing || extra) {
+                throw "BULK-SQL-OPERATION-ERROR", sprintf("record %d/%d has a different field set; missing fields: "
+                    "%y; extra fields: %y; expected fields: %y", row, rows, keys missing, keys extra, expected_keys);
+            }
+        }
+
+        #! Validates list and buffer column lengths and returns the logical row count, if columnar
+        private *int validateColumnLengths(hash<auto> data) {
+            *int rows;
+            foreach hash<auto> column in (data.pairIterator()) {
+                int type = column.value.typeCode();
+                if (type != NT_LIST && type != NT_BUFFER) {
+                    continue;
+                }
+                int column_rows = column.value.lsize();
+                if (!exists rows) {
+                    rows = column_rows;
+                } else if (column_rows != rows) {
+                    throw "BULK-SQL-OPERATION-ERROR", sprintf("field %y has %d values but the record block has %d "
+                        "records", column.key, column_rows, rows);
+                }
+            }
+            return rows;
+        }
+
+        #! Returns True if at least one value is a dense column buffer
+        private bool hasBufferColumn(hash<auto> data) {
+            return any $1.typeCode() == NT_BUFFER, data.iterator();
         }
 
         #! Queues dense column blocks in block-sized slices to avoid materializing large packed inputs at once

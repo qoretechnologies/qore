@@ -405,13 +405,125 @@ public class AbstractDataProcessor inherits Qore::Serializable {
         @since %DataProvider 3.3
     */
     static hash<auto> recordsToHashList(list<auto> records) {
-        hash<auto> result;
-        foreach hash<auto> rec in (records) {
-            foreach hash<auto> i in (rec.pairIterator()) {
-                push result{i.key}, i.value;
+        list<string> record_keys = AbstractDataProcessor::validateRecordList(records);
+        if (!record_keys) {
+            return {};
+        }
+
+        hash<auto> result = map {$1: ()}, record_keys;
+        for (int row = 0; row < records.size(); ++row) {
+            hash<auto> rec = records[row];
+            foreach string key in (record_keys) {
+                push result{key}, rec{key};
             }
         }
         return result;
+    }
+
+    #! Validates a shaped record block and returns its logical record count
+    /** Columnar blocks must have equal-length list or buffer columns. Scalar values in a
+        @ref DataProviderShape::HashOfLists "HashOfLists" block are broadcasts and do not determine the row count.
+
+        @param data the shaped record block
+        @param shape the shape of \a data
+
+        @return the number of logical records in the block
+
+        @throw PROCESSOR-SHAPE-ERROR the block is malformed or has inconsistent column lengths
+
+        @since %DataProvider 3.5
+    */
+    static int validateShapeRecordCount(auto data, DataProviderShape shape) {
+        switch (shape) {
+            case DataProviderShape::DataFrameBlock:
+                return data.numRows();
+            case DataProviderShape::BufferColumns:
+                if (AbstractDataProcessor::isColumnarResult(data)) {
+                    return data.numRows();
+                }
+                return AbstractDataProcessor::validateColumnBlockRecordCount(data,
+                    AbstractDataProcessor::shapeName(shape));
+            case DataProviderShape::HashOfLists:
+                return AbstractDataProcessor::validateColumnBlockRecordCount(data,
+                    AbstractDataProcessor::shapeName(shape));
+            case DataProviderShape::RowRecords:
+                if (AbstractDataProcessor::isRecordList(data)) {
+                    AbstractDataProcessor::validateRecordList(data);
+                    return data.size();
+                }
+                return 1;
+        }
+        throw "PROCESSOR-SHAPE-ERROR", sprintf("unknown data provider shape %y", shape);
+    }
+
+    #! Validates record hashes and returns their common ordered field list
+    /** @param records the list of record hashes to validate
+
+        @return the common field names in the order used by the first record
+
+        @throw PROCESSOR-SHAPE-ERROR a value is not a hash or a record has a different field set
+
+        @since %DataProvider 3.5
+    */
+    static list<string> validateRecordList(list<auto> records) {
+        if (!records) {
+            return ();
+        }
+        if (records[0].typeCode() != NT_HASH) {
+            throw "PROCESSOR-SHAPE-ERROR", sprintf("record 1/%d is type %y; expected a hash",
+                records.size(), records[0].fullType());
+        }
+
+        hash<auto> first = records[0];
+        list<string> record_keys = keys first;
+        hash<string, bool> expected = map {$1: True}, record_keys;
+        for (int row = 1; row < records.size(); ++row) {
+            if (records[row].typeCode() != NT_HASH) {
+                throw "PROCESSOR-SHAPE-ERROR", sprintf("record %d/%d is type %y; expected a hash",
+                    row + 1, records.size(), records[row].fullType());
+            }
+            hash<auto> rec = records[row];
+            hash<string, bool> actual = map {$1: True}, keys rec;
+            *hash<string, bool> missing = expected - keys actual;
+            *hash<string, bool> extra = actual - record_keys;
+            if (missing || extra) {
+                throw "PROCESSOR-SHAPE-ERROR", sprintf("record %d/%d has a different field set; missing fields: %y; "
+                    "extra fields: %y; expected fields: %y", row + 1, records.size(), keys missing, keys extra,
+                    record_keys);
+            }
+        }
+        return record_keys;
+    }
+
+    #! Validates a hash-of-lists or hash-of-buffers block and returns its record count
+    private static int validateColumnBlockRecordCount(auto data, string shape_name) {
+        if (data.typeCode() != NT_HASH) {
+            throw "PROCESSOR-SHAPE-ERROR", sprintf("%s input is type %y; expected a hash of columns",
+                shape_name, data.fullType());
+        }
+        if (!data) {
+            return 0;
+        }
+
+        *int count;
+        foreach hash<auto> column in (data.pairIterator()) {
+            int type = column.value.typeCode();
+            if (type != NT_LIST && type != NT_BUFFER) {
+                continue;
+            }
+            int column_count = column.value.lsize();
+            if (!exists count) {
+                count = column_count;
+            } else if (column_count != count) {
+                throw "PROCESSOR-SHAPE-ERROR", sprintf("field %y has %d values but the %s block has %d records",
+                    column.key, column_count, shape_name, count);
+            }
+        }
+        if (!exists count) {
+            throw "PROCESSOR-SHAPE-ERROR", sprintf("%s block has no list or buffer column to determine its record "
+                "count; use RowRecords for a single record", shape_name);
+        }
+        return count;
     }
 
     #! Returns True if the value is a hash-of-lists block
@@ -841,20 +953,7 @@ public class AbstractDataProcessor inherits Qore::Serializable {
     */
     static int shapeRecordCount(auto data, *DataProviderShape shape) {
         DataProviderShape s = shape ?? AbstractDataProcessor::detectShape(data);
-        switch (s) {
-            case DataProviderShape::DataFrameBlock:
-                return data.numRows();
-            case DataProviderShape::BufferColumns:
-                if (AbstractDataProcessor::isColumnarResult(data)) {
-                    return data.numRows();
-                }
-                return data ? data.firstValue().lsize() : 0;
-            case DataProviderShape::HashOfLists:
-                return data ? data.firstValue().lsize() : 0;
-            case DataProviderShape::RowRecords:
-                return AbstractDataProcessor::isRecordList(data) ? data.size() : 1;
-        }
-        return 1;
+        return AbstractDataProcessor::validateShapeRecordCount(data, s);
     }
 
     #! Converts a shaped value into one or more values in another shape

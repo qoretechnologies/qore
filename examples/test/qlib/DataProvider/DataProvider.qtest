@@ -3163,6 +3163,30 @@ public class DataProviderTest inherits QUnit::Test {
             assertEq({"a": (1, 2), "b": ("x", "y")}, hl);
         }
 
+        # Reject heterogeneous rows before their values can be shifted into another record
+        {
+            list<auto> records = ({"id": 1}, {"id": 2, "value": "belongs-to-row-2"});
+            assertThrows("PROCESSOR-SHAPE-ERROR", "record 2/2 has a different field set",
+                \AbstractDataProcessor::recordsToHashList(), (records,));
+        }
+
+        # Hash key order is not significant; output order follows the first record
+        {
+            list<auto> records = ({"id": 1, "value": "a"}, {"value": "b", "id": 2});
+            assertEq({"id": (1, 2), "value": ("a", "b")}, AbstractDataProcessor::recordsToHashList(records));
+        }
+
+        # Reject jagged column blocks while retaining scalar broadcast values
+        {
+            assertThrows("PROCESSOR-SHAPE-ERROR", "field \"value\" has 1 values",
+                sub () {
+                    AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "value": ("a",)},
+                        DataProviderShape::HashOfLists);
+                });
+            assertEq(2, AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "tenant": "acme"},
+                DataProviderShape::HashOfLists));
+        }
+
         # Test hashListToRecords and recordsToHashList round-trip
         {
             hash<auto> orig = {"name": ("Alice", "Bob"), "age": (30, 25)};

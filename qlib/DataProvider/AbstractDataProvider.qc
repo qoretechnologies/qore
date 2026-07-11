@@ -5103,6 +5103,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Creates records from a shaped block, preserving native columnar input for providers that support it
     private *hash<auto> createRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        if (shape == DataProviderShape::RowRecords && recs.typeCode() == NT_LIST) {
+            return createRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), create_options);
+        }
+        AbstractDataProcessor::validateShapeRecordCount(recs, shape);
         if (shape != DataProviderShape::HashOfLists && supportsBulkCreateShape(shape)) {
             return createRecordsShapeImpl(recs, shape, create_options);
         }
@@ -5111,6 +5115,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Upserts records from a shaped block, preserving native columnar input for providers that support it
     private *list<string> upsertRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        if (shape == DataProviderShape::RowRecords && recs.typeCode() == NT_LIST) {
+            return upsertRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), upsert_options);
+        }
+        AbstractDataProcessor::validateShapeRecordCount(recs, shape);
         if (shape != DataProviderShape::HashOfLists && supportsBulkUpsertShape(shape)) {
             return upsertRecordsShapeImpl(recs, shape, upsert_options);
         }
