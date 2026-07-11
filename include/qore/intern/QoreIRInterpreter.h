@@ -104,4 +104,10 @@ public:
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
+//! Execute a previously resolved direct-call descriptor when its cached IR is
+//! a supported native scalar leaf. Returns false without side effects when the
+//! body or runtime argument types require normal call semantics.
+DLLLOCAL bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
+        uint64_t* args, int nargs, QoreValue& result);
+
 #endif

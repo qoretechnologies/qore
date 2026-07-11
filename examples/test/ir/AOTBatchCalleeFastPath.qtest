@@ -47,6 +47,61 @@ class StaticHelper {
     }
 }
 
+final class SelfHelper {
+    private {
+        int total = 0;
+    }
+
+    int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int pair(int a, int b) {
+        return a * 10 + b;
+    }
+
+    int named() {
+        return self.pair(b: 2, a: 1);
+    }
+
+    int defaulted(int x = 7) {
+        return x;
+    }
+
+    nothing bump(reference<int> x) {
+        ++x;
+    }
+
+    int refs() {
+        int x = 4;
+        self.bump(\\x);
+        return x;
+    }
+
+    int fail() {
+        throw \"SELF-FAST-TEST\", \"expected\";
+    }
+
+    int caught() {
+        try {
+            return self.fail();
+        } catch (hash<auto> ex) {
+            return ex.err == \"SELF-FAST-TEST\" ? 9 : -1;
+        }
+    }
+
+    SelfHelper identity() {
+        return self;
+    }
+
+    string run() {
+        return string(self.add(2)) + \":\" + string(self.add(3)) + \":\" + string(self.named())
+            + \":\" + string(self.defaulted()) + \":\" + string(self.refs()) + \":\" + string(self.caught())
+            + \":\" + string(self.identity() === self);
+    }
+}
+
 int sub leaf(int x) {
     return x + 1;
 }
@@ -74,6 +129,29 @@ int sub float_check() {
     return int(fcombo(4.0) * 10.0);
 }
 
+string sub closure_leaf_checks() {
+    code<int(int)> add = int sub (int value) {
+        return value + 2;
+    };
+    code<float(float)> scale = float sub (float value) {
+        return value * 1.5;
+    };
+    code<auto(auto, auto)> dynamic_add = auto sub (auto left, auto right) {
+        return left + right;
+    };
+    code<int(string)> string_length = int sub (string value) {
+        return value.length();
+    };
+    int captured = 4;
+    code<int(int)> captured_add = int sub (int value) {
+        return value + captured;
+    };
+    string text = \"abcd\";
+    return string(add(3)) + \":\" + string(int(scale(4.0) * 10.0))
+        + \":\" + string(dynamic_add(6, 7)) + \":\" + string(string_length(text))
+        + \":\" + string(captured_add(5));
+}
+
 int sub default_helper(int x = 7) {
     return x * 3;
 }
@@ -84,9 +162,11 @@ string sub method_helper(Holder h) {
 
 string sub caller() {
     Holder h(\"ctx-ok\");
+    SelfHelper sh();
     return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
         + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
-        + \":\" + string(rec_sum(5)) + \":\" + string(float_check());
+        + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
+        + \":\" + closure_leaf_checks();
 }
 
 printf(\"%s\\n\", caller());
@@ -140,6 +220,37 @@ printf(\"%s\\n\", rec(1));
 ";
 }
 
+string sub selfMethodUnassignedScriptCode() {
+    return "%modern
+
+final class SelfUnassigned {
+    int add(int x) {
+        return x + 1;
+    }
+
+    int run() {
+        int x;
+        return self.add(x);
+    }
+}
+
+SelfUnassigned obj();
+printf(\"%s\\n\", obj.run());
+";
+}
+
+string sub closureUnassignedScriptCode() {
+    return "%modern
+
+code<int(int)> leaf = int sub (int x) {
+    return x + 1;
+};
+
+int x;
+printf(\"%s\\n\", leaf(x));
+";
+}
+
 string sub runScript(string script_path) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
         libqore_dir, qore_bin, script_path));
@@ -164,7 +275,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90\n" || aot != ast) {
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }
@@ -212,5 +323,37 @@ if (!(ast_self_rec_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
         || !(aot_self_rec_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
     printf("expected rejection for self-recursive unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_self_rec_unassigned, aot_self_rec_unassigned);
+    exit(2);
+}
+
+string self_method_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-self-method-unassigned-"
+    + string(getpid()) + ".qr";
+File self_method_unassigned_script();
+self_method_unassigned_script.open2(self_method_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+self_method_unassigned_script.write(selfMethodUnassignedScriptCode());
+self_method_unassigned_script.close();
+
+string ast_self_method_unassigned = runScript(self_method_unassigned_path);
+string aot_self_method_unassigned = runAot(self_method_unassigned_path);
+if (!(ast_self_method_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_self_method_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for self-method unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_self_method_unassigned, aot_self_method_unassigned);
+    exit(2);
+}
+
+string closure_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-closure-unassigned-"
+    + string(getpid()) + ".qr";
+File closure_unassigned_script();
+closure_unassigned_script.open2(closure_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+closure_unassigned_script.write(closureUnassignedScriptCode());
+closure_unassigned_script.close();
+
+string ast_closure_unassigned = runScript(closure_unassigned_path);
+string aot_closure_unassigned = runAot(closure_unassigned_path);
+if (!(ast_closure_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
+        || !(aot_closure_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
+        ast_closure_unassigned, aot_closure_unassigned);
     exit(2);
 }

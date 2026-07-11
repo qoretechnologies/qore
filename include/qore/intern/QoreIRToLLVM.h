@@ -198,6 +198,10 @@ private:
     // direct LLVM calls to the fast entry function.
     const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* batch_callees = nullptr;
 
+    // Callee AOT contexts loaded once in the logical function entry, keyed by
+    // expression slot. The context mapping is immutable during an invocation.
+    std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
+
     // Approach B fast entry: LLVM function name override and parameter mapping.
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().

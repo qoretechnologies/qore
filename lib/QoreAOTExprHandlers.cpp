@@ -1531,6 +1531,9 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Populate pre_instantiated_locals
     for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
         if (closure_sig->lv[p]) {
+            // IR local deserialization has already resolved the signature
+            // LocalVar through enclosing_locals; restore analysis metadata.
+            closure_ir->param_local_vars[static_cast<int>(p)] = closure_sig->lv[p];
             closure_ir->pre_instantiated_locals.insert(
                 reinterpret_cast<const void*>(closure_sig->lv[p]));
         }

@@ -1473,6 +1473,9 @@ bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
 
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
+    ast_referenced_locals.clear();
+    has_opaque_ast_local_access = false;
+    has_explicit_self_local_access = false;
 
     // Collect all locals referenced by LoadLocal/StoreLocal/UninstantiateLocal
     std::unordered_set<const void*> all_locals;
@@ -1480,8 +1483,6 @@ void QoreIRFunction::computeIROnlyLocals() {
     // Collect all locals referenced by AST expression trees in Call/Invoke/Lvalue
     // instructions.  These locals are accessed through the runtime stack (not through
     // LoadLocal/StoreLocal) and MUST remain AST-visible.
-    std::unordered_set<const void*> ast_referenced_locals;
-
     // Track whether the function has any delegate-to-AST statements
     bool has_delegate_to_ast = false;
 
@@ -1632,6 +1633,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the function has delegate-to-AST statements, ALL locals are AST-visible
     // because the AST execution could access any local through the thread-local stack.
     if (has_delegate_to_ast) {
+        has_opaque_ast_local_access = true;
         ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': has_delegate_to_ast, all AST-visible\n", name.c_str());
         return;  // ir_only_locals stays empty — all locals are AST-visible
@@ -1640,6 +1642,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the AST walker hit an unknown node type, conservatively treat all locals
     // as AST-visible.  This ensures correctness even for unhandled AST structures.
     if (unknown_node_found) {
+        has_opaque_ast_local_access = true;
         ast_visible_body_locals = all_body_locals;
         printd(5, "computeIROnlyLocals '%s': unknown_node_found, all AST-visible\n", name.c_str());
         return;
@@ -1654,6 +1657,9 @@ void QoreIRFunction::computeIROnlyLocals() {
     // 3. It is NOT a reference type (which can alias other variables)
     for (const void* key : all_locals) {
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+        if (lv && lv->isSelf()) {
+            has_explicit_self_local_access = true;
+        }
         // Local appears in AST expression trees — must stay AST-visible
         if (ast_referenced_locals.count(key)) {
             printd(5, "  local '%s' (%p): AST-referenced (non-IR-only)\n", lv->getName(), key);

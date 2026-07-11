@@ -2767,6 +2767,19 @@ public:
     // (reload after calls), since no AST callback will ever look them up.
     std::unordered_set<const void*> ir_only_locals;
 
+    // Locals referenced by AST expression subtrees retained in otherwise
+    // lowered IR. This metadata lets native fast-entry eligibility distinguish
+    // an unused synthetic method self local from one that still requires TLS.
+    std::unordered_set<const void*> ast_referenced_locals;
+
+    // True when delegate-to-AST statements or an unknown AST node prevent an
+    // exact local-reference inventory.
+    bool has_opaque_ast_local_access = false;
+
+    // True when lowered IR reads or writes the synthetic method `self` local
+    // as a value rather than only accessing members through self helpers.
+    bool has_explicit_self_local_access = false;
+
     // Total number of unique locals referenced by LoadLocal/StoreLocal/UninstantiateLocal.
     // Used with ir_only_locals.size() to determine if ALL locals are IR-only
     // (enabling reloadAllLocalsFromRuntime to be skipped entirely).

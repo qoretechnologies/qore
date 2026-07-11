@@ -583,6 +583,28 @@ static bool isAOTFastMethodCallEligible(const AbstractQoreFunctionVariant* varia
             && variant->getUserVariantBase()->isStaticallyFastCallEligible();
 }
 
+//! Check if a final-class instance method can reuse the caller's implicit self
+//! context in a direct AOT fast entry. Any explicit or opaque AST access to the
+//! synthetic self local still requires the normal method frame and TLS slot.
+static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
+        const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method) {
+    static const bool enabled = getenv("QORE_DISABLE_AOT_SELF_FAST_ENTRY") == nullptr;
+    if (!enabled || !qc || !qc->isFinal() || !method || method->isStatic()
+            || method->getClass() != qc || ir_func->has_opaque_ast_local_access
+            || ir_func->has_explicit_self_local_access
+            || !isAOTFastEntryEligible(ir_func, uvb)) {
+        return false;
+    }
+
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!sig || !sig->selfid) {
+        return true;
+    }
+    const void* self_key = reinterpret_cast<const void*>(sig->selfid);
+    return !ir_func->ir_only_locals.count(self_key)
+        && !ir_func->ast_referenced_locals.count(self_key);
+}
+
 //! Check if an AOT function has self-recursive CallDirect instructions.
 static bool hasAOTSelfRecursiveCall(const QoreIRFunction* ir_func) {
     size_t inst_i = 0;
@@ -3006,6 +3028,11 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
+    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+        return &call->getParsedArgTypeInfo();
+    }
     return nullptr;
 }
 
@@ -3339,14 +3366,14 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
-    // Walk classes for static methods.  Instance methods need a receiver/self
-    // ABI, but static methods can use the same direct-argument fast-entry ABI
-    // as functions.
+    // Walk classes for methods. Final-class instance methods that never expose
+    // their synthetic self local can reuse the caller's implicit object/class
+    // context and the same direct-argument ABI as functions/static methods.
     ClassListIterator cli(ns->classList);
     size_t class_i = 0;
     while (cli.next()) {
         if (class_i && !(class_i % 100)
-                && qore_check_cancel(nullptr, "AOT batch static-method fast-entry class declaration")) {
+                && qore_check_cancel(nullptr, "AOT batch method fast-entry class declaration")) {
             return false;
         }
         ++class_i;
@@ -3369,14 +3396,29 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             class_name += 2;
         }
 
+        std::vector<QoreMethod*> class_methods;
+        class_methods.reserve(qcp->hm.size() + qcp->shm.size());
+        size_t collect_i = 0;
+        for (const auto* methods : {&qcp->hm, &qcp->shm}) {
+            for (const auto& entry : *methods) {
+                if (collect_i && !(collect_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT batch method fast-entry collection")) {
+                    return false;
+                }
+                ++collect_i;
+                class_methods.push_back(entry.second);
+            }
+        }
+
         size_t method_i = 0;
-        for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi, ++method_i) {
+        for (QoreMethod* meth : class_methods) {
             if (method_i && !(method_i % 100)
                     && qore_check_cancel(nullptr,
-                        "AOT batch static-method fast-entry method declaration")) {
+                        "AOT batch method fast-entry declaration")) {
                 return false;
             }
-            QoreMethod* meth = mi->second;
+            ++method_i;
             if (!meth || !meth->isUser()) {
                 continue;
             }
@@ -3388,7 +3430,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             while (vit.next()) {
                 if (variant_i && !(variant_i % 100)
                         && qore_check_cancel(nullptr,
-                            "AOT batch static-method fast-entry variant declaration")) {
+                            "AOT batch method fast-entry variant declaration")) {
                     return false;
                 }
                 ++variant_i;
@@ -3402,7 +3444,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     continue;
                 }
 
-                std::string method_name = std::string(class_name) + "::_static_" + meth->getName();
+                std::string method_name = std::string(class_name) + "::"
+                    + (meth->isStatic() ? "_static_" : "") + meth->getName();
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 if (!declared_keys.insert(variant_key).second) {
                     continue;
@@ -3417,7 +3460,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 }
 
                 ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
-                if (isAOTFastEntryEligible(ir_func, uvb)) {
+                bool implicit_self = isAOTImplicitSelfFastEntryEligible(
+                    ir_func, uvb, qc, meth);
+                if ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
+                        || implicit_self) {
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
                     std::vector<BatchCalleeParamKind> param_kinds =
@@ -3435,8 +3481,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                         fast_params.reserve(num_params + 2);
                         for (unsigned i = 0; i < num_params; ++i) {
                             if (i && !(i % 100)
-                                    && qore_check_cancel(nullptr,
-                                        "AOT static fast-entry declaration parameter setup")) {
+                                && qore_check_cancel(nullptr,
+                                    "AOT method fast-entry declaration parameter setup")) {
                                 delete ir_func;
                                 return false;
                             }
@@ -3456,13 +3502,17 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     BatchCalleeInfo info;
                     info.name = ir_func->name;
                     info.approach_b_eligible = true;
+                    info.implicit_self_method = implicit_self;
                     info.fast_name = fast_entry_name;
                     info.num_params = num_params;
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
-                    ir_func = nullptr;
+                    if (!implicit_self) {
+                        context_candidates.emplace_back(variant,
+                            std::unique_ptr<QoreIRFunction>(ir_func));
+                        ir_func = nullptr;
+                    }
                 }
                 delete ir_func;
             }
@@ -4052,10 +4102,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::string fast_entry_name;
                     std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
+                    bool implicit_self_fast_entry = !metadata_only
+                        && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth);
                     bool fast_entry_eligible = !metadata_only
-                        && meth->isStatic()
                         && isAOTFastMethodCallEligible(variant)
-                        && isAOTFastEntryEligible(ir_func, uvb);
+                        && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
+                            || implicit_self_fast_entry);
                     if (fast_entry_eligible) {
                         fast_entry_name = ir_func->name + "_fast";
                         const UserSignature* sig = uvb->getUserSignature();
@@ -4073,10 +4125,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         for (unsigned i = 0; i < num_params; ++i) {
                             if (i && !(i % 100)
                                     && qore_check_cancel(nullptr,
-                                        "AOT static method fast-entry parameter type setup")) {
+                                        "AOT method fast-entry parameter type setup")) {
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "method", variant_key,
-                                    "static fast-entry parameter type setup", "cancelled");
+                                    "fast-entry parameter type setup", "cancelled");
                                 delete ir_func;
                                 return;
                             }
@@ -4095,7 +4147,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                         fast_fn->addFnAttr(llvm::Attribute::InlineHint);
                         if (getenv("QORE_AOT_DEBUG")) {
-                            fprintf(stderr, "AOT: static method fast entry '%s' (%u params)\n",
+                            fprintf(stderr, "AOT: method fast entry '%s' (%u params)\n",
                                 fast_entry_name.c_str(), num_params);
                         }
                     }
@@ -4178,10 +4230,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             for (unsigned i = 0; i < num_params; ++i) {
                                 if (i && !(i % 100)
                                         && qore_check_cancel(nullptr,
-                                            "AOT static method fast-entry parameter mapping")) {
+                                            "AOT method fast-entry parameter mapping")) {
                                     ++failed_count;
                                     setAOTCompileFatal(fatal_error, "method", variant_key,
-                                        "static fast-entry parameter mapping", "cancelled");
+                                        "fast-entry parameter mapping", "cancelled");
                                     delete ir_func;
                                     return;
                                 }
@@ -4205,16 +4257,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     &param_kind_map);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
-                                printd(2, "AOT: static method fast entry '%s' lowering failed: %s\n",
+                                printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",
                                     fast_entry_name.c_str(), fast_error.c_str());
                                 if (getenv("QORE_AOT_DEBUG")) {
                                     fprintf(stderr,
-                                        "AOT: static method fast entry '%s' lowering failed: %s\n",
+                                        "AOT: method fast entry '%s' lowering failed: %s\n",
                                         fast_entry_name.c_str(), fast_error.c_str());
                                 }
                                 ++failed_count;
                                 setAOTCompileFatal(fatal_error, "method", variant_key,
-                                    "static fast-entry LLVM lowering", fast_error);
+                                    "fast-entry LLVM lowering", fast_error);
                                 delete ir_func;
                                 return;
                             } else if (aot_batch_callee_map) {
@@ -4226,6 +4278,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 }
                                 info.name = ir_func->name;
                                 info.approach_b_eligible = true;
+                                info.implicit_self_method = implicit_self_fast_entry;
                                 info.fast_name = fast_entry_name;
                                 info.num_params = num_params;
                                 info.param_kinds = fast_entry_param_kinds;

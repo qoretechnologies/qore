@@ -2775,7 +2775,7 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     return true;
 }
 
-static bool tryExecuteInterpreterNativeLeaf(QoreIRCallDirectInstruction* inst,
+bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result) {
     if (!ensureInterpreterNativeLeafState(inst, nargs)) {
         return false;
@@ -12608,7 +12608,7 @@ lvalue_path_unary_done:
                     } else if (!debug_active
                             && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0
                             && !direct_inst->cached_uvb->hasCachedFunction()
-                            && tryExecuteInterpreterNativeLeaf(direct_inst, nanboxed_args, nargs, res)) {
+                            && qore_ir_try_execute_native_leaf(direct_inst, nanboxed_args, nargs, res)) {
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;
                     } else {

@@ -4777,6 +4777,49 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         int nargs, const uint64_t* args, ExceptionSink* xsink,
         uint64_t** arg_cleanups = nullptr);
 
+static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
+        const UserVariantBase* uvb, uint64_t* args, int nargs,
+        uint64_t** arg_cleanups, uint64_t& result_bits) {
+    static const bool disabled =
+        std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE") != nullptr;
+    if (disabled || !node || !uvb || uvb->hasCachedFunction() || arg_cleanups
+            || !uvb->isStaticallyFastCallEligible()) {
+        return false;
+    }
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    const UserSignature* sig = uvb->getUserSignature();
+    if (!callee_ir || !sig) {
+        return false;
+    }
+
+    struct NativeClosureLeafCache {
+        NativeClosureLeafCache()
+            : descriptor(nullptr, nullptr, nullptr, QoreValue()) {
+        }
+
+        const UserVariantBase* uvb = nullptr;
+        int nargs = -1;
+        QoreIRCallDirectInstruction descriptor;
+    };
+    static thread_local NativeClosureLeafCache cache;
+    if (cache.uvb != uvb || cache.nargs != nargs
+            || cache.descriptor.cached_callee_ir != callee_ir) {
+        cache.uvb = uvb;
+        cache.nargs = nargs;
+        cache.descriptor.cached_callee_ir = callee_ir;
+        cache.descriptor.cached_uvb = uvb;
+        cache.descriptor.cached_return_type = sig->getReturnTypeInfo();
+        cache.descriptor.native_leaf_state.store(0, std::memory_order_release);
+    }
+
+    QoreValue result;
+    if (!qore_ir_try_execute_native_leaf(&cache.descriptor, args, nargs, result)) {
+        return false;
+    }
+    result_bits = toBits(result);
+    return true;
+}
+
 // Fast-path helper for closure calls with no arguments — avoids QoreListNode allocation
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink) {
     if (check_stack(xsink)) {
@@ -4800,6 +4843,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            uint64_t leaf_result;
+            if (tryExecClosureNativeLeaf(node, uvb, nullptr, 0, nullptr, leaf_result)) {
+                return leaf_result;
+            }
             return execClosureDirect(cb, uvb, 0, nullptr, xsink);
         }
         // Fall through to execValue for closures without cached IR/JIT
@@ -4841,6 +4888,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            uint64_t leaf_result;
+            if (tryExecClosureNativeLeaf(node, uvb, &arg0_bits, 1, nullptr, leaf_result)) {
+                return leaf_result;
+            }
             return execClosureDirect(cb, uvb, 1, &arg0_bits, xsink);
         }
         // Fall through to execValue for closures without cached IR/JIT
@@ -4890,6 +4941,11 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            uint64_t leaf_result;
+            if (tryExecClosureNativeLeaf(node, uvb, args, nargs, arg_cleanups,
+                    leaf_result)) {
+                return leaf_result;
+            }
             return execClosureDirect(cb, uvb, nargs, args, xsink, arg_cleanups);
         }
         // Fall through to execValue for closures without cached IR/JIT
