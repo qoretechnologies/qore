@@ -3262,19 +3262,23 @@ static void resolveAOTBatchContextIndependentFastEntries(
 
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
+            effect_only_candidates,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
     if (std::getenv("QORE_DISABLE_AOT_FUNCTION_EFFECT_SUMMARY")) {
         return true;
     }
     std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>> functions;
-    functions.reserve(candidates.size());
+    functions.reserve(candidates.size() + effect_only_candidates.size());
     size_t check_count = 0;
-    for (const auto& [variant, func] : candidates) {
-        if (++check_count % 100 == 0
-                && qore_check_cancel(nullptr, "AOT batch function effect collection")) {
-            return false;
+    for (const auto* candidate_set : {&candidates, &effect_only_candidates}) {
+        for (const auto& [variant, func] : *candidate_set) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "AOT batch function effect collection")) {
+                return false;
+            }
+            functions.emplace_back(variant, func.get());
         }
-        functions.emplace_back(variant, func.get());
     }
     std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary> summaries;
     if (!qore_ir_compute_function_effect_summaries(functions, summaries)) {
@@ -3309,6 +3313,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         const std::unordered_set<std::string>* keep_modules,
         const std::unordered_set<std::string>* compile_files) {
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
+        effect_only_candidates;
 
     // Walk functions
     size_t func_i = 0;
@@ -3564,7 +3570,11 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    if (!implicit_self) {
+                    if (implicit_self) {
+                        effect_only_candidates.emplace_back(variant,
+                            std::unique_ptr<QoreIRFunction>(ir_func));
+                        ir_func = nullptr;
+                    } else {
                         context_candidates.emplace_back(variant,
                             std::unique_ptr<QoreIRFunction>(ir_func));
                         ir_func = nullptr;
@@ -3576,7 +3586,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
     }
 
     if (!resolveAOTBatchFunctionEffectSummaries(
-            context_candidates, aot_batch_callee_map)) {
+            context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
     }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);

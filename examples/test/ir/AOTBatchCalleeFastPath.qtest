@@ -131,6 +131,31 @@ final class SelfHelper {
     }
 }
 
+final class SelfEffects {
+    int leaf(int value) {
+        return value + 1;
+    }
+
+    *int maybe(bool assign_value) {
+        int value;
+        if (assign_value) {
+            value = 7;
+        }
+        return value;
+    }
+
+    string run() {
+        int value = 4;
+        code<int()> read_value = int sub () {
+            return value;
+        };
+        value = self.leaf(value);
+        *int absent = self.maybe(False);
+        return string(value) + \":\" + string(read_value()) + \":\"
+            + string(absent === NOTHING);
+    }
+}
+
 int sub leaf(int x) {
     return x + 1;
 }
@@ -231,12 +256,13 @@ string sub method_helper(Holder h) {
 string sub caller() {
     Holder h(\"ctx-ok\");
     SelfHelper sh();
+    SelfEffects effects();
     return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
         + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
         + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
         + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
         + \":\" + string(StaticHelper::refTry()) + \":\" + string(StaticHelper::failTry())
-        + \":\" + string(compound_try());
+        + \":\" + string(compound_try()) + \":\" + effects.run();
 }
 
 printf(\"%s\\n\", caller());
@@ -380,7 +406,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:5:11:5:12:3\n"
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:5:11:5:12:3:5:5:1\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);

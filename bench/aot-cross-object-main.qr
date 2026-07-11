@@ -13,6 +13,23 @@ class SameObjectMath {
     }
 }
 
+final class ReadOnlySelfMath {
+    int leaf(int value) {
+        return value + 1;
+    }
+
+    int run(int rounds) {
+        int checksum = 0;
+        code<int()> read_checksum = int sub () {
+            return checksum;
+        };
+        for (int i = 0; i < rounds; ++i) {
+            checksum = self.leaf(checksum);
+        }
+        return checksum + read_checksum();
+    }
+}
+
 int sub benchCrossObjectLeaf(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -147,4 +164,9 @@ nothing sub caughtNativeIntMain() {
 
 nothing sub caughtNativeFloatMain() {
     printf("%g\n", benchCaughtNativeFloatOps(10000000));
+}
+
+nothing sub selfReadOnlyMain() {
+    ReadOnlySelfMath math();
+    printf("%d\n", math.run(10000000));
 }
