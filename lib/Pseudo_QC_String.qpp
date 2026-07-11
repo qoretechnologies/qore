@@ -528,7 +528,7 @@ AbstractIterator<string> <string>::splitString(string separator) [const;flags=RE
     TempEncodingHelper temp(separator, str->getEncoding(), xsink);
     if (*xsink)
         return QoreValue();
-    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+    return new QoreObject(QC_STRINGSPLITITERATOR, getProgram(),
         new StringSplitIterator(str, *temp));
 }
 
@@ -552,7 +552,7 @@ int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
     @since %Qore 3.0
  */
 AbstractIterator<string> <string>::splitChars() [const;flags=CONSTANT] {
-    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+    return new QoreObject(QC_STRINGSPLITITERATOR, getProgram(),
         new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
 }
 
@@ -583,7 +583,7 @@ foreach int cp in (text.codePointIterator()) {
     @since %Qore 3.0
  */
 AbstractIterator<int> <string>::codePointIterator() [const;flags=CONSTANT] {
-    return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
+    return new QoreObject(QC_STRINGCHARITERATOR, getProgram(), new StringCharIterator(str));
 }
 
 //! Returns a lazy iterator yielding each Unicode codepoint of the string as a char value.
@@ -607,7 +607,7 @@ foreach char c in (text.iterator()) {
     @since %Qore 3.0
  */
 AbstractIterator<char> <string>::iterator() [const;flags=CONSTANT] {
-    return new QoreObject(QC_STRINGITERATOR, 0, new StringIterator(str));
+    return new QoreObject(QC_STRINGITERATOR, getProgram(), new StringIterator(str));
 }
 
 //! Returns a lazy iterator yielding each line of the string, one per element.
@@ -628,7 +628,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
  */
 AbstractIterator<string> <string>::splitLines() [const;flags=CONSTANT] {
     QoreString nl("\n");
-    return new QoreObject(QC_STRINGSPLITITERATOR, 0,
+    return new QoreObject(QC_STRINGSPLITITERATOR, getProgram(),
         new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
 }
 
@@ -671,7 +671,7 @@ AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int
     if (*xsink) {
         return QoreValue();
     }
-    return new QoreObject(QC_STRINGREGEXSPLITITERATOR, 0, it.release());
+    return new QoreObject(QC_STRINGREGEXSPLITITERATOR, getProgram(), it.release());
 }
 
 //! Splits a string into a list of components based on a separator string and a quote character

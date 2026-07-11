@@ -12,10 +12,86 @@ hashdecl MyHash {
     int x = 1;
 }
 
+#! holds a pseudo-method iterator so it can be deleted through an object-member lvalue
+class IteratorHolder {
+    public {
+        *AbstractIterator i;
+    }
+
+    constructor(AbstractIterator n) {
+        i = n;
+    }
+
+    del() {
+        # deleting an object member routes through the member-lvalue delete path, which enforces the
+        # system-object check; a pseudo-method iterator must not be flagged a system object (issue: pseudo
+        # iterators were created with a null QoreProgram, so "delete" wrongly raised SYSTEM-OBJECT-ERROR)
+        delete i;
+    }
+}
+
 class PseudoMethods inherits QUnit::Test {
     constructor() : QUnit::Test("PseudoMethods test", "1.0") {
         addTestCase("PseudoMethodsTest", \pseudoMethodsTest());
+        addTestCase("PseudoIteratorDeleteTest", \pseudoIteratorDeleteTest());
         set_return_value(main());
+    }
+
+    #! pseudo-method iterators must be ordinary program objects, not system constants, so they can be deleted
+    /** regression test: previously "<list>.iterator()" and the other pseudo-method iterators were created with a
+        null QoreProgram pointer, marking them as system constant objects; deleting such an object through an
+        object-member lvalue raised "SYSTEM-OBJECT-ERROR: cannot delete a system constant object"
+    */
+    pseudoIteratorDeleteTest() {
+        # list iterator
+        {
+            list<int> l = (1, 2, 3);
+            IteratorHolder h(l.iterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # list range iterator
+        {
+            list<int> l = (1, 2, 3);
+            IteratorHolder h(l.rangeIterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # hash iterator
+        {
+            hash<auto> hh = {"a": 1, "b": 2};
+            IteratorHolder h(hh.iterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # hash pair iterator
+        {
+            hash<auto> hh = {"a": 1, "b": 2};
+            IteratorHolder h(hh.pairIterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # object iterator
+        {
+            object o = new IteratorHolder(().iterator());
+            IteratorHolder h(o.iterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # string code-point iterator
+        {
+            string s = "abc";
+            IteratorHolder h(s.codePointIterator());
+            h.del();
+            assertNothing(h.i);
+        }
+        # string split-chars iterator
+        {
+            string s = "abc";
+            IteratorHolder h(s.splitChars());
+            h.del();
+            assertNothing(h.i);
+        }
     }
 
     pseudoMethodsTest() {

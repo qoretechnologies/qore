@@ -301,7 +301,7 @@ map printf("value: %y\n", $1), h.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <hash>::iterator() [flags=CONSTANT] {
-   return qore_new_hash_iterator_object(0, h);
+   return qore_new_hash_iterator_object(getProgram(), h);
 }
 
 //! Returns a @ref Qore::HashKeyIterator "HashKeyIterator" object for the hash
@@ -321,7 +321,7 @@ map printf("key: %s\n", $1), h.keyIterator();
 HashKeyIterator <hash>::keyIterator() [flags=CONSTANT] {
    ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h), xsink);
    p->setView(QoreHashIterator::VIEW_KEY);
-   return new QoreObject(QC_HASHKEYITERATOR, 0, p.release());
+   return new QoreObject(QC_HASHKEYITERATOR, getProgram(), p.release());
 }
 
 //! Returns a @ref Qore::HashPairIterator "HashPairIterator" object for the hash
@@ -337,7 +337,7 @@ map printf("%s: %y\n", $1.key, $1.value), h.pairIterator());
     @since %Qore 0.8.6.2
  */
 HashPairIterator <hash>::pairIterator() [flags=CONSTANT] {
-   return qore_new_hash_pair_iterator_object(0, h);
+   return qore_new_hash_pair_iterator_object(getProgram(), h);
 }
 
 //! Returns a @ref Qore::HashListIterator "HashListIterator" object for the hash
@@ -357,7 +357,7 @@ map printf("+ %s\n", $1), h.contextIterator();
     @since %Qore 0.8.6.2
  */
 HashListIterator <hash>::contextIterator() [flags=CONSTANT] {
-   return new QoreObject(QC_HASHLISTITERATOR, 0, new QoreHashListIterator(h));
+   return new QoreObject(QC_HASHLISTITERATOR, getProgram(), new QoreHashListIterator(h));
 }
 
 //! Returns @ref True "True" if the hash argument passed has the same keys in the same order as the current hash, @ref False "False" if not
