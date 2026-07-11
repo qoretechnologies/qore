@@ -55,7 +55,9 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
             : AbstractDataProviderRecordIterator(search_options.requires_result,
                 search_options.max_records) {
         self.i = i;
-        self.where_cond = where_cond;
+        self.where_cond = where_cond instanceof hash<DataProviderExpression>
+            ? AbstractDataProvider::prepareExpression(cast<hash<DataProviderExpression>>(where_cond))
+            : where_cond;
         self.template_context = template_context;
         if (exists search_options.columns && search_options.columns.typeCode() != NT_LIST) {
             search_options.columns = list(search_options.columns);

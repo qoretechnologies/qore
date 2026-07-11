@@ -58,7 +58,7 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
     /** @return the record type of the iterator
     */
     *hash<string, AbstractDataField> getRecordType() {
-        table.getRecordType();
+        return table.getRecordType();
     }
 }
 }

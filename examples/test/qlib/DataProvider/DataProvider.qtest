@@ -711,6 +711,18 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+
+        hash<DataProviderExpression> where_cond = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderFieldReference>{"field": "id"},
+                1,
+            ),
+        };
+        DefaultRecordIterator<hash<TypedRecordIteratorRow>> filtered(new TypedRecordIterator(), where_cond);
+        assertTrue(filtered.next());
+        assertEq(1, filtered.getValue().id);
+        assertFalse(filtered.next());
     }
 
     processorShapeApiTest() {

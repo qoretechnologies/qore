@@ -280,6 +280,22 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
             provider.deleteRecords({}, {"max_records": 2});
         });
         assertEq((1, 2, 3), map $1.id, table.selectRows({"orderby": "id"}));
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({"name": "same"}, {"orderby": "id",
+            "limit": 2});
+        assertTrue(exists iter.getRecordType().id);
+        AbstractDataProviderBulkRecordInterface bulk = iter.getBulkApi(1);
+        assertEq(2, bulk.getLimit());
+        list<int> ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            ids += block.id;
+        }
+        assertEq((1, 2), ids);
+        assertFalse(ds.currentThreadInTransaction());
     }
 
     #! Test that DB providers expose and consume native columnar bulk shapes

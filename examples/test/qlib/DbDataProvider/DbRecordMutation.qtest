@@ -64,6 +64,8 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("bounded delete rollback", \testBoundedDeleteRollback());
         addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
         addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
+        addTestCase("bound record iterators", \testBoundRecordIterators());
+        addTestCase("row to bulk iterator adapter", \testRowToBulkIteratorAdapter());
 
         set_return_value(main());
     }
@@ -168,5 +170,85 @@ class DbRecordMutationTest inherits QUnit::Test {
         assertFalse(ds.currentThreadInTransaction());
         ds.rollback();
         assertEq((1, 2, 3, 6), map $1.id, getRows());
+    }
+
+    private testBoundRecordIterators() {
+        requireSqlite();
+        resetRows();
+
+        assertEq((1, 2), map $1.id, table.selectRows({"where": {"group_name": "a"}, "orderby": "id"}));
+        hash<SqlResultInfo> statement_info = table.getStatementWithInfo({"where": {"group_name": "a"},
+            "orderby": "id"});
+        assertEq(("a",), statement_info.args);
+        assertEq((1, 2), map $1.id, statement_info.result.fetchRows());
+        statement_info.result.rollback();
+
+        hash<SqlResultInfo> no_exec_info = table.getStatementNoExecWithInfo({"where": {"group_name": "a"},
+            "orderby": "id"});
+        no_exec_info.result.exec("a");
+        assertEq((1, 2), map $1.id, no_exec_info.result.fetchRows());
+        no_exec_info.result.rollback();
+
+        AbstractSQLStatement constant_stmt = ds.getSQLStatement();
+        constant_stmt.prepare("select * from " + TableName + " where group_name = 'a' order by id");
+        constant_stmt.exec();
+        assertEq((1, 2), map $1.id, constant_stmt.fetchRows());
+        constant_stmt.rollback();
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({"group_name": "a"}, {"orderby": "id"});
+        hash<string, AbstractDataField> record_type = iter.getRecordType();
+        assertTrue(exists record_type.id);
+        list<int> row_ids;
+        while (iter.next()) {
+            push row_ids, iter.getValue().id;
+        }
+        assertEq((1, 2), row_ids);
+
+        AbstractDataProviderBulkRecordInterface bulk = provider.searchRecordsBulk(1, {"group_name": "a"},
+            {"orderby": "id", "limit": 2});
+        assertEq(2, bulk.getLimit());
+        list<int> bulk_ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            bulk_ids += block.id;
+        }
+        assertEq((1, 2), bulk_ids);
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testRowToBulkIteratorAdapter() {
+        requireSqlite();
+        resetRows();
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({}, {"orderby": "id", "limit": 2,
+            "max_records": 3});
+        assertThrows("INVALID-BLOCK-SIZE", sub () {
+            iter.getBulkApi(0);
+        });
+        AbstractDataProviderBulkRecordInterface bulk = iter.getBulkApi(1);
+        assertThrows("INVALID-ITERATOR", sub () {
+            iter.getBulkApi(1);
+        });
+        assertThrows("INVALID-ITERATOR", sub () {
+            iter.next();
+        });
+        assertEq(1, bulk.getBlockSize());
+        assertEq(2, bulk.getLimit());
+        assertEq(3, bulk.getMaxRecords());
+
+        list<int> ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            ids += block.id;
+        }
+        assertEq((1, 2), ids);
+        assertFalse(iter.valid());
+        assertFalse(ds.currentThreadInTransaction());
     }
 }

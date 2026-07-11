@@ -48,7 +48,7 @@ public class DbTableBulkRecordInterface inherits AbstractDataProviderBulkRecordI
     */
     constructor(int block_size, AbstractTable table, *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractDataProviderBulkRecordInterface(block_size, search_options.requires_result,
-                search_options.max_records) {
+                search_options.max_records, search_options.limit) {
         self.table = table;
         # release the transaction with a rollback in the destructor if we do not already have a transaction lock
         release_transaction = !table.getDatasource().currentThreadInTransaction() && !search_options.forupdate;
