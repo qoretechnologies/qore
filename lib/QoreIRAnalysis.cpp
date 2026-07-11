@@ -340,6 +340,8 @@ static bool qore_ir_is_native_scalar_pure_opcode(QoreIROpcode opcode) {
         case QoreIROpcode::AndInt:
         case QoreIROpcode::OrInt:
         case QoreIROpcode::XorInt:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShrInt:
         case QoreIROpcode::EqInt:
         case QoreIROpcode::EqFloat:
         case QoreIROpcode::NeInt:
@@ -354,6 +356,8 @@ static bool qore_ir_is_native_scalar_pure_opcode(QoreIROpcode opcode) {
         case QoreIROpcode::GeFloat:
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
+        case QoreIROpcode::ToBool:
+        case QoreIROpcode::Not:
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::UnaryMinusFloat:
             return true;
