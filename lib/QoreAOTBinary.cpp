@@ -6499,6 +6499,15 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeStringRef(rec.abi_kind.c_str());
     writer.writeStringRef(rec.consumer_source_file.c_str());
     writer.writeStringRef(rec.provider_source_file.c_str());
+    writer.writeU32(rec.fast_entry_flags);
+    writer.writeU32(rec.fast_entry_num_params);
+    for (const auto* values : {&rec.fast_param_kinds,
+            &rec.fast_param_rejects_nothing, &rec.fast_param_noescape}) {
+        writer.writeU32(static_cast<uint32_t>(values->size()));
+        if (!values->empty()) {
+            writer.writeBytes(values->data(), static_cast<uint32_t>(values->size()));
+        }
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6533,6 +6542,26 @@ static void aotAddNativeRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.qore_path = qore_path;
     rec.native_symbol = native_symbol;
     rec.abi_kind = abi_kind ? abi_kind : "qore_body";
+    native.push_back(std::move(rec));
+}
+
+static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
+        const std::string& qore_path, const QoreAOTFastEntryIndexInfo& info) {
+    if (info.native_symbol.empty() || !(info.flags & QORE_AOT_FAST_ENTRY_PRESENT)) {
+        return;
+    }
+    QoreAOTSymbolIndexRecord rec;
+    rec.kind = QoreAOTSymbolKind::NATIVE;
+    rec.dependency_class = QoreAOTDependencyClass::NATIVE_BODY;
+    rec.flags = QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED;
+    rec.qore_path = qore_path;
+    rec.native_symbol = info.native_symbol;
+    rec.abi_kind = "qore_fast_v1";
+    rec.fast_entry_flags = info.flags;
+    rec.fast_entry_num_params = info.num_params;
+    rec.fast_param_kinds = info.param_kinds;
+    rec.fast_param_rejects_nothing = info.param_rejects_nothing;
+    rec.fast_param_noescape = info.param_noescape;
     native.push_back(std::move(rec));
 }
 
@@ -7178,7 +7207,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const std::unordered_map<std::string, std::string>* native_symbol_map,
         const std::unordered_map<std::string, std::string>* init_native_symbol_map,
         const std::vector<AOTCompiledFuncWithSlots>* func_slots, std::string* error,
-        const std::unordered_set<std::string>* compile_files) {
+        const std::unordered_set<std::string>* compile_files,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>*
+            fast_entry_map) {
     if (!root_ns) {
         if (error) {
             *error = "missing root namespace for AOT symbol index";
@@ -7480,6 +7511,12 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
                     aotAddNativeRecord(native, key, it->second, "qore_body");
                 }
             }
+            if (fast_entry_map) {
+                auto fast_it = fast_entry_map->find(v);
+                if (fast_it != fast_entry_map->end()) {
+                    aotAddFastEntryRecord(native, key, fast_it->second);
+                }
+            }
             defined.push_back(std::move(rec));
             ++variant_slot;
         }
@@ -7533,6 +7570,12 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
                 if (it != native_symbol_map->end()) {
                     rec.native_symbol = it->second;
                     aotAddNativeRecord(native, key, it->second, "qore_body");
+                }
+            }
+            if (fast_entry_map) {
+                auto fast_it = fast_entry_map->find(v);
+                if (fast_it != fast_entry_map->end()) {
+                    aotAddFastEntryRecord(native, key, fast_it->second);
                 }
             }
             defined.push_back(std::move(rec));
@@ -7607,8 +7650,29 @@ static bool readSymbolIndexString(const QoreAOTBinaryReader& reader, const uint8
     return true;
 }
 
+static bool readSymbolIndexByteVector(const uint8_t*& ptr, const uint8_t* end,
+        std::vector<uint8_t>& values, std::string& error, const char* field) {
+    if (ptr + sizeof(uint32_t) > end) {
+        error = "truncated SYMBOL_INDEX byte-vector field '";
+        error += field;
+        error += "'";
+        return false;
+    }
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > static_cast<uint32_t>(end - ptr)) {
+        error = "invalid SYMBOL_INDEX byte-vector field '";
+        error += field;
+        error += "'";
+        return false;
+    }
+    values.assign(ptr, ptr + count);
+    ptr += count;
+    return true;
+}
+
 static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
-        const uint8_t* end, QoreAOTSymbolIndexRecord& rec, std::string& error) {
+        const uint8_t* end, uint16_t version, QoreAOTSymbolIndexRecord& rec,
+        std::string& error) {
     if (ptr + 8 > end) {
         error = "truncated SYMBOL_INDEX record header";
         return false;
@@ -7618,7 +7682,7 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.flags = QoreAOTBinaryReader::readU16(ptr);
     rec.metadata_slot = QoreAOTBinaryReader::readU32(ptr);
 
-    return readSymbolIndexString(reader, ptr, end, rec.qore_path, error, "qore_path")
+    if (!(readSymbolIndexString(reader, ptr, end, rec.qore_path, error, "qore_path")
         && readSymbolIndexString(reader, ptr, end, rec.source_file, error, "source_file")
         && readSymbolIndexString(reader, ptr, end, rec.visibility, error, "visibility")
         && readSymbolIndexString(reader, ptr, end, rec.signature_hash, error, "signature_hash")
@@ -7627,12 +7691,29 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         && readSymbolIndexString(reader, ptr, end, rec.native_symbol, error, "native_symbol")
         && readSymbolIndexString(reader, ptr, end, rec.abi_kind, error, "abi_kind")
         && readSymbolIndexString(reader, ptr, end, rec.consumer_source_file, error, "consumer_source_file")
-        && readSymbolIndexString(reader, ptr, end, rec.provider_source_file, error, "provider_source_file");
+        && readSymbolIndexString(reader, ptr, end, rec.provider_source_file, error, "provider_source_file"))) {
+        return false;
+    }
+    if (version < 2) {
+        return true;
+    }
+    if (ptr + 2 * sizeof(uint32_t) > end) {
+        error = "truncated SYMBOL_INDEX fast-entry metadata";
+        return false;
+    }
+    rec.fast_entry_flags = QoreAOTBinaryReader::readU32(ptr);
+    rec.fast_entry_num_params = QoreAOTBinaryReader::readU32(ptr);
+    return readSymbolIndexByteVector(ptr, end, rec.fast_param_kinds, error,
+            "fast_param_kinds")
+        && readSymbolIndexByteVector(ptr, end, rec.fast_param_rejects_nothing,
+            error, "fast_param_rejects_nothing")
+        && readSymbolIndexByteVector(ptr, end, rec.fast_param_noescape, error,
+            "fast_param_noescape");
 }
 
 static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         const uint8_t* end, std::vector<QoreAOTSymbolIndexRecord>& records,
-        std::string& error, const char* label) {
+        uint16_t version, std::string& error, const char* label) {
     if (ptr + sizeof(uint32_t) > end) {
         error = "truncated SYMBOL_INDEX ";
         error += label ? label : "record";
@@ -7653,7 +7734,7 @@ static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const
             return false;
         }
         QoreAOTSymbolIndexRecord rec;
-        if (!readSymbolIndexRecord(reader, ptr, end, rec, error)) {
+        if (!readSymbolIndexRecord(reader, ptr, end, version, rec, error)) {
             return false;
         }
         records.push_back(std::move(rec));
@@ -7685,7 +7766,7 @@ bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& inde
         error = "invalid SYMBOL_INDEX reserved field";
         return false;
     }
-    if (index.version != QORE_AOT_SYMBOL_INDEX_VERSION) {
+    if (index.version < 1 || index.version > QORE_AOT_SYMBOL_INDEX_VERSION) {
         error = "unsupported SYMBOL_INDEX version ";
         error += std::to_string(index.version);
         return false;
@@ -7715,9 +7796,12 @@ bool readSymbolIndex(const QoreAOTBinaryReader& reader, QoreAOTSymbolIndex& inde
         index.context.emplace_back(std::move(key), std::move(value));
     }
 
-    if (!readSymbolIndexRecordVector(reader, ptr, end, index.defined, error, "defined")
-            || !readSymbolIndexRecordVector(reader, ptr, end, index.imported, error, "imported")
-            || !readSymbolIndexRecordVector(reader, ptr, end, index.native, error, "native")) {
+    if (!readSymbolIndexRecordVector(reader, ptr, end, index.defined, index.version,
+                error, "defined")
+            || !readSymbolIndexRecordVector(reader, ptr, end, index.imported,
+                index.version, error, "imported")
+            || !readSymbolIndexRecordVector(reader, ptr, end, index.native,
+                index.version, error, "native")) {
         return false;
     }
     if (ptr != end) {

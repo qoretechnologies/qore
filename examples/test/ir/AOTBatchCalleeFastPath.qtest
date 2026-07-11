@@ -369,6 +369,18 @@ int sub cross_caught(int x) {
         return -1;
     }
 }
+
+nothing sub cross_bump(reference<int> value) {
+    ++value;
+}
+
+*int sub cross_maybe(bool assign_value) {
+    int value;
+    if (assign_value) {
+        value = 7;
+    }
+    return value;
+}
 ";
 }
 
@@ -376,7 +388,21 @@ string sub crossFileMainCode() {
     return "%modern
 
 int sub main() {
-    printf(\"%d:%s:%d\\n\", cross_leaf(4), cross_string(\"ok\"), cross_caught(5));
+    int value = 3;
+    cross_bump(\\value);
+    printf(\"%d:%s:%d:%d:%d\\n\", cross_leaf(4), cross_string(\"ok\"), cross_caught(5),
+        value, cross_maybe(False) === NOTHING);
+    return 0;
+}
+";
+}
+
+string sub crossFileUnassignedMainCode() {
+    return "%modern
+
+int sub main() {
+    int value;
+    printf(\"%s\\n\", cross_leaf(value));
     return 0;
 }
 ";
@@ -509,7 +535,84 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:ok!:13\n") {
+if (cross_out != "5:ok!:13:4:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
+    exit(2);
+}
+
+string separate_root = "/tmp/qore-aot-cross-file-separate-" + string(getpid());
+string separate_provider_dir = separate_root + "/provider";
+string separate_consumer_dir = separate_root + "/consumer";
+mkdir(separate_root);
+mkdir(separate_provider_dir);
+mkdir(separate_consumer_dir);
+string separate_provider_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, cross_leaf_path));
+string provider_qo = separate_provider_dir + "/"
+    + regex_subst(basename(cross_leaf_path), "\\.qr$", ".qo");
+if (!is_file(provider_qo)) {
+    printf("separate provider AOT compile failed:\n%s", separate_provider_out);
+    exit(2);
+}
+string separate_consumer_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, separate_consumer_dir, cross_main_path));
+string consumer_qo = separate_consumer_dir + "/"
+    + regex_subst(basename(cross_main_path), "\\.qr$", ".qo");
+if (!is_file(consumer_qo)) {
+    printf("separate consumer AOT compile failed:\n%s", separate_consumer_out);
+    exit(2);
+}
+string separate_exe = separate_root + "/cross-file";
+string separate_link_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, separate_exe, provider_qo, consumer_qo));
+if (!is_file(separate_exe)) {
+    printf("separate AOT link failed:\n%s", separate_link_out);
+    exit(2);
+}
+string separate_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, separate_exe));
+if (separate_out != cross_out) {
+    printf("unexpected separate cross-file AOT output: %s", separate_out);
+    exit(2);
+}
+string provider_index = backquote(sprintf("%s --dump-index-json %s",
+    qcc_bin, provider_qo));
+if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
+        || !(provider_index =~ /\"fast_entry_num_params\": 1/)
+        || !(provider_index =~ /\"fast_param_rejects_nothing\": \[1\]/)) {
+    printf("missing serialized fast-entry metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string unassigned_main_path = separate_root + "/unassigned-main.qr";
+File unassigned_main_script();
+unassigned_main_script.open2(unassigned_main_path, O_WRONLY | O_CREAT | O_TRUNC);
+unassigned_main_script.write(crossFileUnassignedMainCode());
+unassigned_main_script.close();
+string unassigned_compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, separate_provider_dir, separate_consumer_dir,
+    unassigned_main_path));
+string unassigned_qo = separate_consumer_dir + "/unassigned-main.qo";
+if (!is_file(unassigned_qo)) {
+    printf("unassigned consumer AOT compile failed:\n%s", unassigned_compile_out);
+    exit(2);
+}
+string unassigned_exe = separate_root + "/unassigned";
+string unassigned_link_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, unassigned_exe, provider_qo, unassigned_qo));
+if (!is_file(unassigned_exe)) {
+    printf("unassigned consumer AOT link failed:\n%s", unassigned_link_out);
+    exit(2);
+}
+string unassigned_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, unassigned_exe));
+if (!(unassigned_out =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
+    printf("expected rejection for imported fast-entry unassigned lvalue:\n%s",
+        unassigned_out);
     exit(2);
 }

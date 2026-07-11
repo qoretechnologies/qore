@@ -917,7 +917,9 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
         const char* module_name = nullptr,
         const std::unordered_set<std::string>* keep_modules = nullptr,
         const char* compile_file = nullptr,
-        const std::unordered_set<std::string>* compile_files = nullptr) {
+        const std::unordered_set<std::string>* compile_files = nullptr,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
+            batch_callees = nullptr) {
     std::unordered_map<std::string, std::string> native_symbols;
     if (!buildAOTNativeSymbolMap(compiled_funcs, native_symbols, error,
             "AOT native-symbol map collection")) {
@@ -929,9 +931,59 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
         return false;
     }
 
+    std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>
+        fast_entries;
+    if (batch_callees) {
+        fast_entries.reserve(batch_callees->size());
+        size_t entry_i = 0;
+        for (const auto& [variant, info] : *batch_callees) {
+            if (entry_i && !(entry_i % 100)
+                    && qore_check_cancel(nullptr, "AOT fast-entry index collection")) {
+                error = "operation cancelled during AOT fast-entry index collection";
+                return false;
+            }
+            ++entry_i;
+            if (!variant || !info.approach_b_eligible || info.fast_name.empty()) {
+                continue;
+            }
+            QoreAOTFastEntryIndexInfo entry;
+            entry.native_symbol = info.fast_name;
+            entry.flags = QORE_AOT_FAST_ENTRY_PRESENT;
+            if (info.context_independent_fast_entry) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT;
+            }
+            if (info.may_invalidate_external_caches) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
+            }
+            if (info.never_returns_nothing) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
+            }
+            if (info.implicit_self_method) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
+            }
+            entry.num_params = info.num_params;
+            entry.param_kinds.reserve(info.param_kinds.size());
+            size_t param_i = 0;
+            for (BatchCalleeParamKind kind : info.param_kinds) {
+                if (param_i && !(param_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT fast-entry parameter index collection")) {
+                    error = "operation cancelled during AOT fast-entry parameter index collection";
+                    return false;
+                }
+                entry.param_kinds.push_back(static_cast<uint8_t>(kind));
+                ++param_i;
+            }
+            entry.param_rejects_nothing = info.param_rejects_nothing;
+            entry.param_noescape = info.param_noescape;
+            fast_entries.emplace(variant, std::move(entry));
+        }
+    }
+
     std::string symbol_error;
     if (!serializeSymbolIndex(writer, root_ns, module_name, keep_modules, compile_file,
-            &native_symbols, &init_native_symbols, func_slots, &symbol_error, compile_files)) {
+            &native_symbols, &init_native_symbols, func_slots, &symbol_error,
+            compile_files, fast_entries.empty() ? nullptr : &fast_entries)) {
         error = "failed to serialize AOT symbol index";
         if (!symbol_error.empty()) {
             error += ": " + symbol_error;
@@ -3651,6 +3703,147 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
         fn->setVisibility(llvm::GlobalValue::HiddenVisibility);
         fn->setDSOLocal(true);
         fn->addFnAttr(llvm::Attribute::InlineHint);
+    }
+    return true;
+}
+
+static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
+        BatchCalleeInfo& info, bool& cancelled) {
+    cancelled = false;
+    if (rec.abi_kind != "qore_fast_v1" || rec.native_symbol.empty()
+            || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
+            || rec.fast_param_kinds.size() != rec.fast_entry_num_params
+            || rec.fast_param_rejects_nothing.size() != rec.fast_entry_num_params
+            || rec.fast_param_noescape.size() > rec.fast_entry_num_params) {
+        return false;
+    }
+    info.param_kinds.reserve(rec.fast_param_kinds.size());
+    size_t param_i = 0;
+    for (uint8_t kind : rec.fast_param_kinds) {
+        if (param_i && !(param_i % 100)
+                && qore_check_cancel(nullptr, "AOT preloaded fast-entry ABI validation")) {
+            cancelled = true;
+            return false;
+        }
+        if (kind > static_cast<uint8_t>(BatchCalleeParamKind::NativeFloat)) {
+            return false;
+        }
+        info.param_kinds.push_back(static_cast<BatchCalleeParamKind>(kind));
+        ++param_i;
+    }
+    info.approach_b_eligible = true;
+    info.implicit_self_method = rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
+    info.context_independent_fast_entry =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT;
+    info.may_invalidate_external_caches =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
+    info.never_returns_nothing =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
+    info.fast_name = rec.native_symbol;
+    info.num_params = rec.fast_entry_num_params;
+    info.param_rejects_nothing = rec.fast_param_rejects_nothing;
+    info.param_noescape = rec.fast_param_noescape;
+    info.param_noescape.resize(info.num_params, 0);
+    return true;
+}
+
+static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
+        const std::unordered_map<std::string, QoreAOTSymbolIndexRecord>& records,
+        std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    size_t check_count = 0;
+    for (auto i = ns->func_list.begin(), e = ns->func_list.end(); i != e; ++i) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT preloaded function fast-entry import")) {
+            return false;
+        }
+        QoreFunction* func = i->second->getFunction();
+        if (!func) {
+            continue;
+        }
+        std::string function_name;
+        ns->getPath(function_name);
+        if (!function_name.empty()) {
+            function_name += "::";
+        }
+        function_name += func->getName();
+        QoreFunctionIterator vit(*func);
+        while (vit.next()) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT preloaded function variant fast-entry import")) {
+                return false;
+            }
+            const AbstractQoreFunctionVariant* variant = vit.getVariant();
+            auto rec_it = records.find(getVariantKey(function_name.c_str(), variant));
+            if (rec_it == records.end() || batch_callees.count(variant)) {
+                continue;
+            }
+            BatchCalleeInfo info;
+            bool cancelled = false;
+            if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                batch_callees.emplace(variant, std::move(info));
+            } else if (cancelled) {
+                return false;
+            }
+        }
+    }
+
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT preloaded method fast-entry import")) {
+            return false;
+        }
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        for (const auto* methods : {&qcp->hm, &qcp->shm}) {
+            for (const auto& entry : *methods) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT preloaded method collection")) {
+                    return false;
+                }
+                QoreMethod* method = entry.second;
+                if (!method) {
+                    continue;
+                }
+                QoreFunctionIterator vit(*qore_method_private::get(*method)->getFunction());
+                while (vit.next()) {
+                    if (++check_count % 100 == 0
+                            && qore_check_cancel(nullptr,
+                                "AOT preloaded method variant fast-entry import")) {
+                        return false;
+                    }
+                    const AbstractQoreFunctionVariant* variant = vit.getVariant();
+                    std::string key = aotRelocMethodDisplayKey(qc, method->getName(), variant);
+                    auto rec_it = records.find(key);
+                    if (rec_it == records.end() || batch_callees.count(variant)) {
+                        continue;
+                    }
+                    BatchCalleeInfo info;
+                    bool cancelled = false;
+                    if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                        batch_callees.emplace(variant, std::move(info));
+                    } else if (cancelled) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    for (auto& ni : ns->nsl.nsmap) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT preloaded namespace fast-entry import")) {
+            return false;
+        }
+        if (ni.second && !addAOTPreloadedFastEntries(qore_ns_private::get(*ni.second),
+                records, batch_callees)) {
+            return false;
+        }
     }
     return true;
 }
@@ -9964,7 +10157,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
-                nullptr, nullptr, target_canon.c_str())) {
+                nullptr, nullptr, target_canon.c_str(), nullptr,
+                shared_batch_callees)) {
             return false;
         }
         if (!compiled_init_funcs.empty()) {
@@ -11154,6 +11348,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // Canonical source labels of the siblings actually preloaded below (filled
     // by the `-L` scan).  Used to narrow the dependency sink to true siblings.
     std::unordered_set<std::string> sibling_source_labels;
+    std::unordered_map<std::string, QoreAOTSymbolIndexRecord> sibling_fast_entries;
+    std::unordered_set<std::string> ambiguous_sibling_fast_entries;
 
     // AOT incremental dependency sink: collects the source file of every
     // declaration the TARGET resolves while it is parsed and committed —
@@ -11311,6 +11507,40 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 ++frag_i;
             }
             extracted_frags = std::move(kept);
+        }
+
+        for (const auto& frag : extracted_frags) {
+            QoreAOTBinaryReader index_reader;
+            std::string index_error;
+            if (!index_reader.open(frag.bytes.data(),
+                    static_cast<uint32_t>(frag.bytes.size()), index_error)) {
+                continue;
+            }
+            QoreAOTSymbolIndex index;
+            if (!readSymbolIndex(index_reader, index, index_error)) {
+                error = "cannot read sibling fast-entry metadata from '"
+                    + frag.symbol_name + "': " + index_error;
+                return false;
+            }
+            size_t native_i = 0;
+            for (const QoreAOTSymbolIndexRecord& rec : index.native) {
+                if (native_i && !(native_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT sibling fast-entry metadata collection")) {
+                    error = "operation cancelled during AOT sibling fast-entry metadata collection";
+                    return false;
+                }
+                ++native_i;
+                if (rec.abi_kind != "qore_fast_v1" || rec.qore_path.empty()
+                        || ambiguous_sibling_fast_entries.count(rec.qore_path)) {
+                    continue;
+                }
+                auto [it, inserted] = sibling_fast_entries.emplace(rec.qore_path, rec);
+                if (!inserted) {
+                    sibling_fast_entries.erase(it);
+                    ambiguous_sibling_fast_entries.insert(rec.qore_path);
+                }
+            }
         }
 
         // Phase 1 via multi-deserializer.  Only create sibling shells here.
@@ -11488,6 +11718,33 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
+        standalone_batch_callees;
+    {
+        llvm::LLVMContext discovery_ctx;
+        llvm::Module discovery_module("qore_aot_standalone_fast_entry_discovery",
+            discovery_ctx);
+        std::set<std::string> declared_fast_keys;
+        if (!declareAOTBatchFastEntries(root_ns, *qpgm, discovery_ctx,
+                discovery_module, standalone_batch_callees, declared_fast_keys,
+                nullptr, target_canon.c_str(), nullptr, nullptr)) {
+            error = "operation cancelled during standalone AOT fast-entry discovery";
+            return false;
+        }
+    }
+    if (!sibling_fast_entries.empty()
+            && !addAOTPreloadedFastEntries(root_ns, sibling_fast_entries,
+                standalone_batch_callees)) {
+        error = "operation cancelled during preloaded AOT fast-entry import";
+        return false;
+    }
+    if (!standalone_batch_callees.empty()
+            && !declareAOTSharedFastEntryFunctions(ctx, *module,
+                standalone_batch_callees)) {
+        error = "operation cancelled during standalone AOT fast-entry declaration";
+        return false;
+    }
+
     // compile_file filter restricts emitted code to items declared
     // in target_canon.  Sibling items (preloaded from -L) already
     // have their LLVM code in their own .qo's, so we do not re-emit
@@ -11497,7 +11754,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error);
+        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error,
+        nullptr, nullptr, standalone_batch_callees.empty()
+            ? nullptr : &standalone_batch_callees);
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
@@ -11597,7 +11856,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             return false;
         }
         if (!appendSymbolIndexSection(writer, root_ns, compiled_funcs, compiled_init_funcs, error, &func_slots,
-                nullptr, nullptr, target_canon.c_str())) {
+                nullptr, nullptr, target_canon.c_str(), nullptr,
+                standalone_batch_callees.empty() ? nullptr : &standalone_batch_callees)) {
             return false;
         }
         if (!compiled_init_funcs.empty()) {

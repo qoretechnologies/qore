@@ -3211,6 +3211,10 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
     if (!rec.abi_kind.empty()) {
         printf(" abi=%s", rec.abi_kind.c_str());
     }
+    if (rec.fast_entry_flags) {
+        printf(" fast_flags=0x%x fast_params=%u", rec.fast_entry_flags,
+            rec.fast_entry_num_params);
+    }
     if (rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
         printf(" dep=%s", qoreAOTDependencyClassName(rec.dependency_class));
     }
@@ -4987,6 +4991,22 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     json_print_string("provider_source_file");
     printf(": ");
     json_print_string(rec.provider_source_file);
+    printf(", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u",
+        rec.fast_entry_flags, rec.fast_entry_num_params);
+    auto print_bytes = [](const char* name, const std::vector<uint8_t>& values) {
+        printf(", \"%s\": [", name);
+        for (size_t i = 0; i < values.size(); ++i) {
+            if (i && !(i % 100)
+                    && qcc_check_cancel("AOT fast-entry parameter JSON dump")) {
+                break;
+            }
+            printf("%s%u", i ? ", " : "", values[i]);
+        }
+        printf("]");
+    };
+    print_bytes("fast_param_kinds", rec.fast_param_kinds);
+    print_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
+    print_bytes("fast_param_noescape", rec.fast_param_noescape);
     printf("}");
 }
 
@@ -5513,6 +5533,22 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         json_file_string(f, rec.consumer_source_file);
         fputs(", \"provider_source_file\": ", f);
         json_file_string(f, rec.provider_source_file);
+        fprintf(f, ", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u",
+            rec.fast_entry_flags, rec.fast_entry_num_params);
+        auto write_bytes = [f](const char* name, const std::vector<uint8_t>& values) {
+            fprintf(f, ", \"%s\": [", name);
+            for (size_t j = 0; j < values.size(); ++j) {
+                if (j && !(j % 100)
+                        && qcc_check_cancel("AOT fast-entry parameter JSON write")) {
+                    break;
+                }
+                fprintf(f, "%s%u", j ? ", " : "", values[j]);
+            }
+            fputc(']', f);
+        };
+        write_bytes("fast_param_kinds", rec.fast_param_kinds);
+        write_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
+        write_bytes("fast_param_noescape", rec.fast_param_noescape);
         fputc('}', f);
     }
     if (!records.empty()) {

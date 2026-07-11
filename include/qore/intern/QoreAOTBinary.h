@@ -274,7 +274,13 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 1;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 2;
+
+constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
+constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
+constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_INVALIDATE = 0x0004; //!< Callee may mutate caller-visible state
+constexpr uint32_t QORE_AOT_FAST_ENTRY_NEVER_NOTHING = 0x0008; //!< All normal returns are non-NOTHING
+constexpr uint32_t QORE_AOT_FAST_ENTRY_IMPLICIT_SELF = 0x0010; //!< Entry reuses caller self/class context
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
@@ -292,6 +298,21 @@ struct QoreAOTSymbolIndexRecord {
     std::string abi_kind;
     std::string consumer_source_file;
     std::string provider_source_file;
+    uint32_t fast_entry_flags = 0;
+    uint32_t fast_entry_num_params = 0;
+    std::vector<uint8_t> fast_param_kinds;
+    std::vector<uint8_t> fast_param_rejects_nothing;
+    std::vector<uint8_t> fast_param_noescape;
+};
+
+//! Compile-time fast-entry metadata keyed by the resolved variant.
+struct QoreAOTFastEntryIndexInfo {
+    std::string native_symbol;
+    uint32_t flags = 0;
+    uint32_t num_params = 0;
+    std::vector<uint8_t> param_kinds;
+    std::vector<uint8_t> param_rejects_nothing;
+    std::vector<uint8_t> param_noescape;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.
@@ -984,6 +1005,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     @param func_slots optional compiled slot identities used to emit advisory call imports
     @param error optional output diagnostic
     @param compile_files optional multi-source filter matching serializeNamespaceTree()
+    @param fast_entry_map optional resolved variant -> native fast-entry ABI/effect metadata
     @return true on success, false on cancellation or serialization failure
 */
 bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
@@ -994,7 +1016,9 @@ bool serializeSymbolIndex(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     const std::unordered_map<std::string, std::string>* init_native_symbol_map = nullptr,
     const std::vector<AOTCompiledFuncWithSlots>* func_slots = nullptr,
     std::string* error = nullptr,
-    const std::unordered_set<std::string>* compile_files = nullptr);
+    const std::unordered_set<std::string>* compile_files = nullptr,
+    const std::unordered_map<const AbstractQoreFunctionVariant*, QoreAOTFastEntryIndexInfo>*
+        fast_entry_map = nullptr);
 
 //! Read the optional SYMBOL_INDEX section.
 /** @return true on success or if the section is absent, false on corrupt data
