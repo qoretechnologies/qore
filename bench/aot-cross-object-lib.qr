@@ -10,3 +10,9 @@ int sub crossObjectLeaf(int value) {
 int sub crossObjectMiddle(int value) {
     return crossObjectLeaf(value) + 1;
 }
+
+class CrossObjectMath {
+    static int leaf(int value) {
+        return value + 1;
+    }
+}

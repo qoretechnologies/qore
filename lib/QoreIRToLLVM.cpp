@@ -10739,7 +10739,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const char* single_arg_fast_builtin_helper = nargs == 1 && !direct_inst->has_ref_args
                 ? qore_llvm_get_single_arg_fast_builtin_helper(direct_inst->expr) : nullptr;
 
-            // Box args and optionally build args_array (skipped for Approach B)
+            // Collect raw args first so context-independent native fast entries
+            // can avoid creating boxed temporaries that no call path observes.
             llvm::Value* args_array = nullptr;
             std::vector<llvm::Value*> raw_args;
             std::vector<uint32_t> raw_arg_ids;
@@ -10749,11 +10750,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 raw_arg_ids.reserve(nargs);
                 boxed_args.reserve(nargs);
                 for (int i = 0; i < nargs; ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT direct argument collection")) {
+                        error = "cancelled during AOT direct argument collection";
+                        return false;
+                    }
                     auto* arg_val = getVal(inst->operands[arg_start + i].id, error);
                     if (!arg_val) { return false; }
                     raw_args.push_back(arg_val);
                     raw_arg_ids.push_back(inst->operands[arg_start + i].id);
-                    boxed_args.push_back(boxValue(arg_val, inst->operands[arg_start + i].id));
                 }
                 if (aot_context_independent_fast_entry_call
                         && fastEntryNativeArgsNeedNothingGuard(
@@ -10766,6 +10772,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             callee_info, raw_arg_ids)) {
                         is_approach_b = false;
                     }
+                }
+                bool selective_aot_boxing = aot_context_independent_fast_entry_call
+                    && !type_name_fast_path && !single_arg_fast_builtin_helper
+                    && std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS") == nullptr;
+                for (int i = 0; i < nargs; ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT direct argument boxing")) {
+                        error = "cancelled during AOT direct argument boxing";
+                        return false;
+                    }
+                    bool needs_boxed = !selective_aot_boxing
+                        || getFastEntryParamKind(*aot_approach_b_callee,
+                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed;
+                    boxed_args.push_back(needs_boxed
+                        ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
                 if (!is_approach_b && !aot_context_independent_fast_entry_call && !type_name_fast_path
                         && !single_arg_fast_builtin_helper) {
@@ -11480,13 +11502,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!arg_val) { return false; }
                     raw_args.push_back(arg_val);
                     raw_arg_ids.push_back(inst->operands[i].id);
-                    llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[i].id);
-                    boxed_args.push_back(arg_boxed);
                 }
                 if (aot_context_independent_fast_entry_call
                         && fastEntryNativeArgsNeedNothingGuard(
                             *aot_static_batch_callee, raw_arg_ids)) {
                     aot_context_independent_fast_entry_call = false;
+                }
+                bool selective_aot_boxing = aot_context_independent_fast_entry_call
+                    && std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS") == nullptr;
+                for (int i = 0; i < nargs; ++i) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT static batch argument boxing")) {
+                        error = "cancelled during AOT static batch argument boxing";
+                        return false;
+                    }
+                    bool needs_boxed = !selective_aot_boxing
+                        || getFastEntryParamKind(*aot_static_batch_callee,
+                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed;
+                    boxed_args.push_back(needs_boxed
+                        ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
                 if (nargs > 0 && !aot_context_independent_fast_entry_call) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
