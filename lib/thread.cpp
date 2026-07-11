@@ -1399,6 +1399,26 @@ ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id) {
     return env ? env->find(id) : nullptr;
 }
 
+ClosureVarValue* thread_resolve_runtime_closure_var(const LocalVar* id) {
+    if (!id) {
+        return nullptr;
+    }
+    ThreadData* td = thread_data.get();
+    const QoreClosureBase* env = td->closure_rt_env;
+    if (!env || !td->tlpd) {
+        return nullptr;
+    }
+    ClosureVarValue* frame_cvv = td->tlpd->cvstack.try_find_in_current_frame(id->getName());
+    ClosureVarValue* env_cvv = env->find(id);
+    if (frame_cvv && env_cvv && frame_cvv != env_cvv) {
+        return frame_cvv;
+    }
+    if (env_cvv) {
+        return env_cvv;
+    }
+    return frame_cvv ? frame_cvv : td->tlpd->cvstack.try_find(id->getName());
+}
+
 bool thread_has_runtime_closure_env() {
     return thread_data.get()->closure_rt_env != nullptr;
 }

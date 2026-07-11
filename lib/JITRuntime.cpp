@@ -1268,6 +1268,27 @@ static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSi
     helper.assign(stored, "<lvalue>", check_types);
 }
 
+static void qore_rt_assign_closure_impl(ClosureVarValue* cvv, uint64_t value,
+        ExceptionSink* xsink, bool normalize_weak_refs) {
+    if (!cvv || *xsink) {
+        return;
+    }
+    QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    if (normalize_weak_refs) {
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (xsink && *xsink) {
+            return;
+        }
+    }
+    LValueHelper helper(xsink);
+    if (cvv->getLValue(helper, false, true)) {
+        return;
+    }
+    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    helper.assign(stored, "<lvalue>", true);
+}
+
 extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_assign_local_impl(var, value, xsink, true, false);
 }
@@ -8492,17 +8513,42 @@ extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak_aot(QoreAOTContex
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool disable_direct_load =
+        std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_LOAD") != nullptr;
+    if (!disable_direct_load) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            bool needs_deref = true;
+            QoreValue result = cvv->eval(needs_deref, xsink);
+            return toBits(qore_rt_deref_loaded_var_value(result, needs_deref, xsink));
+        }
+    }
     return qore_rt_load_local(ctx->locals[idx], xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool disable_direct_store =
+        std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE") != nullptr;
+    if (!disable_direct_store) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            qore_rt_assign_closure_impl(cvv, val, xsink, false);
+            return;
+        }
+    }
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_store_closure_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    static const bool disable_direct_store =
+        std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_STORE") != nullptr;
+    if (!disable_direct_store) {
+        if (ClosureVarValue* cvv = thread_resolve_runtime_closure_var(ctx->locals[idx])) {
+            qore_rt_assign_closure_impl(cvv, val, xsink, true);
+            return;
+        }
+    }
     qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
 }
 
