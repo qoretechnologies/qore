@@ -66,6 +66,8 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
         addTestCase("bound record iterators", \testBoundRecordIterators());
         addTestCase("row to bulk iterator adapter", \testRowToBulkIteratorAdapter());
+        addTestCase("raw SQL provider metadata", \testRawSqlProviderMetadata());
+        addTestCase("raw SQL record typing", \testRawSqlRecordTyping());
 
         set_return_value(main());
     }
@@ -249,6 +251,72 @@ class DbRecordMutationTest inherits QUnit::Test {
         }
         assertEq((1, 2), ids);
         assertFalse(iter.valid());
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testRawSqlProviderMetadata() {
+        requireSqlite();
+
+        DbDataProvider raw_provider(ds, NOTHING);
+        hash<DataProviderInfo> info = raw_provider.getInfo();
+        assertFalse(raw_provider.supportsSearchExpressions());
+        assertFalse(info.supports_search_expressions);
+        assertFalse(exists info.expressions);
+
+        # SQLite has no INSERT RETURNING support in Sqlite3SqlUtil; do not publish or accept that option.
+        assertFalse(provider.getCreateOptions().hasKey("returning"));
+        assertFalse(provider.getInfo().create_options.hasKey("returning"));
+        assertThrows("CREATE-RECORD-ERROR", "CREATE-OPTION-ERROR", sub () {
+            provider.createRecord({"id": 100, "group_name": "metadata", "value": 1}, {"returning": "id"});
+        });
+    }
+
+    private testRawSqlRecordTyping() {
+        requireSqlite();
+        resetRows();
+
+        hash<string, AbstractDataField> synthetic = DbDataProvider::getRecordTypeFromDescribeHash({
+            "driver_key": {
+                "name": "MixedAlias",
+                "native_type": "VARCHAR",
+                "maxsize": 20,
+                "type": NT_STRING,
+                "nullable": True,
+            },
+            "RequiredId": {
+                "native_type": "INTEGER",
+                "type": NT_INT,
+                "nullable": False,
+            },
+        });
+        assertEq(("MixedAlias", "RequiredId"), sort(synthetic.keys()));
+        assertEq("*string", synthetic.MixedAlias.getType().getName());
+        assertEq("int", synthetic.RequiredId.getType().getName());
+
+        DbDataProvider raw_provider(ds, NOTHING);
+        hash<auto> search_options = {
+            "sql": "select id as RecordID, group_name as MixedAlias, value + 1 as ComputedValue from "
+                + TableName + " where group_name = %v order by id",
+            "args": ("a",),
+        };
+        hash<string, AbstractDataField> record_type = raw_provider.getRecordType(search_options);
+        assertEq(("ComputedValue", "MixedAlias", "RecordID"), sort(record_type.keys()));
+        assertEq("*int", record_type.RecordID.getType().getName());
+        assertEq("*string", record_type.MixedAlias.getType().getName());
+
+        AbstractDataProviderRecordIterator iter = raw_provider.searchRecords(NOTHING, search_options);
+        list<hash<auto>> rows;
+        while (iter.next()) {
+            push rows, iter.getValue();
+        }
+        assertEq((1, 2), map $1.RecordID, rows);
+        assertEq(("a", "a"), map $1.MixedAlias, rows);
+        assertEq((11, 21), map $1.ComputedValue, rows);
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertThrows("DBSELECT-ERROR", sub () {
+            raw_provider.searchRecords({"RecordID": 1}, search_options);
+        });
         assertFalse(ds.currentThreadInTransaction());
     }
 }

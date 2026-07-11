@@ -341,9 +341,15 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - corrected raw SQL provider metadata and record typing: generic search expressions are no longer advertised
+      when only SQL-side filtering is supported, result aliases retain their exact spelling, nullable statement
+      columns remain nullable, and missing native metadata falls back safely
+    - made table create options database-aware so unsupported \c returning options are not published or accepted
+    - validated unsupported raw SQL search conditions before iterator construction to avoid leaking implicit
+      transactions on constructor errors
     - fixed row and bulk iterator interoperability by preserving record types, limits, maximums, and required-result
       state when adapting a row iterator to bulk, and by releasing implicit transactions immediately at end-of-data
-    - made single-record updates and c max_records-bounded updates and deletes atomic with savepoints, including
+    - made single-record updates and \c max_records-bounded updates and deletes atomic with savepoints, including
       inside caller-owned transactions
     - updated the c exec-sql provider to commit or roll back only transactions started by the request, preserving
       caller-owned transaction boundaries

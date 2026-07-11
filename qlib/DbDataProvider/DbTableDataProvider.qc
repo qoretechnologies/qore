@@ -349,10 +349,18 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             );
 
         hash<DataProviderInfo> rv = AbstractDataProvider::getInfo();
+        rv.create_options = getCreateOptions();
         if (expression_info) {
             rv.expressions = expression_info;
         }
         return rv;
+    }
+
+    #! Returns create options supported by the current database table
+    /** The \c returning option is omitted for database implementations that do not support insert returning clauses.
+    */
+    *hash<string, hash<DataProviderOptionInfo>> getCreateOptions() {
+        return table.hasReturning() ? CreateOptions : CreateOptions - "returning";
     }
 
     #! Begins a transaction in the datasource underlying the table
