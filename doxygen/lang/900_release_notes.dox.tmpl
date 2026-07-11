@@ -38,6 +38,9 @@
     - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
       artifacts by default for better startup and runtime performance (see
       @ref exec_mode_aot "AOT Compilation")
+    - explicit <tt>.qmod</tt> paths now fall back to the complete separated source module directory when the binary
+      artifact is missing or cannot be loaded, ensuring sibling <tt>.qc</tt> and <tt>.ql</tt> component files are
+      parsed along with the main <tt>.qm</tt> file
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
