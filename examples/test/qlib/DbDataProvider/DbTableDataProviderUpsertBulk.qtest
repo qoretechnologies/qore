@@ -27,12 +27,12 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires DataProvider
-%requires SqlUtil
-%requires BulkSqlUtil
-%requires DbDataProvider
-%requires Schema
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/BulkSqlUtil
+%requires ../../../../qlib/DbDataProvider
+%requires ../../../../qlib/Schema
 
 %exec-class DbTableDataProviderUpsertBulkTest
 
@@ -49,6 +49,7 @@ class TestSchema inherits AbstractSchema {
                 "id": c_number(15, True, "PK column"),
                 "name": c_varchar(200, True, "name column"),
                 "value": c_number(15, True, "value column"),
+                "generated": c_number(15, True, "server default column") + {"default_value": 42},
             },
             "primary_key": {"name": "pk_" + TestTableName, "columns": "id"},
         };
@@ -87,6 +88,8 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         addTestCase("upsertRecordsBulk default strategy", \testUpsertBulkDefaultStrategy());
         addTestCase("upsertRecordsBulk explicit strategy", \testUpsertBulkExplicitStrategy());
         addTestCase("upsertRecordsBulk insert then upsert", \testUpsertBulkInsertThenUpsert());
+        addTestCase("upsertRecordsBulk exact results", \testUpsertBulkExactResults());
+        addTestCase("createRecordsBulk returning", \testCreateBulkReturning());
         addTestCase("columnar bulk shapes", \testColumnarBulkShapes());
         addTestCase("transactional mutation limits", \testTransactionalMutationLimits());
 
@@ -246,6 +249,44 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         assertEq(250, rows[1].value, "bob value should be updated");
         assertEq("carol", rows[2].name, "carol should be inserted");
         assertEq(300, rows[2].value, "carol value should be correct");
+    }
+
+    private testUpsertBulkExactResults() {
+        Datasource ds = getDatasource();
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        list<hash<auto>> rows = (
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+        );
+        assertEq((UpsertResultInserted, UpsertResultInserted),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+        assertEq((UpsertResultUnchanged, UpsertResultUnchanged),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+        rows[0].value = 101;
+        assertEq((UpsertResultUpdated, UpsertResultUnchanged),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+    }
+
+    private testCreateBulkReturning() {
+        Datasource ds = getDatasource();
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        *hash<auto> created = provider.createRecordsBulk((
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+            {"id": 3, "name": "carol", "value": 300},
+        ), {"returning": "generated", "block_size": 2});
+        assertEq((42, 42, 42), created.generated,
+            "bulk returning preserves every row across flush blocks");
     }
 
     private testTransactionalMutationLimits() {

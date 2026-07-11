@@ -148,7 +148,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
         #! Upsert options; see details below
         /** The DbTableDataProvider class supports the following upsert options:
-            - \c upsert_strategy: an upsert strategu code; see:
+            - \c upsert_strategy: an upsert strategy code; see:
               <a href="../../SqlUtil/html/group__upsert__options.html">SqlUtil upsert strategy codes</a> for more info
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
@@ -164,26 +164,32 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "UpsertInsertFirst",
+                        "display_name": "Insert First",
                         "desc": "Try to insert first, if it fails, try updating",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertUpdateFirst",
+                        "display_name": "Update First",
                         "desc": "Try to update first, if it fails, try inserting",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertSelectFirst",
+                        "display_name": "Select First",
                         "desc": "Try to select first, if it fails, insert, if it succeeds, update if necessary",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertInsertOnly",
+                        "display_name": "Insert Only",
                         "desc": "Only insert, never update",
                     },
                      <AllowedValueInfo>{
                         "value": "UpsertUpdateOnly",
+                        "display_name": "Update Only",
                         "desc": "Only update, never insert",
                     },
                      <AllowedValueInfo>{
                         "value": "UpsertAuto",
+                        "display_name": "Automatic",
                         "desc": "Use the most efficient upsert for the underlying DB",
                     },
                 ),
@@ -465,13 +471,13 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
-        DbTableTransactionHelper db(table);
+        DbOperationTransactionHelper trans(table);
         on_error {
-            if (db.isDuplicateRowError($1)) {
+            if (table.isDuplicateRowError($1)) {
                 rethrow "DUPLICATE-RECORD", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *hash<auto> returning = db.insert(rec, create_options);
+        *hash<auto> returning = table.insert(rec, create_options);
         return rec + returning;
     }
 
@@ -488,7 +494,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> rh;
         if (create_options.returning) {
             create_options.rowcode = sub (hash<auto> h) {
-                rh = h;
+                map rh{$1.key} += ($1.value,), h.pairIterator();
             };
         }
         BulkInsertOperation bulk(table, create_options + {
@@ -514,7 +520,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> rh;
         if (create_options.returning) {
             create_options.rowcode = sub (hash<auto> h) {
-                rh = h;
+                map rh{$1.key} += ($1.value,), h.pairIterator();
             };
         }
         BulkInsertOperation bulk(table, create_options + {
@@ -538,8 +544,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
-        DbTableTransactionHelper db(table);
-        return DbUpsertMap{db.upsert(rec,
+        DbOperationTransactionHelper trans(table);
+        return DbUpsertMap{table.upsert(rec,
             AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto, upsert_options)};
     }
@@ -557,6 +563,9 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
         int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto;
+        if (needsExactUpsertResults(strategy)) {
+            return upsertRecordsExact(recs, strategy, upsert_options);
+        }
         BulkUpsertOperation bulk(table, upsert_options + {
             "upsert_strategy": strategy,
             "info_log": sub (string fmt, ...) {
@@ -581,6 +590,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
         int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto;
+        if (needsExactUpsertResults(strategy)) {
+            hash<auto> rows = AbstractDataProcessor::convertShape(recs, shape,
+                DataProviderShape::HashOfLists)[0];
+            return upsertRecordsExact(rows, strategy, upsert_options);
+        }
         BulkUpsertOperation bulk(table, upsert_options + {
             "upsert_strategy": strategy,
             "info_log": sub (string fmt, ...) {
@@ -591,6 +605,21 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         bulk.queueData(recs);
         bulk.flush();
         return map UpsertResultVerified, xrange(AbstractDataProcessor::shapeRecordCount(recs, shape));
+    }
+
+    #! Returns True for strategies whose documented per-row result can be preserved by the row-wise implementation
+    private bool needsExactUpsertResults(int strategy) {
+        return inlist(strategy, (AbstractTable::UpsertSelectFirst, AbstractTable::UpsertInsertOnly,
+            AbstractTable::UpsertUpdateOnly));
+    }
+
+    #! Upserts a bulk block row by row to preserve exact per-record result codes
+    private list<string> upsertRecordsExact(hash<auto> recs, int strategy, *hash<auto> upsert_options) {
+        hash<auto> example = map {
+            $1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value
+        }, recs.pairIterator();
+        code<int(hash<auto>)> upsert = table.getUpsertClosure(example, strategy, upsert_options - "block_size");
+        return map DbUpsertMap{upsert($1)}, recs.contextIterator();
     }
 
     #! Returns a single record matching the search options
@@ -743,7 +772,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
-        int max_records = search_options.max_records;
+        *int max_records = search_options.max_records;
         if (max_records > 0) {
             DbOperationTransactionHelper trans(table);
             AbstractSavepointHelper sp = table.getSavepointHelper();
@@ -761,8 +790,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             }
             return rows;
         }
-        DbTableTransactionHelper db(table);
-        return db.update(set, where_cond);
+        DbOperationTransactionHelper trans(table);
+        return table.update(set, where_cond);
     }
 
     #! Deletes zero or more records
@@ -778,7 +807,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        int max_records = search_options.max_records;
+        *int max_records = search_options.max_records;
         if (max_records > 0) {
             DbOperationTransactionHelper trans(table);
             AbstractSavepointHelper sp = table.getSavepointHelper();
@@ -796,8 +825,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
             }
             return rows;
         }
-        DbTableTransactionHelper db(table);
-        return db.del(where_cond);
+        DbOperationTransactionHelper trans(table);
+        return table.del(where_cond);
     }
 
     #! Returns data provider static info
@@ -848,15 +877,25 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> align_opts;
         if (name != field.getName()) {
             if (table_desc.columns{field.getName()}) {
-                throw "UPDATE-FIELD-ERROR", sprintf("new field %y alread exists in %y", field.getName(),
+                throw "UPDATE-FIELD-ERROR", sprintf("new field %y already exists in %y", field.getName(),
                     table.getName());
+            }
+            AbstractDataProviderType old_type = table.getRecordType(){name}.getType();
+            AbstractDataProviderType new_type = field.getType();
+            if (old_type.getBaseTypeCode() == new_type.getBaseTypeCode()
+                    && old_type.isOrNothingType() == new_type.isOrNothingType()
+                    && old_type.getOptions() == new_type.getOptions()) {
+                # A logical rename must not implicitly remap an existing vendor-native type (for example SQLite
+                # TEXT to VARCHAR). Preserve its physical definition while applying nullable/default/comment changes.
+                col = cast<hash<GenericColumnInfo>>(table_desc.columns{name}
+                    + col{"default_value", "notnull", "comment"});
             }
             remove table_desc.columns{name};
             align_opts.column_map{name} = field.getName();
         }
         table_desc.columns{field.getName()} = col;
 
-        alignTable(table_desc);
+        alignTable(table_desc, align_opts);
     }
 
     #! Deletes an existing field
@@ -882,11 +921,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     }
 
     #! Align table with the given description
-    private alignTable(hash<auto> table_desc) {
+    private alignTable(hash<auto> table_desc, *hash<auto> align_opts) {
         AbstractTable new_table = AbstractTable::getTable(table.getDatasource(), table.getName());
         new_table.setupTable(table_desc);
 
-        if (*list<auto> sqll = table.getAlignSql(new_table)) {
+        if (*list<auto> sqll = table.getAlignSql(new_table, align_opts)) {
             execDdlSql(sqll);
         }
     }

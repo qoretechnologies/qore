@@ -34,7 +34,10 @@ public const string UpsertResultInserted = "inserted";
 #! Indicates that the record was updated
 public const string UpsertResultUpdated = "updated";
 
-#! Indicates that the record was verified as already in the target state
+#! Indicates that the upsert completed without distinguishing insertion from an unconditional update
+/** Optimized database implementations can return this result when the final row state is verified but the backend
+    does not expose whether the row was inserted or updated.
+*/
 public const string UpsertResultVerified = "verified";
 
 #! Indicates that the record was left unchanged
@@ -3014,7 +3017,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *int rc = updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             processSearchParameters(where_cond, search_options), search_options);
         checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
@@ -3044,7 +3047,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *int rc = updateRecordsImpl(processFieldValues(set, search_options),
+        int rc = updateRecordsImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
         checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
@@ -3104,7 +3107,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
         checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
@@ -3132,7 +3135,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
         checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
@@ -3141,12 +3144,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     }
 
     #! Enforces max_records for record mutation APIs
-    /** Providers implemented before affected-row reporting was required can return \ref nothing.  In that case the
-        framework preserves the legacy return contract and leaves transactional enforcement to the provider.
-    */
-    private checkAffectedRecordCount(*int affected, *hash<auto> search_options) {
+    private checkAffectedRecordCount(int affected, *hash<auto> search_options) {
         *int max_records = search_options.max_records;
-        if (exists affected && exists max_records && max_records > 0 && affected > max_records) {
+        if (exists max_records && max_records > 0 && affected > max_records) {
             throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
                 "exceeded by a mutation affecting %d records", max_records, affected);
         }

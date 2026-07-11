@@ -1733,7 +1733,7 @@ string sql = table.getRenameColumnSql("name", "family_name");
         string old_name = c.name;
 
         # rename column after database is updated
-        c.name = new_name;
+        c.setDdlName(new_name);
 
         # replaces the column in the internal column representation with the new definition
         columns.renameKey(old_name, new_name);
@@ -10107,21 +10107,21 @@ list<auto> l = table.getAlignSql(table2);
             l += AbstractDatabase::doCallback(opt, c.getRenameSql(self, value), AbstractDatabase::AC_Rename,
                 "column", c.name, name, value);
             columns.renameKey(key, value);
-            c.name = value;
+            c.setDdlName(value);
 
             # rename column in indexes
             foreach AbstractIndex ix in (indexes.iterator()) {
                 if (ix.columns.hasKey(key)) {
                     #printf("%s.%s: col %y %Y\n", getName(), ix.name, key, ix.columns);
                     AbstractColumn rc = ix.columns{key};
-                    rc.name = value;
+                    rc.setDdlName(value);
                     ix.columns.renameKey(key, value);
                 }
             }
             # rename column in pk
             if (primaryKey.hasKey(key)) {
                 AbstractColumn rc = primaryKey{key};
-                rc.name = value;
+                rc.setDdlName(value);
                 primaryKey.renameKey(key, value);
             }
             # rename column in unique constraints
@@ -10130,7 +10130,7 @@ list<auto> l = table.getAlignSql(table2);
                     AbstractUniqueConstraint uk = ct;
                     if (uk.hasKey(key)) {
                         AbstractColumn rc = uk{key};
-                        rc.name = value;
+                        rc.setDdlName(value);
                         uk.renameKey(key, value);
                     }
                 }
@@ -10139,7 +10139,7 @@ list<auto> l = table.getAlignSql(table2);
             foreach AbstractForeignConstraint fk in (foreignConstraints.iterator()) {
                 if (fk.hasKey(key)) {
                     AbstractColumn rc = fk{key};
-                    rc.name = value;
+                    rc.setDdlName(value);
                     fk.renameKey(key, value);
                 }
             }

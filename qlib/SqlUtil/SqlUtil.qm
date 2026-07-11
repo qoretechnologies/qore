@@ -115,6 +115,9 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_0_0 SqlUtil v3.0.0
+    - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
+      quoted DDL names synchronized after column renames, allowing a rename and a definition change in one alignment
+      operation
     - corrected the expression metadata for \c contains, \c startsWith, and \c endsWith so the optional
       case-insensitive argument and its default case-sensitive behavior match the implementation
     - fixed the advanced-expression \c "in" and \c "not in" operators to bind each value to its own
@@ -8150,6 +8153,21 @@ AbstractColumn c = cols.id;
             ddl_name = getDdlName(name);
         }
 
+        #! Updates both the logical and quoted DDL names
+        /** @par Example:
+            @code{.py}
+column.setDdlName("order");
+            @endcode
+
+            @param name the new object name
+
+            @since %SqlUtil 3.0.0
+        */
+        setDdlName(string name) {
+            self.name = name;
+            ddl_name = getDdlName(name);
+        }
+
         #! returns the column name with quoting in case the column name is a reserved word
         /** the name returned here will be used when executing DDL
         */
@@ -8280,6 +8298,9 @@ list l = col.getModifySql(t, newcol);
             @return a list of sql strings that can be used to modify the column to the new definition; if the column definitions are identical then an empty list is returned
          */
         list<auto> getModifySql(AbstractTable t, AbstractColumn c, *hash<auto> opt) {
+            if (equal(c)) {
+                return ();
+            }
             list l = getModifySqlImpl(t, c, opt);
 
             # update existing rows with the new default column value if:

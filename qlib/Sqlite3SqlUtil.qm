@@ -282,7 +282,8 @@ string str = col.getRenameSql(t, "new_name");
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
         private bool equalImpl(AbstractColumn c) {
-            return True;
+            Sqlite3Column sc = c;
+            return auto_increment == sc.auto_increment && primary_key == sc.primary_key;
         }
     }
 

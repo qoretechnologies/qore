@@ -341,6 +341,14 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - update and delete APIs now preserve affected-row counts when optional search options are omitted, including
+      zero-row results, while retaining caller-owned transaction boundaries
+    - bulk create operations now return every requested server-generated value across flush blocks instead of only
+      the final callback row
+    - bulk upserts preserve exact per-row inserted, updated, and unchanged results for strategies that promise this
+      distinction; optimized strategies explicitly return \c verified when the backend cannot expose it
+    - field renames now use SqlUtil column mapping so data is preserved, and same-type logical renames retain the
+      database-native physical type instead of introducing an implicit type conversion
     - database table providers now advertise expression pushdown capabilities dynamically from the active
       database-specific SqlUtil expression map
     - added the opt-in \c allow_client_side_filter search option for predicates without a native SQL

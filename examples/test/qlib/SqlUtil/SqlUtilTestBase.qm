@@ -320,7 +320,7 @@ public class SqlTestBase inherits QUnit::Test {
         dp2.updateField("comment", new QoreDataField("comment2", "comment2 field",
             new QoreStringOrNothingDataType({"string.max_size_chars": 60})));
         child_record.comment2 = remove child_record.comment;
-        dp2.updateRecords({"comment2": child_record.comment2}, child_record{"id", "name2"});
+        assertEq(1, dp2.updateRecords({"comment2": child_record.comment2}, child_record{"id", "name2"}));
         assertEq(child_record, dp2.searchSingleRecord({"id": record.id, "name2": child_record.name2}));
 
         # delete field

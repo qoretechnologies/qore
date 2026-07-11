@@ -1226,9 +1226,8 @@ if (errors) {
       @ref DataProvider::DataProvider "DataProvider" facade
     - made limited and exhausted @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" instances
       release wrapped iterators immediately, including their database transaction resources
-    - preserved compatibility with providers that do not return affected-row counts from update and delete
-      implementations; \c max_records is enforced by the framework when a count is available and can still be
-      enforced transactionally by the provider
+    - update and delete implementations must return affected-row counts, ensuring the public mutation APIs always
+      return an integer and allowing uniform \c max_records and \c requires_result enforcement
     - @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" now prepares typed expressions once at
       construction for efficient repeated evaluation
     - record update and delete APIs now enforce \c max_records against affected-row counts and preserve

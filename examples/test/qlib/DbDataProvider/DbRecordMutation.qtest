@@ -75,6 +75,7 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("single update rollback", \testSingleUpdateRollback());
         addTestCase("bounded update rollback", \testBoundedUpdateRollback());
         addTestCase("bounded delete rollback", \testBoundedDeleteRollback());
+        addTestCase("mutation affected row counts", \testMutationAffectedRowCounts());
         addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
         addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
         addTestCase("bound record iterators", \testBoundRecordIterators());
@@ -83,6 +84,7 @@ class DbRecordMutationTest inherits QUnit::Test {
         addTestCase("raw SQL record typing", \testRawSqlRecordTyping());
         addTestCase("residual expression filtering", \testResidualExpressionFiltering());
         addTestCase("SQLite string expression semantics", \testSqliteStringExpressionSemantics());
+        addTestCase("field rename preserves data", \testFieldRenamePreservesData());
 
         set_return_value(main());
     }
@@ -155,6 +157,17 @@ class DbRecordMutationTest inherits QUnit::Test {
 
         assertEq(2, provider.deleteRecords({"group_name": "a"}, {"max_records": 2}));
         assertEq((3,), map $1.id, getRows());
+    }
+
+    private testMutationAffectedRowCounts() {
+        requireSqlite();
+        resetRows();
+
+        assertEq(2, provider.updateRecords({"value": 88}, {"group_name": "a"}));
+        assertEq(0, provider.updateRecords({"value": 99}, {"group_name": "missing"}));
+        assertEq(2, provider.deleteRecords({"group_name": "a"}));
+        assertEq(0, provider.deleteRecords({"group_name": "missing"}));
+        assertFalse(ds.currentThreadInTransaction());
     }
 
     private testCallerTransactionPreservation() {
@@ -455,5 +468,30 @@ class DbRecordMutationTest inherits QUnit::Test {
             getIteratorIds(provider.searchRecords(contains_insensitive, {"orderby": "id"})));
         assertEq((1, 2, 3, 4), getIteratorIds(provider.searchRecords(ends_empty, {"orderby": "id"})));
         assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testFieldRenamePreservesData() {
+        requireSqlite();
+        Datasource rename_ds = new Datasource("sqlite3:@:memory:");
+        rename_ds.open();
+        rename_ds.execRaw("create table field_rename_test "
+            "(id integer primary key, group_name text not null)");
+        rename_ds.execRaw("insert into field_rename_test values (1, 'a'), (2, 'b')");
+        rename_ds.commit();
+        Sqlite3Table rename_table = new Sqlite3Table(rename_ds, "field_rename_test");
+        DbTableDataProvider rename_provider = new DbTableDataProvider(rename_table);
+
+        rename_provider.updateField("group_name", new QoreDataField("category", NOTHING, StringType));
+        assertEq(("a", "b"), map $1.category, rename_table.selectRows({"orderby": "id"}),
+            "renaming a provider field preserves existing values");
+        hash<auto> desc = rename_table.getDescriptionHash();
+        assertFalse(desc.columns.hasKey("group_name"));
+        assertTrue(desc.columns.hasKey("category"));
+        assertFalse(rename_ds.currentThreadInTransaction());
+
+        Sqlite3Column current("value", "integer", "int", False, NOTHING);
+        Sqlite3Column changed("value", "integer", "int", False, NOTHING, True, True);
+        assertThrows("UNSUPPORTED", \current.getModifySql(), (rename_table, changed),
+            "a real SQLite column definition change is not mistaken for an unchanged column");
     }
 }
