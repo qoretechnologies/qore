@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub typedListKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1, i + 2);
+        checksum += values[1];
+    }
+    return checksum;
+}
+
+int sub branchKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int value = i + 7;
+        if (i & 1) {
+            checksum += value + (i + 7);
+        } else {
+            checksum += value - (i + 7);
+        }
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "typed-list";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
+int checksum = kernel == "branch"
+    ? branchKernel(rounds) : typedListKernel(rounds);
+printf("%d\n", checksum);

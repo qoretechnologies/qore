@@ -1,0 +1,12 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub crossObjectLeaf(int value) {
+    return value + 1;
+}
+
+int sub crossObjectMiddle(int value) {
+    return crossObjectLeaf(value) + 1;
+}

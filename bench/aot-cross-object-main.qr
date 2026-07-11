@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub benchCrossObjectLeaf(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += crossObjectLeaf(i);
+    }
+    return checksum;
+}
+
+int sub benchCrossObjectChain(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += crossObjectMiddle(i);
+    }
+    return checksum;
+}
+
+nothing sub leafMain() {
+    printf("%d\n", benchCrossObjectLeaf(10000000));
+}
+
+nothing sub chainMain() {
+    printf("%d\n", benchCrossObjectChain(10000000));
+}

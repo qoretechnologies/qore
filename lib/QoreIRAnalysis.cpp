@@ -1165,7 +1165,8 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
     return folded;
 }
 
-static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFunction& func) {
+static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
+        QoreIRFunction& func, const QoreIRControlFlowGraph& cfg) {
     size_t check_count = 0;
     QoreIRScalarUses uses;
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
@@ -1175,13 +1176,72 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFu
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_set<const QoreIRInstruction*> eliminated;
     std::unordered_set<const QoreIRInstruction*> forwarded_loads;
-    for (const auto& block : func.blocks) {
+    using ExpressionMap = std::unordered_map<QoreIRScalarExpressionKey, QoreIRValue,
+        QoreIRScalarExpressionKeyHash>;
+    using LoadMap = std::unordered_map<const LocalVar*, QoreIRValue>;
+    struct AvailableState {
+        ExpressionMap expressions;
+        LoadMap loads;
+    };
+    std::vector<AvailableState> block_outputs(func.blocks.size());
+    std::vector<uint8_t> processed(func.blocks.size(), 0);
+    std::vector<uint8_t> discovered(func.blocks.size(), 0);
+    std::vector<size_t> order;
+    if (!func.blocks.empty()) {
+        std::vector<size_t> worklist{0};
+        discovered[0] = 1;
+        while (!worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR cross-block scalar traversal")) {
+                return {};
+            }
+            size_t block_id = worklist.back();
+            worklist.pop_back();
+            order.push_back(block_id);
+            for (size_t successor : cfg.successors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR cross-block scalar traversal")) {
+                    return {};
+                }
+                if (!discovered[successor]) {
+                    discovered[successor] = 1;
+                    worklist.push_back(successor);
+                }
+            }
+        }
+    }
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR cross-block scalar traversal")) {
+            return {};
+        }
+        if (!discovered[block_id]) {
+            order.push_back(block_id);
+        }
+    }
+
+    const bool cross_block = std::getenv("QORE_DISABLE_IR_CROSS_BLOCK_CSE") == nullptr;
+    for (size_t block_id : order) {
         if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
             return {};
         }
-        std::unordered_map<QoreIRScalarExpressionKey, QoreIRValue,
-            QoreIRScalarExpressionKeyHash> available;
-        std::unordered_map<const LocalVar*, QoreIRValue> available_loads;
+        ExpressionMap available;
+        LoadMap available_loads;
+        if (cross_block && cfg.reachable[block_id]
+                && cfg.predecessors[block_id].size() == 1) {
+            size_t predecessor = cfg.predecessors[block_id][0];
+            if (predecessor != block_id && processed[predecessor]
+                    && cfg.dominates(predecessor, block_id)) {
+                if (cfg.successors[predecessor].size() == 1) {
+                    available = std::move(block_outputs[predecessor].expressions);
+                    available_loads = std::move(block_outputs[predecessor].loads);
+                } else {
+                    available = block_outputs[predecessor].expressions;
+                    available_loads = block_outputs[predecessor].loads;
+                }
+            }
+        }
+        const auto& block = func.blocks[block_id];
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
                 return {};
@@ -1243,6 +1303,9 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(QoreIRFu
             replacements.emplace(inst.result.id, available_it->second);
             eliminated.insert(&inst);
         }
+        block_outputs[block_id].expressions = std::move(available);
+        block_outputs[block_id].loads = std::move(available_loads);
+        processed[block_id] = 1;
     }
 
     if (eliminated.empty()) {
@@ -2297,7 +2360,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     }
 
     if (!getenv("QORE_DISABLE_IR_CSE")) {
-        QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func);
+        QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func, cfg);
         local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
         local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
     }
