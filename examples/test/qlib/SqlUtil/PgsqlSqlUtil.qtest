@@ -1424,6 +1424,9 @@ class PgsqlTest inherits SqlTestBase {
                 "name": {"qore_type": SqlUtil::VARCHAR, "size": 80},
             },
             "primary_key": {"name": "pk_" + parent, "columns": ("id",)},
+            "indexes": {
+                (parent + "_name_idx"): {"columns": ("name",)},
+            },
             "partition_strategy": {"method": "range", "columns": ("name",),
                 "driver": {"pgsql": {"columns": ("id",)}}},
             "partitions": {
@@ -1447,6 +1450,14 @@ class PgsqlTest inherits SqlTestBase {
         assertTrue(t.supportsTargetedPartitionLookup(), "pgsql supports targeted partition catalog lookup");
         assertTrue(t.supportsPartitionDetach(), "pgsql supports partition detach");
         assertFalse(t.supportsPartitionExchange(), "pgsql does not expose non-equivalent partition exchange");
+        assertEq("I", ds.selectRow("select relkind from pg_catalog.pg_class where oid = %v::regclass",
+            parent + "_name_idx").relkind,
+            "secondary index fixture is a PostgreSQL partitioned parent index");
+        Indexes partition_indexes = t.getIndexes();
+        assertTrue(partition_indexes.hasKey(parent + "_name_idx"),
+            "partitioned parent index is exposed by portable index introspection");
+        assertEq(("name",), partition_indexes{parent + "_name_idx"}.columns.keys(),
+            "partitioned parent index columns are introspected");
         assertThrows("PARTITION-NOT-SUPPORTED", "does not support exchanging partitions", sub () {
             t.getExchangePartitionSql(parent + "_p1", t);
         });

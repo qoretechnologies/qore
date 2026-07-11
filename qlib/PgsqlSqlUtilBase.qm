@@ -3438,7 +3438,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "pg_get_indexdef(i.oid, a.attnum, false) column_name, xs.tablespace, "
             "am.amname access_method, pg_get_indexdef(i.oid, 0, false) indexdef "
             "FROM pg_class t, pg_class i, pg_index d, pg_attribute a, pg_indexes xs, pg_am am "
-            "WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
+            # PostgreSQL uses relkind 'I' for partitioned parent indexes and
+            # 'i' for ordinary indexes. Both are logical indexes on the table
+            # and must round-trip through the portable SqlUtil API.
+            "WHERE i.relkind in ('i', 'I') and i.relname = xs.indexname AND "
             "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relam = am.oid AND "
             "i.relnamespace IN (SELECT oid FROM pg_namespace "
             "WHERE nspname IN (%v)) AND a.attrelid = i.oid AND t.relname = %v ORDER BY i.relname, attnum", schema,
