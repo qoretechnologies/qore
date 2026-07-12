@@ -705,6 +705,37 @@ class QoreAOTBinaryReader {
     std::vector<uint8_t> decompressed_body;
 
 public:
+    //! Releases the decompressed metadata pool and invalidates the reader
+    /** The AOT metadata blob is stored compressed in the binary and inflated into
+        @ref decompressed_body at open() time; every section pointer (@ref data,
+        @ref data_area, @ref string_pool) points INTO that buffer.  For a large
+        program the inflated pool is substantial (it dominates the process's heap
+        at startup), and it is only needed while the namespace tree, classes,
+        functions, and slot maps are being deserialized.
+
+        Once deserialization and function registration are complete, nothing may
+        reference the pool any more: string refs that outlive it (e.g.
+        QoreProgramLocation::file) are interned into the program's string pool at
+        deserialization time, and the debug metadata is copied by value.  Call this
+        once registration is done to return the pool to the allocator instead of
+        holding it for the life of the process.
+
+        The reader is unusable afterwards: all section pointers are cleared so that
+        any use-after-release faults immediately rather than reading recycled memory.
+    */
+    DLLLOCAL void releaseDecompressedBody() {
+        // free the buffer's storage (clear() alone would keep the capacity)
+        std::vector<uint8_t>().swap(decompressed_body);
+        data = nullptr;
+        total_size = 0;
+        data_area = nullptr;
+        data_area_size = 0;
+        string_pool = nullptr;
+        string_pool_size = 0;
+        sections.clear();
+        sections.shrink_to_fit();
+    }
+
     //! Controls the VT_CONST_REF reader return path.  When true (set by the
     //! hashdecl-member reader), VT_CONST_REF resolves to a fresh
     //! `RuntimeConstantRefNode` wrapping the ConstantEntry rather than
@@ -2153,6 +2184,15 @@ public:
 
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }
+
+    //! Releases the reader's decompressed metadata pool
+    /** Call once deserialization and function registration are complete and the
+        reader will not be used again; see
+        QoreAOTBinaryReader::releaseDecompressedBody().  The pool is a large,
+        process-lifetime allocation for big programs, so releasing it before the
+        program runs keeps it out of the steady-state footprint.
+    */
+    DLLLOCAL void releaseReaderBody() { reader.releaseDecompressedBody(); }
 
     //! Expose the session's type resolver so the slot-map register
     //! phase can reuse its warmed cache (populated during
