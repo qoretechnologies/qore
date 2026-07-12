@@ -4993,7 +4993,8 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
     }
 
     QoreValue result;
-    if (!qore_ir_try_execute_native_leaf(&cache.descriptor, args, nargs, result)) {
+    if (!qore_ir_try_execute_native_leaf(&cache.descriptor, args, nargs, result,
+            static_cast<const QoreClosureBase*>(node))) {
         return false;
     }
     result_bits = toBits(result);

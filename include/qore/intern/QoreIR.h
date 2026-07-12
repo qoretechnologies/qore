@@ -2001,6 +2001,7 @@ public:
         StringSize,
         StringLength,
         IntProgram,
+        ClosureIntIncrement,
     };
 
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
@@ -2040,6 +2041,8 @@ public:
     mutable int64_t native_leaf_rhs_int = 0;
     mutable double native_leaf_lhs_float = 0.0;
     mutable double native_leaf_rhs_float = 0.0;
+    mutable LocalVar* native_leaf_local = nullptr;
+    mutable int64_t native_leaf_delta = 0;
 };
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods

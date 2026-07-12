@@ -2335,8 +2335,79 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
                 std::getenv("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE") != nullptr;
             return int_disabled || program_disabled;
         }
+        case QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement: {
+            static const bool increment_disabled =
+                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE") != nullptr;
+            return int_disabled || increment_disabled;
+        }
     }
     return true;
+}
+
+static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstruction(
+        const QoreIRFunction* callee_ir) {
+    if (!callee_ir) {
+        return nullptr;
+    }
+    const QoreIRIncrementLocalIntInstruction* inc_inst = nullptr;
+    bool has_return_nothing = false;
+    for (const auto& block : callee_ir->blocks) {
+        if (!block) {
+            continue;
+        }
+        for (const auto& inst_ptr : block->instructions) {
+            if (!inst_ptr) {
+                continue;
+            }
+            switch (inst_ptr->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::IncrementLocalInt: {
+                    if (inc_inst) {
+                        return nullptr;
+                    }
+                    auto* candidate = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst_ptr.get());
+                    if (!candidate->local || !candidate->local->closureUse() || candidate->ir_only
+                            || QoreTypeInfo::isReference(candidate->local->getTypeInfo())
+                            || candidate->local->getTypeInfo() != bigIntTypeInfo) {
+                        return nullptr;
+                    }
+                    inc_inst = candidate;
+                    break;
+                }
+                case QoreIROpcode::ReturnNothing:
+                    has_return_nothing = true;
+                    break;
+                default:
+                    return nullptr;
+            }
+        }
+    }
+    return inc_inst && has_return_nothing ? inc_inst : nullptr;
+}
+
+static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
+        const LocalVar* local, int64_t delta, QoreValue& result, ExceptionSink* xsink) {
+    if (!cb || !local) {
+        return false;
+    }
+    ClosureVarValue* stack_cvv = thread_try_find_closure_var(local->getName());
+    ClosureVarValue* env_cvv = cb->find(local);
+    ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
+        : (env_cvv ? env_cvv : stack_cvv);
+    if (!cv) {
+        return false;
+    }
+    QoreSafeVarRWWriteLocker locker(cv->rml);
+    if (cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
+        return false;
+    }
+    int64_t result_val = cv->val.getAsBigInt() + delta;
+    discard(cv->val.assign(static_cast<int64>(result_val)), xsink);
+    result = QoreValue();
+    return !(xsink && *xsink);
 }
 
 static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
@@ -2477,9 +2548,21 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     const UserVariantBase* uvb = inst->cached_uvb;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     unsigned num_params = sig ? sig->numParams() : 0;
-    if (!callee_ir || !sig || !num_params || num_params > 2
+    if (!callee_ir || !sig || num_params > 2
             || nargs != static_cast<int>(num_params)) {
         return reject();
+    }
+    if (!num_params) {
+        const auto* increment = getSimpleClosureIncrementInstruction(callee_ir);
+        if (!increment || interpreterNativeLeafInlineDisabled(
+                QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement)) {
+            return reject();
+        }
+        inst->native_leaf_kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement;
+        inst->native_leaf_local = increment->local;
+        inst->native_leaf_delta = increment->delta;
+        inst->native_leaf_state.store(1, std::memory_order_release);
+        return true;
     }
     if (callee_ir->blocks.size() != 1) {
         if (!isInterpreterNativeIntProgram(callee_ir, sig, num_params)) {
@@ -2777,13 +2860,17 @@ bool qore_ir_is_native_leaf(const QoreIRFunction* ir, const UserVariantBase* uvb
 }
 
 bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
-        uint64_t* args, int nargs, QoreValue& result) {
+        uint64_t* args, int nargs, QoreValue& result, const QoreClosureBase* closure) {
     if (!ensureInterpreterNativeLeafState(inst, nargs)) {
         return false;
     }
     QoreValue arg_values[2];
     for (int i = 0; i < nargs; ++i) {
         arg_values[i] = fromBits(args[i]);
+    }
+    if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement) {
+        return tryExecuteSimpleClosureIncrement(closure, inst->native_leaf_local,
+            inst->native_leaf_delta, result, nullptr);
     }
     if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::IntProgram) {
         const QoreIRFunction* ir = inst->cached_callee_ir;
@@ -3562,66 +3649,6 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     return true;
 }
 
-static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstruction(
-        const QoreIRFunction* callee_ir) {
-    if (!callee_ir) {
-        return nullptr;
-    }
-    const QoreIRIncrementLocalIntInstruction* inc_inst = nullptr;
-    bool has_return_nothing = false;
-    for (const auto& block : callee_ir->blocks) {
-        if (!block) {
-            continue;
-        }
-        for (const auto& inst_ptr : block->instructions) {
-            if (!inst_ptr) {
-                continue;
-            }
-            switch (inst_ptr->opcode) {
-                case QoreIROpcode::DebugBlock:
-                case QoreIROpcode::PushTempMark:
-                case QoreIROpcode::DiscardTemps:
-                    break;
-                case QoreIROpcode::IncrementLocalInt: {
-                    if (inc_inst) {
-                        return nullptr;
-                    }
-                    auto* candidate = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst_ptr.get());
-                    if (!candidate->local || !candidate->local->closureUse() || candidate->ir_only) {
-                        return nullptr;
-                    }
-                    inc_inst = candidate;
-                    break;
-                }
-                case QoreIROpcode::ReturnNothing:
-                    has_return_nothing = true;
-                    break;
-                default:
-                    return nullptr;
-            }
-        }
-    }
-    return inc_inst && has_return_nothing ? inc_inst : nullptr;
-}
-
-static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
-        const QoreIRIncrementLocalIntInstruction* inc_inst, QoreValue& result, ExceptionSink* xsink) {
-    if (!cb || !inc_inst || !inc_inst->local) {
-        return false;
-    }
-    ClosureVarValue* stack_cvv = thread_try_find_closure_var(inc_inst->local->getName());
-    ClosureVarValue* env_cvv = cb->find(inc_inst->local);
-    ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
-        : (env_cvv ? env_cvv : stack_cvv);
-    if (!cv || cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
-        return false;
-    }
-    int64_t result_val = cv->val.getAsBigInt() + inc_inst->delta;
-    discard(cv->val.assign(static_cast<int64>(result_val)), xsink);
-    result = QoreValue();
-    return !(xsink && *xsink);
-}
-
 static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram* caller_pgm,
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr) {
@@ -3715,7 +3742,8 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         };
     }
     if (nargs == 0 && simple_increment
-            && tryExecuteSimpleClosureIncrement(cb, simple_increment, result, xsink)) {
+            && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
+                simple_increment->delta, result, xsink)) {
         if (may_invalidate_external_caches) {
             *may_invalidate_external_caches = true;
         }
