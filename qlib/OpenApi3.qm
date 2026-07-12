@@ -1695,6 +1695,14 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 case "date-time": return required
                     ? AbstractDataProviderType::get(SoftDateType)
                     : AbstractDataProviderType::get(SoftDateOrNothingType);
+                # semantic string formats (string-backed types carrying a UI-renderable identity)
+                case "email": return required ? EmailType : EmailOrNothingType;
+                case "uri": return required ? UriType : UriOrNothingType;
+                case "uuid": return required ? UuidType : UuidOrNothingType;
+                case "hostname": return required ? HostnameType : HostnameOrNothingType;
+                case "ipv4": return required ? Ipv4Type : Ipv4OrNothingType;
+                case "ipv6": return required ? Ipv6Type : Ipv6OrNothingType;
+                case "phone": return required ? PhoneType : PhoneOrNothingType;
             }
         }
         switch (typestr) {
@@ -5852,6 +5860,13 @@ public class OpenApi3TypeMapper {
             "date": {"type": "string", "format": "date-time"},
             "softdate": {"type": "string", "format": "date-time"},
             "binary": {"type": "string", "format": "binary"},
+            "email": {"type": "string", "format": "email"},
+            "uri": {"type": "string", "format": "uri"},
+            "uuid": {"type": "string", "format": "uuid"},
+            "hostname": {"type": "string", "format": "hostname"},
+            "ipv4": {"type": "string", "format": "ipv4"},
+            "ipv6": {"type": "string", "format": "ipv6"},
+            "phone": {"type": "string", "format": "phone"},
             "any": {},
             "auto": {},
             "nothing": {"type": "null"},

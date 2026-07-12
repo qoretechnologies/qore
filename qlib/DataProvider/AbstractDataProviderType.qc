@@ -172,6 +172,21 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
 
     "rgbcolor": RgbColorDataType,
     "*rgbcolor": RgbColorOrNothingDataType,
+
+    "email": EmailType,
+    "*email": EmailOrNothingType,
+    "uri": UriType,
+    "*uri": UriOrNothingType,
+    "uuid": UuidType,
+    "*uuid": UuidOrNothingType,
+    "hostname": HostnameType,
+    "*hostname": HostnameOrNothingType,
+    "ipv4": Ipv4Type,
+    "*ipv4": Ipv4OrNothingType,
+    "ipv6": Ipv6Type,
+    "*ipv6": Ipv6OrNothingType,
+    "phone": PhoneType,
+    "*phone": PhoneOrNothingType,
 };
 
 #! describes type options
