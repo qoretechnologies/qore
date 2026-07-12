@@ -2345,6 +2345,17 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
                 std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE") != nullptr;
             return int_disabled || binary_disabled;
         }
+        case QoreIRCallDirectInstruction::NativeLeafKind::ClosureFloatBinary: {
+            static const bool binary_disabled =
+                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_FLOAT_BINARY_INLINE") != nullptr;
+            return float_disabled || binary_disabled;
+        }
+        case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize:
+        case QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength: {
+            static const bool closure_string_disabled =
+                std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_STRING_INLINE") != nullptr;
+            return string_disabled || closure_string_disabled;
+        }
     }
     return true;
 }
@@ -2391,6 +2402,73 @@ static const QoreIRIncrementLocalIntInstruction* getSimpleClosureIncrementInstru
         }
     }
     return inc_inst && has_return_nothing ? inc_inst : nullptr;
+}
+
+static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
+        LocalVar*& local, QoreIRCallDirectInstruction::NativeLeafKind& kind) {
+    if (!callee_ir || callee_ir->blocks.size() != 1 || !callee_ir->blocks.front()
+            || callee_ir->blocks.front()->instructions.size() > 16) {
+        return false;
+    }
+    const QoreIRLocalInstruction* load = nullptr;
+    const QoreIRDotEvalMethodDirectInstruction* operation = nullptr;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : callee_ir->blocks.front()->instructions) {
+        if (!inst_ptr) {
+            continue;
+        }
+        switch (inst_ptr->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadClosure: {
+                auto* candidate = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (load || !candidate->local || !candidate->local->closureUse()
+                        || candidate->is_ref || candidate->exception_target
+                        || candidate->local->getTypeInfo() != stringTypeInfo
+                        || !candidate->result.isValid()) {
+                    return false;
+                }
+                load = candidate;
+                break;
+            }
+            case QoreIROpcode::DotEvalMethodDirect:
+                if (operation || inst_ptr->exception_target || !inst_ptr->result.isValid()
+                        || inst_ptr->operands.size() != 1) {
+                    return false;
+                }
+                operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst_ptr.get());
+                break;
+            case QoreIROpcode::Return:
+                if (ret || inst_ptr->exception_target) {
+                    return false;
+                }
+                ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!load || !operation || !operation->pseudo || operation->has_ref_args
+            || operation->operands[0].id != load->result.id || !ret || !ret->has_value
+            || ret->value.id != operation->result.id) {
+        return false;
+    }
+    QoreIRIntrinsic intrinsic = operation->intrinsic;
+    if (intrinsic == QoreIRIntrinsic::None) {
+        intrinsic = qore_ir_resolve_pseudo_intrinsic(
+            operation->method, operation->qc, operation->fallback_method_name);
+    }
+    if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
+        kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize;
+    } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+        kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength;
+    } else {
+        return false;
+    }
+    local = load->local;
+    return true;
 }
 
 static bool tryExecuteSimpleClosureIncrement(const QoreClosureBase* cb,
@@ -2559,15 +2637,25 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     }
     if (!num_params) {
         const auto* increment = getSimpleClosureIncrementInstruction(callee_ir);
-        if (!increment || interpreterNativeLeafInlineDisabled(
+        if (increment && !interpreterNativeLeafInlineDisabled(
                 QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement)) {
-            return reject();
+            inst->native_leaf_kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement;
+            inst->native_leaf_local = increment->local;
+            inst->native_leaf_delta = increment->delta;
+            inst->native_leaf_state.store(1, std::memory_order_release);
+            return true;
         }
-        inst->native_leaf_kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntIncrement;
-        inst->native_leaf_local = increment->local;
-        inst->native_leaf_delta = increment->delta;
-        inst->native_leaf_state.store(1, std::memory_order_release);
-        return true;
+        LocalVar* string_local = nullptr;
+        QoreIRCallDirectInstruction::NativeLeafKind string_kind;
+        if (sig->getReturnTypeInfo() == bigIntTypeInfo
+                && getSimpleClosureStringLeaf(callee_ir, string_local, string_kind)
+                && !interpreterNativeLeafInlineDisabled(string_kind)) {
+            inst->native_leaf_kind = string_kind;
+            inst->native_leaf_local = string_local;
+            inst->native_leaf_state.store(1, std::memory_order_release);
+            return true;
+        }
+        return reject();
     }
     if (callee_ir->blocks.size() != 1) {
         if (!isInterpreterNativeIntProgram(callee_ir, sig, num_params)) {
@@ -2762,11 +2850,12 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
                     }
                 }
                 LocalVar* closure_local = nullptr;
-                if (inst_ptr->opcode == QoreIROpcode::LoadClosure && is_int
+                if (inst_ptr->opcode == QoreIROpcode::LoadClosure && (is_int || is_float)
                         && candidate->local && candidate->local->closureUse()
                         && !candidate->is_ref
                         && !QoreTypeInfo::isReference(candidate->local->getTypeInfo())
-                        && candidate->local->getTypeInfo() == bigIntTypeInfo) {
+                        && candidate->local->getTypeInfo()
+                            == (is_int ? bigIntTypeInfo : floatTypeInfo)) {
                     closure_local = candidate->local;
                 }
                 if ((param < 0 && !closure_local) || candidate->exception_target
@@ -2851,12 +2940,13 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     bool lhs_closure = operands[0]->closure_local;
     bool rhs_closure = operands[1]->closure_local;
     if ((lhs_closure || rhs_closure)
-            && (!is_int || lhs_closure == rhs_closure
+            && ((!is_int && !is_float) || lhs_closure == rhs_closure
                 || (lhs_closure ? operands[1]->param : operands[0]->param) < 0)) {
         return reject();
     }
     auto kind = lhs_closure || rhs_closure
-        ? QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntBinary
+        ? (is_int ? QoreIRCallDirectInstruction::NativeLeafKind::ClosureIntBinary
+                  : QoreIRCallDirectInstruction::NativeLeafKind::ClosureFloatBinary)
         : (is_int ? QoreIRCallDirectInstruction::NativeLeafKind::IntBinary
         : (is_float ? QoreIRCallDirectInstruction::NativeLeafKind::FloatBinary
                     : QoreIRCallDirectInstruction::NativeLeafKind::DynamicBinary));
@@ -2979,6 +3069,67 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
             case QoreIROpcode::CmpInt: result = QoreValue(lhs < rhs ? -1 : lhs > rhs ? 1 : 0); break;
             default: return false;
         }
+        return true;
+    }
+    if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::ClosureFloatBinary) {
+        if (!closure || !inst->native_leaf_local) {
+            return false;
+        }
+        ClosureVarValue* stack_cvv = thread_try_find_closure_var(inst->native_leaf_local->getName());
+        ClosureVarValue* env_cvv = closure->find(inst->native_leaf_local);
+        ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
+            : (env_cvv ? env_cvv : stack_cvv);
+        if (!cv) {
+            return false;
+        }
+        QoreSafeVarRWReadLocker locker(cv->rml);
+        if (cv->finalized || cv->val.getType() != NT_FLOAT) {
+            return false;
+        }
+        int8_t param = inst->native_leaf_lhs_param == -2
+            ? inst->native_leaf_rhs_param : inst->native_leaf_lhs_param;
+        if (param < 0 || param >= nargs || arg_values[param].getType() != NT_FLOAT) {
+            return false;
+        }
+        double captured = cv->val.getAsFloat();
+        double argument = arg_values[param].getAsFloat();
+        double lhs = inst->native_leaf_lhs_param == -2 ? captured : argument;
+        double rhs = inst->native_leaf_rhs_param == -2 ? captured : argument;
+        switch (inst->native_leaf_opcode) {
+            case QoreIROpcode::AddFloat: result = QoreValue(lhs + rhs); break;
+            case QoreIROpcode::SubFloat: result = QoreValue(lhs - rhs); break;
+            case QoreIROpcode::MulFloat: result = QoreValue(lhs * rhs); break;
+            case QoreIROpcode::EqFloat: result = QoreValue(lhs == rhs); break;
+            case QoreIROpcode::NeFloat: result = QoreValue(lhs != rhs); break;
+            case QoreIROpcode::LtFloat: result = QoreValue(lhs < rhs); break;
+            case QoreIROpcode::LeFloat: result = QoreValue(lhs <= rhs); break;
+            case QoreIROpcode::GtFloat: result = QoreValue(lhs > rhs); break;
+            case QoreIROpcode::GeFloat: result = QoreValue(lhs >= rhs); break;
+            default: return false;
+        }
+        return true;
+    }
+    if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize
+            || inst->native_leaf_kind
+                == QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength) {
+        if (!closure || !inst->native_leaf_local) {
+            return false;
+        }
+        ClosureVarValue* stack_cvv = thread_try_find_closure_var(inst->native_leaf_local->getName());
+        ClosureVarValue* env_cvv = closure->find(inst->native_leaf_local);
+        ClosureVarValue* cv = (stack_cvv && env_cvv && stack_cvv != env_cvv) ? stack_cvv
+            : (env_cvv ? env_cvv : stack_cvv);
+        if (!cv) {
+            return false;
+        }
+        QoreSafeVarRWReadLocker locker(cv->rml);
+        if (cv->finalized || cv->val.getType() != NT_STRING) {
+            return false;
+        }
+        QoreStringValueHelper str(cv->val.getValue());
+        result = QoreValue(static_cast<int64_t>(inst->native_leaf_kind
+                == QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize
+            ? str->strlen() : str->length()));
         return true;
     }
     if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::IntProgram) {

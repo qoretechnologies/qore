@@ -239,10 +239,22 @@ string sub closure_leaf_checks() {
     code<int(int)> captured_add = int sub (int value) {
         return value + captured;
     };
+    float captured_float = 1.5;
+    code<float(float)> captured_float_add = float sub (float value) {
+        return value + captured_float;
+    };
+    string captured_text = \"abc\\u2500\\u2501\";
+    code<int()> captured_size = int sub () {
+        return captured_text.size();
+    };
+    code<int()> captured_length = int sub () {
+        return captured_text.length();
+    };
     string text = \"abcd\";
     return string(add(3)) + \":\" + string(int(scale(4.0) * 10.0))
         + \":\" + string(dynamic_add(6, 7)) + \":\" + string(string_length(text))
-        + \":\" + string(captured_add(5));
+        + \":\" + string(captured_add(5)) + \":\" + string(int(captured_float_add(4.0) * 10.0))
+        + \":\" + string(captured_size()) + \":\" + string(captured_length());
 }
 
 int sub default_helper(int x = 7) {
@@ -338,12 +350,12 @@ printf(\"%s\\n\", obj.run());
 string sub closureUnassignedScriptCode() {
     return "%modern
 
-code<int(int)> leaf = int sub (int x) {
-    return x + 1;
+float captured;
+code<bool(float)> leaf = bool sub (float x) {
+    return captured == x;
 };
 
-int x;
-printf(\"%s\\n\", leaf(x));
+printf(\"%s\\n\", leaf(0.0));
 ";
 }
 
@@ -440,7 +452,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:5:11:5:12:3:5:5:1\n"
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
@@ -517,9 +529,8 @@ closure_unassigned_script.close();
 
 string ast_closure_unassigned = runScript(closure_unassigned_path);
 string aot_closure_unassigned = runAot(closure_unassigned_path);
-if (!(ast_closure_unassigned =~ /RUNTIME-OVERLOAD-ERROR/)
-        || !(aot_closure_unassigned =~ /RUNTIME-(OVERLOAD|TYPE)-ERROR/)) {
-    printf("expected rejection for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
+if (ast_closure_unassigned != "1\n" || aot_closure_unassigned != ast_closure_unassigned) {
+    printf("unexpected result for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_closure_unassigned, aot_closure_unassigned);
     exit(2);
 }

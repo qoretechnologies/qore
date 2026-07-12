@@ -2003,6 +2003,9 @@ public:
         IntProgram,
         ClosureIntIncrement,
         ClosureIntBinary,
+        ClosureFloatBinary,
+        ClosureStringSize,
+        ClosureStringLength,
     };
 
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
