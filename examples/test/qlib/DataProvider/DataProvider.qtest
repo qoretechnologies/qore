@@ -1048,6 +1048,12 @@ public class DataProviderTest inherits QUnit::Test {
             AbstractDataProviderType nt = AbstractDataProviderTypeMap{"*" + i.key};
             assertEq("*" + i.key, nt.getName(), "*" + i.key + " nullable name");
             assertNothing(nt.acceptsValue(NOTHING), "*" + i.key + " accepts no value");
+
+            # the type resolves by name via both get(string) and a name-only get(hash) descriptor, so
+            # fields/options may reference it by name (e.g. from metadata or the type builder)
+            assertEq(i.key, AbstractDataProviderType::get(i.key).getName(), i.key + " resolves by name");
+            assertEq(i.key, AbstractDataProviderType::get(<DataTypeInfo>{"name": i.key}).getName(),
+                i.key + " resolves from a name-only descriptor");
         }
 
         # invalid values are rejected server-side (backstop)

@@ -36,21 +36,25 @@ public class FileDataType inherits AbstractDataProviderType {
                 "display_name": "Filename",
                 "short_desc": "The filename",
                 "desc": "The filename",
-                "type": AbstractDataProviderTypeMap."string",
+                # NOTE: reference the leaf Qore reflection type (StringType) directly, not the aggregate
+                # AbstractDataProviderTypeMap: FileDataType is itself a member of AbstractDataProviderTypeMap, so
+                # reading that map here would create a constant-initialization cycle (see NamedClassBackedTypeMap
+                # note in AbstractDataProviderType.qc)
+                "type": StringType,
             }),
             "content": new QoreDataField({
                 "name": "content",
                 "display_name": "File Data",
                 "short_desc": "Base64-encoded file data or raw data to be encoded with base64 encoding",
                 "desc": "Base64-encoded file data or raw data to be encoded with base64 encoding",
-                "type": AbstractDataProviderTypeMap."data",
+                "type": DataType,
             }),
             "mime_type": new QoreDataField({
                 "name": "mime_type",
                 "display_name": "MIME Type",
                 "short_desc": "The MIME type string for the file",
                 "desc": "The MIME type string for the file",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": StringType,
                 "allowed_values": ExampleMimeTypeList,
                 "allowed_values_creatable": True,
                 "default_value": "auto",
