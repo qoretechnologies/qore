@@ -10594,13 +10594,25 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 ? selectAnalysisType(base_analysis) : nullptr;
             bool pseudo_base_safe_value_dispatch = pseudo_base_type
                 && !qore_ir_type_may_require_dot_eval_name_dispatch(pseudo_base_type);
-            // Ordinary object dot-eval must use runtime name dispatch: the parse-time
-            // method pointer can be a containing method object whose overload set does
-            // not match the runtime overload lookup exactly after AOT deserialization.
-            // Pseudo-methods remain direct so the existing fast paths are preserved.
-            const QoreMethod* method = m->isPseudo() ? m->getMethod() : nullptr;
-            const QoreClass* qc = m->isPseudo() ? m->getClass() : nullptr;
-            const AbstractQoreFunctionVariant* variant = m->isPseudo() ? m->getVariant() : nullptr;
+            // Preserve the parse-resolved target for a guarded exact-class fast path.
+            // Runtime dot-eval helpers compare the receiver's concrete class with qc
+            // before using this target and fall back to fallback_method_name for a
+            // subclass. Calls whose selected overload could reject an unassigned
+            // argument also stay name-dispatched so runtime NOTHING semantics choose
+            // the correct overload.
+            const QoreMethod* method = m->getMethod();
+            const QoreClass* qc = m->getClass();
+            const AbstractQoreFunctionVariant* variant = m->getVariant();
+            const QoreFunction* method_func = method
+                ? qore_method_private::get(*method)->getFunction() : nullptr;
+            if (!m->isPseudo() && (!method || !qc || !variant || !method_func
+                    || method_func->numVariants() != 1
+                    || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
+                        m->getParseArgs(), m->getArgs()))) {
+                method = nullptr;
+                qc = nullptr;
+                variant = nullptr;
+            }
             // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
             // AOT deserialization) don't need to extract it from the AST expr field.
             // The expr is still stored for the LLVM AOT slot system (call target resolution).
