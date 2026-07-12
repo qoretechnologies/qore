@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 383,
+static_assert(QORE_IR_MAX_OPCODE == 384,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -8298,6 +8298,44 @@ load_local_done:
                 setValueSlot(values, mhk->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::SelectHashKeyPositiveInt: {
+                const auto* select_inst = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, select_inst->operands[0]);
+                QoreValue out;
+                if (list_val.getType() == NT_LIST) {
+                    const QoreListNode* l = list_val.get<const QoreListNode>();
+                    const QoreTypeInfo* list_type = qore_list_private::get(*l)->complexTypeInfo;
+                    const QoreTypeInfo* element_type =
+                        QoreTypeInfo::getUniqueReturnComplexList(list_type);
+                    ReferenceHolder<QoreListNode> result(
+                        new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
+                    size_t sz = l->size();
+                    for (size_t i = 0; i < sz; ++i) {
+                        if (i && !(i % 100) && qore_check_cancel(xsink,
+                                "IR select hash-key positive-int loop")) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        QoreValue elem = l->retrieveEntry(i);
+                        if (elem.getType() != NT_HASH) {
+                            continue;
+                        }
+                        QoreValue value = elem.get<const QoreHashNode>()->getKeyValue(
+                            select_inst->key1.c_str());
+                        if (value.getAsBigInt() > 0) {
+                            result->push(elem.refSelf(), xsink);
+                        }
+                    }
+                    out = result.release();
+                }
+                setValueSlot(values, select_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(select_inst->result.id);
                 }
                 ++ip;
                 break;

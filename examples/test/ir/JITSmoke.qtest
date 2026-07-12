@@ -167,6 +167,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("dot-eval method fast call", \testDotEvalMethodFastCall());
         addTestCase("builtin function fast call", \testBuiltinFastCall());
         addTestCase("specialized hash-key map opcodes", \testMapHashKeyOpcodes());
+        addTestCase("specialized hash-key select opcode", \testSelectHashKeyPositiveInt());
         addTestCase("direct-index select on typed lists", \testDirectIndexSelect());
         addTestCase("hash key access skip invoke for plain hash", \testHashKeyAccessSkipInvoke());
         addTestCase("hash key access int opcode", \testHashKeyAccessInt());
@@ -5743,6 +5744,27 @@ printf(\"%d:%d:%d\\n\", result.x, result.y, result.z);
             string result = trim(runScript(code, mode));
             assertEq("10:20:30", result,
                     sprintf("HashMapTwoKeys three items %s", mode));
+        }
+    }
+
+    testSelectHashKeyPositiveInt() {
+        string code = "%modern
+list<hash<auto>> items = (
+    {\"value\": -1, \"name\": \"negative\"},
+    {\"value\": 0, \"name\": \"zero\"},
+    {\"value\": 2, \"name\": \"positive\"},
+    {\"name\": \"missing\"}
+);
+list<hash<auto>> result = select items, $1.value > 0;
+list<hash<auto>> nonpositive = (items[0], items[1]);
+list<hash<auto>> empty = select nonpositive, $1.value > 0;
+printf(\"%d:%s:%s:%s\\n\", result.size(), result[0].name,
+    result.fullType(), empty.fullType());
+";
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:positive:list<hash<auto>>:list<hash<auto>>", result,
+                sprintf("SelectHashKeyPositiveInt %s", mode));
         }
     }
 

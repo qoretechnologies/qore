@@ -239,6 +239,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call_prehashed) },
     { "qore_rt_hash_key_access_int_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_access_int_prehashed) },
+    { "qore_rt_select_hash_key_positive_int",
+        reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
@@ -5537,6 +5539,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_positive_int(uint64_t list_val) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         if (val > 0) {
             result->push(val, nullptr);
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val,
+        const char* key, ExceptionSink* xsink) {
+    QoreValue v = fromBits(list_val);
+    if (v.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+    const QoreListNode* l = v.get<const QoreListNode>();
+    const QoreTypeInfo* list_type = qore_list_private::get(*l)->complexTypeInfo;
+    const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+    ReferenceHolder<QoreListNode> result(
+        new QoreListNode(element_type ? element_type : autoTypeInfo), nullptr);
+    size_t sz = l->size();
+    for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink,
+                "select hash-key positive-int loop")) {
+            return toBits(QoreValue());
+        }
+        QoreValue elem = l->retrieveEntry(i);
+        if (elem.getType() != NT_HASH) {
+            continue;
+        }
+        QoreValue value = elem.get<const QoreHashNode>()->getKeyValue(key);
+        if (value.getAsBigInt() > 0) {
+            result->push(elem.refSelf(), nullptr);
         }
     }
     return toBits(result.release());

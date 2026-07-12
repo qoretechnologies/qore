@@ -12428,7 +12428,8 @@ static QoreIROpcode analyzeHashMapTwoKeysPattern(const QoreValue& key_expr, cons
 
 // Pattern analysis for optimized select operations
 // Returns optimized opcode if pattern detected, or SelectAny for fallback
-static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr, const QoreTypeInfo*& result_type) {
+static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr,
+        const QoreTypeInfo*& result_type, std::string* hash_key = nullptr) {
     const AbstractQoreNode* node = select_expr.getInternalNode();
     if (!node) {
         return QoreIROpcode::SelectAny;
@@ -12440,6 +12441,15 @@ static QoreIROpcode analyzeSelectPattern(const QoreValue& select_expr, const Qor
         QoreValue right = gt_op->getRight();
 
         const auto* arg_left = dynamic_cast<const QoreImplicitArgumentNode*>(left.getInternalNode());
+
+        std::string key;
+        if (!std::getenv("QORE_DISABLE_SELECT_HASH_KEY_POSITIVE_INT")
+                && hash_key && getImplicitHashKeyAccess(left, key) && !right.hasNode()
+                && right.getType() == NT_INT && right.getAsBigInt() == 0) {
+            *hash_key = std::move(key);
+            result_type = gt_op->getTypeInfo();
+            return QoreIROpcode::SelectHashKeyPositiveInt;
+        }
 
         // Pattern: $1 > 0
         if (arg_left && arg_left->getOffset() == 0 && !right.hasNode()) {
@@ -12981,10 +12991,16 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
     // Try pattern analysis for optimized opcodes
     // Syntax: (select list, condition) - getLeft() = list, getRight() = condition
     const QoreTypeInfo* result_type = nullptr;
-    QoreIROpcode opt_opcode = analyzeSelectPattern(select->getRight(), result_type);
+    std::string select_hash_key;
+    QoreIROpcode opt_opcode = analyzeSelectPattern(select->getRight(), result_type,
+        &select_hash_key);
 
     // For optimized patterns, emit optimized opcode with just the list
     if (opt_opcode != QoreIROpcode::SelectAny) {
+        if (opt_opcode == QoreIROpcode::SelectHashKeyPositiveInt
+                && !exception_stack.empty()) {
+            return lowerSelectNative(select, expr, error);
+        }
         // Lower the list (left operand of select)
         QoreIRValue list_val = lowerExpression(select->getLeft(), error);
         if (!list_val.isValid()) {
@@ -13014,6 +13030,12 @@ QoreIRValue QoreIRLowering::lowerSelect(const QoreValue& expr, std::string& erro
         QoreIRValue placeholder = builder.createConstNothing(select->loc)->result;
 
         QoreIRValue result;
+        if (opt_opcode == QoreIROpcode::SelectHashKeyPositiveInt) {
+            auto* inst = builder.createMapHashKey(opt_opcode,
+                select_hash_key.c_str(), nullptr, select->loc);
+            inst->operands.push_back(list_val);
+            return inst->result;
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {

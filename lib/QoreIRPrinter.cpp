@@ -280,6 +280,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MapHashKeyOffsetInt: return "map.hashkey.offset.int";
         case QoreIROpcode::MapHashKeyScaleInt: return "map.hashkey.scale.int";
         case QoreIROpcode::HashMapTwoKeys: return "hashmap.twokeys";
+        case QoreIROpcode::SelectHashKeyPositiveInt: return "select.hashkey.positive.int";
         case QoreIROpcode::SelectAny: return "select.any";
         case QoreIROpcode::SelectInt: return "select.int";
         case QoreIROpcode::SelectFloat: return "select.float";
@@ -533,7 +534,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     || inst->opcode == QoreIROpcode::MapHashKeyInt
                     || inst->opcode == QoreIROpcode::MapHashKeyOffsetInt
                     || inst->opcode == QoreIROpcode::MapHashKeyScaleInt
-                    || inst->opcode == QoreIROpcode::HashMapTwoKeys) {
+                    || inst->opcode == QoreIROpcode::HashMapTwoKeys
+                    || inst->opcode == QoreIROpcode::SelectHashKeyPositiveInt) {
                 auto* mhk_inst = dynamic_cast<const QoreIRMapHashKeyInstruction*>(inst.get());
                 if (mhk_inst) {
                     out << " ." << mhk_inst->key1;

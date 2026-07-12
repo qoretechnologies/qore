@@ -690,6 +690,9 @@ enum class QoreIROpcode : uint16_t {
     //! Convert a value to a native float.
     ToFloat            = 383,
 
+    //! Select hash elements whose constant-key value converts to a positive integer.
+    SelectHashKeyPositiveInt = 384,
+
     // NOTE: When adding new opcodes, assign the next sequential ID (384, 385, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
@@ -698,8 +701,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ToFloat);
-static_assert(QORE_IR_MAX_OPCODE == 383, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::SelectHashKeyPositiveInt);
+static_assert(QORE_IR_MAX_OPCODE == 384, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
