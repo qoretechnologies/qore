@@ -344,6 +344,9 @@ uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink);
 //! Store a NaN-boxed QoreValue to a closure variable
 void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink);
 
+//! Increment a typed integer closure variable through its runtime LocalVar binding
+int64_t qore_rt_increment_closure_int(LocalVar* var, int64_t delta, ExceptionSink* xsink);
+
 //! Load from a thread-local variable; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink);
 
@@ -888,6 +891,10 @@ uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSin
 
 //! Store to a closure variable via AOT context slot (uses locals array)
 void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+
+//! Increment a typed integer closure variable via an AOT local slot
+int64_t qore_rt_increment_closure_int_aot(QoreAOTContext* ctx, int32_t idx,
+        int64_t delta, ExceptionSink* xsink);
 
 //! Invoke an expression via AOT context slot
 uint64_t qore_rt_invoke_expr_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);

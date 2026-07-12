@@ -39,6 +39,16 @@ string sub exercise() {
     code<int()> bump = int sub () {
         return ++captured;
     };
+    int unset;
+    code<int()> initialize = int sub () {
+        return ++unset;
+    };
+    code<int()> add_five = int sub () {
+        return unset += 5;
+    };
+    code<int()> decrement = int sub () {
+        return --unset;
+    };
     code<int(int)> defaulted = int sub (int value = 5) {
         return value * 2;
     };
@@ -76,13 +86,18 @@ string sub exercise() {
     int first = add(4);
     int changed = bump();
     int second = add(4);
+    int outer_changed = captured += 2;
+    int initialized = initialize();
+    int added = add_five();
+    remove unset;
+    int decremented = decrement();
     int ref_value = 6;
     write_ref(\\ref_value);
     Box box(10);
     code<int(int)> object_adder = box.makeAdder();
-    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
-        first, changed, second, defaulted(), ref_value, loop(5), nested_call(),
-        object_adder(2), recursive(5), guarded(-1));
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+        first, changed, second, outer_changed, initialized, added, decremented,
+        defaulted(), ref_value, loop(5), nested_call(), object_adder(2), recursive(5), guarded(-1));
 }
 
 printf(\"%s\\n\", exercise());
@@ -115,10 +130,10 @@ string native_out = backquote(sprintf(
     "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
 string fallback_out = backquote(sprintf(
     "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-string expected = "7:4:8:10:13:40:11:12:15:17\n";
+string expected = "7:4:8:6:1:6:-1:10:13:60:11:12:15:17\n";
 if (ast_out != expected || fallback_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:10:13:40:11:12:15:17/)) {
+        || !(native_out =~ /7:4:8:6:1:6:-1:10:13:60:11:12:15:17/)) {
     printf("native closure execution mismatch\nAST:\n%sNative:\n%sFallback:\n%sCompile:\n%s",
         ast_out, native_out, fallback_out, compile_out);
     exit(2);

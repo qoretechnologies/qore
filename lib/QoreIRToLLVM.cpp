@@ -8442,6 +8442,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::IncrementLocalInt: {
             const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
             auto key = reinterpret_cast<const void*>(fused->local);
+            if (fused->local && fused->local->closureUse()) {
+                llvm::Value* result;
+                if (aot_mode) {
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_increment_closure_int_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         llvm::ConstantInt::get(i64_type, fused->delta, true), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_increment_closure_int",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(fused->local));
+                    result = builder->CreateCall(helper,
+                        {builder->CreateIntToPtr(var_ptr, ptr_type),
+                         llvm::ConstantInt::get(i64_type, fused->delta, true), xsink_arg});
+                }
+                if (inst->result.isValid()) {
+                    values[inst->result.id] = result;
+                }
+                return true;
+            }
             auto it = local_allocas.find(key);
             llvm::Value* local_int = load_local_int_for_fused(fused->local, key, it, "inc.val");
             llvm::Value* result = builder->CreateAdd(local_int,
