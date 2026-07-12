@@ -388,6 +388,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test TagObject", \testTagObject());
         addTestCase("Test SchemaObject", \testSchemaObject());
         addTestCase("Test SchemaObject Composition Validation", \testSchemaCompositionValidation());
+        addTestCase("Test semantic string formats", \testSemanticStringFormats());
         addTestCase("Test XmlObject", \testXmlObject());
         addTestCase("Test SecuritySchemeObject", \testSecuritySchemeObject());
         addTestCase("Test ScopesObject", \testScopesObject());
@@ -1913,6 +1914,19 @@ public class OpenApi3Test inherits QUnit::Test {
 
         tag = {"name": "a", "externalDocs": 5};
         assertThrows("INVALID-FIELD-TYPE", "externalDocs", loadyaml, my_make_yaml(base + {"tags": (tag,)}));
+    }
+
+    testSemanticStringFormats() {
+        checkModules();
+
+        OpenApi3Schema schema("", {"openapi": "3.0", "info": ValidInfoObject, "paths": {}});
+        foreach string fmt in (("email", "uri", "uuid", "hostname", "ipv4", "ipv6", "phone")) {
+            auto t = schema.getType("p", "string", fmt);
+            assertEq(fmt, t.getName(), sprintf("string/%s maps to the %y type", fmt, fmt));
+            assertEq("string", t.getBaseTypeName(), fmt + " is string-backed");
+        }
+        # an unrecognized format still maps to a plain string type
+        assertEq("softstring", schema.getType("p", "string").getName(), "no format maps to a string type");
     }
 
     testSchemaObject() {

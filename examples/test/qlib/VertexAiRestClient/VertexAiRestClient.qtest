@@ -110,6 +110,7 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("complete() helper",                  \completeTest());
         addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
         addTestCase("URL path includes project/region/model", \pathTest());
+        addTestCase("API URL follows location kind",        \apiUrlTest());
         addTestCase("missing project_id throws",          \missingProjectTest());
         addTestCase("embedder factory + round-trip",      \embedderTest());
         addTestCase("VertexAiRestConnection constructs",  \connectionTest());
@@ -313,6 +314,28 @@ public class VertexAiTest inherits QUnit::Test {
         string path = p.getVertexPath();
         assertEq("/v1/projects/fake-project/locations/us-central1/"
             "publishers/google/models/gemini-2.0-flash:generateContent", path);
+    }
+
+    private apiUrlTest() {
+        assertEq("https://us-central1-aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("us-central1"),
+            "regional locations use the regional hostname");
+        assertEq("https://europe-west4-aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("europe-west4"),
+            "European regional locations use the regional hostname");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("us"),
+            "US multi-region uses the general hostname with location in the path");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("eu"),
+            "EU multi-region uses the general hostname with location in the path");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("global"),
+            "global uses the unprefixed hostname");
+        assertThrows("VERTEX-AI-CONFIG-ERROR",
+            "Vertex AI location must not be empty",
+            \VertexAiRestClient::vertexApiUrl(), ("",),
+            "an empty location is rejected before an invalid hostname is built");
     }
 
     private missingProjectTest() {

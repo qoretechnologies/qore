@@ -50,7 +50,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.5.1";
+    version = "3.6";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1218,6 +1218,13 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_6 DataProvider v3.6
+    - added semantic string-backed data types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6, and
+      \c phone) that carry a UI-renderable format identity while remaining string-compatible; Swagger and
+      OpenAPI schema \c format values are mapped to these types on import and emitted on schema generation
+    - @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
+      now propagates a source field's \c ui_type into the derived application-action option
 
     @subsection dataprovider_v3_5 DataProvider v3.5
     - added explicit expression pushdown capability metadata so action sessions and database providers can
