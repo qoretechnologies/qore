@@ -17,13 +17,17 @@
 #   LD_LIBRARY_PATH  Library path for the qore binary
 #   BENCH_MODES      Comma-separated list of modes to run (default: ast,ir,tiered,jit,aot)
 #   BENCH_ITERS      Base iteration count (default: 10000000 for extended benchmarks)
+#   BENCH_SAMPLES    Timed process samples per mode (default: 5)
+#   BENCH_WARMUP     Untimed process warmups per mode (default: 1)
+#   BENCH_TESTS      Optional comma-separated list of benchmark names
 #
 # Note: This is the extended benchmark suite with 10x longer iterations for more
 # reliable measurements. Compilation time is separated from execution time for AOT.
 
 const DEFAULT_ITERATIONS = 10000000;  # 10x longer than original (1M -> 10M)
 
-hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path) {
+hash<auto> sub run_benchmark(string name, string code, string mode, string qore_bin, string ld_path,
+        int samples, int warmup) {
     # Write code to temp file
     string tmp = sprintf("/tmp/bench_%s.qr", name);
     {
@@ -54,18 +58,45 @@ hash<auto> sub run_benchmark(string name, string code, string mode, string qore_
             ld_path, qore_bin, mode, tmp);
     }
 
-    # Time the execution (for all modes)
-    date start = now_us();
-    string output = backquote(cmd);
-    date end = now_us();
+    for (int i = 0; i < warmup; ++i) {
+        backquote(cmd);
+    }
 
-    int elapsed_us = (end - start).durationMicroseconds();
-    float elapsed_ms = elapsed_us / 1000.0;
+    list<float> timings;
+    bool samples_match = True;
+    string first_output;
+    for (int i = 0; i < samples; ++i) {
+        date start = now_us();
+        string sample_output = trim(backquote(cmd));
+        date end = now_us();
+        timings += (end - start).durationMicroseconds() / 1000.0;
+        if (!i) {
+            first_output = sample_output;
+        } else if (sample_output != first_output) {
+            samples_match = False;
+        }
+    }
+
+    list<auto> sorted = sort(timings);
+    float median_ms = samples % 2
+        ? sorted[samples / 2].toFloat()
+        : (sorted[samples / 2 - 1].toFloat() + sorted[samples / 2].toFloat()) / 2.0;
+    float sum_ms = 0.0;
+    foreach float timing in (timings) {
+        sum_ms += timing;
+    }
+    float mean_ms = sum_ms / samples;
+    float sq_sum = 0.0;
+    foreach float timing in (timings) {
+        sq_sum += (timing - mean_ms) * (timing - mean_ms);
+    }
 
     return {
-        "elapsed_ms": elapsed_ms,
+        "elapsed_ms": median_ms,
+        "stdev_ms": sqrt(sq_sum / samples),
         "compile_ms": compile_ms,  # Only non-zero for AOT
-        "output": trim(output),
+        "output": first_output,
+        "samples_match": samples_match,
     };
 }
 
@@ -76,6 +107,12 @@ class BenchmarkRunner {
 
     private main() {
         int iterations = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
+        int samples = int(ENV.BENCH_SAMPLES ?? 5);
+        int warmup = int(ENV.BENCH_WARMUP ?? 1);
+        if (samples <= 0 || warmup < 0) {
+            stderr.printf("BENCH_SAMPLES must be positive and BENCH_WARMUP must be non-negative\n");
+            exit(2);
+        }
 
     # ==========================================================================
     # Test 1: Simple integer loop (baseline - tests typed int ops)
@@ -214,7 +251,7 @@ printf(\"%%d\\n\", sum);
 list<int> nums = range(%d);
 int sum = (foldl $1 + $2, nums, 0);
 printf(\"%%d\\n\", sum);
-", iterations / 100);
+", iterations);
 
     # ==========================================================================
     # Test 8: Functional operators - map (int list)
@@ -311,7 +348,7 @@ for (int i = 0; i < %d; ++i) {
 }
 int sum = (foldl $1 + $2, (map $1(), closures), 0);
 printf(\"%%d\\n\", sum);
-", iterations / 10000);
+", iterations / 100);
 
     # ==========================================================================
     # Test 15: closure as comparator - closure used as sort/map callback
@@ -407,11 +444,19 @@ printf(\"%%d\\n\", sum);
         modes = ("ast", "ir", "tiered", "jit", "aot");
     }
 
+    hash<string, bool> selected_tests;
+    if (ENV.BENCH_TESTS) {
+        foreach string test_name in (ENV.BENCH_TESTS.split(",")) {
+            selected_tests{test_name} = True;
+        }
+    }
+
     printf("================================================================================\n");
     printf("Extended Performance Benchmark (10x longer iterations for reliable measurements)\n");
     printf("================================================================================\n");
     printf("Modes: %s\n", modes.join(" vs "));
     printf("Base iterations: %d\n", iterations);
+    printf("Samples: %d timed, %d warmup\n", samples, warmup);
     printf("Binary: %s\n", qore_bin);
     printf("Note: AOT shows execution time (compilation time shown separately)\n");
     printf("================================================================================\n\n");
@@ -420,6 +465,9 @@ printf(\"%%d\\n\", sum);
     hash<string, hash<string, float>> results;
 
     foreach string test_name in (keys tests) {
+        if (!selected_tests.empty() && !selected_tests{test_name}) {
+            continue;
+        }
         string code = tests{test_name};
         printf("Test: %s\n", test_name);
         printf("------------------------------------------------------------------------\n");
@@ -429,19 +477,19 @@ printf(\"%%d\\n\", sum);
         bool have_expected = False;
 
         foreach string mode in (modes) {
-            hash<auto> r = run_benchmark(test_name, code, mode, qore_bin, ld_path);
+            hash<auto> r = run_benchmark(test_name, code, mode, qore_bin, ld_path, samples, warmup);
             test_results{mode} = r.elapsed_ms;
             if (!have_expected) {
                 expected_output = r.output;
                 have_expected = True;
             }
-            string status = r.output == expected_output ? "OK" : "MISMATCH";
+            string status = r.samples_match && r.output == expected_output ? "OK" : "MISMATCH";
             if (mode == "aot" && r.compile_ms > 0) {
                 # Show AOT as: execution time (compilation time)
-                printf("  %-7s: %8.1f ms (compile: %6.1f ms)  [%s]\n",
-                    mode, r.elapsed_ms, r.compile_ms, status);
+                printf("  %-7s: %8.1f ms (+/-%6.1f, compile: %6.1f ms)  [%s]\n",
+                    mode, r.elapsed_ms, r.stdev_ms, r.compile_ms, status);
             } else {
-                printf("  %-7s: %8.1f ms  [%s]\n", mode, r.elapsed_ms, status);
+                printf("  %-7s: %8.1f ms (+/-%6.1f)  [%s]\n", mode, r.elapsed_ms, r.stdev_ms, status);
             }
         }
 
@@ -485,23 +533,23 @@ printf(\"%%d\\n\", sum);
     }
     printf("------------------------------------------------------------------------\n");
 
-    # Average speedups
-    printf("\nAverage Speedup vs AST:\n");
+    # Geometric-mean speedups avoid overweighting isolated short kernels.
+    printf("\nGeometric Mean Speedup vs AST:\n");
     foreach string mode in (modes) {
         if (mode == "ast") {
             continue;
         }
-        float total_speedup = 0.0;
+        float speedup_product = 1.0;
         int count = 0;
         foreach string test_name in (keys results) {
             hash<string, float> r = results{test_name};
             if (r.ast > 0 && r{mode} > 0) {
-                total_speedup += r.ast / r{mode};
+                speedup_product *= r.ast / r{mode};
                 ++count;
             }
         }
         if (count > 0) {
-            printf("  %-7s: %.2fx\n", mode, total_speedup / count);
+            printf("  %-7s: %.2fx\n", mode, pow(speedup_product, 1.0 / count));
         }
     }
 
@@ -511,7 +559,7 @@ printf(\"%%d\\n\", sum);
     printf("  - All times are EXECUTION times (how fast the code runs)\n");
     printf("  - AOT compilation times are shown separately per test and NOT included above\n");
     printf("  - JIT/tiered compilation happens during first execution and is included\n");
-    printf("  - 10x longer iterations than original for more reliable measurements\n");
+    printf("  - Summary values are medians from repeated process executions\n");
     printf("================================================================================\n");
 }
 }
