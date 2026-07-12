@@ -209,6 +209,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_list_by_type_path", reinterpret_cast<void*>(&qore_rt_make_list_by_type_path) },
     { "qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash) },
     { "qore_rt_make_hash_by_type_path", reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path) },
+    { "qore_rt_hash_reserve", reinterpret_cast<void*>(&qore_rt_hash_reserve) },
     { "qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys) },
     { "qore_rt_make_hash_const_keys_by_type_path",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path) },
@@ -3171,6 +3172,17 @@ extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_
     // Do NOT discard key_val — the caller (JIT/IR) manages the key's lifetime.
     // Discarding here causes a double-free since the key is also cleaned up by
     // the JIT function's exit cleanup or the IR value map cleanup mechanism.
+}
+
+extern "C" DLLEXPORT void qore_rt_hash_reserve(uint64_t hash_bits, int64_t capacity) {
+    if (capacity <= 0) {
+        return;
+    }
+    QoreValue hash_val = fromBits(hash_bits);
+    if (hash_val.getType() == NT_HASH) {
+        qore_hash_private::get(*hash_val.get<QoreHashNode>())->hm.reserve(
+            static_cast<size_t>(capacity));
+    }
 }
 
 // --- Reverse iterator creation helper ---

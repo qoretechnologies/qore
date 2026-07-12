@@ -6785,6 +6785,12 @@ next_instruction:
             }
             case QoreIROpcode::MakeHash: {
                 const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
+                size_t pair_operand_count = inst->operands.size();
+                int64_t capacity = 0;
+                if (pair_operand_count % 2) {
+                    capacity = getIRValue(values, inst->operands.back()).getAsBigInt();
+                    --pair_operand_count;
+                }
                 const QoreTypeInfo* typeInfo = substituteRuntimeTypeParams(mh->typeInfo);
                 const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
                 if (!declared_vtype) {
@@ -6796,17 +6802,12 @@ next_instruction:
                 bool declared_type = declared_vtype && declared_vtype != autoTypeInfo;
                 ReferenceHolder<QoreHashNode> hash(
                     new QoreHashNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
+                if (capacity > 0) {
+                    qore_hash_private::get(*hash)->hm.reserve(static_cast<size_t>(capacity));
+                }
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
-                if (inst->operands.size() % 2 != 0) {
-                    if (xsink) {
-                        xsink->raiseException("IR-EXEC-ERROR", "make.hash requires even operands");
-                    }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                for (size_t i = 0; i < inst->operands.size(); i += 2) {
+                for (size_t i = 0; i < pair_operand_count; i += 2) {
                     if (i && !(i % 100) && qore_check_cancel(xsink, "IR hash literal construction")) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();

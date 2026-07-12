@@ -1648,7 +1648,9 @@ public:
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
 };
 
-//! Make hash instruction with optional parse-time type info
+//! Make hash instruction with optional parse-time type info.
+//! Operands normally alternate key/value pairs. An odd final operand is a
+//! native integer capacity hint used only for initially empty map results.
 class QoreIRMakeHashInstruction : public QoreIRInstruction {
 public:
     explicit QoreIRMakeHashInstruction() : QoreIRInstruction(QoreIROpcode::MakeHash) {

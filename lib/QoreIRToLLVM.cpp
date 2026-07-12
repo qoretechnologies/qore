@@ -15883,9 +15883,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::MakeHash: {
             const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
+            bool has_capacity = inst->operands.size() % 2;
             // Operands are alternating keys and values
             int pair_count = static_cast<int>(inst->operands.size() / 2);
-            int total = static_cast<int>(inst->operands.size());
+            int total = pair_count * 2;
             llvm::Value* count_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), pair_count);
             // Hoist alloca to entry block to avoid stack overflow in loops
             llvm::IRBuilder<> ab_hash(&llvm_func->getEntryBlock(),
@@ -15920,6 +15921,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, mh_ft);
             llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
                     {arr, count_val, ti_arg, xsink_arg}, module, llvm_func, inst);
+            if (has_capacity) {
+                llvm::Value* capacity = getVal(inst->operands.back().id, error);
+                if (!capacity || capacity->getType() != i64_type
+                        || nanboxed_values.count(inst->operands.back().id)) {
+                    error = "MakeHash capacity hint is not a native integer";
+                    return false;
+                }
+                auto reserve_ft = llvm::FunctionType::get(void_type, {i64_type, i64_type}, false);
+                auto reserve = module.getOrInsertFunction("qore_rt_hash_reserve", reserve_ft);
+                builder->CreateCall(reserve, {hash_result, capacity});
+            }
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);

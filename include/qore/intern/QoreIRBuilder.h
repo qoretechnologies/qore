@@ -59,6 +59,8 @@ public:
         const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
+    QoreIRInstruction* createSizedHash(QoreIRValue capacity,
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* typeInfo = nullptr);
     QoreIRInstruction* createMakeHashConstKeys(std::vector<std::string>&& keys,
         const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc = nullptr,
         const QoreTypeInfo* typeInfo = nullptr);

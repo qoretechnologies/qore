@@ -14815,7 +14815,9 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
-        QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
+        QoreIRValue result_hash = std::getenv("QORE_DISABLE_IR_SIZED_HASH_MAP_RESULT")
+            ? builder.createMakeHash({}, hm->loc, hash_result_type)->result
+            : builder.createSizedHash(list_size, hm->loc, hash_result_type)->result;
         {
             auto* br = builder.createBranch(header_block, hm->loc);
             setLoopCheckpointExceptionTarget(br, header_block);

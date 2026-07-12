@@ -667,6 +667,8 @@ uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* vrn, ExceptionSink* xs
 //! Set a key-value pair in a hash (for hash map loops)
 void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits, uint64_t value_bits,
     ExceptionSink* xsink);
+//! Reserves storage in a newly constructed hash for a nonnegative capacity hint.
+void qore_rt_hash_reserve(uint64_t hash_bits, int64_t capacity);
 
 // --- Reverse iterator creation helper ---
 

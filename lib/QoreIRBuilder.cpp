@@ -324,6 +324,11 @@ QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>&
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createSizedHash(QoreIRValue capacity,
+        const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo) {
+    return createMakeHash({capacity}, loc, typeInfo);
+}
+
 QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::string>&& keys,
         const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc,
         const QoreTypeInfo* typeInfo) {
