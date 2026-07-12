@@ -142,9 +142,15 @@ public const hash<auto> DataTypeMap = {
     "*data": DataOrNothingType,
 };
 
-#! Maps Qore type name constant values to AbstractDataProviderType values
-public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderType::get($1.value)},
-    DataTypeMap.pairIterator()) + {
+#! Maps type names to class-backed AbstractDataProviderType values not present in @ref DataTypeMap
+/** These types (e.g. @c "file", @c "rgbcolor", @c "email") are registered here rather than in
+    @ref DataTypeMap because they are not backed by a plain Qore reflection type. The map is kept separate
+    from @ref AbstractDataProviderTypeMap so that @ref AbstractDataProviderType::get() can resolve these
+    names by string without a recursive constant reference to @ref AbstractDataProviderTypeMap.
+
+    @since %DataProvider 3.6
+*/
+public const NamedClassBackedTypeMap = {
     "byte": new QoreSignedByteDataType(),
     "*byte": new QoreSignedByteOrNothingDataType(),
     "softbyte": new QoreSoftSignedByteDataType(),
@@ -188,6 +194,10 @@ public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderTyp
     "phone": PhoneType,
     "*phone": PhoneOrNothingType,
 };
+
+#! Maps Qore type name constant values to AbstractDataProviderType values
+public const AbstractDataProviderTypeMap = (map {$1.key: AbstractDataProviderType::get($1.value)},
+    DataTypeMap.pairIterator()) + NamedClassBackedTypeMap;
 
 #! describes type options
 public hashdecl DataProviderTypeOptionInfo {
@@ -863,7 +873,15 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         if (*list<string> union_types = AbstractDataProviderType::splitTypeUnion(typename)) {
             return new QoreUnionDataType(union_types);
         }
-        return AbstractDataProviderType::get(DataTypeMap{typename} ?? new Type(typename), options);
+        if (*Type t = DataTypeMap{typename}) {
+            return AbstractDataProviderType::get(t, options);
+        }
+        # class-backed named types (e.g. "file", "rgbcolor", "email", "uuid") live only in
+        # NamedClassBackedTypeMap, not DataTypeMap
+        if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{typename}) {
+            return adt;
+        }
+        return AbstractDataProviderType::get(new Type(typename), options);
     }
 
     #! Split a type string into top-level union alternatives
@@ -944,6 +962,11 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         *Type t = DataTypeMap{info.name};
         if (!t && info.name) {
+            # class-backed named types (e.g. "file", "email") are not Qore reflection types; the name
+            # ("email" vs "*email") already encodes nullability
+            if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name}) {
+                return adt;
+            }
             try {
                 t = new Type(info.name);
             } catch (hash<ExceptionInfo> ex) {

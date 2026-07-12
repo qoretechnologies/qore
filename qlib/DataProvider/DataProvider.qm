@@ -1225,6 +1225,9 @@ if (errors) {
       OpenAPI schema \c format values are mapped to these types on import and emitted on schema generation
     - @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
       now propagates a source field's \c ui_type into the derived application-action option
+    - class-backed named types (\c file, \c rgbcolor, and the new semantic string types) are now resolvable
+      by name through @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()",
+      so fields and options can reference them by name
 
     @subsection dataprovider_v3_5 DataProvider v3.5
     - added explicit expression pushdown capability metadata so action sessions and database providers can
