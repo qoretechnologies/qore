@@ -205,6 +205,7 @@ class ProgramTest inherits QUnit::Test {
         addTestCase("issue 2993", \issue2993());
         addTestCase("issue 3136", \issue3136());
         addTestCase("issue 3027 test", \issue3027Test());
+        addTestCase("const init order test", \constInitOrderTest());
         addTestCase("issueModuleCmd() test", \issueModuleCmdTest());
         addTestCase("issue 2807", \issue2807());
         addTestCase("issue 2735 test", \issue2735Test());
@@ -360,12 +361,56 @@ class ProgramTest inherits QUnit::Test {
     }
 
     issue3027Test() {
-        if (!Option::HAVE_STACK_GUARD) {
-            testSkip("Qore library was not built with stack protection support");
-        }
         Program p(PO_NEW_STYLE);
-        assertThrows("STACK-LIMIT-EXCEEDED", \p.parse(), ('sub foo() { hash h = T{"foo"}; return h.a; } '
+        # issue #3027: a constant whose runtime value depends on itself through a function body (here T's value
+        # calls foo(), and foo() reads T) used to recurse until the thread stack overflowed
+        # (STACK-LIMIT-EXCEEDED).  Such indirect cycles escape the parse-time recursive-constant detector; they
+        # are now caught deterministically when the value is evaluated (RECURSIVE-CONSTANT-REFERENCE).
+        assertThrows("RECURSIVE-CONSTANT-REFERENCE", \p.parse(), ('sub foo() { hash h = T{"foo"}; return h.a; } '
             'const T = {"foo": { "a": 1, "b": foo()},}; foo();', ""));
+    }
+
+    constInitOrderTest() {
+        # A constant folded as "new X()" must not fail to parse merely because some function called (directly or
+        # transitively) from X's construction path has a *body* that references a constant which in turn
+        # references the class-backed constant.  Such references are parse-time-only for constant folding (only
+        # the callee signature is needed); the callee body is parse-initialized later, so this is not a genuine
+        # value cycle and must parse regardless of declaration/commit order.
+        #
+        # Here XConst = new X(); X's member calls Helper::lookup(int), which does NOT read TypeMap at runtime, but
+        # the sibling overload Helper::lookup(string) does - so only a parse-time (not value) edge exists.  This
+        # used to raise a spurious, commit-order-dependent "recursive constant reference" PARSE-EXCEPTION.
+        string src =
+            "class Helper {\n"
+            "    static hash<auto> lookup(string s) { return TypeMap; }\n"
+            "    static hash<auto> lookup(int i)    { return {}; }\n"
+            "}\n"
+            "class X { public { auto m = Helper::lookup(1); } constructor() {} }\n"
+            "const TypeMap = {\"x\": XConst};\n"
+            "const X XConst = new X();\n"
+            "auto sub get_m() { return XConst.m; }\n"
+            "auto sub get_tm() { return TypeMap.x.m; }\n";
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(src, "const-init-order-fwd");
+            assertEq({}, p.callFunction("get_m"));
+            assertEq({}, p.callFunction("get_tm"));
+        }
+        # ...and independent of declaration order (the constants swapped)
+        {
+            string src2 =
+                "const X XConst = new X();\n"
+                "const TypeMap = {\"x\": XConst};\n"
+                "class Helper {\n"
+                "    static hash<auto> lookup(string s) { return TypeMap; }\n"
+                "    static hash<auto> lookup(int i)    { return {}; }\n"
+                "}\n"
+                "class X { public { auto m = Helper::lookup(1); } constructor() {} }\n"
+                "auto sub get_m() { return XConst.m; }\n";
+            Program p(PO_NEW_STYLE);
+            p.parse(src2, "const-init-order-rev");
+            assertEq({}, p.callFunction("get_m"));
+        }
     }
 
     issueModuleCmdTest() {

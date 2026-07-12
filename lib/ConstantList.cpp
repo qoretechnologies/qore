@@ -38,6 +38,9 @@
 #include <cstdlib>
 #include <cstring>
 
+// parse-time thread-local depth of constant value initialization in progress (see ConstantList.h)
+thread_local unsigned qore_constant_init_depth = 0;
+
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
 
 #ifdef DEBUG
@@ -51,6 +54,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
+        rt_in_init(false),
         access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
@@ -75,6 +79,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         aot_shell_pending(old.aot_shell_pending),
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
+        rt_in_init(false),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
@@ -336,6 +341,14 @@ int ConstantEntry::parseCommitRuntimeInit() {
     has_init_expr = true;
     assert(saved_val_set);
     assert(saved_val.needsEval());
+
+    // guard against genuine runtime value cycles for the duration of the evaluation below (a dependency that
+    // references this constant while it is being evaluated is detected in RuntimeConstantRefNode::evalImpl)
+    rt_in_init = true;
+    struct RtInitGuard {
+        ConstantEntry& ce;
+        ~RtInitGuard() { ce.rt_in_init = false; }
+    } rt_init_guard{*this};
 
     // Preserve the init expression for AOT lowering before evaluation consumes it.
     // The expression AST is ref-counted; this keeps it alive after saved_val is replaced.
