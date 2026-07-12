@@ -1440,13 +1440,23 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
         // uses a name-based walk-all lookup; for recursive calls, that lookup
         // can find an outer frame's CVV and cause cross-frame aliasing.  Locals
         // with explicit block scope are instantiated at closure load/store and
-        // popped by the explicit UninstantiateLocal lowering.
+        // popped by the explicit UninstantiateLocal lowering. Direct AOT fast
+        // entries also instantiate runtime-visible non-closure body locals here
+        // because they bypass the normal runtime frame wrapper.
         if (current_ir_func) {
             for (LocalVar* var : current_ir_func->all_body_locals) {
-                if (!var || !var->closureUse()) {
+                if (!var) {
                     continue;
                 }
                 const void* key = reinterpret_cast<const void*>(var);
+                if (!var->closureUse()) {
+                    if (!fast_entry_name.empty() && !ir_only_body_locals.count(key)) {
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot)});
+                    }
+                    continue;
+                }
                 if (instantiated_closure_use.count(key)) {
                     continue;
                 }
@@ -1689,10 +1699,18 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
             for (auto it = current_ir_func->all_body_locals.rbegin();
                     it != current_ir_func->all_body_locals.rend(); ++it) {
                 LocalVar* var = *it;
-                if (!var || !var->closureUse()) {
+                if (!var) {
                     continue;
                 }
                 const void* key = reinterpret_cast<const void*>(var);
+                if (!var->closureUse()) {
+                    if (!fast_entry_name.empty() && !ir_only_body_locals.count(key)) {
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                        builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    }
+                    continue;
+                }
                 if (entry_local_set.count(key)) {
                     continue;  // Already handled by the entry_locals loop below
                 }
