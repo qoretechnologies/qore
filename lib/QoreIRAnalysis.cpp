@@ -1599,6 +1599,8 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         LocalVar* index_local = nullptr;
         LocalVar* list_local = nullptr;
         LocalVar* bound_local = nullptr;
+        QoreIRInstruction* list_size_inst = nullptr;
+        QoreIRInstruction* list_size_load_inst = nullptr;
         size_t bound_assignment_block = cfg.blocks.size();
         size_t bound_assignment_offset = 0;
 
@@ -1631,6 +1633,8 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 continue;
             }
             list_local = get_raw_loaded_local(size->operands[0]);
+            list_size_inst = size;
+            list_size_load_inst = get_definition(size->operands[0]);
         } else if (terminator->opcode == QoreIROpcode::BranchIfLtLocalInt) {
             auto* branch = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(terminator);
             true_target = branch->true_target;
@@ -1859,6 +1863,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
             return local && local != index_local && local != list_local
                 && !local->closureUse() && !QoreTypeInfo::isReference(local->getTypeInfo());
         };
+        size_t loop_specializations = 0;
         for (size_t block_id : loop.blocks) {
             for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count, "IR bounded list mutation analysis")) {
@@ -1929,6 +1934,44 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 result_facts.never_nothing = true;
                 func.setValueFacts(inst.result, result_facts);
                 ++changed;
+                ++loop_specializations;
+            }
+        }
+        if (loop_specializations && list_size_inst && list_size_load_inst
+                && !getenv("QORE_DISABLE_IR_BOUNDED_LIST_SIZE_HOIST")) {
+            auto move_to_preheader = [&](QoreIRInstruction* target) {
+                std::unique_ptr<QoreIRInstruction> moved;
+                for (size_t block_id : loop.blocks) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR bounded list size hoist")) {
+                        return false;
+                    }
+                    auto& instructions = cfg.blocks[block_id]->instructions;
+                    for (auto found = instructions.begin(); found != instructions.end(); ++found) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR bounded list size hoist")) {
+                            return false;
+                        }
+                        if (found->get() == target) {
+                            moved = std::move(*found);
+                            instructions.erase(found);
+                            break;
+                        }
+                    }
+                    if (moved) {
+                        break;
+                    }
+                }
+                if (!moved) {
+                    return true;
+                }
+                auto& preheader = cfg.blocks[loop.preheader]->instructions;
+                preheader.insert(preheader.end() - 1, std::move(moved));
+                return true;
+            };
+            if (!move_to_preheader(list_size_load_inst)
+                    || !move_to_preheader(list_size_inst)) {
+                return changed;
             }
         }
     }

@@ -723,6 +723,10 @@ private:
     // Handles NaN-boxed values (int or float), native i64, and native doubles
     llvm::Value* ensureFloatType(llvm::Value* val, uint32_t value_id, llvm::Module& module);
 
+    // Inline fast-path version for NaN-boxed floats, with runtime conversion for
+    // NOTHING and other representations.
+    llvm::Value* ensureFloatTypeInline(llvm::Value* val, uint32_t value_id, llvm::Module& module);
+
     // Get a declared runtime helper function
     llvm::FunctionCallee getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft);
 

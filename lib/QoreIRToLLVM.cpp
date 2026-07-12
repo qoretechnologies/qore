@@ -779,6 +779,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
     module.getOrInsertFunction("qore_rt_list_get_float_unchecked",
             llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+            llvm::FunctionType::get(ptr_type, {i64_type}, false));
     // list_get_value: (i64, i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_list_get_value",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
@@ -1259,6 +1261,38 @@ llvm::Value* QoreIRToLLVM::ensureFloatType(llvm::Value* val, uint32_t value_id, 
     // Unreachable: all LLVM value types should be handled above
     assert(false && "ensureFloatType: unexpected LLVM type");
     return val;
+}
+
+llvm::Value* QoreIRToLLVM::ensureFloatTypeInline(llvm::Value* val, uint32_t value_id,
+        llvm::Module& module) {
+    if (val->getType() == double_type) {
+        return val;
+    }
+    if (val->getType() != i64_type || !nanboxed_values.count(value_id)) {
+        return ensureFloatType(val, value_id, module);
+    }
+
+    auto* cur_func = builder->GetInsertBlock()->getParent();
+    auto* fast_bb = llvm::BasicBlock::Create(ctx, "float_fast", cur_func);
+    auto* slow_bb = llvm::BasicBlock::Create(ctx, "float_slow", cur_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "float_merge", cur_func);
+    builder->CreateCondBr(emitIsBoxedFloat(val), fast_bb, slow_bb);
+
+    builder->SetInsertPoint(fast_bb);
+    llvm::Value* fast_result = unboxFloat(val);
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(slow_bb);
+    auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+            llvm::FunctionType::get(double_type, {i64_type}, false));
+    llvm::Value* slow_result = builder->CreateCall(to_float, {val});
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(merge_bb);
+    auto* result = builder->CreatePHI(double_type, 2);
+    result->addIncoming(fast_result, fast_bb);
+    result->addIncoming(slow_result, slow_bb);
+    return result;
 }
 
 void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
@@ -13525,9 +13559,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!idx) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_get_int_unchecked",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
+            llvm::Value* result;
+            if (aot_mode && std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS") == nullptr) {
+                auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+                        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
+                    data_fn->addFnAttr(llvm::Attribute::NoUnwind);
+                    data_fn->addFnAttr(llvm::Attribute::WillReturn);
+                    data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
+                }
+                llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+                llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
+                nanboxed_values.insert(inst->result.id);
+                result = ensureIntTypeInline(boxed, inst->result.id);
+                nanboxed_values.erase(inst->result.id);
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_list_get_int_unchecked",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+                result = builder->CreateCall(helper, {list_boxed, idx_int});
+            }
             values[inst->result.id] = result;
             // Result is native i64, not nanboxed
             return true;
@@ -13539,9 +13590,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!idx) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_list_get_float_unchecked",
-                    llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int});
+            llvm::Value* result;
+            if (aot_mode && std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS") == nullptr) {
+                auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+                        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
+                    data_fn->addFnAttr(llvm::Attribute::NoUnwind);
+                    data_fn->addFnAttr(llvm::Attribute::WillReturn);
+                    data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
+                }
+                llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+                llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
+                nanboxed_values.insert(inst->result.id);
+                result = ensureFloatTypeInline(boxed, inst->result.id, module);
+                nanboxed_values.erase(inst->result.id);
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_list_get_float_unchecked",
+                        llvm::FunctionType::get(double_type, {i64_type, i64_type}, false));
+                result = builder->CreateCall(helper, {list_boxed, idx_int});
+            }
             values[inst->result.id] = result;
             // Result is native double, not nanboxed
             return true;

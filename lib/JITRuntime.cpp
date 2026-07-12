@@ -258,6 +258,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float) },
     { "qore_rt_list_get_int_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_int_unchecked) },
     { "qore_rt_list_get_float_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_float_unchecked) },
+    { "qore_rt_list_get_data_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_data_unchecked) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
@@ -4847,6 +4848,12 @@ extern "C" DLLEXPORT int64_t qore_rt_list_get_int_unchecked(uint64_t list_val, i
 extern "C" DLLEXPORT double qore_rt_list_get_float_unchecked(uint64_t list_val, int64_t index) {
     const QoreListNode* list = fromBits(list_val).get<const QoreListNode>();
     return qore_list_private::get(*list)->entry[static_cast<size_t>(index)].getAsFloat();
+}
+
+extern "C" DLLEXPORT const uint64_t* qore_rt_list_get_data_unchecked(uint64_t list_val) {
+    const QoreListNode* list = fromBits(list_val).get<const QoreListNode>();
+    static_assert(sizeof(QoreValue) == sizeof(uint64_t));
+    return reinterpret_cast<const uint64_t*>(qore_list_private::get(*list)->entry);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
