@@ -876,7 +876,11 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const string DefaultOAuth2RedirectUrl = "auto";
 
         #! Default option values
-        const hash<auto> DefaultOptions = {
+        /** declared \c hash<auto!> so that merging with caller options (\c "opts = DefaultOptions + opts")
+            yields an auto-valued hash; this is required so that option keys like \c "headers" can be
+            vivified to hashes regardless of the runtime value type of the constant (soft \c hash<auto>
+            would preserve the narrow \c hash<string, string> type under IR/JIT execution) */
+        const hash<auto!> DefaultOptions = {
             "oauth2_redirect_url": DefaultOAuth2RedirectUrl,
         };
 
