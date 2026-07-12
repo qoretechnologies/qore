@@ -5449,6 +5449,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Clear value and local maps
     values.clear();
+    typed_list_data_ptrs.clear();
+    direct_typed_list_read_sources.clear();
     local_allocas.clear();
     aot_call_target_contexts.clear();
     nanboxed_values.clear();
@@ -5590,6 +5592,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
                 continue;
+            }
+            if ((inst_ptr->opcode == QoreIROpcode::ListGetInt
+                    || inst_ptr->opcode == QoreIROpcode::ListGetFloat)
+                    && !inst_ptr->operands.empty()) {
+                direct_typed_list_read_sources.insert(inst_ptr->operands[0].id);
             }
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
@@ -13645,6 +13652,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             if (exact_scalar_output) {
                 emitExceptionCheck(module, llvm_func, inst);
+                if (std::getenv("QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST") == nullptr) {
+                    auto data_helper = module.getOrInsertFunction(
+                            "qore_rt_list_get_mutable_data_unchecked",
+                            llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                    typed_list_data_ptrs[inst->result.id] =
+                        builder->CreateCall(data_helper, {result}, "typed_output_data");
+                }
             }
             return true;
         }
@@ -13656,6 +13670,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed});
             values[inst->result.id] = result;
+            if (aot_mode && direct_typed_list_read_sources.count(inst->operands[0].id)
+                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST") == nullptr) {
+                auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+                        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                typed_list_data_ptrs[inst->operands[0].id] =
+                    builder->CreateCall(data_helper, {list_boxed}, "typed_input_data");
+            }
             // Result is native i64, not nanboxed
             return true;
         }
@@ -13675,7 +13696,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     data_fn->addFnAttr(llvm::Attribute::WillReturn);
                     data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
                 }
-                llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                llvm::Value* data = data_it != typed_list_data_ptrs.end()
+                    ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
                 llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
                 nanboxed_values.insert(inst->result.id);
@@ -13706,7 +13729,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     data_fn->addFnAttr(llvm::Attribute::WillReturn);
                     data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
                 }
-                llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                llvm::Value* data = data_it != typed_list_data_ptrs.end()
+                    ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                 llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
                 llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
                 nanboxed_values.insert(inst->result.id);
@@ -13802,7 +13827,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
                     auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
                             llvm::FunctionType::get(ptr_type, {i64_type}, false));
-                    llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                    auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                    llvm::Value* data = data_it != typed_list_data_ptrs.end()
+                        ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
                     builder->CreateStore(boxInt(val_int), entry);
                     return true;
@@ -13820,7 +13847,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
                     auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
                             llvm::FunctionType::get(ptr_type, {i64_type}, false));
-                    llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                    auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                    llvm::Value* data = data_it != typed_list_data_ptrs.end()
+                        ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
                     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
                     builder->CreateStore(boxFloat(val_float), entry);
                     return true;

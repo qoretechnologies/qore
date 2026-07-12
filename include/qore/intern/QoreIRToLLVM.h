@@ -247,6 +247,10 @@ private:
     // Value mapping: QoreIR value IDs → LLVM values
     std::unordered_map<uint32_t, llvm::Value*> values;
 
+    // AOT typed-map backing pointers materialized in loop preheaders.
+    std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
+    std::unordered_set<uint32_t> direct_typed_list_read_sources;
+
     // Local variable allocas (LocalVar* address → alloca)
     std::unordered_map<const void*, llvm::Value*> local_allocas;
 
