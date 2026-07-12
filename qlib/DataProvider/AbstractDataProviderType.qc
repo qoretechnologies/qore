@@ -148,6 +148,12 @@ public const hash<auto> DataTypeMap = {
     from @ref AbstractDataProviderTypeMap so that @ref AbstractDataProviderType::get() can resolve these
     names by string without a recursive constant reference to @ref AbstractDataProviderTypeMap.
 
+    @note The class-backed types listed here must not read @ref AbstractDataProviderTypeMap during their own
+    construction (e.g. in field-type definitions): @ref AbstractDataProviderTypeMap merges in this map, so any
+    such read closes a constant-initialization cycle (@ref AbstractDataProviderTypeMap -> this map -> the type ->
+    @ref AbstractDataProviderTypeMap) that Qore rejects nondeterministically depending on constant commit order.
+    Reference the leaf Qore reflection @ref Qore::Type "Type" constants (e.g. @ref StringType) directly instead.
+
     @since %DataProvider 3.6
 */
 public const NamedClassBackedTypeMap = {
