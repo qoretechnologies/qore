@@ -25,7 +25,8 @@ class AOTScriptAggregateNativeRegisterTest inherits QUnit::Test {
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         source_root = realpath(dirname(get_script_path()) + "/../../..");
-        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s",
+        env = sprintf("QORE_DISABLE_IR_NATIVE_LEAF_INLINE=1 "
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_INCLUDE_DIR=%s",
             libqore_dir, libqore_dir, source_root + "/include");
 
         addTestCase("script aggregate binds per-file native bodies", \testNativeRegisterAggregate());
