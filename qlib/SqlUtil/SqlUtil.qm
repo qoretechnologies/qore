@@ -141,6 +141,9 @@ module SqlUtil {
     - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
       lifecycle APIs for range-partitioned tables; driver support is advertised by
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
+    - added the portable \c partition_aligned index and unique-constraint option; it validates partitioned table
+      state and complete unique partition keys centrally and maps to native partition-local/aligned indexes without
+      requiring application code to contain driver-specific DDL options
     - added storage-shape validation and partition exchange APIs with equivalent empty-target semantics for
       Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
     - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state

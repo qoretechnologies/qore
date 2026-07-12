@@ -1423,9 +1423,9 @@ class PgsqlTest inherits SqlTestBase {
                 "id": {"qore_type": Type::Int, "notnull": True},
                 "name": {"qore_type": SqlUtil::VARCHAR, "size": 80},
             },
-            "primary_key": {"name": "pk_" + parent, "columns": ("id",)},
+            "primary_key": {"name": "pk_" + parent, "columns": ("id",), "partition_aligned": True},
             "indexes": {
-                (parent + "_name_idx"): {"columns": ("name",)},
+                (parent + "_name_idx"): {"columns": ("name",), "partition_aligned": True},
             },
             "partition_strategy": {"method": "range", "columns": ("name",),
                 "driver": {"pgsql": {"columns": ("id",)}}},
@@ -1436,6 +1436,27 @@ class PgsqlTest inherits SqlTestBase {
                     "driver": {"pgsql": {"bound_to": 20}}},
             },
         };
+
+        assertThrows("INDEX-OPTION-ERROR", "requires a partitioned table", sub () {
+            PgsqlTable nonpartitioned(ds, "pgsql_partition_aligned_invalid");
+            nonpartitioned.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "indexes": {"bad_ix": {"columns": "id", "partition_aligned": True}},
+            });
+        });
+
+        PgsqlTable direct_aligned(ds, "pgsql_partition_aligned_direct");
+        direct_aligned.setupTable({
+            "columns": desc.columns,
+            "partition_strategy": {"method": "range", "columns": "id"},
+        });
+        assertTrue(direct_aligned.getAddPrimaryKeySql("pgsql_partition_aligned_direct_pk", "id",
+            {"partition_aligned": True}) =~ /primary key \(id\)/i,
+            "direct primary-key SQL accepts portable partition alignment");
+        string aligned_uk_sql = direct_aligned.getAddUniqueConstraintSql("pgsql_partition_aligned_direct_uk",
+            ("name", "id"), {"partition_aligned": True});
+        assertTrue(aligned_uk_sql =~ /add constraint .* unique/i,
+            "direct unique-constraint SQL accepts portable partition alignment: " + aligned_uk_sql);
 
         PgsqlTable tmpl(ds, parent);
         tmpl.setupTable(desc);

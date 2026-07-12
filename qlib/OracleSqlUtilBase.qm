@@ -4196,6 +4196,17 @@ group by p.index_name", schema.upr(), name.upr());
         return rv ? rv : NOTHING;
     }
 
+    #! maps the portable partition-aligned intent to an Oracle LOCAL index
+    private preparePartitionAlignedOptionsImpl(string err, string object_kind, string object_name, bool unique,
+            hash<auto> object_columns, reference<hash<auto>> opt) {
+        *string requested_scope = opt.partition_scope;
+        if (requested_scope.val() && requested_scope.lwr() != "default" && requested_scope.lwr() != "local") {
+            throw err, sprintf("Oracle %s %y cannot combine partition_aligned = True with partition_scope %y",
+                object_kind, object_name, requested_scope);
+        }
+        opt.partition_scope = "local";
+    }
+
     private hash<auto> getIndexOptions() {
         return OracleIndexOptions;
     }

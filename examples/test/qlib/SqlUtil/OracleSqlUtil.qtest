@@ -1041,8 +1041,8 @@ class OracleTest inherits SqlTestBase {
             "indexes": {
                 "olit_v": {
                     "columns": "v",
+                    "partition_aligned": True,
                     "driver": {"oracle": {
-                        "partition_scope": "local",
                         "index_tablespace": tablespace,
                         "compute_statistics": True,
                     }},
@@ -1050,7 +1050,7 @@ class OracleTest inherits SqlTestBase {
                 "olit_ud": {
                     "columns": ("u", "d"),
                     "unique": True,
-                    "driver": {"oracle": {"partition_scope": "local"}},
+                    "partition_aligned": True,
                 },
                 "ogit_v": {
                     "columns": ("id", "v"),
@@ -1061,8 +1061,8 @@ class OracleTest inherits SqlTestBase {
             "primary_key": {
                 "name": "opli_pk",
                 "columns": ("id", "d"),
+                "partition_aligned": True,
                 "driver": {"oracle": {
-                    "partition_scope": "local",
                     "index_tablespace": tablespace,
                     "compute_statistics": True,
                 }},
@@ -1070,8 +1070,8 @@ class OracleTest inherits SqlTestBase {
             "unique_constraints": {
                 "opli_uk": {
                     "columns": ("v", "d"),
+                    "partition_aligned": True,
                     "driver": {"oracle": {
-                        "partition_scope": "local",
                         "index_tablespace": tablespace,
                         "compute_statistics": True,
                     }},
@@ -1105,13 +1105,28 @@ class OracleTest inherits SqlTestBase {
             =~ /using index tablespace .* compute statistics local$/i,
             "local unique-constraint DDL emits an inline local index clause");
 
+        OracleTable direct_sql(ds, "oracle_partition_aligned_direct_sql");
+        direct_sql.setupTable({
+            "columns": columns,
+            "partition_strategy": partition_strategy,
+        });
+        assertTrue(direct_sql.getAddIndexSql("opli_direct_ix", False, "v",
+            {"partition_aligned": True}) =~ / local$/i,
+            "portable alignment is applied by direct index SQL generation");
+        assertTrue(direct_sql.getAddPrimaryKeySql("opli_direct_pk", ("id", "d"),
+            {"partition_aligned": True}) =~ / using index local$/i,
+            "portable alignment is applied by direct primary-key SQL generation");
+        assertTrue(direct_sql.getAddUniqueConstraintSql("opli_direct_uk", ("v", "d"),
+            {"partition_aligned": True}) =~ / using index local$/i,
+            "portable alignment is applied by direct unique-constraint SQL generation");
+
         assertThrows("INDEX-OPTION-ERROR", "must include partition key", sub () {
             OracleTable invalid(ds, "opli_invalid_unique_index");
             invalid.setupTable({
                 "columns": columns,
                 "indexes": {"bad_ix": {
                     "columns": "v", "unique": True,
-                    "driver": {"oracle": {"partition_scope": "local"}},
+                    "partition_aligned": True,
                 }},
                 "partition_strategy": partition_strategy,
             });
@@ -1122,7 +1137,7 @@ class OracleTest inherits SqlTestBase {
                 "columns": columns,
                 "primary_key": {
                     "name": "bad_pk", "columns": "id",
-                    "driver": {"oracle": {"partition_scope": "local"}},
+                    "partition_aligned": True,
                 },
                 "partition_strategy": partition_strategy,
             });
@@ -1133,19 +1148,31 @@ class OracleTest inherits SqlTestBase {
                 "columns": columns,
                 "unique_constraints": {"bad_uk": {
                     "columns": "v",
-                    "driver": {"oracle": {"partition_scope": "local"}},
+                    "partition_aligned": True,
                 }},
                 "partition_strategy": partition_strategy,
             });
         });
-        assertThrows("INDEX-OPTION-ERROR", "nonpartitioned table", sub () {
+        assertThrows("INDEX-OPTION-ERROR", "requires a partitioned table", sub () {
             OracleTable invalid(ds, "opli_invalid_nonpartitioned");
             invalid.setupTable({
                 "columns": columns,
                 "indexes": {"bad_ix": {
                     "columns": "v",
-                    "driver": {"oracle": {"partition_scope": "local"}},
+                    "partition_aligned": True,
                 }},
+            });
+        });
+        assertThrows("INDEX-OPTION-ERROR", "cannot combine partition_aligned", sub () {
+            OracleTable invalid(ds, "opli_invalid_portable_scope_conflict");
+            invalid.setupTable({
+                "columns": columns,
+                "indexes": {"bad_ix": {
+                    "columns": "v",
+                    "partition_aligned": True,
+                    "driver": {"oracle": {"partition_scope": "global"}},
+                }},
+                "partition_strategy": partition_strategy,
             });
         });
         assertThrows("INDEX-OPTION-ERROR", "invalid partition_scope", sub () {
