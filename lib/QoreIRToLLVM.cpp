@@ -13601,8 +13601,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* cap = getVal(inst->operands[0].id, error);
             if (!cap) { return false; }
             llvm::Value* cap_int = ensureIntTypeInline(cap, inst->operands[0].id);
-            const char* helper_name = aot_mode
-                ? "qore_rt_create_sized_list_by_type_path" : "qore_rt_create_sized_list_typed";
+            bool exact_scalar_output = aot_mode
+                && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
+                && (QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
+                    || QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT);
+            const char* helper_name = exact_scalar_output
+                ? "qore_rt_create_fixed_list_by_type_path"
+                : (aot_mode ? "qore_rt_create_sized_list_by_type_path"
+                            : "qore_rt_create_sized_list_typed");
             auto helper = module.getOrInsertFunction(helper_name,
                     llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
             llvm::Value* type_arg = aot_mode
@@ -13611,6 +13617,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (exact_scalar_output) {
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             return true;
         }
         case QoreIROpcode::ListSize: {
@@ -13754,6 +13763,47 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            const QoreIRValueFacts* facts = current_ir_func
+                ? current_ir_func->getValueFacts(inst->operands[2]) : nullptr;
+            bool assigned_native = facts
+                && facts->assigned_state == QoreIRAssignedState::Assigned
+                && facts->never_nothing;
+            if (aot_mode && assigned_native
+                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
+                    && QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
+                    && facts->representation == QoreIRValueRepresentation::NativeInt) {
+                llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
+                if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
+                    auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
+                            llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                    llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+                    builder->CreateStore(boxInt(val_int), entry);
+                    return true;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+                builder->CreateCall(helper, {list_boxed, idx_int, val_int});
+                return true;
+            }
+            if (aot_mode && assigned_native
+                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
+                    && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
+                    && facts->representation == QoreIRValueRepresentation::NativeFloat) {
+                llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
+                if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
+                    auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
+                            llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                    llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+                    builder->CreateStore(boxFloat(val_float), entry);
+                    return true;
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
+                builder->CreateCall(helper, {list_boxed, idx_int, val_float});
+                return true;
+            }
             llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
             // refSelf before ownership transfer: the value may also be tracked by
             // trackResultForCleanup (invoke results) or boxValue's internal cleanup

@@ -82,7 +82,7 @@ public:
     QoreIRInstruction* createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr);
+        const QoreProgramLocation* loc = nullptr, const QoreTypeInfo* element_type = nullptr);
     QoreIRInstruction* createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc = nullptr);
 
     QoreIRInstruction* createListPush(QoreIRValue list, QoreIRValue val,

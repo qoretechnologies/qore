@@ -13367,7 +13367,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
         if (need_result) {
             // Store result directly at index position in pre-sized list
-            builder.createListSetValue(result_list, index_val, expr_result, map->loc);
+            builder.createListSetValue(result_list, index_val, expr_result, map->loc, expTypeInfo);
         } else {
             builder.createDiscardTemps(map->loc);
         }

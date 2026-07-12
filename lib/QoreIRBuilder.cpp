@@ -432,9 +432,10 @@ QoreIRInstruction* QoreIRBuilder::createListSetFloat(QoreIRValue list, QoreIRVal
 }
 
 QoreIRInstruction* QoreIRBuilder::createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
-        const QoreProgramLocation* loc) {
+        const QoreProgramLocation* loc, const QoreTypeInfo* element_type) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetValue);
     inst->loc = loc;
+    inst->element_type = element_type;
     inst->operands.push_back(list);
     inst->operands.push_back(index);
     inst->operands.push_back(value);

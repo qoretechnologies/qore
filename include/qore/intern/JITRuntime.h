@@ -805,6 +805,9 @@ double qore_rt_list_get_float_unchecked(uint64_t list_val, int64_t index);
 //! Get the immutable entry array when the compiler has proven list type and loop stability.
 const uint64_t* qore_rt_list_get_data_unchecked(uint64_t list_val);
 
+//! Get the mutable entry array for a fresh fixed-size list owned by generated code.
+uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
+
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
 uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);
@@ -816,6 +819,9 @@ uint64_t qore_rt_list_get_value_noref(uint64_t list_val, int64_t index, Exceptio
 uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink);
 uint64_t qore_rt_create_sized_list_typed(int64_t capacity, const QoreTypeInfo* element_type, ExceptionSink* xsink);
 uint64_t qore_rt_create_sized_list_by_type_path(int64_t capacity, const char* element_type_path,
+        ExceptionSink* xsink);
+//! Create an exact typed list at its final size for direct scalar map output stores.
+uint64_t qore_rt_create_fixed_list_by_type_path(int64_t size, const char* element_type_path,
         ExceptionSink* xsink);
 
 //! Set int element in list at index (for pre-sized typed map output). No bounds check.

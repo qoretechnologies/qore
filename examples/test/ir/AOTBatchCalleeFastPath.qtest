@@ -257,6 +257,14 @@ string sub closure_leaf_checks() {
         + \":\" + string(captured_size()) + \":\" + string(captured_length());
 }
 
+string sub map_store_checks() {
+    list<int> input = (1, 2, 3);
+    list<int> ints = map $1 * 2, input;
+    list<float> floats = map float($1) * 1.5, input;
+    list<int> big = map $1 + 1125899906842624, input;
+    return string(ints[-1]) + \":\" + string(floats[-1]) + \":\" + string(big[-1]);
+}
+
 int sub default_helper(int x = 7) {
     return x * 3;
 }
@@ -274,7 +282,7 @@ string sub caller() {
         + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
         + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
         + \":\" + string(StaticHelper::refTry()) + \":\" + string(StaticHelper::failTry())
-        + \":\" + string(compound_try()) + \":\" + effects.run();
+        + \":\" + string(compound_try()) + \":\" + effects.run() + \":\" + map_store_checks();
 }
 
 printf(\"%s\\n\", caller());
@@ -356,6 +364,16 @@ code<bool(float)> leaf = bool sub (float x) {
 };
 
 printf(\"%s\\n\", leaf(0.0));
+";
+}
+
+string sub mapStoreUnassignedScriptCode() {
+    return "%modern
+
+list<int> input = (1, 2, 3);
+int absent;
+list<int> output = map absent, input;
+printf(\"%y\\n\", output);
 ";
 }
 
@@ -452,7 +470,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1\n"
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
@@ -532,6 +550,22 @@ string aot_closure_unassigned = runAot(closure_unassigned_path);
 if (ast_closure_unassigned != "1\n" || aot_closure_unassigned != ast_closure_unassigned) {
     printf("unexpected result for closure unassigned lvalue\nAST:\n%sAOT:\n%s",
         ast_closure_unassigned, aot_closure_unassigned);
+    exit(2);
+}
+
+string map_store_unassigned_path = "/tmp/qore-aot-batch-callee-fast-path-map-store-unassigned-"
+    + string(getpid()) + ".qr";
+File map_store_unassigned_script();
+map_store_unassigned_script.open2(map_store_unassigned_path, O_WRONLY | O_CREAT | O_TRUNC);
+map_store_unassigned_script.write(mapStoreUnassignedScriptCode());
+map_store_unassigned_script.close();
+
+string ast_map_store_unassigned = runScript(map_store_unassigned_path);
+string aot_map_store_unassigned = runAot(map_store_unassigned_path);
+if (!(ast_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)
+        || !(aot_map_store_unassigned =~ /RUNTIME-TYPE-ERROR/)) {
+    printf("expected rejection for unassigned typed map result\nAST:\n%sAOT:\n%s",
+        ast_map_store_unassigned, aot_map_store_unassigned);
     exit(2);
 }
 
