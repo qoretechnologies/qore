@@ -1202,6 +1202,10 @@ uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_args(uint64_t base_bi
 uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! AOT dot-eval path for an assigned object receiver; falls back if the runtime tag differs.
+uint64_t qore_rt_dot_eval_object_method_direct_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! AOT variant that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);

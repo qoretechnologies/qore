@@ -12356,10 +12356,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                const char* helper_name = direct_inst->pseudo
+                const QoreIRValueFacts* base_facts = current_ir_func
+                    ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
+                bool object_fast_path = !direct_inst->pseudo && !has_arg_cleanups
+                    && std::getenv("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH") == nullptr
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
+                    && base_facts
+                    && base_facts->assigned_state == QoreIRAssignedState::Assigned
+                    && base_facts->never_nothing
+                    && QoreTypeInfo::parseReturns(base_facts->type_info, NT_OBJECT) == QTI_IDENT;
+                const char* helper_name = object_fast_path
+                    ? "qore_rt_dot_eval_object_method_direct_aot"
+                    : direct_inst->pseudo
                         ? "qore_rt_dot_eval_pseudo_method_direct_aot"
                         : "qore_rt_dot_eval_method_direct_aot";
-                const char* helper_name_throwing = direct_inst->pseudo
+                const char* helper_name_throwing = object_fast_path
+                    ? "qore_rt_dot_eval_object_method_direct_aot_throwing"
+                    : direct_inst->pseudo
                         ? "qore_rt_dot_eval_pseudo_method_direct_aot_throwing"
                         : "qore_rt_dot_eval_method_direct_aot_throwing";
                 if (has_arg_cleanups) {
@@ -12734,10 +12747,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                const char* helper_name = invoke_inst->pseudo
+                const QoreIRValueFacts* base_facts = current_ir_func
+                    ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
+                bool object_fast_path = !invoke_inst->pseudo && !has_arg_cleanups
+                    && std::getenv("QORE_DISABLE_AOT_OBJECT_DOT_EVAL_FAST_PATH") == nullptr
+                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)
+                    && base_facts
+                    && base_facts->assigned_state == QoreIRAssignedState::Assigned
+                    && base_facts->never_nothing
+                    && QoreTypeInfo::parseReturns(base_facts->type_info, NT_OBJECT) == QTI_IDENT;
+                const char* helper_name = object_fast_path
+                    ? "qore_rt_dot_eval_object_method_direct_aot"
+                    : invoke_inst->pseudo
                         ? "qore_rt_dot_eval_pseudo_method_direct_aot"
                         : "qore_rt_dot_eval_method_direct_aot";
-                const char* helper_name_throwing = invoke_inst->pseudo
+                const char* helper_name_throwing = object_fast_path
+                    ? "qore_rt_dot_eval_object_method_direct_aot_throwing"
+                    : invoke_inst->pseudo
                         ? "qore_rt_dot_eval_pseudo_method_direct_aot_throwing"
                         : "qore_rt_dot_eval_method_direct_aot_throwing";
                 if (has_arg_cleanups) {
