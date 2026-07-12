@@ -1,0 +1,329 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    RestClient bounded response tests
+*/
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpServer.qm
+
+%exec-class RestClientResponseLimitTest
+
+const string LimitSecret = "BODY_SECRET_MUST_NOT_APPEAR_IN_THE_EXCEPTION";
+
+#! Deterministic HTTP responses for bounded RestClient tests
+class ResponseLimitHandler inherits HttpServer::AbstractHttpRequestHandler {
+    private {
+        string endpoint;
+    }
+
+    constructor(string endpoint) {
+        self.endpoint = endpoint;
+    }
+
+    hash<HttpServer::HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (endpoint) {
+            case "/fixed-under":
+                return makeResponse(200, "1234567", {"Content-Type": "text/plain"});
+            case "/fixed-exact":
+                return makeResponse(200, "12345678", {"Content-Type": "text/plain"});
+            case "/fixed-over":
+                return makeResponse(200, "123456789", {"Content-Type": "text/plain"});
+            case "/redirect-target":
+                return makeResponse(200, "done", {"Content-Type": "text/plain"});
+            case "/redirect":
+                return makeResponse(302, strmul("ignored-redirect-body", 4), {
+                    "Content-Type": "text/plain",
+                    "Location": "/redirect-target",
+                });
+            case "/empty":
+                return makeResponse(204, NOTHING, {"Content-Type": "text/plain"});
+            case "/json":
+                return makeResponse(200, "{\"ok\":true,\"value\":\"bounded\"}", {
+                    "Content-Type": "application/json",
+                });
+            case "/error":
+                return makeResponse(500, "error-body", {"Content-Type": "text/plain"});
+            case "/secret":
+                return makeResponse(500, LimitSecret, {"Content-Type": "text/plain"});
+            case "/echo-header":
+                return makeResponse(200, hdr."x-limit-test" ?? "missing", {"Content-Type": "text/plain"});
+            case "/post-echo":
+                return makeResponse(200, body ?? "", {
+                    "Content-Type": hdr."content-type" ?? "application/json",
+                });
+            case "/auth":
+                if (hdr.authorization != "Basic " + make_base64_string("limit-user:limit-pass")) {
+                    return makeResponse(401, "authentication required", {
+                        "Content-Type": "text/plain",
+                        "WWW-Authenticate": "Basic realm=\"response-limit-test\"",
+                    });
+                }
+                return makeResponse(200, "auth-ok", {"Content-Type": "text/plain"});
+            case "/chunked-exact":
+                return makeChunkedResponse(("abc", "de", "fgh"));
+            case "/chunked-over":
+                return makeChunkedResponse(("abc", "de", "fghi"));
+            case "/gzip-exact":
+                return makeGzipResponse(strmul("G", 64));
+            case "/gzip-over":
+                return makeGzipResponse(strmul("G", 65));
+        }
+        return makeResponse(404, "not found", {"Content-Type": "text/plain"});
+    }
+
+    #! Returns a response whose chunks are produced without sleeps or polling
+    private static hash<HttpServer::HttpResponseInfo> makeChunkedResponse(list<string> chunks) {
+        int index = 0;
+        return <HttpServer::HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/plain",
+            },
+            "send_callback": *string sub () {
+                return index < chunks.size() ? chunks[index++] : NOTHING;
+            },
+            "no_content_encoding": True,
+        };
+    }
+
+    #! Returns a manually compressed response so decoded and wire sizes differ
+    private static hash<HttpServer::HttpResponseInfo> makeGzipResponse(string value) {
+        return <HttpServer::HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Encoding": "gzip",
+                "Content-Type": "text/plain",
+            },
+            "body": gzip(value),
+            "no_content_encoding": True,
+        };
+    }
+}
+
+public class RestClientResponseLimitTest inherits QUnit::Test {
+    private {
+        HttpServer::HttpServer server;
+        int port;
+    }
+
+    constructor() : QUnit::Test("RestClientResponseLimitTest", "1.0") {
+        addTestCase("invalid response limits", \testInvalidLimits());
+        addTestCase("fixed response boundaries", \testFixedBoundaries());
+        addTestCase("chunked response boundaries", \testChunkedBoundaries());
+        addTestCase("compressed response boundaries", \testCompressedBoundaries());
+        addTestCase("empty and deserialized responses", \testEmptyAndJson());
+        addTestCase("bodyless response content lengths", \testBodylessContentLengths());
+        addTestCase("HTTP error behavior", \testErrorBehavior());
+        addTestCase("redirect, headers, and authentication", \testTransportBehavior());
+        addTestCase("safe exception and client reuse", \testSafeExceptionAndReuse());
+        set_return_value(main());
+    }
+
+    setUp() {
+        server = new HttpServer::HttpServer();
+        foreach string path in (
+                "/fixed-under", "/fixed-exact", "/fixed-over", "/redirect-target", "/redirect", "/empty", "/json",
+                "/error", "/secret", "/echo-header", "/post-echo", "/auth", "/chunked-exact", "/chunked-over",
+                "/gzip-exact", "/gzip-over") {
+            server.setHandler(path, path, "*/*", new ResponseLimitHandler(path));
+        }
+        port = server.addListener(<HttpServer::HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    tearDown() {
+        delete server;
+    }
+
+    testInvalidLimits() {
+        RestClient::RestClient client = makeClient();
+        assertThrows("RESTCLIENT-ERROR", \client.doRequestWithResponseLimit(),
+            ("GET", "/fixed-under", NOTHING, 0));
+        assertThrows("RESTCLIENT-ERROR", \client.doRequestWithResponseLimit(),
+            ("GET", "/fixed-under", NOTHING, -1));
+    }
+
+    testFixedBoundaries() {
+        RestClient::RestClient client = makeClient();
+        hash<auto> info;
+        hash<auto> response = client.doRequestWithResponseLimit("GET", "/fixed-under", NOTHING, 8, \info);
+        assertEq("1234567", response.body, "a fixed response below the limit must succeed");
+        assertEq(7, info."response-body-raw".size(), "raw response info must contain the bounded body");
+
+        response = client.doRequestWithResponseLimit("GET", "/fixed-exact", NOTHING, 8);
+        assertEq("12345678", response.body, "a fixed response exactly at the limit must succeed");
+        assertLimit(client, "/fixed-over", 8);
+    }
+
+    testChunkedBoundaries() {
+        RestClient::RestClient client = makeClient();
+        hash<auto> response = client.doRequestWithResponseLimit("GET", "/chunked-exact", NOTHING, 8);
+        assertEq("abcdefgh", response.body, "multiple chunks totaling the exact limit must succeed");
+        assertLimit(client, "/chunked-over", 8);
+    }
+
+    testCompressedBoundaries() {
+        RestClient::RestClient client = makeClient();
+        hash<auto> response = client.doRequestWithResponseLimit("GET", "/gzip-exact", NOTHING, 64);
+        assertEq(strmul("G", 64), response.body, "the cap must apply after gzip decoding");
+        assertLimit(client, "/gzip-over", 64);
+    }
+
+    testEmptyAndJson() {
+        RestClient::RestClient text_client = makeClient();
+        hash<auto> response = text_client.doRequestWithResponseLimit("GET", "/empty", NOTHING, 1);
+        assertEq(204, response.status_code, "an empty response must retain its status code");
+        assertFalse(response.hasKey("body"), "an empty response must not gain a synthetic body");
+
+        string encoded = "{\"ok\":true,\"value\":\"bounded\"}";
+        RestClient::RestClient json_client = makeClient({"data": "json"});
+        response = json_client.doRequestWithResponseLimit("GET", "/json", NOTHING, encoded.size());
+        assertEq({"ok": True, "value": "bounded"}, response.body,
+            "bounded response data must still be deserialized normally");
+    }
+
+    testBodylessContentLengths() {
+        Socket listener();
+        listener.bind("localhost:0", True);
+        listener.listen();
+        int raw_port = listener.getSocketInfo().port;
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            foreach string response in (
+                    "HTTP/1.1 200 OK\r\nContent-Length: 999\r\nContent-Type: text/plain\r\n"
+                        "Connection: close\r\n\r\n",
+                    "HTTP/1.1 204 No Content\r\nContent-Length: 999\r\nContent-Type: text/plain\r\n"
+                        "Connection: close\r\n\r\n",
+                    "HTTP/1.1 304 Not Modified\r\nContent-Length: 999\r\nContent-Type: text/plain\r\n"
+                        "Connection: close\r\n\r\n") {
+                Socket peer = listener.accept(5s);
+                peer.readHTTPHeader(5s);
+                peer.send2(response, 5s);
+                peer.close();
+            }
+        }();
+        on_exit {
+            listener.close();
+            assertEq(0, done.waitForZero(5s), "the bodyless raw HTTP server must terminate cleanly");
+        }
+
+        RestClient::RestClient client = new RestClient::RestClient({
+            "url": sprintf("http://localhost:%d", raw_port),
+            "content_encoding": "identity",
+            "data": "text",
+        });
+        hash<auto> response = client.doRequestWithResponseLimit("HEAD", "/", NOTHING, 1);
+        assertEq("999", response."content-length",
+            "a HEAD response may advertise the corresponding GET representation length");
+        assertFalse(response.hasKey("body"), "a HEAD response must not have a response body");
+
+        response = client.doRequestWithResponseLimit("GET", "/", NOTHING, 1);
+        assertEq(204, response.status_code, "a 204 response must not be rejected from its Content-Length");
+        assertFalse(response.hasKey("body"), "a 204 response must not have a response body");
+
+        RestClient::RestClient passthru_client = new RestClient::RestClient({
+            "url": sprintf("http://localhost:%d", raw_port),
+            "content_encoding": "identity",
+            "data": "text",
+            "error_passthru": True,
+        });
+        response = passthru_client.doRequestWithResponseLimit("GET", "/", NOTHING, 1);
+        assertEq("999", response."content-length",
+            "a 304 response may advertise the selected representation length");
+        assertFalse(response.hasKey("body"), "a 304 response must not have a response body");
+    }
+
+    testErrorBehavior() {
+        RestClient::RestClient client = makeClient();
+        hash<auto> info;
+        assertThrows("REST-RESPONSE-ERROR", sub () {
+            client.doRequestWithResponseLimit("GET", "/error", NOTHING, 32, \info);
+        });
+        assertEq(500, info."response-code", "bounded HTTP errors must report the status in info");
+        assertEq(500, info."response-headers".status_code,
+            "bounded HTTP errors must retain response headers in info");
+        assertEq("error-body", info."response-body-raw",
+            "bounded HTTP errors must retain only the body received within the cap");
+        assertTrue(info."response-body-raw".size() <= 32,
+            "raw HTTP error data retained in info must remain bounded");
+
+        RestClient::RestClient passthru_client = makeClient({"error_passthru": True});
+        hash<auto> response = passthru_client.doRequestWithResponseLimit("GET", "/error", NOTHING, 32);
+        assertEq(500, response.status_code, "error_passthru must preserve the HTTP status");
+        assertEq("error-body", response.body, "error_passthru must preserve the bounded body");
+    }
+
+    testTransportBehavior() {
+        RestClient::RestClient client = makeClient();
+        hash<auto> response = client.doRequestWithResponseLimit("GET", "/redirect", NOTHING, 4);
+        assertEq("done", response.body, "redirects must be followed before applying the final response result");
+
+        client.addDefaultHeaders({"X-Limit-Test": "default"});
+        response = client.doRequestWithResponseLimit("GET", "/echo-header", NOTHING, 16, NOTHING, NOTHING,
+            {"X-Limit-Test": "override"});
+        assertEq("override", response.body, "per-request headers must continue to override defaults");
+
+        RestClient::RestClient json_client = makeClient({"data": "json"});
+        hash<auto> payload = {"trace_id": "test-trace", "span_count": 2};
+        response = json_client.doRequestWithResponseLimit("POST", "/post-echo", payload, 128);
+        assertEq(payload, response.body, "request serialization and POST bodies must remain unchanged");
+
+        RestClient::RestClient auth_client = new RestClient::RestClient({
+            "url": sprintf("http://limit-user:limit-pass@127.0.0.1:%d", port),
+            "content_encoding": "identity",
+            "data": "text",
+        });
+        response = auth_client.doRequestWithResponseLimit("GET", "/auth", NOTHING, 7);
+        assertEq("auth-ok", response.body, "HTTP authentication challenge handling must remain active");
+    }
+
+    testSafeExceptionAndReuse() {
+        RestClient::RestClient client = makeClient();
+        *hash<ExceptionInfo> ex = assertLimit(client, "/secret", 8, 500);
+        if (ex) {
+            string exception_text = ex.desc + sprintf("%y", ex.arg);
+            assertFalse(exception_text =~ /BODY_SECRET_MUST_NOT_APPEAR_IN_THE_EXCEPTION/,
+                "the limit exception must not expose response body data");
+            assertFalse(ex.arg.hasKey("body"), "the limit exception argument must not contain a body key");
+        }
+
+        hash<auto> response = client.doRequestWithResponseLimit("GET", "/fixed-under", NOTHING, 8);
+        assertEq("1234567", response.body, "the same client must reconnect safely after an over-limit response");
+    }
+
+    #! Creates a text RestClient with deterministic response compression negotiation
+    private RestClient::RestClient makeClient(*hash<auto> options) {
+        return new RestClient::RestClient({
+            "url": sprintf("http://127.0.0.1:%d", port),
+            "content_encoding": "identity",
+            "data": "text",
+        } + (options ?? {}));
+    }
+
+    #! Asserts the bounded-response exception and returns it for additional checks
+    private *hash<ExceptionInfo> assertLimit(RestClient::RestClient client, string path, int limit,
+            int expected_status = 200) {
+        *hash<ExceptionInfo> caught;
+        try {
+            client.doRequestWithResponseLimit("GET", path, NOTHING, limit);
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex;
+        }
+        assertTrue(exists caught, sprintf("request to %s must raise the response limit exception", path));
+        if (!caught) {
+            return NOTHING;
+        }
+        assertEq("REST-RESPONSE-BODY-TOO-LARGE", caught.err, "the response limit exception type must be stable");
+        assertEq(limit, caught.arg.max_response_bytes, "the exception must report the configured limit");
+        assertEq(expected_status, caught.arg.response_code,
+            "the exception must report the response status when available");
+        return caught;
+    }
+}

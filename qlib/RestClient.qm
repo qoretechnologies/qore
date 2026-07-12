@@ -58,7 +58,7 @@
 %endtry
 
 module RestClient {
-    version = "2.5";
+    version = "2.6";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -149,6 +149,10 @@ printf("%Y\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_6 RestClient v2.6
+    - added @ref RestClient::RestClient::doRequestWithResponseLimit()
+      "RestClient::doRequestWithResponseLimit()" for memory-safe bounded REST responses
 
     @subsection restclientv2_5 RestClient v2.5
     - added \c deserialized_body member to @ref RestResponseInfo "RestResponseInfo" hashdecl
@@ -589,6 +593,196 @@ hash<auto> sub getRestClientHttpClientConstructorOptions(*hash<auto> opts) {
     return (opts ?? {}) - ConnectionProvider::HttpConnection::NegotiateOptionNames;
 }
 
+#! Bounded response-body sink used by RestClientResponseOutputStream
+class RestClientBoundedOutputStream inherits Qore::OutputStream {
+    private {
+        #! Buffered response data
+        Qore::BinaryOutputStream output();
+
+        #! Maximum response body size
+        int max_response_bytes;
+
+        #! Current response body size
+        int response_bytes = 0;
+    }
+
+    #! Creates the bounded output stream
+    constructor(int max_response_bytes) {
+        self.max_response_bytes = max_response_bytes;
+    }
+
+    #! Closes the stream
+    close() {
+    }
+
+    #! Writes response data, rejecting the write before the configured limit is exceeded
+    write(binary data) {
+        int data_size = data.size();
+        if (data_size > max_response_bytes - response_bytes) {
+            reject();
+        }
+        output.write(data);
+        response_bytes += data_size;
+    }
+
+    #! Returns the buffered response size
+    int size() {
+        return response_bytes;
+    }
+
+    #! Returns and clears the buffered response data
+    binary getData() {
+        return output.getData();
+    }
+
+    #! Raises the response limit exception without exposing response data
+    reject() {
+        throw "REST-RESPONSE-BODY-TOO-LARGE",
+            sprintf("HTTP response body exceeds the configured maximum of %d bytes", max_response_bytes),
+            {"max_response_bytes": max_response_bytes};
+    }
+}
+
+#! Output stream that incrementally decodes a response into a bounded sink
+class RestClientResponseOutputStream inherits Qore::OutputStream {
+    private {
+        #! Maximum response body size
+        int max_response_bytes;
+
+        #! Bounded response sink
+        RestClientBoundedOutputStream output;
+
+        #! Optional streaming response decompressor
+        *Qore::TransformOutputStream transform;
+
+        #! True when the body must be returned as binary data
+        bool binary_body = False;
+
+        #! True after response headers have configured this stream
+        bool configured = False;
+    }
+
+    #! Creates the response output stream
+    constructor(int max_response_bytes) {
+        self.max_response_bytes = max_response_bytes;
+        output = new RestClientBoundedOutputStream(max_response_bytes);
+    }
+
+    #! Configures the stream from response headers
+    /** @return a character encoding incorrectly supplied as \c Content-Encoding, if any
+    */
+    *string configure(*string content_encoding, *string content_length, bool encoding_passthru,
+            bool check_content_length) {
+        # HTTPClient can report headers for an authentication challenge or redirect before the final response.
+        # Such responses have no body delivered to this stream, so reset all per-response state here.
+        output = new RestClientBoundedOutputStream(max_response_bytes);
+        transform = NOTHING;
+        binary_body = False;
+        configured = True;
+
+        string token = content_encoding ?? "";
+        token =~ s/^\s+//;
+        token =~ s/[,;\s].*$//;
+        token = token.lwr();
+
+        *string character_encoding;
+        bool decoded_content = False;
+        if (token =~ /^(?:iso|utf-)/) {
+            character_encoding = token;
+        } else if (token.val() && encoding_passthru) {
+            # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as
+            # binary data, including identity and unknown encodings.
+            binary_body = True;
+        } else {
+            Qore::Transform decompressor;
+            switch (token) {
+                case "deflate":
+                case "x-deflate":
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
+                    break;
+                case "gzip":
+                case "x-gzip":
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
+                    break;
+                case "bzip2":
+                case "x-bzip2":
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
+                    break;
+                case "br":
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BROTLI);
+                    break;
+                case "zstd":
+                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZSTD);
+                    break;
+            }
+            if (decompressor) {
+                transform = new Qore::TransformOutputStream(output, decompressor);
+                decoded_content = True;
+            }
+        }
+
+        # Content-Length is the encoded size for compressed responses, so only use it as an early rejection when it
+        # represents the bytes returned to the caller. All other responses are still bounded incrementally.
+        if (check_content_length && !decoded_content) {
+            checkContentLength(content_length);
+        }
+        return character_encoding;
+    }
+
+    #! Closes the stream
+    close() {
+        finish();
+    }
+
+    #! Writes response bytes to the bounded response pipeline
+    write(binary data) {
+        @assert(configured);
+        if (transform) {
+            transform.write(data);
+        } else {
+            output.write(data);
+        }
+    }
+
+    #! Flushes any pending transformed bytes
+    finish() {
+        if (transform) {
+            transform.close();
+            transform = NOTHING;
+        }
+    }
+
+    #! Returns the complete response body
+    *data getBody(string encoding) {
+        if (!output.size()) {
+            return NOTHING;
+        }
+        binary data = output.getData();
+        return binary_body ? data : data.toString(encoding);
+    }
+
+    #! Checks a decimal Content-Length value without narrowing it to a bounded integer type
+    private checkContentLength(*string content_length) {
+        if (!content_length.val()) {
+            return;
+        }
+        string value = content_length;
+        trim value;
+        if (value !~ /^\d+$/) {
+            return;
+        }
+        value =~ s/^0+//;
+        if (!value.val()) {
+            return;
+        }
+        string max_value = string(max_response_bytes);
+        if (value.size() > max_value.size()
+                || (value.size() == max_value.size() && value > max_value)) {
+            output.reject();
+        }
+    }
+}
+
 #! this class provides the REST client API
 public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, ConnectionProvider::UpdateOptionsInterface,
         ConnectionProvider::OptionHelper, AbstractRestClient {
@@ -667,7 +861,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         const hash<string, bool> AcceptMap = map {$1: True}, AcceptList;
 
         #! RestClient Version
-        const string Version = "2.5";
+        const string Version = "2.6";
 
         #! RestClient Version String
         const string VersionString = sprintf("Qore-RestClient/%s", RestClient::Version);
@@ -2029,6 +2223,51 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         return doRequestIntern(m, path, body, \info, decode_errors, hdr);
     }
 
+    #! Sends an HTTP request and rejects a response body that exceeds a configured size
+    /** @par Example:
+        @code{.py}
+RestClient rest({"url": "https://telemetry.example.com", "data": "json"});
+hash<auto> response = rest.doRequestWithResponseLimit("POST", "/v1/traces", trace_batch,
+    8 * 1024 * 1024);
+        @endcode
+
+        This method follows the same request preparation, authentication, redirect, validation, error decoding, and
+        response deserialization path as @ref RestClient::RestClient::doRequest() "doRequest()", but receives the
+        response incrementally into a bounded buffer. The limit is enforced after supported HTTP
+        \c Content-Encoding decoding and before REST response deserialization.
+
+        @param m the HTTP method to be used; case is ignored
+        @param path the URI path to add
+        @param body an optional message body to include in the request
+        @param max_response_bytes the maximum decoded response body size in bytes; must be greater than zero
+        @param info an optional request and response info output hash
+        @param decode_errors decode error response bodies and throw an exception based on the decoded body
+        @param hdr any headers to send with the request
+
+        @return the same response hash as @ref RestClient::RestClient::doRequest() "doRequest()"
+
+        @throw RESTCLIENT-ERROR \a max_response_bytes is not greater than zero
+        @throw REST-RESPONSE-BODY-TOO-LARGE the decoded response body exceeds \a max_response_bytes; the exception
+        argument contains only the configured limit and, when available, the HTTP response code, and never contains
+        response body data
+
+        @note Subclasses that override @ref RestClient::RestClient::doRequest() "doRequest()" must also override this
+        method when the bounded request must include behavior implemented only in that override. Normal RestClient
+        request hooks, including request preprocessing and signing, are still applied.
+
+        @since %RestClient 2.6
+    */
+    hash<auto> doRequestWithResponseLimit(string m, string path, auto body, int max_response_bytes,
+            *reference<hash<auto>> info, softbool decode_errors = True, *hash<auto> hdr) {
+        if (max_response_bytes <= 0) {
+            throw "RESTCLIENT-ERROR", sprintf("max_response_bytes must be greater than zero; got %d",
+                max_response_bytes);
+        }
+        checkLogin(\info);
+        return doRequestIntern(m, path, body, \info, decode_errors, hdr, NOTHING, NOTHING, NOTHING, NOTHING,
+            max_response_bytes);
+    }
+
     #! sends a signed HTTP request to the REST server and returns the response
     /** @par Example:
         @code{.py}
@@ -2267,7 +2506,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     #! Makes a REST request and returns the result
     private hash<auto> doRequestIntern(string m, string path, auto body, *reference<hash<auto>> info,
             softbool decode_errors = True, *hash<auto> hdr, *string assume_content_type, *string shdr, *code signer,
-            *bool no_auth_retry) {
+            *bool no_auth_retry, *int max_response_bytes) {
         prepareMsg(m, path, \body, \hdr);
         on_exit if (exists body) {
             info += {
@@ -2297,7 +2536,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
 
         return sendAndDecodeResponse(body, m, path, hdr, \info, decode_errors, assume_content_type, shdr, signer,
-            no_auth_retry);
+            no_auth_retry, max_response_bytes);
     }
 
     #! Prepares and processes message parameters for sending without sending the message
@@ -3050,10 +3289,89 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
     }
 
+    #! Returns a scalar response header value
+    private static *string getResponseHeaderValue(hash<auto> hdr, string name) {
+        auto value = hdr{name};
+        if (value.typeCode() == NT_LIST) {
+            if (!value.size() || value[0].typeCode() != NT_STRING) {
+                return NOTHING;
+            }
+            return value[0];
+        }
+        return value.typeCode() == NT_STRING ? value : NOTHING;
+    }
+
+    #! Sends an HTTP request and incrementally receives a bounded response body
+    private hash<auto> sendWithResponseLimit(*data body, string m, string path, hash<auto> hdr,
+            reference<hash<auto>> info, int max_response_bytes) {
+        RestClientResponseOutputStream response_stream(max_response_bytes);
+        code<nothing(hash<auto>)> receive_callback = sub (hash<auto> callback_info) {
+            if (!callback_info.hdr) {
+                return;
+            }
+            hash<auto> response_hdr = callback_info.hdr;
+            int status_code = response_hdr.status_code;
+            bool followed_redirect = !getRedirectPassthru() && status_code >= 300 && status_code < 400
+                && status_code != 304;
+            bool possible_auth_retry = !getErrorPassthru() && (status_code == 401 || status_code == 407);
+            string method = m.upr();
+            bool response_body_allowed = method != "HEAD" && status_code >= 200 && status_code != 204
+                && status_code != 205 && status_code != 304
+                && !(method == "CONNECT" && status_code < 300);
+            *string character_encoding = response_stream.configure(
+                getResponseHeaderValue(response_hdr, "content-encoding"),
+                getResponseHeaderValue(response_hdr, "content-length"), getEncodingPassthru(),
+                response_body_allowed && !followed_redirect && !possible_auth_retry);
+            if (character_encoding) {
+                # Match HTTPClient's compatibility handling for servers that misuse Content-Encoding for a charset.
+                setEncoding(character_encoding);
+            }
+        };
+
+        try {
+            send(output_stream: response_stream, body: body, method: m, path: path, headers: hdr,
+                read_response_body: False, info: \info, receive_callback: receive_callback);
+            response_stream.finish();
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-BODY-TOO-LARGE") {
+                # The body was deliberately not drained. Drop the transport so no unread bytes can be mistaken for a
+                # subsequent response; the RestClient remains reusable and reconnects on demand.
+                try {
+                    disconnect();
+                } catch () {
+                    # Preserve the response-limit exception if transport cleanup also fails.
+                }
+                hash<auto> arg = {
+                    "max_response_bytes": max_response_bytes,
+                };
+                if (exists info."response-headers".status_code) {
+                    arg.response_code = info."response-headers".status_code;
+                }
+                throw ex.err, ex.desc, arg;
+            }
+            rethrow;
+        }
+
+        hash<auto> response = {} + info."response-headers";
+        *data response_body = response_stream.getBody(getEncoding());
+        if (exists response_body) {
+            response.body = response_body;
+            info."response-body" = response_body;
+        }
+
+        int status_code = response.status_code;
+        if (!getErrorPassthru() && (status_code < 100 || status_code >= 300)) {
+            throw "HTTP-CLIENT-RECEIVE-ERROR",
+                sprintf("HTTP status code %d received: message: %s", status_code,
+                    response.status_message ?? "<no message>"), response;
+        }
+        return response;
+    }
+
     #! sends the outgoing HTTP message and recodes the response to data
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
-            *code signer, *bool no_auth_retry) {
+            *code signer, *bool no_auth_retry, *int max_response_bytes) {
         hash<auto> h;
 
         bool retry = !no_auth_retry;
@@ -3084,7 +3402,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 # in case of any "signer" and "shdr" args, the request could be signed twice
                 signRequest(m, path, body, \hdr);
                 debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
-                h = send(body, m, path, hdr, False, \info);
+                h = max_response_bytes
+                    ? sendWithResponseLimit(body, m, path, hdr, \info, max_response_bytes)
+                    : send(body, m, path, hdr, False, \info);
                 info."response-code" = h.status_code;
                 debug("RestClient sent: %y received: %y (%y: %s bytes%s)", info."request-uri", info."response-uri",
                     (h.body ? h.body.encoding() : "n/a"), h.body.size(), h.body.size() && h."content-type" ? (" " +
