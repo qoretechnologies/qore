@@ -104,7 +104,8 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
     private Datasource getDatasource() {
         string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL ?? "";
         if (!connstr) {
-            throw "SKIP", "no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL";
+            # skip the calling test case cleanly (throws TEST-SKIPPED-EXCEPTION); every test method needs a DB
+            testSkip("no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL");
         }
         Datasource ds(connstr);
         ds.open();
@@ -116,15 +117,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         which expected an integer constant.
     */
     private testUpsertBulkDefaultStrategy() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -162,15 +155,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
 
     #! Test that upsertRecordsBulk works with an explicit string strategy
     private testUpsertBulkExplicitStrategy() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -202,15 +187,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
 
     #! Test insert then upsert: records are inserted first, then upserted with updated values
     private testUpsertBulkInsertThenUpsert() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -290,15 +267,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
     }
 
     private testTransactionalMutationLimits() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -341,15 +310,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
 
     #! Test that DB providers expose and consume native columnar bulk shapes
     private testColumnarBulkShapes() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
