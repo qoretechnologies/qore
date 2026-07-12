@@ -3401,6 +3401,271 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
         callee_it->second.scalar_leaf = leaf;
     }
+
+    if (!std::getenv("QORE_DISABLE_AOT_AFFINE_BODY_IMPORT")) {
+        struct AffineValue {
+            int64_t scale = 0;
+            int64_t offset = 0;
+        };
+        auto wrap_add = [](int64_t lhs, int64_t rhs) {
+            return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                + static_cast<uint64_t>(rhs));
+        };
+        auto wrap_sub = [](int64_t lhs, int64_t rhs) {
+            return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                - static_cast<uint64_t>(rhs));
+        };
+        auto wrap_mul = [](int64_t lhs, int64_t rhs) {
+            return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+                * static_cast<uint64_t>(rhs));
+        };
+        auto leaf_to_affine = [&](const AOTScalarLeafInfo& leaf,
+                AffineValue& value) -> bool {
+            if (leaf.kind == AOTScalarLeafKind::IntAffine) {
+                if (leaf.lhs_param != 0) {
+                    return false;
+                }
+                value = {leaf.lhs_int, leaf.rhs_int};
+                return true;
+            }
+            if (leaf.kind != AOTScalarLeafKind::IntBinary) {
+                return false;
+            }
+            auto operand = [](int8_t param, int64_t constant,
+                    AffineValue& value) {
+                if (param == 0) {
+                    value = {1, 0};
+                    return true;
+                }
+                if (param == -1) {
+                    value = {0, constant};
+                    return true;
+                }
+                return false;
+            };
+            AffineValue lhs;
+            AffineValue rhs;
+            if (!operand(leaf.lhs_param, leaf.lhs_int, lhs)
+                    || !operand(leaf.rhs_param, leaf.rhs_int, rhs)) {
+                return false;
+            }
+            switch (static_cast<QoreIROpcode>(leaf.opcode)) {
+                case QoreIROpcode::AddInt:
+                    value = {wrap_add(lhs.scale, rhs.scale),
+                        wrap_add(lhs.offset, rhs.offset)};
+                    return true;
+                case QoreIROpcode::SubInt:
+                    value = {wrap_sub(lhs.scale, rhs.scale),
+                        wrap_sub(lhs.offset, rhs.offset)};
+                    return true;
+                case QoreIROpcode::MulInt:
+                    if (!lhs.scale) {
+                        value = {wrap_mul(rhs.scale, lhs.offset),
+                            wrap_mul(rhs.offset, lhs.offset)};
+                        return true;
+                    }
+                    if (!rhs.scale) {
+                        value = {wrap_mul(lhs.scale, rhs.offset),
+                            wrap_mul(lhs.offset, rhs.offset)};
+                        return true;
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        };
+        std::function<bool(const AbstractQoreFunctionVariant*)> derive_affine;
+        auto get_affine_body = [&](const AbstractQoreFunctionVariant* variant,
+                const QoreIRFunction* func, AOTScalarLeafInfo& leaf) -> bool {
+            UserVariantBase* uvb = variant
+                ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+            const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+            if (!func || !sig || sig->numParams() != 1 || func->blocks.size() != 1
+                    || !func->blocks.front()
+                    || func->blocks.front()->instructions.size() > 24) {
+                return false;
+            }
+            auto param_it = func->param_local_vars.find(0);
+            if (param_it == func->param_local_vars.end() || !param_it->second
+                    || param_it->second->getTypeInfo() != bigIntTypeInfo
+                    || param_it->second->closureUse()) {
+                return false;
+            }
+            const LocalVar* param = param_it->second;
+            std::unordered_map<uint32_t, AffineValue> values;
+            bool saw_call = false;
+            const QoreIRReturnInstruction* ret = nullptr;
+            for (const auto& inst_ptr : func->blocks.front()->instructions) {
+                if (!inst_ptr || inst_ptr->exception_target) {
+                    return false;
+                }
+                const QoreIRInstruction* inst = inst_ptr.get();
+                switch (inst->opcode) {
+                    case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::DiscardTemps:
+                        break;
+                    case QoreIROpcode::LoadLocal: {
+                        const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                        if (load->local != param || !inst->result.isValid()) {
+                            return false;
+                        }
+                        values.emplace(inst->result.id, AffineValue{1, 0});
+                        break;
+                    }
+                    case QoreIROpcode::ConstInt: {
+                        const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                        if (!inst->result.isValid()) {
+                            return false;
+                        }
+                        values.emplace(inst->result.id,
+                            AffineValue{0, constant->constant.int_value});
+                        break;
+                    }
+                    case QoreIROpcode::AddInt:
+                    case QoreIROpcode::SubInt:
+                    case QoreIROpcode::MulInt: {
+                        if (!inst->result.isValid() || inst->operands.size() != 2) {
+                            return false;
+                        }
+                        auto lhs = values.find(inst->operands[0].id);
+                        auto rhs = values.find(inst->operands[1].id);
+                        if (lhs == values.end() || rhs == values.end()) {
+                            return false;
+                        }
+                        AffineValue result;
+                        if (inst->opcode == QoreIROpcode::AddInt) {
+                            result = {wrap_add(lhs->second.scale, rhs->second.scale),
+                                wrap_add(lhs->second.offset, rhs->second.offset)};
+                        } else if (inst->opcode == QoreIROpcode::SubInt) {
+                            result = {wrap_sub(lhs->second.scale, rhs->second.scale),
+                                wrap_sub(lhs->second.offset, rhs->second.offset)};
+                        } else if (!lhs->second.scale) {
+                            result = {wrap_mul(rhs->second.scale, lhs->second.offset),
+                                wrap_mul(rhs->second.offset, lhs->second.offset)};
+                        } else if (!rhs->second.scale) {
+                            result = {wrap_mul(lhs->second.scale, rhs->second.offset),
+                                wrap_mul(lhs->second.offset, rhs->second.offset)};
+                        } else {
+                            return false;
+                        }
+                        values.emplace(inst->result.id, result);
+                        break;
+                    }
+                    case QoreIROpcode::CallDirect: {
+                        const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+                        if (call->has_ref_args || !call->variant || !inst->result.isValid()
+                                || inst->operands.size() != 1) {
+                            return false;
+                        }
+                        auto arg = values.find(inst->operands[0].id);
+                        auto callee = batch_callees.find(call->variant);
+                        if (arg == values.end() || callee == batch_callees.end()) {
+                            return false;
+                        }
+                        if (callee->second.scalar_leaf.kind == AOTScalarLeafKind::None
+                                && !derive_affine(call->variant)) {
+                            return false;
+                        }
+                        AffineValue callee_value;
+                        if (!leaf_to_affine(callee->second.scalar_leaf, callee_value)) {
+                            return false;
+                        }
+                        values.emplace(inst->result.id, AffineValue{
+                            wrap_mul(callee_value.scale, arg->second.scale),
+                            wrap_add(wrap_mul(callee_value.scale, arg->second.offset),
+                                callee_value.offset)});
+                        saw_call = true;
+                        break;
+                    }
+                    case QoreIROpcode::Return:
+                        if (ret) {
+                            return false;
+                        }
+                        ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                        break;
+                    default:
+                        return false;
+                }
+            }
+            if (!saw_call || !ret || !ret->has_value) {
+                return false;
+            }
+            auto result = values.find(ret->value.id);
+            if (result == values.end()) {
+                return false;
+            }
+            leaf.kind = AOTScalarLeafKind::IntAffine;
+            leaf.lhs_param = 0;
+            leaf.lhs_int = result->second.scale;
+            leaf.rhs_int = result->second.offset;
+            return true;
+        };
+
+        std::unordered_map<const AbstractQoreFunctionVariant*, const QoreIRFunction*> function_map;
+        function_map.reserve(functions.size());
+        for (const auto& [variant, func] : functions) {
+            function_map.emplace(variant, func);
+        }
+        enum class AffineVisitState : uint8_t {
+            Unknown,
+            Visiting,
+            Success,
+            Failed,
+        };
+        std::unordered_map<const AbstractQoreFunctionVariant*, AffineVisitState> states;
+        states.reserve(functions.size());
+        bool affine_cancelled = false;
+        derive_affine = [&](const AbstractQoreFunctionVariant* variant) -> bool {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT affine body import dependency traversal")) {
+                affine_cancelled = true;
+                return false;
+            }
+            auto callee = batch_callees.find(variant);
+            if (callee == batch_callees.end()) {
+                return false;
+            }
+            AffineValue existing;
+            if (leaf_to_affine(callee->second.scalar_leaf, existing)) {
+                return true;
+            }
+            AffineVisitState& state = states[variant];
+            if (state != AffineVisitState::Unknown) {
+                return state == AffineVisitState::Success;
+            }
+            state = AffineVisitState::Visiting;
+            auto func = function_map.find(variant);
+            if (func == function_map.end()
+                    || callee->second.return_kind != BatchCalleeReturnKind::NativeInt
+                    || callee->second.param_kinds.size() != 1
+                    || callee->second.param_kinds[0] != BatchCalleeParamKind::NativeInt) {
+                state = AffineVisitState::Failed;
+                return false;
+            }
+            AOTScalarLeafInfo leaf;
+            if (!get_affine_body(variant, func->second, leaf)) {
+                state = AffineVisitState::Failed;
+                return false;
+            }
+            callee->second.scalar_leaf = leaf;
+            state = AffineVisitState::Success;
+            return true;
+        };
+        for (const auto& [variant, func] : functions) {
+            (void)func;
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT affine body import scan")) {
+                return false;
+            }
+            derive_affine(variant);
+            if (affine_cancelled) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -3843,7 +4108,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
     info.param_noescape.resize(info.num_params, 0);
-    if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::FloatBinary)
+    if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::IntAffine)
             || rec.scalar_leaf_lhs_param < -1 || rec.scalar_leaf_rhs_param < -1
             || rec.scalar_leaf_lhs_param >= static_cast<int>(info.num_params)
             || rec.scalar_leaf_rhs_param >= static_cast<int>(info.num_params)) {
@@ -3858,18 +4123,22 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.scalar_leaf.lhs_float = rec.scalar_leaf_lhs_float;
     info.scalar_leaf.rhs_float = rec.scalar_leaf_rhs_float;
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
-        bool is_int = info.scalar_leaf.kind == AOTScalarLeafKind::IntBinary;
+        bool is_affine = info.scalar_leaf.kind == AOTScalarLeafKind::IntAffine;
+        bool is_int = info.scalar_leaf.kind == AOTScalarLeafKind::IntBinary || is_affine;
         BatchCalleeReturnKind expected_return = is_int
             ? BatchCalleeReturnKind::NativeInt : BatchCalleeReturnKind::NativeFloat;
         BatchCalleeParamKind expected_param = is_int
             ? BatchCalleeParamKind::NativeInt : BatchCalleeParamKind::NativeFloat;
         QoreIROpcode opcode = static_cast<QoreIROpcode>(info.scalar_leaf.opcode);
-        bool supported_opcode = is_int
+        bool supported_opcode = is_affine
+            ? info.num_params == 1 && info.scalar_leaf.lhs_param == 0
+                && info.scalar_leaf.rhs_param == -1
+            : (is_int
             ? (opcode == QoreIROpcode::AddInt || opcode == QoreIROpcode::SubInt
                 || opcode == QoreIROpcode::MulInt || opcode == QoreIROpcode::AndInt
                 || opcode == QoreIROpcode::OrInt || opcode == QoreIROpcode::XorInt)
             : (opcode == QoreIROpcode::AddFloat || opcode == QoreIROpcode::SubFloat
-                || opcode == QoreIROpcode::MulFloat);
+                || opcode == QoreIROpcode::MulFloat));
         if (info.num_params > 2 || info.return_kind != expected_return
                 || !supported_opcode
                 || std::any_of(info.param_kinds.begin(), info.param_kinds.end(),

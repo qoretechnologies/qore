@@ -84,6 +84,7 @@ enum class AOTScalarLeafKind : uint8_t {
     None = 0,
     IntBinary = 1,
     FloatBinary = 2,
+    IntAffine = 3,
 };
 
 struct AOTScalarLeafInfo {

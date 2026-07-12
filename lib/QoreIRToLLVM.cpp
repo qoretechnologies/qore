@@ -3803,6 +3803,25 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
         return nullptr;
     }
     const AOTScalarLeafInfo& leaf = info.scalar_leaf;
+    if (leaf.kind == AOTScalarLeafKind::IntAffine) {
+        if (leaf.lhs_param < 0
+                || static_cast<size_t>(leaf.lhs_param) >= native_args.size()) {
+            return nullptr;
+        }
+        llvm::Value* value = native_args[static_cast<size_t>(leaf.lhs_param)];
+        if (value->getType() != i64_type) {
+            return nullptr;
+        }
+        if (leaf.lhs_int != 1) {
+            value = builder->CreateMul(value,
+                llvm::ConstantInt::get(i64_type, leaf.lhs_int));
+        }
+        if (leaf.rhs_int) {
+            value = builder->CreateAdd(value,
+                llvm::ConstantInt::get(i64_type, leaf.rhs_int));
+        }
+        return value;
+    }
     bool is_int = leaf.kind == AOTScalarLeafKind::IntBinary;
     auto get_operand = [&](int8_t param, int64_t int_value, double float_value) -> llvm::Value* {
         if (param >= 0) {
