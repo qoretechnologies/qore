@@ -10606,6 +10606,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             const QoreFunction* method_func = method
                 ? qore_method_private::get(*method)->getFunction() : nullptr;
             if (!m->isPseudo() && (!method || !qc || !variant || !method_func
+                    || qc->hasTypeParameters() || method->getClass()->hasTypeParameters()
                     || method_func->numVariants() != 1
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
