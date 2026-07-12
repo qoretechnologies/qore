@@ -5022,7 +5022,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
             uint64_t leaf_result;
-            if (tryExecClosureNativeLeaf(node, uvb, nullptr, 0, nullptr, leaf_result)) {
+            if (!uvb->hasCachedAOT()
+                    && tryExecClosureNativeLeaf(node, uvb, nullptr, 0, nullptr, leaf_result)) {
                 return leaf_result;
             }
             return execClosureDirect(cb, uvb, 0, nullptr, xsink);
@@ -5067,7 +5068,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
             uint64_t leaf_result;
-            if (tryExecClosureNativeLeaf(node, uvb, &arg0_bits, 1, nullptr, leaf_result)) {
+            if (!uvb->hasCachedAOT()
+                    && tryExecClosureNativeLeaf(node, uvb, &arg0_bits, 1, nullptr, leaf_result)) {
                 return leaf_result;
             }
             return execClosureDirect(cb, uvb, 1, &arg0_bits, xsink);
@@ -5120,7 +5122,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
             uint64_t leaf_result;
-            if (tryExecClosureNativeLeaf(node, uvb, args, nargs, arg_cleanups,
+            if (!uvb->hasCachedAOT()
+                    && tryExecClosureNativeLeaf(node, uvb, args, nargs, arg_cleanups,
                     leaf_result)) {
                 return leaf_result;
             }
