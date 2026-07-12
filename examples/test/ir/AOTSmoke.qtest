@@ -321,6 +321,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testNamespaceConstantReverseMapOrder());
         addTestCase("AOT qcc one-shot multi-source executable",
             \testQccOneShotMultiSourceExecutable());
+        addTestCase("AOT standalone top-level static fast entry",
+            \testStandaloneTopLevelStaticFastEntry());
         addTestCase("AOT batch fragments avoid forward constant refs",
             \testBatchFragmentConstantReverseMapOrder());
         addTestCase("AOT batch fragments defer class constant refs",
@@ -9339,6 +9341,34 @@ exit(0);
         assertTrue(mixed_out.regex("mixed source and \\.qo inputs")
                 && mixed_out.regex("EXIT=1"),
             "qcc one-shot rejects mixed source and .qo inputs: " + mixed_out);
+    }
+
+    testStandaloneTopLevelStaticFastEntry() {
+        hash<auto> tmp = writeTempScript("%modern
+class FastEntryProbe {
+    static int add(int a, int b) {
+        return a + b;
+    }
+}
+printf(\"%d\\n\", FastEntryProbe::add(20, 22));
+");
+        on_exit {
+            backquote(sprintf("rm -f %s %s", tmp.src, tmp.out));
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_DUMP_LLVM_IR=1 %s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qcc_bin, tmp.out, tmp.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "standalone fast-entry probe compiles: " + compile_out);
+        assertTrue(compile_out.regex(
+                "call i64 @FastEntryProbe___static_add[^\\n]*_fast\\("),
+            "top-level static call uses the native fast entry: " + compile_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, tmp.out));
+        assertEq("42\nEXIT=0\n", run_out,
+            "standalone static fast-entry executable result");
     }
 
     testBatchFragmentConstantReverseMapOrder() {

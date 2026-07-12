@@ -6787,6 +6787,20 @@ bool QoreAOT::compile(QoreProgram* pgm,
         buildConstantReverseMapImpl(root.second, const_reverse_map);
     }
 
+    // Keep standalone fast-entry discovery alive through top-level lowering.
+    // compileNamespaceFunctions() otherwise owns a temporary map that is lost
+    // before _toplevel is compiled, forcing its resolved calls through runtime
+    // slot dispatch even when the callee has a direct native ABI in this module.
+    std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
+        executable_batch_callees;
+    std::set<std::string> declared_fast_keys;
+    if (!declareAOTBatchFastEntries(root_ns, pgm, ctx, *module,
+            executable_batch_callees, declared_fast_keys, "", nullptr,
+            local_module_names.empty() ? nullptr : &local_module_names, nullptr)) {
+        error = "operation cancelled during executable AOT fast-entry discovery";
+        return false;
+    }
+
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule().  Relative
     // %requires modules are embedded in the executable instead, so compile the
@@ -6797,7 +6811,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, &compiled_keys, "",
         nullptr, false, nullptr, nullptr, &fatal_lowering_error,
-        local_module_names.empty() ? nullptr : &local_module_names);
+        local_module_names.empty() ? nullptr : &local_module_names, nullptr,
+        executable_batch_callees.empty() ? nullptr : &executable_batch_callees);
     for (auto& root : local_module_roots) {
         compileNamespaceFunctions(root.second, pgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
@@ -6889,6 +6904,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
+                if (!executable_batch_callees.empty()) {
+                    llvm_lowerer.setBatchCallees(&executable_batch_callees);
+                }
                 llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
                 llvm_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
                 llvm_lowerer.setDeferredExceptionChecking(false);
@@ -6917,7 +6935,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     ++compiled_count;
                     if (!compileAOTClosureBodiesForOwner(owner_index, pgm, ctx, *module,
                             di_builder, di_cu, compiled_funcs, total_funcs, compiled_count,
-                            total_ir_insts_all, &const_reverse_map, "", false, nullptr,
+                            total_ir_insts_all, &const_reverse_map, "", false,
+                            executable_batch_callees.empty()
+                                ? nullptr : &executable_batch_callees,
                             &fatal_lowering_error)) {
                         delete ir_func;
                         error = fatal_lowering_error;
