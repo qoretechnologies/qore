@@ -2895,6 +2895,37 @@ bool qore_ir_is_native_leaf(const QoreIRFunction* ir, const UserVariantBase* uvb
     return ensureInterpreterNativeLeafState(&descriptor, nargs);
 }
 
+bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir, const UserVariantBase* uvb,
+        int nargs, AOTScalarLeafInfo& result) {
+    if (!ir || !uvb) {
+        return false;
+    }
+    QoreIRCallDirectInstruction descriptor(nullptr, nullptr, nullptr, QoreValue());
+    descriptor.cached_callee_ir = ir;
+    descriptor.cached_uvb = uvb;
+    const UserSignature* sig = uvb->getUserSignature();
+    descriptor.cached_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
+    if (!ensureInterpreterNativeLeafState(&descriptor, nargs)) {
+        return false;
+    }
+    if (descriptor.native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::IntBinary) {
+        result.kind = AOTScalarLeafKind::IntBinary;
+    } else if (descriptor.native_leaf_kind
+            == QoreIRCallDirectInstruction::NativeLeafKind::FloatBinary) {
+        result.kind = AOTScalarLeafKind::FloatBinary;
+    } else {
+        return false;
+    }
+    result.opcode = static_cast<uint16_t>(descriptor.native_leaf_opcode);
+    result.lhs_param = descriptor.native_leaf_lhs_param;
+    result.rhs_param = descriptor.native_leaf_rhs_param;
+    result.lhs_int = descriptor.native_leaf_lhs_int;
+    result.rhs_int = descriptor.native_leaf_rhs_int;
+    result.lhs_float = descriptor.native_leaf_lhs_float;
+    result.rhs_float = descriptor.native_leaf_rhs_float;
+    return true;
+}
+
 bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result, const QoreClosureBase* closure) {
     if (!ensureInterpreterNativeLeafState(inst, nargs)) {

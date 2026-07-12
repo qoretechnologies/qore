@@ -45,6 +45,7 @@ class QoreValue;
 class QoreClosureBase;
 class AbstractStatement;
 class StatementBlock;
+struct AOTScalarLeafInfo;
 
 //! Direct params for IR-to-IR calls — bypasses TLS variable stack entirely.
 //! Param values are placed directly into the IR slot cache, eliminating
@@ -114,5 +115,8 @@ DLLLOCAL bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
 //! Return true when the IR body is covered by the direct native leaf executor.
 DLLLOCAL bool qore_ir_is_native_leaf(const QoreIRFunction* ir,
         const UserVariantBase* uvb, int nargs);
+//! Return an importable pure scalar leaf descriptor for cross-object AOT lowering.
+DLLLOCAL bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir,
+        const UserVariantBase* uvb, int nargs, AOTScalarLeafInfo& result);
 
 #endif

@@ -3796,6 +3796,58 @@ bool QoreIRToLLVM::selfRecursiveFastEntryArgsNeedNothingGuard(
     return fastEntryNativeArgsNeedNothingGuard(self_info, raw_arg_ids);
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
+        const std::vector<llvm::Value*>& native_args) {
+    if (std::getenv("QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE")
+            || info.scalar_leaf.kind == AOTScalarLeafKind::None) {
+        return nullptr;
+    }
+    const AOTScalarLeafInfo& leaf = info.scalar_leaf;
+    bool is_int = leaf.kind == AOTScalarLeafKind::IntBinary;
+    auto get_operand = [&](int8_t param, int64_t int_value, double float_value) -> llvm::Value* {
+        if (param >= 0) {
+            if (static_cast<size_t>(param) >= native_args.size()) {
+                return nullptr;
+            }
+            llvm::Value* value = native_args[static_cast<size_t>(param)];
+            if ((is_int && value->getType() != i64_type)
+                    || (!is_int && value->getType() != double_type)) {
+                return nullptr;
+            }
+            return value;
+        }
+        return is_int ? static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, int_value))
+            : static_cast<llvm::Value*>(llvm::ConstantFP::get(double_type, float_value));
+    };
+    llvm::Value* lhs = get_operand(leaf.lhs_param, leaf.lhs_int, leaf.lhs_float);
+    llvm::Value* rhs = get_operand(leaf.rhs_param, leaf.rhs_int, leaf.rhs_float);
+    if (!lhs || !rhs) {
+        return nullptr;
+    }
+    switch (static_cast<QoreIROpcode>(leaf.opcode)) {
+        case QoreIROpcode::AddInt:
+            return is_int ? builder->CreateAdd(lhs, rhs) : nullptr;
+        case QoreIROpcode::AddFloat:
+            return !is_int ? builder->CreateFAdd(lhs, rhs) : nullptr;
+        case QoreIROpcode::SubInt:
+            return is_int ? builder->CreateSub(lhs, rhs) : nullptr;
+        case QoreIROpcode::SubFloat:
+            return !is_int ? builder->CreateFSub(lhs, rhs) : nullptr;
+        case QoreIROpcode::MulInt:
+            return is_int ? builder->CreateMul(lhs, rhs) : nullptr;
+        case QoreIROpcode::MulFloat:
+            return !is_int ? builder->CreateFMul(lhs, rhs) : nullptr;
+        case QoreIROpcode::AndInt:
+            return is_int ? builder->CreateAnd(lhs, rhs) : nullptr;
+        case QoreIROpcode::OrInt:
+            return is_int ? builder->CreateOr(lhs, rhs) : nullptr;
+        case QoreIROpcode::XorInt:
+            return is_int ? builder->CreateXor(lhs, rhs) : nullptr;
+        default:
+            return nullptr;
+    }
+}
+
 llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, int32_t slot, llvm::Function* fast_fn,
@@ -3877,7 +3929,10 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     }
     call_args.push_back(callee_ctx);
     call_args.push_back(xsink_arg);
-    llvm::Value* fast_result = builder->CreateCall(fast_fn, call_args);
+    llvm::Value* fast_result = emitAOTScalarLeaf(callee_info, call_args);
+    if (!fast_result) {
+        fast_result = builder->CreateCall(fast_fn, call_args);
+    }
     if (has_arg_cleanups) {
         auto clear_helper = module.getOrInsertFunction(
                 "qore_rt_clear_arg_cleanups",
@@ -11160,7 +11215,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
-                call_result = builder->CreateCall(aot_approach_b_fn, call_args);
+                call_result = emitAOTScalarLeaf(*aot_approach_b_callee, call_args);
+                if (!call_result) {
+                    call_result = builder->CreateCall(aot_approach_b_fn, call_args);
+                }
                 call_return_kind = aot_approach_b_callee->return_kind;
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
@@ -11967,7 +12025,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
-                call_result = builder->CreateCall(aot_static_batch_fn, call_args);
+                call_result = emitAOTScalarLeaf(*aot_static_batch_callee, call_args);
+                if (!call_result) {
+                    call_result = builder->CreateCall(aot_static_batch_fn, call_args);
+                }
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",

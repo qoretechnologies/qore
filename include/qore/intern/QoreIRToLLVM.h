@@ -604,6 +604,11 @@ private:
             int nargs, bool has_arg_cleanups, const char* fallback_name,
             const char* fallback_consume_name, std::string& error);
 
+    // Emit an imported pure scalar leaf body. Returns nullptr when the summary
+    // is absent, disabled, or not valid for the supplied native arguments.
+    llvm::Value* emitAOTScalarLeaf(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args);
+
     BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,

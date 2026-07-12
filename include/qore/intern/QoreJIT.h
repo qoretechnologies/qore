@@ -80,6 +80,23 @@ enum class BatchCalleeReturnKind : uint8_t {
     NativeFloat = 2,
 };
 
+enum class AOTScalarLeafKind : uint8_t {
+    None = 0,
+    IntBinary = 1,
+    FloatBinary = 2,
+};
+
+struct AOTScalarLeafInfo {
+    AOTScalarLeafKind kind = AOTScalarLeafKind::None;
+    uint16_t opcode = 0;
+    int8_t lhs_param = -1;
+    int8_t rhs_param = -1;
+    int64_t lhs_int = 0;
+    int64_t rhs_int = 0;
+    double lhs_float = 0.0;
+    double rhs_float = 0.0;
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -93,6 +110,7 @@ struct BatchCalleeInfo {
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
+    AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.

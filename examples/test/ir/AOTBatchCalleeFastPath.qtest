@@ -592,7 +592,9 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"fast_entry_num_params\": 1/)
         || !(provider_index =~ /\"fast_param_rejects_nothing\": \[1\]/)
         || !(provider_index =~ /\"fast_return_kind\": 1/)
-        || !(provider_index =~ /\"fast_return_kind\": 2/)) {
+        || !(provider_index =~ /\"fast_return_kind\": 2/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 1/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 2/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

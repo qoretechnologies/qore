@@ -274,7 +274,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 3;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 4;
 
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
 constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
@@ -304,6 +304,14 @@ struct QoreAOTSymbolIndexRecord {
     std::vector<uint8_t> fast_param_kinds;
     std::vector<uint8_t> fast_param_rejects_nothing;
     std::vector<uint8_t> fast_param_noescape;
+    uint8_t scalar_leaf_kind = 0;
+    uint16_t scalar_leaf_opcode = 0;
+    int8_t scalar_leaf_lhs_param = -1;
+    int8_t scalar_leaf_rhs_param = -1;
+    int64_t scalar_leaf_lhs_int = 0;
+    int64_t scalar_leaf_rhs_int = 0;
+    double scalar_leaf_lhs_float = 0.0;
+    double scalar_leaf_rhs_float = 0.0;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -315,6 +323,14 @@ struct QoreAOTFastEntryIndexInfo {
     std::vector<uint8_t> param_kinds;
     std::vector<uint8_t> param_rejects_nothing;
     std::vector<uint8_t> param_noescape;
+    uint8_t scalar_leaf_kind = 0;
+    uint16_t scalar_leaf_opcode = 0;
+    int8_t scalar_leaf_lhs_param = -1;
+    int8_t scalar_leaf_rhs_param = -1;
+    int64_t scalar_leaf_lhs_int = 0;
+    int64_t scalar_leaf_rhs_int = 0;
+    double scalar_leaf_lhs_float = 0.0;
+    double scalar_leaf_rhs_float = 0.0;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

@@ -3214,6 +3214,9 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
     if (rec.fast_entry_flags) {
         printf(" fast_flags=0x%x fast_params=%u fast_return=%u", rec.fast_entry_flags,
             rec.fast_entry_num_params, rec.fast_return_kind);
+        if (rec.scalar_leaf_kind) {
+            printf(" scalar_leaf=%u:%u", rec.scalar_leaf_kind, rec.scalar_leaf_opcode);
+        }
     }
     if (rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
         printf(" dep=%s", qoreAOTDependencyClassName(rec.dependency_class));
@@ -5007,6 +5010,15 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     print_bytes("fast_param_kinds", rec.fast_param_kinds);
     print_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
     print_bytes("fast_param_noescape", rec.fast_param_noescape);
+    printf(", \"scalar_leaf_kind\": %u, \"scalar_leaf_opcode\": %u"
+        ", \"scalar_leaf_lhs_param\": %d, \"scalar_leaf_rhs_param\": %d"
+        ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
+        ", \"scalar_leaf_lhs_float\": %.17g, \"scalar_leaf_rhs_float\": %.17g",
+        rec.scalar_leaf_kind, rec.scalar_leaf_opcode,
+        rec.scalar_leaf_lhs_param, rec.scalar_leaf_rhs_param,
+        static_cast<long long>(rec.scalar_leaf_lhs_int),
+        static_cast<long long>(rec.scalar_leaf_rhs_int),
+        rec.scalar_leaf_lhs_float, rec.scalar_leaf_rhs_float);
     printf("}");
 }
 
@@ -5549,6 +5561,15 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         write_bytes("fast_param_kinds", rec.fast_param_kinds);
         write_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
         write_bytes("fast_param_noescape", rec.fast_param_noescape);
+        fprintf(f, ", \"scalar_leaf_kind\": %u, \"scalar_leaf_opcode\": %u"
+            ", \"scalar_leaf_lhs_param\": %d, \"scalar_leaf_rhs_param\": %d"
+            ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
+            ", \"scalar_leaf_lhs_float\": %.17g, \"scalar_leaf_rhs_float\": %.17g",
+            rec.scalar_leaf_kind, rec.scalar_leaf_opcode,
+            rec.scalar_leaf_lhs_param, rec.scalar_leaf_rhs_param,
+            static_cast<long long>(rec.scalar_leaf_lhs_int),
+            static_cast<long long>(rec.scalar_leaf_rhs_int),
+            rec.scalar_leaf_lhs_float, rec.scalar_leaf_rhs_float);
         fputc('}', f);
     }
     if (!records.empty()) {

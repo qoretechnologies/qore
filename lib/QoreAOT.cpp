@@ -982,6 +982,14 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             }
             entry.param_rejects_nothing = info.param_rejects_nothing;
             entry.param_noescape = info.param_noescape;
+            entry.scalar_leaf_kind = static_cast<uint8_t>(info.scalar_leaf.kind);
+            entry.scalar_leaf_opcode = info.scalar_leaf.opcode;
+            entry.scalar_leaf_lhs_param = info.scalar_leaf.lhs_param;
+            entry.scalar_leaf_rhs_param = info.scalar_leaf.rhs_param;
+            entry.scalar_leaf_lhs_int = info.scalar_leaf.lhs_int;
+            entry.scalar_leaf_rhs_int = info.scalar_leaf.rhs_int;
+            entry.scalar_leaf_lhs_float = info.scalar_leaf.lhs_float;
+            entry.scalar_leaf_rhs_float = info.scalar_leaf.rhs_float;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3361,6 +3369,38 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             }
         }
     }
+    for (const auto& [variant, func] : functions) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT scalar leaf summary collection")) {
+            return false;
+        }
+        auto callee_it = batch_callees.find(variant);
+        UserVariantBase* uvb = variant
+            ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase() : nullptr;
+        const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+        if (callee_it == batch_callees.end() || !sig) {
+            continue;
+        }
+        AOTScalarLeafInfo leaf;
+        if (!qore_ir_get_aot_scalar_leaf(func, uvb,
+                static_cast<int>(sig->numParams()), leaf)) {
+            continue;
+        }
+        BatchCalleeReturnKind expected_return = leaf.kind == AOTScalarLeafKind::IntBinary
+            ? BatchCalleeReturnKind::NativeInt : BatchCalleeReturnKind::NativeFloat;
+        BatchCalleeParamKind expected_param = leaf.kind == AOTScalarLeafKind::IntBinary
+            ? BatchCalleeParamKind::NativeInt : BatchCalleeParamKind::NativeFloat;
+        if (callee_it->second.return_kind != expected_return
+                || callee_it->second.param_kinds.size() != sig->numParams()
+                || std::any_of(callee_it->second.param_kinds.begin(),
+                    callee_it->second.param_kinds.end(),
+                    [expected_param](BatchCalleeParamKind kind) {
+                        return kind != expected_param;
+                    })) {
+            continue;
+        }
+        callee_it->second.scalar_leaf = leaf;
+    }
     return true;
 }
 
@@ -3803,6 +3843,42 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
     info.param_noescape.resize(info.num_params, 0);
+    if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::FloatBinary)
+            || rec.scalar_leaf_lhs_param < -1 || rec.scalar_leaf_rhs_param < -1
+            || rec.scalar_leaf_lhs_param >= static_cast<int>(info.num_params)
+            || rec.scalar_leaf_rhs_param >= static_cast<int>(info.num_params)) {
+        return false;
+    }
+    info.scalar_leaf.kind = static_cast<AOTScalarLeafKind>(rec.scalar_leaf_kind);
+    info.scalar_leaf.opcode = rec.scalar_leaf_opcode;
+    info.scalar_leaf.lhs_param = rec.scalar_leaf_lhs_param;
+    info.scalar_leaf.rhs_param = rec.scalar_leaf_rhs_param;
+    info.scalar_leaf.lhs_int = rec.scalar_leaf_lhs_int;
+    info.scalar_leaf.rhs_int = rec.scalar_leaf_rhs_int;
+    info.scalar_leaf.lhs_float = rec.scalar_leaf_lhs_float;
+    info.scalar_leaf.rhs_float = rec.scalar_leaf_rhs_float;
+    if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
+        bool is_int = info.scalar_leaf.kind == AOTScalarLeafKind::IntBinary;
+        BatchCalleeReturnKind expected_return = is_int
+            ? BatchCalleeReturnKind::NativeInt : BatchCalleeReturnKind::NativeFloat;
+        BatchCalleeParamKind expected_param = is_int
+            ? BatchCalleeParamKind::NativeInt : BatchCalleeParamKind::NativeFloat;
+        QoreIROpcode opcode = static_cast<QoreIROpcode>(info.scalar_leaf.opcode);
+        bool supported_opcode = is_int
+            ? (opcode == QoreIROpcode::AddInt || opcode == QoreIROpcode::SubInt
+                || opcode == QoreIROpcode::MulInt || opcode == QoreIROpcode::AndInt
+                || opcode == QoreIROpcode::OrInt || opcode == QoreIROpcode::XorInt)
+            : (opcode == QoreIROpcode::AddFloat || opcode == QoreIROpcode::SubFloat
+                || opcode == QoreIROpcode::MulFloat);
+        if (info.num_params > 2 || info.return_kind != expected_return
+                || !supported_opcode
+                || std::any_of(info.param_kinds.begin(), info.param_kinds.end(),
+                    [expected_param](BatchCalleeParamKind kind) {
+                        return kind != expected_param;
+                    })) {
+            return false;
+        }
+    }
     return true;
 }
 

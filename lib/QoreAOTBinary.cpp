@@ -6509,6 +6509,14 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
             writer.writeBytes(values->data(), static_cast<uint32_t>(values->size()));
         }
     }
+    writer.writeU8(rec.scalar_leaf_kind);
+    writer.writeU16(rec.scalar_leaf_opcode);
+    writer.writeU8(static_cast<uint8_t>(rec.scalar_leaf_lhs_param));
+    writer.writeU8(static_cast<uint8_t>(rec.scalar_leaf_rhs_param));
+    writer.writeI64(rec.scalar_leaf_lhs_int);
+    writer.writeI64(rec.scalar_leaf_rhs_int);
+    writer.writeF64(rec.scalar_leaf_lhs_float);
+    writer.writeF64(rec.scalar_leaf_rhs_float);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6564,6 +6572,14 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.fast_param_kinds = info.param_kinds;
     rec.fast_param_rejects_nothing = info.param_rejects_nothing;
     rec.fast_param_noescape = info.param_noescape;
+    rec.scalar_leaf_kind = info.scalar_leaf_kind;
+    rec.scalar_leaf_opcode = info.scalar_leaf_opcode;
+    rec.scalar_leaf_lhs_param = info.scalar_leaf_lhs_param;
+    rec.scalar_leaf_rhs_param = info.scalar_leaf_rhs_param;
+    rec.scalar_leaf_lhs_int = info.scalar_leaf_lhs_int;
+    rec.scalar_leaf_rhs_int = info.scalar_leaf_rhs_int;
+    rec.scalar_leaf_lhs_float = info.scalar_leaf_lhs_float;
+    rec.scalar_leaf_rhs_float = info.scalar_leaf_rhs_float;
     native.push_back(std::move(rec));
 }
 
@@ -7712,12 +7728,31 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         }
         rec.fast_return_kind = QoreAOTBinaryReader::readU8(ptr);
     }
-    return readSymbolIndexByteVector(ptr, end, rec.fast_param_kinds, error,
+    if (!(readSymbolIndexByteVector(ptr, end, rec.fast_param_kinds, error,
             "fast_param_kinds")
         && readSymbolIndexByteVector(ptr, end, rec.fast_param_rejects_nothing,
             error, "fast_param_rejects_nothing")
         && readSymbolIndexByteVector(ptr, end, rec.fast_param_noescape, error,
-            "fast_param_noescape");
+            "fast_param_noescape"))) {
+        return false;
+    }
+    if (version < 4) {
+        return true;
+    }
+    constexpr size_t scalar_leaf_size = 1 + 2 + 2 + 4 * sizeof(uint64_t);
+    if (static_cast<size_t>(end - ptr) < scalar_leaf_size) {
+        error = "truncated SYMBOL_INDEX scalar leaf metadata";
+        return false;
+    }
+    rec.scalar_leaf_kind = QoreAOTBinaryReader::readU8(ptr);
+    rec.scalar_leaf_opcode = QoreAOTBinaryReader::readU16(ptr);
+    rec.scalar_leaf_lhs_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.scalar_leaf_rhs_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.scalar_leaf_lhs_int = QoreAOTBinaryReader::readI64(ptr);
+    rec.scalar_leaf_rhs_int = QoreAOTBinaryReader::readI64(ptr);
+    rec.scalar_leaf_lhs_float = QoreAOTBinaryReader::readF64(ptr);
+    rec.scalar_leaf_rhs_float = QoreAOTBinaryReader::readF64(ptr);
+    return true;
 }
 
 static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
