@@ -16334,11 +16334,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Constant* key_const = builder->CreateGlobalString(
                 select_inst->key1, "select_hash_key");
-            auto helper = module.getOrInsertFunction("qore_rt_select_hash_key_positive_int",
+            llvm::Value* result;
+            if (qore_ir_use_prehashed_keys()) {
+                QoreIRPrecomputedStringHash key_hash =
+                    qore_ir_precompute_string_hash(select_inst->key1);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_select_hash_key_positive_int_prehashed",
                     llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper,
-                {list_boxed, key_const, xsink_arg});
+                        {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {list_boxed, key_const,
+                    llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                    llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg});
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_select_hash_key_positive_int",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {list_boxed, key_const, xsink_arg});
+            }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

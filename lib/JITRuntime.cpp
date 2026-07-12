@@ -241,6 +241,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_hash_key_access_int_prehashed) },
     { "qore_rt_select_hash_key_positive_int",
         reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int) },
+    { "qore_rt_select_hash_key_positive_int_prehashed",
+        reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int_prehashed) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
@@ -5547,8 +5549,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_positive_int(uint64_t list_val) {
     return toBits(result.release());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val,
-        const char* key, ExceptionSink* xsink) {
+static uint64_t qore_rt_select_hash_key_positive_int_impl(uint64_t list_val,
+        const char* key, size_t key_hash, bool prehashed, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -5568,12 +5570,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_select_hash_key_positive_int(uint64_t list
         if (elem.getType() != NT_HASH) {
             continue;
         }
-        QoreValue value = elem.get<const QoreHashNode>()->getKeyValue(key);
+        const QoreHashNode* hash = elem.get<const QoreHashNode>();
+        QoreValue value = prehashed
+            ? qore_hash_private::get(*hash)->getKeyValuePrehashed(key, key_hash, nullptr)
+            : hash->getKeyValue(key);
         if (value.getAsBigInt() > 0) {
             result->push(elem.refSelf(), nullptr);
         }
     }
     return toBits(result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val,
+        const char* key, ExceptionSink* xsink) {
+    return qore_rt_select_hash_key_positive_int_impl(list_val, key, 0, false, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_select_hash_key_positive_int_prehashed(
+        uint64_t list_val, const char* key, uint64_t hash64, uint32_t hash32,
+        ExceptionSink* xsink) {
+    return qore_rt_select_hash_key_positive_int_impl(list_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_select_positive_float(uint64_t list_val) {
