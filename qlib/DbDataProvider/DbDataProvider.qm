@@ -341,6 +341,31 @@ module DbDataProvider {
     @section dbdataprovider_relnotes Release Notes
 
     @subsection dbdataprovider_v2_5 DbDataProvider v2.5
+    - update and delete APIs now preserve affected-row counts when optional search options are omitted, including
+      zero-row results, while retaining caller-owned transaction boundaries
+    - bulk create operations now return every requested server-generated value across flush blocks instead of only
+      the final callback row
+    - bulk upserts preserve exact per-row inserted, updated, and unchanged results for strategies that promise this
+      distinction; optimized strategies explicitly return \c verified when the backend cannot expose it
+    - field renames now use SqlUtil column mapping so data is preserved, and same-type logical renames retain the
+      database-native physical type instead of introducing an implicit type conversion
+    - database table providers now advertise expression pushdown capabilities dynamically from the active
+      database-specific SqlUtil expression map
+    - added the opt-in \c allow_client_side_filter search option for predicates without a native SQL
+      implementation; pushdownable conjunctions run in SQL and residual filtering, projection, paging, and
+      cardinality checks run in the provider with deterministic transaction cleanup
+    - corrected raw SQL provider metadata and record typing: generic search expressions are no longer advertised
+      when only SQL-side filtering is supported, result aliases retain their exact spelling, nullable statement
+      columns remain nullable, and missing native metadata falls back safely
+    - made table create options database-aware so unsupported \c returning options are not published or accepted
+    - validated unsupported raw SQL search conditions before iterator construction to avoid leaking implicit
+      transactions on constructor errors
+    - fixed row and bulk iterator interoperability by preserving record types, limits, maximums, and required-result
+      state when adapting a row iterator to bulk, and by releasing implicit transactions immediately at end-of-data
+    - made single-record updates and \c max_records-bounded updates and deletes atomic with savepoints, including
+      inside caller-owned transactions
+    - updated the c exec-sql provider to commit or roll back only transactions started by the request, preserving
+      caller-owned transaction boundaries
     - added \c BufferColumns support for bulk table reads and raw SQL reads with
       @ref Qore::SQL::ColumnarResult "ColumnarResult" blocks from \c getShapedValue()
     - added \c BufferColumns support for @ref DbDataProvider::DbTableDataProvider "DbTableDataProvider" bulk create

@@ -476,7 +476,7 @@ public class DpqlActionSession {
     #! provider's server-supported expression set
     private bool allOperatorsServerSupported(hash<DataProviderExpression> exp,
             hash<string, hash<DataProviderExpressionInfo>> server_expressions) {
-        if (!server_expressions.hasKey(exp.exp)) {
+        if (!server_expressions.hasKey(exp.exp) || !server_expressions{exp.exp}.supports_pushdown) {
             return False;
         }
         foreach auto arg in (exp.args) {

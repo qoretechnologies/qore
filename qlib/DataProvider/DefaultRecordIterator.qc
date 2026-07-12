@@ -29,7 +29,7 @@ public namespace DataProvider {
 */
 public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProviderRecordIterator<RecT> {
     private {
-        AbstractIterator i;
+        *AbstractIterator i;
         *hash<auto> where_cond;
         *hash<auto> search_options;
         *hash<string, AbstractDataField> record_type;
@@ -55,7 +55,9 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
             : AbstractDataProviderRecordIterator(search_options.requires_result,
                 search_options.max_records) {
         self.i = i;
-        self.where_cond = where_cond;
+        self.where_cond = where_cond instanceof hash<DataProviderExpression>
+            ? AbstractDataProvider::prepareExpression(cast<hash<DataProviderExpression>>(where_cond))
+            : where_cond;
         self.template_context = template_context;
         if (exists search_options.columns && search_options.columns.typeCode() != NT_LIST) {
             search_options.columns = list(search_options.columns);
@@ -69,7 +71,7 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
     /** @return @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not
     */
     bool valid() {
-        return i.valid();
+        return i && i.valid();
     }
 
     #! returns a single record if the iterator is valid
@@ -113,11 +115,15 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
         be used); @ref True if successful (meaning that the iterator object is valid)
     */
     private bool nextImpl() {
+        if (!i) {
+            return False;
+        }
         while (i.next()) {
             if (!where_cond || (where_cond && matchGeneric(i.getValue(), where_cond, template_context))) {
                 if (search_options.offset > 0) {
                     if (exists search_options.limit && search_options.limit >= 0
                         && (count - search_options.offset) == search_options.limit) {
+                        delete i;
                         return False;
                     }
                     if (count < search_options.offset) {
@@ -126,12 +132,16 @@ public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProvi
                     }
                 } else if (exists search_options.limit && search_options.limit >= 0 &&
                     count == search_options.limit) {
+                    delete i;
                     return False;
                 }
                 ++count;
                 return True;
             }
         }
+        # Release the wrapped iterator as soon as it is exhausted. Database iterators can own implicit transactions,
+        # and callers commonly keep the outer iterator object alive after next() returns False.
+        delete i;
         return False;
     }
 }

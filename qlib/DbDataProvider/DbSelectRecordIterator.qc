@@ -39,13 +39,9 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
     constructor(AbstractDatasource ds, *hash<auto> where_cond, hash<auto> select_options)
             : AbstractDbRecordIterator(
                 !ds.currentThreadInTransaction() && !select_options.forupdate,
-                DbSelectRecordIterator::prepareStatement(ds.getSQLStatement(), select_options),
+                DbSelectRecordIterator::prepareStatement(ds.getSQLStatement(), where_cond, select_options),
                 select_options
             ) {
-        if (where_cond) {
-            throw "DBSELECT-ERROR", sprintf("where_cond must be empty for %s; value provided: %y",
-                self.className(), where_cond);
-        }
     }
 
     #! Returns the value of the given field in the current record, if the iterator is valid
@@ -60,7 +56,14 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
     }
 
     #! Prepares the AbstractSQLStatement object for the iterator
-    private static AbstractSQLStatement prepareStatement(AbstractSQLStatement stmt, hash<auto> select_options) {
+    private static AbstractSQLStatement prepareStatement(AbstractSQLStatement stmt, *hash<auto> where_cond,
+            hash<auto> select_options) {
+        # Validate before constructing AbstractDbRecordIterator: preparing/executing the statement can acquire an
+        # implicit transaction that a partially constructed Qore object cannot reliably release.
+        if (where_cond) {
+            throw "DBSELECT-ERROR", sprintf("where_cond must be empty for DbSelectRecordIterator; value provided: %y",
+                where_cond);
+        }
         stmt.prepare(select_options.sql);
         if (select_options.args) {
             stmt.bindArgs(select_options.args);

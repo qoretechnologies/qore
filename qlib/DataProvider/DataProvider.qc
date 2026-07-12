@@ -1214,6 +1214,50 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
         AbstractDataProvider::clearTemplateCallbacks();
     }
 
+    #! Returns registered DPQL template contexts
+    /** @param template_context optional application context passed to the registered callback
+
+        @return registered template contexts, if a context callback is configured
+
+        Delegates to @ref AbstractDataProvider::getTemplateContexts().
+
+        @since DataProvider 3.5
+    */
+    static *list<hash<auto>> getTemplateContexts(*hash<auto> template_context) {
+        return AbstractDataProvider::getTemplateContexts(template_context);
+    }
+
+    #! Returns registered DPQL template values for a context
+    /** @param ctx the template context name
+        @param prefix optional value prefix used to restrict completion results
+        @param template_context optional application context passed to the registered callback
+
+        @return registered template values for the requested context, if a value callback is configured
+
+        Delegates to @ref AbstractDataProvider::getTemplateValues().
+
+        @since DataProvider 3.5
+    */
+    static *list<hash<auto>> getTemplateValues(string ctx, string prefix, *hash<auto> template_context) {
+        return AbstractDataProvider::getTemplateValues(ctx, prefix, template_context);
+    }
+
+    #! Resolves the type of a DPQL template reference
+    /** @param ctx the template context name
+        @param value the template value name
+        @param template_context optional application context passed to the registered callback
+
+        @return the resolved type, if a type callback is configured and resolves the reference
+
+        Delegates to @ref AbstractDataProvider::resolveTemplateType().
+
+        @since DataProvider 3.5
+    */
+    static *AbstractDataProviderType resolveTemplateType(string ctx, string value,
+            *hash<auto> template_context) {
+        return AbstractDataProvider::resolveTemplateType(ctx, value, template_context);
+    }
+
     #! Validates a DPQL expression against available fields
     /** @param text the DPQL expression to validate
         @param fields available fields

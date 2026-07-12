@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BulkInsertOperation class definition
 
-/*  BulkInsertOperation.qc Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  BulkInsertOperation.qc Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -90,6 +90,9 @@ on_error ds.rollback();
 
             #! hash of "returning" arguments
             hash static_ret_expr;
+
+            #! caller-requested returning arguments
+            softlist<auto> returning_args;
         }
 
         #! creates the object from the supplied arguments
@@ -98,6 +101,7 @@ on_error ds.rollback();
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "block_size": the number of rows executed at once (default: 1000)
+            - \c "returning": optional column names or returning descriptors to retrieve for every inserted row
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
               hash argument and will be called for every row after a bulk insert; the hash argument representing the
               row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
@@ -114,6 +118,7 @@ on_error ds.rollback();
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "block_size": the number of rows executed at once (default: 1000)
+            - \c "returning": optional column names or returning descriptors to retrieve for every inserted row
             - \c "rowcode": a per-row @ref closure or @ref call_reference for batch inserts; this must take a single
               hash argument and will be called for every row after a bulk insert; the hash argument representing the
               row inserted will also contain any output values if applicable (for example if @ref sql_iop_funcs are
@@ -163,6 +168,8 @@ inserter.setRowCode(rowcode);
         private init(*hash opts) {
             if (opts.rowcode)
                 rowcode = opts.rowcode;
+            if (exists opts.returning)
+                returning_args = opts.returning;
             AbstractBulkOperation::init(opts);
         }
 
@@ -205,7 +212,8 @@ inserter.setRowCode(rowcode);
             if (!stmt) {
                 string sql;
                 # insert the data
-                rh = table.insert(hbuf + cval + static_ret_expr, \sql, rowcode ? ("returning": ret_args) : NOTHING);
+                rh = table.insert(hbuf + cval + static_ret_expr, \sql,
+                    rowcode ? ("returning": returning_args + ret_args) : NOTHING);
                 # create the statement for future inserts
                 stmt = table.getDatasource().getSQLStatement();
                 stmt.prepare(sql);

@@ -148,7 +148,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
         #! Upsert options; see details below
         /** The DbTableDataProvider class supports the following upsert options:
-            - \c upsert_strategy: an upsert strategu code; see:
+            - \c upsert_strategy: an upsert strategy code; see:
               <a href="../../SqlUtil/html/group__upsert__options.html">SqlUtil upsert strategy codes</a> for more info
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
@@ -164,26 +164,32 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "UpsertInsertFirst",
+                        "display_name": "Insert First",
                         "desc": "Try to insert first, if it fails, try updating",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertUpdateFirst",
+                        "display_name": "Update First",
                         "desc": "Try to update first, if it fails, try inserting",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertSelectFirst",
+                        "display_name": "Select First",
                         "desc": "Try to select first, if it fails, insert, if it succeeds, update if necessary",
                     },
                     <AllowedValueInfo>{
                         "value": "UpsertInsertOnly",
+                        "display_name": "Insert Only",
                         "desc": "Only insert, never update",
                     },
                      <AllowedValueInfo>{
                         "value": "UpsertUpdateOnly",
+                        "display_name": "Update Only",
                         "desc": "Only update, never insert",
                     },
                      <AllowedValueInfo>{
                         "value": "UpsertAuto",
+                        "display_name": "Automatic",
                         "desc": "Use the most efficient upsert for the underlying DB",
                     },
                 ),
@@ -279,6 +285,18 @@ public class DbTableDataProvider inherits DbDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftBoolType),
                 "desc": "Uses `FOR UPDATE` with the query to lock records selected",
             },
+            "allow_client_side_filter": <DataProviderOptionInfo>{
+                "display_name": "Allow Client-Side Filter",
+                "short_desc": "Allow non-pushdownable expression predicates to be evaluated on returned rows",
+                "type": AbstractDataProviderType::get(SoftBoolType),
+                "desc": "If `True`, expression predicates without a native implementation in the current database "
+                    "are evaluated on the client after all pushdownable AND conditions run in SQL. This can scan "
+                    "many rows; `limit`, `offset`, `columns`, `requires_result`, and `max_records` are applied after "
+                    "the client filter. The default is `False`. Grouped queries, `having`, and computed column "
+                    "expressions are rejected because their SQL evaluation order cannot be preserved after a "
+                    "client-side filter.",
+                "default_value": False,
+            },
             "partition": <DataProviderOptionInfo>{
                 "display_name": "Partition",
                 "short_desc": "Restrict reads to one physical table partition",
@@ -343,16 +361,31 @@ public class DbTableDataProvider inherits DbDataProviderBase {
 
     #! Returns data provider info
     hash<DataProviderInfo> getInfo() {
-        *hash<string, hash<DataProviderExpressionInfo>> expression_info =
-            cast<hash<string, hash<DataProviderExpressionInfo>>>(
-                map {$1.key: $1.value.exp}, table.getExpressionMap().pairIterator()
-            );
+        *hash<string, hash<DataProviderExpressionInfo>> expression_info = getTableExpressionInfo();
 
         hash<DataProviderInfo> rv = AbstractDataProvider::getInfo();
+        rv.create_options = getCreateOptions();
         if (expression_info) {
             rv.expressions = expression_info;
         }
         return rv;
+    }
+
+    #! Returns expression metadata for the current database implementation
+    /** @param options provider options; currently unused because expression support is determined by the table's
+        active database implementation
+
+        @return expression metadata annotated with native pushdown capability
+    */
+    *hash<string, hash<DataProviderExpressionInfo>> getExpressionsWithOptions(*hash<auto> options) {
+        return getTableExpressionInfo();
+    }
+
+    #! Returns create options supported by the current database table
+    /** The \c returning option is omitted for database implementations that do not support insert returning clauses.
+    */
+    *hash<string, hash<DataProviderOptionInfo>> getCreateOptions() {
+        return table.hasReturning() ? CreateOptions : CreateOptions - "returning";
     }
 
     #! Begins a transaction in the datasource underlying the table
@@ -438,13 +471,13 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
-        DbTableTransactionHelper db(table);
+        DbOperationTransactionHelper trans(table);
         on_error {
-            if (db.isDuplicateRowError($1)) {
+            if (table.isDuplicateRowError($1)) {
                 rethrow "DUPLICATE-RECORD", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
-        *hash<auto> returning = db.insert(rec, create_options);
+        *hash<auto> returning = table.insert(rec, create_options);
         return rec + returning;
     }
 
@@ -461,7 +494,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> rh;
         if (create_options.returning) {
             create_options.rowcode = sub (hash<auto> h) {
-                rh = h;
+                map rh{$1.key} += ($1.value,), h.pairIterator();
             };
         }
         BulkInsertOperation bulk(table, create_options + {
@@ -487,7 +520,7 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> rh;
         if (create_options.returning) {
             create_options.rowcode = sub (hash<auto> h) {
-                rh = h;
+                map rh{$1.key} += ($1.value,), h.pairIterator();
             };
         }
         BulkInsertOperation bulk(table, create_options + {
@@ -511,8 +544,8 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     string upsertRecordImpl(hash<auto> rec, *hash<auto> upsert_options) {
-        DbTableTransactionHelper db(table);
-        return DbUpsertMap{db.upsert(rec,
+        DbOperationTransactionHelper trans(table);
+        return DbUpsertMap{table.upsert(rec,
             AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto, upsert_options)};
     }
@@ -530,6 +563,9 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
         int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto;
+        if (needsExactUpsertResults(strategy)) {
+            return upsertRecordsExact(recs, strategy, upsert_options);
+        }
         BulkUpsertOperation bulk(table, upsert_options + {
             "upsert_strategy": strategy,
             "info_log": sub (string fmt, ...) {
@@ -554,6 +590,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         # Map string upsert_strategy to integer constant (same as upsertRecordImpl)
         int strategy = AbstractTable::UpsertStrategyDescriptionMap{remove upsert_options.upsert_strategy}
             ?? AbstractTable::UpsertAuto;
+        if (needsExactUpsertResults(strategy)) {
+            hash<auto> rows = AbstractDataProcessor::convertShape(recs, shape,
+                DataProviderShape::HashOfLists)[0];
+            return upsertRecordsExact(rows, strategy, upsert_options);
+        }
         BulkUpsertOperation bulk(table, upsert_options + {
             "upsert_strategy": strategy,
             "info_log": sub (string fmt, ...) {
@@ -566,6 +607,21 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         return map UpsertResultVerified, xrange(AbstractDataProcessor::shapeRecordCount(recs, shape));
     }
 
+    #! Returns True for strategies whose documented per-row result can be preserved by the row-wise implementation
+    private bool needsExactUpsertResults(int strategy) {
+        return inlist(strategy, (AbstractTable::UpsertSelectFirst, AbstractTable::UpsertInsertOnly,
+            AbstractTable::UpsertUpdateOnly));
+    }
+
+    #! Upserts a bulk block row by row to preserve exact per-record result codes
+    private list<string> upsertRecordsExact(hash<auto> recs, int strategy, *hash<auto> upsert_options) {
+        hash<auto> example = map {
+            $1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value
+        }, recs.pairIterator();
+        code<int(hash<auto>)> upsert = table.getUpsertClosure(example, strategy, upsert_options - "block_size");
+        return map DbUpsertMap{upsert($1)}, recs.contextIterator();
+    }
+
     #! Returns a single record matching the search options
     /** @param where_cond the search criteria; will be processed by processFieldValues()
         @param search_options the search options (see @ref SearchOptions) after processing by validateSearchOptions()
@@ -573,15 +629,15 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         @throw MULTIPLE-RECORDS-ERROR multiple records found
     */
     private *hash<auto> searchSingleRecordImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        DbTableTransactionHelper db(table);
-        try {
-            return db.selectRow(search_options - ("requires_result", "max_records") + {"where": where_cond});
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "DBI-SELECT-ROW-ERROR") {
-                rethrow "MULTIPLE-RECORDS-ERROR", ex.desc, ex.arg;
-            }
-            rethrow;
+        AbstractDataProviderRecordIterator<hash<auto>> i = getReadIterator(where_cond, search_options);
+        *hash<auto> rv;
+        if (i.next()) {
+            rv = i.getValue();
         }
+        if (i.next()) {
+            throw "MULTIPLE-RECORDS-ERROR", sprintf("multiple records found for search: %y", where_cond);
+        }
+        return rv;
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -594,7 +650,12 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     */
     private AbstractDataProviderBulkRecordInterface searchRecordsBulkImpl(int block_size = 1000,
             *hash<auto> where_cond, *hash<auto> search_options) {
-        return new DbTableBulkRecordInterface(block_size, table, where_cond, search_options);
+        hash<auto> split = getReadExpressionSplit(where_cond, search_options);
+        if (!exists split.client) {
+            return new DbTableBulkRecordInterface(block_size, table, split.pushdown,
+                search_options - "allow_client_side_filter");
+        }
+        return getReadIteratorFromSplit(split, search_options).getBulkApi(block_size);
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -606,8 +667,70 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         @ref SqlUtil::DbTableRecordIterator::keepTransactionLock() "DbTableRecordIterator::keepTransactionLock()" is
         not called
     */
-    private DbTableRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        return new DbTableRecordIterator(table, where_cond, search_options);
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        return getReadIterator(where_cond, search_options);
+    }
+
+    #! Splits a read predicate into native SQL and optional client-side portions
+    private hash<auto> getReadExpressionSplit(*hash<auto> where_cond, *hash<auto> search_options) {
+        if (!(where_cond instanceof hash<DataProviderExpression>)) {
+            return {"pushdown": where_cond, "client": NOTHING};
+        }
+        hash<auto> split = AbstractDataProvider::splitPushdownableExpression(
+            cast<hash<DataProviderExpression>>(where_cond), table.getExpressionMap());
+        if (exists split.client && !search_options.allow_client_side_filter) {
+            throw "CLIENT-SIDE-FILTER-DISABLED", sprintf(
+                "operator(s) in the search predicate have no native SQL implementation for database driver %y; "
+                "set search option allow_client_side_filter to True to evaluate the residual predicate on returned "
+                "rows, or rewrite the predicate using native operators", table.getDatasource().getDriverName());
+        }
+        return split;
+    }
+
+    #! Returns a read iterator after splitting any residual expression
+    private AbstractDataProviderRecordIterator<hash<auto>> getReadIterator(*hash<auto> where_cond,
+            *hash<auto> search_options) {
+        return getReadIteratorFromSplit(getReadExpressionSplit(where_cond, search_options), search_options);
+    }
+
+    #! Returns a read iterator from an already split expression
+    private AbstractDataProviderRecordIterator<hash<auto>> getReadIteratorFromSplit(hash<auto> split,
+            *hash<auto> search_options) {
+        hash<auto> public_options = search_options - "allow_client_side_filter";
+        if (!exists split.client) {
+            return new DbTableRecordIterator(table, split.pushdown, public_options);
+        }
+
+        if (exists public_options.groupby || exists public_options.having) {
+            throw "CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED",
+                "groupby and having search options cannot be combined with a client-side residual filter";
+        }
+        if (exists public_options.columns) {
+            foreach auto column in (public_options.columns) {
+                if (column.typeCode() != NT_STRING) {
+                    throw "CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED",
+                        "computed column expressions cannot be combined with a client-side residual filter";
+                }
+            }
+        }
+
+        # Paging, projections, and result-count constraints must apply after the residual predicate. Query all
+        # columns so the client expression has every field it may reference.
+        hash<auto> native_options = public_options - ("columns", "limit", "offset", "requires_result", "max_records");
+        DbTableRecordIterator native_iter(table, split.pushdown, native_options);
+        return new DefaultRecordIterator<hash<auto>>(native_iter, split.client, public_options,
+            table.getRecordType(), NOTHING, NOTHING);
+    }
+
+    #! Returns expression info annotated with native pushdown capability
+    private hash<string, hash<DataProviderExpressionInfo>> getTableExpressionInfo() {
+        return cast<hash<string, hash<DataProviderExpressionInfo>>>(
+            map {
+                $1.key: cast<hash<DataProviderExpressionInfo>>(
+                    $1.value.exp + {"supports_pushdown": exists $1.value.code})
+            }, table.getExpressionMap().pairIterator()
+        );
     }
 
     #! Updates a single record matching the search options
@@ -621,11 +744,19 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private bool updateSingleRecordImpl(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
-        int rows = updateRecordsImpl(set, where_cond, search_options);
+        DbOperationTransactionHelper trans(table);
+        AbstractSavepointHelper sp = table.getSavepointHelper();
+        int rows;
+        try {
+            rows = table.update(set, where_cond);
+        } catch (hash<ExceptionInfo> ex) {
+            sp.rollback();
+            rethrow;
+        }
         if (rows > 1) {
-            bool in_trans = table.getDatasource().currentThreadInTransaction();
-            throw "UPDATE-SINGLE-RECORD-ERROR", sprintf("%d record(s) were updated; %ssearch args: %y (set: %y)", rows,
-                (!in_trans ? "the update has been rolled back; " : ""), search_options, set);
+            sp.rollback();
+            throw "UPDATE-SINGLE-RECORD-ERROR", sprintf("%d records matched; the update has been rolled back; "
+                "search args: %y (set: %y)", rows, search_options, set);
         }
         return rows.toBool();
     }
@@ -641,8 +772,26 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
-        DbTableTransactionHelper db(table);
-        return db.update(set, where_cond);
+        *int max_records = search_options.max_records;
+        if (max_records > 0) {
+            DbOperationTransactionHelper trans(table);
+            AbstractSavepointHelper sp = table.getSavepointHelper();
+            int rows;
+            try {
+                rows = table.update(set, where_cond);
+            } catch (hash<ExceptionInfo> ex) {
+                sp.rollback();
+                rethrow;
+            }
+            if (rows > max_records) {
+                sp.rollback();
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded by an update affecting %d records; the update has been rolled back", max_records, rows);
+            }
+            return rows;
+        }
+        DbOperationTransactionHelper trans(table);
+        return table.update(set, where_cond);
     }
 
     #! Deletes zero or more records
@@ -658,8 +807,26 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         this call
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
-        DbTableTransactionHelper db(table);
-        return db.del(where_cond);
+        *int max_records = search_options.max_records;
+        if (max_records > 0) {
+            DbOperationTransactionHelper trans(table);
+            AbstractSavepointHelper sp = table.getSavepointHelper();
+            int rows;
+            try {
+                rows = table.del(where_cond);
+            } catch (hash<ExceptionInfo> ex) {
+                sp.rollback();
+                rethrow;
+            }
+            if (rows > max_records) {
+                sp.rollback();
+                throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                    "exceeded by a delete affecting %d records; the delete has been rolled back", max_records, rows);
+            }
+            return rows;
+        }
+        DbOperationTransactionHelper trans(table);
+        return table.del(where_cond);
     }
 
     #! Returns data provider static info
@@ -710,15 +877,25 @@ public class DbTableDataProvider inherits DbDataProviderBase {
         hash<auto> align_opts;
         if (name != field.getName()) {
             if (table_desc.columns{field.getName()}) {
-                throw "UPDATE-FIELD-ERROR", sprintf("new field %y alread exists in %y", field.getName(),
+                throw "UPDATE-FIELD-ERROR", sprintf("new field %y already exists in %y", field.getName(),
                     table.getName());
+            }
+            AbstractDataProviderType old_type = table.getRecordType(){name}.getType();
+            AbstractDataProviderType new_type = field.getType();
+            if (old_type.getBaseTypeCode() == new_type.getBaseTypeCode()
+                    && old_type.isOrNothingType() == new_type.isOrNothingType()
+                    && old_type.getOptions() == new_type.getOptions()) {
+                # A logical rename must not implicitly remap an existing vendor-native type (for example SQLite
+                # TEXT to VARCHAR). Preserve its physical definition while applying nullable/default/comment changes.
+                col = cast<hash<GenericColumnInfo>>(table_desc.columns{name}
+                    + col{"default_value", "notnull", "comment"});
             }
             remove table_desc.columns{name};
             align_opts.column_map{name} = field.getName();
         }
         table_desc.columns{field.getName()} = col;
 
-        alignTable(table_desc);
+        alignTable(table_desc, align_opts);
     }
 
     #! Deletes an existing field
@@ -744,11 +921,11 @@ public class DbTableDataProvider inherits DbDataProviderBase {
     }
 
     #! Align table with the given description
-    private alignTable(hash<auto> table_desc) {
+    private alignTable(hash<auto> table_desc, *hash<auto> align_opts) {
         AbstractTable new_table = AbstractTable::getTable(table.getDatasource(), table.getName());
         new_table.setupTable(table_desc);
 
-        if (*list<auto> sqll = table.getAlignSql(new_table)) {
+        if (*list<auto> sqll = table.getAlignSql(new_table, align_opts)) {
             execDdlSql(sqll);
         }
     }

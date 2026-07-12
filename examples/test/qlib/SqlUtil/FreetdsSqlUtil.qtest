@@ -372,9 +372,14 @@ class FreetdsTest inherits SqlTestBase {
                 "d": {"native_type": "datetime2", "notnull": True},
                 "v": {"qore_type": Type::String, "size": 20},
             },
-            "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d")},
-            "indexes": {"mssql_partition_test_aligned_uk": {"columns": ("d", "id"), "unique": True}},
-            "unique_constraints": {"mssql_partition_test_aligned_uc": {"columns": ("d", "v")}},
+            "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d"),
+                "partition_aligned": True},
+            "indexes": {"mssql_partition_test_aligned_uk": {
+                "columns": ("d", "id"), "unique": True, "partition_aligned": True,
+            }},
+            "unique_constraints": {"mssql_partition_test_aligned_uc": {
+                "columns": ("d", "v"), "partition_aligned": True,
+            }},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
                 "p1": {"name": "p1", "bound_from": "2026-01-01", "bound_to": "2026-02-01"},

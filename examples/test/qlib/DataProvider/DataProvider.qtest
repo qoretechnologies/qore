@@ -676,6 +676,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         addTestCase("expression tests", \expressionTests());
         addTestCase("get display name", \getDisplayNameTest());
+        addTestCase("action option example determinism", \actionOptionExampleDeterminismTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
         addTestCase("pending app module context", \pendingAppModuleContextTest());
@@ -711,6 +712,18 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+
+        hash<DataProviderExpression> where_cond = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderFieldReference>{"field": "id"},
+                1,
+            ),
+        };
+        DefaultRecordIterator<hash<TypedRecordIteratorRow>> filtered(new TypedRecordIterator(), where_cond);
+        assertTrue(filtered.next());
+        assertEq(1, filtered.getValue().id);
+        assertFalse(filtered.next());
     }
 
     processorShapeApiTest() {
@@ -1008,6 +1021,88 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("Create TPS Reports", AbstractDataField::getDisplayName("createTPSReports"));
         assertEq("Create TPS Reports", AbstractDataField::getDisplayName("CreateTPSReports"));
         assertEq("FBI Code", AbstractDataField::getDisplayName("FBICode"));
+    }
+
+    actionOptionExampleDeterminismTest() {
+        hash<auto> implicit_example_field = {
+            "timestamp": {
+                "type": DateOrNothingType,
+                "display_name": "Timestamp",
+                "short_desc": "Timestamp",
+                "desc": "Timestamp",
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> implicit_options_a =
+            DataProviderActionCatalog::getActionOptionFromFields(implicit_example_field);
+        hash<string, hash<ActionOptionInfo>> implicit_options_b =
+            DataProviderActionCatalog::getActionOptionFromFields(implicit_example_field);
+        assertFalse(implicit_options_a.timestamp.hasKey("example_value"),
+            "raw fields do not acquire a generated example value");
+        assertFalse(implicit_options_b.timestamp.hasKey("example_value"),
+            "repeated conversion does not acquire a generated example value");
+
+        date example_a = 2026-01-02T03:04:05Z;
+        date example_b = 2027-02-03T04:05:06Z;
+        hash<auto> explicit_example_field_a = implicit_example_field + {
+            "timestamp": implicit_example_field.timestamp + {
+                "example_value": example_a,
+            },
+        };
+        hash<auto> explicit_example_field_b = implicit_example_field + {
+            "timestamp": implicit_example_field.timestamp + {
+                "example_value": example_b,
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> explicit_options_a =
+            DataProviderActionCatalog::getActionOptionFromFields(explicit_example_field_a);
+        hash<string, hash<ActionOptionInfo>> explicit_options_b =
+            DataProviderActionCatalog::getActionOptionFromFields(explicit_example_field_b);
+        assertEq(example_a, explicit_options_a.timestamp.example_value,
+            "explicit raw-field examples are preserved");
+        assertEq(example_b, explicit_options_b.timestamp.example_value,
+            "different explicit raw-field examples are preserved");
+
+        string app = "option-example-" + get_random_string();
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Option Example Test",
+            "short_desc": "Option example test",
+            "desc": "Tests deterministic action option examples",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        hash<DataProviderActionInfo> implicit_action = <DataProviderActionInfo>{
+            "app": app,
+            "action": "implicit-example",
+            "path": "/implicit-example",
+            "display_name": "Implicit Example",
+            "short_desc": "Implicit example",
+            "desc": "Implicit example",
+            "action_code": DPAT_API,
+            "options": implicit_options_a,
+        };
+        DataProviderActionCatalog::registerAction(implicit_action);
+        implicit_action.options = implicit_options_b;
+        DataProviderActionCatalog::registerAction(implicit_action);
+
+        hash<DataProviderActionInfo> explicit_action = <DataProviderActionInfo>{
+            "app": app,
+            "action": "explicit-example",
+            "path": "/explicit-example",
+            "display_name": "Explicit Example",
+            "short_desc": "Explicit example",
+            "desc": "Explicit example",
+            "action_code": DPAT_API,
+            "options": explicit_options_a,
+        };
+        DataProviderActionCatalog::registerAction(explicit_action);
+        explicit_action.options = explicit_options_b;
+        assertThrows("ACTION-ERROR", \DataProviderActionCatalog::registerAction(), explicit_action);
     }
 
     actionCatalogTests() {
@@ -3161,6 +3256,30 @@ public class DataProviderTest inherits QUnit::Test {
             list<auto> records = ({"a": 1, "b": "x"}, {"a": 2, "b": "y"});
             hash<auto> hl = AbstractDataProcessor::recordsToHashList(records);
             assertEq({"a": (1, 2), "b": ("x", "y")}, hl);
+        }
+
+        # Reject heterogeneous rows before their values can be shifted into another record
+        {
+            list<auto> records = ({"id": 1}, {"id": 2, "value": "belongs-to-row-2"});
+            assertThrows("PROCESSOR-SHAPE-ERROR", "record 2/2 has a different field set",
+                \AbstractDataProcessor::recordsToHashList(), (records,));
+        }
+
+        # Hash key order is not significant; output order follows the first record
+        {
+            list<auto> records = ({"id": 1, "value": "a"}, {"value": "b", "id": 2});
+            assertEq({"id": (1, 2), "value": ("a", "b")}, AbstractDataProcessor::recordsToHashList(records));
+        }
+
+        # Reject jagged column blocks while retaining scalar broadcast values
+        {
+            assertThrows("PROCESSOR-SHAPE-ERROR", "field \"value\" has 1 values",
+                sub () {
+                    AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "value": ("a",)},
+                        DataProviderShape::HashOfLists);
+                });
+            assertEq(2, AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "tenant": "acme"},
+                DataProviderShape::HashOfLists));
         }
 
         # Test hashListToRecords and recordsToHashList round-trip

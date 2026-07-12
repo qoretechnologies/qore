@@ -387,7 +387,7 @@ map printf("+ %y\n", $1), v.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <value>::iterator() [flags=CONSTANT] {
-    return qore_new_single_value_iterator_object(0, v);
+    return qore_new_single_value_iterator_object(getProgram(), v);
 }
 
 //! Returns @ref True if the type can return a non-zero size (@ref True for containers including @ref binary "binary objects" and @ref string "strings", @ref False for everything else)

@@ -351,7 +351,7 @@ AbstractIterator <buffer>::iterator() [const;flags=RET_VALUE_ONLY] {
    ReferenceHolder<QoreListNode> l(b->toList(xsink), xsink);
    if (*xsink)
       return QoreValue();
-   return qore_new_list_iterator_object(0, *l);
+   return qore_new_list_iterator_object(getProgram(), *l);
 }
 
 //! Returns the sum of valid buffer values

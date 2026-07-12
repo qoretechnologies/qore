@@ -58,6 +58,12 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c opclass: (@ref hash_type) per-column operator class (PostgreSQL only), mapping column name
               to operator class name (e.g. \c {"embedding": "vector_cosine_ops"}); throws
               \c INDEX-OPTION-ERROR on drivers that do not support it
+            - \c partition_aligned: (@ref bool_type) if @ref True "True", requires the index (or the
+              supporting index for a primary key or unique constraint) to be physically aligned with the table's
+              partitioning.  The table must be partitioned, and a unique aligned key must contain every partition
+              key column.  Drivers map this portable intent to their native representation (for example an Oracle
+              \c LOCAL index or a SQL Server index on the table's partition scheme); on PostgreSQL and MySQL this
+              confirms the inherent partition-local behavior of indexes on partitioned tables
         */
         const hash<auto> IndexOptions = {
             "index_tablespace": Type::String,
@@ -65,6 +71,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "method": Type::String,
             "with": Type::Hash,
             "opclass": Type::Hash,
+            "partition_aligned": Type::Boolean,
         };
 
         #! default constraint options
@@ -1733,7 +1740,7 @@ string sql = table.getRenameColumnSql("name", "family_name");
         string old_name = c.name;
 
         # rename column after database is updated
-        c.name = new_name;
+        c.setDdlName(new_name);
 
         # replaces the column in the internal column representation with the new definition
         columns.renameKey(old_name, new_name);
@@ -1882,6 +1889,8 @@ printf("%s;\n", sql);
             ch{v} = columns{v};
         }
 
+        preparePartitionAlignedOptionsUnlocked("CONSTRAINT-OPTION-ERROR", "primary key", pkname, True, ch, \opt);
+
         # get the new primary key object
         AbstractPrimaryKey pk = addPrimaryKeyImpl(pkname, ch, opt);
 
@@ -1889,7 +1898,10 @@ printf("%s;\n", sql);
         pk.findMatchingIndex(indexes);
 
         # add pk to table if the table already exists in the DB
-        sql = pk.getCreateSql(getSqlName());
+        if (opt.partition_aligned) {
+            prepareCreateSqlOptionsImpl(\opt);
+        }
+        sql = pk.getCreateSql(getSqlName(), opt);
 
         return pk;
     }
@@ -2145,6 +2157,9 @@ printf("%s;\n", sql);
             ch{v} = columns{v};
         }
 
+        preparePartitionAlignedOptionsUnlocked("CONSTRAINT-OPTION-ERROR", "unique constraint", cname, True, ch,
+            \opt);
+
         # get the new constraint object
         AbstractUniqueConstraint c = addUniqueConstraintImpl(cname, ch, opt);
 
@@ -2152,7 +2167,10 @@ printf("%s;\n", sql);
         c.findMatchingIndex(indexes);
 
         # add foreign constraint to table in the DB if the table already exists in the DB
-        sql = c.getCreateSql(getSqlName());
+        if (opt.partition_aligned) {
+            prepareCreateSqlOptionsImpl(\opt);
+        }
+        sql = c.getCreateSql(getSqlName(), opt);
 
         # return the new constraint
         return c;
@@ -2279,10 +2297,15 @@ printf("%s;\n", sql);
         hash<auto> ixopt = getIndexOptions();
         validateOptionsIntern("INDEX-ERROR", ixopt, \opt);
 
+        preparePartitionAlignedOptionsUnlocked("INDEX-OPTION-ERROR", "index", iname, unique, ch, \opt);
+
         # get the new index object
         AbstractIndex ix = addIndexImpl(iname, unique, ch, opt);
 
         # add index to table in the DB if the table already exists in the DB
+        if (opt.partition_aligned) {
+            prepareCreateSqlOptionsImpl(\opt);
+        }
         sql = ix.getCreateSql(getSqlName(), opt);
 
         # return the new index
@@ -9138,6 +9161,37 @@ string sql = table.getCreateTableSql();
         }
     }
 
+    #! validates and normalizes the portable partition-aligned index option
+    /** A partition-aligned non-unique index need not include the partition key on every backend, but every
+        supported backend requires an aligned unique key to contain all partition columns.  Keeping this invariant
+        here gives callers deterministic validation before any driver DDL is generated.
+
+        @since SqlUtil 3.0.0
+    */
+    private preparePartitionAlignedOptionsUnlocked(string err, string object_kind, string object_name, bool unique,
+            hash<auto> object_columns, reference<hash<auto>> opt) {
+        if (!opt.partition_aligned) {
+            return;
+        }
+
+        *hash<PartitionStrategy> strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            throw err, sprintf("%s: partition-aligned %s %y requires a partitioned table", getDesc(), object_kind,
+                object_name);
+        }
+
+        if (unique) {
+            hash<string, bool> pch = map {$1: True}, getAllPartitionKeyColumnsUnlocked(strategy);
+            *hash<string, bool> missing = pch - object_columns.keys();
+            if (missing) {
+                throw err, sprintf("%s: partition-aligned %s %y must include partition key column(s): %y",
+                    getDesc(), object_kind, object_name, missing.keys());
+            }
+        }
+
+        preparePartitionAlignedOptionsImpl(err, object_kind, object_name, unique, object_columns, \opt);
+    }
+
     private softlist<string> getAllPartitionKeyColumnsUnlocked(hash<PartitionStrategy> strategy) {
         hash<string, bool> seen;
         list<string> rv = ();
@@ -10108,21 +10162,21 @@ list<auto> l = table.getAlignSql(table2);
             l += AbstractDatabase::doCallback(opt, c.getRenameSql(self, value), AbstractDatabase::AC_Rename,
                 "column", c.name, name, value);
             columns.renameKey(key, value);
-            c.name = value;
+            c.setDdlName(value);
 
             # rename column in indexes
             foreach AbstractIndex ix in (indexes.iterator()) {
                 if (ix.columns.hasKey(key)) {
                     #printf("%s.%s: col %y %Y\n", getName(), ix.name, key, ix.columns);
                     AbstractColumn rc = ix.columns{key};
-                    rc.name = value;
+                    rc.setDdlName(value);
                     ix.columns.renameKey(key, value);
                 }
             }
             # rename column in pk
             if (primaryKey.hasKey(key)) {
                 AbstractColumn rc = primaryKey{key};
-                rc.name = value;
+                rc.setDdlName(value);
                 primaryKey.renameKey(key, value);
             }
             # rename column in unique constraints
@@ -10131,7 +10185,7 @@ list<auto> l = table.getAlignSql(table2);
                     AbstractUniqueConstraint uk = ct;
                     if (uk.hasKey(key)) {
                         AbstractColumn rc = uk{key};
-                        rc.name = value;
+                        rc.setDdlName(value);
                         uk.renameKey(key, value);
                     }
                 }
@@ -10140,7 +10194,7 @@ list<auto> l = table.getAlignSql(table2);
             foreach AbstractForeignConstraint fk in (foreignConstraints.iterator()) {
                 if (fk.hasKey(key)) {
                     AbstractColumn rc = fk{key};
-                    rc.name = value;
+                    rc.setDdlName(value);
                     fk.renameKey(key, value);
                 }
             }
@@ -11680,6 +11734,17 @@ on_exit printf("SQL> %s\n", sql);
         @since SqlUtil 3.0.0
     */
     private prepareCreateSqlOptionsImpl(reference<hash<auto>> opt) {
+    }
+
+    #! maps the portable partition-aligned option to any driver-specific index or constraint options
+    /** Common table-state and unique-key validation has already completed when this hook is called.  Drivers only
+        need to translate the physical representation; drivers whose indexes are inherently partition-local do not
+        need to override it.
+
+        @since SqlUtil 3.0.0
+    */
+    private preparePartitionAlignedOptionsImpl(string err, string object_kind, string object_name, bool unique,
+            hash<auto> object_columns, reference<hash<auto>> opt) {
     }
 
     #! returns @ref True "True" if every PK and unique key must contain all partition columns

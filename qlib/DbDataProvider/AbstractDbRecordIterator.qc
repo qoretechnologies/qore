@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDbRecordIterator class definition
 
-/** AbstractDbRecordIterator.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDbRecordIterator.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,7 +41,7 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
     */
     constructor(bool release_transaction, AbstractSQLStatement stmt, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result,
-                search_options.max_records) {
+                search_options.max_records, search_options.limit) {
         self.release_transaction = release_transaction;
         self.stmt = stmt;
     }
@@ -91,8 +91,15 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
 
         @note This object cannot be used after this call
     */
-    *AbstractDataProviderBulkRecordInterface getBulkApi(*int block_size = DefaultBlockSize) {
-        return new DbSelectBulkRecordInterface(block_size, remove release_transaction, remove stmt);
+    *AbstractDataProviderBulkRecordInterface getBulkApi(int block_size = DefaultBlockSize) {
+        if (!stmt) {
+            throw "INVALID-ITERATOR", "This object was already invalidated when a bulk iterator was created from it";
+        }
+        if (block_size <= 0) {
+            throw "INVALID-BLOCK-SIZE", sprintf("block_size %d is invalid; the block size must be positive", block_size);
+        }
+        return new DbSelectBulkRecordInterface(block_size, remove release_transaction, remove stmt, requiresResult(),
+            getMaxRecords(), getLimit());
     }
 
     #! Increments the row pointer when retrieving rows from a select statement
@@ -103,7 +110,15 @@ public class AbstractDbRecordIterator inherits AbstractDataProviderRecordIterato
         docs for more information
     */
     private bool nextImpl() {
-        return stmt.next();
+        if (!stmt) {
+            throw "INVALID-ITERATOR", "This object was invalidated when a bulk iterator was created from it";
+        }
+        bool result = stmt.next();
+        if (!result && release_transaction) {
+            stmt.rollback();
+            release_transaction = False;
+        }
+        return result;
     }
 }
 }

@@ -273,6 +273,9 @@ class MysqlTest inherits SqlTestBase {
                 "v": {"qore_type": Type::String, "size": 20},
             },
             "primary_key": {"name": "mysql_partition_test_pk", "columns": ("id", "d")},
+            "indexes": {
+                "mysql_partition_test_v_idx": {"columns": "v", "partition_aligned": True},
+            },
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
                 "p1": {"name": "p1", "bound_sql": "values less than ('2026-02-01 00:00:00')"},
@@ -344,6 +347,8 @@ class MysqlTest inherits SqlTestBase {
         assertEq("range", strategy.method);
         assertEq(1, strategy.columns.size());
         assertEq("d", strategy.columns[0]);
+        assertTrue(rt.getIndexes().hasKey("mysql_partition_test_v_idx"),
+            "portable aligned index is materialized with MySQL's inherent partition-local storage");
 
         hash<string, PartitionInfo> parts = rt.listPartitions();
         assertEq(2, parts.size());

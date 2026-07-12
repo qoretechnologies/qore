@@ -1926,6 +1926,13 @@ public class DataProviderActionCatalog {
                     "element_allowed_values_creatable"} + {
                     "type": i.value.getType(),
                 };
+                # Raw field definitions only expose explicitly configured example values. QoreDataField
+                # synthesizes examples from the field type, and temporal types use the current time; retaining
+                # those generated values makes otherwise identical action definitions compare unequal when they
+                # are registered more than once.
+                if (raw_info && !exists raw_info.example_value) {
+                    remove i.value.example_value;
+                }
                 # remove missing attributes
                 map remove i.value{$1.key}, i.value.pairIterator(), !exists $1.value;
                 if (info.attr.ref_data.val()) {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProviderBulkRecordInterface class definition
 
-/** AbstractDataProviderBulkRecordInterface.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProviderBulkRecordInterface.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,9 +62,14 @@ public class AbstractDataProviderBulkRecordInterface {
         number of records is exceeded
         @param limit an optional limit on the number of records to return
 
+        @throw INVALID-BLOCK-SIZE a block_size is not positive
+
         @since DataProvider 3.3
     */
     constructor(int block_size, *bool requires_result, *int max_records, *int limit) {
+        if (block_size <= 0) {
+            throw "INVALID-BLOCK-SIZE", sprintf("block_size %d is invalid; the block size must be positive", block_size);
+        }
         if (max_records && (block_size > (max_records + 1))) {
             block_size = max_records + 1;
         }

@@ -1733,6 +1733,8 @@ foreach string module_name in (registry.getProcessModules()) {
         with schema-description round-trip for PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server; lifecycle APIs
         include SQL generators, transaction-managing variants, callback support, deterministic concurrent-create
         handling, and driver-aware key validation
+      - added a portable \c partition_aligned option for indexes, primary keys, and unique constraints, mapping
+        application-level partition alignment to native local/aligned index placement without driver-specific DDL
       - added Oracle local/global partitioned index and constraint placement with tablespace and statistics options
       - added reusable table storage-shape validation and no-data-movement partition exchange APIs for Oracle
         \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION, with exact datasource identity and an

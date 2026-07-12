@@ -34,7 +34,10 @@ public const string UpsertResultInserted = "inserted";
 #! Indicates that the record was updated
 public const string UpsertResultUpdated = "updated";
 
-#! Indicates that the record was verified as already in the target state
+#! Indicates that the upsert completed without distinguishing insertion from an unconditional update
+/** Optimized database implementations can return this result when the final row state is verified but the backend
+    does not expose whether the row was inserted or updated.
+*/
 public const string UpsertResultVerified = "verified";
 
 #! Indicates that the record was left unchanged
@@ -770,6 +773,14 @@ public hashdecl DataProviderExpressionInfo {
     /** @see @ref expression_role_codes
     */
     int role = ER_All;
+
+    #! Whether the expression can be pushed down to the provider backend
+    /** Set to @ref False for expressions that are available for generic client-side evaluation but have no native
+        backend implementation in the current provider context.
+
+        @since DataProvider 3.5
+    */
+    bool supports_pushdown = True;
 
     #! Any template to render the expression
     /** Placeholders are:
@@ -1998,9 +2009,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 "display_name": "Max Records",
                 "short_desc": "The maximum number of records to return or to affect",
                 "desc": "The maximum number of records to return or to affect; if more records are returned or "
-                    "affected, the operation results in an error; for data provider supporting transactions; this "
-                    "will normally result in a transaction rollback if a transaction is in progress. This option is "
-                    "noormally enforced externally from the server interfaced by the data provider",
+                    "affected, the operation results in an error; for data providers supporting transactions, this "
+                    "normally results in the mutation being rolled back. The framework verifies affected counts, and "
+                    "providers can additionally enforce the limit transactionally",
                 "type": AbstractDataProviderTypeMap."int",
             },
             "offset": <DataProviderOptionInfo>{
@@ -2896,6 +2907,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record updating
         @throw UPDATE-RECORDS-ERROR error updating records
+        @throw UPDATE-SINGLE-RECORD-ERROR more than one record matched the update
 
         @since DataProvider 3.3
     */
@@ -2919,7 +2931,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkUpdate();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR") {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
+                    && $1.err != "UPDATE-SINGLE-RECORD-ERROR") {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
@@ -2936,12 +2949,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record updating
         @throw UPDATE-RECORDS-ERROR error updating records
+        @throw UPDATE-SINGLE-RECORD-ERROR more than one record matched the update
     */
     bool updateSingleRecord(hash<auto> set, hash<auto> where_cond, *hash<auto> search_options) {
         checkUpdate();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR") {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
+                    && $1.err != "UPDATE-SINGLE-RECORD-ERROR") {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
@@ -2956,6 +2971,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record updating
         @throw UPDATE-RECORDS-ERROR error updating records
+        @throw MAX-RECORDS-EXCEEDED more than c max_records records were affected
 
         @since DataProvider 3.3
     */
@@ -2996,12 +3012,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkUpdate();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR") {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
+                    && $1.err != "MAX-RECORDS-EXCEEDED") {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
             processSearchParameters(where_cond, search_options), search_options);
+        checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
         }
@@ -3018,17 +3036,20 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record updating
         @throw UPDATE-RECORDS-ERROR error updating records
+        @throw MAX-RECORDS-EXCEEDED more than c max_records records were affected
     */
     int updateRecords(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
         checkUpdate();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR") {
+            if ($1.err != "DUPLICATE-RECORD" && $1.err != "UPDATE-RECORDS-ERROR"
+                    && $1.err != "MAX-RECORDS-EXCEEDED") {
                 rethrow "UPDATE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
         int rc = updateRecordsImpl(processFieldValues(set, search_options),
             getSearchExpression(where_cond, search_options), search_options);
+        checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "UPDATE-RECORDS-ERROR", "no records updated but 'requires_result' is True";
         }
@@ -3041,6 +3062,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record deletion
         @throw DELETE-RECORDS-ERROR error deleting records
+        @throw MAX-RECORDS-EXCEEDED more than c max_records records were affected
 
         @since DataProvider 3.3
     */
@@ -3081,11 +3103,12 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         checkDelete();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DELETE-RECORDS-ERROR") {
+            if ($1.err != "DELETE-RECORDS-ERROR" && $1.err != "MAX-RECORDS-EXCEEDED") {
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
         int rc = deleteRecordsImpl(processSearchParameters(where_cond, search_options), search_options);
+        checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
         }
@@ -3102,20 +3125,31 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
         @throw INVALID-OPERATION the data provider does not support record deletion
         @throw DELETE-RECORDS-ERROR error deleting records
+        @throw MAX-RECORDS-EXCEEDED more than c max_records records were affected
     */
     int deleteRecords(*hash<auto> where_cond, *hash<auto> search_options) {
         checkDelete();
         search_options = validateSearchOptions(search_options);
         on_error {
-            if ($1.err != "DELETE-RECORDS-ERROR") {
+            if ($1.err != "DELETE-RECORDS-ERROR" && $1.err != "MAX-RECORDS-EXCEEDED") {
                 rethrow "DELETE-RECORDS-ERROR", sprintf("%s: %s", $1.err, $1.desc), $1.arg;
             }
         }
         int rc = deleteRecordsImpl(getSearchExpression(where_cond, search_options), search_options);
+        checkAffectedRecordCount(rc, search_options);
         if (!rc && search_options.requires_result) {
             throw "DELETE-RECORDS-ERROR", "no records deleted but 'requires_result' is True";
         }
         return rc;
+    }
+
+    #! Enforces max_records for record mutation APIs
+    private checkAffectedRecordCount(int affected, *hash<auto> search_options) {
+        *int max_records = search_options.max_records;
+        if (exists max_records && max_records > 0 && affected > max_records) {
+            throw "MAX-RECORDS-EXCEEDED", sprintf("The maximum number of records (max_records = %d) has been "
+                "exceeded by a mutation affecting %d records", max_records, affected);
+        }
     }
 
     #! Makes a request and returns the response
@@ -5103,6 +5137,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Creates records from a shaped block, preserving native columnar input for providers that support it
     private *hash<auto> createRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> create_options) {
+        if (shape == DataProviderShape::RowRecords && recs.typeCode() == NT_LIST) {
+            return createRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), create_options);
+        }
+        AbstractDataProcessor::validateShapeRecordCount(recs, shape);
         if (shape != DataProviderShape::HashOfLists && supportsBulkCreateShape(shape)) {
             return createRecordsShapeImpl(recs, shape, create_options);
         }
@@ -5111,6 +5149,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Upserts records from a shaped block, preserving native columnar input for providers that support it
     private *list<string> upsertRecordsShapeIntern(auto recs, DataProviderShape shape, *hash<auto> upsert_options) {
+        if (shape == DataProviderShape::RowRecords && recs.typeCode() == NT_LIST) {
+            return upsertRecordsBulkIntern(shapedRecordsToHashOfLists(recs, shape), upsert_options);
+        }
+        AbstractDataProcessor::validateShapeRecordCount(recs, shape);
         if (shape != DataProviderShape::HashOfLists && supportsBulkUpsertShape(shape)) {
             return upsertRecordsShapeImpl(recs, shape, upsert_options);
         }

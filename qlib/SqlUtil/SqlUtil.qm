@@ -115,6 +115,11 @@ module SqlUtil {
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
     @subsection sqlutilv3_0_0 SqlUtil v3.0.0
+    - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
+      quoted DDL names synchronized after column renames, allowing a rename and a definition change in one alignment
+      operation
+    - corrected the expression metadata for \c contains, \c startsWith, and \c endsWith so the optional
+      case-insensitive argument and its default case-sensitive behavior match the implementation
     - fixed the advanced-expression \c "in" and \c "not in" operators to bind each value to its own
       placeholder; previously a \c (field, list) value list was bound to a single placeholder, which
       failed or silently mismatched on backends without native list-bind support (for example numeric
@@ -136,6 +141,9 @@ module SqlUtil {
     - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
       lifecycle APIs for range-partitioned tables; driver support is advertised by
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
+    - added the portable \c partition_aligned index and unique-constraint option; it validates partitioned table
+      state and complete unique partition keys centrally and maps to native partition-local/aligned indexes without
+      requiring application code to contain driver-specific DDL options
     - added storage-shape validation and partition exchange APIs with equivalent empty-target semantics for
       Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
     - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state
@@ -6106,11 +6114,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "contains",
                 "short_desc": "Returns True if the string contains the given substring",
                 "desc": "Returns True if the first argument contains the second as a substring; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "contains",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6131,11 +6139,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "starts with",
                 "short_desc": "Returns True if the string starts with the given characters",
                 "desc": "Returns True if the first argument starts with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "startsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6156,11 +6164,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "ends with",
                 "short_desc": "Returns True if the string ends with the given characters",
                 "desc": "Returns True if the first argument ends with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "endsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -8148,6 +8156,21 @@ AbstractColumn c = cols.id;
             ddl_name = getDdlName(name);
         }
 
+        #! Updates both the logical and quoted DDL names
+        /** @par Example:
+            @code{.py}
+column.setDdlName("order");
+            @endcode
+
+            @param name the new object name
+
+            @since %SqlUtil 3.0.0
+        */
+        setDdlName(string name) {
+            self.name = name;
+            ddl_name = getDdlName(name);
+        }
+
         #! returns the column name with quoting in case the column name is a reserved word
         /** the name returned here will be used when executing DDL
         */
@@ -8278,6 +8301,9 @@ list l = col.getModifySql(t, newcol);
             @return a list of sql strings that can be used to modify the column to the new definition; if the column definitions are identical then an empty list is returned
          */
         list<auto> getModifySql(AbstractTable t, AbstractColumn c, *hash<auto> opt) {
+            if (equal(c)) {
+                return ();
+            }
             list l = getModifySqlImpl(t, c, opt);
 
             # update existing rows with the new default column value if:
