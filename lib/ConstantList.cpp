@@ -349,7 +349,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
             typeInfo = val.getTypeInfo();
-        } else if (explicit_type && val && !val.needsEval()) {
+        } else if (explicit_type && val && !val.needsEval() && !pgm->parseExceptionRaised()) {
+            // only fold the value into the declared type when the declared type actually accepts the
+            // initializer expression; if the parse-time type check above already raised a PARSE-TYPE-ERROR,
+            // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
+            // same mismatch
             ExceptionSink type_xsink;
             QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink);
             if (!type_xsink) {
