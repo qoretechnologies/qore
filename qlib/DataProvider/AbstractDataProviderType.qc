@@ -321,6 +321,20 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         # not initialized here to workaround issue #4048 (circular initializtion error)
         static AbstractDataProviderType anyDataType;
 
+        #! Runtime cache of class-backed named types; a copy of @ref NamedClassBackedTypeMap
+        /** Populated by the module init closure (see DataProvider.qm) rather than initialized here, and read by
+            @ref get() instead of @ref NamedClassBackedTypeMap directly, to break a parse-time
+            constant-initialization cycle: get() is parse-initialized (to resolve its return type) while the
+            class-backed type constants are being folded - e.g. RgbColorDataType, a HashDataType subclass, runs
+            get() in its construction path (HashDataType member init + QoreDataField()).  A compile-time reference
+            to @ref NamedClassBackedTypeMap in get()'s body would force that map's value to be initialized while
+            one of the very constants it references is still in-init, which Qore's recursive-constant detector
+            flags nondeterministically depending on constant commit (file glob) order.  Reading this static
+            variable (assigned only at runtime, in the init closure) keeps get()'s body free of any compile-time
+            reference to the map.
+        */
+        static *hash<string, AbstractDataProviderType> NamedClassBackedTypeCache;
+
         #! Default description
         const string DefaultDesc = "no description available";
     }
@@ -883,8 +897,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return AbstractDataProviderType::get(t, options);
         }
         # class-backed named types (e.g. "file", "rgbcolor", "email", "uuid") live only in
-        # NamedClassBackedTypeMap, not DataTypeMap
-        if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{typename}) {
+        # NamedClassBackedTypeMap, not DataTypeMap; read the runtime cache (populated by the module init closure)
+        # rather than the constant to avoid a parse-time constant-initialization cycle (see NamedClassBackedTypeCache)
+        if (*AbstractDataProviderType adt = NamedClassBackedTypeCache{typename}) {
             return adt;
         }
         return AbstractDataProviderType::get(new Type(typename), options);
@@ -969,8 +984,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         *Type t = DataTypeMap{info.name};
         if (!t && info.name) {
             # class-backed named types (e.g. "file", "email") are not Qore reflection types; the name
-            # ("email" vs "*email") already encodes nullability
-            if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name}) {
+            # ("email" vs "*email") already encodes nullability; read the runtime cache (populated by the module
+            # init closure) rather than NamedClassBackedTypeMap to avoid a parse-time constant cycle (see
+            # NamedClassBackedTypeCache)
+            if (*AbstractDataProviderType adt = NamedClassBackedTypeCache{info.name}) {
                 return adt;
             }
             try {

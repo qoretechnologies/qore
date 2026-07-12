@@ -77,6 +77,11 @@ module DataProvider {
         # to workaround #4048 (circular initialization error)
         AbstractDataProviderType::anyDataType = new QoreDataType(AutoType);
 
+        # populate the runtime class-backed named-type cache read by AbstractDataProviderType::get(); assigned
+        # here (at runtime) rather than referenced directly in get() to break a parse-time constant-init cycle
+        # (see AbstractDataProviderType::NamedClassBackedTypeCache)
+        AbstractDataProviderType::NamedClassBackedTypeCache = NamedClassBackedTypeMap;
+
         # register the Qore processors data provider factory
         DataProvider::registerFactory(new QoreProcessorsDataProviderFactory());
 
