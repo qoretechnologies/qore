@@ -2330,8 +2330,128 @@ static bool interpreterNativeLeafInlineDisabled(QoreIRCallDirectInstruction::Nat
         case QoreIRCallDirectInstruction::NativeLeafKind::StringSize:
         case QoreIRCallDirectInstruction::NativeLeafKind::StringLength:
             return string_disabled;
+        case QoreIRCallDirectInstruction::NativeLeafKind::IntProgram: {
+            static const bool program_disabled =
+                std::getenv("QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE") != nullptr;
+            return int_disabled || program_disabled;
+        }
     }
     return true;
+}
+
+static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
+        const UserSignature* sig, unsigned num_params) {
+    if (!ir || !sig || !num_params || num_params > 2 || ir->blocks.size() < 2
+            || ir->blocks.size() > 8 || ir->all_body_locals.size() > 8
+            || sig->getReturnTypeInfo() != bigIntTypeInfo) {
+        return false;
+    }
+
+    std::unordered_set<const LocalVar*> locals;
+    for (unsigned i = 0; i < num_params; ++i) {
+        auto param_it = ir->param_local_vars.find(static_cast<int>(i));
+        const LocalVar* local = param_it == ir->param_local_vars.end() ? nullptr : param_it->second;
+        if (!local || local->closureUse() || QoreTypeInfo::isReference(local->getTypeInfo())
+                || local->getTypeInfo() != bigIntTypeInfo) {
+            return false;
+        }
+        locals.insert(local);
+    }
+    for (LocalVar* local : ir->all_body_locals) {
+        if (!local || local->closureUse() || QoreTypeInfo::isReference(local->getTypeInfo())
+                || local->getTypeInfo() != bigIntTypeInfo
+                || !ir->ir_only_locals.count(reinterpret_cast<const void*>(local))) {
+            return false;
+        }
+        locals.insert(local);
+    }
+
+    size_t instruction_count = 0;
+    for (size_t block_index = 0; block_index < ir->blocks.size(); ++block_index) {
+        const auto& block = ir->blocks[block_index];
+        if (!block) {
+            return false;
+        }
+        for (const auto& inst_ptr : block->instructions) {
+            if (!inst_ptr || ++instruction_count > 64 || inst_ptr->exception_target
+                    || (inst_ptr->result.isValid() && inst_ptr->result.id >= 128)) {
+                return false;
+            }
+            auto targetIsForward = [&](const QoreIRBasicBlock* target) {
+                for (size_t i = block_index + 1; i < ir->blocks.size(); ++i) {
+                    if (ir->blocks[i].get() == target) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            switch (inst_ptr->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                case QoreIROpcode::ConstInt:
+                case QoreIROpcode::AddInt:
+                case QoreIROpcode::SubInt:
+                case QoreIROpcode::MulInt:
+                case QoreIROpcode::ModInt:
+                case QoreIROpcode::MulAssignAny:
+                case QoreIROpcode::EqInt:
+                case QoreIROpcode::NeInt:
+                case QoreIROpcode::LtInt:
+                case QoreIROpcode::LeInt:
+                case QoreIROpcode::GtInt:
+                case QoreIROpcode::GeInt:
+                case QoreIROpcode::RefSelf:
+                    break;
+                case QoreIROpcode::LoadLocal:
+                case QoreIROpcode::StoreLocal:
+                case QoreIROpcode::UninstantiateLocal: {
+                    const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                    if (!local_inst->local || !locals.count(local_inst->local)
+                            || local_inst->is_closure || local_inst->is_ref
+                            || (inst_ptr->opcode == QoreIROpcode::StoreLocal && local_inst->weak)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::IncrementLocalInt: {
+                    const auto* increment =
+                        static_cast<const QoreIRIncrementLocalIntInstruction*>(inst_ptr.get());
+                    if (!increment->local || !locals.count(increment->local)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Br: {
+                    const auto* branch = static_cast<const QoreIRBranchInstruction*>(inst_ptr.get());
+                    if (!targetIsForward(branch->target)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::BrIf: {
+                    const auto* branch = static_cast<const QoreIRBranchIfInstruction*>(inst_ptr.get());
+                    if (!branch->condition.isValid() || branch->condition.id >= 128
+                            || !targetIsForward(branch->true_target)
+                            || !targetIsForward(branch->false_target)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Return: {
+                    const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                    if (!ret->has_value || !ret->value.isValid() || ret->value.id >= 128) {
+                        return false;
+                    }
+                    break;
+                }
+                default:
+                    return false;
+            }
+        }
+    }
+    return !interpreterNativeLeafInlineDisabled(
+        QoreIRCallDirectInstruction::NativeLeafKind::IntProgram);
 }
 
 static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, int nargs) {
@@ -2358,8 +2478,18 @@ static bool ensureInterpreterNativeLeafState(QoreIRCallDirectInstruction* inst, 
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     unsigned num_params = sig ? sig->numParams() : 0;
     if (!callee_ir || !sig || !num_params || num_params > 2
-            || nargs != static_cast<int>(num_params)
-            || callee_ir->blocks.size() != 1 || !callee_ir->blocks.front()
+            || nargs != static_cast<int>(num_params)) {
+        return reject();
+    }
+    if (callee_ir->blocks.size() != 1) {
+        if (!isInterpreterNativeIntProgram(callee_ir, sig, num_params)) {
+            return reject();
+        }
+        inst->native_leaf_kind = QoreIRCallDirectInstruction::NativeLeafKind::IntProgram;
+        inst->native_leaf_state.store(1, std::memory_order_release);
+        return true;
+    }
+    if (!callee_ir->blocks.front()
             || callee_ir->blocks.front()->instructions.size() > 16) {
         return reject();
     }
@@ -2654,6 +2784,215 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
     QoreValue arg_values[2];
     for (int i = 0; i < nargs; ++i) {
         arg_values[i] = fromBits(args[i]);
+    }
+    if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::IntProgram) {
+        const QoreIRFunction* ir = inst->cached_callee_ir;
+        const UserSignature* sig = inst->cached_uvb ? inst->cached_uvb->getUserSignature() : nullptr;
+        if (!ir || !sig) {
+            return false;
+        }
+        const LocalVar* locals[10]{};
+        int64_t local_values[10]{};
+        bool local_assigned[10]{};
+        size_t local_count = 0;
+        for (int i = 0; i < nargs; ++i) {
+            if (arg_values[i].getType() != NT_INT) {
+                return false;
+            }
+            auto param_it = ir->param_local_vars.find(i);
+            if (param_it == ir->param_local_vars.end() || !param_it->second) {
+                return false;
+            }
+            locals[local_count] = param_it->second;
+            local_values[local_count] = arg_values[i].getAsBigInt();
+            local_assigned[local_count++] = true;
+        }
+        for (LocalVar* local : ir->all_body_locals) {
+            bool duplicate = false;
+            for (size_t i = 0; i < local_count; ++i) {
+                duplicate |= locals[i] == local;
+            }
+            if (!duplicate) {
+                if (local_count == 10) {
+                    return false;
+                }
+                locals[local_count++] = local;
+            }
+        }
+        auto localIndex = [&](const LocalVar* local) -> int {
+            for (size_t i = 0; i < local_count; ++i) {
+                if (locals[i] == local) {
+                    return static_cast<int>(i);
+                }
+            }
+            return -1;
+        };
+        auto blockIndex = [&](const QoreIRBasicBlock* target) -> int {
+            for (size_t i = 0; i < ir->blocks.size(); ++i) {
+                if (ir->blocks[i].get() == target) {
+                    return static_cast<int>(i);
+                }
+            }
+            return -1;
+        };
+
+        int64_t values[128]{};
+        bool value_assigned[128]{};
+        size_t block_index = 0;
+        while (block_index < ir->blocks.size()) {
+            bool branched = false;
+            for (const auto& inst_ptr : ir->blocks[block_index]->instructions) {
+                const QoreIRInstruction* operation = inst_ptr.get();
+                auto readValue = [&](QoreIRValue value, int64_t& output) {
+                    if (!value.isValid() || value.id >= 128 || !value_assigned[value.id]) {
+                        return false;
+                    }
+                    output = values[value.id];
+                    return true;
+                };
+                auto writeResult = [&](int64_t value) {
+                    if (operation->result.isValid()) {
+                        values[operation->result.id] = value;
+                        value_assigned[operation->result.id] = true;
+                    }
+                };
+                switch (operation->opcode) {
+                    case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::DiscardTemps:
+                        break;
+                    case QoreIROpcode::ConstInt:
+                        writeResult(static_cast<const QoreIRConstInstruction*>(operation)->constant.int_value);
+                        break;
+                    case QoreIROpcode::LoadLocal: {
+                        int index = localIndex(static_cast<const QoreIRLocalInstruction*>(operation)->local);
+                        if (index < 0 || !local_assigned[index]) {
+                            return false;
+                        }
+                        writeResult(local_values[index]);
+                        break;
+                    }
+                    case QoreIROpcode::StoreLocal: {
+                        int64_t value;
+                        int index = localIndex(static_cast<const QoreIRLocalInstruction*>(operation)->local);
+                        if (index < 0 || operation->operands.size() != 1
+                                || !readValue(operation->operands[0], value)) {
+                            return false;
+                        }
+                        local_values[index] = value;
+                        local_assigned[index] = true;
+                        writeResult(value);
+                        break;
+                    }
+                    case QoreIROpcode::UninstantiateLocal: {
+                        int index = localIndex(static_cast<const QoreIRLocalInstruction*>(operation)->local);
+                        if (index < 0) {
+                            return false;
+                        }
+                        local_assigned[index] = false;
+                        break;
+                    }
+                    case QoreIROpcode::IncrementLocalInt: {
+                        const auto* increment =
+                            static_cast<const QoreIRIncrementLocalIntInstruction*>(operation);
+                        int index = localIndex(increment->local);
+                        if (index < 0 || !local_assigned[index]) {
+                            return false;
+                        }
+                        local_values[index] += increment->delta;
+                        writeResult(local_values[index]);
+                        break;
+                    }
+                    case QoreIROpcode::RefSelf: {
+                        int64_t value;
+                        if (operation->operands.size() != 1
+                                || !readValue(operation->operands[0], value)) {
+                            return false;
+                        }
+                        writeResult(value);
+                        break;
+                    }
+                    case QoreIROpcode::AddInt:
+                    case QoreIROpcode::SubInt:
+                    case QoreIROpcode::MulInt:
+                    case QoreIROpcode::ModInt:
+                    case QoreIROpcode::MulAssignAny:
+                    case QoreIROpcode::EqInt:
+                    case QoreIROpcode::NeInt:
+                    case QoreIROpcode::LtInt:
+                    case QoreIROpcode::LeInt:
+                    case QoreIROpcode::GtInt:
+                    case QoreIROpcode::GeInt: {
+                        int64_t lhs;
+                        int64_t rhs;
+                        if (operation->operands.size() != 2
+                                || !readValue(operation->operands[0], lhs)
+                                || !readValue(operation->operands[1], rhs)) {
+                            return false;
+                        }
+                        switch (operation->opcode) {
+                            case QoreIROpcode::AddInt: writeResult(lhs + rhs); break;
+                            case QoreIROpcode::SubInt: writeResult(lhs - rhs); break;
+                            case QoreIROpcode::MulInt:
+                            case QoreIROpcode::MulAssignAny: writeResult(lhs * rhs); break;
+                            case QoreIROpcode::ModInt:
+                                if (!rhs || (lhs == INT64_MIN && rhs == -1)) { return false; }
+                                writeResult(lhs % rhs);
+                                break;
+                            case QoreIROpcode::EqInt: writeResult(lhs == rhs); break;
+                            case QoreIROpcode::NeInt: writeResult(lhs != rhs); break;
+                            case QoreIROpcode::LtInt: writeResult(lhs < rhs); break;
+                            case QoreIROpcode::LeInt: writeResult(lhs <= rhs); break;
+                            case QoreIROpcode::GtInt: writeResult(lhs > rhs); break;
+                            case QoreIROpcode::GeInt: writeResult(lhs >= rhs); break;
+                            default: return false;
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::Br: {
+                        int target = blockIndex(static_cast<const QoreIRBranchInstruction*>(operation)->target);
+                        if (target < 0 || target <= static_cast<int>(block_index)) {
+                            return false;
+                        }
+                        block_index = static_cast<size_t>(target);
+                        branched = true;
+                        break;
+                    }
+                    case QoreIROpcode::BrIf: {
+                        const auto* branch = static_cast<const QoreIRBranchIfInstruction*>(operation);
+                        int64_t condition;
+                        if (!readValue(branch->condition, condition)) {
+                            return false;
+                        }
+                        int target = blockIndex(condition ? branch->true_target : branch->false_target);
+                        if (target < 0 || target <= static_cast<int>(block_index)) {
+                            return false;
+                        }
+                        block_index = static_cast<size_t>(target);
+                        branched = true;
+                        break;
+                    }
+                    case QoreIROpcode::Return: {
+                        const auto* ret = static_cast<const QoreIRReturnInstruction*>(operation);
+                        int64_t value;
+                        if (!readValue(ret->value, value)) {
+                            return false;
+                        }
+                        result = QoreValue(value);
+                        return true;
+                    }
+                    default:
+                        return false;
+                }
+                if (branched) {
+                    break;
+                }
+            }
+            if (!branched) {
+                return false;
+            }
+        }
+        return false;
     }
     if (inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::StringSize
             || inst->native_leaf_kind == QoreIRCallDirectInstruction::NativeLeafKind::StringLength) {

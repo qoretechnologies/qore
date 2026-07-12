@@ -2000,6 +2000,7 @@ public:
         DynamicBinary,
         StringSize,
         StringLength,
+        IntProgram,
     };
 
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
