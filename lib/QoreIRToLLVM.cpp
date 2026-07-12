@@ -5449,9 +5449,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     dot_eval_only_bases.clear();
     weak_assigned_locals.clear();
     weak_load_result_ids.clear();
+    native_boolean_result_values.clear();
     // First: collect all register IDs used as DotEval bases
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
+    std::unordered_map<uint32_t, int> to_bool_uses;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
@@ -5459,6 +5461,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
+            }
+            if (inst_ptr->opcode == QoreIROpcode::ToBool
+                    && inst_ptr->operands.size() == 1) {
+                to_bool_uses[inst_ptr->operands[0].id]++;
             }
             if (inst_ptr->opcode == QoreIROpcode::StoreLocal
                     || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
@@ -5541,6 +5547,23 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     for (uint32_t id : dot_eval_base_candidates) {
         if (!non_dot_eval_uses.count(id)) {
             dot_eval_only_bases.insert(id);
+        }
+    }
+    static const bool native_boolean_consumers =
+        std::getenv("QORE_DISABLE_NATIVE_BOOLEAN_CONSUMERS") == nullptr;
+    if (native_boolean_consumers) {
+        size_t boolean_consumer_count = 0;
+        for (const auto& [id, count] : to_bool_uses) {
+            if (boolean_consumer_count++ && !(boolean_consumer_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM native boolean consumer analysis")) {
+                error = "cancelled during LLVM native boolean consumer analysis";
+                return false;
+            }
+            auto total = operand_remaining_uses.find(id);
+            if (total != operand_remaining_uses.end() && total->second == count) {
+                native_boolean_result_values.insert(id);
+            }
         }
     }
 
@@ -6734,7 +6757,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (val->getType() == i1_type) {
                 values[inst->result.id] = val;
             } else if (val->getType() == i64_type && nanboxed_values.count(inst->operands[0].id)) {
-                // NaN-boxed value: use qore_rt_to_bool to properly interpret the value
                 auto helper = module.getOrInsertFunction("qore_rt_to_bool",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
                 llvm::Value* bool_val = builder->CreateCall(helper, {val});
@@ -12795,12 +12817,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_EQ,
                 llvm::CmpInst::FCMP_OEQ, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12825,12 +12850,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_NE,
                 llvm::CmpInst::FCMP_ONE, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12907,12 +12935,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLT,
                 llvm::CmpInst::FCMP_OLT, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12922,12 +12953,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLE,
                 llvm::CmpInst::FCMP_OLE, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12937,12 +12971,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGT,
                 llvm::CmpInst::FCMP_OGT, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -12952,12 +12989,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGE,
                 llvm::CmpInst::FCMP_OGE, static_cast<int>(inst->opcode),
-                inst, lhs_boxed, rhs_boxed, llvm_func, module);
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -18734,7 +18774,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
         llvm::CmpInst::Predicate float_pred, int opcode,
         const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
-        llvm::Function* llvm_func, llvm::Module& module) {
+        llvm::Function* llvm_func, llvm::Module& module, bool native_result) {
     // Check if both are int48-tagged
     llvm::Value* lhs_is_int = emitIsBoxedInt48(lhs);
     llvm::Value* rhs_is_int = emitIsBoxedInt48(rhs);
@@ -18754,7 +18794,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* l_int = unboxInt(lhs);
     llvm::Value* r_int = unboxInt(rhs);
     llvm::Value* int_cmp = builder->CreateICmp(int_pred, l_int, r_int);
-    llvm::Value* int_boxed = boxBool(int_cmp);
+    llvm::Value* int_result = native_result ? int_cmp : boxBool(int_cmp);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
 
@@ -18770,7 +18810,7 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     llvm::Value* l_float = unboxFloat(lhs);
     llvm::Value* r_float = unboxFloat(rhs);
     llvm::Value* float_cmp = builder->CreateFCmp(float_pred, l_float, r_float);
-    llvm::Value* float_boxed = boxBool(float_cmp);
+    llvm::Value* float_result = native_result ? float_cmp : boxBool(float_cmp);
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_float_end = builder->GetInsertBlock();
 
@@ -18784,14 +18824,18 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
             "qore_rt_comparison_op_throwing", cmp_ft);
     llvm::Value* slow_result = emitMaybeInvoke(helper, helper_throwing,
             {opcode_val, lhs, rhs, xsink_arg}, module, llvm_func, inst);
+    if (native_result) {
+        slow_result = builder->CreateICmpEQ(slow_result,
+                llvm::ConstantInt::get(i64_type, VAL_TRUE));
+    }
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* slow_end = builder->GetInsertBlock();
 
     // Merge with PHI
     builder->SetInsertPoint(merge_bb);
-    llvm::PHINode* phi = builder->CreatePHI(i64_type, 3);
-    phi->addIncoming(int_boxed, fast_int_end);
-    phi->addIncoming(float_boxed, fast_float_end);
+    llvm::PHINode* phi = builder->CreatePHI(native_result ? i1_type : i64_type, 3);
+    phi->addIncoming(int_result, fast_int_end);
+    phi->addIncoming(float_result, fast_float_end);
     phi->addIncoming(slow_result, slow_end);
 
     return phi;

@@ -8838,6 +8838,21 @@ printf(\"%d\\n\", pos.size());
         aot_out = compileAndRun(code);
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT select on typed int list");
+
+        # Dynamic comparisons used only as predicates can remain native booleans,
+        # including the mixed-type runtime-comparison path.
+        code = "%modern
+list<hash<auto>> items = ({\"val\": \"b\"}, {\"val\": \"a\"}, {\"val\": \"c\"});
+list<auto> selected = (select items, $1.val > \"a\");
+auto lhs = 2;
+auto rhs = 1;
+auto comparison = lhs > rhs;
+bool condition = comparison;
+printf(\"%d:%s:%s:%s\\n\", selected.size(), comparison.type(), comparison, condition);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT native boolean comparison consumers");
     }
 
     testAOTDirectIndexMapSelectImplicitArgCleanup() {

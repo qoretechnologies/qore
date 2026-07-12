@@ -445,6 +445,10 @@ private:
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
 
+    // Comparison result IDs consumed exclusively by ToBool.  These can remain
+    // native i1 through LLVM lowering instead of being boxed and decoded again.
+    std::unordered_set<uint32_t> native_boolean_result_values;
+
     // Set of register IDs that are ONLY used as DotEval bases (operands[0]
     // of DotEvalMethodDirect, InvokeDotEvalMethodDirect, or Invoke with a
     // DotEval invoke_opcode).  For these registers, LoadSelfMember uses the
@@ -1059,7 +1063,7 @@ private:
             llvm::CmpInst::Predicate float_pred, int opcode,
             const QoreIRInstruction* inst,
             llvm::Value* lhs, llvm::Value* rhs,
-            llvm::Function* llvm_func, llvm::Module& module);
+            llvm::Function* llvm_func, llvm::Module& module, bool native_result = false);
 
     // Emit inline LLVM fast-path for .any compound assignments (AddAssignAny/SubAssignAny/etc).
     // Type-checks operands for int+int and float+float, falls back to helper for mixed types.

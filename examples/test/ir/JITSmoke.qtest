@@ -5906,6 +5906,32 @@ printf(\"%d\\n\", result.size());
                     sprintf("select on typed hash list %s", mode));
         }
 
+        # Dynamic string comparison exercises the native-bool slow-path merge
+        code = "%modern
+list<hash<auto>> items = ({\"val\": \"b\"}, {\"val\": \"a\"}, {\"val\": \"c\"});
+list<auto> result = (select items, $1.val > \"a\");
+printf(\"%d\\n\", result.size());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("2", result,
+                    sprintf("select dynamic string comparison %s", mode));
+        }
+
+        # A comparison with a second use must retain its boxed Qore bool value
+        code = "%modern
+auto lhs = 2;
+auto rhs = 1;
+auto comparison = lhs > rhs;
+bool condition = comparison;
+printf(\"%s:%s:%s\\n\", comparison.type(), comparison, condition);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("bool:1:1", result,
+                    sprintf("multi-use dynamic comparison remains boxed %s", mode));
+        }
+
         # Select on typed int list (direct-index)
         code = "%modern
 list<int> vals = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10);

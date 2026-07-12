@@ -279,6 +279,26 @@ printf(\"%%d\\n\", vals.size());
 ", iterations / 10);
 
     # ==========================================================================
+    # Test 9b: repeated hash-key map over prebuilt data
+    # ==========================================================================
+    string map_hash_lookup_code = sprintf("%%modern
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"value\": i};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(10000);
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    list<auto> vals = (map $1.value + 1, data);
+    total += vals[0] + vals[-1];
+}
+printf(\"%%d\\n\", total);
+", iterations / 10000);
+
+    # ==========================================================================
     # Test 10: map hash body over list<hash<auto>> (hash remapping pattern)
     # ==========================================================================
     string map_hash_body_code = sprintf("%%modern
@@ -310,6 +330,26 @@ list<hash<auto>> data = build_data(%d);
 list<hash<auto>> result = (select data, $1.value > 0);
 printf(\"%%d\\n\", result.size());
 ", iterations / 10);
+
+    # ==========================================================================
+    # Test 11b: repeated hash predicate over prebuilt data
+    # ==========================================================================
+    string select_hash_lookup_code = sprintf("%%modern
+list<hash<auto>> sub build_data(int n) {
+    list<hash<auto>> data = ();
+    for (int i = 0; i < n; ++i) {
+        push data, {\"value\": i};
+    }
+    return data;
+}
+list<hash<auto>> data = build_data(10000);
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    list<hash<auto>> result = (select data, $1.value > 0);
+    total += result.size();
+}
+printf(\"%%d\\n\", total);
+", iterations / 10000);
 
     # ==========================================================================
     # Test 12: closure basic - closure captures variable, called in tight loop
@@ -422,8 +462,10 @@ printf(\"%%d\\n\", sum);
         "foldl": foldl_code,
         "map_int": map_int_code,
         "map_hash_expr": map_hash_expr_code,
+        "map_hash_lookup": map_hash_lookup_code,
         "map_hash_body": map_hash_body_code,
         "select_hash": select_hash_code,
+        "select_hash_lookup": select_hash_lookup_code,
         "closure_basic": closure_basic_code,
         "closure_writeback": closure_writeback_code,
         "closure_loop_var": closure_loop_var_code,
