@@ -182,6 +182,38 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
     }
 }
 
+static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
+        const QoreIRInstruction* inst, bool& has_ref_args) {
+    has_ref_args = true;
+    if (!inst) {
+        return nullptr;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect: {
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            return call->variant;
+        }
+        case QoreIROpcode::CallStaticDirect: {
+            const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            return call->variant;
+        }
+        case QoreIROpcode::CallMethodDirect: {
+            const auto* call = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            return call->variant;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const auto* call = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            return call->variant;
+        }
+        default:
+            return nullptr;
+    }
+}
+
 bool qore_ir_compute_function_effect_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries) {
@@ -259,12 +291,17 @@ bool qore_ir_compute_function_effect_summaries(
                     effect.saw_return = true;
                     effect.local_never_returns_nothing = false;
                 }
-                if (inst && inst->opcode == QoreIROpcode::CallDirect) {
-                    auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
-                    if (call->has_ref_args || !call->variant) {
+                bool has_ref_args = true;
+                const AbstractQoreFunctionVariant* callee =
+                    qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+                if (callee || (inst && (inst->opcode == QoreIROpcode::CallDirect
+                        || inst->opcode == QoreIROpcode::CallStaticDirect
+                        || inst->opcode == QoreIROpcode::CallMethodDirect
+                        || inst->opcode == QoreIROpcode::InvokeMethodDirect))) {
+                    if (has_ref_args || !callee) {
                         effect.local_may_invalidate = true;
                     } else {
-                        effect.callees.push_back(call->variant);
+                        effect.callees.push_back(callee);
                     }
                 } else if (qore_ir_instruction_may_invalidate_caller_caches(*func, inst)) {
                     effect.local_may_invalidate = true;
@@ -334,6 +371,7 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.param_noescape[param_it->second] = false;
                     }
                 }
+                bool callee_arg_analysis_cancelled = false;
                 qore_ir_visit_value_operands(*inst, [&](QoreIRValue operand) {
                     auto loaded_it = loaded_params.find(operand.id);
                     if (loaded_it == loaded_params.end()) {
@@ -346,21 +384,34 @@ bool qore_ir_compute_function_effect_summaries(
                     if (inst->opcode == QoreIROpcode::Return) {
                         return;
                     }
-                    if (inst->opcode == QoreIROpcode::CallDirect) {
-                        const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
-                        if (!call->variant || call->has_ref_args) {
+                    bool has_ref_args = true;
+                    const AbstractQoreFunctionVariant* callee =
+                        qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+                    if (callee || inst->opcode == QoreIROpcode::CallDirect
+                            || inst->opcode == QoreIROpcode::CallStaticDirect
+                            || inst->opcode == QoreIROpcode::CallMethodDirect
+                            || inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                        if (!callee || has_ref_args) {
                             effect.param_noescape[param_index] = false;
                             return;
                         }
-                        for (size_t arg = 0; arg < call->operands.size(); ++arg) {
-                            if (call->operands[arg].id == operand.id) {
-                                effect.param_callees[param_index].emplace_back(call->variant, arg);
+                        for (size_t arg = 0; arg < inst->operands.size(); ++arg) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR function parameter callee argument analysis")) {
+                                callee_arg_analysis_cancelled = true;
+                                return;
+                            }
+                            if (inst->operands[arg].id == operand.id) {
+                                effect.param_callees[param_index].emplace_back(callee, arg);
                             }
                         }
                         return;
                     }
                     effect.param_noescape[param_index] = false;
                 });
+                if (callee_arg_analysis_cancelled) {
+                    return false;
+                }
             }
         }
     }

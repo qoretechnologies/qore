@@ -32,6 +32,39 @@ class EffectHolder {
     }
 }
 
+class StaticEffects {
+    static int pureLeaf(int value) {
+        return value + 1;
+    }
+
+    static int pureMiddle(int value) {
+        return StaticEffects::pureLeaf(value);
+    }
+
+    static int mutatingLeaf(int value) {
+        global_value += value;
+        return global_value;
+    }
+
+    static int mutatingMiddle(int value) {
+        return StaticEffects::mutatingLeaf(value);
+    }
+}
+
+final class FinalEffects {
+    int pureLeaf(int value) {
+        return value + 1;
+    }
+
+    int pureMiddle(int value) {
+        return self.pureLeaf(value);
+    }
+
+    int run(int value) {
+        return self.pureMiddle(value);
+    }
+}
+
 int sub pureLeaf(int value) {
     return value + offsets[0];
 }
@@ -93,11 +126,25 @@ int sub caller() {
     return pure * 10000 + recursive * 100 + mutated * 10 + referenced;
 }
 
+int sub methodEffects() {
+    int local = 4;
+    code<int()> read_local = int sub () {
+        return local;
+    };
+    local = StaticEffects::pureMiddle(local);
+    int static_value = read_local();
+    FinalEffects effects();
+    local = effects.run(local);
+    int final_value = read_local();
+    int mutated = StaticEffects::mutatingMiddle(1);
+    return static_value * 1000 + final_value * 100 + mutated;
+}
+
 hash<auto> input = {\"number\": 7};
 EffectHolder holder = objectIdentity(new EffectHolder(11));
-printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
+printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
     recursiveIdentity(input, 5).number, reassigned(input).number, escaping(input).number, escaped.number,
-    holder.get());
+    holder.get(), methodEffects());
 ";
 
 string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
@@ -116,7 +163,7 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-if (ast != "71055:5:10:null:7:9:7:7:11\n" || aot != ast) {
+if (ast != "71055:5:10:null:7:9:7:7:11:5606\n" || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

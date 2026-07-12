@@ -11568,7 +11568,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     call_may_modify_runtime_locals =
-                        aot_self_batch_callee->may_invalidate_external_caches;
+                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
+                        || aot_self_batch_callee->may_invalidate_external_caches;
                 } else {
                     // Use fast path if variant is compile-time known and eligible.
                     bool use_fast_helper = false;
@@ -11777,7 +11778,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     call_may_modify_runtime_locals =
-                        aot_self_batch_callee->may_invalidate_external_caches;
+                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
+                        || aot_self_batch_callee->may_invalidate_external_caches;
                 } else {
                     // Use fast path if variant is compile-time known and eligible.
                     bool use_fast_helper = false;
@@ -12011,6 +12013,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
+            bool call_may_modify_runtime_locals = true;
             if (aot_context_independent_fast_entry_call) {
                 std::vector<llvm::Value*> call_args;
                 for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
@@ -12029,6 +12032,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     call_result = builder->CreateCall(aot_static_batch_fn, call_args);
                 }
+                call_may_modify_runtime_locals =
+                    std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
+                    || aot_static_batch_callee->may_invalidate_external_caches;
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
@@ -12052,6 +12058,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     return false;
                 }
+                call_may_modify_runtime_locals =
+                    std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
+                    || aot_static_batch_callee->may_invalidate_external_caches;
             } else if (aot_mode) {
                 // AOT mode: always use expression slot — embedded pointer optimization is only valid
                 // in JIT mode (same process). In AOT, compile-time pointers are invalid at runtime.
@@ -12111,7 +12120,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            if (call_may_modify_runtime_locals) {
+                reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
+            }
 
             values[inst->result.id] = call_result;
             if (!aot_static_batch_callee
