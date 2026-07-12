@@ -196,6 +196,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global) },
     { "qore_rt_load_closure", reinterpret_cast<void*>(&qore_rt_load_closure) },
     { "qore_rt_store_closure", reinterpret_cast<void*>(&qore_rt_store_closure) },
+    { "qore_rt_add_assign_local_int", reinterpret_cast<void*>(&qore_rt_add_assign_local_int) },
     { "qore_rt_increment_closure_int", reinterpret_cast<void*>(&qore_rt_increment_closure_int) },
     { "qore_rt_load_thread_local", reinterpret_cast<void*>(&qore_rt_load_thread_local) },
     { "qore_rt_store_thread_local", reinterpret_cast<void*>(&qore_rt_store_thread_local) },
@@ -271,6 +272,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot) },
     { "qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot) },
     { "qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot) },
+    { "qore_rt_add_assign_local_int_aot", reinterpret_cast<void*>(&qore_rt_add_assign_local_int_aot) },
     { "qore_rt_increment_closure_int_aot", reinterpret_cast<void*>(&qore_rt_increment_closure_int_aot) },
     { "qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot) },
     { "qore_rt_load_constant_aot", reinterpret_cast<void*>(&qore_rt_load_constant_aot) },
@@ -1945,6 +1947,28 @@ extern "C" DLLEXPORT void qore_rt_store_closure_eval_weak(ClosureVarValue* var, 
     qore_rt_store_closure_impl(var, value, xsink, true);
 }
 
+static int64_t qore_rt_apply_int_delta(LValueHelper& helper, int64_t delta) {
+    if (delta == 1) {
+        return helper.preIncrementBigInt("<integer increment>");
+    }
+    if (delta == -1) {
+        return helper.preDecrementBigInt("<integer decrement>");
+    }
+    return helper.plusEqualsBigInt(delta, "<integer add assignment>");
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_add_assign_local_int(LocalVar* var,
+        int64_t delta, ExceptionSink* xsink) {
+    if (!var || (xsink && *xsink)) {
+        return 0;
+    }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, false)) {
+        return 0;
+    }
+    return qore_rt_apply_int_delta(helper, delta);
+}
+
 static int64_t qore_rt_increment_closure_int_impl(ClosureVarValue* cvv,
         int64_t delta, ExceptionSink* xsink) {
     if (!cvv || (xsink && *xsink)) {
@@ -1954,13 +1978,7 @@ static int64_t qore_rt_increment_closure_int_impl(ClosureVarValue* cvv,
     if (cvv->getLValue(helper, false)) {
         return 0;
     }
-    if (delta == 1) {
-        return helper.preIncrementBigInt("<closure increment>");
-    }
-    if (delta == -1) {
-        return helper.preDecrementBigInt("<closure decrement>");
-    }
-    return helper.plusEqualsBigInt(delta, "<closure increment>");
+    return qore_rt_apply_int_delta(helper, delta);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_increment_closure_int(LocalVar* var,
@@ -1969,20 +1987,7 @@ extern "C" DLLEXPORT int64_t qore_rt_increment_closure_int(LocalVar* var,
     if (cvv) {
         return qore_rt_increment_closure_int_impl(cvv, delta, xsink);
     }
-    if (!var || (xsink && *xsink)) {
-        return 0;
-    }
-    LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, false)) {
-        return 0;
-    }
-    if (delta == 1) {
-        return helper.preIncrementBigInt("<closure increment>");
-    }
-    if (delta == -1) {
-        return helper.preDecrementBigInt("<closure decrement>");
-    }
-    return helper.plusEqualsBigInt(delta, "<closure increment>");
+    return qore_rt_add_assign_local_int(var, delta, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink) {
@@ -8686,6 +8691,12 @@ extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t
         }
     }
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_add_assign_local_int_aot(
+        QoreAOTContext* ctx, int32_t idx, int64_t delta, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_add_assign_local_int(ctx->locals[idx], delta, xsink);
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_increment_closure_int_aot(

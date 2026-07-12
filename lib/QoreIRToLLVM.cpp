@@ -6148,6 +6148,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
     };
 
+    auto add_assign_runtime_local_int = [&](LocalVar* local, const void* key,
+            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            llvm::Value* delta, const QoreIRInstruction* source_inst) -> llvm::Value* {
+        llvm::Value* result;
+        if (aot_mode) {
+            auto helper = module.getOrInsertFunction("qore_rt_add_assign_local_int_aot",
+                    llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false));
+            int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+            result = builder->CreateCall(helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), delta, xsink_arg});
+        } else {
+            auto helper = module.getOrInsertFunction("qore_rt_add_assign_local_int",
+                    llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, ptr_type}, false));
+            llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(local));
+            result = builder->CreateCall(helper,
+                    {builder->CreateIntToPtr(var_ptr, ptr_type), delta, xsink_arg});
+        }
+        if (alloca_it != local_allocas.end()) {
+            if (native_int_locals.count(key)) {
+                builder->CreateStore(result, alloca_it->second);
+            } else {
+                builder->CreateStore(boxIntInline(result), alloca_it->second);
+            }
+            markLocalCacheFresh(key, llvm_func);
+        }
+        emitExceptionCheck(module, llvm_func, source_inst);
+        return result;
+    };
+
     switch (inst->opcode) {
         // === Constants ===
         case QoreIROpcode::ConstInt: {
@@ -8427,12 +8459,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto source_key = reinterpret_cast<const void*>(fused->source);
             auto target_it = local_allocas.find(target_key);
             auto source_it = local_allocas.find(source_key);
-            llvm::Value* target_int = load_local_int_for_fused(
-                    fused->target, target_key, target_it, "add.target");
             llvm::Value* source_int = load_local_int_for_fused(
                     fused->source, source_key, source_it, "add.source");
-            llvm::Value* result = builder->CreateAdd(target_int, source_int, "add.result");
-            assign_local_int_for_fused(fused->target, target_key, target_it, result);
+            bool target_ir_only = ir_only_locals_set && ir_only_locals_set->count(target_key);
+            llvm::Value* result;
+            if (fused->target && !fused->target->closureUse() && !target_ir_only) {
+                result = add_assign_runtime_local_int(
+                        fused->target, target_key, target_it, source_int, inst);
+            } else {
+                llvm::Value* target_int = load_local_int_for_fused(
+                        fused->target, target_key, target_it, "add.target");
+                result = builder->CreateAdd(target_int, source_int, "add.result");
+                assign_local_int_for_fused(fused->target, target_key, target_it, result);
+            }
             if (inst->result.isValid()) {
                 values[inst->result.id] = result;
                 // NOT nanboxed — native int result
@@ -8470,10 +8509,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
             auto it = local_allocas.find(key);
-            llvm::Value* local_int = load_local_int_for_fused(fused->local, key, it, "inc.val");
-            llvm::Value* result = builder->CreateAdd(local_int,
-                    llvm::ConstantInt::get(i64_type, fused->delta), "inc.result");
-            assign_local_int_for_fused(fused->local, key, it, result);
+            bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+            llvm::Value* result;
+            if (fused->local && !is_ir_only) {
+                result = add_assign_runtime_local_int(fused->local, key, it,
+                        llvm::ConstantInt::get(i64_type, fused->delta, true), inst);
+            } else {
+                llvm::Value* local_int = load_local_int_for_fused(
+                        fused->local, key, it, "inc.val");
+                result = builder->CreateAdd(local_int,
+                        llvm::ConstantInt::get(i64_type, fused->delta), "inc.result");
+                assign_local_int_for_fused(fused->local, key, it, result);
+            }
             if (inst->result.isValid()) {
                 values[inst->result.id] = result;
                 // NOT nanboxed — native int result
