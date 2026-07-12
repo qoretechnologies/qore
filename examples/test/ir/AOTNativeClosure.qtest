@@ -57,6 +57,14 @@ string sub exercise() {
     code<nothing()> guarded_writeback = nothing sub () {
         ++unset_writeback;
     };
+    int read_multiplier = 6;
+    code<int(int)> captured_multiply = int sub (int value) {
+        return value * read_multiplier;
+    };
+    int unset_multiplier;
+    code<int(int)> guarded_multiply = int sub (int value) {
+        return value * unset_multiplier;
+    };
     code<int(int)> defaulted = int sub (int value = 5) {
         return value * 2;
     };
@@ -128,10 +136,10 @@ string sub exercise() {
     } catch (hash<auto> ex) {
         mod_zero_caught = 1;
     }
-    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
         first, changed, second, outer_changed, initialized, added, decremented,
-        writeback_counter, unset_writeback, defaulted(), ref_value, loop(5), nested_call(), object_adder(2),
-        recursive(5), guarded(-1),
+        writeback_counter, unset_writeback, captured_multiply(7), guarded_multiply(7), defaulted(), ref_value,
+        loop(5), nested_call(), object_adder(2), recursive(5), guarded(-1),
         branched(8), branched(9), mod_zero_caught);
 }
 
@@ -155,6 +163,7 @@ string compile_out = backquote(sprintf(
     libqore_dir, qcc_bin, exe_path, source_path));
 string disabled_compile_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
+    "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_exe_path, source_path));
 if (!is_file(exe_path) || !is_file(disabled_exe_path)) {
@@ -172,12 +181,13 @@ string fallback_out = backquote(sprintf(
     "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
 string disabled_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
+    "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-string expected = "7:4:8:6:1:6:-1:41:1:10:13:60:11:12:15:17:721:280:1\n";
+string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:10:13:60:11:12:15:17:721:280:1/)) {
+        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1/)) {
     printf("native closure execution mismatch\nAST:\n%sNative:\n%sFallback:\n%sDisabled:\n%sCompile:\n%s",
         ast_out, native_out, fallback_out, disabled_out, compile_out);
     exit(2);
