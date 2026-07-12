@@ -661,6 +661,26 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSign
     return rejects;
 }
 
+BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
+        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing) {
+    if (!variant || !never_returns_nothing || std::getenv("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
+        return BatchCalleeReturnKind::Boxed;
+    }
+    const AbstractFunctionSignature* sig
+        = const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature();
+    if (!sig) {
+        return BatchCalleeReturnKind::Boxed;
+    }
+    const QoreTypeInfo* ti = sig->getReturnTypeInfo();
+    if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        return BatchCalleeReturnKind::NativeInt;
+    }
+    if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        return BatchCalleeReturnKind::NativeFloat;
+    }
+    return BatchCalleeReturnKind::Boxed;
+}
+
 static llvm::Type* qore_jit_fast_entry_param_type(BatchCalleeParamKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
     return kind == BatchCalleeParamKind::NativeFloat ? double_ty : i64_ty;

@@ -74,6 +74,12 @@ enum class BatchCalleeParamKind : uint8_t {
     NativeFloat = 2,
 };
 
+enum class BatchCalleeReturnKind : uint8_t {
+    Boxed = 0,
+    NativeInt = 1,
+    NativeFloat = 2,
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -81,6 +87,7 @@ struct BatchCalleeInfo {
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     bool may_invalidate_external_caches = true; //!< Callee can mutate caller-visible runtime state
     bool never_returns_nothing = false; //!< Every normal return has an assigned non-NOTHING value
+    BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed; //!< Fast-entry return ABI
     std::string fast_name;               //!< Fast entry function name (if eligible)
     unsigned num_params = 0;             //!< Number of parameters
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
@@ -94,6 +101,12 @@ DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
 
 //! Derive fast-entry parameter NOTHING rejection metadata from the signature.
 DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig);
+
+//! Derive the fast-entry return ABI from the exact declared return type and
+//! assigned-state summary.  A native ABI is never selected for a return that
+//! can be NOTHING.
+DLLLOCAL BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
+        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing);
 
 //! Returns locals that cannot safely use native scalar storage because a load may
 //! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was

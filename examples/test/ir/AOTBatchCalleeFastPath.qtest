@@ -358,6 +358,14 @@ int sub cross_pair(int x) {
     return cross_leaf(x) + cross_leaf(x + 1);
 }
 
+int sub cross_big() {
+    return 1125899906842624;
+}
+
+float sub cross_float(float value) {
+    return value * 1.5;
+}
+
 string sub cross_string(string value) {
     return value + \"!\";
 }
@@ -390,8 +398,8 @@ string sub crossFileMainCode() {
 int sub main() {
     int value = 3;
     cross_bump(\\value);
-    printf(\"%d:%s:%d:%d:%d\\n\", cross_leaf(4), cross_string(\"ok\"), cross_caught(5),
-        value, cross_maybe(False) === NOTHING);
+    printf(\"%d:%s:%d:%d:%d:%d:%g\\n\", cross_leaf(4), cross_string(\"ok\"), cross_caught(5),
+        value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0));
     return 0;
 }
 ";
@@ -535,7 +543,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:ok!:13:4:1\n") {
+if (cross_out != "5:ok!:13:4:1:1125899906842624:6.0\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -582,7 +590,9 @@ string provider_index = backquote(sprintf("%s --dump-index-json %s",
     qcc_bin, provider_qo));
 if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"fast_entry_num_params\": 1/)
-        || !(provider_index =~ /\"fast_param_rejects_nothing\": \[1\]/)) {
+        || !(provider_index =~ /\"fast_param_rejects_nothing\": \[1\]/)
+        || !(provider_index =~ /\"fast_return_kind\": 1/)
+        || !(provider_index =~ /\"fast_return_kind\": 2/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

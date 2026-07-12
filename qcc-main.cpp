@@ -3212,8 +3212,8 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
         printf(" abi=%s", rec.abi_kind.c_str());
     }
     if (rec.fast_entry_flags) {
-        printf(" fast_flags=0x%x fast_params=%u", rec.fast_entry_flags,
-            rec.fast_entry_num_params);
+        printf(" fast_flags=0x%x fast_params=%u fast_return=%u", rec.fast_entry_flags,
+            rec.fast_entry_num_params, rec.fast_return_kind);
     }
     if (rec.dependency_class != QoreAOTDependencyClass::UNKNOWN) {
         printf(" dep=%s", qoreAOTDependencyClassName(rec.dependency_class));
@@ -4991,8 +4991,8 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     json_print_string("provider_source_file");
     printf(": ");
     json_print_string(rec.provider_source_file);
-    printf(", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u",
-        rec.fast_entry_flags, rec.fast_entry_num_params);
+    printf(", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u, \"fast_return_kind\": %u",
+        rec.fast_entry_flags, rec.fast_entry_num_params, rec.fast_return_kind);
     auto print_bytes = [](const char* name, const std::vector<uint8_t>& values) {
         printf(", \"%s\": [", name);
         for (size_t i = 0; i < values.size(); ++i) {
@@ -5533,8 +5533,8 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         json_file_string(f, rec.consumer_source_file);
         fputs(", \"provider_source_file\": ", f);
         json_file_string(f, rec.provider_source_file);
-        fprintf(f, ", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u",
-            rec.fast_entry_flags, rec.fast_entry_num_params);
+        fprintf(f, ", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u, \"fast_return_kind\": %u",
+            rec.fast_entry_flags, rec.fast_entry_num_params, rec.fast_return_kind);
         auto write_bytes = [f](const char* name, const std::vector<uint8_t>& values) {
             fprintf(f, ", \"%s\": [", name);
             for (size_t j = 0; j < values.size(); ++j) {

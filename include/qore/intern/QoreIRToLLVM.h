@@ -38,6 +38,7 @@
 #include <unordered_set>
 #include <vector>
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreJIT.h"
 
 class LocalVar;
 class FunctionEntry;
@@ -54,9 +55,6 @@ class QoreIRInstruction;
 class QoreIRPhiInstruction;
 class AbstractQoreFunctionVariant;
 struct AOTSlotMap;
-struct BatchCalleeInfo;
-enum class BatchCalleeParamKind : uint8_t;
-
 class QoreIRToLLVM {
 public:
     explicit QoreIRToLLVM(llvm::LLVMContext& context) : ctx(context) {
@@ -99,14 +97,17 @@ public:
     //! @param args maps LocalVar* (as void*) → LLVM Value* for each parameter
     //! @param arg_kinds maps parameters to their native or boxed ABI representation
     //! @param borrowed_args boxed parameters proven not to escape the call
+    //! @param return_kind native or boxed fast-entry return ABI
     void setFastEntryMode(const std::string& name,
             const std::unordered_map<const void*, llvm::Value*>* args,
             const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
-            const std::unordered_set<const void*>* borrowed_args = nullptr) {
+            const std::unordered_set<const void*>* borrowed_args = nullptr,
+            BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed) {
         fast_entry_name = name;
         fast_entry_args = args;
         fast_entry_arg_kinds = arg_kinds;
         fast_entry_borrowed_args = borrowed_args;
+        fast_entry_return_kind = return_kind;
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -120,13 +121,15 @@ public:
     void setAOTSelfRecursiveFastEntry(const std::string& name,
             const FunctionEntry* fe = nullptr,
             const std::vector<BatchCalleeParamKind>* param_kinds = nullptr,
-            const std::vector<uint8_t>* param_rejects_nothing = nullptr) {
+            const std::vector<uint8_t>* param_rejects_nothing = nullptr,
+            BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed) {
         aot_self_recursive_fast_entry = name;
         aot_self_recursive_fe = fe;
         aot_self_recursive_param_kinds = param_kinds ? *param_kinds
             : std::vector<BatchCalleeParamKind>();
         aot_self_recursive_param_rejects_nothing = param_rejects_nothing
             ? *param_rejects_nothing : std::vector<uint8_t>();
+        aot_self_recursive_return_kind = return_kind;
     }
 
     //! Set shared debug info for multi-function module compilation (AOT/batch).
@@ -214,6 +217,7 @@ private:
     const std::unordered_map<const void*, BatchCalleeParamKind>* fast_entry_arg_kinds = nullptr;
     //! Proven noescape boxed parameters that borrow the caller's reference.
     const std::unordered_set<const void*>* fast_entry_borrowed_args = nullptr;
+    BatchCalleeReturnKind fast_entry_return_kind = BatchCalleeReturnKind::Boxed;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -226,6 +230,7 @@ private:
     const FunctionEntry* aot_self_recursive_fe = nullptr;
     std::vector<BatchCalleeParamKind> aot_self_recursive_param_kinds;
     std::vector<uint8_t> aot_self_recursive_param_rejects_nothing;
+    BatchCalleeReturnKind aot_self_recursive_return_kind = BatchCalleeReturnKind::Boxed;
 
     // IR builder
     std::unique_ptr<llvm::IRBuilder<>> builder;
@@ -611,6 +616,7 @@ private:
             llvm::Module& module);
     bool fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& info,
             const std::vector<uint32_t>& raw_arg_ids) const;
+    llvm::Constant* getNothingReturnValue() const;
     bool selfRecursiveFastEntryArgsNeedNothingGuard(
             const std::vector<uint32_t>& raw_arg_ids) const;
 

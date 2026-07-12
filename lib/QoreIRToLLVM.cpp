@@ -3682,6 +3682,14 @@ BatchCalleeParamKind QoreIRToLLVM::getFastEntryParamKind(
         ? info.param_kinds[index] : BatchCalleeParamKind::Boxed;
 }
 
+llvm::Constant* QoreIRToLLVM::getNothingReturnValue() const {
+    if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
+        return llvm::ConstantFP::get(double_type, 0.0);
+    }
+    return llvm::ConstantInt::get(i64_type,
+        fast_entry_return_kind == BatchCalleeReturnKind::NativeInt ? 0 : VAL_NOTHING);
+}
+
 bool QoreIRToLLVM::fastEntryParamRejectsNothing(
         const BatchCalleeInfo& info, unsigned index) const {
     return index < info.param_rejects_nothing.size()
@@ -3866,11 +3874,28 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
                 {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), args_array,
                  llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
     }
+    if (callee_info.return_kind == BatchCalleeReturnKind::NativeInt) {
+        auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        llvm::Value* boxed_result = fallback_result;
+        fallback_result = builder->CreateCall(to_int, {boxed_result});
+        auto decref = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref, {boxed_result, xsink_arg});
+    } else if (callee_info.return_kind == BatchCalleeReturnKind::NativeFloat) {
+        auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+            llvm::FunctionType::get(double_type, {i64_type}, false));
+        llvm::Value* boxed_result = fallback_result;
+        fallback_result = builder->CreateCall(to_float, {boxed_result});
+        auto decref = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref, {boxed_result, xsink_arg});
+    }
     builder->CreateBr(merge_bb);
     fallback_bb = builder->GetInsertBlock();
 
     builder->SetInsertPoint(merge_bb);
-    llvm::PHINode* result = builder->CreatePHI(i64_type, 2, "aot_batch_result");
+    llvm::PHINode* result = builder->CreatePHI(fast_result->getType(), 2, "aot_batch_result");
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(fallback_result, fallback_bb);
     (void)inst;
@@ -5387,7 +5412,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->CreateCondBr(ok, first_ir_bb, stack_overflow_bb);
 
         builder->SetInsertPoint(stack_overflow_bb);
-        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+        builder->CreateRet(getNothingReturnValue());
     }
 
     if (invoke_cleanup_array_capacity && !func.blocks.empty()) {
@@ -5903,9 +5928,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
     pending_phis.clear();
 
-    // Finalize the error return block (if used): fire on_block_exit handlers,
-    // emit cleanup for all tracked allocas and pre-instantiated locals before
-    // returning NOTHING.
+    // Finalize the error return block (if used): fire on_block_exit handlers and
+    // clean up before returning NOTHING for boxed entries or a neutral native
+    // scalar for fast entries.  ExceptionSink remains authoritative.
     if (error_return_block) {
         builder->SetInsertPoint(error_return_block);
         emitOnBlockExitExec(module);
@@ -5913,7 +5938,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitPreinstantiatedCleanup(module);
         emitInvokeCleanup(module);
         emitLocalUninstantiation(module);
-        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+        builder->CreateRet(getNothingReturnValue());
     }
 
     // C++ EH prototype: finalize the shared function-level unwind landing pad
@@ -5955,7 +5980,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(deopt_counter_ptr)),
             ptr_type);
         builder->CreateCall(deopt_fn, {counter_ptr});
-        builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+        builder->CreateRet(getNothingReturnValue());
     }
 
     emitLateExitCleanup(llvm_func, module);
@@ -8690,23 +8715,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::Return: {
             const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
-            // Box the return value BEFORE cleanup so we can incref it.  Cleanup
-            // (invoke cleanup, local uninstantiation) may deref values that the
-            // return value references — e.g. a CatchException result stored into
-            // a local.  We must take our own reference first, mirroring the IR
-            // interpreter's val.refSelf() in its Return handler.
-            llvm::Value* boxed_ret = nullptr;
+            // Materialize the ABI return value before cleanup. Boxed returns take
+            // their own reference because cleanup can deref the source. Native
+            // scalar fast entries extract the value before releasing that source.
+            llvm::Value* return_value = nullptr;
+            bool boxed_return = fast_entry_return_kind == BatchCalleeReturnKind::Boxed;
             if (ret->has_value) {
                 auto* val = getVal(ret->value.id, error);
                 if (!val) { return false; }
-                if (nanboxed_values.count(ret->value.id)) {
-                    boxed_ret = val;
+                if (fast_entry_return_kind == BatchCalleeReturnKind::NativeInt) {
+                    return_value = ensureIntTypeInline(val, ret->value.id);
+                } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
+                    return_value = ensureFloatType(val, ret->value.id, module);
+                } else if (nanboxed_values.count(ret->value.id)) {
+                    return_value = val;
                 } else if (val->getType() == i64_type) {
-                    boxed_ret = boxIntInline(val);
+                    return_value = boxIntInline(val);
                 } else if (val->getType() == double_type) {
-                    boxed_ret = boxFloat(val);
+                    return_value = boxFloat(val);
                 } else if (val->getType() == i1_type) {
-                    boxed_ret = boxBool(val);
+                    return_value = boxBool(val);
                 } else {
                     error = "unsupported return value type for LLVM lowering";
                     return false;
@@ -8733,12 +8761,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(cont);
                     // Fall through — incref + cleanup + ret now emitted into cont
                 }
-                // Take a reference to the return value before cleanup.
-                // emitInvokeCleanup will deref the invoke alloca (if any),
-                // balancing this incref. Net refcount change = 0 (correct).
-                auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
-                        llvm::FunctionType::get(void_type, {i64_type}, false));
-                builder->CreateCall(incref_fn, {boxed_ret});
+                // A boxed result needs its own reference across cleanup. Native
+                // scalar returns carry no ownership.
+                if (boxed_return) {
+                    auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
+                            llvm::FunctionType::get(void_type, {i64_type}, false));
+                    builder->CreateCall(incref_fn, {return_value});
+                }
             }
             // Execute on_block_exit handlers before cleanup
             emitOnBlockExitExec(module);
@@ -8755,10 +8784,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitPendingSsaCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
-            if (boxed_ret) {
-                builder->CreateRet(boxed_ret);
+            if (return_value) {
+                builder->CreateRet(return_value);
             } else {
-                builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                builder->CreateRet(getNothingReturnValue());
             }
             return true;
         }
@@ -8788,7 +8817,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
-            builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            builder->CreateRet(getNothingReturnValue());
             return true;
         }
 
@@ -8811,6 +8840,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::Invoke: {
             const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
             llvm::Value* result;
+            BatchCalleeReturnKind invoke_return_kind = BatchCalleeReturnKind::Boxed;
 
             // Dispatch based on invoke_opcode and operand availability to avoid
             // double-evaluating pre-evaluated operands via qore_rt_invoke_expr
@@ -9335,6 +9365,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_args.push_back(xsink_arg);
                         result = builder->CreateCall(
                                 aot_invoke_context_independent_fn, call_args);
+                        invoke_return_kind = aot_approach_b_callee->return_kind;
                         if (has_arg_cleanups) {
                             auto clear_helper = module.getOrInsertFunction(
                                     "qore_rt_clear_arg_cleanups",
@@ -9356,6 +9387,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (!result) {
                             return false;
                         }
+                        invoke_return_kind = aot_approach_b_callee->return_kind;
                     } else if (is_self_rec
                             && isFastFunctionCallEligible(aot_call->getVariant())
                             && qore_ir_fast_entry_args_need_no_binding(
@@ -9387,6 +9419,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_args.push_back(aot_ctx_arg);
                         call_args.push_back(xsink_arg);
                         result = builder->CreateCall(fast_fn, call_args);
+                        invoke_return_kind = aot_self_recursive_return_kind;
                         if (has_arg_cleanups) {
                             auto clear_helper = module.getOrInsertFunction(
                                     "qore_rt_clear_arg_cleanups",
@@ -9497,6 +9530,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_args.push_back(xsink_arg);
                         result = builder->CreateCall(
                                 aot_invoke_context_independent_fn, call_args);
+                        invoke_return_kind = aot_static_batch_callee->return_kind;
                         if (has_arg_cleanups) {
                             auto clear_helper = module.getOrInsertFunction(
                                     "qore_rt_clear_arg_cleanups",
@@ -9517,6 +9551,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (!result) {
                             return false;
                         }
+                        invoke_return_kind = aot_static_batch_callee->return_kind;
                     } else if (has_arg_cleanups) {
                         auto ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
@@ -10677,7 +10712,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             values[inst->result.id] = result;
             // RefForeachInit returns an opaque state handle — not a nanboxed QoreValue
-            if (inv->invoke_opcode != QoreIROpcode::RefForeachInit) {
+            if (inv->invoke_opcode != QoreIROpcode::RefForeachInit
+                    && invoke_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
             }
@@ -10774,7 +10810,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
-            builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            builder->CreateRet(getNothingReturnValue());
             return true;
         }
 
@@ -10827,7 +10863,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
-            builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            builder->CreateRet(getNothingReturnValue());
             return true;
         }
 
@@ -11050,6 +11086,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
+            BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;
             bool call_may_modify_runtime_locals = true;
             if (type_name_fast_path) {
                 auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
@@ -11090,6 +11127,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
                 call_result = builder->CreateCall(aot_approach_b_fn, call_args);
+                call_return_kind = aot_approach_b_callee->return_kind;
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
@@ -11117,6 +11155,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     return false;
                 }
+                call_return_kind = aot_approach_b_callee->return_kind;
                 call_may_modify_runtime_locals =
                     aot_approach_b_callee->may_invalidate_external_caches;
             } else if (aot_mode && direct_inst->is_self_recursive
@@ -11148,6 +11187,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
                 call_result = builder->CreateCall(fast_fn, call_args);
+                call_return_kind = aot_self_recursive_return_kind;
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
@@ -11241,6 +11281,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     call_args.push_back(xsink_arg);
                     call_result = builder->CreateCall(fast_fn, call_args);
+                    call_return_kind = callee_info.return_kind;
                     if (has_arg_cleanups) {
                         auto clear_helper = module.getOrInsertFunction(
                                 "qore_rt_clear_arg_cleanups",
@@ -11339,12 +11380,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            nanboxed_values.insert(inst->result.id);
+            if (call_return_kind == BatchCalleeReturnKind::Boxed) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             if (aot_approach_b_callee
                     && aot_approach_b_callee->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -11545,12 +11588,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            nanboxed_values.insert(inst->result.id);
+            if (!aot_self_batch_callee
+                    || aot_self_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             if (aot_self_batch_callee
                     && aot_self_batch_callee->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -11751,13 +11797,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            nanboxed_values.insert(inst->result.id);
+            if (!aot_self_batch_callee
+                    || aot_self_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             if (aot_self_batch_callee
                     && aot_self_batch_callee->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
-
             // Check for exception and branch accordingly (like Invoke)
             auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
                     llvm::FunctionType::get(i64_type, {ptr_type}, false));
@@ -11971,8 +12019,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
 
             values[inst->result.id] = call_result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            if (!aot_static_batch_callee
+                    || aot_static_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -17633,7 +17684,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
-            builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            builder->CreateRet(getNothingReturnValue());
             return true;
         }
 

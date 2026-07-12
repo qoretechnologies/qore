@@ -537,6 +537,11 @@ static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
     return kind == BatchCalleeParamKind::NativeFloat ? double_ty : i64_ty;
 }
 
+static llvm::Type* qore_aot_fast_entry_return_type(BatchCalleeReturnKind kind,
+        llvm::Type* i64_ty, llvm::Type* double_ty) {
+    return kind == BatchCalleeReturnKind::NativeFloat ? double_ty : i64_ty;
+}
+
 //! Check if an AOT function can have an Approach B fast entry.
 //! Criteria: all params/body locals IR-only, no closures/references/varargs.
 static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
@@ -962,6 +967,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                 entry.flags |= QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
             }
             entry.num_params = info.num_params;
+            entry.return_kind = static_cast<uint8_t>(info.return_kind);
             entry.param_kinds.reserve(info.param_kinds.size());
             size_t param_i = 0;
             for (BatchCalleeParamKind kind : info.param_kinds) {
@@ -3348,10 +3354,55 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 summary.may_invalidate_external_caches;
             callee_it->second.never_returns_nothing =
                 summary.never_returns_nothing;
+            callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
+                variant, summary.never_returns_nothing);
             if (!disable_noescape_params) {
                 callee_it->second.param_noescape = summary.param_noescape;
             }
         }
+    }
+    return true;
+}
+
+static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::Module& module,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+    auto* double_ty = llvm::Type::getDoubleTy(ctx);
+    auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+    size_t entry_i = 0;
+    for (const auto& [variant, info] : batch_callees) {
+        (void)variant;
+        if (entry_i++ && !(entry_i % 100)
+                && qore_check_cancel(nullptr, "AOT fast-entry return ABI declaration")) {
+            return false;
+        }
+        if (!info.approach_b_eligible || info.fast_name.empty()) {
+            continue;
+        }
+        llvm::Function* old_fn = module.getFunction(info.fast_name);
+        if (old_fn) {
+            assert(old_fn->empty());
+            assert(old_fn->use_empty());
+            old_fn->eraseFromParent();
+        }
+        std::vector<llvm::Type*> params;
+        params.reserve(info.num_params + 2);
+        for (unsigned i = 0; i < info.num_params; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr, "AOT fast-entry return ABI parameter setup")) {
+                return false;
+            }
+            BatchCalleeParamKind kind = i < info.param_kinds.size()
+                ? info.param_kinds[i] : BatchCalleeParamKind::Boxed;
+            params.push_back(qore_aot_fast_entry_param_type(kind, i64_ty, double_ty));
+        }
+        params.push_back(ptr_ty);
+        params.push_back(ptr_ty);
+        auto* fn_type = llvm::FunctionType::get(
+            qore_aot_fast_entry_return_type(info.return_kind, i64_ty, double_ty), params, false);
+        llvm::Function* fn = llvm::Function::Create(fn_type,
+            llvm::Function::InternalLinkage, info.fast_name, module);
+        fn->addFnAttr(llvm::Attribute::InlineHint);
     }
     return true;
 }
@@ -3641,6 +3692,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
     }
+    if (!refreshAOTBatchFastEntryDeclarations(ctx, module, aot_batch_callee_map)) {
+        return false;
+    }
     resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
 
     size_t ns_i = 0;
@@ -3694,7 +3748,8 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
         }
         params.push_back(ptr_ty);
         params.push_back(ptr_ty);
-        auto* fn_type = llvm::FunctionType::get(i64_ty, params, false);
+        auto* fn_type = llvm::FunctionType::get(
+            qore_aot_fast_entry_return_type(info.return_kind, i64_ty, double_ty), params, false);
         llvm::Function* fn = module.getFunction(info.fast_name);
         if (!fn) {
             fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
@@ -3739,6 +3794,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
     info.never_returns_nothing =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
+    if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeFloat)) {
+        return false;
+    }
+    info.return_kind = static_cast<BatchCalleeReturnKind>(rec.fast_return_kind);
     info.fast_name = rec.native_symbol;
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
@@ -4352,9 +4411,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         // comparison mis-identifies cross-namespace
                         // calls to same-named wrappers as self-recursion
                         // (e.g. `OMQ::foo` → `Util::foo`).
+                        auto fast_info_it = aot_batch_callee_map->find(variant);
+                        BatchCalleeReturnKind self_return_kind
+                            = fast_info_it == aot_batch_callee_map->end()
+                                ? BatchCalleeReturnKind::Boxed
+                                : fast_info_it->second.return_kind;
                         lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name, fe,
                                 &fast_entry_param_kinds,
-                                &fast_entry_param_rejects_nothing);
+                                &fast_entry_param_rejects_nothing, self_return_kind);
                     }
                     // Debug: dump IR before LLVM lowering if requested
                     if (getenv("QORE_AOT_DUMP_IR")) {
@@ -4425,12 +4489,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                             fast_lowerer.setBatchCallees(aot_batch_callee_map);
                         }
+                        auto fast_info_it = aot_batch_callee_map->find(variant);
+                        BatchCalleeReturnKind fast_return_kind
+                            = fast_info_it == aot_batch_callee_map->end()
+                                ? BatchCalleeReturnKind::Boxed
+                                : fast_info_it->second.return_kind;
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                &param_kind_map, &borrowed_param_map);
+                                &param_kind_map, &borrowed_param_map, fast_return_kind);
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
-                                    &fast_entry_param_rejects_nothing);
+                                    &fast_entry_param_rejects_nothing, fast_return_kind);
                         }
                         std::string fast_error;
                         if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
@@ -4781,8 +4850,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
                                 fast_lowerer.setBatchCallees(aot_batch_callee_map);
                             }
+                            auto fast_info_it = aot_batch_callee_map->find(variant);
+                            BatchCalleeReturnKind fast_return_kind
+                                = fast_info_it == aot_batch_callee_map->end()
+                                    ? BatchCalleeReturnKind::Boxed
+                                    : fast_info_it->second.return_kind;
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                    &param_kind_map, &borrowed_param_map);
+                                    &param_kind_map, &borrowed_param_map, fast_return_kind);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
                                 printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",

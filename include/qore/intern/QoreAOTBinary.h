@@ -274,7 +274,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 2;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 3;
 
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
 constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
@@ -300,6 +300,7 @@ struct QoreAOTSymbolIndexRecord {
     std::string provider_source_file;
     uint32_t fast_entry_flags = 0;
     uint32_t fast_entry_num_params = 0;
+    uint8_t fast_return_kind = 0;
     std::vector<uint8_t> fast_param_kinds;
     std::vector<uint8_t> fast_param_rejects_nothing;
     std::vector<uint8_t> fast_param_noescape;
@@ -310,6 +311,7 @@ struct QoreAOTFastEntryIndexInfo {
     std::string native_symbol;
     uint32_t flags = 0;
     uint32_t num_params = 0;
+    uint8_t return_kind = 0;
     std::vector<uint8_t> param_kinds;
     std::vector<uint8_t> param_rejects_nothing;
     std::vector<uint8_t> param_noescape;

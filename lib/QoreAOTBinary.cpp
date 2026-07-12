@@ -6501,6 +6501,7 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeStringRef(rec.provider_source_file.c_str());
     writer.writeU32(rec.fast_entry_flags);
     writer.writeU32(rec.fast_entry_num_params);
+    writer.writeU8(rec.fast_return_kind);
     for (const auto* values : {&rec.fast_param_kinds,
             &rec.fast_param_rejects_nothing, &rec.fast_param_noescape}) {
         writer.writeU32(static_cast<uint32_t>(values->size()));
@@ -6559,6 +6560,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.abi_kind = "qore_fast_v1";
     rec.fast_entry_flags = info.flags;
     rec.fast_entry_num_params = info.num_params;
+    rec.fast_return_kind = info.return_kind;
     rec.fast_param_kinds = info.param_kinds;
     rec.fast_param_rejects_nothing = info.param_rejects_nothing;
     rec.fast_param_noescape = info.param_noescape;
@@ -7703,6 +7705,13 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     }
     rec.fast_entry_flags = QoreAOTBinaryReader::readU32(ptr);
     rec.fast_entry_num_params = QoreAOTBinaryReader::readU32(ptr);
+    if (version >= 3) {
+        if (ptr >= end) {
+            error = "truncated SYMBOL_INDEX fast-entry return metadata";
+            return false;
+        }
+        rec.fast_return_kind = QoreAOTBinaryReader::readU8(ptr);
+    }
     return readSymbolIndexByteVector(ptr, end, rec.fast_param_kinds, error,
             "fast_param_kinds")
         && readSymbolIndexByteVector(ptr, end, rec.fast_param_rejects_nothing,
