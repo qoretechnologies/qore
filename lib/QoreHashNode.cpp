@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
@@ -729,6 +730,13 @@ bool QoreHashNode::existsKeyValue(const char* key) const {
 }
 
 int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
+    // as an alias to the anchor rendered with the container, so this check is made before the recursion check
+    QoreFormatBoundsHelper fbh(str, this, empty() ? "{}" : "{...}");
+    if (fbh.elided()) {
+        return 0;
+    }
+
     QoreContainerHelper cch(this);
     if (!cch) {
         str.sprintf("{ERROR: recursive reference to hash %p}", this);
@@ -738,12 +746,17 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
     if (foff == FMT_YAML_SHORT) {
         str.concat('{');
         ConstHashIterator hi(this);
+        size_t count = 0;
         while (hi.next()) {
+            if (fbh.elideElements(str, count, size())) {
+                break;
+            }
             str.sprintf("%s: ", hi.getKey());
             if (hi.get().getAsString(str, foff, xsink))
                 return -1;
             if (!hi.last())
                 str.concat(", ");
+            ++count;
         }
         str.concat('}');
         return 0;
@@ -759,7 +772,12 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
             return 0;
         }
         ConstHashIterator hi(this);
+        size_t count = 0;
         while (hi.next()) {
+            if (fbh.elideElements(str, count, size())) {
+                break;
+            }
+            ++count;
             if (indent > 0)
                 str.addch(' ', indent);
             str.sprintf("%s:", hi.getKey());
@@ -809,7 +827,12 @@ int QoreHashNode::getAsString(QoreString& str, int foff, ExceptionSink* xsink) c
     }
 
     ConstHashIterator hi(this);
+    size_t count = 0;
     while (hi.next()) {
+        if (fbh.elideElements(str, count, size())) {
+            break;
+        }
+        ++count;
         if (foff != FMT_NONE)
             str.addch(' ', foff + 2);
 

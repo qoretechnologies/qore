@@ -81,13 +81,16 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     // do not block SIGALRM or SIGCHLD on UNIX platforms (any platform that supports signals)
     sigdelset(&mask, SIGALRM);
     sigdelset(&mask, SIGCHLD);
+    // SIGSEGV must never be blocked or caught by the library: it is delivered synchronously to the faulting
+    // thread, and other components in the process rely on handling it themselves (the JVM uses it for implicit
+    // null checks, for example), so it is left entirely to the OS and to any handler installed in the process
     sigdelset(&mask, SIGSEGV);
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
         fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
-        fmap[SIGSEGV] = "QORE (SIGSEGV for stack guard)";
+        fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
     }
 }
 
@@ -113,9 +116,12 @@ void QoreSignalManager::init(bool disable_signal_mask) {
         qore_sigmask(SIG_SETMASK, &mask, 0);
 
         // set up default handler mask
+        // NOTE: SIGSEGV is deliberately not included; the signal thread must not wait for it, as sigwait() in
+        // the signal thread would consume a SIGSEGV delivered to the process and no Qore-language handler can
+        // be set for it in any case (it is reserved), so it would simply be ignored, and any handler installed
+        // by another component in the process (ex: the JVM) would never see it
         sigemptyset(&mask);
         sigaddset(&mask, QORE_STATUS_SIGNAL);
-        sigaddset(&mask, SIGSEGV);
         sigaddset(&mask, SIGALRM);
         sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGINT);

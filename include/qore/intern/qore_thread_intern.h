@@ -635,6 +635,13 @@ DLLLOCAL void delete_signal_thread();
 DLLLOCAL int thread_push_container(const AbstractQoreNode* n);
 DLLLOCAL void thread_pop_container(const AbstractQoreNode* n);
 
+class QoreFormatBoundsContext;
+
+//! returns the format bounds context active in the current thread or nullptr if none is active
+DLLLOCAL QoreFormatBoundsContext* thread_get_format_bounds();
+//! sets the format bounds context for the current thread; nullptr means that value formatting is not bounded
+DLLLOCAL void thread_set_format_bounds(QoreFormatBoundsContext* ctx);
+
 // called when a StatementBlock has "on block exit" blocks
 DLLLOCAL void pushBlock(block_list_t::iterator i);
 // called when a StatementBlock has "on block exit" blocks

@@ -439,6 +439,9 @@ public:
     // used to detect output of recursive data structures at runtime
     const_node_set_t node_set;
 
+    // the format bounds context active in this thread, if any
+    QoreFormatBoundsContext* format_bounds = nullptr;
+
     // currently-executing/parsing block's return type
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
@@ -1226,6 +1229,14 @@ void set_reexport(QoreAbstractModule* m, bool reexport) {
 int thread_push_container(const AbstractQoreNode* n) {
     std::pair<const_node_set_t::iterator, bool> rv = thread_data.get()->node_set.insert(n);
     return !rv.second;
+}
+
+QoreFormatBoundsContext* thread_get_format_bounds() {
+    return thread_data.get()->format_bounds;
+}
+
+void thread_set_format_bounds(QoreFormatBoundsContext* ctx) {
+    thread_data.get()->format_bounds = ctx;
 }
 
 void thread_pop_container(const AbstractQoreNode* n) {

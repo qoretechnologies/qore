@@ -34,6 +34,7 @@
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreFormatBounds.h"
 
 #include <cstdarg>
 
@@ -133,6 +134,14 @@ QoreString* QoreStringNode::getAsString(bool& del, int foff, ExceptionSink* xsin
 
 int QoreStringNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
     assert(str.getEncoding()->isAsciiCompat());
+    // a string longer than the remaining output budget is truncated when format bounds are active in this thread
+    QoreFormatBoundsContext* fb = thread_get_format_bounds();
+    if (fb) {
+        int rc = fb->renderString(str, this, xsink);
+        if (rc) {
+            return rc < 0 ? -1 : 0;
+        }
+    }
     str.concat('"');
     str.concatEscape(this, '\"', '\\', xsink);
     if (xsink && *xsink) {
