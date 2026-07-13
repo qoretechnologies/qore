@@ -368,7 +368,8 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             } else if (inst->opcode == QoreIROpcode::IteratorNext
                     || inst->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst->opcode == QoreIROpcode::TypedForeachNextFloat
-                    || inst->opcode == QoreIROpcode::TypedForeachNextBool) {
+                    || inst->opcode == QoreIROpcode::TypedForeachNextBool
+                    || inst->opcode == QoreIROpcode::TypedForeachNextString) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (!iter || !iter->iterator.isValid()) {
                     error = "iterator.next missing iterator";

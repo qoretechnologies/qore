@@ -71,6 +71,26 @@ bool sub deletedBoolIsNothing() {
     return value === NOTHING;
 }
 
+*string sub maybeAssignedString(bool assign) {
+    string value;
+    if (assign) {
+        value = \"set\";
+    }
+    return value;
+}
+
+bool sub removedStringIsNothing() {
+    string value = \"set\";
+    remove value;
+    return value === NOTHING;
+}
+
+bool sub deletedStringIsNothing() {
+    string value = \"set\";
+    delete value;
+    return value === NOTHING;
+}
+
 int sub unassigned() {
     list<int> values;
     int total = 0;
@@ -127,6 +147,14 @@ int sub optionalBool(*list<bool> values) {
     return total;
 }
 
+string sub optionalString(*list<string> values) {
+    string result = \"\";
+    foreach string value in (values) {
+        result += value;
+    }
+    return result;
+}
+
 int sub sparseInt() {
     list<int> values = ();
     values[2] = 7;
@@ -157,6 +185,16 @@ int sub sparseBool() {
         }
     }
     return total;
+}
+
+string sub sparseString() {
+    list<string> values = ();
+    values[2] = \"set\";
+    string result;
+    foreach string value in (values) {
+        result += value;
+    }
+    return result;
 }
 
 int sub sparseAuto() {
@@ -234,6 +272,37 @@ string sub genericList(list<string> values) {
     return result;
 }
 
+string sub firstString(list<string> values) {
+    foreach string value in (values) {
+        return value;
+    }
+    return \"\";
+}
+
+string sub stringMutationSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        result += value;
+        if (value == \"a\") {
+            push values, \"c\";
+        }
+    }
+    return result + \":\" + string(values.size());
+}
+
+string sub stringReassignmentSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        result += value;
+        if (value == \"a\") {
+            values = (\"x\",);
+        }
+    }
+    return result + \":\" + values[0];
+}
+
 string action = ARGV.size() ? ARGV[0] : \"\";
 if (action == \"sparse-int\") {
     sparseInt();
@@ -247,11 +316,28 @@ if (action == \"sparse-bool\") {
     sparseBool();
     exit(0);
 }
+if (action == \"sparse-string\") {
+    sparseString();
+    exit(0);
+}
 bool basic = action == \"basic\";
 if (unassignedBool() || !(maybeAssignedBool(False) === NOTHING)
         || !(maybeAssignedBool(True) === True) || !removedBoolIsNothing()
         || !deletedBoolIsNothing()) {
     printf(\"bool assigned-state mismatch\\n\");
+    exit(2);
+}
+if (!(maybeAssignedString(False) === NOTHING)
+        || maybeAssignedString(True) != \"set\" || !removedStringIsNothing()
+        || !deletedStringIsNothing()
+        || optionalString(NOTHING) != \"\" || optionalString((\"a\", \"b\")) != \"ab\"
+        || firstString((\"first\", \"second\")) != \"first\"
+        || (!basic && (stringMutationSnapshot() != \"ab:3\"
+            || stringReassignmentSnapshot() != \"ab:x\"))) {
+    printf(\"string mismatch: maybe-empty=%y maybe-set=%y removed=%y deleted=%y optional-empty=%y optional-ab=%y mutation=%y reassignment=%y\\n\",
+        maybeAssignedString(False), maybeAssignedString(True), removedStringIsNothing(),
+        deletedStringIsNothing(), optionalString(NOTHING), optionalString((\"a\", \"b\")),
+        stringMutationSnapshot(), stringReassignmentSnapshot());
     exit(2);
 }
 printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\", sumInt((1, 2, 3, 4)),
@@ -314,7 +400,7 @@ if (aot != expected || disabled_aot != basic_expected) {
     exit(2);
 }
 
-foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool")) {
+foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool", "sparse-string")) {
     foreach string mode in (("ast", "ir", "tiered", "jit")) {
         string actual = runMode(mode, False, sparse_test);
         if (actual !~ /RUNTIME-TYPE-ERROR/) {
@@ -341,15 +427,20 @@ if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: deleted:.*typed-foreach=1/
         || stats !~ /IR-OPT: optional:.*typed-foreach=1/
         || stats !~ /IR-OPT: optionalBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: optionalString:.*typed-foreach=1/
         || stats !~ /IR-OPT: sparseInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: sparseFloat:.*typed-foreach=1/
         || stats !~ /IR-OPT: sparseBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseString:.*typed-foreach=1/
+        || stats !~ /IR-OPT: genericList:.*typed-foreach=1/
+        || stats !~ /IR-OPT: firstString:.*typed-foreach=1/
+        || stats !~ /IR-OPT: stringMutationSnapshot:.*typed-foreach=1/
+        || stats !~ /IR-OPT: stringReassignmentSnapshot:.*typed-foreach=1/
         || stats !~ /IR-OPT: nested:.*typed-foreach=2/) {
     printf("missing typed foreach lowering:\n%s", stats);
     exit(2);
 }
-if (stats !~ /IR-OPT: genericList:.*typed-foreach=0/
-        || stats !~ /IR-OPT: sparseAuto:.*typed-foreach=0/) {
+if (stats !~ /IR-OPT: sparseAuto:.*typed-foreach=0/) {
     printf("unsafe typed foreach lowering:\n%s", stats);
     exit(2);
 }

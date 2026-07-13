@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 389,
+static_assert(QORE_IR_MAX_OPCODE == 390,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -5820,14 +5820,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // runtime stack, so StoreLocal must sync via qore_rt_assign_local_aot (which
     // adds a reference).  Without sync, the alloca holds the only reference while
     // the cleanup alloca also tracks the source value for decref → double-free on
-    // function exit. Proven-assigned native scalar locals carry no references,
-    // so they can safely remain alloca-only and skip runtime synchronization.
+    // function exit. Proven-assigned native scalar locals carry no references;
+    // exact string locals use the existing owned IR-local alloca cleanup. Both
+    // can safely remain alloca-only and skip runtime synchronization.
     // Parameters and other non-body locals remain IR-only.
     aot_adjusted_ir_only.clear();
     if (aot_mode && ir_only_locals_set && !func.all_body_locals.empty()) {
         aot_adjusted_ir_only = *ir_only_locals_set;
         static const bool native_aot_body_locals =
             std::getenv("QORE_DISABLE_AOT_NATIVE_BODY_LOCALS") == nullptr;
+        static const bool string_aot_body_locals =
+            std::getenv("QORE_DISABLE_AOT_STRING_BODY_LOCALS") == nullptr;
         for (LocalVar* lv : func.all_body_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
             const QoreTypeInfo* ti = lv->getTypeInfo();
@@ -5837,7 +5840,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         && !QoreTypeInfo::getReturnEnum(ti))
                     || QoreTypeInfo::isType(ti, NT_FLOAT)
                     || QoreTypeInfo::isType(ti, NT_BOOLEAN));
-            if (!native_scalar) {
+            bool owned_string = string_aot_body_locals
+                && !native_unsafe_locals.count(key)
+                && ti == stringTypeInfo;
+            if (!native_scalar && !owned_string) {
                 aot_adjusted_ir_only.erase(key);
             }
         }
@@ -6249,7 +6255,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 direct_typed_list_read_sources.insert(inst_ptr->operands[0].id);
             } else if (inst_ptr->opcode == QoreIROpcode::TypedForeachNextInt
                     || inst_ptr->opcode == QoreIROpcode::TypedForeachNextFloat
-                    || inst_ptr->opcode == QoreIROpcode::TypedForeachNextBool) {
+                    || inst_ptr->opcode == QoreIROpcode::TypedForeachNextBool
+                    || inst_ptr->opcode == QoreIROpcode::TypedForeachNextString) {
                 const auto* next = static_cast<const QoreIRIteratorNextInstruction*>(inst_ptr.get());
                 direct_typed_list_read_sources.insert(next->iterator.id);
             }
@@ -6376,7 +6383,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 if (user == QoreIROpcode::TypedForeachNextInt
                         || user == QoreIROpcode::TypedForeachNextFloat
-                        || user == QoreIROpcode::TypedForeachNextBool) {
+                        || user == QoreIROpcode::TypedForeachNextBool
+                        || user == QoreIROpcode::TypedForeachNextString) {
                     has_next = true;
                 } else if (user == QoreIROpcode::Decref) {
                     has_decref = true;
@@ -8446,6 +8454,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && (QoreTypeInfo::isHashType(local_ti)
                     || QoreTypeInfo::isListType(local_ti));
 
+            const QoreIRValueFacts* operand_facts = current_ir_func
+                ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
+            bool exact_assigned_string = local_ti == stringTypeInfo
+                && operand_facts
+                && operand_facts->type_info == stringTypeInfo
+                && operand_facts->assigned_state == QoreIRAssignedState::Assigned
+                && operand_facts->never_nothing;
+
             // Case 3: Scalar typed locals also need assignment coercion before
             // storing into the LLVM alloca.  Otherwise a softint local assigned
             // from a string is coerced on the runtime stack but remains a string
@@ -8455,7 +8471,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !QoreTypeInfo::isReference(local_ti)
                 && !is_complex_typed
                 && !needs_type_strip
-                && !QoreTypeInfo::getTypedHash(local_ti);
+                && !QoreTypeInfo::getTypedHash(local_ti)
+                && !exact_assigned_string;
             bool needs_plain_any = local_ti == anyTypeInfo || local_ti == autoNoNarrowTypeInfo;
             bool needs_value_coerce = is_complex_typed || needs_scalar_coerce || needs_plain_any;
             llvm::Value* consumed_cleanup = nullptr;
@@ -19387,7 +19404,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
-        case QoreIROpcode::TypedForeachNextBool: {
+        case QoreIROpcode::TypedForeachNextBool:
+        case QoreIROpcode::TypedForeachNextString: {
             const auto* next_inst = static_cast<const QoreIRIteratorNextInstruction*>(inst);
             auto* list = getVal(next_inst->iterator.id, error);
             auto* index = getVal(next_inst->index.id, error);
@@ -19449,19 +19467,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             builder->CreateCall(error_helper, {
                 llvm::ConstantInt::get(i32_type,
                     inst->opcode == QoreIROpcode::TypedForeachNextFloat ? 1
-                        : inst->opcode == QoreIROpcode::TypedForeachNextBool ? 2 : 0),
+                        : inst->opcode == QoreIROpcode::TypedForeachNextBool ? 2
+                            : inst->opcode == QoreIROpcode::TypedForeachNextString ? 3 : 0),
                 xsink_arg});
             emitExceptionCheck(module, llvm_func, inst);
             builder->CreateUnreachable();
 
             builder->SetInsertPoint(value_block);
             nanboxed_values.insert(inst->result.id);
-            llvm::Value* result = inst->opcode == QoreIROpcode::TypedForeachNextInt
-                ? ensureIntTypeInline(boxed, inst->result.id)
-                : inst->opcode == QoreIROpcode::TypedForeachNextFloat
-                    ? ensureFloatTypeInline(boxed, inst->result.id, module)
-                    : unboxBool(boxed);
-            nanboxed_values.erase(inst->result.id);
+            llvm::Value* result = boxed;
+            if (inst->opcode != QoreIROpcode::TypedForeachNextString) {
+                result = inst->opcode == QoreIROpcode::TypedForeachNextInt
+                    ? ensureIntTypeInline(boxed, inst->result.id)
+                    : inst->opcode == QoreIROpcode::TypedForeachNextFloat
+                        ? ensureFloatTypeInline(boxed, inst->result.id, module)
+                        : unboxBool(boxed);
+                nanboxed_values.erase(inst->result.id);
+            }
             values[inst->result.id] = result;
             builder->CreateBr(body_it->second);
             return true;

@@ -1119,6 +1119,7 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:
+        case QoreIROpcode::TypedForeachNextString:
         case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:

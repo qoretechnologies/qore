@@ -1297,7 +1297,9 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue
     QoreIROpcode opcode = element_type == floatTypeInfo
         ? QoreIROpcode::TypedForeachNextFloat
         : element_type == boolTypeInfo
-            ? QoreIROpcode::TypedForeachNextBool : QoreIROpcode::TypedForeachNextInt;
+            ? QoreIROpcode::TypedForeachNextBool
+            : element_type == stringTypeInfo
+                ? QoreIROpcode::TypedForeachNextString : QoreIROpcode::TypedForeachNextInt;
     auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(
         opcode, list, index, limit, done_target, continue_target);
     inst->loc = loc;
@@ -1308,7 +1310,9 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue
     facts.representation = element_type == floatTypeInfo
         ? QoreIRValueRepresentation::NativeFloat
         : element_type == boolTypeInfo
-            ? QoreIRValueRepresentation::NativeBool : QoreIRValueRepresentation::NativeInt;
+            ? QoreIRValueRepresentation::NativeBool
+            : element_type == stringTypeInfo
+                ? QoreIRValueRepresentation::Boxed : QoreIRValueRepresentation::NativeInt;
     facts.never_nothing = true;
     func->setValueFacts(inst->result, facts);
     return inst;

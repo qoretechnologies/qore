@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 389,
+static_assert(QORE_IR_MAX_OPCODE == 390,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -10878,7 +10878,8 @@ load_local_done:
             }
             case QoreIROpcode::TypedForeachNextInt:
             case QoreIROpcode::TypedForeachNextFloat:
-            case QoreIROpcode::TypedForeachNextBool: {
+            case QoreIROpcode::TypedForeachNextBool:
+            case QoreIROpcode::TypedForeachNextString: {
                 auto* next_inst = static_cast<QoreIRIteratorNextInstruction*>(inst);
                 assert(next_inst->iterator.id < values.size());
                 assert(next_inst->index.id < values.size());
@@ -10897,7 +10898,8 @@ load_local_done:
                 if (entry.isNothing()) {
                     qore_rt_raise_typed_foreach_nothing(
                         inst->opcode == QoreIROpcode::TypedForeachNextFloat ? 1
-                            : inst->opcode == QoreIROpcode::TypedForeachNextBool ? 2 : 0,
+                            : inst->opcode == QoreIROpcode::TypedForeachNextBool ? 2
+                                : inst->opcode == QoreIROpcode::TypedForeachNextString ? 3 : 0,
                         xsink);
                     if (inst->exception_target) {
                         prev_block = block;
@@ -10913,8 +10915,11 @@ load_local_done:
                     setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsBigInt()));
                 } else if (inst->opcode == QoreIROpcode::TypedForeachNextFloat) {
                     setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsFloat()));
-                } else {
+                } else if (inst->opcode == QoreIROpcode::TypedForeachNextBool) {
                     setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsBool()));
+                } else {
+                    setValueSlotDirect(values, inst->result.id, entry);
+                    trackBorrowedTemp(inst->result.id);
                 }
                 prev_block = block;
                 block = next_inst->continue_target;

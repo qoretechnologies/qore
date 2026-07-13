@@ -7544,7 +7544,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             uint16_t continue_idx = QoreAOTBinaryReader::readU16(ptr);
             if ((opcode == QoreIROpcode::TypedForeachNextInt
                     || opcode == QoreIROpcode::TypedForeachNextFloat
-                    || opcode == QoreIROpcode::TypedForeachNextBool)
+                    || opcode == QoreIROpcode::TypedForeachNextBool
+                    || opcode == QoreIROpcode::TypedForeachNextString)
                     && operands.size() == 3) {
                 inst = std::make_unique<QoreIRIteratorNextInstruction>(opcode,
                     QoreIRValue(iterator_id), operands[1], operands[2], resolveBlock(done_idx),

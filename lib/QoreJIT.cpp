@@ -146,7 +146,8 @@ static std::vector<const QoreIRBasicBlock*> qore_ir_get_normal_successors(
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
-        case QoreIROpcode::TypedForeachNextBool: {
+        case QoreIROpcode::TypedForeachNextBool:
+        case QoreIROpcode::TypedForeachNextString: {
             const auto* iter = static_cast<const QoreIRIteratorNextInstruction*>(inst);
             qore_ir_add_successor(successors, iter->continue_target);
             qore_ir_add_successor(successors, iter->done_target);

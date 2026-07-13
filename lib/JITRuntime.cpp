@@ -5118,7 +5118,8 @@ extern "C" DLLEXPORT const uint64_t* qore_rt_list_get_data_unchecked(uint64_t li
 
 extern "C" DLLEXPORT void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsink) {
     if (xsink) {
-        const char* type_name = value_kind == 1 ? "float" : value_kind == 2 ? "bool" : "int";
+        const char* type_name = value_kind == 1 ? "float"
+            : value_kind == 2 ? "bool" : value_kind == 3 ? "string" : "int";
         xsink->raiseException("RUNTIME-TYPE-ERROR",
             "<foreach lvalue assignment> expects type '%s', but got no value instead",
             type_name);

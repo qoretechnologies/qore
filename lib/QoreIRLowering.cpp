@@ -2175,7 +2175,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             && !QoreTypeInfo::isReference(foreach_var_type)
             && ((element_type == bigIntTypeInfo && foreach_var_type == bigIntTypeInfo)
                 || (element_type == floatTypeInfo && foreach_var_type == floatTypeInfo)
-                || (element_type == boolTypeInfo && foreach_var_type == boolTypeInfo));
+                || (element_type == boolTypeInfo && foreach_var_type == boolTypeInfo)
+                || (element_type == stringTypeInfo && foreach_var_type == stringTypeInfo));
         QoreIRValue list_val;
         if (list_expr && !list_expr.isNothing()) {
             list_val = lowerExpression(list_expr, error);
