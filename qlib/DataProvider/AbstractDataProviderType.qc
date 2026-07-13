@@ -318,8 +318,12 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     public {
         static Type nothingType = Reflection::NothingType;
         static Type anyType = Reflection::AutoType;
-        # not initialized here to workaround issue #4048 (circular initializtion error)
-        static AbstractDataProviderType anyDataType;
+        #! The "any" data type (accepts any value); lazily constructed on first access
+        /** A static class variable rather than a constant because it is an instance of a subclass
+            (QoreDataType) of the enclosing class: Qore initializes static variable values lazily on first
+            access (not at class-init time), so this does not form a class-initialization cycle even though
+            AbstractDataProviderType's own static initializer references a subclass. */
+        static AbstractDataProviderType anyDataType = new QoreDataType(AutoType);
 
         #! Default description
         const string DefaultDesc = "no description available";

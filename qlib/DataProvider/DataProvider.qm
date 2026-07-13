@@ -74,9 +74,6 @@ module DataProvider {
         # register the data provider factory
         DataProvider::registerFactory(new NullDataProviderFactory());
 
-        # to workaround #4048 (circular initialization error)
-        AbstractDataProviderType::anyDataType = new QoreDataType(AutoType);
-
         # register the Qore processors data provider factory
         DataProvider::registerFactory(new QoreProcessorsDataProviderFactory());
 

@@ -11704,6 +11704,14 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             }
         }
 
+        // Deserialization and function registration are complete, so the inflated
+        // AOT metadata pool is dead: string refs that outlive it are interned into
+        // the program's string pool as they are read, and the debug metadata is
+        // copied by value.  For a large program the pool dominates the startup
+        // heap, so return it to the allocator now instead of pinning it for the
+        // whole run.
+        deserializer.releaseReaderBody();
+
         // Run the v3 program
         printd(2, "AOT v3: about to call qpgm->run()\n");
         QoreValue rv = qpgm->run(&xsink);
