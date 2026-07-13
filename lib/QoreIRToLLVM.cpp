@@ -3824,6 +3824,53 @@ bool QoreIRToLLVM::selfRecursiveFastEntryArgsNeedNothingGuard(
     return fastEntryNativeArgsNeedNothingGuard(self_info, raw_arg_ids);
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
+        const std::vector<llvm::Value*>& native_args) {
+    if (!info.int_expression
+            || std::getenv("QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT")
+            || info.int_expression.nodes.size() > QORE_AOT_INT_EXPRESSION_MAX_NODES) {
+        return nullptr;
+    }
+    std::vector<llvm::Value*> values;
+    values.reserve(info.int_expression.nodes.size());
+    for (const auto& node : info.int_expression.nodes) {
+        llvm::Value* value = nullptr;
+        if (node.kind == AOTIntExpressionNodeKind::Param) {
+            if (node.param < 0
+                    || static_cast<size_t>(node.param) >= native_args.size()) {
+                return nullptr;
+            }
+            value = native_args[static_cast<size_t>(node.param)];
+            if (value->getType() != i64_type) {
+                return nullptr;
+            }
+        } else if (node.kind == AOTIntExpressionNodeKind::Constant) {
+            value = llvm::ConstantInt::get(i64_type, node.constant);
+        } else {
+            if (node.lhs >= values.size() || node.rhs >= values.size()) {
+                return nullptr;
+            }
+            llvm::Value* lhs = values[node.lhs];
+            llvm::Value* rhs = values[node.rhs];
+            switch (node.kind) {
+                case AOTIntExpressionNodeKind::Add:
+                    value = builder->CreateAdd(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Sub:
+                    value = builder->CreateSub(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Mul:
+                    value = builder->CreateMul(lhs, rhs);
+                    break;
+                default:
+                    return nullptr;
+            }
+        }
+        values.push_back(value);
+    }
+    return values.back();
+}
+
 llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args) {
     if (std::getenv("QORE_DISABLE_AOT_CROSS_OBJECT_LEAF_INLINE")
@@ -4372,6 +4419,9 @@ llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
     }
     if (!result) {
         result = emitAOTComposedInt(info, native_args, module);
+    }
+    if (!result) {
+        result = emitAOTIntExpression(info, native_args);
     }
     if (!result) {
         result = emitAOTScalarLeaf(info, native_args);
