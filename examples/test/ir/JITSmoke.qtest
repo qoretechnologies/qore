@@ -5940,6 +5940,46 @@ printf(\"%d\\n\", result.size());
                     sprintf("select dynamic string comparison %s", mode));
         }
 
+        # Hash-key truth predicates use guarded access for typed-list elements:
+        # list declarations allow unassigned slots. Scalar values use the
+        # borrowed truth path; strings retain the full owned-node path.
+        code = "%modern
+list<hash<auto>> items = ();
+items[0] = (\"id\": \"bool\", \"active\": True);
+items[1] = (\"id\": \"false\", \"active\": False);
+items[2] = (\"id\": \"int\", \"active\": 1);
+items[3] = (\"id\": \"zero\", \"active\": 0);
+items[4] = (\"id\": \"string\", \"active\": \"x\");
+items[5] = (\"id\": \"empty\", \"active\": \"\");
+items[6] = (\"id\": \"missing\");
+items[8] = (\"id\": \"last\", \"active\": True);
+list<hash<auto>> result = (select items, $1.active);
+printf(\"%s\\n\", (map $1.id, result).join(\",\"));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("bool,int,string,last", result,
+                    sprintf("guarded hash-key truth predicate %s", mode));
+        }
+
+        # Exact parameters are assigned by successful binding and can use the
+        # no-guard variant; remove restores NOTHING and requires a guard.
+        code = "%modern
+bool sub active(hash<auto> h) {
+    return h.active;
+}
+bool sub removed(hash<auto> h) {
+    remove h;
+    return h.active ? True : False;
+}
+printf(\"%s:%s\\n\", active((\"active\": True)), removed((\"active\": True)));
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1:0", result,
+                    sprintf("assigned hash-key truth predicate %s", mode));
+        }
+
         # A comparison with a second use must retain its boxed Qore bool value
         code = "%modern
 auto lhs = 2;

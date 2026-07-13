@@ -785,6 +785,16 @@ uint64_t qore_rt_hash_key_access_hash_guarded(uint64_t hash_val, const char* key
 uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uint64_t hash_val, const char* key,
         uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
 
+//! Test the truth value of a constant hash key without materializing an owned
+//! lookup result. Guarded variants accept NOTHING and other non-hash values.
+int64_t qore_rt_hash_key_truthy(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_guarded(uint64_t hash_val, const char* key,
+        ExceptionSink* xsink);
+int64_t qore_rt_hash_key_truthy_guarded_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
 //! Look up a key known to have an int value; returns NOTHING if unavailable.
 uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
 uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val, const char* key,

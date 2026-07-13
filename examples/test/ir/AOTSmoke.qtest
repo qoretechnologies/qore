@@ -8897,6 +8897,39 @@ try {
                 || aot_out == "RUNTIME-OVERLOAD-ERROR\n",
             "AOT fixed hash remap sends unassigned element through parameter binding: " + aot_out);
 
+        code = "%modern
+list<hash<auto>> items = ();
+items[0] = (\"id\": \"bool\", \"active\": True);
+items[1] = (\"id\": \"false\", \"active\": False);
+items[2] = (\"id\": \"int\", \"active\": 1);
+items[3] = (\"id\": \"zero\", \"active\": 0);
+items[4] = (\"id\": \"string\", \"active\": \"x\");
+items[5] = (\"id\": \"empty\", \"active\": \"\");
+items[6] = (\"id\": \"missing\");
+items[8] = (\"id\": \"last\", \"active\": True);
+list<hash<auto>> result = (select items, $1.active);
+printf(\"%s\\n\", (map $1.id, result).join(\",\"));
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT guarded hash-key truth predicate matches interpreter");
+
+        code = "%modern
+bool sub active(hash<auto> h) {
+    return h.active;
+}
+bool sub removed(hash<auto> h) {
+    remove h;
+    return h.active ? True : False;
+}
+printf(\"%s:%s\\n\", active((\"active\": True)), removed((\"active\": True)));
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out,
+            "AOT assigned hash-key truth predicate matches interpreter");
+
         # Direct-index select on typed list
         code = "%modern
 list<int> nums = (1, -2, 3, -4, 5);

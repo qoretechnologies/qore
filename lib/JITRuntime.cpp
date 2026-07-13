@@ -242,6 +242,13 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_hash_key_access_prehashed", reinterpret_cast<void*>(&qore_rt_hash_key_access_prehashed) },
     { "qore_rt_hash_key_access_for_call_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call_prehashed) },
+    { "qore_rt_hash_key_truthy", reinterpret_cast<void*>(&qore_rt_hash_key_truthy) },
+    { "qore_rt_hash_key_truthy_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_key_truthy_prehashed) },
+    { "qore_rt_hash_key_truthy_guarded",
+        reinterpret_cast<void*>(&qore_rt_hash_key_truthy_guarded) },
+    { "qore_rt_hash_key_truthy_guarded_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_key_truthy_guarded_prehashed) },
     { "qore_rt_hash_key_access_int_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_access_int_prehashed) },
     { "qore_rt_select_hash_key_positive_int",
@@ -4260,6 +4267,104 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uin
         ? qore_rt_hash_key_access_hash_impl(hash_val, key,
             qore_rt_select_precomputed_hash(hash64, hash32), true, xsink)
         : toBits(QoreValue());
+}
+
+static int64_t qore_rt_hash_key_truthy_impl(uint64_t hash_val, const char* key,
+        size_t key_hash, bool prehashed, bool guarded, ExceptionSink* xsink) {
+    QoreValue hash_value = fromBits(hash_val);
+    if (guarded && hash_value.getType() != NT_HASH) {
+        return 0;
+    }
+    const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
+    QoreValue result = qore_rt_get_hash_key_value(hash, key, key_hash, prehashed, xsink);
+    if (*xsink) {
+        return 0;
+    }
+
+    const QoreTypeInfo* value_type = hash->getValueTypeInfo();
+    bool type_accepted = hash->getHashDecl() || result.isNothing()
+        || !QoreTypeInfo::hasType(value_type) || value_type == autoTypeInfo
+        || value_type == anyTypeInfo
+        || QoreTypeInfo::runtimeAcceptsValue(value_type, result) != QTI_NOT_EQUAL;
+    if (!result.hasNode() && type_accepted) {
+        return result.getAsBool() ? 1 : 0;
+    }
+
+    result.refSelf();
+    if (!qore_rt_apply_complex_hash_value_type(hash, key, result, xsink)) {
+        result.discard(xsink);
+        return 0;
+    }
+    qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+    if (*xsink) {
+        return 0;
+    }
+    bool truthy = result.getAsBool();
+    result.discard(xsink);
+    return truthy ? 1 : 0;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_key_truthy(uint64_t hash_val,
+        const char* key, ExceptionSink* xsink) {
+    return qore_rt_hash_key_truthy_impl(hash_val, key, 0, false, false, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_key_truthy_prehashed(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    return qore_rt_hash_key_truthy_impl(hash_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, false, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_key_truthy_guarded(uint64_t hash_val,
+        const char* key, ExceptionSink* xsink) {
+    return qore_rt_hash_key_truthy_impl(hash_val, key, 0, false, true, xsink);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_hash_key_truthy_guarded_prehashed(
+        uint64_t hash_val, const char* key, uint64_t hash64, uint32_t hash32,
+        ExceptionSink* xsink) {
+    return qore_rt_hash_key_truthy_impl(hash_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, true, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_hash_key_truthy_throwing(
+        uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    int64_t result = qore_rt_hash_key_truthy(hash_val, key, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t
+qore_rt_hash_key_truthy_prehashed_throwing(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    int64_t result = qore_rt_hash_key_truthy_prehashed(
+        hash_val, key, hash64, hash32, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t qore_rt_hash_key_truthy_guarded_throwing(
+        uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    int64_t result = qore_rt_hash_key_truthy_guarded(hash_val, key, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) int64_t
+qore_rt_hash_key_truthy_guarded_prehashed_throwing(uint64_t hash_val,
+        const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink) {
+    int64_t result = qore_rt_hash_key_truthy_guarded_prehashed(
+        hash_val, key, hash64, hash32, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx,

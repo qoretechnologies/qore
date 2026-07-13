@@ -14301,6 +14301,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool preserve_weak_result = dot_eval_only_bases.count(inst->result.id);
             bool known_hash = inst->opcode == QoreIROpcode::HashKeyAccessHash;
             bool guarded_hash = inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded;
+            bool truthy_only = native_boolean_result_values.count(inst->result.id)
+                && !std::getenv("QORE_DISABLE_HASH_KEY_TRUTHY_FUSION")
+                && (known_hash || guarded_hash);
+            if (truthy_only) {
+                const char* helper_name = guarded_hash
+                    ? (prehashed ? "qore_rt_hash_key_truthy_guarded_prehashed"
+                        : "qore_rt_hash_key_truthy_guarded")
+                    : (prehashed ? "qore_rt_hash_key_truthy_prehashed"
+                        : "qore_rt_hash_key_truthy");
+                const char* helper_throwing_name = guarded_hash
+                    ? (prehashed ? "qore_rt_hash_key_truthy_guarded_prehashed_throwing"
+                        : "qore_rt_hash_key_truthy_guarded_throwing")
+                    : (prehashed ? "qore_rt_hash_key_truthy_prehashed_throwing"
+                        : "qore_rt_hash_key_truthy_throwing");
+                if (prehashed) {
+                    auto ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, i64_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(helper_name, ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                        helper_throwing_name, ft);
+                    QoreIRPrecomputedStringHash key_hash =
+                        qore_ir_precompute_string_hash(hka_inst->key_name);
+                    values[inst->result.id] = emitMaybeInvoke(helper,
+                        helper_throwing, {base_boxed, key_const,
+                         llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                         llvm::ConstantInt::get(i32_type, key_hash.hash32), xsink_arg},
+                        module, llvm_func, inst);
+                } else {
+                    auto ft = llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(helper_name, ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                        helper_throwing_name, ft);
+                    values[inst->result.id] = emitMaybeInvoke(helper,
+                        helper_throwing, {base_boxed, key_const, xsink_arg},
+                        module, llvm_func, inst);
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             const char* helper_name = preserve_weak_result
                     ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
                         : "qore_rt_hash_key_access_for_call")
