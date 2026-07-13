@@ -6521,6 +6521,7 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeI64(rec.scalar_leaf_true_offset);
     writer.writeI64(rec.scalar_leaf_false_scale);
     writer.writeI64(rec.scalar_leaf_false_offset);
+    writer.writeStringRef(rec.object_getter_member.c_str());
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6588,6 +6589,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.scalar_leaf_true_offset = info.scalar_leaf_true_offset;
     rec.scalar_leaf_false_scale = info.scalar_leaf_false_scale;
     rec.scalar_leaf_false_offset = info.scalar_leaf_false_offset;
+    rec.object_getter_member = info.object_getter_member;
     native.push_back(std::move(rec));
 }
 
@@ -7772,6 +7774,13 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.scalar_leaf_true_offset = QoreAOTBinaryReader::readI64(ptr);
     rec.scalar_leaf_false_scale = QoreAOTBinaryReader::readI64(ptr);
     rec.scalar_leaf_false_offset = QoreAOTBinaryReader::readI64(ptr);
+    if (version < 6) {
+        return true;
+    }
+    if (!readSymbolIndexString(reader, ptr, end, rec.object_getter_member,
+            error, "object_getter_member")) {
+        return false;
+    }
     return true;
 }
 

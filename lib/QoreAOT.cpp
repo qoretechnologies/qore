@@ -994,6 +994,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.scalar_leaf_true_offset = info.scalar_leaf.true_offset;
             entry.scalar_leaf_false_scale = info.scalar_leaf.false_scale;
             entry.scalar_leaf_false_offset = info.scalar_leaf.false_offset;
+            entry.object_getter_member = info.object_getter_member;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3739,6 +3740,43 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         leaf.rhs_int = rhs.constant;
         return true;
     };
+    auto get_object_getter = [](const QoreIRFunction* func, int num_params,
+            std::string& member_name) -> bool {
+        if (std::getenv("QORE_DISABLE_AOT_OBJECT_GETTER_IMPORT") || !func
+                || num_params || func->blocks.size() != 1
+                || func->blocks.front()->instructions.size() > 4) {
+            return false;
+        }
+        const QoreIRSelfMemberInstruction* load = nullptr;
+        const QoreIRReturnInstruction* ret = nullptr;
+        for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (!inst_ptr || inst_ptr->exception_target || ret) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::DebugBlock
+                    || inst->opcode == QoreIROpcode::PushTempMark) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::LoadSelfMember) {
+                if (load || !inst->result.isValid()) {
+                    return false;
+                }
+                load = static_cast<const QoreIRSelfMemberInstruction*>(inst);
+                continue;
+            }
+            if (inst->opcode != QoreIROpcode::Return || !load) {
+                return false;
+            }
+            ret = static_cast<const QoreIRReturnInstruction*>(inst);
+        }
+        if (!load || load->member_name.empty() || !ret || !ret->has_value
+                || ret->value.id != load->result.id) {
+            return false;
+        }
+        member_name = load->member_name;
+        return true;
+    };
     for (const auto& [variant, func] : functions) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT scalar leaf summary collection")) {
@@ -3750,6 +3788,10 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
         if (callee_it == batch_callees.end() || !sig) {
             continue;
+        }
+        if (callee_it->second.implicit_self_method) {
+            get_object_getter(func, static_cast<int>(sig->numParams()),
+                callee_it->second.object_getter_member);
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
@@ -4498,6 +4540,11 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.scalar_leaf.true_offset = rec.scalar_leaf_true_offset;
     info.scalar_leaf.false_scale = rec.scalar_leaf_false_scale;
     info.scalar_leaf.false_offset = rec.scalar_leaf_false_offset;
+    info.object_getter_member = rec.object_getter_member;
+    if (!info.object_getter_member.empty()
+            && (!info.implicit_self_method || info.num_params)) {
+        return false;
+    }
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
         bool is_affine = info.scalar_leaf.kind == AOTScalarLeafKind::IntAffine;
         bool is_select = info.scalar_leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue

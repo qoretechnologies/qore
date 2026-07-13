@@ -365,6 +365,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
+    { "qore_rt_load_object_getter_aot",
+        reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -13462,6 +13464,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     return dispatch_method_on_object(object, target.method, target.qc, target.variant,
         *arg_list, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        const char* member_name, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreValue base = fromBits(base_bits);
+    if (!target.method || !target.qc || target.is_pseudo
+            || base.getType() != NT_OBJECT) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, nullptr, 0, xsink);
+    }
+    QoreObject* object = base.get<QoreObject>();
+    if (!object->isValid() || object->getClass() != target.qc) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, nullptr, 0, xsink);
+    }
+    ValueHolder value(object->getReferencedMemberNoMethod(
+        member_name, target.qc, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(value->needsEval() ? value->eval(xsink) : value.release());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx,

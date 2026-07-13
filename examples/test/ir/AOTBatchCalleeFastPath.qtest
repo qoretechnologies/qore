@@ -407,6 +407,20 @@ printf(\"%y\\n\", output);
 string sub crossFileLeafCode() {
     return "%modern
 
+final class CrossGetter {
+    private {
+        int value;
+    }
+
+    constructor(int initial_value) {
+        value = initial_value;
+    }
+
+    int getValue() {
+        return value;
+    }
+}
+
 int sub cross_leaf(int x) {
     return x + 1;
 }
@@ -484,10 +498,19 @@ string sub crossFileMainCode() {
 int sub main() {
     int value = 3;
     cross_bump(\\value);
-    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d\\n\", cross_leaf(4), cross_affine(4),
+    CrossGetter getter(9);
+    CrossGetter unassigned;
+    bool getter_rejected = False;
+    try {
+        unassigned.getValue();
+    } catch (hash<auto> ex) {
+        getter_rejected = True;
+    }
+    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d\\n\", cross_leaf(4), cross_affine(4),
         cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
         value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
-        cross_min(7, 3), cross_floor(2), cross_piecewise(2), cross_piecewise(5));
+        cross_min(7, 3), cross_floor(2), cross_piecewise(2), cross_piecewise(5),
+        getter.getValue(), getter_rejected);
     return 0;
 }
 ";
@@ -646,7 +669,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13\n") {
+if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -705,7 +728,8 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"scalar_leaf_true_scale\": 2/)
         || !(provider_index =~ /\"scalar_leaf_true_offset\": 1/)
         || !(provider_index =~ /\"scalar_leaf_false_scale\": 3/)
-        || !(provider_index =~ /\"scalar_leaf_false_offset\": -2/)) {
+        || !(provider_index =~ /\"scalar_leaf_false_offset\": -2/)
+        || !(provider_index =~ /\"object_getter_member\": \"value\"/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

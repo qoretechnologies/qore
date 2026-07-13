@@ -274,7 +274,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 5;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 6;
 
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
 constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
@@ -316,6 +316,7 @@ struct QoreAOTSymbolIndexRecord {
     int64_t scalar_leaf_true_offset = 0;
     int64_t scalar_leaf_false_scale = 0;
     int64_t scalar_leaf_false_offset = 0;
+    std::string object_getter_member;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -339,6 +340,7 @@ struct QoreAOTFastEntryIndexInfo {
     int64_t scalar_leaf_true_offset = 0;
     int64_t scalar_leaf_false_scale = 0;
     int64_t scalar_leaf_false_offset = 0;
+    std::string object_getter_member;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

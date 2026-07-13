@@ -131,6 +131,7 @@ struct BatchCalleeInfo {
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
+    std::string object_getter_member;     //!< Exact final-object getter member name
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.

@@ -5015,7 +5015,8 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
         ", \"scalar_leaf_lhs_float\": %.17g, \"scalar_leaf_rhs_float\": %.17g"
         ", \"scalar_leaf_true_scale\": " QLLD ", \"scalar_leaf_true_offset\": " QLLD
-        ", \"scalar_leaf_false_scale\": " QLLD ", \"scalar_leaf_false_offset\": " QLLD,
+        ", \"scalar_leaf_false_scale\": " QLLD ", \"scalar_leaf_false_offset\": " QLLD
+        ", \"object_getter_member\": ",
         rec.scalar_leaf_kind, rec.scalar_leaf_opcode,
         rec.scalar_leaf_lhs_param, rec.scalar_leaf_rhs_param,
         static_cast<long long>(rec.scalar_leaf_lhs_int),
@@ -5025,6 +5026,7 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         static_cast<long long>(rec.scalar_leaf_true_offset),
         static_cast<long long>(rec.scalar_leaf_false_scale),
         static_cast<long long>(rec.scalar_leaf_false_offset));
+    json_print_string(rec.object_getter_member);
     printf("}");
 }
 
@@ -5572,7 +5574,8 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
             ", \"scalar_leaf_lhs_float\": %.17g, \"scalar_leaf_rhs_float\": %.17g"
             ", \"scalar_leaf_true_scale\": " QLLD ", \"scalar_leaf_true_offset\": " QLLD
-            ", \"scalar_leaf_false_scale\": " QLLD ", \"scalar_leaf_false_offset\": " QLLD,
+            ", \"scalar_leaf_false_scale\": " QLLD ", \"scalar_leaf_false_offset\": " QLLD
+            ", \"object_getter_member\": ",
             rec.scalar_leaf_kind, rec.scalar_leaf_opcode,
             rec.scalar_leaf_lhs_param, rec.scalar_leaf_rhs_param,
             static_cast<long long>(rec.scalar_leaf_lhs_int),
@@ -5582,6 +5585,7 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             static_cast<long long>(rec.scalar_leaf_true_offset),
             static_cast<long long>(rec.scalar_leaf_false_scale),
             static_cast<long long>(rec.scalar_leaf_false_offset));
+        json_file_string(f, rec.object_getter_member);
         fputc('}', f);
     }
     if (!records.empty()) {
