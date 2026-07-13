@@ -45,6 +45,18 @@ int sub foreachListKernel(list<int> values, int rounds) {
     return checksum;
 }
 
+int sub foreachBoolKernel(list<bool> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach bool value in (values) {
+            if (value) {
+                ++checksum;
+            }
+        }
+    }
+    return checksum;
+}
+
 string kernel = ARGV.size() ? ARGV[0] : "typed-list";
 int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
 int checksum;
@@ -57,6 +69,9 @@ switch (kernel) {
         break;
     case "foreach-list":
         checksum = foreachListKernel((1, 2, 3, 4, 5, 6, 7, 8), rounds);
+        break;
+    case "foreach-bool":
+        checksum = foreachBoolKernel((True, False, True, True, False, True, False, True), rounds);
         break;
     default:
         checksum = typedListKernel(rounds);

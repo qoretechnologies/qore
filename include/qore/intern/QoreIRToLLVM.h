@@ -319,11 +319,10 @@ private:
     // after calls.
     bool all_locals_reload_exempt = false;
 
-    // Sets of IR-only locals that use native (unboxed) allocas for typed int/float.
-    // LoadLocal from these returns native i64/double (NOT nanboxed).
-    // StoreLocal to these stores native i64/double (skips boxing).
+    // Sets of IR-only locals that use native (unboxed) allocas.
     std::unordered_set<const void*> native_int_locals;
     std::unordered_set<const void*> native_float_locals;
+    std::unordered_set<const void*> native_bool_locals;
 
     // Set of body locals that are IR-only — these can have their allocas initialized
     // to NOTHING directly instead of loading from the runtime stack (since the fast

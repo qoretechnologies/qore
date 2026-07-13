@@ -852,7 +852,7 @@ double qore_rt_list_get_float_unchecked(uint64_t list_val, int64_t index);
 const uint64_t* qore_rt_list_get_data_unchecked(uint64_t list_val);
 
 //! Raise the typed foreach assignment error for an unassigned scalar list slot.
-void qore_rt_raise_typed_foreach_nothing(int32_t is_float, ExceptionSink* xsink);
+void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsink);
 
 //! Get the mutable entry array for a fresh fixed-size list owned by generated code.
 uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);

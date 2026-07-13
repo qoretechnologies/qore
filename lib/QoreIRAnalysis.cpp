@@ -518,6 +518,7 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
             return visit(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
+        case QoreIROpcode::TypedForeachNextBool:
             // The list, index, and entry limit are in the base operand vector.
             break;
         case QoreIROpcode::Return: {
@@ -580,7 +581,8 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
         }
         case QoreIROpcode::IteratorNext:
         case QoreIROpcode::TypedForeachNextInt:
-        case QoreIROpcode::TypedForeachNextFloat: {
+        case QoreIROpcode::TypedForeachNextFloat:
+        case QoreIROpcode::TypedForeachNextBool: {
             const auto& next = static_cast<const QoreIRIteratorNextInstruction&>(inst);
             visit(next.continue_target);
             visit(next.done_target);
@@ -951,7 +953,8 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
             qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
             break;
         case QoreIROpcode::TypedForeachNextInt:
-        case QoreIROpcode::TypedForeachNextFloat: {
+        case QoreIROpcode::TypedForeachNextFloat:
+        case QoreIROpcode::TypedForeachNextBool: {
             auto& next = static_cast<QoreIRIteratorNextInstruction&>(inst);
             if (next.operands.size() == 3) {
                 next.iterator = next.operands[0];

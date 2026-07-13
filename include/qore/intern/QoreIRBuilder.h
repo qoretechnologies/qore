@@ -308,7 +308,8 @@ public:
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createTypedForeachNext(QoreIRValue list, QoreIRValue index,
-        QoreIRValue limit, bool is_float, QoreIRBasicBlock* done_target, QoreIRBasicBlock* continue_target,
+        QoreIRValue limit, const QoreTypeInfo* element_type, QoreIRBasicBlock* done_target,
+        QoreIRBasicBlock* continue_target,
         const QoreProgramLocation* loc = nullptr);
     QoreIRRefForeachInitInstruction* createRefForeachInit(const QoreValue& parse_ref_expr,
         const QoreProgramLocation* loc = nullptr);

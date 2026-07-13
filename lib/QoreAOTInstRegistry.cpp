@@ -2783,7 +2783,8 @@ static std::unique_ptr<QoreIRInstruction> readIteratorNext(
     QoreIROpcode opcode = static_cast<QoreIROpcode>(opcode_raw);
     std::unique_ptr<QoreIRIteratorNextInstruction> inst;
     if ((opcode == QoreIROpcode::TypedForeachNextInt
-            || opcode == QoreIROpcode::TypedForeachNextFloat)
+            || opcode == QoreIROpcode::TypedForeachNextFloat
+            || opcode == QoreIROpcode::TypedForeachNextBool)
             && operands.size() == 3) {
         inst = std::make_unique<QoreIRIteratorNextInstruction>(opcode,
             QoreIRValue(iterator_id), operands[1], operands[2], ctx.resolveBlock(done_idx),

@@ -2174,7 +2174,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             && foreach_var && foreach_var->getType() != VT_IMMEDIATE
             && !QoreTypeInfo::isReference(foreach_var_type)
             && ((element_type == bigIntTypeInfo && foreach_var_type == bigIntTypeInfo)
-                || (element_type == floatTypeInfo && foreach_var_type == floatTypeInfo));
+                || (element_type == floatTypeInfo && foreach_var_type == floatTypeInfo)
+                || (element_type == boolTypeInfo && foreach_var_type == boolTypeInfo));
         QoreIRValue list_val;
         if (list_expr && !list_expr.isNothing()) {
             list_val = lowerExpression(list_expr, error);
@@ -2256,7 +2257,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // The entry size preserves iterator bounds when the source grows;
             // the fused operation also checks live size to handle removals.
             auto* next = builder.createTypedForeachNext(list_val, index_val, foreach_limit,
-                element_type == floatTypeInfo, exit_block, body_block, stmt->loc);
+                element_type, exit_block, body_block, stmt->loc);
             if (!exception_stack.empty()) {
                 next->exception_target = exception_stack.back();
             }

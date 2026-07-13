@@ -30,6 +30,47 @@ float sub sumFloat(list<float> values) {
     return total;
 }
 
+int sub countBool(list<bool> values) {
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub unassignedBool() {
+    list<bool> values;
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+*bool sub maybeAssignedBool(bool assign) {
+    bool value;
+    if (assign) {
+        value = True;
+    }
+    return value;
+}
+
+bool sub removedBoolIsNothing() {
+    bool value = True;
+    remove value;
+    return value === NOTHING;
+}
+
+bool sub deletedBoolIsNothing() {
+    bool value = True;
+    delete value;
+    return value === NOTHING;
+}
+
 int sub unassigned() {
     list<int> values;
     int total = 0;
@@ -76,6 +117,16 @@ int sub optional(*list<int> values) {
     return total;
 }
 
+int sub optionalBool(*list<bool> values) {
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
+    }
+    return total;
+}
+
 int sub sparseInt() {
     list<int> values = ();
     values[2] = 7;
@@ -92,6 +143,18 @@ float sub sparseFloat() {
     float total = 0.0;
     foreach float value in (values) {
         total += value;
+    }
+    return total;
+}
+
+int sub sparseBool() {
+    list<bool> values = ();
+    values[2] = True;
+    int total = 0;
+    foreach bool value in (values) {
+        if (value) {
+            ++total;
+        }
     }
     return total;
 }
@@ -180,10 +243,21 @@ if (action == \"sparse-float\") {
     sparseFloat();
     exit(0);
 }
+if (action == \"sparse-bool\") {
+    sparseBool();
+    exit(0);
+}
 bool basic = action == \"basic\";
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\", sumInt((1, 2, 3, 4)),
-    sumFloat((1.5, 2.5, 3.0)), unassigned(), empty(), removed(), deleted(), optional(NOTHING),
-    optional((8, 9)), sparseAuto(), controlFlow((1, 2, 3, 4, 5)),
+if (unassignedBool() || !(maybeAssignedBool(False) === NOTHING)
+        || !(maybeAssignedBool(True) === True) || !removedBoolIsNothing()
+        || !deletedBoolIsNothing()) {
+    printf(\"bool assigned-state mismatch\\n\");
+    exit(2);
+}
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\", sumInt((1, 2, 3, 4)),
+    sumFloat((1.5, 2.5, 3.0)), countBool((True, False, True)), unassigned(), empty(), removed(),
+    deleted(), optional(NOTHING), optional((8, 9)), optionalBool(NOTHING),
+    optionalBool((False, True, True)), sparseAuto(), controlFlow((1, 2, 3, 4, 5)),
     returnFromLoop((1, 2, 3, 4)), nested((1, 2), (3, 4)), basic ? 0 : mutationSnapshot(),
     basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")));
 ";
@@ -214,7 +288,7 @@ string sub runAot(bool disabled, string arg) {
         libqore_dir, exe, arg));
 }
 
-string expected = "10:7.0:0:0:0:0:0:17:72:4:3:21:12304:12302:ab\n";
+string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
@@ -222,7 +296,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string basic_expected = "10:7.0:0:0:0:0:0:17:72:4:3:21:0:0:ab\n";
+string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab\n";
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode, True, "basic");
     if (actual != basic_expected) {
@@ -240,7 +314,7 @@ if (aot != expected || disabled_aot != basic_expected) {
     exit(2);
 }
 
-foreach string sparse_test in (("sparse-int", "sparse-float")) {
+foreach string sparse_test in (("sparse-int", "sparse-float", "sparse-bool")) {
     foreach string mode in (("ast", "ir", "tiered", "jit")) {
         string actual = runMode(mode, False, sparse_test);
         if (actual !~ /RUNTIME-TYPE-ERROR/) {
@@ -260,12 +334,16 @@ string stats = backquote(sprintf(
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: sumFloat:.*typed-foreach=1/
+        || stats !~ /IR-OPT: countBool:.*typed-foreach=1/
+        || stats !~ /IR-OPT: unassignedBool:.*typed-foreach=1/
         || stats !~ /IR-OPT: unassigned:.*typed-foreach=1/
         || stats !~ /IR-OPT: removed:.*typed-foreach=1/
         || stats !~ /IR-OPT: deleted:.*typed-foreach=1/
         || stats !~ /IR-OPT: optional:.*typed-foreach=1/
+        || stats !~ /IR-OPT: optionalBool:.*typed-foreach=1/
         || stats !~ /IR-OPT: sparseInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: sparseFloat:.*typed-foreach=1/
+        || stats !~ /IR-OPT: sparseBool:.*typed-foreach=1/
         || stats !~ /IR-OPT: nested:.*typed-foreach=2/) {
     printf("missing typed foreach lowering:\n%s", stats);
     exit(2);

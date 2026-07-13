@@ -1291,19 +1291,24 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue ite
 }
 
 QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue list, QoreIRValue index,
-        QoreIRValue limit, bool is_float, QoreIRBasicBlock* done_target, QoreIRBasicBlock* continue_target,
+        QoreIRValue limit, const QoreTypeInfo* element_type, QoreIRBasicBlock* done_target,
+        QoreIRBasicBlock* continue_target,
         const QoreProgramLocation* loc) {
-    QoreIROpcode opcode = is_float
-        ? QoreIROpcode::TypedForeachNextFloat : QoreIROpcode::TypedForeachNextInt;
+    QoreIROpcode opcode = element_type == floatTypeInfo
+        ? QoreIROpcode::TypedForeachNextFloat
+        : element_type == boolTypeInfo
+            ? QoreIROpcode::TypedForeachNextBool : QoreIROpcode::TypedForeachNextInt;
     auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(
         opcode, list, index, limit, done_target, continue_target);
     inst->loc = loc;
     inst->result = func->createValue();
     QoreIRValueFacts facts;
-    facts.type_info = is_float ? floatTypeInfo : bigIntTypeInfo;
+    facts.type_info = element_type;
     facts.assigned_state = QoreIRAssignedState::Assigned;
-    facts.representation = is_float
-        ? QoreIRValueRepresentation::NativeFloat : QoreIRValueRepresentation::NativeInt;
+    facts.representation = element_type == floatTypeInfo
+        ? QoreIRValueRepresentation::NativeFloat
+        : element_type == boolTypeInfo
+            ? QoreIRValueRepresentation::NativeBool : QoreIRValueRepresentation::NativeInt;
     facts.never_nothing = true;
     func->setValueFacts(inst->result, facts);
     return inst;

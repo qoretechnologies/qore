@@ -5116,11 +5116,12 @@ extern "C" DLLEXPORT const uint64_t* qore_rt_list_get_data_unchecked(uint64_t li
     return reinterpret_cast<const uint64_t*>(qore_list_private::get(*list)->entry);
 }
 
-extern "C" DLLEXPORT void qore_rt_raise_typed_foreach_nothing(int32_t is_float, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsink) {
     if (xsink) {
+        const char* type_name = value_kind == 1 ? "float" : value_kind == 2 ? "bool" : "int";
         xsink->raiseException("RUNTIME-TYPE-ERROR",
             "<foreach lvalue assignment> expects type '%s', but got no value instead",
-            is_float ? "float" : "int");
+            type_name);
     }
 }
 
