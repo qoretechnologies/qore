@@ -58,6 +58,7 @@ class QoreIRFunction;
 class LocalVar;
 class Var;
 class UserVariantBase;
+class UserSignature;
 class QoreFunction;
 class AbstractQoreFunctionVariant;
 class QoreParseListNode;
@@ -127,7 +128,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v7: serialized Find instructions include the explicit find mode
 //! v8: serialized Phi instructions include the PHI value representation kind
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 9;
+//! v10: callable generic type-parameter declarations are preserved in variant signatures
+constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 10;
 
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
@@ -1022,6 +1025,7 @@ class QoreAOTTypeResolver {
     QoreProgram* pgm;
     cache_t owned_cache;
     cache_t* cache_ptr = &owned_cache;  // default: own our own cache
+    const UserSignature* signature_type_param_owner = nullptr;
 
 public:
     explicit QoreAOTTypeResolver(QoreProgram* pgm) : pgm(pgm) {}
@@ -1032,6 +1036,18 @@ public:
         @return the resolved type, or nullptr on failure
     */
     const QoreTypeInfo* resolve(const char* path, std::string& error);
+
+    //! Resolve a type path containing callable-owned type parameters.
+    /** Signature-owned type parameters cannot use the shared path cache because
+        equal serialized paths belong to distinct UserSignature instances.
+
+        @param path the serialized type path
+        @param error receives an error message on failure
+        @param signature the callable that owns any signature type parameters
+        @return the resolved type, or nullptr on failure
+    */
+    const QoreTypeInfo* resolveForSignature(const char* path, std::string& error,
+        const UserSignature* signature);
 
     //! Swap in a caller-owned cache (for cross-session sharing).
     //! The caller must keep the map alive for the resolver's lifetime.
@@ -2168,6 +2184,8 @@ private:
     //! cuts ~3.3 M resolver calls on qwf's 656 k variants.  Empty when
     //! loading a pre-feature-flag .qmod or a blob with no variants.
     std::vector<const QoreTypeInfo*> type_table_resolved;
+    //! Non-owning raw paths into reader storage for signature-owned generic types.
+    std::vector<const char*> type_table_paths;
 
     //! Set when the blob's header advertises QORE_AOT_FEAT_TYPE_TABLE.
     //! Signatures emit a u32 index rather than an inline string for

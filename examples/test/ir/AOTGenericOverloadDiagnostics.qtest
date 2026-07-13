@@ -37,6 +37,33 @@ module AOTGenericOverloadDiagnosticsMod {
 }
 
 public namespace AOTGenericOverloadDiagnosticsMod {
+public T sub identity<T>(T value) {
+    return value;
+}
+
+public T sub defaultValue<T = int>(T value = 11) {
+    return value;
+}
+
+public T sub bounded<T: int>(T value) {
+    return value;
+}
+
+public class GenericCalls {
+    constructor() {
+    }
+
+    T echo<T>(T value) {
+        return value;
+    }
+}
+
+public class GenericChooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
 public string sub verify() {
     Program p(PO_NEW_STYLE);
     p.parse(\"T sub takes<T>(T a, int b) { return a; }\", \"aot-generic-overload\");
@@ -59,6 +86,9 @@ public string sub verify() {
             ex.desc =~ /takes[(]string, string[)]/ ? \"call\" : \"missing-call\",
             ex.desc =~ /takes[(]string a, int b[)]/ ? \"candidate\" : \"missing-candidate\");
     }
+    GenericCalls calls();
+    rv += sprintf(\"%d:%s:%d:%d:%s\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
+        bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"));
     return rv;
 }
 }
@@ -67,7 +97,8 @@ public string sub verify() {
 
     private string expectedOutput() {
         return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
-            "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n";
+            "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
+            "41:echo:11:42:chosen\n";
     }
 
     private string runModule(string module_dir, string script_path) {

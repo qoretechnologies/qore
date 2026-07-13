@@ -3607,10 +3607,13 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Validate version (must be exactly 1)
-    if (header.version != QORE_AOT_BINARY_VERSION) {
+    // Readers accept the previous format so installed version-9 qmods remain
+    // usable while version 10 adds callable type-parameter metadata.
+    if (header.version < QORE_AOT_BINARY_MIN_VERSION
+            || header.version > QORE_AOT_BINARY_VERSION) {
         error = "unsupported binary format version " + std::to_string(header.version)
-              + " (expected " + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
+              + " (supported " + std::to_string(QORE_AOT_BINARY_MIN_VERSION) + "-"
+              + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
               + "; please update your Qore installation";
         return false;
     }
@@ -4728,6 +4731,39 @@ static bool extract_aot_type_args(const char* path, const char* type_name, bool&
     return false;
 }
 
+static bool extract_aot_signature_type_param_args(const char* path, bool& or_nothing,
+        std::vector<std::string>& args) {
+    or_nothing = false;
+    args.clear();
+    if (!path) {
+        return false;
+    }
+    const char* p = path;
+    if (*p == '*') {
+        or_nothing = true;
+        ++p;
+    }
+    static constexpr const char* prefix = "typeparam<,";
+    if (strncmp(p, prefix, strlen(prefix))) {
+        return false;
+    }
+    size_t len = strlen(p);
+    if (!len || p[len - 1] != '>') {
+        return false;
+    }
+
+    // split_aot_type_args() correctly rejects empty structured-type
+    // arguments. Supply a temporary owner token for the one canonical form
+    // where an empty owner has meaning: a callable-owned type parameter.
+    std::string expanded("signature");
+    expanded.append(p + strlen("typeparam<"), len - strlen("typeparam<") - 1);
+    if (!split_aot_type_args(expanded, args) || args.size() != 3) {
+        return false;
+    }
+    args[0].clear();
+    return true;
+}
+
 static std::string trim_aot_type_component(const std::string& str) {
     size_t start = str.find_first_not_of(" \t\r\n");
     if (start == std::string::npos) {
@@ -4960,8 +4996,28 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveTypeParameterType(const char* pa
         return qore_get_hashdecl_type_parameter_type(hd, index, param_name, or_nothing);
     }
 
-    if (!extract_aot_type_args(path, "typeparam", or_nothing, args) || args.size() != 3) {
+    bool signature_type_param = signature_type_param_owner
+        && extract_aot_signature_type_param_args(path, or_nothing, args);
+    if (!signature_type_param
+            && (!extract_aot_type_args(path, "typeparam", or_nothing, args) || args.size() != 3)) {
         return nullptr;
+    }
+
+    if (signature_type_param && signature_type_param_owner->hasTypeParameters()) {
+        errno = 0;
+        char* end = nullptr;
+        unsigned long long raw_index = strtoull(args[1].c_str(), &end, 10);
+        if (errno || !end || *end || raw_index >= signature_type_param_owner->getTypeParameterCount()) {
+            return nullptr;
+        }
+
+        size_t index = static_cast<size_t>(raw_index);
+        const char* param_name = signature_type_param_owner->getTypeParameterName(index);
+        if (!param_name || args[2] != param_name) {
+            return nullptr;
+        }
+
+        return qore_get_signature_type_parameter_type(signature_type_param_owner, index, param_name, or_nothing);
     }
 
     const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, args[0].c_str());
@@ -5306,10 +5362,17 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
         return nullptr;  // null/empty = no type constraint (auto)
     }
 
-    // Check cache first (may be owned or shared across sibling sessions)
-    auto it = cache_ptr->find(path);
-    if (it != cache_ptr->end()) {
-        return it->second;
+    // Signature-owned type parameter identities include their UserSignature
+    // owner, which is intentionally absent from the stable serialized path.
+    // Never share these entries between signatures with otherwise identical
+    // paths; nested structured types inherit the same restriction.
+    bool signature_owned = signature_type_param_owner && strstr(path, "typeparam<,");
+    if (!signature_owned) {
+        // Check cache first (may be owned or shared across sibling sessions)
+        auto it = cache_ptr->find(path);
+        if (it != cache_ptr->end()) {
+            return it->second;
+        }
     }
 
     // Try builtin types (fast path)
@@ -5340,12 +5403,23 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     }
 
     if (result) {
-        (*cache_ptr)[path] = result;
+        if (!signature_owned) {
+            (*cache_ptr)[path] = result;
+        }
         return result;
     }
 
     error = "cannot resolve type path: " + std::string(path);
     return nullptr;
+}
+
+const QoreTypeInfo* QoreAOTTypeResolver::resolveForSignature(const char* path, std::string& error,
+        const UserSignature* signature) {
+    const UserSignature* old_signature = signature_type_param_owner;
+    signature_type_param_owner = signature;
+    const QoreTypeInfo* rv = resolve(path, error);
+    signature_type_param_owner = old_signature;
+    return rv;
 }
 
 // ---- Namespace Serialization (Phase 3) ----
@@ -8072,9 +8146,12 @@ bool readCallRelocations(const QoreAOTBinaryReader& reader, QoreAOTCallRelocatio
 namespace {
 
 //! Write a function/method variant signature
-static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQoreFunctionVariant* v) {
+static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQoreFunctionVariant* v,
+        std::string& error) {
     const AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature();
     assert(sig);
+    UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase();
+    const UserSignature* usig = uvb ? uvb->getUserSignature() : nullptr;
 
     // return type path — emitted as a u32 index into the per-blob
     // TYPE_TABLE (see QoreAOTBinaryWriter::internTypePath).  At read
@@ -8092,6 +8169,7 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     //   bit  0 = effective varargs  (v->hasVarargs(), OR of sig-ellipsis and QCF_USES_EXTRA_ARGS)
     //   bit  1 = is_user
     //   bit  2 = signature literally has the `...` ellipsis (sig->hasVarargs())
+    //   bit  3 = callable type-parameter declarations follow parse options
     //   bit 15 = format marker: "bits 2+ are meaningful" (new-format qmod)
     //
     // Bits 0 and 2 together let the reader separate two distinct
@@ -8135,6 +8213,9 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     if (sig->hasVarargs()) {
         flags |= 0x0004;
     }
+    if (usig && usig->hasTypeParameters()) {
+        flags |= 0x0008;
+    }
     writer.writeU16(flags);
 
     // Per-variant signature start/end lines — plumbed into the reader's
@@ -8142,14 +8223,11 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     // line numbers instead of 0.  Gated on QORE_AOT_FEAT_SIG_LINES so older
     // readers skip these bytes and newer readers expect them.  Stored as
     // int16_t to match QoreProgramLineLocation's on-heap representation.
-    UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase();
     int16_t sig_first = 0, sig_last = 0;
-    if (uvb) {
-        if (UserSignature* usig = uvb->getUserSignature()) {
-            if (const QoreProgramLocation* vloc = usig->getParseLocation()) {
-                sig_first = vloc->start_line;
-                sig_last  = vloc->end_line;
-            }
+    if (usig) {
+        if (const QoreProgramLocation* vloc = usig->getParseLocation()) {
+            sig_first = vloc->start_line;
+            sig_last  = vloc->end_line;
         }
     }
     writer.writeU16(static_cast<uint16_t>(sig_first));
@@ -8185,6 +8263,21 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     writer.writeI64(variant_po.getLo());
     writer.writeI64(variant_po.getHi());
 
+    if (flags & 0x0008) {
+        assert(usig);
+        uint32_t count = static_cast<uint32_t>(usig->getTypeParameterCount());
+        writer.writeU32(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT callable type parameter serialization")) {
+                error = "operation cancelled during AOT callable type parameter serialization";
+                return false;
+            }
+            writer.writeStringRef(usig->getTypeParameterName(i));
+            writer.writeStringRef(usig->getTypeParameterDefaultType(i));
+            writer.writeStringRef(usig->getTypeParameterBoundType(i));
+        }
+    }
+
     // params
     const arg_vec_t& defaults = sig->getDefaultArgList();
     auto write_native_expr_default = [&writer](const QoreValue& dv) -> bool {
@@ -8212,6 +8305,10 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     };
 
     for (uint32_t i = 0; i < np; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT variant signature serialization")) {
+            error = "operation cancelled during AOT variant signature serialization";
+            return false;
+        }
         // param name
         const char* pname = sig->getName(i);
         writer.writeStringRef(pname ? pname : "");
@@ -8386,6 +8483,7 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             writer.writeU8(0);
         }
     }
+    return true;
 }
 
 //! Write NAMESPACES section
@@ -9162,13 +9260,20 @@ static void writeGlobalsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 }
 
 //! Write FUNCTIONS section
-static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::FUNCTIONS);
 
     uint32_t count = static_cast<uint32_t>(state.functions.size());
     writer.writeU32(count);
 
+    size_t function_index = 0;
     for (auto& fi : state.functions) {
+        if (function_index && !(function_index % 100)
+                && qore_check_cancel(nullptr, "AOT function signature serialization")) {
+            error = "operation cancelled during AOT function signature serialization";
+            return false;
+        }
         writer.writeStringRef(fi.entry->getName());
         writer.writeU32(fi.ns_idx);
 
@@ -9183,10 +9288,17 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         uint32_t num_variants = 0;
         {
             QoreFunctionIterator qfi(*fi.func);
+            size_t variant_index = 0;
             while (qfi.next()) {
+                if (variant_index && !(variant_index % 100)
+                        && qore_check_cancel(nullptr, "AOT function variant counting")) {
+                    error = "operation cancelled during AOT function variant counting";
+                    return false;
+                }
                 if (qfi.getVariant()->isUser()) {
                     ++num_variants;
                 }
+                ++variant_index;
             }
         }
         writer.writeU32(num_variants);
@@ -9194,7 +9306,13 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         // write user variant signatures
         {
             QoreFunctionIterator qfi(*fi.func);
+            size_t variant_index = 0;
             while (qfi.next()) {
+                if (variant_index && !(variant_index % 100)
+                        && qore_check_cancel(nullptr, "AOT function variant serialization")) {
+                    error = "operation cancelled during AOT function variant serialization";
+                    return false;
+                }
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (v->isUser()) {
                     uint8_t vflags = 0;
@@ -9203,13 +9321,18 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                         vflags |= 0x01;
                     }
                     writer.writeU8(vflags);
-                    writeVariantSignature(writer, v);
+                    if (!writeVariantSignature(writer, v, error)) {
+                        return false;
+                    }
                 }
+                ++variant_index;
             }
         }
+        ++function_index;
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 //! Recursively build a reverse map from constant value node pointers to FQNs for all namespaces
@@ -9437,7 +9560,13 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     uint32_t count = static_cast<uint32_t>(state.methods.size());
     writer.writeU32(count);
 
+    size_t method_index = 0;
     for (auto& mi : state.methods) {
+        if (method_index && !(method_index % 100)
+                && qore_check_cancel(nullptr, "AOT method signature serialization")) {
+            error = "operation cancelled during AOT method signature serialization";
+            return false;
+        }
         const QoreMethod* method = mi.method;
         writer.writeU32(mi.class_idx);
         writer.writeStringRef(method->getName());
@@ -9451,11 +9580,18 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         uint32_t num_variants = 0;
         {
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
+            size_t variant_index = 0;
             while (qfi.next()) {
+                if (variant_index && !(variant_index % 100)
+                        && qore_check_cancel(nullptr, "AOT method variant counting")) {
+                    error = "operation cancelled during AOT method variant counting";
+                    return false;
+                }
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (isAOTSerializableMethodVariant(method, v)) {
                     ++num_variants;
                 }
+                ++variant_index;
             }
         }
         writer.writeU32(num_variants);
@@ -9466,7 +9602,13 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             bool is_destructor = strcmp(method->getName(), "destructor") == 0;
             bool is_copy = strcmp(method->getName(), "copy") == 0;
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
+            size_t variant_index = 0;
             while (qfi.next()) {
+                if (variant_index && !(variant_index % 100)
+                        && qore_check_cancel(nullptr, "AOT method variant serialization")) {
+                    error = "operation cancelled during AOT method variant serialization";
+                    return false;
+                }
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (isAOTSerializableMethodVariant(method, v)) {
                     const MethodVariantBase* mvb = reinterpret_cast<const MethodVariantBase*>(v);
@@ -9502,7 +9644,9 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         mflags |= 0x08;
                     }
                     writer.writeU8(mflags);
-                    writeVariantSignature(writer, v);
+                    if (!writeVariantSignature(writer, v, error)) {
+                        return false;
+                    }
 
                     // Serialize BCA (Base Class Constructor Arguments) for constructors
                     if (is_constructor) {
@@ -9531,6 +9675,11 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
                             uint16_t bca_index = 0;
                             for (const BCANode* bca : *bcal) {
+                                if (bca_index && !(bca_index % 100)
+                                        && qore_check_cancel(nullptr, "AOT BCA serialization")) {
+                                    error = "operation cancelled during AOT BCA serialization";
+                                    return false;
+                                }
                                 // Write base class path for runtime resolution
                                 std::string base_path = aotBCAClassRef(mi.method, bca);
                                 writer.writeStringRef(base_path.c_str());
@@ -9581,6 +9730,11 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 const QoreClass* method_class = mi.method->getClass();
                                 std::string method_class_path = qore_aot_encode_class_ref(method_class);
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
+                                    if (ai && !(ai % 100)
+                                            && qore_check_cancel(nullptr, "AOT BCA argument serialization")) {
+                                        error = "operation cancelled during AOT BCA argument serialization";
+                                        return false;
+                                    }
                                     QoreValue arg_val = aotBCAArgValue(bca, ai);
                                     if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, &program_crm,
                                             method_class_path, method->getName(), base_path, bca_index, ai,
@@ -9595,8 +9749,10 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         }
                     }
                 }
+                ++variant_index;
             }
         }
+        ++method_index;
     }
 
     writer.endSection(sec_idx);
@@ -13245,8 +13401,14 @@ bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
     }
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     type_table_resolved.resize(count);
+    type_table_paths.resize(count);
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT type table resolution")) {
+            error = "operation cancelled during AOT type table resolution";
+            return false;
+        }
         const char* path = reader.readStringRef(ptr);
+        type_table_paths[i] = path;
         if (!path || !*path) {
             // Index 0 (or any other empty-string entry) → no type
             // constraint / auto.
@@ -15629,7 +15791,7 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
     }
 
     uint32_t num_params = QoreAOTBinaryReader::readU32(ptr);
-    QoreAOTBinaryReader::readU16(ptr);
+    uint16_t sig_flags = QoreAOTBinaryReader::readU16(ptr);
 
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
         QoreAOTBinaryReader::readU16(ptr);
@@ -15642,6 +15804,23 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
         QoreAOTBinaryReader::readI64(ptr);
         QoreAOTBinaryReader::readI64(ptr);
+    }
+
+    if (reader.getHeader().version >= 10 && (sig_flags & 0x0008)) {
+        uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
+        if (!type_param_count || type_param_count > UINT16_MAX) {
+            error = "invalid callable type parameter count: " + std::to_string(type_param_count);
+            return false;
+        }
+        for (uint32_t i = 0; i < type_param_count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT callable type parameter skip")) {
+                error = "operation cancelled during AOT callable type parameter skip";
+                return false;
+            }
+            reader.readStringRef(ptr);
+            reader.readStringRef(ptr);
+            reader.readStringRef(ptr);
+        }
     }
 
     for (uint32_t p = 0; p < num_params; ++p) {
@@ -15681,16 +15860,18 @@ static bool readAndSetupVariantSignature(
         QoreParseOptions& variant_parse_options,
         std::string& error,
         const QoreClass* classTypeInfo = nullptr,
-        const std::vector<const QoreTypeInfo*>* type_table = nullptr) {
+        const std::vector<const QoreTypeInfo*>* type_table = nullptr,
+        const std::vector<const char*>* type_paths = nullptr) {
     // Return type — when a per-blob type table is provided, the
     // serialized form is a `u32` index into it; otherwise fall back
     // to the legacy inline string + per-lookup resolve path.
     const QoreTypeInfo* ret_ti_preresolved = nullptr;
     const char* ret_type_path = nullptr;
+    uint32_t ret_type_index = UINT32_MAX;
     if (type_table) {
-        uint32_t idx = QoreAOTBinaryReader::readU32(ptr);
-        if (idx < type_table->size()) {
-            ret_ti_preresolved = (*type_table)[idx];
+        ret_type_index = QoreAOTBinaryReader::readU32(ptr);
+        if (ret_type_index < type_table->size()) {
+            ret_ti_preresolved = (*type_table)[ret_type_index];
         }
     } else {
         ret_type_path = reader.readStringRef(ptr);
@@ -15703,6 +15884,7 @@ static bool readAndSetupVariantSignature(
     //   bit  0 = effective varargs (v->hasVarargs())
     //   bit  1 = is_user
     //   bit  2 = signature literally has `...` (sig->hasVarargs())
+    //   bit  3 = callable type-parameter declarations follow parse options
     //   bit 15 = new-format marker — bits 2+ are meaningful
     //
     // Pre-marker qmods used bit 0 as the OR of both concepts, and
@@ -15713,6 +15895,7 @@ static bool readAndSetupVariantSignature(
     bool new_format = (sig_flags & 0x8000) != 0;
     bool bit0 = (sig_flags & 0x0001) != 0;
     bool bit2 = (sig_flags & 0x0004) != 0;
+    bool has_callable_type_params = reader.getHeader().version >= 10 && (sig_flags & 0x0008);
     if (new_format) {
         // bit 2 tells us precisely whether the signature had `...`;
         // bit 0 - bit 2 is the QCF_USES_EXTRA_ARGS flag alone.
@@ -15750,6 +15933,41 @@ static bool readAndSetupVariantSignature(
         variant_parse_options = pgm ? pgm->getParseOptions() : QoreParseOptions();
     }
 
+    UserSignature* sig = uvb->getUserSignature();
+    if (has_callable_type_params) {
+        uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
+        if (!type_param_count || type_param_count > UINT16_MAX) {
+            error = "invalid callable type parameter count: " + std::to_string(type_param_count);
+            return false;
+        }
+        std::vector<QoreGenericTypeParam> type_params;
+        type_params.reserve(type_param_count);
+        std::unordered_set<std::string> seen_type_params;
+        for (uint32_t i = 0; i < type_param_count; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr, "AOT callable type parameter deserialization")) {
+                error = "operation cancelled during AOT callable type parameter deserialization";
+                return false;
+            }
+            const char* name = reader.readStringRef(ptr);
+            const char* default_type = reader.readStringRef(ptr);
+            const char* bound_type = reader.readStringRef(ptr);
+            std::string type_param_name(name ? name : "");
+            if (type_param_name.empty()) {
+                error = "invalid empty callable type parameter";
+                return false;
+            }
+            if (!seen_type_params.insert(type_param_name).second) {
+                error = "duplicate callable type parameter '" + type_param_name + "'";
+                return false;
+            }
+            type_params.emplace_back(std::move(type_param_name),
+                std::string(default_type ? default_type : ""),
+                std::string(bound_type ? bound_type : ""));
+        }
+        sig->setTypeParameters(std::move(type_params));
+    }
+
     // Read params — reserve+emplace rather than resize+assign so we
     // skip the up-front default-construction of `np` empty strings per
     // variant (~3.3 M skipped default-constructions in qwf batch).
@@ -15765,13 +15983,23 @@ static bool readAndSetupVariantSignature(
     }
 
     for (uint32_t j = 0; j < np; ++j) {
+        if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT variant signature deserialization")) {
+            for (uint32_t k = 0; k < j; ++k) {
+                param_defaults[k].discard(nullptr);
+            }
+            error = "operation cancelled during AOT variant signature deserialization";
+            return false;
+        }
         const char* pname = reader.readStringRef(ptr);
-        const char* ptype_path = nullptr;  // only populated on the legacy path
+        const char* ptype_path = nullptr;
         const QoreTypeInfo* pti = nullptr;
         if (type_table) {
             uint32_t idx = QoreAOTBinaryReader::readU32(ptr);
             if (idx < type_table->size()) {
                 pti = (*type_table)[idx];
+            }
+            if (type_paths && idx < type_paths->size()) {
+                ptype_path = (*type_paths)[idx];
             }
         } else {
             ptype_path = reader.readStringRef(ptr);
@@ -15784,8 +16012,10 @@ static bool readAndSetupVariantSignature(
 
         param_names.emplace_back(pname ? pname : "");
 
-        if (!type_table) {
-            pti = type_resolver->resolve(ptype_path, error);
+        if (!type_table || has_callable_type_params) {
+            pti = has_callable_type_params
+                ? type_resolver->resolveForSignature(ptype_path, error, sig)
+                : type_resolver->resolve(ptype_path, error);
             if (!error.empty()) {
                 // Fall back to auto type when the type can't be resolved
                 // (e.g., module-private types filtered from metadata).
@@ -15966,10 +16196,15 @@ static bool readAndSetupVariantSignature(
     // phase 2b entry (see resolveTypeTable); legacy path still does
     // per-variant hash lookup here.
     const QoreTypeInfo* ret_ti;
-    if (type_table) {
+    if (type_table && !has_callable_type_params) {
         ret_ti = ret_ti_preresolved;
     } else {
-        ret_ti = type_resolver->resolve(ret_type_path, error);
+        if (type_table && type_paths && ret_type_index < type_paths->size()) {
+            ret_type_path = (*type_paths)[ret_type_index];
+        }
+        ret_ti = has_callable_type_params
+            ? type_resolver->resolveForSignature(ret_type_path, error, sig)
+            : type_resolver->resolve(ret_type_path, error);
         if (!error.empty()) {
             printd(2, "AOT deser: cannot resolve return type '%s': %s (falling back to auto)\n",
                 ret_type_path ? ret_type_path : "(null)", error.c_str());
@@ -15996,7 +16231,6 @@ static bool readAndSetupVariantSignature(
     // exception location via `sig->getParseLocation()` (e.g.
     // block-missing-return) report the declaring source instead of the
     // empty-file/line-0 default.
-    UserSignature* sig = uvb->getUserSignature();
     sig->setupFromAOTMetadata(pgm, ret_ti,
         std::move(param_names), std::move(param_types), std::move(param_defaults),
         sig_has_ellipsis, classTypeInfo, reader.getLabel(),
@@ -16101,9 +16335,10 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             QoreParseOptions variant_parse_options;
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
+            const std::vector<const char*>* tp = uses_type_table ? &type_table_paths : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     ufv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, variant_parse_options, error, nullptr, tt)) {
+                    entry_last_line, variant_parse_options, error, nullptr, tt, tp)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
@@ -16269,9 +16504,10 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             }
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
+            const std::vector<const char*>* tp = uses_type_table ? &type_table_paths : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     umv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, variant_parse_options, error, qc, tt)) {
+                    entry_last_line, variant_parse_options, error, qc, tt, tp)) {
                 delete mvb;
                 return false;
             }
@@ -17111,7 +17347,13 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     writeTypedefsSection(writer, state);
     writeConstantsSection(writer, state);
     writeGlobalsSection(writer, state);
-    writeFunctionsSection(writer, state);
+    section_error.clear();
+    if (!writeFunctionsSection(writer, state, section_error)) {
+        if (error) {
+            *error = "FUNCTIONS section: " + section_error;
+        }
+        return false;
+    }
     section_error.clear();
     if (!writeMethodsSection(writer, state, section_error)) {
         if (error) {
