@@ -6193,6 +6193,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || inst_ptr->opcode == QoreIROpcode::ListGetFloat)
                     && !inst_ptr->operands.empty()) {
                 direct_typed_list_read_sources.insert(inst_ptr->operands[0].id);
+            } else if (inst_ptr->opcode == QoreIROpcode::TypedForeachNextInt
+                    || inst_ptr->opcode == QoreIROpcode::TypedForeachNextFloat) {
+                const auto* next = static_cast<const QoreIRIteratorNextInstruction*>(inst_ptr.get());
+                direct_typed_list_read_sources.insert(next->iterator.id);
             }
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
@@ -19228,12 +19232,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, next_inst->iterator.id);
             llvm::Value* index_int = ensureIntTypeInline(index, next_inst->index.id);
             llvm::Value* limit_int = ensureIntTypeInline(limit, next_inst->limit.id);
-            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
-            llvm::Value* at_live_end = builder->CreateICmpUGE(index_int, size);
             llvm::Value* at_initial_end = builder->CreateICmpUGE(index_int, limit_int);
-            llvm::Value* at_end = builder->CreateOr(at_live_end, at_initial_end);
+            auto data_it = typed_list_data_ptrs.find(next_inst->iterator.id);
+            bool stable_snapshot = aot_mode
+                && std::getenv("QORE_DISABLE_AOT_TYPED_FOREACH_DATA_HOIST") == nullptr
+                && data_it != typed_list_data_ptrs.end();
+            llvm::Value* at_end = at_initial_end;
+            if (!stable_snapshot) {
+                auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+                llvm::Value* at_live_end = builder->CreateICmpUGE(index_int, size);
+                at_end = builder->CreateOr(at_live_end, at_initial_end);
+            }
 
             auto done_it = block_map.find(next_inst->done_target);
             auto body_it = block_map.find(next_inst->continue_target);
@@ -19253,7 +19264,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 data_fn->addFnAttr(llvm::Attribute::WillReturn);
                 data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
             }
-            llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+            llvm::Value* data = stable_snapshot
+                ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
             llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, index_int);
             llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
             llvm::Value* is_nothing = builder->CreateICmpEQ(boxed,
