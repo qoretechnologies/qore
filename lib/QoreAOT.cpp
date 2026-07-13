@@ -1116,6 +1116,8 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         // Direct list index (13-15)
         case QoreIROpcode::ListGetInt:
         case QoreIROpcode::ListGetFloat:
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:

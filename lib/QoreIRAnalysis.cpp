@@ -516,6 +516,10 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
             return visit(static_cast<const QoreIRIteratorCreateInstruction&>(inst).iterable);
         case QoreIROpcode::IteratorNext:
             return visit(static_cast<const QoreIRIteratorNextInstruction&>(inst).iterator);
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat:
+            // The list, index, and entry limit are in the base operand vector.
+            break;
         case QoreIROpcode::Return: {
             const auto& ret = static_cast<const QoreIRReturnInstruction&>(inst);
             if (ret.has_value) {
@@ -574,7 +578,9 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
             }
             break;
         }
-        case QoreIROpcode::IteratorNext: {
+        case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat: {
             const auto& next = static_cast<const QoreIRIteratorNextInstruction&>(inst);
             visit(next.continue_target);
             visit(next.done_target);
@@ -944,6 +950,16 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
         case QoreIROpcode::IteratorNext:
             qore_ir_rewrite_value(static_cast<QoreIRIteratorNextInstruction&>(inst).iterator, replacements);
             break;
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat: {
+            auto& next = static_cast<QoreIRIteratorNextInstruction&>(inst);
+            if (next.operands.size() == 3) {
+                next.iterator = next.operands[0];
+                next.index = next.operands[1];
+                next.limit = next.operands[2];
+            }
+            break;
+        }
         case QoreIROpcode::Phi: {
             auto& phi = static_cast<QoreIRPhiInstruction&>(inst);
             for (QoreIRPhiIncoming& incoming : phi.incoming) {
@@ -2521,6 +2537,17 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     size_t check_count = 0;
     local_stats.fixed_lists_scalarized =
         qore_ir_scalar_replace_fixed_lists(func, check_count);
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
+            if (stats) {
+                *stats = local_stats;
+            }
+            return;
+        }
+        if (block->name.rfind("foreach.typed.header.", 0) == 0) {
+            ++local_stats.typed_foreach_loops;
+        }
+    }
     QoreIRControlFlowGraph cfg(func);
     if (cfg.cancelled) {
         if (stats) {

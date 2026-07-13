@@ -189,6 +189,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IteratorCreate: return "iterator.create";
         case QoreIROpcode::IteratorCreateIterate: return "iterator.create.iterate";
         case QoreIROpcode::IteratorNext: return "iterator.next";
+        case QoreIROpcode::TypedForeachNextInt: return "foreach.next.int";
+        case QoreIROpcode::TypedForeachNextFloat: return "foreach.next.float";
         case QoreIROpcode::OnBlockExit: return "on.block.exit";
         case QoreIROpcode::ThreadExit: return "thread.exit";
         case QoreIROpcode::Context: return "context.init";
@@ -785,10 +787,15 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << " <functional>";
                     }
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+            } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::TypedForeachNextInt
+                    || inst->opcode == QoreIROpcode::TypedForeachNextFloat) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (iter) {
                     out << " %" << iter->iterator.id;
+                    if (inst->opcode != QoreIROpcode::IteratorNext) {
+                        out << " index %" << iter->index.id << " limit %" << iter->limit.id;
+                    }
                     if (iter->continue_target) {
                         out << " body " << iter->continue_target->name;
                     }

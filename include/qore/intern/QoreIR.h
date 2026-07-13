@@ -699,7 +699,13 @@ enum class QoreIROpcode : uint16_t {
     //! Constant-key access on a typed hash value that may still be NOTHING.
     HashKeyAccessHashGuarded = 386,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (387, 388, ...)
+    //! Advance a retained typed-list foreach source by native index.
+    //! These terminators produce a native scalar and branch to the body, or
+    //! branch to the done target at the captured or live list bound.
+    TypedForeachNextInt = 387,
+    TypedForeachNextFloat = 388,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (389, 390, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -707,8 +713,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::HashKeyAccessHashGuarded);
-static_assert(QORE_IR_MAX_OPCODE == 386, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::TypedForeachNextFloat);
+static_assert(QORE_IR_MAX_OPCODE == 388, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -2279,7 +2285,18 @@ public:
               continue_target(n_continue_target) {
     }
 
+    QoreIRIteratorNextInstruction(QoreIROpcode op, QoreIRValue n_list, QoreIRValue n_index,
+            QoreIRValue n_limit, QoreIRBasicBlock* n_done_target, QoreIRBasicBlock* n_continue_target)
+            : QoreIRInstruction(op), iterator(n_list), index(n_index), limit(n_limit),
+              done_target(n_done_target), continue_target(n_continue_target) {
+        operands.push_back(n_list);
+        operands.push_back(n_index);
+        operands.push_back(n_limit);
+    }
+
     QoreIRValue iterator;                       //!< Iterator handle from IteratorCreate
+    QoreIRValue index;                          //!< Native index for typed-list foreach
+    QoreIRValue limit;                          //!< Source size captured at loop entry
     QoreIRBasicBlock* done_target = nullptr;    //!< Target block when iterator is exhausted
     QoreIRBasicBlock* continue_target = nullptr; //!< Target block with next value
 };

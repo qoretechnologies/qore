@@ -35,6 +35,16 @@ int sub parameterListKernel(list<int> values, int rounds) {
     return checksum;
 }
 
+int sub foreachListKernel(list<int> values, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        foreach int value in (values) {
+            checksum += value;
+        }
+    }
+    return checksum;
+}
+
 string kernel = ARGV.size() ? ARGV[0] : "typed-list";
 int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
 int checksum;
@@ -44,6 +54,9 @@ switch (kernel) {
         break;
     case "parameter-list":
         checksum = parameterListKernel((1, 2, 3, 4, 5, 6, 7, 8), rounds);
+        break;
+    case "foreach-list":
+        checksum = foreachListKernel((1, 2, 3, 4, 5, 6, 7, 8), rounds);
         break;
     default:
         checksum = typedListKernel(rounds);

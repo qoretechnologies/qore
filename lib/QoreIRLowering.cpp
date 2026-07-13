@@ -2162,6 +2162,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // block list. This ensures IteratorCreate's block is processed before
         // IteratorNext's block during LLVM lowering.
         QoreValue list_expr = foreach_stmt->getList();
+        QoreValue var_expr = foreach_stmt->getVar();
+        const auto* foreach_var = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
+        const QoreTypeInfo* foreach_var_type = foreach_var ? getVarRefTypeInfo(foreach_var) : nullptr;
+        const QoreTypeInfo* list_type = getExprTypeInfo(list_expr);
+        const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
+        if (!element_type) {
+            element_type = QoreTypeInfo::getReturnComplexListOrNothing(list_type);
+        }
+        bool direct_typed_list = !std::getenv("QORE_DISABLE_IR_TYPED_FOREACH")
+            && foreach_var && foreach_var->getType() != VT_IMMEDIATE
+            && !QoreTypeInfo::isReference(foreach_var_type)
+            && ((element_type == bigIntTypeInfo && foreach_var_type == bigIntTypeInfo)
+                || (element_type == floatTypeInfo && foreach_var_type == floatTypeInfo));
         QoreIRValue list_val;
         if (list_expr && !list_expr.isNothing()) {
             list_val = lowerExpression(list_expr, error);
@@ -2173,19 +2186,32 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             list_val = builder.createConstNothing(stmt->loc)->result;
         }
 
-        // Create the iterator.  Pass nullptr for iterator_func to use the generic
-        // runtime path.  The parse-tree iterator_func pointer is a compile-time artifact
-        // that doesn't exist at runtime in AOT-compiled binaries.
-        auto* iter_inst = builder.createIteratorCreate(list_val, nullptr, stmt->loc);
-        QoreIRValue iter_val = iter_inst->result;
+        QoreIRValue retained_list;
+        QoreIRValue iter_val;
+        bool guard_typed_list = direct_typed_list;
+        if (direct_typed_list) {
+            const QoreIRValueFacts* facts = builder.getFunction()->getValueFacts(list_val);
+            guard_typed_list = !facts
+                || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing;
+            // Match the iterator's ownership and copy-on-write behavior. The
+            // retained value is released at loop exit and on non-local exits.
+            retained_list = builder.createRefSelf(list_val, stmt->loc)->result;
+            list_val = retained_list;
+        } else {
+            // The parse-tree iterator_func pointer is a compile-time artifact
+            // that does not exist at runtime in AOT-compiled binaries.
+            iter_val = builder.createIteratorCreate(list_val, nullptr, stmt->loc)->result;
+        }
 
         // Create basic blocks for the loop structure AFTER evaluating the list
         // expression and creating the iterator
-        QoreIRBasicBlock* preheader_block = createBlock("foreach.preheader");
-        QoreIRBasicBlock* header_block = createBlock("foreach.header");
-        QoreIRBasicBlock* body_block = createBlock("foreach.body");
-        QoreIRBasicBlock* latch_block = createBlock("foreach.latch");
-        QoreIRBasicBlock* exit_block = createBlock("foreach.exit");
+        const char* block_prefix = direct_typed_list ? "foreach.typed" : "foreach";
+        QoreIRBasicBlock* preheader_block = createBlock(std::string(block_prefix) + ".preheader");
+        QoreIRBasicBlock* header_block = createBlock(std::string(block_prefix) + ".header");
+        QoreIRBasicBlock* body_block = createBlock(std::string(block_prefix) + ".body");
+        QoreIRBasicBlock* latch_block = createBlock(std::string(block_prefix) + ".latch");
+        QoreIRBasicBlock* exit_block = createBlock(std::string(block_prefix) + ".exit");
         if (!preheader_block || !header_block || !body_block || !latch_block || !exit_block) {
             error = "IR builder failed to create blocks for foreach";
             return false;
@@ -2193,11 +2219,23 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Mark header block as loop header for OSR detection
         header_block->is_loop_header = true;
 
-        // Branch to preheader
-        builder.createBranch(preheader_block, stmt->loc);
+        if (guard_typed_list) {
+            // A declared list lvalue can still be unassigned. Preserve foreach
+            // semantics by treating runtime NOTHING as an empty source.
+            QoreIRValue nothing = builder.createConstNothing(stmt->loc)->result;
+            QoreIRValue is_nothing = builder.createBinaryOp(
+                QoreIROpcode::EqHard, list_val, nothing, stmt->loc)->result;
+            builder.createBranchIf(is_nothing, exit_block, preheader_block, stmt->loc);
+        } else {
+            builder.createBranch(preheader_block, stmt->loc);
+        }
 
         // Preheader: initialize index counter and branch to header
         builder.setBlock(preheader_block);
+        QoreIRValue foreach_limit;
+        if (direct_typed_list) {
+            foreach_limit = builder.createListSize(list_val, stmt->loc)->result;
+        }
         QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
         {
             auto* br = builder.createBranch(header_block, stmt->loc);
@@ -2211,17 +2249,30 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         auto* index_phi = builder.createPhi({}, stmt->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
 
-        auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, stmt->loc);
-        QoreIRValue value_val = next_inst->result;
+        QoreIRValue value_val;
+        if (direct_typed_list) {
+            // One fused terminator keeps the interpreter dispatch cost at the
+            // same granularity as IteratorNext while AOT emits a direct load.
+            // The entry size preserves iterator bounds when the source grows;
+            // the fused operation also checks live size to handle removals.
+            auto* next = builder.createTypedForeachNext(list_val, index_val, foreach_limit,
+                element_type == floatTypeInfo, exit_block, body_block, stmt->loc);
+            if (!exception_stack.empty()) {
+                next->exception_target = exception_stack.back();
+            }
+            value_val = next->result;
+            builder.setBlock(body_block);
+        } else {
+            value_val = builder.createIteratorNext(
+                iter_val, exit_block, body_block, stmt->loc)->result;
+            builder.setBlock(body_block);
+        }
 
         // Body block: set $# via PushImplicitElement, assign value to loop variable, execute body
-        builder.setBlock(body_block);
-
         // Push the implicit element ($#) for the current iteration
         QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
 
         // Assign the value to the loop variable
-        QoreValue var_expr = foreach_stmt->getVar();
         if (var_expr && !var_expr.isNothing()) {
             // Simple variable targets can use normal assignment lowering; complex
             // lvalues and reference-typed vars need StoreLValue write-through semantics.
@@ -2308,6 +2359,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.getFunction()->moveBlockToEnd(exit_block);
         // Exit block
         builder.setBlock(exit_block);
+
+        if (direct_typed_list) {
+            auto* decref = builder.createDecref(retained_list, stmt->loc);
+            if (!exception_stack.empty()) {
+                decref->exception_target = exception_stack.back();
+            }
+        }
 
         // Foreach loop variables live for the duration of the foreach
         // statement. Clean them up at the loop exit so nested block locals

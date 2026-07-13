@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[387] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[389] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -445,12 +445,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[387] = {
     { "SelectHashKeyPositiveInt"       , false, false, false,  1, "SelectHashKeyPositiveInt", false, true , "ParseNode", true , false, false, false, false }, // 384
     { "HashKeyAccessHash"              , true , false, false,  1, "HashKeyAccessHash", false, true , "ParseNode", true , false, true , false, false }, // 385
     { "HashKeyAccessHashGuarded"       , true , false, false,  1, "HashKeyAccessHashGuarded", false, true , "ParseNode", true , false, true , false, false }, // 386
+    { "TypedForeachNextInt"            , false, true , true ,  3, "Advance exact list<int> foreach", false, true , "ForEachStatement", true , false, true , false, false }, // 387
+    { "TypedForeachNextFloat"          , false, true , true ,  3, "Advance exact list<float> foreach", false, true , "ForEachStatement", true , false, true , false, false }, // 388
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 387,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 387"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 389,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 389"
 );
 
 //! ============================================================================

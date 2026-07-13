@@ -264,6 +264,12 @@ public:
         @return the RefSelf instruction; its result owns an independent reference
      */
     QoreIRInstruction* createRefSelf(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+    //! Release an independently owned reference.
+    /** @param value the owned IR value to release
+        @param loc optional source location for diagnostics
+        @return the Decref instruction
+     */
+    QoreIRInstruction* createDecref(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
     //! Emit DiscardTemps to drain cleanup back to the nearest PushTempMark.
     //! In LLVM mode, drains generated cleanup slots created since the nearest
     //! mark; in the IR interpreter, drains the runtime cleanup vector so
@@ -301,6 +307,9 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
+    QoreIRIteratorNextInstruction* createTypedForeachNext(QoreIRValue list, QoreIRValue index,
+        QoreIRValue limit, bool is_float, QoreIRBasicBlock* done_target, QoreIRBasicBlock* continue_target,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRRefForeachInitInstruction* createRefForeachInit(const QoreValue& parse_ref_expr,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createRefForeachSize(QoreIRValue state, const QoreProgramLocation* loc = nullptr);

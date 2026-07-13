@@ -7542,8 +7542,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             uint32_t iterator_id = QoreAOTBinaryReader::readU32(ptr);
             uint16_t done_idx = QoreAOTBinaryReader::readU16(ptr);
             uint16_t continue_idx = QoreAOTBinaryReader::readU16(ptr);
-            inst = std::make_unique<QoreIRIteratorNextInstruction>(
-                QoreIRValue(iterator_id), resolveBlock(done_idx), resolveBlock(continue_idx));
+            if ((opcode == QoreIROpcode::TypedForeachNextInt
+                    || opcode == QoreIROpcode::TypedForeachNextFloat)
+                    && operands.size() == 3) {
+                inst = std::make_unique<QoreIRIteratorNextInstruction>(opcode,
+                    QoreIRValue(iterator_id), operands[1], operands[2], resolveBlock(done_idx),
+                    resolveBlock(continue_idx));
+            } else {
+                auto* next = new QoreIRIteratorNextInstruction(
+                    QoreIRValue(iterator_id), resolveBlock(done_idx), resolveBlock(continue_idx));
+                next->opcode = opcode;
+                inst.reset(next);
+            }
             break;
         }
 

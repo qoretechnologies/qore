@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 386,
+static_assert(QORE_IR_MAX_OPCODE == 388,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -7294,8 +7294,20 @@ next_instruction:
                 QoreIRValue id = inst->operands.front();
                 removeCleanupEntry(cleanup, id.id);
                 QoreValue val = getIRValue(values, id);
+                setValueSlotDirect(values, id.id, QoreValue());
                 QoreValue temp = val;
                 temp.discard(inst->opcode == QoreIROpcode::DecrefNoThrow ? nullptr : xsink);
+                if (inst->opcode == QoreIROpcode::Decref && xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ++ip;
                 break;
             }
@@ -10862,6 +10874,46 @@ load_local_done:
                 }
                 setValueSlot(values, iter_inst->result.id, QoreValue(reinterpret_cast<int64_t>(iter)), xsink);
                 ++ip;
+                break;
+            }
+            case QoreIROpcode::TypedForeachNextInt:
+            case QoreIROpcode::TypedForeachNextFloat: {
+                auto* next_inst = static_cast<QoreIRIteratorNextInstruction*>(inst);
+                assert(next_inst->iterator.id < values.size());
+                assert(next_inst->index.id < values.size());
+                assert(next_inst->limit.id < values.size());
+                const QoreValue& list_val = values[next_inst->iterator.id];
+                size_t index = static_cast<size_t>(values[next_inst->index.id].getAsBigInt());
+                size_t limit = static_cast<size_t>(values[next_inst->limit.id].getAsBigInt());
+                const QoreListNode* list = list_val.get<const QoreListNode>();
+                if (index >= limit || index >= list->size()) {
+                    prev_block = block;
+                    block = next_inst->done_target;
+                    ip = 0;
+                    break;
+                }
+                QoreValue entry = list->retrieveEntry(index);
+                if (entry.isNothing()) {
+                    qore_rt_raise_typed_foreach_nothing(
+                        inst->opcode == QoreIROpcode::TypedForeachNextFloat, xsink);
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (inst->opcode == QoreIROpcode::TypedForeachNextInt) {
+                    setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsBigInt()));
+                } else {
+                    setValueSlotDirect(values, inst->result.id, QoreValue(entry.getAsFloat()));
+                }
+                prev_block = block;
+                block = next_inst->continue_target;
+                ip = 0;
                 break;
             }
             case QoreIROpcode::IteratorNext: {

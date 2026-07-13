@@ -1176,6 +1176,13 @@ QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QorePro
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createDecref(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Decref);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
     inst->loc = loc;
@@ -1280,6 +1287,25 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue ite
     auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue list, QoreIRValue index,
+        QoreIRValue limit, bool is_float, QoreIRBasicBlock* done_target, QoreIRBasicBlock* continue_target,
+        const QoreProgramLocation* loc) {
+    QoreIROpcode opcode = is_float
+        ? QoreIROpcode::TypedForeachNextFloat : QoreIROpcode::TypedForeachNextInt;
+    auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(
+        opcode, list, index, limit, done_target, continue_target);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    QoreIRValueFacts facts;
+    facts.type_info = is_float ? floatTypeInfo : bigIntTypeInfo;
+    facts.assigned_state = QoreIRAssignedState::Assigned;
+    facts.representation = is_float
+        ? QoreIRValueRepresentation::NativeFloat : QoreIRValueRepresentation::NativeInt;
+    facts.never_nothing = true;
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 

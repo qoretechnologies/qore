@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 386,
+static_assert(QORE_IR_MAX_OPCODE == 388,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -8926,19 +8926,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::Decref: {
-            auto* val = getVal(inst->operands[0].id, error);
-            if (!val) { return false; }
-            llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            if (inst->operands.empty()) {
+                error = "Decref: missing operand";
+                return false;
             }
-            auto helper = module.getOrInsertFunction("qore_rt_decref",
-                    llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-            builder->CreateCall(helper, {boxed, xsink_arg});
+            uint32_t value_id = inst->operands[0].id;
+            if (invoke_alloca_map.count(value_id)) {
+                releaseCleanupForValueId(value_id, module);
+            } else {
+                auto* val = getVal(value_id, error);
+                if (!val) { return false; }
+                llvm::Value* boxed = val;
+                if (val->getType() != i64_type) {
+                    if (val->getType() == double_type) {
+                        boxed = boxFloat(val);
+                    } else if (val->getType() == i1_type) {
+                        boxed = boxBool(val);
+                    }
+                }
+                auto helper = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                builder->CreateCall(helper, {boxed, xsink_arg});
+            }
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::DecrefNoThrow: {
@@ -19204,6 +19214,75 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::TypedForeachNextInt:
+        case QoreIROpcode::TypedForeachNextFloat: {
+            const auto* next_inst = static_cast<const QoreIRIteratorNextInstruction*>(inst);
+            auto* list = getVal(next_inst->iterator.id, error);
+            auto* index = getVal(next_inst->index.id, error);
+            auto* limit = getVal(next_inst->limit.id, error);
+            if (!list || !index || !limit) {
+                return false;
+            }
+            llvm::Value* list_boxed = boxValue(list, next_inst->iterator.id);
+            llvm::Value* index_int = ensureIntTypeInline(index, next_inst->index.id);
+            llvm::Value* limit_int = ensureIntTypeInline(limit, next_inst->limit.id);
+            auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(size_helper, {list_boxed});
+            llvm::Value* at_live_end = builder->CreateICmpUGE(index_int, size);
+            llvm::Value* at_initial_end = builder->CreateICmpUGE(index_int, limit_int);
+            llvm::Value* at_end = builder->CreateOr(at_live_end, at_initial_end);
+
+            auto done_it = block_map.find(next_inst->done_target);
+            auto body_it = block_map.find(next_inst->continue_target);
+            if (done_it == block_map.end() || body_it == block_map.end()) {
+                error = "TypedForeachNext: target block not found";
+                return false;
+            }
+            llvm::BasicBlock* load_block = llvm::BasicBlock::Create(
+                ctx, "typed_foreach.load", llvm_func);
+            builder->CreateCondBr(at_end, done_it->second, load_block);
+            builder->SetInsertPoint(load_block);
+
+            auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+                    llvm::FunctionType::get(ptr_type, {i64_type}, false));
+            if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
+                data_fn->addFnAttr(llvm::Attribute::NoUnwind);
+                data_fn->addFnAttr(llvm::Attribute::WillReturn);
+                data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
+            }
+            llvm::Value* data = builder->CreateCall(data_helper, {list_boxed});
+            llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, index_int);
+            llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
+            llvm::Value* is_nothing = builder->CreateICmpEQ(boxed,
+                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            llvm::BasicBlock* nothing_block = llvm::BasicBlock::Create(
+                ctx, "typed_foreach.nothing", llvm_func);
+            llvm::BasicBlock* value_block = llvm::BasicBlock::Create(
+                ctx, "typed_foreach.value", llvm_func);
+            builder->CreateCondBr(is_nothing, nothing_block, value_block);
+
+            builder->SetInsertPoint(nothing_block);
+            auto error_helper = module.getOrInsertFunction(
+                "qore_rt_raise_typed_foreach_nothing",
+                llvm::FunctionType::get(void_type, {i32_type, ptr_type}, false));
+            builder->CreateCall(error_helper, {
+                llvm::ConstantInt::get(i32_type,
+                    inst->opcode == QoreIROpcode::TypedForeachNextFloat),
+                xsink_arg});
+            emitExceptionCheck(module, llvm_func, inst);
+            builder->CreateUnreachable();
+
+            builder->SetInsertPoint(value_block);
+            nanboxed_values.insert(inst->result.id);
+            llvm::Value* result = inst->opcode == QoreIROpcode::TypedForeachNextInt
+                ? ensureIntTypeInline(boxed, inst->result.id)
+                : ensureFloatTypeInline(boxed, inst->result.id, module);
+            nanboxed_values.erase(inst->result.id);
+            values[inst->result.id] = result;
+            builder->CreateBr(body_it->second);
             return true;
         }
         case QoreIROpcode::IteratorNext: {

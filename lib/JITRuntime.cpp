@@ -271,6 +271,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_get_int_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_int_unchecked) },
     { "qore_rt_list_get_float_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_float_unchecked) },
     { "qore_rt_list_get_data_unchecked", reinterpret_cast<void*>(&qore_rt_list_get_data_unchecked) },
+    { "qore_rt_raise_typed_foreach_nothing",
+        reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
@@ -5112,6 +5114,14 @@ extern "C" DLLEXPORT const uint64_t* qore_rt_list_get_data_unchecked(uint64_t li
     const QoreListNode* list = fromBits(list_val).get<const QoreListNode>();
     static_assert(sizeof(QoreValue) == sizeof(uint64_t));
     return reinterpret_cast<const uint64_t*>(qore_list_private::get(*list)->entry);
+}
+
+extern "C" DLLEXPORT void qore_rt_raise_typed_foreach_nothing(int32_t is_float, ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR",
+            "<foreach lvalue assignment> expects type '%s', but got no value instead",
+            is_float ? "float" : "int");
+    }
 }
 
 extern "C" DLLEXPORT uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val) {

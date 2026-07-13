@@ -365,10 +365,21 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     error = "iterator.create missing iterable";
                     return false;
                 }
-            } else if (inst->opcode == QoreIROpcode::IteratorNext) {
+            } else if (inst->opcode == QoreIROpcode::IteratorNext
+                    || inst->opcode == QoreIROpcode::TypedForeachNextInt
+                    || inst->opcode == QoreIROpcode::TypedForeachNextFloat) {
                 auto* iter = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get());
                 if (!iter || !iter->iterator.isValid()) {
                     error = "iterator.next missing iterator";
+                    return false;
+                }
+                if (inst->opcode != QoreIROpcode::IteratorNext
+                        && (!iter->index.isValid() || !iter->limit.isValid()
+                            || inst->operands.size() != 3
+                            || inst->operands[0].id != iter->iterator.id
+                            || inst->operands[1].id != iter->index.id
+                            || inst->operands[2].id != iter->limit.id)) {
+                    error = "typed foreach.next missing list/index/limit operands";
                     return false;
                 }
                 if (!iter->done_target || !iter->continue_target) {

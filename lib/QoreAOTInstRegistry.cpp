@@ -2780,8 +2780,19 @@ static std::unique_ptr<QoreIRInstruction> readIteratorNext(
     uint32_t iterator_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     uint16_t done_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     uint16_t continue_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
-    auto inst = std::make_unique<QoreIRIteratorNextInstruction>(
-        QoreIRValue(iterator_id), ctx.resolveBlock(done_idx), ctx.resolveBlock(continue_idx));
+    QoreIROpcode opcode = static_cast<QoreIROpcode>(opcode_raw);
+    std::unique_ptr<QoreIRIteratorNextInstruction> inst;
+    if ((opcode == QoreIROpcode::TypedForeachNextInt
+            || opcode == QoreIROpcode::TypedForeachNextFloat)
+            && operands.size() == 3) {
+        inst = std::make_unique<QoreIRIteratorNextInstruction>(opcode,
+            QoreIRValue(iterator_id), operands[1], operands[2], ctx.resolveBlock(done_idx),
+            ctx.resolveBlock(continue_idx));
+    } else {
+        inst = std::make_unique<QoreIRIteratorNextInstruction>(
+            QoreIRValue(iterator_id), ctx.resolveBlock(done_idx), ctx.resolveBlock(continue_idx));
+        inst->opcode = opcode;
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
