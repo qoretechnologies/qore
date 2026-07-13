@@ -6055,7 +6055,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_select_square_positive_float(uin
 
 // Fused map+foldl operations - map and reduce in single pass, no intermediate list
 // Pattern: foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t list_val, int64_t scale) {
+static uint64_t qore_rt_fused_map_foldl_sum_scale_int_impl(
+        uint64_t list_val, int64_t scale, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6067,12 +6068,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t lis
     }
     int64_t result = 0;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl sum-scale int")) {
+            return toBits(QoreValue());
+        }
         result += l->retrieveEntry(i).getAsBigInt() * scale;
     }
     return toBits(result);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_float(uint64_t list_val, double scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_int(uint64_t list_val, int64_t scale) {
+    return qore_rt_fused_map_foldl_sum_scale_int_impl(list_val, scale, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_int_checked(
+        uint64_t list_val, int64_t scale, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_sum_scale_int_impl(list_val, scale, xsink);
+}
+
+static uint64_t qore_rt_fused_map_foldl_sum_scale_float_impl(
+        uint64_t list_val, double scale, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6084,13 +6098,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_float(uint64_t l
     }
     double result = 0.0;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl sum-scale float")) {
+            return toBits(QoreValue());
+        }
         result += l->retrieveEntry(i).getAsFloat() * scale;
     }
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_float(uint64_t list_val, double scale) {
+    return qore_rt_fused_map_foldl_sum_scale_float_impl(list_val, scale, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_scale_float_checked(
+        uint64_t list_val, double scale, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_sum_scale_float_impl(list_val, scale, xsink);
+}
+
 // Pattern: foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t list_val) {
+static uint64_t qore_rt_fused_map_foldl_sum_square_int_impl(
+        uint64_t list_val, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6102,13 +6129,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t li
     }
     int64_t result = 0;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl sum-square int")) {
+            return toBits(QoreValue());
+        }
         int64_t val = l->retrieveEntry(i).getAsBigInt();
         result += val * val;
     }
     return toBits(result);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_float(uint64_t list_val) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_int(uint64_t list_val) {
+    return qore_rt_fused_map_foldl_sum_square_int_impl(list_val, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_int_checked(
+        uint64_t list_val, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_sum_square_int_impl(list_val, xsink);
+}
+
+static uint64_t qore_rt_fused_map_foldl_sum_square_float_impl(
+        uint64_t list_val, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6120,14 +6160,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_float(uint64_t 
     }
     double result = 0.0;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl sum-square float")) {
+            return toBits(QoreValue());
+        }
         double val = l->retrieveEntry(i).getAsFloat();
         result += val * val;
     }
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_float(uint64_t list_val) {
+    return qore_rt_fused_map_foldl_sum_square_float_impl(list_val, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_sum_square_float_checked(
+        uint64_t list_val, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_sum_square_float_impl(list_val, xsink);
+}
+
 // Pattern: foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t list_val, int64_t scale) {
+static uint64_t qore_rt_fused_map_foldl_prod_scale_int_impl(
+        uint64_t list_val, int64_t scale, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6139,12 +6192,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t li
     }
     int64_t result = 1;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl prod-scale int")) {
+            return toBits(QoreValue());
+        }
         result *= l->retrieveEntry(i).getAsBigInt() * scale;
     }
     return toBits(result);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_float(uint64_t list_val, double scale) {
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_int(uint64_t list_val, int64_t scale) {
+    return qore_rt_fused_map_foldl_prod_scale_int_impl(list_val, scale, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_int_checked(
+        uint64_t list_val, int64_t scale, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_prod_scale_int_impl(list_val, scale, xsink);
+}
+
+static uint64_t qore_rt_fused_map_foldl_prod_scale_float_impl(
+        uint64_t list_val, double scale, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() != NT_LIST) {
         return toBits(QoreValue());
@@ -6156,9 +6222,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_float(uint64_t 
     }
     double result = 1.0;
     for (size_t i = 0; i < sz; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused map/foldl prod-scale float")) {
+            return toBits(QoreValue());
+        }
         result *= l->retrieveEntry(i).getAsFloat() * scale;
     }
     return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_float(uint64_t list_val, double scale) {
+    return qore_rt_fused_map_foldl_prod_scale_float_impl(list_val, scale, nullptr);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fused_map_foldl_prod_scale_float_checked(
+        uint64_t list_val, double scale, ExceptionSink* xsink) {
+    return qore_rt_fused_map_foldl_prod_scale_float_impl(list_val, scale, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink) {

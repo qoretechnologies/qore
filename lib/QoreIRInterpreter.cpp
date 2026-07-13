@@ -15995,6 +15995,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t scale = right.getAsBigInt();
             int64_t result = 0;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-scale int")) {
+                    return QoreValue();
+                }
                 result += l->retrieveEntry(i).getAsBigInt() * scale;
             }
             return QoreValue(result);
@@ -16011,6 +16015,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double scale = right.getAsFloat();
             double result = 0.0;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-scale float")) {
+                    return QoreValue();
+                }
                 result += l->retrieveEntry(i).getAsFloat() * scale;
             }
             return QoreValue(result);
@@ -16028,6 +16036,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             int64_t result = 0;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-square int")) {
+                    return QoreValue();
+                }
                 int64_t val = l->retrieveEntry(i).getAsBigInt();
                 result += val * val;
             }
@@ -16044,6 +16056,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             double result = 0.0;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-square float")) {
+                    return QoreValue();
+                }
                 double val = l->retrieveEntry(i).getAsFloat();
                 result += val * val;
             }
@@ -16063,6 +16079,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             int64_t scale = right.getAsBigInt();
             int64_t result = 1;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl prod-scale int")) {
+                    return QoreValue();
+                }
                 result *= l->retrieveEntry(i).getAsBigInt() * scale;
             }
             return QoreValue(result);
@@ -16079,6 +16099,10 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             double scale = right.getAsFloat();
             double result = 1.0;
             for (size_t i = 0; i < sz; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl prod-scale float")) {
+                    return QoreValue();
+                }
                 result *= l->retrieveEntry(i).getAsFloat() * scale;
             }
             return QoreValue(result);

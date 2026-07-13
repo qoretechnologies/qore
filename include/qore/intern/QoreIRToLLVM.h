@@ -1209,6 +1209,11 @@ private:
             std::function<llvm::Value*(llvm::Value*, llvm::Value*)> accumulate,
             std::string& error);
 
+    //! Emit an AOT-native fused map/fold loop without an intermediate list.
+    bool emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Module& module,
+            llvm::Function* llvm_func, const char* label, bool is_float,
+            bool product, bool square, std::string& error);
+
     //! Inline a small callee's IR directly into the caller's LLVM function
     //! Phase 3: Aggressive inlining for ≤20 instruction callees
     //! @param callee_ir the QoreIRFunction to inline

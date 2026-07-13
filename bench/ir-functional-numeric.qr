@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+const int DATA_SIZE = 1024;
+
+list<int> sub makeIntData() {
+    list<int> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, (i % 17) - 8;
+    }
+    return data;
+}
+
+list<float> sub makeFloatData() {
+    list<float> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, (i % 17) - 8.0;
+    }
+    return data;
+}
+
+int sub foldSumInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, data);
+    }
+    return checksum;
+}
+
+float sub foldSumFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, data);
+    }
+    return checksum;
+}
+
+int sub fusedSumSquareInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * $1, data));
+    }
+    return checksum;
+}
+
+int sub fusedSumScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumScaleFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * 3.0, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumSquareFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 * $1, data));
+    }
+    return checksum;
+}
+
+int sub fusedProdScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 * $2, (map $1 * 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedProdScaleFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 * $2, (map $1 * 3.0, data));
+    }
+    return checksum;
+}
+
+int sub mapScaleInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> mapped = (map $1 * 3, data);
+        checksum += mapped[DATA_SIZE - 1];
+    }
+    return checksum;
+}
+
+int sub selectPositiveInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> selected = (select data, $1 > 0);
+        checksum += selected.size();
+    }
+    return checksum;
+}
+
+string kernel = ARGV.size() ? ARGV[0] : "fold-sum-int";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 20000;
+
+switch (kernel) {
+    case "fold-sum-int":
+        printf("%d\n", foldSumInt(makeIntData(), rounds));
+        break;
+    case "fold-sum-float":
+        printf("%.1f\n", foldSumFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-square-int":
+        printf("%d\n", fusedSumSquareInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-scale-int":
+        printf("%d\n", fusedSumScaleInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-scale-float":
+        printf("%.1f\n", fusedSumScaleFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-square-float":
+        printf("%.1f\n", fusedSumSquareFloat(makeFloatData(), rounds));
+        break;
+    case "fused-prod-scale-int":
+        printf("%d\n", fusedProdScaleInt(makeIntData(), rounds));
+        break;
+    case "fused-prod-scale-float":
+        printf("%.1f\n", fusedProdScaleFloat(makeFloatData(), rounds));
+        break;
+    case "map-scale-int":
+        printf("%d\n", mapScaleInt(makeIntData(), rounds));
+        break;
+    case "select-positive-int":
+        printf("%d\n", selectPositiveInt(makeIntData(), rounds));
+        break;
+    default:
+        throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
+}

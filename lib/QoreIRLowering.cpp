@@ -12594,7 +12594,34 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
         if (!collectLazyPipelineStages(foldl->getIteratorExpr(), base_source, source_stages, error)) {
             return QoreIRValue();
         }
-        if (!source_stages.empty()) {
+        bool specialized_map_fold = false;
+        if (!std::getenv("QORE_DISABLE_IR_SPECIALIZED_MAP_FOLD_PRECEDENCE")) {
+            const auto* inner_map = dynamic_cast<const QoreMapOperatorNode*>(
+                foldl->getRight().getInternalNode());
+            if (inner_map) {
+                const QoreTypeInfo* source_type = getExprTypeInfo(inner_map->getRight());
+                bool exact_list_source = source_type && QoreTypeInfo::isListType(source_type);
+                const QoreTypeInfo* fold_type = nullptr;
+                const QoreTypeInfo* list_type = getExprTypeInfo(foldl->getRight());
+                QoreIROpcode fold_opcode = analyzeFoldPattern(
+                    foldl->getLeft(), fold_type, list_type);
+                const QoreTypeInfo* map_type = nullptr;
+                QoreValue map_constant;
+                QoreIROpcode map_opcode = analyzeMapPattern(
+                    inner_map->getLeft(), map_type, map_constant);
+                bool sum = fold_opcode == QoreIROpcode::FoldlSumInt
+                    || fold_opcode == QoreIROpcode::FoldlSumFloat;
+                bool product = fold_opcode == QoreIROpcode::FoldlProdInt
+                    || fold_opcode == QoreIROpcode::FoldlProdFloat;
+                bool scale = map_opcode == QoreIROpcode::MapScaleInt
+                    || map_opcode == QoreIROpcode::MapScaleFloat;
+                bool square = map_opcode == QoreIROpcode::MapSquareInt
+                    || map_opcode == QoreIROpcode::MapSquareFloat;
+                specialized_map_fold = exact_list_source
+                    && ((sum && (scale || square)) || (product && scale));
+            }
+        }
+        if (!source_stages.empty() && !specialized_map_fold) {
             LazyPipelineRoot root;
             root.kind = LazyPipelineRoot::Foldl;
             root.fold_expr = &foldl->getFoldExpression();
