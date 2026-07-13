@@ -1,0 +1,216 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class FormatBoundedTest
+
+public class Node {
+    public {
+        string name;
+        auto next;
+        auto other;
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+}
+
+public class FormatBoundedTest inherits QUnit::Test {
+    public {
+        # a hash graph where each level references the same subgraph twice; formatting this with "%y" expands
+        # 2 ^ levels copies of the leaf, which is the blowup that the bounded formatter has to avoid
+        const SharedGraphLevels = 24;
+    }
+
+    constructor() : Test("FormatBounded test", "1.0") {
+        addTestCase("unbounded values", \unboundedValues());
+        addTestCase("shared containers", \sharedContainers());
+        addTestCase("recursive references", \recursiveReferences());
+        addTestCase("byte limit", \byteLimit());
+        addTestCase("depth limit", \depthLimit());
+        addTestCase("element limit", \elementLimit());
+        addTestCase("long strings", \longStrings());
+        addTestCase("objects", \objects());
+        addTestCase("sprintf_bounded()", \sprintfBounded());
+        addTestCase("vsprintf_bounded()", \vsprintfBounded());
+        addTestCase("bounds errors", \boundsErrors());
+
+        set_return_value(main());
+    }
+
+    # returns a hash graph of the given depth where every level references the same subgraph twice
+    static hash<auto> getSharedGraph(int levels) {
+        auto h = {"leaf": "x"};
+        for (int i = 0; i < levels; ++i) {
+            h = {"l": h, "r": h};
+        }
+        return h;
+    }
+
+    unboundedValues() {
+        # values that do not reach any bound are formatted exactly as with "%y"
+        foreach auto v in ((1, 2.0), {"a": 1, "b": ("x", NOTHING)}, "str", 2020-01-01Z, NOTHING, True) {
+            assertEq(sprintf("%y", v), format_bounded(v), sprintf("%y", v));
+        }
+    }
+
+    sharedContainers() {
+        hash<auto> h = FormatBoundedTest::getSharedGraph(SharedGraphLevels);
+
+        # each shared container is expanded once and referenced with a YAML alias afterwards; formatting this
+        # graph with "%y" would expand 2 ^ SharedGraphLevels leaves
+        string str = format_bounded(h, <FormatBounds>{"max_bytes": 0, "max_depth": 0});
+        assertFalse(str =~ /truncated/, str);
+        assertTrue(str.size() < 1024, sprintf("size: %d", str.size()));
+        # the root is referenced once, so it gets no anchor; every shared container below it does
+        assertRegex("^\\{l: &1 ", str);
+        assertRegex(", r: \\*1\\}$", str);
+        # the leaf is expanded exactly once no matter how many paths lead to it
+        assertEq(1, str.split("leaf").size() - 1);
+
+        # a container shared by two keys of the same hash is expanded once
+        hash<auto> shared = {"a": 1};
+        assertEq("{x: &1 {a: 1}, y: *1}", format_bounded({"x": shared, "y": shared}));
+
+        # the same subhash reached from separate values is not shared, so it is expanded in each value
+        assertEq("{x: {a: 1}}", format_bounded({"x": {"a": 1}}));
+    }
+
+    recursiveReferences() {
+        Node n1("n1");
+        Node n2("n2");
+        n1.next = n2;
+        n2.next = n1;
+
+        # a recursive reference is rendered as an alias to the anchor of the enclosing container
+        string str = format_bounded(n1);
+        assertRegex("<Node object>", str);
+        assertRegex("\\*1", str);
+        assertRegex("n2", str);
+        assertTrue(str.size() < 1024, sprintf("size: %d", str.size()));
+    }
+
+    byteLimit() {
+        list<auto> l = map sprintf("key-%d-%s", $1, strmul("v", 32)), xrange(0, 1000);
+
+        string str = format_bounded(l, <FormatBounds>{"max_bytes": 256, "max_elements": 0});
+        assertRegex("\\.\\.\\.<truncated>", str);
+        # the limit is a soft limit; only delimiters and the truncation marker can follow it
+        assertTrue(str.size() < 256 + 32, sprintf("size: %d", str.size()));
+
+        # a zero limit means unlimited
+        string full = format_bounded(l, <FormatBounds>{"max_bytes": 0, "max_elements": 0});
+        assertFalse(full =~ /truncated/);
+        assertEq(sprintf("%y", l), full);
+    }
+
+    depthLimit() {
+        hash<auto> h = {"a": {"b": {"c": {"d": 1}}}};
+
+        assertEq("{a: {b: {...}}}", format_bounded(h, <FormatBounds>{"max_depth": 2}));
+        assertEq("{a: {...}}", format_bounded(h, <FormatBounds>{"max_depth": 1}));
+        # a zero limit means unlimited
+        assertEq(sprintf("%y", h), format_bounded(h, <FormatBounds>{"max_depth": 0}));
+
+        # empty containers at the depth limit are not marked as elided
+        assertEq("{a: {}}", format_bounded({"a": {}}, <FormatBounds>{"max_depth": 1}));
+        assertEq("{a: []}", format_bounded({"a": ()}, <FormatBounds>{"max_depth": 1}));
+        assertEq("[[...]]", format_bounded(((1, 2),), <FormatBounds>{"max_depth": 1}));
+    }
+
+    elementLimit() {
+        list<int> l = map $1, xrange(0, 99);
+        assertEq(99, l.size());
+        assertEq("[0, 1, 2, ...<96 more>]", format_bounded(l, <FormatBounds>{"max_elements": 3}));
+
+        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+        assertEq("{a: 1, ...<2 more>}", format_bounded(h, <FormatBounds>{"max_elements": 1}));
+
+        # a zero limit means unlimited
+        assertEq(sprintf("%y", h), format_bounded(h, <FormatBounds>{"max_elements": 0}));
+    }
+
+    longStrings() {
+        string long = strmul("x", 100000);
+
+        string str = format_bounded(long, <FormatBounds>{"max_bytes": 64});
+        assertRegex("\\.\\.\\.<truncated>", str);
+        assertTrue(str.size() < 128, sprintf("size: %d", str.size()));
+
+        # a string that fits in the budget is formatted as with "%y"
+        assertEq(sprintf("%y", "x"), format_bounded("x", <FormatBounds>{"max_bytes": 64}));
+
+        # escaping is preserved when a string is truncated
+        str = format_bounded(strmul("a\"b", 100), <FormatBounds>{"max_bytes": 16});
+        assertRegex("\\\\\"", str);
+    }
+
+    objects() {
+        Node n("n1");
+        n.next = {"a": 1};
+
+        assertEq("{<Node object>: name: \"n1\", next: {a: 1}, other: null}", format_bounded(n));
+        assertEq(sprintf("%y", n), format_bounded(n));
+
+        # objects are subject to the depth limit like any other container
+        assertEq("{o: {<Node object>...}}", format_bounded({"o": n}, <FormatBounds>{"max_depth": 1}));
+
+        # a deleted object is formatted as no value
+        delete n;
+        assertEq(sprintf("%y", NOTHING), format_bounded(n));
+    }
+
+    sprintfBounded() {
+        # conversions that do not format values behave as with sprintf()
+        assertEq(sprintf("%5s|%-3d|%.2f|%x", "a", 7, 1.005, 255),
+            sprintf_bounded("%5s|%-3d|%.2f|%x", "a", 7, 1.005, 255));
+        assertEq("100% done", sprintf_bounded("100%% done"));
+        assertEq("", sprintf_bounded(""));
+
+        # values are formatted with the default bounds
+        hash<auto> h = FormatBoundedTest::getSharedGraph(SharedGraphLevels);
+        string str = sprintf_bounded("graph: %y end", h);
+        assertRegex("^graph: ", str);
+        assertRegex(" end$", str);
+        assertTrue(str.size() < 1024, sprintf("size: %d", str.size()));
+
+        # each value format specification keeps its own output format
+        assertEq(sprintf("a: %y b: %n c: %N d: %Y", {"a": 1}, (1, 2), {"b": 2}, {"c": {"d": 1}}),
+            sprintf_bounded("a: %y b: %n c: %N d: %Y", {"a": 1}, (1, 2), {"b": 2}, {"c": {"d": 1}}));
+
+        # the bounds are applied in every output format
+        hash<auto> deep = {"a": {"b": {"c": {"d": 1}}}};
+        foreach string conv in ("y", "n", "N", "Y") {
+            string bstr = vsprintf_bounded("%" + conv, deep, <FormatBounds>{"max_depth": 2});
+            assertRegex("\\.\\.\\.", bstr, conv);
+            assertTrue(bstr.size() < sprintf("%" + conv, deep).size(), conv);
+        }
+    }
+
+    vsprintfBounded() {
+        assertEq("a: 1 b: \"x\"", vsprintf_bounded("a: %d b: %y", (1, "x")));
+
+        # the bounds are applied to each value formatted
+        list<int> l = map $1, xrange(0, 999);
+        assertEq(999, l.size());
+        string str = vsprintf_bounded("l: %y l: %y", (l, l), <FormatBounds>{"max_elements": 2});
+        assertEq("l: [0, 1, ...<997 more>] l: [0, 1, ...<997 more>]", str);
+
+        # a missing argument is handled as with vsprintf()
+        assertEq(vsprintf("a: %y b: %y", (1,)), vsprintf_bounded("a: %y b: %y", (1,)));
+    }
+
+    boundsErrors() {
+        assertThrows("FORMAT-BOUNDS-ERROR", "max_bytes",
+            \format_bounded(), (1, <FormatBounds>{"max_bytes": -1}));
+        assertThrows("FORMAT-BOUNDS-ERROR", "max_depth",
+            \format_bounded(), (1, <FormatBounds>{"max_depth": -1}));
+        assertThrows("FORMAT-BOUNDS-ERROR", "max_elements",
+            \vsprintf_bounded(), ("%y", (1,), <FormatBounds>{"max_elements": -1}));
+    }
+}

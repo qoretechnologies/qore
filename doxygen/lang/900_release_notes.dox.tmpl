@@ -1174,6 +1174,13 @@ cargo install tree-sitter-cli@0.26.5
         objects for the first ready operation (send or recv)
       - @ref Qore::clear_thread_cancel() "clear_thread_cancel()": clears the cancellation flag for the current thread
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+      - @ref Qore::format_bounded() "format_bounded()", @ref Qore::sprintf_bounded() "sprintf_bounded()", and
+        @ref Qore::vsprintf_bounded() "vsprintf_bounded()": format values subject to
+        @ref Qore::FormatBounds "FormatBounds" limits on the size, the nesting depth, and the number of elements
+        expanded, where each container is expanded at most once and further references to it are rendered as YAML
+        aliases; use these functions instead of @ref Qore::sprintf() "sprintf()" and
+        @ref Qore::vsprintf() "vsprintf()" when formatting values that can be arbitrarily large, such as when
+        logging values that reach live internal data structures
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::getaddrinfo_async() "getaddrinfo_async()": Future-returning async DNS address lookup backed by

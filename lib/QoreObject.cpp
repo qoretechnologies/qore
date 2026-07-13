@@ -35,6 +35,7 @@
 #include "qore/QoreTypeSafeReferenceHelper.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #ifdef QORE_HAVE_ALLOC_TRACKING
 #include "qore/intern/AllocTracking.h"
@@ -1991,6 +1992,15 @@ QoreString* QoreObject::getAsString(bool& del, int foff, ExceptionSink* xsink) c
 }
 
 int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
+    // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
+    // as an alias to the anchor rendered with the object, so this check is made before the recursion check
+    QoreString elision;
+    elision.sprintf("{<%s object>...}", getClassName());
+    QoreFormatBoundsHelper fbh(str, this, elision.c_str());
+    if (fbh.elided()) {
+        return 0;
+    }
+
     QoreContainerHelper cch(this);
     if (!cch) {
         str.sprintf("{ERROR: recursive reference to object %p (class %s)}", this, getClassName());
@@ -2012,12 +2022,17 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
             str.concat(": ");
             ConstHashIterator hi(*h);
 
+            size_t count = 0;
             while (hi.next()) {
+                if (fbh.elideElements(str, count, h->size())) {
+                    break;
+                }
                 str.sprintf("%s: ", hi.getKey());
                 if (hi.get().getAsString(str, foff, xsink))
                     return -1;
                 if (!hi.last())
                     str.concat(", ");
+                ++count;
             }
         }
         str.concat('}');
@@ -2048,10 +2063,16 @@ int QoreObject::getAsString(QoreString& str, int foff, ExceptionSink* xsink) con
         */
 
         ConstHashIterator hi(*h);
+        size_t count = 0;
         while (hi.next()) {
             // skip private members when accessed outside the class
             //if (!class_ctx && priv->checkMemberAccessIntern(hi.getKey(), false, false) == QOA_PRIV_ERROR)
             //   continue;
+
+            if (fbh.elideElements(str, count, h->size())) {
+                break;
+            }
+            ++count;
 
             if (foff != FMT_NONE)
                 str.addch(' ', foff + 2);

@@ -472,4 +472,9 @@ DLLEXPORT extern const TypedHashDecl* hashdeclTimerEventInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclRegexMatchInfo;
 
+//! FormatBounds hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclFormatBounds;
+
 #endif

@@ -35,5 +35,6 @@
 
 DLLLOCAL void init_string_functions(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_RegexMatchInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_FormatBounds(QoreNamespace& ns);
 
 #endif

@@ -31,6 +31,7 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -924,6 +925,335 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
     }
 
     return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
+}
+
+// applies the format bounds while the standard formatter expands the value, so that the bounds work with every
+// value format specification ("%n", "%N", "%y", and "%Y") and their output formats are preserved
+void QoreFormatBoundsContext::scan(const QoreValue val) {
+    unsigned nodes = 0;
+    scanIntern(val, 0, nodes);
+}
+
+void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+    const AbstractQoreNode* node;
+    switch (val.getType()) {
+        case NT_HASH:
+        case NT_LIST:
+        case NT_OBJECT:
+            node = val.getInternalNode();
+            break;
+        default:
+            return;
+    }
+
+    if (nodes >= max_scan_nodes) {
+        return;
+    }
+    ++nodes;
+
+    nmap_t::iterator i = counts.lower_bound(node);
+    if (i != counts.end() && i->first == node) {
+        // the container is already known; count the reference and do not expand it again; this also terminates
+        // the scan of recursive references
+        ++(i->second);
+        return;
+    }
+    counts.insert(i, nmap_t::value_type(node, 1));
+
+    if (bounds.max_depth && depth >= bounds.max_depth) {
+        return;
+    }
+
+    switch (val.getType()) {
+        case NT_HASH: {
+            ConstHashIterator hi(val.get<const QoreHashNode>());
+            while (hi.next()) {
+                scanIntern(hi.get(), depth + 1, nodes);
+            }
+            break;
+        }
+        case NT_LIST: {
+            ConstListIterator li(val.get<const QoreListNode>());
+            while (li.next()) {
+                scanIntern(li.getValue(), depth + 1, nodes);
+            }
+            break;
+        }
+        case NT_OBJECT: {
+            // any exception here is ignored; the format pass reports it
+            ExceptionSink xs;
+            QoreHashNodeHolder h(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false),
+                &xs);
+            xs.clear();
+            if (h) {
+                ConstHashIterator hi(*h);
+                while (hi.next()) {
+                    scanIntern(hi.get(), depth + 1, nodes);
+                }
+            }
+            break;
+        }
+        default:
+            assert(false);
+            break;
+    }
+}
+
+int QoreFormatBoundsContext::enterContainer(QoreString& str, const AbstractQoreNode* node, const char* elision) {
+    if (overBudget(str)) {
+        return 1;
+    }
+
+    // a container already expanded is rendered as an alias to its anchor
+    nmap_t::const_iterator ai = anchors.find(node);
+    if (ai != anchors.end()) {
+        str.sprintf("*%u", ai->second);
+        return 1;
+    }
+
+    if (bounds.max_depth && depth >= bounds.max_depth) {
+        truncated = true;
+        str.concat(elision);
+        return 1;
+    }
+
+    // containers referenced only once cannot be referenced again and therefore get no anchor; containers not
+    // reached by the scan pass are treated as if they were shared, as they could be referenced recursively
+    nmap_t::const_iterator ci = counts.find(node);
+    if (ci == counts.end() || ci->second > 1) {
+        unsigned id = ++last_anchor;
+        anchors[node] = id;
+        str.sprintf("&%u ", id);
+    }
+
+    ++depth;
+    return 0;
+}
+
+bool QoreFormatBoundsContext::elideElements(QoreString& str, size_t count, size_t total) {
+    if (bounds.max_elements && count >= bounds.max_elements) {
+        truncated = true;
+        str.sprintf("...<%zu more>", total - count);
+        return true;
+    }
+    return overBudget(str);
+}
+
+int QoreFormatBoundsContext::renderString(QoreString& str, const QoreStringNode* val, ExceptionSink* xsink) {
+    size_t rem = remaining(str);
+    if (val->strlen() <= rem) {
+        return 0;
+    }
+    if (!rem) {
+        overBudget(str);
+        return 1;
+    }
+
+    // the budget is in bytes and substr() takes characters, so the string rendered here can be longer than the
+    // budget in a multi-byte encoding; the budget check made before the next value is rendered ends the output
+    // in any case
+    SimpleRefHolder<QoreStringNode> sub(val->substr(0, static_cast<qore_offset_t>(rem), xsink));
+    if (*xsink) {
+        return -1;
+    }
+    str.concat('"');
+    str.concatEscape(*sub, '"', '\\', xsink);
+    if (*xsink) {
+        return -1;
+    }
+    str.concat("\"...<truncated>");
+    truncated = true;
+    return 1;
+}
+
+namespace {
+//! returns True if the conversion character consumes an argument in process_opt()
+static bool format_conversion_uses_arg(char conv) {
+    switch (conv) {
+        case 's':
+        case 'w':
+        case 'p':
+        case 'd':
+        case 'o':
+        case 'x':
+        case 'X':
+        case 'A':
+        case 'a':
+        case 'G':
+        case 'g':
+        case 'F':
+        case 'f':
+        case 'E':
+        case 'e':
+        case 'n':
+        case 'N':
+        case 'y':
+        case 'Y':
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! returns True if the conversion character expands a value and therefore has to be bounded
+static bool format_conversion_is_value(char conv) {
+    return conv == 'n' || conv == 'N' || conv == 'y' || conv == 'Y';
+}
+
+//! returns the format offset used by process_opt() for a value conversion character
+/** @param conv the conversion character
+    @param width the field width given with the conversion or -1 if none was given; the field width is the
+    format offset with the "%N" conversion
+*/
+static int format_conversion_offset(char conv, int width) {
+    switch (conv) {
+        case 'n':
+            return FMT_NONE;
+        case 'N':
+            return width == -1 ? FMT_NORMAL : width;
+        case 'Y':
+            return FMT_YAML_LONG;
+        default:
+            assert(conv == 'y');
+            return FMT_YAML_SHORT;
+    }
+}
+}
+
+QoreStringNode* q_format_bounded(const QoreValue val, int foff, const QoreFormatBounds& bounds,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    QoreFormatBoundsContext ctx(bounds);
+    ctx.scan(val);
+
+    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode);
+    QoreFormatBoundsContextHelper ch(&ctx);
+    if (val.getAsString(**rv, foff, xsink)) {
+        return nullptr;
+    }
+    return rv.release();
+}
+
+static QoreStringNode* qore_sprintf_bounded_intern(ExceptionSink* xsink, const QoreString& fmt,
+        const QoreListNode* args, size_t arg_offset, int field, const QoreFormatBounds& bounds) {
+    assert(xsink);
+
+    // the value-formatting conversions are rendered here subject to the bounds given and are replaced by "%s"
+    // conversions taking the rendered string; all other conversions are passed through to the standard formatter
+    SimpleRefHolder<QoreStringNode> new_fmt(new QoreStringNode(fmt.getEncoding()));
+    ReferenceHolder<QoreListNode> new_args(new QoreListNode(autoTypeInfo), xsink);
+
+    const char* pstr = fmt.c_str();
+    size_t len = fmt.strlen();
+    size_t arg_size = args ? args->size() : 0;
+
+    for (size_t i = 0; i < len; ++i) {
+        if (pstr[i] != '%') {
+            new_fmt->concat(pstr[i]);
+            continue;
+        }
+
+        // find the conversion character; flags, the field width, and the precision precede it
+        size_t j = i + 1;
+        while (j < len && pstr[j] != '%' && !isalpha(static_cast<unsigned char>(pstr[j]))) {
+            ++j;
+        }
+        if (j == len) {
+            // an incomplete conversion at the end of the format string is output verbatim
+            new_fmt->concat(&pstr[i], len - i);
+            break;
+        }
+
+        char conv = pstr[j];
+        if (conv == '%' && j == i + 1) {
+            new_fmt->concat("%%");
+            i = j;
+            continue;
+        }
+
+        bool uses_arg = format_conversion_uses_arg(conv) && arg_offset < arg_size;
+        if (uses_arg && format_conversion_is_value(conv)) {
+            // the value is rendered here in the format given by the conversion and subject to the bounds; the
+            // conversion is replaced by "%s" taking the string rendered
+            const char* wstr = &pstr[i + 1];
+            int width = isdigit(static_cast<unsigned char>(*wstr))
+                ? get_number(const_cast<char**>(&wstr))
+                : -1;
+            SimpleRefHolder<QoreStringNode> val(q_format_bounded(args->retrieveEntry(arg_offset++),
+                format_conversion_offset(conv, width), bounds, xsink));
+            if (!val) {
+                return nullptr;
+            }
+            new_args->push(val.release(), xsink);
+            new_fmt->concat("%s");
+        } else {
+            new_fmt->concat(&pstr[i], j - i + 1);
+            if (uses_arg) {
+                new_args->push(args->getReferencedEntry(arg_offset++), xsink);
+            }
+        }
+        i = j;
+    }
+
+    return qore_sprintf_intern(xsink, *new_fmt, *new_args, 0, field, -1, true);
+}
+
+QoreStringNode* q_vsprintf_bounded(const QoreString& fmt, const QoreListNode* args, int field,
+        const QoreFormatBounds& bounds, ExceptionSink* xsink) {
+    return qore_sprintf_bounded_intern(xsink, fmt, args, 0, field, bounds);
+}
+
+QoreStringNode* q_sprintf_bounded(const QoreListNode* params, int field, int offset,
+        const QoreFormatBounds& bounds, ExceptionSink* xsink) {
+    assert(xsink);
+    QoreValue pv = get_param_value(params, offset);
+    if (pv.getType() != NT_STRING) {
+        return new QoreStringNode;
+    }
+    QoreStringNodeValueHelper fmt(pv);
+    return qore_sprintf_bounded_intern(xsink, **fmt, params, offset + 1, field, bounds);
+}
+
+int q_get_format_bounds(QoreFormatBounds& bounds, const QoreHashNode* h, ExceptionSink* xsink) {
+    assert(xsink);
+    if (!h) {
+        return 0;
+    }
+
+    struct {
+        const char* key;
+        size_t* val;
+    } limits[] = {
+        {"max_bytes", &bounds.max_bytes},
+        {"max_elements", &bounds.max_elements},
+    };
+
+    for (auto& i : limits) {
+        QoreValue v = h->getKeyValue(i.key);
+        if (v.isNothing()) {
+            continue;
+        }
+        int64 iv = v.getAsBigInt();
+        if (iv < 0) {
+            xsink->raiseException("FORMAT-BOUNDS-ERROR", "format bounds key \"%s\" cannot be negative (got "
+                QLLD ")", i.key, iv);
+            return -1;
+        }
+        *i.val = static_cast<size_t>(iv);
+    }
+
+    QoreValue v = h->getKeyValue("max_depth");
+    if (!v.isNothing()) {
+        int64 iv = v.getAsBigInt();
+        if (iv < 0) {
+            xsink->raiseException("FORMAT-BOUNDS-ERROR", "format bounds key \"max_depth\" cannot be negative "
+                "(got " QLLD ")", iv);
+            return -1;
+        }
+        bounds.max_depth = iv > UINT_MAX ? UINT_MAX : static_cast<unsigned>(iv);
+    }
+
+    return 0;
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
