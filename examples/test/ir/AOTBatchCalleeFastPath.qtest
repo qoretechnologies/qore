@@ -431,6 +431,20 @@ float sub cross_float(float value) {
     return value * 1.5;
 }
 
+int sub cross_min(int lhs, int rhs) {
+    if (lhs < rhs) {
+        return lhs;
+    }
+    return rhs;
+}
+
+int sub cross_floor(int value) {
+    if (value < 4) {
+        return 4;
+    }
+    return value;
+}
+
 string sub cross_string(string value) {
     return value + \"!\";
 }
@@ -463,9 +477,10 @@ string sub crossFileMainCode() {
 int sub main() {
     int value = 3;
     cross_bump(\\value);
-    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g\\n\", cross_leaf(4), cross_affine(4),
+    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d\\n\", cross_leaf(4), cross_affine(4),
         cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
-        value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0));
+        value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
+        cross_min(7, 3), cross_floor(2));
     return 0;
 }
 ";
@@ -476,7 +491,7 @@ string sub crossFileUnassignedMainCode() {
 
 int sub main() {
     int value;
-    printf(\"%s\\n\", cross_affine(value));
+    printf(\"%s\\n\", cross_min(value, 2));
     return 0;
 }
 ";
@@ -624,7 +639,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0\n") {
+if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -676,7 +691,9 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"fast_return_kind\": 2/)
         || !(provider_index =~ /\"scalar_leaf_kind\": 1/)
         || !(provider_index =~ /\"scalar_leaf_kind\": 2/)
-        || !(provider_index =~ /\"scalar_leaf_kind\": 3/)) {
+        || !(provider_index =~ /\"scalar_leaf_kind\": 3/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 4/)
+        || !(provider_index =~ /\"scalar_leaf_kind\": 5/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

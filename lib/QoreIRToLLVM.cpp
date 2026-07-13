@@ -3823,7 +3823,9 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
         }
         return value;
     }
-    bool is_int = leaf.kind == AOTScalarLeafKind::IntBinary;
+    bool is_select = leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
+        || leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue;
+    bool is_int = leaf.kind == AOTScalarLeafKind::IntBinary || is_select;
     auto get_operand = [&](int8_t param, int64_t int_value, double float_value) -> llvm::Value* {
         if (param >= 0) {
             if (static_cast<size_t>(param) >= native_args.size()) {
@@ -3843,6 +3845,37 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
     llvm::Value* rhs = get_operand(leaf.rhs_param, leaf.rhs_int, leaf.rhs_float);
     if (!lhs || !rhs) {
         return nullptr;
+    }
+    if (is_select) {
+        if (std::getenv("QORE_DISABLE_AOT_CFG_SELECT_IMPORT")) {
+            return nullptr;
+        }
+        llvm::Value* condition = nullptr;
+        switch (static_cast<QoreIROpcode>(leaf.opcode)) {
+            case QoreIROpcode::EqInt:
+                condition = builder->CreateICmpEQ(lhs, rhs);
+                break;
+            case QoreIROpcode::NeInt:
+                condition = builder->CreateICmpNE(lhs, rhs);
+                break;
+            case QoreIROpcode::LtInt:
+                condition = builder->CreateICmpSLT(lhs, rhs);
+                break;
+            case QoreIROpcode::LeInt:
+                condition = builder->CreateICmpSLE(lhs, rhs);
+                break;
+            case QoreIROpcode::GtInt:
+                condition = builder->CreateICmpSGT(lhs, rhs);
+                break;
+            case QoreIROpcode::GeInt:
+                condition = builder->CreateICmpSGE(lhs, rhs);
+                break;
+            default:
+                return nullptr;
+        }
+        return leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
+            ? builder->CreateSelect(condition, lhs, rhs)
+            : builder->CreateSelect(condition, rhs, lhs);
     }
     switch (static_cast<QoreIROpcode>(leaf.opcode)) {
         case QoreIROpcode::AddInt:

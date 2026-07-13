@@ -3454,6 +3454,174 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             }
         }
     }
+    struct ScalarIntOperand {
+        int8_t param = -1;
+        int64_t constant = 0;
+
+        bool operator==(const ScalarIntOperand& other) const {
+            return param == other.param && (param >= 0 || constant == other.constant);
+        }
+    };
+    auto get_cfg_select = [](const QoreIRFunction* func, UserVariantBase* uvb,
+            int num_params, AOTScalarLeafInfo& leaf) -> bool {
+        if (std::getenv("QORE_DISABLE_AOT_CFG_SELECT_IMPORT") || !func || !uvb
+                || num_params < 1 || num_params > 2 || func->blocks.size() != 3) {
+            return false;
+        }
+        size_t instruction_count = 0;
+        for (const auto& block : func->blocks) {
+            if (!block || (instruction_count += block->instructions.size()) > 16) {
+                return false;
+            }
+        }
+        std::unordered_map<const LocalVar*, int8_t> params;
+        for (int i = 0; i < num_params; ++i) {
+            auto param = func->param_local_vars.find(i);
+            if (param == func->param_local_vars.end() || !param->second
+                    || param->second->getTypeInfo() != bigIntTypeInfo
+                    || param->second->closureUse()) {
+                return false;
+            }
+            params.emplace(param->second, static_cast<int8_t>(i));
+        }
+        auto record_value = [&params](const QoreIRInstruction* inst,
+                std::unordered_map<uint32_t, ScalarIntOperand>& values) -> bool {
+            if (!inst->result.isValid()) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (param == params.end()) {
+                    return false;
+                }
+                values.emplace(inst->result.id, ScalarIntOperand{param->second, 0});
+                return true;
+            }
+            if (inst->opcode == QoreIROpcode::ConstInt) {
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                values.emplace(inst->result.id,
+                    ScalarIntOperand{-1, constant->constant.int_value});
+                return true;
+            }
+            return false;
+        };
+        auto supported_comparison = [](QoreIROpcode opcode) {
+            return opcode == QoreIROpcode::EqInt || opcode == QoreIROpcode::NeInt
+                || opcode == QoreIROpcode::LtInt || opcode == QoreIROpcode::LeInt
+                || opcode == QoreIROpcode::GtInt || opcode == QoreIROpcode::GeInt;
+        };
+
+        const QoreIRBasicBlock* entry = func->blocks.front().get();
+        std::unordered_map<uint32_t, ScalarIntOperand> entry_values;
+        const QoreIRInstruction* comparison = nullptr;
+        const QoreIRBranchIfInstruction* branch = nullptr;
+        for (const auto& inst_ptr : entry->instructions) {
+            if (!inst_ptr || inst_ptr->exception_target || branch) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::DebugBlock) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::ConstInt) {
+                if (!record_value(inst, entry_values)) {
+                    return false;
+                }
+                continue;
+            }
+            if (supported_comparison(inst->opcode)) {
+                if (comparison || !inst->result.isValid() || inst->operands.size() != 2
+                        || entry_values.find(inst->operands[0].id) == entry_values.end()
+                        || entry_values.find(inst->operands[1].id) == entry_values.end()) {
+                    return false;
+                }
+                comparison = inst;
+                continue;
+            }
+            if (inst->opcode != QoreIROpcode::BrIf || !comparison) {
+                return false;
+            }
+            branch = static_cast<const QoreIRBranchIfInstruction*>(inst);
+            if (branch->condition.id != comparison->result.id || !branch->true_target
+                    || !branch->false_target || branch->true_target == branch->false_target
+                    || branch->true_target == entry || branch->false_target == entry) {
+                return false;
+            }
+        }
+        if (!comparison || !branch) {
+            return false;
+        }
+        bool saw_true = false;
+        bool saw_false = false;
+        for (const auto& block : func->blocks) {
+            if (block.get() == branch->true_target) {
+                saw_true = true;
+            }
+            if (block.get() == branch->false_target) {
+                saw_false = true;
+            }
+        }
+        if (!saw_true || !saw_false) {
+            return false;
+        }
+        auto get_return_operand = [&](const QoreIRBasicBlock* block,
+                ScalarIntOperand& result) -> bool {
+            std::unordered_map<uint32_t, ScalarIntOperand> values = entry_values;
+            const QoreIRReturnInstruction* ret = nullptr;
+            for (const auto& inst_ptr : block->instructions) {
+                if (!inst_ptr || inst_ptr->exception_target || ret) {
+                    return false;
+                }
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (inst->opcode == QoreIROpcode::DebugBlock) {
+                    continue;
+                }
+                if (inst->opcode == QoreIROpcode::LoadLocal
+                        || inst->opcode == QoreIROpcode::ConstInt) {
+                    if (!record_value(inst, values)) {
+                        return false;
+                    }
+                    continue;
+                }
+                if (inst->opcode != QoreIROpcode::Return) {
+                    return false;
+                }
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+            }
+            if (!ret || !ret->has_value) {
+                return false;
+            }
+            auto value = values.find(ret->value.id);
+            if (value == values.end()) {
+                return false;
+            }
+            result = value->second;
+            return true;
+        };
+        ScalarIntOperand true_result;
+        ScalarIntOperand false_result;
+        if (!get_return_operand(branch->true_target, true_result)
+                || !get_return_operand(branch->false_target, false_result)) {
+            return false;
+        }
+        const ScalarIntOperand& lhs = entry_values.at(comparison->operands[0].id);
+        const ScalarIntOperand& rhs = entry_values.at(comparison->operands[1].id);
+        if (true_result == lhs && false_result == rhs) {
+            leaf.kind = AOTScalarLeafKind::IntSelectLhsIfTrue;
+        } else if (true_result == rhs && false_result == lhs) {
+            leaf.kind = AOTScalarLeafKind::IntSelectRhsIfTrue;
+        } else {
+            return false;
+        }
+        leaf.opcode = static_cast<uint16_t>(comparison->opcode);
+        leaf.lhs_param = lhs.param;
+        leaf.rhs_param = rhs.param;
+        leaf.lhs_int = lhs.constant;
+        leaf.rhs_int = rhs.constant;
+        return true;
+    };
     for (const auto& [variant, func] : functions) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT scalar leaf summary collection")) {
@@ -3468,7 +3636,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
-                static_cast<int>(sig->numParams()), leaf)) {
+                static_cast<int>(sig->numParams()), leaf)
+                && !get_cfg_select(func, uvb, static_cast<int>(sig->numParams()), leaf)) {
             AOTFixedHashRemapInfo hash_remap;
             bool fixed_hash = !std::getenv("QORE_DISABLE_AOT_FIXED_HASH_REMAP")
                 && qore_aot_get_fixed_hash_remap(*func, *sig, hash_remap);
@@ -3477,9 +3646,10 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             }
             continue;
         }
-        BatchCalleeReturnKind expected_return = leaf.kind == AOTScalarLeafKind::IntBinary
+        bool is_int = leaf.kind != AOTScalarLeafKind::FloatBinary;
+        BatchCalleeReturnKind expected_return = is_int
             ? BatchCalleeReturnKind::NativeInt : BatchCalleeReturnKind::NativeFloat;
-        BatchCalleeParamKind expected_param = leaf.kind == AOTScalarLeafKind::IntBinary
+        BatchCalleeParamKind expected_param = is_int
             ? BatchCalleeParamKind::NativeInt : BatchCalleeParamKind::NativeFloat;
         if (callee_it->second.return_kind != expected_return
                 || callee_it->second.param_kinds.size() != sig->numParams()
@@ -4193,7 +4363,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
     info.param_noescape.resize(info.num_params, 0);
-    if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::IntAffine)
+    if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::IntSelectRhsIfTrue)
             || rec.scalar_leaf_lhs_param < -1 || rec.scalar_leaf_rhs_param < -1
             || rec.scalar_leaf_lhs_param >= static_cast<int>(info.num_params)
             || rec.scalar_leaf_rhs_param >= static_cast<int>(info.num_params)) {
@@ -4209,7 +4379,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.scalar_leaf.rhs_float = rec.scalar_leaf_rhs_float;
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
         bool is_affine = info.scalar_leaf.kind == AOTScalarLeafKind::IntAffine;
-        bool is_int = info.scalar_leaf.kind == AOTScalarLeafKind::IntBinary || is_affine;
+        bool is_select = info.scalar_leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
+            || info.scalar_leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue;
+        bool is_int = info.scalar_leaf.kind == AOTScalarLeafKind::IntBinary
+            || is_affine || is_select;
         BatchCalleeReturnKind expected_return = is_int
             ? BatchCalleeReturnKind::NativeInt : BatchCalleeReturnKind::NativeFloat;
         BatchCalleeParamKind expected_param = is_int
@@ -4218,6 +4391,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         bool supported_opcode = is_affine
             ? info.num_params == 1 && info.scalar_leaf.lhs_param == 0
                 && info.scalar_leaf.rhs_param == -1
+            : is_select
+            ? (opcode == QoreIROpcode::EqInt || opcode == QoreIROpcode::NeInt
+                || opcode == QoreIROpcode::LtInt || opcode == QoreIROpcode::LeInt
+                || opcode == QoreIROpcode::GtInt || opcode == QoreIROpcode::GeInt)
             : (is_int
             ? (opcode == QoreIROpcode::AddInt || opcode == QoreIROpcode::SubInt
                 || opcode == QoreIROpcode::MulInt || opcode == QoreIROpcode::AndInt
