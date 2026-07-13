@@ -6522,6 +6522,10 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeI64(rec.scalar_leaf_false_scale);
     writer.writeI64(rec.scalar_leaf_false_offset);
     writer.writeStringRef(rec.object_getter_member.c_str());
+    writer.writeU8(rec.string_op_kind);
+    writer.writeU8(static_cast<uint8_t>(rec.string_op_base_param));
+    writer.writeU8(static_cast<uint8_t>(rec.string_op_arg0_param));
+    writer.writeU8(static_cast<uint8_t>(rec.string_op_arg1_param));
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6590,6 +6594,10 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.scalar_leaf_false_scale = info.scalar_leaf_false_scale;
     rec.scalar_leaf_false_offset = info.scalar_leaf_false_offset;
     rec.object_getter_member = info.object_getter_member;
+    rec.string_op_kind = info.string_op_kind;
+    rec.string_op_base_param = info.string_op_base_param;
+    rec.string_op_arg0_param = info.string_op_arg0_param;
+    rec.string_op_arg1_param = info.string_op_arg1_param;
     native.push_back(std::move(rec));
 }
 
@@ -7781,6 +7789,17 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             error, "object_getter_member")) {
         return false;
     }
+    if (version < 7) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 4) {
+        error = "truncated SYMBOL_INDEX string operation metadata";
+        return false;
+    }
+    rec.string_op_kind = QoreAOTBinaryReader::readU8(ptr);
+    rec.string_op_base_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.string_op_arg0_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.string_op_arg1_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
     return true;
 }
 

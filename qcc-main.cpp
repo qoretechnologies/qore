@@ -5027,6 +5027,10 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         static_cast<long long>(rec.scalar_leaf_false_scale),
         static_cast<long long>(rec.scalar_leaf_false_offset));
     json_print_string(rec.object_getter_member);
+    printf(", \"string_op_kind\": %u, \"string_op_base_param\": %d"
+        ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
+        rec.string_op_kind, rec.string_op_base_param,
+        rec.string_op_arg0_param, rec.string_op_arg1_param);
     printf("}");
 }
 
@@ -5586,6 +5590,10 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             static_cast<long long>(rec.scalar_leaf_false_scale),
             static_cast<long long>(rec.scalar_leaf_false_offset));
         json_file_string(f, rec.object_getter_member);
+        fprintf(f, ", \"string_op_kind\": %u, \"string_op_base_param\": %d"
+            ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
+            rec.string_op_kind, rec.string_op_base_param,
+            rec.string_op_arg0_param, rec.string_op_arg1_param);
         fputc('}', f);
     }
     if (!records.empty()) {

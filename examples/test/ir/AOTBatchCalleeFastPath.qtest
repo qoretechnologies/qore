@@ -466,6 +466,38 @@ int sub cross_piecewise(int value) {
     return value * 3 - 2;
 }
 
+int sub cross_string_size(string value) {
+    return value.size();
+}
+
+int sub cross_string_length(string value) {
+    return value.length();
+}
+
+bool sub cross_starts_with(string value, string pattern) {
+    return value.startsWith(pattern);
+}
+
+bool sub cross_ends_with(string value, string pattern) {
+    return value.endsWith(pattern);
+}
+
+bool sub cross_contains(string value, string pattern) {
+    return value.contains(pattern);
+}
+
+int sub cross_find(string value, string pattern, int offset) {
+    return value.find(pattern, offset);
+}
+
+int sub cross_rfind(string value, string pattern) {
+    return value.rfind(pattern);
+}
+
+string sub cross_substr(string value, int start, int length) {
+    return value.substr(start, length);
+}
+
 string sub cross_string(string value) {
     return value + \"!\";
 }
@@ -506,11 +538,25 @@ int sub main() {
     } catch (hash<auto> ex) {
         getter_rejected = True;
     }
-    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d\\n\", cross_leaf(4), cross_affine(4),
+    string missing_string;
+    bool string_rejected = False;
+    try {
+        cross_contains(missing_string, \"x\");
+    } catch (hash<auto> ex) {
+        string_rejected = True;
+    }
+    string utf8 = \"aébcé\";
+    string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
+    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\",
+        cross_leaf(4), cross_affine(4),
         cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
         value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
         cross_min(7, 3), cross_floor(2), cross_piecewise(2), cross_piecewise(5),
-        getter.getValue(), getter_rejected);
+        getter.getValue(), getter_rejected, cross_string_size(utf8), cross_string_length(utf8),
+        cross_starts_with(utf8, \"aé\"), cross_ends_with(utf8, \"cé\"),
+        cross_contains(utf8, \"éb\"), cross_find(utf8, \"é\", 2), cross_substr(utf8, 1, 2),
+        cross_rfind(utf8, \"é\"), cross_string_size(latin1), cross_string_length(latin1),
+        string_rejected);
     return 0;
 }
 ";
@@ -669,7 +715,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1\n") {
+if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -729,7 +775,10 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"scalar_leaf_true_offset\": 1/)
         || !(provider_index =~ /\"scalar_leaf_false_scale\": 3/)
         || !(provider_index =~ /\"scalar_leaf_false_offset\": -2/)
-        || !(provider_index =~ /\"object_getter_member\": \"value\"/)) {
+        || !(provider_index =~ /\"object_getter_member\": \"value\"/)
+        || !(provider_index =~ /\"string_op_kind\": 5/)
+        || !(provider_index =~ /\"string_op_base_param\": 0/)
+        || !(provider_index =~ /\"string_op_arg0_param\": 1/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

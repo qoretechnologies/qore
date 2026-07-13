@@ -116,6 +116,29 @@ struct AOTFixedHashRemapInfo {
     }
 };
 
+enum class AOTStringOpKind : uint8_t {
+    None = 0,
+    Size = 1,
+    Length = 2,
+    StartsWith = 3,
+    EndsWith = 4,
+    Contains = 5,
+    Find = 6,
+    RFind = 7,
+    Substr = 8,
+};
+
+struct AOTStringOpInfo {
+    AOTStringOpKind kind = AOTStringOpKind::None;
+    int8_t base_param = -1;
+    int8_t arg0_param = -1;
+    int8_t arg1_param = -1;
+
+    explicit operator bool() const {
+        return kind != AOTStringOpKind::None;
+    }
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -131,6 +154,7 @@ struct BatchCalleeInfo {
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
+    AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     std::string object_getter_member;     //!< Exact final-object getter member name
 };
 

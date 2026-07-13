@@ -995,6 +995,10 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.scalar_leaf_false_scale = info.scalar_leaf.false_scale;
             entry.scalar_leaf_false_offset = info.scalar_leaf.false_offset;
             entry.object_getter_member = info.object_getter_member;
+            entry.string_op_kind = static_cast<uint8_t>(info.string_op.kind);
+            entry.string_op_base_param = info.string_op.base_param;
+            entry.string_op_arg0_param = info.string_op.arg0_param;
+            entry.string_op_arg1_param = info.string_op.arg1_param;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3416,6 +3420,148 @@ static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
     return true;
 }
 
+static bool qore_aot_get_string_op(const QoreIRFunction& func,
+        const UserSignature& sig, AOTStringOpInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_STRING_OP_IMPORT")
+            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || func.blocks.size() != 1 || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 8) {
+        return false;
+    }
+
+    std::unordered_map<const LocalVar*, int8_t> params;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT string operation parameter analysis")) {
+            return false;
+        }
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second
+                || param->second->closureUse()) {
+            return false;
+        }
+        params.emplace(param->second, static_cast<int8_t>(i));
+    }
+
+    std::unordered_map<uint32_t, int8_t> values;
+    const QoreIRDotEvalMethodDirectInstruction* operation = nullptr;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (param == params.end() || !inst->result.isValid()) {
+                    return false;
+                }
+                values.emplace(inst->result.id, param->second);
+                break;
+            }
+            case QoreIROpcode::DotEvalMethodDirect:
+                if (operation || !inst->result.isValid()) {
+                    return false;
+                }
+                operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                break;
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!operation || !operation->pseudo || operation->has_ref_args
+            || !operation->qc || strcmp(operation->qc->getName(), "<string>")
+            || !operation->pseudo_base_known_assigned_string
+            || !ret || !ret->has_value || ret->value.id != operation->result.id
+            || operation->operands.empty() || operation->operands.size() > 3) {
+        return false;
+    }
+
+    auto get_param = [&](size_t operand) -> int8_t {
+        if (operand >= operation->operands.size()) {
+            return -1;
+        }
+        auto value = values.find(operation->operands[operand].id);
+        return value == values.end() ? -1 : value->second;
+    };
+    result.base_param = get_param(0);
+    result.arg0_param = get_param(1);
+    result.arg1_param = get_param(2);
+    if (result.base_param < 0) {
+        return false;
+    }
+
+    QoreIRIntrinsic intrinsic = operation->intrinsic;
+    if (intrinsic == QoreIRIntrinsic::None) {
+        intrinsic = qore_ir_resolve_pseudo_intrinsic(operation->method,
+            operation->qc, operation->fallback_method_name);
+    }
+    switch (intrinsic) {
+        case QoreIRIntrinsic::Size:
+        case QoreIRIntrinsic::StringStrlen:
+            if (operation->operands.size() != 1) {
+                return false;
+            }
+            result.kind = AOTStringOpKind::Size;
+            break;
+        case QoreIRIntrinsic::StringLength:
+            if (operation->operands.size() != 1) {
+                return false;
+            }
+            result.kind = AOTStringOpKind::Length;
+            break;
+        case QoreIRIntrinsic::StringStartsWith:
+        case QoreIRIntrinsic::StringEndsWith:
+        case QoreIRIntrinsic::StringContains:
+            if (operation->operands.size() != 2 || result.arg0_param < 0
+                    || !operation->pseudo_arg0_known_assigned_string) {
+                return false;
+            }
+            result.kind = intrinsic == QoreIRIntrinsic::StringStartsWith
+                ? AOTStringOpKind::StartsWith
+                : intrinsic == QoreIRIntrinsic::StringEndsWith
+                    ? AOTStringOpKind::EndsWith : AOTStringOpKind::Contains;
+            break;
+        case QoreIRIntrinsic::StringFind:
+        case QoreIRIntrinsic::StringRFind:
+            if ((operation->operands.size() != 2 && operation->operands.size() != 3)
+                    || result.arg0_param < 0
+                    || !operation->pseudo_arg0_known_assigned_string
+                    || (operation->operands.size() == 3
+                        && (result.arg1_param < 0
+                            || !operation->pseudo_arg1_known_assigned_int))) {
+                return false;
+            }
+            result.kind = intrinsic == QoreIRIntrinsic::StringFind
+                ? AOTStringOpKind::Find : AOTStringOpKind::RFind;
+            break;
+        case QoreIRIntrinsic::StringSubstr:
+            if ((operation->operands.size() != 2 && operation->operands.size() != 3)
+                    || result.arg0_param < 0
+                    || !operation->pseudo_arg0_known_assigned_int
+                    || (operation->operands.size() == 3
+                        && (result.arg1_param < 0
+                            || !operation->pseudo_arg1_known_assigned_int))) {
+                return false;
+            }
+            result.kind = AOTStringOpKind::Substr;
+            break;
+        default:
+            return false;
+    }
+    return true;
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -3792,6 +3938,10 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         if (callee_it->second.implicit_self_method) {
             get_object_getter(func, static_cast<int>(sig->numParams()),
                 callee_it->second.object_getter_member);
+        }
+        AOTStringOpInfo string_op;
+        if (qore_aot_get_string_op(*func, *sig, string_op)) {
+            callee_it->second.string_op = string_op;
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
@@ -4544,6 +4694,54 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     if (!info.object_getter_member.empty()
             && (!info.implicit_self_method || info.num_params)) {
         return false;
+    }
+    if (rec.string_op_kind > static_cast<uint8_t>(AOTStringOpKind::Substr)
+            || rec.string_op_base_param < -1 || rec.string_op_arg0_param < -1
+            || rec.string_op_arg1_param < -1
+            || rec.string_op_base_param >= static_cast<int>(info.num_params)
+            || rec.string_op_arg0_param >= static_cast<int>(info.num_params)
+            || rec.string_op_arg1_param >= static_cast<int>(info.num_params)) {
+        return false;
+    }
+    info.string_op.kind = static_cast<AOTStringOpKind>(rec.string_op_kind);
+    info.string_op.base_param = rec.string_op_base_param;
+    info.string_op.arg0_param = rec.string_op_arg0_param;
+    info.string_op.arg1_param = rec.string_op_arg1_param;
+    if (!info.string_op) {
+        if (info.string_op.base_param != -1 || info.string_op.arg0_param != -1
+                || info.string_op.arg1_param != -1) {
+            return false;
+        }
+    } else {
+        bool no_arg = info.string_op.kind == AOTStringOpKind::Size
+            || info.string_op.kind == AOTStringOpKind::Length;
+        bool optional_arg1 = info.string_op.kind == AOTStringOpKind::Find
+            || info.string_op.kind == AOTStringOpKind::RFind
+            || info.string_op.kind == AOTStringOpKind::Substr;
+        bool boxed_result = info.string_op.kind == AOTStringOpKind::StartsWith
+            || info.string_op.kind == AOTStringOpKind::EndsWith
+            || info.string_op.kind == AOTStringOpKind::Contains
+            || info.string_op.kind == AOTStringOpKind::Substr;
+        auto rejects_nothing = [&](int8_t param) {
+            return param < 0 || (static_cast<size_t>(param)
+                < info.param_rejects_nothing.size()
+                && info.param_rejects_nothing[static_cast<size_t>(param)]);
+        };
+        if (info.string_op.base_param < 0
+                || (no_arg && (info.string_op.arg0_param != -1
+                    || info.string_op.arg1_param != -1))
+                || (!no_arg && info.string_op.arg0_param < 0)
+                || (!optional_arg1 && info.string_op.arg1_param != -1)
+                || !rejects_nothing(info.string_op.base_param)
+                || !rejects_nothing(info.string_op.arg0_param)
+                || !rejects_nothing(info.string_op.arg1_param)
+                || (boxed_result
+                    && info.return_kind != BatchCalleeReturnKind::Boxed)
+                || (!boxed_result
+                    && info.return_kind != BatchCalleeReturnKind::Boxed
+                    && info.return_kind != BatchCalleeReturnKind::NativeInt)) {
+            return false;
+        }
     }
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
         bool is_affine = info.scalar_leaf.kind == AOTScalarLeafKind::IntAffine;
