@@ -454,6 +454,21 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     hash<DataTypeInfo> getInfo(*bool simple) {
         # to catch recursive fields
         string uh = self.uniqueHash();
+
+        # "rimap" only tracks types on the current path, so a type object reachable by more than one path (i.e. any
+        # shared subtype in a type DAG) would be re-expanded at every occurrence, which is exponential in the depth
+        # of the graph.  Memoize each type's info for the duration of the traversal instead; results are shared by
+        # reference, so this bounds both the time and the memory by the number of distinct type objects
+        string ck = uh + (simple ? "-s" : "-f");
+        bool toplevel = !rimap;
+        on_exit if (toplevel) {
+            remove imap;
+            remove itrunc;
+        }
+        if (*hash<DataTypeInfo> cached = imap{ck}) {
+            return cached;
+        }
+
         bool recursive = rimap{uh} ?? False;
         if (!recursive) {
             rimap{uh} = True;
@@ -463,6 +478,13 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         on_error rethrow $1.err, sprintf("%s (while reading type %s %s recursive: %y rimap: %y)", $1.desc, getName(),
             uh, recursive, rimap.size());
+
+        # info for a type truncated by a cycle depends on the path taken to reach it, so it cannot be memoized;
+        # record truncations so that every type on the cycle's path is excluded from the cache as well
+        int trunc0 = itrunc ?? 0;
+        if (recursive) {
+            itrunc = trunc0 + 1;
+        }
         hash<DataTypeInfo> rv = <DataTypeInfo>{
             "name": getName(),
             "display_name": getDisplayName(),
@@ -485,14 +507,22 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "unique_key": uh,
             "tags": tags,
         };
-        if (*AbstractDataProviderType etype = getElementType()) {
-            rv.element_type = etype.getInfo(simple);
+        # element types are traversed as live objects, so a cyclic element-type graph would recurse without
+        # bound here; suppress it on the same condition as "fields", with "recursive" marking the truncation
+        if (!recursive) {
+            if (*AbstractDataProviderType etype = getElementType()) {
+                rv.element_type = etype.getInfo(simple);
+            }
         }
         if (exists (auto v = getDefaultValue())) {
             rv.default_value = v;
         }
         if (path.val()) {
             rv.path = path;
+        }
+        # only memoize path-independent results: neither this type nor anything below it was truncated by a cycle
+        if (!recursive && (itrunc ?? 0) == trunc0) {
+            imap{ck} = rv;
         }
         return rv;
     }
@@ -767,11 +797,45 @@ public class AbstractDataProviderType inherits Qore::Serializable {
     */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
         string u = self.uniqueHash();
+
+        # "emap" is passed by value, so it only tracks types on the current path; a type object shared by more than
+        # one parent (i.e. any shared subtype in a type DAG) therefore has its example value rebuilt at every
+        # occurrence, which is exponential in the depth of the graph.  Memoize per traversal instead: values are
+        # shared by reference, so this bounds the time and the memory by the number of distinct (type, field) pairs
+        bool toplevel = !exists emap;
+        on_exit if (toplevel) {
+            remove exmap;
+            remove extrunc;
+        }
+        # scalar examples depend on the field name (see NT_STRING below), so it forms part of the key
+        string ck = u + "-" + (fname ?? "");
+        if (*hash<auto!> cached = exmap{ck}) {
+            return cached.value;
+        }
+
         if (emap{u}) {
+            # the value of a type truncated by a cycle depends on the path taken to reach it, so it cannot be
+            # memoized; count truncations so that every type on the cycle's path is excluded from the cache too
+            extrunc = (extrunc ?? 0) + 1;
             return;
         }
         emap{u} = True;
 
+        int trunc0 = extrunc ?? 0;
+        auto rv = getExampleValueImpl(emap, fname);
+        if ((extrunc ?? 0) == trunc0) {
+            exmap{ck} = {"set": True, "value": rv};
+        }
+        return rv;
+    }
+
+    #! Returns any example value for the type; cycle detection and memoization are handled by the caller
+    /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+
+        @since DataProvider 3.6
+    */
+    private auto getExampleValueImpl(*hash<string, bool> emap, *string fname) {
         if (*hash<string, AbstractDataField> fields = getFields()) {
             # do not return example values for complex "or nothing" types
             if (isOrNothingType()) {
@@ -1093,4 +1157,22 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 namespace Priv {
 #! Recursive info map: unique key -> True
 thread_local hash<string, bool> rimap;
+
+#! Memoizes type info for the duration of a single getInfo() traversal, keyed by type object identity
+/** Without this, a type object shared by multiple parents in a type DAG is re-expanded once per path, which is
+    exponential in the depth of the graph
+*/
+thread_local hash<string, hash<DataTypeInfo>> imap;
+
+#! Counts cycle truncations during a getInfo() traversal, so that path-dependent results are not memoized
+thread_local int itrunc;
+
+#! Memoizes example values for the duration of a single getExampleValue() traversal
+/** Keyed by type object identity and field name; without this, a type object shared by multiple parents in a type
+    DAG has its example value rebuilt once per path, which is exponential in the depth of the graph
+*/
+thread_local hash<string, hash<auto!>> exmap;
+
+#! Counts cycle truncations during a getExampleValue() traversal, so that path-dependent values are not memoized
+thread_local int extrunc;
 }
