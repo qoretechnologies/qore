@@ -6037,6 +6037,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     values.clear();
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
+    elided_typed_foreach_refself_values.clear();
     local_allocas.clear();
     aot_call_target_contexts.clear();
     nanboxed_values.clear();
@@ -6177,10 +6178,29 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_map<uint32_t, int> to_bool_uses;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
     std::vector<const QoreIRInstruction*> closure_call_candidates;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
+    std::unordered_map<const LocalVar*, size_t> local_load_counts;
+    std::unordered_set<const LocalVar*> stored_locals;
+    std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
                 continue;
+            }
+            if (inst_ptr->result.isValid()) {
+                value_definitions[inst_ptr->result.id] = inst_ptr.get();
+            }
+            if (inst_ptr->opcode == QoreIROpcode::LoadLocal) {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (load->local) {
+                    ++local_load_counts[load->local];
+                }
+            } else if (inst_ptr->opcode == QoreIROpcode::StoreLocal
+                    || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
+                if (store->local) {
+                    stored_locals.insert(store->local);
+                }
             }
             if (inst_ptr->opcode == QoreIROpcode::CreateClosure) {
                 closure_definitions[inst_ptr->result.id] =
@@ -6200,6 +6220,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
+                value_operand_users[op.id].push_back(inst_ptr->opcode);
             }
             if (inst_ptr->opcode == QoreIROpcode::ToBool
                     && inst_ptr->operands.size() == 1) {
@@ -6278,6 +6299,59 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
                 }
+            }
+        }
+    }
+    if (aot_mode && std::getenv("QORE_DISABLE_AOT_TYPED_FOREACH_REF_ELISION") == nullptr) {
+        // A read-once, never-stored, uncaptured local owns the list for the
+        // entire loop, so the typed foreach snapshot does not need another ref.
+        size_t refself_candidate_count = 0;
+        for (const auto& [value_id, definition] : value_definitions) {
+            if (refself_candidate_count++ && !(refself_candidate_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM typed foreach snapshot analysis")) {
+                error = "cancelled during LLVM typed foreach snapshot analysis";
+                return false;
+            }
+            if (definition->opcode != QoreIROpcode::RefSelf
+                    || definition->operands.size() != 1) {
+                continue;
+            }
+            auto source = value_definitions.find(definition->operands[0].id);
+            if (source == value_definitions.end()
+                    || source->second->opcode != QoreIROpcode::LoadLocal) {
+                continue;
+            }
+            const auto* load = static_cast<const QoreIRLocalInstruction*>(source->second);
+            if (!load->local || load->is_closure || load->is_ref
+                    || local_load_counts[load->local] != 1
+                    || stored_locals.count(load->local)) {
+                continue;
+            }
+            bool has_next = false;
+            bool has_decref = false;
+            bool supported_uses = true;
+            size_t refself_use_count = 0;
+            for (QoreIROpcode user : value_operand_users[value_id]) {
+                if (refself_use_count++ && !(refself_use_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM typed foreach snapshot use analysis")) {
+                    error = "cancelled during LLVM typed foreach snapshot use analysis";
+                    return false;
+                }
+                if (user == QoreIROpcode::TypedForeachNextInt
+                        || user == QoreIROpcode::TypedForeachNextFloat) {
+                    has_next = true;
+                } else if (user == QoreIROpcode::Decref) {
+                    has_decref = true;
+                } else if (user != QoreIROpcode::EqHard
+                        && user != QoreIROpcode::ListSize) {
+                    supported_uses = false;
+                    break;
+                }
+            }
+            if (supported_uses && has_next && has_decref) {
+                elided_typed_foreach_refself_values.insert(value_id);
             }
         }
     }
@@ -8923,6 +8997,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* boxed = boxValue(val, inst->operands[0].id);
+            if (aot_mode && elided_typed_foreach_refself_values.count(inst->result.id)) {
+                values[inst->result.id] = boxed;
+                nanboxed_values.insert(inst->result.id);
+                return true;
+            }
             llvm::Value* retained = emitHelperRef(module, boxed);
             values[inst->result.id] = retained;
             nanboxed_values.insert(inst->result.id);
@@ -8935,6 +9014,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return false;
             }
             uint32_t value_id = inst->operands[0].id;
+            if (aot_mode && elided_typed_foreach_refself_values.count(value_id)) {
+                return true;
+            }
             if (invoke_alloca_map.count(value_id)) {
                 releaseCleanupForValueId(value_id, module);
             } else {
