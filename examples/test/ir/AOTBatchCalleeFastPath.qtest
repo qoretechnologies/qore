@@ -502,6 +502,18 @@ int sub cross_list_size(list<int> values) {
     return values.size();
 }
 
+int sub cross_list_size_composed(list<int> values, int delta) {
+    return values.size() * 2 + delta * 3 - 4;
+}
+
+int sub cross_string_length_plus(string value, int delta) {
+    return value.length() + delta;
+}
+
+int sub cross_string_size_plus(string value, int delta) {
+    return value.size() + delta;
+}
+
 *int sub cross_list_get(list<int> values, int index) {
     return values[index];
 }
@@ -567,9 +579,21 @@ int sub main() {
     } catch (hash<auto> ex) {
         list_rejected = True;
     }
+    bool composed_list_rejected = False;
+    try {
+        cross_list_size_composed(missing_list, 2);
+    } catch (hash<auto> ex) {
+        composed_list_rejected = True;
+    }
+    bool composed_string_rejected = False;
+    try {
+        cross_string_length_plus(missing_string, 2);
+    } catch (hash<auto> ex) {
+        composed_string_rejected = True;
+    }
     hash<string, int> present_hash = (\"answer\": 42);
     hash<string, int> missing_hash = {};
-    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         cross_leaf(4), cross_affine(4),
         cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
         value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
@@ -580,7 +604,10 @@ int sub main() {
         cross_rfind(utf8, \"é\"), cross_string_size(latin1), cross_string_length(latin1),
         string_rejected, cross_list_size(collection), cross_list_get(collection, 1),
         cross_list_get(collection, 8) === NOTHING, cross_hash_get(present_hash),
-        cross_hash_get(missing_hash) === NOTHING, list_rejected);
+        cross_hash_get(missing_hash) === NOTHING, list_rejected,
+        cross_list_size_composed(collection, 3), cross_string_length_plus(utf8, 2),
+        cross_string_size_plus(utf8, 2), cross_string_size_plus(latin1, 2),
+        composed_list_rejected, composed_string_rejected);
     return 0;
 }
 ";
@@ -739,7 +766,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1\n") {
+if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -806,7 +833,15 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"collection_op_kind\": 1/)
         || !(provider_index =~ /\"collection_op_kind\": 2/)
         || !(provider_index =~ /\"collection_op_kind\": 3/)
-        || !(provider_index =~ /\"collection_op_key\": \"answer\"/)) {
+        || !(provider_index =~ /\"collection_op_key\": \"answer\"/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 1/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 2/)
+        || !(provider_index =~ /\"composed_int_source_kind\": 3/)
+        || !(provider_index =~ /\"composed_int_base_param\": 0/)
+        || !(provider_index =~ /\"composed_int_value_param\": 1/)
+        || !(provider_index =~ /\"composed_int_source_scale\": 2/)
+        || !(provider_index =~ /\"composed_int_value_scale\": 3/)
+        || !(provider_index =~ /\"composed_int_offset\": -4/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

@@ -1004,6 +1004,12 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.collection_op_index_param = info.collection_op.index_param;
             entry.collection_op_string_index_char = info.collection_op.string_index_char;
             entry.collection_op_key = info.collection_op.key;
+            entry.composed_int_source_kind = static_cast<uint8_t>(info.composed_int.source_kind);
+            entry.composed_int_base_param = info.composed_int.base_param;
+            entry.composed_int_value_param = info.composed_int.value_param;
+            entry.composed_int_source_scale = info.composed_int.source_scale;
+            entry.composed_int_value_scale = info.composed_int.value_scale;
+            entry.composed_int_offset = info.composed_int.offset;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3712,6 +3718,203 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     }
 }
 
+static bool qore_aot_get_composed_int(const QoreIRFunction& func,
+        const UserSignature& sig, AOTComposedIntInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
+            || !sig.numParams() || sig.numParams() > 2
+            || func.blocks.size() != 1 || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 12) {
+        return false;
+    }
+
+    auto rejects_nothing = [](const LocalVar* local) {
+        return local && QoreTypeInfo::hasType(local->getTypeInfo())
+            && !QoreTypeInfo::parseAcceptsReturns(local->getTypeInfo(), NT_NOTHING);
+    };
+    std::unordered_map<const LocalVar*, int8_t> params;
+    int8_t base_param = -1;
+    int8_t value_param = -1;
+    bool base_is_list = false;
+    bool base_is_string = false;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second
+                || param->second->closureUse() || !rejects_nothing(param->second)) {
+            return false;
+        }
+        const QoreTypeInfo* type = param->second->getTypeInfo();
+        if (QoreTypeInfo::isListType(type) || QoreTypeInfo::isType(type, NT_STRING)) {
+            if (base_param >= 0) {
+                return false;
+            }
+            base_param = static_cast<int8_t>(i);
+            base_is_list = QoreTypeInfo::isListType(type);
+            base_is_string = !base_is_list;
+        } else if (QoreTypeInfo::isType(type, NT_INT)) {
+            if (value_param >= 0) {
+                return false;
+            }
+            value_param = static_cast<int8_t>(i);
+        } else {
+            return false;
+        }
+        params.emplace(param->second, static_cast<int8_t>(i));
+    }
+    if (base_param < 0) {
+        return false;
+    }
+
+    struct AffineValue {
+        int64_t source_scale = 0;
+        int64_t value_scale = 0;
+        int64_t offset = 0;
+    };
+    auto wrap_add = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            + static_cast<uint64_t>(rhs));
+    };
+    auto wrap_sub = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            - static_cast<uint64_t>(rhs));
+    };
+    auto wrap_mul = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            * static_cast<uint64_t>(rhs));
+    };
+
+    std::unordered_map<uint32_t, int8_t> base_values;
+    std::unordered_map<uint32_t, AffineValue> values;
+    AOTComposedIntSourceKind source_kind = AOTComposedIntSourceKind::None;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (!inst->result.isValid() || param == params.end()) {
+                    return false;
+                }
+                if (param->second == base_param) {
+                    base_values.emplace(inst->result.id, base_param);
+                } else if (param->second == value_param) {
+                    values.emplace(inst->result.id, AffineValue{0, 1, 0});
+                } else {
+                    return false;
+                }
+                break;
+            }
+            case QoreIROpcode::ConstInt: {
+                if (!inst->result.isValid()) {
+                    return false;
+                }
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                values.emplace(inst->result.id,
+                    AffineValue{0, 0, constant->constant.int_value});
+                break;
+            }
+            case QoreIROpcode::ListSize: {
+                if (source_kind != AOTComposedIntSourceKind::None || !base_is_list
+                        || !inst->result.isValid() || inst->operands.size() != 1
+                        || base_values.find(inst->operands[0].id) == base_values.end()) {
+                    return false;
+                }
+                source_kind = AOTComposedIntSourceKind::ListSize;
+                values.emplace(inst->result.id, AffineValue{1, 0, 0});
+                break;
+            }
+            case QoreIROpcode::DotEvalMethodDirect: {
+                if (source_kind != AOTComposedIntSourceKind::None || !base_is_string
+                        || !inst->result.isValid() || inst->operands.size() != 1
+                        || base_values.find(inst->operands[0].id) == base_values.end()) {
+                    return false;
+                }
+                const auto* op = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                if (!op->pseudo || op->has_ref_args || !op->qc
+                        || strcmp(op->qc->getName(), "<string>")
+                        || !op->pseudo_base_known_assigned_string) {
+                    return false;
+                }
+                QoreIRIntrinsic intrinsic = op->intrinsic;
+                if (intrinsic == QoreIRIntrinsic::None) {
+                    intrinsic = qore_ir_resolve_pseudo_intrinsic(op->method,
+                        op->qc, op->fallback_method_name);
+                }
+                if (intrinsic == QoreIRIntrinsic::Size
+                        || intrinsic == QoreIRIntrinsic::StringStrlen) {
+                    source_kind = AOTComposedIntSourceKind::StringSize;
+                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+                    source_kind = AOTComposedIntSourceKind::StringLength;
+                } else {
+                    return false;
+                }
+                values.emplace(inst->result.id, AffineValue{1, 0, 0});
+                break;
+            }
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::MulInt: {
+                if (!inst->result.isValid() || inst->operands.size() != 2) {
+                    return false;
+                }
+                auto lhs = values.find(inst->operands[0].id);
+                auto rhs = values.find(inst->operands[1].id);
+                if (lhs == values.end() || rhs == values.end()) {
+                    return false;
+                }
+                AffineValue value;
+                if (inst->opcode == QoreIROpcode::AddInt) {
+                    value = {wrap_add(lhs->second.source_scale, rhs->second.source_scale),
+                        wrap_add(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_add(lhs->second.offset, rhs->second.offset)};
+                } else if (inst->opcode == QoreIROpcode::SubInt) {
+                    value = {wrap_sub(lhs->second.source_scale, rhs->second.source_scale),
+                        wrap_sub(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_sub(lhs->second.offset, rhs->second.offset)};
+                } else if (!lhs->second.source_scale && !lhs->second.value_scale) {
+                    value = {wrap_mul(lhs->second.offset, rhs->second.source_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.value_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.offset)};
+                } else if (!rhs->second.source_scale && !rhs->second.value_scale) {
+                    value = {wrap_mul(rhs->second.offset, lhs->second.source_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.value_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.offset)};
+                } else {
+                    return false;
+                }
+                values.emplace(inst->result.id, value);
+                break;
+            }
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (source_kind == AOTComposedIntSourceKind::None || !ret || !ret->has_value) {
+        return false;
+    }
+    auto value = values.find(ret->value.id);
+    if (value == values.end() || !value->second.source_scale) {
+        return false;
+    }
+    result.source_kind = source_kind;
+    result.base_param = base_param;
+    result.value_param = value->second.value_scale ? value_param : -1;
+    result.source_scale = value->second.source_scale;
+    result.value_scale = value->second.value_scale;
+    result.offset = value->second.offset;
+    return result.value_param >= 0 || !result.value_scale;
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -4096,6 +4299,21 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         AOTCollectionOpInfo collection_op;
         if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
             callee_it->second.collection_op = std::move(collection_op);
+        }
+        AOTComposedIntInfo composed_int;
+        if (qore_aot_get_composed_int(*func, *sig, composed_int)
+                && callee_it->second.return_kind == BatchCalleeReturnKind::NativeInt
+                && composed_int.base_param >= 0
+                && static_cast<size_t>(composed_int.base_param)
+                    < callee_it->second.param_kinds.size()
+                && callee_it->second.param_kinds[composed_int.base_param]
+                    == BatchCalleeParamKind::Boxed
+                && (composed_int.value_param < 0
+                    || (static_cast<size_t>(composed_int.value_param)
+                            < callee_it->second.param_kinds.size()
+                        && callee_it->second.param_kinds[composed_int.value_param]
+                            == BatchCalleeParamKind::NativeInt))) {
+            callee_it->second.composed_int = composed_int;
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
@@ -4934,6 +5152,49 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     && info.return_kind != BatchCalleeReturnKind::NativeInt)
                 || (info.collection_op.kind != AOTCollectionOpKind::ListSize
                     && info.return_kind != BatchCalleeReturnKind::Boxed)) {
+            return false;
+        }
+    }
+    if (rec.composed_int_source_kind
+                > static_cast<uint8_t>(AOTComposedIntSourceKind::StringLength)
+            || rec.composed_int_base_param < -1 || rec.composed_int_value_param < -1
+            || rec.composed_int_base_param >= static_cast<int>(info.num_params)
+            || rec.composed_int_value_param >= static_cast<int>(info.num_params)) {
+        return false;
+    }
+    info.composed_int.source_kind =
+        static_cast<AOTComposedIntSourceKind>(rec.composed_int_source_kind);
+    info.composed_int.base_param = rec.composed_int_base_param;
+    info.composed_int.value_param = rec.composed_int_value_param;
+    info.composed_int.source_scale = rec.composed_int_source_scale;
+    info.composed_int.value_scale = rec.composed_int_value_scale;
+    info.composed_int.offset = rec.composed_int_offset;
+    if (!info.composed_int) {
+        if (info.composed_int.base_param != -1 || info.composed_int.value_param != -1
+                || info.composed_int.source_scale || info.composed_int.value_scale
+                || info.composed_int.offset) {
+            return false;
+        }
+    } else {
+        auto rejects_nothing = [&](int8_t param) {
+            return param >= 0 && static_cast<size_t>(param)
+                < info.param_rejects_nothing.size()
+                && info.param_rejects_nothing[static_cast<size_t>(param)];
+        };
+        if (info.return_kind != BatchCalleeReturnKind::NativeInt
+                || info.composed_int.base_param < 0
+                || !info.composed_int.source_scale
+                || ((info.composed_int.value_param >= 0)
+                    != (info.composed_int.value_scale != 0))
+                || !rejects_nothing(info.composed_int.base_param)
+                || info.param_kinds[static_cast<unsigned>(
+                    info.composed_int.base_param)]
+                    != BatchCalleeParamKind::Boxed
+                || (info.composed_int.value_param >= 0
+                    && (!rejects_nothing(info.composed_int.value_param)
+                        || info.param_kinds[static_cast<unsigned>(
+                            info.composed_int.value_param)]
+                            != BatchCalleeParamKind::NativeInt))) {
             return false;
         }
     }

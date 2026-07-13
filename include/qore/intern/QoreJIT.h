@@ -158,6 +158,27 @@ struct AOTCollectionOpInfo {
     }
 };
 
+enum class AOTComposedIntSourceKind : uint8_t {
+    None = 0,
+    ListSize = 1,
+    StringSize = 2,
+    StringLength = 3,
+};
+
+//! Bounded affine composition of one typed size/length source and one int parameter.
+struct AOTComposedIntInfo {
+    AOTComposedIntSourceKind source_kind = AOTComposedIntSourceKind::None;
+    int8_t base_param = -1;
+    int8_t value_param = -1;
+    int64_t source_scale = 0;
+    int64_t value_scale = 0;
+    int64_t offset = 0;
+
+    explicit operator bool() const {
+        return source_kind != AOTComposedIntSourceKind::None;
+    }
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -175,6 +196,7 @@ struct BatchCalleeInfo {
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
+    AOTComposedIntInfo composed_int;       //!< Importable bounded size/length expression
     std::string object_getter_member;     //!< Exact final-object getter member name
 };
 

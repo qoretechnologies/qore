@@ -6531,6 +6531,12 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeU8(static_cast<uint8_t>(rec.collection_op_index_param));
     writer.writeU8(rec.collection_op_string_index_char ? 1 : 0);
     writer.writeStringRef(rec.collection_op_key.c_str());
+    writer.writeU8(rec.composed_int_source_kind);
+    writer.writeU8(static_cast<uint8_t>(rec.composed_int_base_param));
+    writer.writeU8(static_cast<uint8_t>(rec.composed_int_value_param));
+    writer.writeI64(rec.composed_int_source_scale);
+    writer.writeI64(rec.composed_int_value_scale);
+    writer.writeI64(rec.composed_int_offset);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6608,6 +6614,12 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.collection_op_index_param = info.collection_op_index_param;
     rec.collection_op_string_index_char = info.collection_op_string_index_char;
     rec.collection_op_key = info.collection_op_key;
+    rec.composed_int_source_kind = info.composed_int_source_kind;
+    rec.composed_int_base_param = info.composed_int_base_param;
+    rec.composed_int_value_param = info.composed_int_value_param;
+    rec.composed_int_source_scale = info.composed_int_source_scale;
+    rec.composed_int_value_scale = info.composed_int_value_scale;
+    rec.composed_int_offset = info.composed_int_offset;
     native.push_back(std::move(rec));
 }
 
@@ -7830,6 +7842,19 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             error, "collection_op_key")) {
         return false;
     }
+    if (version < 9) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 27) {
+        error = "truncated SYMBOL_INDEX composed integer metadata";
+        return false;
+    }
+    rec.composed_int_source_kind = QoreAOTBinaryReader::readU8(ptr);
+    rec.composed_int_base_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.composed_int_value_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.composed_int_source_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.composed_int_value_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.composed_int_offset = QoreAOTBinaryReader::readI64(ptr);
     return true;
 }
 
