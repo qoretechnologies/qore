@@ -3824,7 +3824,8 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
         return value;
     }
     bool is_select = leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
-        || leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue;
+        || leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue
+        || leaf.kind == AOTScalarLeafKind::IntAffineSelect;
     bool is_int = leaf.kind == AOTScalarLeafKind::IntBinary || is_select;
     auto get_operand = [&](int8_t param, int64_t int_value, double float_value) -> llvm::Value* {
         if (param >= 0) {
@@ -3873,9 +3874,34 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
             default:
                 return nullptr;
         }
-        return leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
-            ? builder->CreateSelect(condition, lhs, rhs)
-            : builder->CreateSelect(condition, rhs, lhs);
+        if (leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue) {
+            return builder->CreateSelect(condition, lhs, rhs);
+        }
+        if (leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue) {
+            return builder->CreateSelect(condition, rhs, lhs);
+        }
+        if (native_args.empty() || native_args.front()->getType() != i64_type) {
+            return nullptr;
+        }
+        auto emit_affine = [&](int64_t scale, int64_t offset) {
+            if (!scale) {
+                return static_cast<llvm::Value*>(
+                    llvm::ConstantInt::get(i64_type, offset));
+            }
+            llvm::Value* value = native_args.front();
+            if (scale != 1) {
+                value = builder->CreateMul(value,
+                    llvm::ConstantInt::get(i64_type, scale));
+            }
+            if (offset) {
+                value = builder->CreateAdd(value,
+                    llvm::ConstantInt::get(i64_type, offset));
+            }
+            return value;
+        };
+        return builder->CreateSelect(condition,
+            emit_affine(leaf.true_scale, leaf.true_offset),
+            emit_affine(leaf.false_scale, leaf.false_offset));
     }
     switch (static_cast<QoreIROpcode>(leaf.opcode)) {
         case QoreIROpcode::AddInt:

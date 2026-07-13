@@ -6517,6 +6517,10 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeI64(rec.scalar_leaf_rhs_int);
     writer.writeF64(rec.scalar_leaf_lhs_float);
     writer.writeF64(rec.scalar_leaf_rhs_float);
+    writer.writeI64(rec.scalar_leaf_true_scale);
+    writer.writeI64(rec.scalar_leaf_true_offset);
+    writer.writeI64(rec.scalar_leaf_false_scale);
+    writer.writeI64(rec.scalar_leaf_false_offset);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6580,6 +6584,10 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.scalar_leaf_rhs_int = info.scalar_leaf_rhs_int;
     rec.scalar_leaf_lhs_float = info.scalar_leaf_lhs_float;
     rec.scalar_leaf_rhs_float = info.scalar_leaf_rhs_float;
+    rec.scalar_leaf_true_scale = info.scalar_leaf_true_scale;
+    rec.scalar_leaf_true_offset = info.scalar_leaf_true_offset;
+    rec.scalar_leaf_false_scale = info.scalar_leaf_false_scale;
+    rec.scalar_leaf_false_offset = info.scalar_leaf_false_offset;
     native.push_back(std::move(rec));
 }
 
@@ -7752,6 +7760,18 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.scalar_leaf_rhs_int = QoreAOTBinaryReader::readI64(ptr);
     rec.scalar_leaf_lhs_float = QoreAOTBinaryReader::readF64(ptr);
     rec.scalar_leaf_rhs_float = QoreAOTBinaryReader::readF64(ptr);
+    if (version < 5) {
+        return true;
+    }
+    constexpr size_t affine_select_size = 4 * sizeof(uint64_t);
+    if (static_cast<size_t>(end - ptr) < affine_select_size) {
+        error = "truncated SYMBOL_INDEX affine select metadata";
+        return false;
+    }
+    rec.scalar_leaf_true_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.scalar_leaf_true_offset = QoreAOTBinaryReader::readI64(ptr);
+    rec.scalar_leaf_false_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.scalar_leaf_false_offset = QoreAOTBinaryReader::readI64(ptr);
     return true;
 }
 

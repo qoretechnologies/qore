@@ -88,6 +88,7 @@ enum class AOTScalarLeafKind : uint8_t {
     IntAffine = 3,
     IntSelectLhsIfTrue = 4,
     IntSelectRhsIfTrue = 5,
+    IntAffineSelect = 6,
 };
 
 struct AOTScalarLeafInfo {
@@ -99,6 +100,10 @@ struct AOTScalarLeafInfo {
     int64_t rhs_int = 0;
     double lhs_float = 0.0;
     double rhs_float = 0.0;
+    int64_t true_scale = 0;
+    int64_t true_offset = 0;
+    int64_t false_scale = 0;
+    int64_t false_offset = 0;
 };
 
 struct AOTFixedHashRemapInfo {
