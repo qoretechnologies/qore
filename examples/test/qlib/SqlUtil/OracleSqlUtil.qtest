@@ -251,6 +251,8 @@ class OracleTest inherits SqlTestBase {
             addTestCase("rowid test", \rowidTest());
             addTestCase("rownum test", \rownumTest());
             addTestCase("for update and limit", \forupdateAndLimitTest());
+            addTestCase("for update with orderby and limit", \forupdateWithOrderbyAndLimitTest());
+            addTestCase("for update with limit and join", \forupdateWithLimitAndJoinTest());
             addTestCase("issue 2795", \issue2785());
             addTestCase("sequence operators", \testSequenceOperators());
             addTestCase("pseudo-columns", \testPseudoColumns());
@@ -318,6 +320,92 @@ class OracleTest inherits SqlTestBase {
 
         hash<SqlResultInfo> rv = table.selectRowsWithInfo(sh);
         assertEq(2, rv.result.size());
+    }
+
+    #! An ordered, paged "for update" select must lock exactly the rows of the page
+    /** An ordered page has to be produced with an inline view, because \c ROWNUM is assigned before \c ORDER BY is
+        applied, and Oracle rejects \c FOR UPDATE against an inline view (\c ORA-02014); it also rejects
+        \c FOR UPDATE combined with <tt>FETCH NEXT ... ROWS ONLY</tt>.  The page must therefore be resolved to the
+        \c ROWIDs of its rows, which are then located and locked in the base table.
+    */
+    forupdateWithOrderbyAndLimitTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        Datasource ds = table.getDatasource();
+
+        # use a dedicated table with known contents; the rows must be committed so that the locking assertions
+        # below can be made from an independent connection
+        ds.execRaw("create table oracle_forupdate_test (id number(10) primary key, grp varchar2(10))");
+        on_exit {
+            ds.rollback();
+            ds.execRaw("drop table oracle_forupdate_test");
+            ds.commit();
+        }
+        for (int i = 1; i <= 6; ++i) {
+            ds.exec("insert into oracle_forupdate_test (id, grp) values (%v, %v)", i, i % 2 ? "odd" : "even");
+        }
+        ds.commit();
+
+        AbstractTable t = (new Table(ds, "oracle_forupdate_test")).getTable();
+
+        # the "where" clause has a bind argument, so this also verifies that the arguments of the query keep their
+        # positions relative to the arguments added for "limit" and "offset"
+        hash<auto> base = {
+            "columns": ("id",),
+            "where": {"grp": "odd"},
+            "orderby": "id",
+        };
+
+        list<auto> rows = map $1.id, t.selectRows(base + {"forupdate": True, "limit": 2});
+        assertEq((1, 3), rows, "an ordered 'for update' page is limited and ordered");
+
+        rows = map $1.id, t.selectRows(base + {"forupdate": True, "limit": 2, "offset": 1});
+        assertEq((3, 5), rows, "an ordered 'for update' page honors 'offset'");
+
+        rows = map $1.id, t.selectRows(base + {"forupdate": True, "limit": 2, "desc": True});
+        assertEq((5, 3), rows, "an ordered 'for update' page honors 'desc'");
+
+        # the single-row lock form
+        *hash<auto> row = t.selectRow(base + {"forupdate": True, "limit": 1});
+        assertEq(1, row.id, "an ordered single-row 'for update' page locks the first row");
+
+        # the rows of the page must really be locked, and only those rows: an independent connection must not be
+        # able to lock a row of the page, but must still be able to lock a row outside it
+        # NOTE: the queries above locked rows of their own pages; release those locks first so that only the locks
+        # taken by the query under test here are held
+        ds.rollback();
+        t.selectRows(base + {"forupdate": True, "limit": 2});    # locks ids 1 and 3
+
+        Datasource ds2 = getDatasource();
+        on_exit ds2.rollback();
+
+        assertThrows("DBI:ORACLE:OCI-ERROR", "ORA-00054",
+            sub () {
+                ds2.selectRows("select id from oracle_forupdate_test where id = 1 for update nowait");
+            },
+            NOTHING, "the rows of the page are locked");
+        assertEq(1, ds2.selectRows("select id from oracle_forupdate_test where id = 5 for update nowait").size(),
+            "rows outside the page are not locked");
+    }
+
+    #! The rows of a page cannot be attributed to a single base table when the query joins
+    forupdateWithLimitAndJoinTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        assertThrows("ORACLE-SELECT-ERROR", "cannot be combined",
+            sub () {
+                table.selectRows({
+                    "columns": ("id",),
+                    "orderby": "id",
+                    "forupdate": True,
+                    "limit": 2,
+                    "join": join_inner(table2, "b", {"id": "id"}),
+                });
+            });
     }
 
     issue2785() {

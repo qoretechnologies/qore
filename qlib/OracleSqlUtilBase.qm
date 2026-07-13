@@ -44,7 +44,7 @@
 # enable all warnings
 
 module OracleSqlUtilBase {
-    version = "1.6";
+    version = "1.6.1";
     desc = "user module for working with Oracle SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -272,6 +272,13 @@ hash schema = (
     description hash keys.
 
     @section ora_relnotes Release Notes
+
+    @subsection oracle161 OracleSqlUtilBase v1.6.1
+    - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
+      \c ORA-02014; the rows of the page are now located and locked in the base table with their \c ROWIDs, as
+      Oracle cannot lock rows selected through an inline view
+    - fixed a bug where the \c first_rows optimizer hint used with \c limit was placed after the \c "from" clause,
+      where Oracle ignores it as a plain comment
 
     @subsection oracle16 OracleSqlUtilBase v1.6
     - added portable list-partition creation, introspection, lookup, lifecycle, and schema round-trip support
@@ -2091,6 +2098,12 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 */
 public class OracleTable inherits SqlUtil::AbstractTable {
     public {
+        #! The leading keyword of a select query; an optimizer hint is only recognized directly after it
+        const SelectKeyword = "select";
+
+        #! The keyword introducing the "from" clause of a select query
+        const FromKeyword = " from ";
+
         #! maps oracle type names to type descriptions
         const OraTypeMap = {
             "number": ("qore": Type::Number, "size": SZ_NUM, "size_range": (1, 38), "scale_range": (-84, 127)),
@@ -3528,11 +3541,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     }
 
     private insertLimitOptimizerHint(hash<auto> qh, reference<string> sql) {
-        # insert optimizer hint
-        int i = sql.find(" from ");
         # http://www.oracle.com/technetwork/issue-archive/2006/06-sep/o56asktom-086197.html
         # /*+ first_rows(n) */ is an optimizer hint that we want the first rows as fast as possible
-        splice sql, i + 5, 0, sprintf(" /*+ first_rows(%d) */", qh.limit);
+        # NOTE: an optimizer hint is only recognized directly after the leading SQL keyword; when placed anywhere
+        # else (such as after the "from" clause) Oracle silently treats it as a plain comment and ignores it
+        splice sql, SelectKeyword.size(), 0, sprintf(" /*+ first_rows(%d) */", qh.limit);
     }
 
     #! Oracle accepts non-unique orderby + offset/limit at the SQL level;
@@ -3567,6 +3580,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         list<auto> ce = getOrderByListIntern(info, coll);
         string sort = foldl $1 + ", " + $2, ce;
+        string desc = info.query_hash.desc ? " desc" : "";
+
+        if (info.query_hash.forupdate) {
+            doSelectForUpdateWithLimitSqlIntern(\info, \sql, sort, desc, limit, offset);
+            return;
+        }
+
         # http://www.oracle.com/technetwork/issue-archive/2006/06-sep/o56asktom-086197.html
         # /*+ first_rows(n) */ is an optimizer hint that we want the first rows as fast as possible
         # NOTE: the subquery is necessary because the ORDER BY clause is enforced *after* the ROWNUM
@@ -3574,7 +3594,56 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         # - https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/ROWNUM-Pseudocolumn.html#GUID-2E40EC12-3FCF-4A4F-B5F2-6BC669021726
         # - https://stackoverflow.com/questions/15091849/how-to-use-oracle-order-by-and-rownum-correctly/15091900
         sql = sprintf("select * from (select /*+ first_rows(%d) */ a.*, rownum rnum from (%s order by %s%s) a "
-            "where rownum <= %v%s) where rnum > %v", limit, sql, sort, info.query_hash.desc ? " desc" : "");
+            "where rownum <= %v%s) where rnum > %v", limit, sql, sort, desc);
+        if (offset) {
+            limit += offset;
+        }
+        info.args += limit;
+        info.args += offset;
+    }
+
+    #! Rewrites an ordered, paged query so that the selected rows can be locked with \c FOR UPDATE
+    /** An ordered page has to be produced with an inline view, because \c ROWNUM is assigned before \c ORDER BY is
+        applied.  Oracle rejects \c FOR UPDATE against an inline view (\c ORA-02014), and also rejects it in
+        combination with <tt>FETCH NEXT ... ROWS ONLY</tt> (see @ref optimizedLimit()), so the rows of the page
+        cannot be locked by the query that selects them.
+
+        Instead the page is reduced to the \c ROWIDs of its rows in a subquery, and the rows of the page are then
+        located and locked in the base table itself, which Oracle does allow.
+
+        @param info the query being generated
+        @param sql the query SQL generated so far; the leading \c "select" keyword and the \c "from" clause are
+            reused as-is, so any bind arguments in the column list and in the \c where clause keep their positions
+        @param sort the \c ORDER BY expression list
+        @param desc \c " desc" if the sort order is descending, otherwise an empty string
+        @param limit the maximum number of rows in the page
+        @param offset the number of rows to skip before the page
+
+        @throw ORACLE-SELECT-ERROR the query selects from more than one table; the rows to lock cannot be
+            attributed to a single base table in that case
+    */
+    private doSelectForUpdateWithLimitSqlIntern(reference<hash<QueryInfo>> info, reference<string> sql, string sort,
+            string desc, softint limit, softint offset) {
+        int fpos = sql.find(FromKeyword);
+        if (fpos < 0) {
+            throw "ORACLE-SELECT-ERROR", sprintf("cannot generate a 'for update' query with 'limit' or 'offset' "
+                "from %y; no 'from' clause found", sql);
+        }
+        if (info.query_hash.join) {
+            throw "ORACLE-SELECT-ERROR", sprintf("%s: 'forupdate' cannot be combined with 'limit' or 'offset' in a "
+                "query with joins; Oracle cannot lock rows selected through an inline view (ORA-02014), and the "
+                "rows of the page cannot be attributed to a single base table", getDesc());
+        }
+
+        # the column list (with the leading "select" keyword) and the "from" clause are reused unchanged, so that
+        # any bind arguments they contain keep the same relative order as the arguments added for limit / offset
+        string collist = sql.substr(0, fpos);
+        string from = sql.substr(fpos);
+
+        sql = sprintf("%s from %s where rowid in (select rid from (select /*+ first_rows(%d) */ rid, rownum rnum "
+            "from (select rowid rid%s order by %s%s) where rownum <= %v) where rnum > %v) order by %s%s",
+            collist, getSqlName(), limit, from, sort, desc, sort, desc);
+
         if (offset) {
             limit += offset;
         }
