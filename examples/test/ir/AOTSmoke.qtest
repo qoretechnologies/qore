@@ -8860,6 +8860,43 @@ printf(\"%s:%d:%d:%s:%s:%s\\n\", exists before ? \"set\" : \"nothing\", assigned
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT hash key access assigned-state guards");
 
+        # A two-key hash remap callback can use its fixed-body AOT summary. The
+        # source list can still contain an unassigned element, which must take
+        # the ordinary call path and fail parameter binding instead of entering
+        # the specialized hash implementation.
+        code = "%modern
+hash<auto> sub remap(hash<auto> h) {
+    return (\"n\": h.name, \"v\": h.value);
+}
+list<hash<auto>> items = ((\"name\": \"first\", \"value\": 1),
+    (\"name\": \"second\", \"value\": 2));
+list<hash<auto>> result = (map remap($1), items);
+printf(\"%s:%d:%s:%d\\n\", result[0].n, result[0].v,
+    result[1].n, result[1].v);
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT fixed hash remap matches interpreter");
+
+        code = "%modern
+hash<auto> sub remap(hash<auto> h) {
+    return (\"n\": h.name, \"v\": h.value);
+}
+list<hash<auto>> items = ();
+items[0] = (\"name\": \"first\", \"value\": 1);
+items[2] = (\"name\": \"third\", \"value\": 3);
+try {
+    list<hash<auto>> result = (map remap($1), items);
+    printf(\"unexpected:%d\\n\", result.size());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+";
+        aot_out = compileAndRun(code);
+        assertTrue(aot_out == "RUNTIME-TYPE-ERROR\n"
+                || aot_out == "RUNTIME-OVERLOAD-ERROR\n",
+            "AOT fixed hash remap sends unassigned element through parameter binding: " + aot_out);
+
         # Direct-index select on typed list
         code = "%modern
 list<int> nums = (1, -2, 3, -4, 5);

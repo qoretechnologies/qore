@@ -613,6 +613,10 @@ private:
     llvm::Value* emitAOTScalarLeaf(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args);
 
+    llvm::Value* emitAOTFixedHashRemap(const BatchCalleeInfo& info,
+            llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
+            llvm::Function* llvm_func, const QoreIRInstruction* inst);
+
     BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,

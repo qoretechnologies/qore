@@ -213,6 +213,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys) },
     { "qore_rt_make_hash_const_keys_by_type_path",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path) },
+    { "qore_rt_fixed_hash_remap2_aot",
+        reinterpret_cast<void*>(&qore_rt_fixed_hash_remap2_aot) },
+    { "qore_rt_fixed_hash_remap2_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_fixed_hash_remap2_aot_throwing) },
     { "qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement) },
     { "qore_rt_thread_exit", reinterpret_cast<void*>(&qore_rt_thread_exit) },
     { "qore_rt_context_init", reinterpret_cast<void*>(&qore_rt_context_init) },
@@ -4256,6 +4260,54 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uin
         ? qore_rt_hash_key_access_hash_impl(hash_val, key,
             qore_rt_select_precomputed_hash(hash64, hash32), true, xsink)
         : toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t value_bits, const char* input_key1,
+        uint64_t input_hash1_64, uint32_t input_hash1_32, const char* output_key1,
+        const char* input_key2, uint64_t input_hash2_64, uint32_t input_hash2_32,
+        const char* output_key2, const char* type_path, ExceptionSink* xsink) {
+    QoreValue value = fromBits(value_bits);
+    if (value.getType() != NT_HASH) {
+        uint64_t args[1] = {value_bits};
+        return qore_rt_call_direct_aot(ctx, slot, args, 1, xsink);
+    }
+
+    uint64_t values[2];
+    values[0] = qore_rt_hash_key_access_hash_impl(value_bits, input_key1,
+        qore_rt_select_precomputed_hash(input_hash1_64, input_hash1_32), true, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    values[1] = qore_rt_hash_key_access_hash_impl(value_bits, input_key2,
+        qore_rt_select_precomputed_hash(input_hash2_64, input_hash2_32), true, xsink);
+    if (*xsink) {
+        fromBits(values[0]).discard(xsink);
+        return toBits(QoreValue());
+    }
+
+    const char* output_keys[2] = {output_key1, output_key2};
+    uint64_t result = type_path
+        ? qore_rt_make_hash_const_keys_by_type_path(output_keys, values, 2, type_path, xsink)
+        : qore_rt_make_hash_const_keys(output_keys, values, 2, nullptr, xsink);
+    fromBits(values[0]).discard(xsink);
+    fromBits(values[1]).discard(xsink);
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_fixed_hash_remap2_aot_throwing(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value, const char* input_key1, uint64_t input_hash1_64,
+        uint32_t input_hash1_32, const char* output_key1, const char* input_key2,
+        uint64_t input_hash2_64, uint32_t input_hash2_32, const char* output_key2,
+        const char* type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_fixed_hash_remap2_aot(ctx, slot, value, input_key1,
+        input_hash1_64, input_hash1_32, output_key1, input_key2, input_hash2_64,
+        input_hash2_32, output_key2, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {

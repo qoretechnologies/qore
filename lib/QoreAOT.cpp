@@ -3329,6 +3329,88 @@ static void resolveAOTBatchContextIndependentFastEntries(
     }
 }
 
+static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
+        const UserSignature& sig, AOTFixedHashRemapInfo& result) {
+    if (sig.numParams() != 1 || func.blocks.size() != 1 || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 16) {
+        return false;
+    }
+    auto param_it = func.param_local_vars.find(0);
+    if (param_it == func.param_local_vars.end() || !param_it->second
+            || param_it->second->closureUse()
+            || !QoreTypeInfo::isHashType(param_it->second->getTypeInfo())) {
+        return false;
+    }
+
+    const LocalVar* param = param_it->second;
+    std::unordered_set<uint32_t> param_values;
+    std::unordered_map<uint32_t, std::string> hash_values;
+    const QoreIRMakeHashConstKeysInstruction* make_hash = nullptr;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (load->local != param || !inst->result.isValid()) {
+                    return false;
+                }
+                param_values.insert(inst->result.id);
+                break;
+            }
+            case QoreIROpcode::HashKeyAccessHash:
+            case QoreIROpcode::HashKeyAccessHashGuarded: {
+                const auto* access = static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+                if (!inst->result.isValid() || inst->operands.size() != 1
+                        || !param_values.count(inst->operands[0].id)) {
+                    return false;
+                }
+                hash_values.emplace(inst->result.id, access->key_name);
+                break;
+            }
+            case QoreIROpcode::MakeHashConstKeys: {
+                if (make_hash) {
+                    return false;
+                }
+                make_hash = static_cast<const QoreIRMakeHashConstKeysInstruction*>(inst);
+                if (!inst->result.isValid() || make_hash->keys.size() != 2
+                        || inst->operands.size() != 2) {
+                    return false;
+                }
+                break;
+            }
+            case QoreIROpcode::Return:
+                if (ret) {
+                    return false;
+                }
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!make_hash || !ret || !ret->has_value || ret->value.id != make_hash->result.id) {
+        return false;
+    }
+    for (const QoreIRValue& operand : make_hash->operands) {
+        auto value = hash_values.find(operand.id);
+        if (value == hash_values.end()) {
+            return false;
+        }
+        result.input_keys.push_back(value->second);
+    }
+    result.output_keys = make_hash->keys;
+    result.result_type_info = make_hash->typeInfo;
+    return true;
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -3387,6 +3469,12 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
                 static_cast<int>(sig->numParams()), leaf)) {
+            AOTFixedHashRemapInfo hash_remap;
+            bool fixed_hash = !std::getenv("QORE_DISABLE_AOT_FIXED_HASH_REMAP")
+                && qore_aot_get_fixed_hash_remap(*func, *sig, hash_remap);
+            if (fixed_hash) {
+                callee_it->second.fixed_hash_remap = std::move(hash_remap);
+            }
             continue;
         }
         BatchCalleeReturnKind expected_return = leaf.kind == AOTScalarLeafKind::IntBinary

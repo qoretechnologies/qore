@@ -395,6 +395,19 @@ uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* 
 uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
 
+//! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
+//! inputs use the original AOT call slot so parameter binding remains authoritative.
+uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,
+        const char* input_key1, uint64_t input_hash1_64, uint32_t input_hash1_32,
+        const char* output_key1, const char* input_key2, uint64_t input_hash2_64,
+        uint32_t input_hash2_32, const char* output_key2, const char* type_path,
+        ExceptionSink* xsink);
+uint64_t qore_rt_fixed_hash_remap2_aot_throwing(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value, const char* input_key1, uint64_t input_hash1_64,
+        uint32_t input_hash1_32, const char* output_key1, const char* input_key2,
+        uint64_t input_hash2_64, uint32_t input_hash2_32, const char* output_key2,
+        const char* type_path, ExceptionSink* xsink);
+
 //! Create an empty list with an optional element type; nullptr means auto.
 uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type, ExceptionSink* xsink);
 

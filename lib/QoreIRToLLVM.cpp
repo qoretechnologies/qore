@@ -3867,6 +3867,43 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
     }
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTFixedHashRemap(const BatchCalleeInfo& info,
+        llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
+        llvm::Function* llvm_func, const QoreIRInstruction* inst) {
+    const AOTFixedHashRemapInfo& remap = info.fixed_hash_remap;
+    if (!remap || std::getenv("QORE_DISABLE_AOT_FIXED_HASH_REMAP")) {
+        return nullptr;
+    }
+    llvm::Value* input_key1 = builder->CreateGlobalString(remap.input_keys[0],
+        "fixed_hash_input1");
+    llvm::Value* output_key1 = builder->CreateGlobalString(remap.output_keys[0],
+        "fixed_hash_output1");
+    llvm::Value* input_key2 = builder->CreateGlobalString(remap.input_keys[1],
+        "fixed_hash_input2");
+    llvm::Value* output_key2 = builder->CreateGlobalString(remap.output_keys[1],
+        "fixed_hash_output2");
+    QoreIRPrecomputedStringHash hash1 =
+        qore_ir_precompute_string_hash(remap.input_keys[0]);
+    QoreIRPrecomputedStringHash hash2 =
+        qore_ir_precompute_string_hash(remap.input_keys[1]);
+    llvm::Value* type_path = remap.result_type_info
+        ? getTypePathArg(remap.result_type_info)
+        : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    auto ft = llvm::FunctionType::get(i64_type,
+        {ptr_type, i32_type, i64_type, ptr_type, i64_type, i32_type, ptr_type,
+         ptr_type, i64_type, i32_type, ptr_type, ptr_type, ptr_type}, false);
+    auto helper = module.getOrInsertFunction("qore_rt_fixed_hash_remap2_aot", ft);
+    auto helper_throwing = module.getOrInsertFunction(
+        "qore_rt_fixed_hash_remap2_aot_throwing", ft);
+    return emitMaybeInvoke(helper, helper_throwing,
+        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), boxed_arg,
+         input_key1, llvm::ConstantInt::get(i64_type, hash1.hash64),
+         llvm::ConstantInt::get(i32_type, hash1.hash32), output_key1, input_key2,
+         llvm::ConstantInt::get(i64_type, hash2.hash64),
+         llvm::ConstantInt::get(i32_type, hash2.hash32), output_key2, type_path,
+         xsink_arg}, module, llvm_func, inst);
+}
+
 llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::Module& module, llvm::Function* llvm_func,
         const QoreIRInstruction* inst, int32_t slot, llvm::Function* fast_fn,
@@ -11124,6 +11161,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         direct_inst->variant, direct_inst->expr, arg_start, nargs);
             bool aot_context_independent_fast_entry_call = aot_approach_b_callee
                     && aot_approach_b_callee->context_independent_fast_entry;
+            bool aot_fixed_hash_remap_call = aot_approach_b_callee
+                    && static_cast<bool>(aot_approach_b_callee->fixed_hash_remap)
+                    && nargs == 1;
             bool type_name_fast_path = nargs == 1
                 && qore_llvm_is_type_name_builtin_call(direct_inst->expr);
             const char* single_arg_fast_builtin_helper = nargs == 1 && !direct_inst->has_ref_args
@@ -11179,7 +11219,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed_args.push_back(needs_boxed
                         ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
-                if (!is_approach_b && !aot_context_independent_fast_entry_call && !type_name_fast_path
+                if (!is_approach_b && !aot_context_independent_fast_entry_call
+                        && !aot_fixed_hash_remap_call && !type_name_fast_path
                         && !single_arg_fast_builtin_helper) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                             llvm_func->getEntryBlock().begin());
@@ -11223,6 +11264,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper, {arg_cleanups,
+                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
+                call_may_modify_runtime_locals = false;
+            } else if (aot_fixed_hash_remap_call) {
+                QoreValue expr_val = direct_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                call_result = emitAOTFixedHashRemap(*aot_approach_b_callee,
+                    boxed_args[0], slot, module, llvm_func, inst);
+                if (!call_result) {
+                    return false;
+                }
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                            "qore_rt_clear_arg_cleanups",
+                            llvm::FunctionType::get(void_type,
+                                {ptr_type, i32_type, ptr_type}, false));
                     builder->CreateCall(clear_helper, {arg_cleanups,
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }

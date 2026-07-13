@@ -55,6 +55,7 @@ class AbstractQoreFunctionVariant;
 class UserVariantBase;
 class UserSignature;
 class QoreProgram;
+class QoreTypeInfo;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
@@ -98,6 +99,16 @@ struct AOTScalarLeafInfo {
     double rhs_float = 0.0;
 };
 
+struct AOTFixedHashRemapInfo {
+    std::vector<std::string> input_keys;
+    std::vector<std::string> output_keys;
+    const QoreTypeInfo* result_type_info = nullptr;
+
+    explicit operator bool() const {
+        return input_keys.size() == 2 && output_keys.size() == 2;
+    }
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -112,6 +123,7 @@ struct BatchCalleeInfo {
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
+    AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.
