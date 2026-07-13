@@ -3248,6 +3248,25 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         return false;
     }
 
+    std::unordered_set<const LocalVar*> context_independent_locals;
+    context_independent_locals.reserve(sig->numParams() + ir_func.all_body_locals.size());
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT context-independent signature local analysis")) {
+            return false;
+        }
+        context_independent_locals.insert(sig->lv[i]);
+    }
+    for (size_t i = 0; i < ir_func.all_body_locals.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT context-independent body local analysis")) {
+            return false;
+        }
+        context_independent_locals.insert(ir_func.all_body_locals[i]);
+    }
+
     size_t inst_count = 0;
     for (const auto& block : ir_func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
@@ -3288,7 +3307,8 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                     break;
                 case QoreIROpcode::LoadLocal: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
-                    if (!linst->local || linst->is_closure || linst->is_ref) {
+                    if (!linst->local || linst->is_closure || linst->is_ref
+                            || !context_independent_locals.count(linst->local)) {
                         return false;
                     }
                     break;
@@ -3915,6 +3935,140 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
     return result.value_param >= 0 || !result.value_scale;
 }
 
+static bool qore_aot_get_context_int(const QoreIRFunction& func,
+        const UserSignature& sig, AOTContextIntInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_CONTEXT_INT_IMPORT")
+            || sig.numParams() != 1 || func.blocks.size() != 1
+            || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 12) {
+        return false;
+    }
+    auto param = func.param_local_vars.find(0);
+    if (param == func.param_local_vars.end() || !param->second
+            || param->second->closureUse()
+            || !QoreTypeInfo::isType(param->second->getTypeInfo(), NT_INT)
+            || QoreTypeInfo::parseAcceptsReturns(
+                param->second->getTypeInfo(), NT_NOTHING)) {
+        return false;
+    }
+
+    struct AffineValue {
+        int64_t value_scale = 0;
+        int64_t context_scale = 0;
+        int64_t offset = 0;
+    };
+    auto wrap_add = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            + static_cast<uint64_t>(rhs));
+    };
+    auto wrap_sub = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            - static_cast<uint64_t>(rhs));
+    };
+    auto wrap_mul = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            * static_cast<uint64_t>(rhs));
+    };
+
+    const LocalVar* context_local = nullptr;
+    std::unordered_map<uint32_t, AffineValue> values;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!inst->result.isValid() || !load->local) {
+                    return false;
+                }
+                if (load->local == param->second) {
+                    values.emplace(inst->result.id, AffineValue{1, 0, 0});
+                    break;
+                }
+                if ((context_local && context_local != load->local)
+                        || QoreTypeInfo::isReference(load->local->getTypeInfo())
+                        || !QoreTypeInfo::isType(load->local->getTypeInfo(), NT_INT)) {
+                    return false;
+                }
+                context_local = load->local;
+                values.emplace(inst->result.id, AffineValue{0, 1, 0});
+                break;
+            }
+            case QoreIROpcode::ConstInt: {
+                if (!inst->result.isValid()) {
+                    return false;
+                }
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                values.emplace(inst->result.id,
+                    AffineValue{0, 0, constant->constant.int_value});
+                break;
+            }
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::MulInt: {
+                if (!inst->result.isValid() || inst->operands.size() != 2) {
+                    return false;
+                }
+                auto lhs = values.find(inst->operands[0].id);
+                auto rhs = values.find(inst->operands[1].id);
+                if (lhs == values.end() || rhs == values.end()) {
+                    return false;
+                }
+                AffineValue value;
+                if (inst->opcode == QoreIROpcode::AddInt) {
+                    value = {wrap_add(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_add(lhs->second.context_scale, rhs->second.context_scale),
+                        wrap_add(lhs->second.offset, rhs->second.offset)};
+                } else if (inst->opcode == QoreIROpcode::SubInt) {
+                    value = {wrap_sub(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_sub(lhs->second.context_scale, rhs->second.context_scale),
+                        wrap_sub(lhs->second.offset, rhs->second.offset)};
+                } else if (!lhs->second.value_scale && !lhs->second.context_scale) {
+                    value = {wrap_mul(lhs->second.offset, rhs->second.value_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.context_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.offset)};
+                } else if (!rhs->second.value_scale && !rhs->second.context_scale) {
+                    value = {wrap_mul(rhs->second.offset, lhs->second.value_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.context_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.offset)};
+                } else {
+                    return false;
+                }
+                values.emplace(inst->result.id, value);
+                break;
+            }
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!context_local || !ret || !ret->has_value) {
+        return false;
+    }
+    auto value = values.find(ret->value.id);
+    auto slot = func.local_var_slots.find(context_local);
+    if (value == values.end() || !value->second.context_scale
+            || slot == func.local_var_slots.end()
+            || slot->second > static_cast<uint32_t>(INT32_MAX)) {
+        return false;
+    }
+    result.value_param = value->second.value_scale ? 0 : -1;
+    result.local_slot = static_cast<int32_t>(slot->second);
+    result.value_scale = value->second.value_scale;
+    result.context_scale = value->second.context_scale;
+    result.offset = value->second.offset;
+    return result.value_param >= 0 || !result.value_scale;
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -4314,6 +4468,17 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                         && callee_it->second.param_kinds[composed_int.value_param]
                             == BatchCalleeParamKind::NativeInt))) {
             callee_it->second.composed_int = composed_int;
+        }
+        AOTContextIntInfo context_int;
+        if (qore_aot_get_context_int(*func, *sig, context_int)
+                && callee_it->second.return_kind == BatchCalleeReturnKind::NativeInt
+                && (!context_int.value_scale
+                    || (context_int.value_param >= 0
+                        && static_cast<size_t>(context_int.value_param)
+                            < callee_it->second.param_kinds.size()
+                        && callee_it->second.param_kinds[context_int.value_param]
+                            == BatchCalleeParamKind::NativeInt))) {
+            callee_it->second.context_int = context_int;
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,

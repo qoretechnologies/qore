@@ -15,6 +15,8 @@ if (!is_file(qcc_bin)) {
 string code = "%modern
 
 int global_value = 2;
+int assigned_context = 3;
+int optional_context;
 list<int> offsets = (3,);
 hash<auto> escaped;
 
@@ -75,6 +77,23 @@ int sub pureRecursive(int value) {
 
 int sub pureNested(int value) {
     return pureLeaf(pureLeaf(value));
+}
+
+int sub assignedContextLeaf(int value) {
+    return value + assigned_context;
+}
+
+int sub optionalContextLeaf(int value) {
+    return value + optional_context;
+}
+
+int sub contextSummary() {
+    int first = optionalContextLeaf(7);
+    optional_context = 4;
+    int second = optionalContextLeaf(7);
+    remove optional_context;
+    int third = optionalContextLeaf(7);
+    return assignedContextLeaf(4) * 1000 + first * 100 + second * 10 + third;
 }
 
 auto sub maybeNothing(bool assign_value) {
@@ -142,13 +161,14 @@ int sub methodEffects() {
 
 hash<auto> input = {\"number\": 7};
 EffectHolder holder = objectIdentity(new EffectHolder(11));
-printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
+printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
     recursiveIdentity(input, 5).number, reassigned(input).number, escaping(input).number, escaped.number,
-    holder.get(), methodEffects());
+    holder.get(), methodEffects(), contextSummary());
 ";
 
 string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
 string exe_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid());
+string disabled_exe_path = exe_path + "-disabled";
 File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
@@ -163,7 +183,17 @@ if (!is_file(exe_path)) {
     exit(2);
 }
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
-if (ast != "71055:5:10:null:7:9:7:7:11:5606\n" || aot != ast) {
+string disabled_compile_out = backquote(sprintf(
+    "QORE_DISABLE_AOT_CONTEXT_INT_IMPORT=1 LD_LIBRARY_PATH=%s %s --strip-debug-info -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe_path, script_path));
+if (!is_file(disabled_exe_path)) {
+    printf("AOT disabled-summary compile failed:\n%s", disabled_compile_out);
+    exit(2);
+}
+string disabled_aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe_path));
+if (ast != "71055:5:10:null:7:9:7:7:11:5606:7817\n"
+        || aot != ast || disabled_aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

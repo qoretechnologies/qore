@@ -636,6 +636,16 @@ private:
     llvm::Value* emitAOTComposedInt(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Module& module);
 
+    // Emit a bounded affine expression over one argument and one callee-context local.
+    llvm::Value* emitAOTContextInt(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn);
+
+    // Emit any importable callee summary through one shared dispatch path.
+    llvm::Value* emitAOTImportedSummary(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn);
+
     llvm::Value* emitAOTFixedHashRemap(const BatchCalleeInfo& info,
             llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst);

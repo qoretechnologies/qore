@@ -179,6 +179,19 @@ struct AOTComposedIntInfo {
     }
 };
 
+//! Bounded affine expression over one native int argument and one captured int lvalue.
+struct AOTContextIntInfo {
+    int8_t value_param = -1;
+    int32_t local_slot = -1;
+    int64_t value_scale = 0;
+    int64_t context_scale = 0;
+    int64_t offset = 0;
+
+    explicit operator bool() const {
+        return local_slot >= 0;
+    }
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -197,6 +210,7 @@ struct BatchCalleeInfo {
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
     AOTComposedIntInfo composed_int;       //!< Importable bounded size/length expression
+    AOTContextIntInfo context_int;         //!< Importable affine captured-int expression
     std::string object_getter_member;     //!< Exact final-object getter member name
 };
 
