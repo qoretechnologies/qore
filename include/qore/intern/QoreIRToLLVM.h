@@ -641,6 +641,11 @@ private:
             const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
             llvm::Module& module, llvm::Function* fallback_fn);
 
+    // Emit a bounded affine expression over one argument and one global lvalue.
+    llvm::Value* emitAOTGlobalInt(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+            llvm::Module& module, llvm::Function* fallback_fn);
+
     // Emit any importable callee summary through one shared dispatch path.
     llvm::Value* emitAOTImportedSummary(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,

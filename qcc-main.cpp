@@ -5045,6 +5045,13 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         static_cast<long long>(rec.composed_int_source_scale),
         static_cast<long long>(rec.composed_int_value_scale),
         static_cast<long long>(rec.composed_int_offset));
+    printf(", \"global_int_value_param\": %d, \"global_int_slot\": %d"
+        ", \"global_int_value_scale\": " QLLD ", \"global_int_global_scale\": " QLLD
+        ", \"global_int_offset\": " QLLD,
+        rec.global_int_value_param, rec.global_int_slot,
+        static_cast<long long>(rec.global_int_value_scale),
+        static_cast<long long>(rec.global_int_global_scale),
+        static_cast<long long>(rec.global_int_offset));
     printf("}");
 }
 
@@ -5622,6 +5629,13 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             static_cast<long long>(rec.composed_int_source_scale),
             static_cast<long long>(rec.composed_int_value_scale),
             static_cast<long long>(rec.composed_int_offset));
+        fprintf(f, ", \"global_int_value_param\": %d, \"global_int_slot\": %d"
+            ", \"global_int_value_scale\": " QLLD ", \"global_int_global_scale\": " QLLD
+            ", \"global_int_offset\": " QLLD,
+            rec.global_int_value_param, rec.global_int_slot,
+            static_cast<long long>(rec.global_int_value_scale),
+            static_cast<long long>(rec.global_int_global_scale),
+            static_cast<long long>(rec.global_int_offset));
         fputc('}', f);
     }
     if (!records.empty()) {

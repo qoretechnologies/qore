@@ -4261,11 +4261,88 @@ llvm::Value* QoreIRToLLVM::emitAOTContextInt(const BatchCalleeInfo& info,
     return phi;
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTGlobalInt(const BatchCalleeInfo& info,
+        const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
+        llvm::Module& module, llvm::Function* fallback_fn) {
+    const AOTGlobalIntInfo& op = info.global_int;
+    if (!op || std::getenv("QORE_DISABLE_AOT_GLOBAL_INT_IMPORT")
+            || info.return_kind != BatchCalleeReturnKind::NativeInt
+            || !callee_ctx || !fallback_fn || (op.value_scale
+                && (op.value_param < 0
+                    || static_cast<size_t>(op.value_param) >= native_args.size()))) {
+        return nullptr;
+    }
+    llvm::Value* value = nullptr;
+    if (op.value_scale) {
+        value = native_args[static_cast<size_t>(op.value_param)];
+        if (value->getType() != i64_type
+                || getFastEntryParamKind(info,
+                    static_cast<unsigned>(op.value_param))
+                    != BatchCalleeParamKind::NativeInt) {
+            return nullptr;
+        }
+    }
+
+    auto load = module.getOrInsertFunction("qore_rt_load_global_aot",
+        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+    llvm::Value* boxed_global = builder->CreateCall(load,
+        {callee_ctx, llvm::ConstantInt::get(i32_type, op.global_slot), xsink_arg});
+    auto decref = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
+        ctx, "aot.global.assigned", llvm_func);
+    llvm::BasicBlock* fallback_bb = llvm::BasicBlock::Create(
+        ctx, "aot.global.nothing", llvm_func);
+    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(
+        ctx, "aot.global.merge", llvm_func);
+    llvm::Value* assigned = builder->CreateICmpNE(boxed_global,
+        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    builder->CreateCondBr(assigned, assigned_bb, fallback_bb);
+    builder->SetInsertPoint(assigned_bb);
+
+    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+        llvm::FunctionType::get(i64_type, {i64_type}, false));
+    llvm::Value* global_value = builder->CreateCall(to_int, {boxed_global});
+    builder->CreateCall(decref, {boxed_global, xsink_arg});
+
+    llvm::Value* result = op.global_scale == 1 ? global_value
+        : builder->CreateMul(global_value,
+            llvm::ConstantInt::get(i64_type, op.global_scale));
+    if (op.value_scale) {
+        llvm::Value* scaled_value = op.value_scale == 1 ? value
+            : builder->CreateMul(value,
+                llvm::ConstantInt::get(i64_type, op.value_scale));
+        result = builder->CreateAdd(result, scaled_value);
+    }
+    if (op.offset) {
+        result = builder->CreateAdd(result,
+            llvm::ConstantInt::get(i64_type, op.offset));
+    }
+    assigned_bb = builder->GetInsertBlock();
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(fallback_bb);
+    builder->CreateCall(decref, {boxed_global, xsink_arg});
+    llvm::Value* fallback_result = builder->CreateCall(fallback_fn, native_args);
+    builder->CreateBr(merge_bb);
+    fallback_bb = builder->GetInsertBlock();
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "aot.global.result");
+    phi->addIncoming(result, assigned_bb);
+    phi->addIncoming(fallback_result, fallback_bb);
+    return phi;
+}
+
 llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
         llvm::Module& module, llvm::Function* fallback_fn) {
     llvm::Value* result = emitAOTContextInt(info, native_args, callee_ctx,
         module, fallback_fn);
+    if (!result) {
+        result = emitAOTGlobalInt(info, native_args, callee_ctx,
+            module, fallback_fn);
+    }
     if (!result) {
         result = emitAOTComposedInt(info, native_args, module);
     }

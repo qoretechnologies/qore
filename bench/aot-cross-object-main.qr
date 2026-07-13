@@ -53,6 +53,14 @@ int sub benchCrossObjectLeaf(int rounds) {
     return checksum;
 }
 
+int sub benchCrossObjectGlobal(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += crossObjectGlobal(i);
+    }
+    return checksum;
+}
+
 int sub benchCrossObjectChain(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -147,6 +155,11 @@ float sub benchCaughtNativeFloatOps(int rounds) {
 
 nothing sub leafMain() {
     printf("%d\n", benchCrossObjectLeaf(10000000));
+}
+
+nothing sub globalMain() {
+    cross_object_global = 3;
+    printf("%d\n", benchCrossObjectGlobal(10000000));
 }
 
 nothing sub chainMain() {

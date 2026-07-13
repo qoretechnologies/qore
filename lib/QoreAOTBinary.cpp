@@ -6611,6 +6611,11 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeI64(rec.composed_int_source_scale);
     writer.writeI64(rec.composed_int_value_scale);
     writer.writeI64(rec.composed_int_offset);
+    writer.writeU8(static_cast<uint8_t>(rec.global_int_value_param));
+    writer.writeU32(static_cast<uint32_t>(rec.global_int_slot));
+    writer.writeI64(rec.global_int_value_scale);
+    writer.writeI64(rec.global_int_global_scale);
+    writer.writeI64(rec.global_int_offset);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6694,6 +6699,11 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.composed_int_source_scale = info.composed_int_source_scale;
     rec.composed_int_value_scale = info.composed_int_value_scale;
     rec.composed_int_offset = info.composed_int_offset;
+    rec.global_int_value_param = info.global_int_value_param;
+    rec.global_int_slot = info.global_int_slot;
+    rec.global_int_value_scale = info.global_int_value_scale;
+    rec.global_int_global_scale = info.global_int_global_scale;
+    rec.global_int_offset = info.global_int_offset;
     native.push_back(std::move(rec));
 }
 
@@ -7929,6 +7939,18 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.composed_int_source_scale = QoreAOTBinaryReader::readI64(ptr);
     rec.composed_int_value_scale = QoreAOTBinaryReader::readI64(ptr);
     rec.composed_int_offset = QoreAOTBinaryReader::readI64(ptr);
+    if (version < 10) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 29) {
+        error = "truncated SYMBOL_INDEX global integer metadata";
+        return false;
+    }
+    rec.global_int_value_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.global_int_slot = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
+    rec.global_int_value_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.global_int_global_scale = QoreAOTBinaryReader::readI64(ptr);
+    rec.global_int_offset = QoreAOTBinaryReader::readI64(ptr);
     return true;
 }
 

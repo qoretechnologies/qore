@@ -1010,6 +1010,11 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.composed_int_source_scale = info.composed_int.source_scale;
             entry.composed_int_value_scale = info.composed_int.value_scale;
             entry.composed_int_offset = info.composed_int.offset;
+            entry.global_int_value_param = info.global_int.value_param;
+            entry.global_int_slot = info.global_int.global_slot;
+            entry.global_int_value_scale = info.global_int.value_scale;
+            entry.global_int_global_scale = info.global_int.global_scale;
+            entry.global_int_offset = info.global_int.offset;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -4069,6 +4074,141 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
     return result.value_param >= 0 || !result.value_scale;
 }
 
+static bool qore_aot_get_global_int(const QoreIRFunction& func,
+        const UserSignature& sig, AOTGlobalIntInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_GLOBAL_INT_IMPORT")
+            || sig.numParams() != 1 || func.blocks.size() != 1
+            || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 12) {
+        return false;
+    }
+    auto param = func.param_local_vars.find(0);
+    if (param == func.param_local_vars.end() || !param->second
+            || param->second->closureUse()
+            || !QoreTypeInfo::isType(param->second->getTypeInfo(), NT_INT)
+            || QoreTypeInfo::parseAcceptsReturns(
+                param->second->getTypeInfo(), NT_NOTHING)) {
+        return false;
+    }
+
+    struct AffineValue {
+        int64_t value_scale = 0;
+        int64_t global_scale = 0;
+        int64_t offset = 0;
+    };
+    auto wrap_add = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            + static_cast<uint64_t>(rhs));
+    };
+    auto wrap_sub = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            - static_cast<uint64_t>(rhs));
+    };
+    auto wrap_mul = [](int64_t lhs, int64_t rhs) {
+        return static_cast<int64_t>(static_cast<uint64_t>(lhs)
+            * static_cast<uint64_t>(rhs));
+    };
+
+    const Var* global_var = nullptr;
+    std::unordered_map<uint32_t, AffineValue> values;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!inst->result.isValid() || load->local != param->second) {
+                    return false;
+                }
+                values.emplace(inst->result.id, AffineValue{1, 0, 0});
+                break;
+            }
+            case QoreIROpcode::LoadGlobal: {
+                const auto* load = static_cast<const QoreIRVarInstruction*>(inst);
+                if (!inst->result.isValid() || !load->var
+                        || (global_var && global_var != load->var)
+                        || QoreTypeInfo::isReference(load->var->getTypeInfo())
+                        || !QoreTypeInfo::isType(load->var->getTypeInfo(), NT_INT)) {
+                    return false;
+                }
+                global_var = load->var;
+                values.emplace(inst->result.id, AffineValue{0, 1, 0});
+                break;
+            }
+            case QoreIROpcode::ConstInt: {
+                if (!inst->result.isValid()) {
+                    return false;
+                }
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                values.emplace(inst->result.id,
+                    AffineValue{0, 0, constant->constant.int_value});
+                break;
+            }
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::SubInt:
+            case QoreIROpcode::MulInt: {
+                if (!inst->result.isValid() || inst->operands.size() != 2) {
+                    return false;
+                }
+                auto lhs = values.find(inst->operands[0].id);
+                auto rhs = values.find(inst->operands[1].id);
+                if (lhs == values.end() || rhs == values.end()) {
+                    return false;
+                }
+                AffineValue value;
+                if (inst->opcode == QoreIROpcode::AddInt) {
+                    value = {wrap_add(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_add(lhs->second.global_scale, rhs->second.global_scale),
+                        wrap_add(lhs->second.offset, rhs->second.offset)};
+                } else if (inst->opcode == QoreIROpcode::SubInt) {
+                    value = {wrap_sub(lhs->second.value_scale, rhs->second.value_scale),
+                        wrap_sub(lhs->second.global_scale, rhs->second.global_scale),
+                        wrap_sub(lhs->second.offset, rhs->second.offset)};
+                } else if (!lhs->second.value_scale && !lhs->second.global_scale) {
+                    value = {wrap_mul(lhs->second.offset, rhs->second.value_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.global_scale),
+                        wrap_mul(lhs->second.offset, rhs->second.offset)};
+                } else if (!rhs->second.value_scale && !rhs->second.global_scale) {
+                    value = {wrap_mul(rhs->second.offset, lhs->second.value_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.global_scale),
+                        wrap_mul(rhs->second.offset, lhs->second.offset)};
+                } else {
+                    return false;
+                }
+                values.emplace(inst->result.id, value);
+                break;
+            }
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!global_var || !ret || !ret->has_value) {
+        return false;
+    }
+    auto value = values.find(ret->value.id);
+    if (value == values.end() || !value->second.global_scale) {
+        return false;
+    }
+    // This form permits one global and no opaque expressions, so its
+    // deterministic per-function AOT global slot is necessarily zero.
+    result.value_param = value->second.value_scale ? 0 : -1;
+    result.global_slot = 0;
+    result.value_scale = value->second.value_scale;
+    result.global_scale = value->second.global_scale;
+    result.offset = value->second.offset;
+    return result.value_param >= 0 || !result.value_scale;
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -4479,6 +4619,17 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                         && callee_it->second.param_kinds[context_int.value_param]
                             == BatchCalleeParamKind::NativeInt))) {
             callee_it->second.context_int = context_int;
+        }
+        AOTGlobalIntInfo global_int;
+        if (qore_aot_get_global_int(*func, *sig, global_int)
+                && callee_it->second.return_kind == BatchCalleeReturnKind::NativeInt
+                && (!global_int.value_scale
+                    || (global_int.value_param >= 0
+                        && static_cast<size_t>(global_int.value_param)
+                            < callee_it->second.param_kinds.size()
+                        && callee_it->second.param_kinds[global_int.value_param]
+                            == BatchCalleeParamKind::NativeInt))) {
+            callee_it->second.global_int = global_int;
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
@@ -5362,6 +5513,31 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             != BatchCalleeParamKind::NativeInt))) {
             return false;
         }
+    }
+    info.global_int.value_param = rec.global_int_value_param;
+    info.global_int.global_slot = rec.global_int_slot;
+    info.global_int.value_scale = rec.global_int_value_scale;
+    info.global_int.global_scale = rec.global_int_global_scale;
+    info.global_int.offset = rec.global_int_offset;
+    if (info.global_int.value_param < -1 || info.global_int.global_slot < -1) {
+        return false;
+    }
+    if (!info.global_int) {
+        if (info.global_int.global_slot != -1
+                || info.global_int.value_param != -1 || info.global_int.value_scale
+                || info.global_int.global_scale || info.global_int.offset) {
+            return false;
+        }
+    } else if (info.return_kind != BatchCalleeReturnKind::NativeInt
+            || !info.global_int.global_scale
+            || ((info.global_int.value_param >= 0)
+                != (info.global_int.value_scale != 0))
+            || info.global_int.value_param >= static_cast<int>(info.num_params)
+            || (info.global_int.value_param >= 0
+                && info.param_kinds[static_cast<unsigned>(
+                    info.global_int.value_param)]
+                    != BatchCalleeParamKind::NativeInt)) {
+        return false;
     }
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {
         bool is_affine = info.scalar_leaf.kind == AOTScalarLeafKind::IntAffine;

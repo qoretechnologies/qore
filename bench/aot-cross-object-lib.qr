@@ -3,6 +3,12 @@
 
 %modern
 
+our int cross_object_global;
+
+int sub crossObjectGlobal(int value) {
+    return value + cross_object_global;
+}
+
 int sub crossObjectLeaf(int value) {
     return value + 1;
 }
