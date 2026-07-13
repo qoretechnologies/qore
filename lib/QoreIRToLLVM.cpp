@@ -4047,6 +4047,78 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
     }
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
+        const std::vector<llvm::Value*>& native_args, llvm::Module& module) {
+    const AOTCollectionOpInfo& op = info.collection_op;
+    if (!op || std::getenv("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")) {
+        return nullptr;
+    }
+    auto get_param = [&](int8_t param) -> llvm::Value* {
+        if (param < 0 || static_cast<size_t>(param) >= native_args.size()) {
+            return nullptr;
+        }
+        llvm::Value* value = native_args[static_cast<size_t>(param)];
+        return value->getType() == i64_type ? value : nullptr;
+    };
+    llvm::Value* base = get_param(op.base_param);
+    if (!base || getFastEntryParamKind(info, static_cast<unsigned>(op.base_param))
+            != BatchCalleeParamKind::Boxed) {
+        return nullptr;
+    }
+
+    switch (op.kind) {
+        case AOTCollectionOpKind::ListSize: {
+            auto helper = module.getOrInsertFunction("qore_rt_list_size",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            llvm::Value* size = builder->CreateCall(helper, {base});
+            if (info.return_kind == BatchCalleeReturnKind::NativeInt) {
+                return size;
+            }
+            return info.return_kind == BatchCalleeReturnKind::Boxed
+                ? boxIntInline(size) : nullptr;
+        }
+        case AOTCollectionOpKind::ListIndex: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed) {
+                return nullptr;
+            }
+            llvm::Value* index = get_param(op.index_param);
+            if (!index) {
+                return nullptr;
+            }
+            BatchCalleeParamKind index_kind = getFastEntryParamKind(info,
+                static_cast<unsigned>(op.index_param));
+            if (index_kind == BatchCalleeParamKind::NativeInt) {
+                index = boxIntInline(index);
+            } else if (index_kind != BatchCalleeParamKind::Boxed) {
+                return nullptr;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_list_index_dynamic",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, i32_type, ptr_type}, false));
+            return builder->CreateCall(helper,
+                {base, index,
+                 llvm::ConstantInt::get(i32_type, op.string_index_char), xsink_arg});
+        }
+        case AOTCollectionOpKind::HashKeyInt: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed || op.key.empty()) {
+                return nullptr;
+            }
+            llvm::Value* key = builder->CreateGlobalString(op.key,
+                "collection_hash_key");
+            QoreIRPrecomputedStringHash hash = qore_ir_precompute_string_hash(op.key);
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_hash_key_access_int_prehashed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, i64_type, i32_type}, false));
+            return builder->CreateCall(helper,
+                {base, key, llvm::ConstantInt::get(i64_type, hash.hash64),
+                 llvm::ConstantInt::get(i32_type, hash.hash32)});
+        }
+        default:
+            return nullptr;
+    }
+}
+
 llvm::Value* QoreIRToLLVM::emitAOTFixedHashRemap(const BatchCalleeInfo& info,
         llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
         llvm::Function* llvm_func, const QoreIRInstruction* inst) {
@@ -4178,6 +4250,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     llvm::Value* fast_result = emitAOTScalarLeaf(callee_info, call_args);
     if (!fast_result) {
         fast_result = emitAOTStringOp(callee_info, call_args, module);
+    }
+    if (!fast_result) {
+        fast_result = emitAOTCollectionOp(callee_info, call_args, module);
     }
     if (!fast_result) {
         fast_result = builder->CreateCall(fast_fn, call_args);
@@ -11566,6 +11641,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_args, module);
                 }
                 if (!call_result) {
+                    call_result = emitAOTCollectionOp(*aot_approach_b_callee,
+                        call_args, module);
+                }
+                if (!call_result) {
                     call_result = builder->CreateCall(aot_approach_b_fn, call_args);
                 }
                 call_return_kind = aot_approach_b_callee->return_kind;
@@ -12380,6 +12459,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = emitAOTScalarLeaf(*aot_static_batch_callee, call_args);
                 if (!call_result) {
                     call_result = emitAOTStringOp(*aot_static_batch_callee,
+                        call_args, module);
+                }
+                if (!call_result) {
+                    call_result = emitAOTCollectionOp(*aot_static_batch_callee,
                         call_args, module);
                 }
                 if (!call_result) {

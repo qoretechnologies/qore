@@ -5031,6 +5031,12 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
         rec.string_op_kind, rec.string_op_base_param,
         rec.string_op_arg0_param, rec.string_op_arg1_param);
+    printf(", \"collection_op_kind\": %u, \"collection_op_base_param\": %d"
+        ", \"collection_op_index_param\": %d, \"collection_op_string_index_char\": %s"
+        ", \"collection_op_key\": ", rec.collection_op_kind,
+        rec.collection_op_base_param, rec.collection_op_index_param,
+        rec.collection_op_string_index_char ? "true" : "false");
+    json_print_string(rec.collection_op_key);
     printf("}");
 }
 
@@ -5594,6 +5600,12 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
             rec.string_op_kind, rec.string_op_base_param,
             rec.string_op_arg0_param, rec.string_op_arg1_param);
+        fprintf(f, ", \"collection_op_kind\": %u, \"collection_op_base_param\": %d"
+            ", \"collection_op_index_param\": %d, \"collection_op_string_index_char\": %s"
+            ", \"collection_op_key\": ", rec.collection_op_kind,
+            rec.collection_op_base_param, rec.collection_op_index_param,
+            rec.collection_op_string_index_char ? "true" : "false");
+        json_file_string(f, rec.collection_op_key);
         fputc('}', f);
     }
     if (!records.empty()) {

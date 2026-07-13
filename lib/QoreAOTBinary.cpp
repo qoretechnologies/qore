@@ -6526,6 +6526,11 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeU8(static_cast<uint8_t>(rec.string_op_base_param));
     writer.writeU8(static_cast<uint8_t>(rec.string_op_arg0_param));
     writer.writeU8(static_cast<uint8_t>(rec.string_op_arg1_param));
+    writer.writeU8(rec.collection_op_kind);
+    writer.writeU8(static_cast<uint8_t>(rec.collection_op_base_param));
+    writer.writeU8(static_cast<uint8_t>(rec.collection_op_index_param));
+    writer.writeU8(rec.collection_op_string_index_char ? 1 : 0);
+    writer.writeStringRef(rec.collection_op_key.c_str());
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6598,6 +6603,11 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.string_op_base_param = info.string_op_base_param;
     rec.string_op_arg0_param = info.string_op_arg0_param;
     rec.string_op_arg1_param = info.string_op_arg1_param;
+    rec.collection_op_kind = info.collection_op_kind;
+    rec.collection_op_base_param = info.collection_op_base_param;
+    rec.collection_op_index_param = info.collection_op_index_param;
+    rec.collection_op_string_index_char = info.collection_op_string_index_char;
+    rec.collection_op_key = info.collection_op_key;
     native.push_back(std::move(rec));
 }
 
@@ -7800,6 +7810,26 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     rec.string_op_base_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
     rec.string_op_arg0_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
     rec.string_op_arg1_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    if (version < 8) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 4) {
+        error = "truncated SYMBOL_INDEX collection operation metadata";
+        return false;
+    }
+    rec.collection_op_kind = QoreAOTBinaryReader::readU8(ptr);
+    rec.collection_op_base_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.collection_op_index_param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    uint8_t string_index_char = QoreAOTBinaryReader::readU8(ptr);
+    if (string_index_char > 1) {
+        error = "invalid SYMBOL_INDEX collection string-index flag";
+        return false;
+    }
+    rec.collection_op_string_index_char = string_index_char != 0;
+    if (!readSymbolIndexString(reader, ptr, end, rec.collection_op_key,
+            error, "collection_op_key")) {
+        return false;
+    }
     return true;
 }
 

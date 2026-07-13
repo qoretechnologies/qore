@@ -139,6 +139,25 @@ struct AOTStringOpInfo {
     }
 };
 
+enum class AOTCollectionOpKind : uint8_t {
+    None = 0,
+    ListSize = 1,
+    ListIndex = 2,
+    HashKeyInt = 3,
+};
+
+struct AOTCollectionOpInfo {
+    AOTCollectionOpKind kind = AOTCollectionOpKind::None;
+    int8_t base_param = -1;
+    int8_t index_param = -1;
+    bool string_index_char = false;
+    std::string key;
+
+    explicit operator bool() const {
+        return kind != AOTCollectionOpKind::None;
+    }
+};
+
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
     bool approach_b_eligible = false;    //!< True if fast entry exists
@@ -155,6 +174,7 @@ struct BatchCalleeInfo {
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
+    AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
     std::string object_getter_member;     //!< Exact final-object getter member name
 };
 

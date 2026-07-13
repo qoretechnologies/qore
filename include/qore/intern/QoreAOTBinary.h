@@ -274,7 +274,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 7;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 8;
 
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
 constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No callee AOT context required
@@ -321,6 +321,11 @@ struct QoreAOTSymbolIndexRecord {
     int8_t string_op_base_param = -1;
     int8_t string_op_arg0_param = -1;
     int8_t string_op_arg1_param = -1;
+    uint8_t collection_op_kind = 0;
+    int8_t collection_op_base_param = -1;
+    int8_t collection_op_index_param = -1;
+    bool collection_op_string_index_char = false;
+    std::string collection_op_key;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -349,6 +354,11 @@ struct QoreAOTFastEntryIndexInfo {
     int8_t string_op_base_param = -1;
     int8_t string_op_arg0_param = -1;
     int8_t string_op_arg1_param = -1;
+    uint8_t collection_op_kind = 0;
+    int8_t collection_op_base_param = -1;
+    int8_t collection_op_index_param = -1;
+    bool collection_op_string_index_char = false;
+    std::string collection_op_key;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

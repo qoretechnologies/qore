@@ -498,6 +498,18 @@ string sub cross_substr(string value, int start, int length) {
     return value.substr(start, length);
 }
 
+int sub cross_list_size(list<int> values) {
+    return values.size();
+}
+
+*int sub cross_list_get(list<int> values, int index) {
+    return values[index];
+}
+
+*int sub cross_hash_get(hash<string, int> values) {
+    return values.answer;
+}
+
 string sub cross_string(string value) {
     return value + \"!\";
 }
@@ -547,7 +559,17 @@ int sub main() {
     }
     string utf8 = \"aébcé\";
     string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
-    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\",
+    list<int> collection = (10, 20, 30);
+    list<int> missing_list;
+    bool list_rejected = False;
+    try {
+        cross_list_size(missing_list);
+    } catch (hash<auto> ex) {
+        list_rejected = True;
+    }
+    hash<string, int> present_hash = (\"answer\": 42);
+    hash<string, int> missing_hash = {};
+    printf(\"%d:%d:%d:%s:%d:%d:%d:%d:%g:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         cross_leaf(4), cross_affine(4),
         cross_affine_scaled(4), cross_string(\"ok\"), cross_caught(5),
         value, cross_maybe(False) === NOTHING, cross_big(), cross_float(4.0),
@@ -556,7 +578,9 @@ int sub main() {
         cross_starts_with(utf8, \"aé\"), cross_ends_with(utf8, \"cé\"),
         cross_contains(utf8, \"éb\"), cross_find(utf8, \"é\", 2), cross_substr(utf8, 1, 2),
         cross_rfind(utf8, \"é\"), cross_string_size(latin1), cross_string_length(latin1),
-        string_rejected);
+        string_rejected, cross_list_size(collection), cross_list_get(collection, 1),
+        cross_list_get(collection, 8) === NOTHING, cross_hash_get(present_hash),
+        cross_hash_get(missing_hash) === NOTHING, list_rejected);
     return 0;
 }
 ";
@@ -715,7 +739,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1\n") {
+if (cross_out != "5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
@@ -778,7 +802,11 @@ if (!(provider_index =~ /\"abi_kind\": \"qore_fast_v1\"/)
         || !(provider_index =~ /\"object_getter_member\": \"value\"/)
         || !(provider_index =~ /\"string_op_kind\": 5/)
         || !(provider_index =~ /\"string_op_base_param\": 0/)
-        || !(provider_index =~ /\"string_op_arg0_param\": 1/)) {
+        || !(provider_index =~ /\"string_op_arg0_param\": 1/)
+        || !(provider_index =~ /\"collection_op_kind\": 1/)
+        || !(provider_index =~ /\"collection_op_kind\": 2/)
+        || !(provider_index =~ /\"collection_op_kind\": 3/)
+        || !(provider_index =~ /\"collection_op_key\": \"answer\"/)) {
     printf("missing serialized fast-entry metadata:\n%s", provider_index);
     exit(2);
 }

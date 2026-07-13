@@ -627,6 +627,11 @@ private:
     llvm::Value* emitAOTStringOp(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Module& module);
 
+    // Emit an imported typed collection operation. Returns nullptr when no
+    // valid summary is available for the supplied fast-entry arguments.
+    llvm::Value* emitAOTCollectionOp(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+
     llvm::Value* emitAOTFixedHashRemap(const BatchCalleeInfo& info,
             llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst);

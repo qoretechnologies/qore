@@ -999,6 +999,11 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.string_op_base_param = info.string_op.base_param;
             entry.string_op_arg0_param = info.string_op.arg0_param;
             entry.string_op_arg1_param = info.string_op.arg1_param;
+            entry.collection_op_kind = static_cast<uint8_t>(info.collection_op.kind);
+            entry.collection_op_base_param = info.collection_op.base_param;
+            entry.collection_op_index_param = info.collection_op.index_param;
+            entry.collection_op_string_index_char = info.collection_op.string_index_char;
+            entry.collection_op_key = info.collection_op.key;
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3562,6 +3567,151 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     return true;
 }
 
+static bool qore_aot_get_collection_op(const QoreIRFunction& func,
+        const UserSignature& sig, AOTCollectionOpInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")
+            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || func.blocks.size() != 1 || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 6) {
+        return false;
+    }
+
+    std::unordered_map<const LocalVar*, int8_t> params;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT collection operation parameter analysis")) {
+            return false;
+        }
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second
+                || param->second->closureUse()) {
+            return false;
+        }
+        params.emplace(param->second, static_cast<int8_t>(i));
+    }
+
+    std::unordered_map<uint32_t, int8_t> values;
+    const QoreIRInstruction* operation = nullptr;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (param == params.end() || !inst->result.isValid()) {
+                    return false;
+                }
+                values.emplace(inst->result.id, param->second);
+                break;
+            }
+            case QoreIROpcode::ListSize:
+            case QoreIROpcode::ListIndexDynamic:
+            case QoreIROpcode::HashKeyAccessInt:
+                if (operation || !inst->result.isValid()) {
+                    return false;
+                }
+                operation = inst;
+                break;
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!operation || !ret || !ret->has_value
+            || ret->value.id != operation->result.id
+            || operation->operands.empty()) {
+        return false;
+    }
+    auto get_param = [&](size_t operand) -> int8_t {
+        if (operand >= operation->operands.size()) {
+            return -1;
+        }
+        auto value = values.find(operation->operands[operand].id);
+        return value == values.end() ? -1 : value->second;
+    };
+    auto get_local = [&](int8_t param) -> const LocalVar* {
+        if (param < 0) {
+            return nullptr;
+        }
+        auto local = func.param_local_vars.find(static_cast<unsigned>(param));
+        return local == func.param_local_vars.end() ? nullptr : local->second;
+    };
+    auto rejects_nothing = [](const LocalVar* local) {
+        return local && QoreTypeInfo::hasType(local->getTypeInfo())
+            && !QoreTypeInfo::parseAcceptsReturns(local->getTypeInfo(), NT_NOTHING);
+    };
+    result.base_param = get_param(0);
+    const LocalVar* base = get_local(result.base_param);
+    if (!base) {
+        return false;
+    }
+
+    switch (operation->opcode) {
+        case QoreIROpcode::ListSize:
+            if (operation->operands.size() != 1
+                    || !QoreTypeInfo::isListType(base->getTypeInfo())
+                    || !rejects_nothing(base)) {
+                return false;
+            }
+            result.kind = AOTCollectionOpKind::ListSize;
+            return true;
+        case QoreIROpcode::ListIndexDynamic: {
+            if (operation->operands.size() != 2
+                    || !QoreTypeInfo::isListType(base->getTypeInfo())
+                    || !rejects_nothing(base)) {
+                return false;
+            }
+            result.index_param = get_param(1);
+            const LocalVar* index = get_local(result.index_param);
+            if (!index || !QoreTypeInfo::isType(index->getTypeInfo(), NT_INT)
+                    || !rejects_nothing(index)) {
+                return false;
+            }
+            const auto* expr = static_cast<const QoreIRExprInstruction*>(operation);
+            if (!expr->list_selector_kinds.empty()) {
+                return false;
+            }
+            if (expr->expr.hasNode()) {
+                const auto* square = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    expr->expr.getInternalNode());
+                if (!square) {
+                    return false;
+                }
+                result.string_index_char = square->hasStringIndexChar();
+            }
+            result.kind = AOTCollectionOpKind::ListIndex;
+            return true;
+        }
+        case QoreIROpcode::HashKeyAccessInt: {
+            if (operation->operands.size() != 1
+                    || !QoreTypeInfo::isHashType(base->getTypeInfo())
+                    || !rejects_nothing(base)) {
+                return false;
+            }
+            const auto* access = static_cast<const QoreIRHashKeyAccessInstruction*>(operation);
+            if (access->key_name.empty()) {
+                return false;
+            }
+            result.key = access->key_name;
+            result.kind = AOTCollectionOpKind::HashKeyInt;
+            return true;
+        }
+        default:
+            return false;
+    }
+}
+
 static bool resolveAOTBatchFunctionEffectSummaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>& candidates,
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>&
@@ -3942,6 +4092,10 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         AOTStringOpInfo string_op;
         if (qore_aot_get_string_op(*func, *sig, string_op)) {
             callee_it->second.string_op = string_op;
+        }
+        AOTCollectionOpInfo collection_op;
+        if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
+            callee_it->second.collection_op = std::move(collection_op);
         }
         AOTScalarLeafInfo leaf;
         if (!qore_ir_get_aot_scalar_leaf(func, uvb,
@@ -4740,6 +4894,46 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 || (!boxed_result
                     && info.return_kind != BatchCalleeReturnKind::Boxed
                     && info.return_kind != BatchCalleeReturnKind::NativeInt)) {
+            return false;
+        }
+    }
+    if (rec.collection_op_kind > static_cast<uint8_t>(AOTCollectionOpKind::HashKeyInt)
+            || rec.collection_op_base_param < -1 || rec.collection_op_index_param < -1
+            || rec.collection_op_base_param >= static_cast<int>(info.num_params)
+            || rec.collection_op_index_param >= static_cast<int>(info.num_params)) {
+        return false;
+    }
+    info.collection_op.kind = static_cast<AOTCollectionOpKind>(rec.collection_op_kind);
+    info.collection_op.base_param = rec.collection_op_base_param;
+    info.collection_op.index_param = rec.collection_op_index_param;
+    info.collection_op.string_index_char = rec.collection_op_string_index_char;
+    info.collection_op.key = rec.collection_op_key;
+    if (!info.collection_op) {
+        if (info.collection_op.base_param != -1
+                || info.collection_op.index_param != -1
+                || info.collection_op.string_index_char
+                || !info.collection_op.key.empty()) {
+            return false;
+        }
+    } else {
+        bool list_index = info.collection_op.kind == AOTCollectionOpKind::ListIndex;
+        bool hash_key = info.collection_op.kind == AOTCollectionOpKind::HashKeyInt;
+        auto rejects_nothing = [&](int8_t param) {
+            return param < 0 || (static_cast<size_t>(param)
+                < info.param_rejects_nothing.size()
+                && info.param_rejects_nothing[static_cast<size_t>(param)]);
+        };
+        if (info.collection_op.base_param < 0
+                || (list_index != (info.collection_op.index_param >= 0))
+                || (hash_key != !info.collection_op.key.empty())
+                || (!list_index && info.collection_op.string_index_char)
+                || !rejects_nothing(info.collection_op.base_param)
+                || !rejects_nothing(info.collection_op.index_param)
+                || (info.collection_op.kind == AOTCollectionOpKind::ListSize
+                    && info.return_kind != BatchCalleeReturnKind::Boxed
+                    && info.return_kind != BatchCalleeReturnKind::NativeInt)
+                || (info.collection_op.kind != AOTCollectionOpKind::ListSize
+                    && info.return_kind != BatchCalleeReturnKind::Boxed)) {
             return false;
         }
     }
