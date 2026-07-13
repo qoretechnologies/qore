@@ -5980,6 +5980,42 @@ printf(\"%s:%s\\n\", active((\"active\": True)), removed((\"active\": True)));
                     sprintf("assigned hash-key truth predicate %s", mode));
         }
 
+        # A single-use noncapturing closure can be called without allocating a
+        # runtime closure. Captured, method-bound, and stored closures retain
+        # the ordinary identity-preserving path.
+        code = "%modern
+class ImmediateClosureTest {
+    private { int base = 20; }
+    int run(int x) {
+        return (int sub (int y) { return base + y; })(x);
+    }
+}
+int captured = 10;
+int pure = (int sub (int x) { return x + 1; })(4);
+int nonleaf = (int sub (int x) {
+    int total = 0;
+    for (int i = 0; i < x; ++i) total += i;
+    return total;
+})(5);
+string temporary = (string sub (string value) { return value + \"!\"; })(\"a\" + \"b\");
+int captured_result = (int sub (int x) { return captured + x; })(5);
+code<int(int)> stored = int sub (int x) { return x * 2; };
+string error;
+try {
+    (int sub (int x) { throw \"IMMEDIATE-CLOSURE\", string(x); })(7);
+} catch (hash<ExceptionInfo> ex) {
+    error = ex.err;
+}
+ImmediateClosureTest object();
+printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
+    captured_result, stored(6), object.run(2), error);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:10:ab!:15:12:22:IMMEDIATE-CLOSURE", result,
+                    sprintf("immediate noncapturing closure fusion %s", mode));
+        }
+
         # A comparison with a second use must retain its boxed Qore bool value
         code = "%modern
 auto lhs = 2;

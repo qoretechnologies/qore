@@ -562,6 +562,17 @@ uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* x
 //! Create a closure/lambda via AOT context slot
 uint64_t qore_rt_create_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Call a single-use noncapturing closure without materializing a runtime closure node.
+uint64_t qore_rt_call_immediate_closure(const QoreClosureParseNode* cn,
+        uint64_t* args, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_consume_args(const QoreClosureParseNode* cn,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* args, int nargs, ExceptionSink* xsink);
+uint64_t qore_rt_call_immediate_closure_aot_consume_args(QoreAOTContext* ctx,
+        int32_t idx, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink);
+
 // --- Reference creation helpers ---
 
 class ParseReferenceNode;

@@ -5252,7 +5252,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
     static const bool disabled =
         std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE") != nullptr;
-    if (disabled || !node || !uvb || arg_cleanups
+    if (disabled || !uvb || arg_cleanups
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
@@ -5284,7 +5284,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
 
     QoreValue result;
     if (!qore_ir_try_execute_native_leaf(&cache.descriptor, args, nargs, result,
-            static_cast<const QoreClosureBase*>(node))) {
+            node ? static_cast<const QoreClosureBase*>(node) : nullptr)) {
         return false;
     }
     result_bits = toBits(result);
@@ -7652,7 +7652,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     }
 
     // Push captured vars onto the cvstack selected by the closure's program context.
-    CVecInstantiator cvi(cb->getCvec(), xsink);
+    CVecInstantiator cvi(cb ? cb->getCvec() : nullptr, xsink);
 
     // Set closure runtime environment so closure-captured vars are findable.
     ThreadSafeLocalVarRuntimeEnvironmentHelper ch(cb);
@@ -7661,7 +7661,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     ThreadFrameBoundaryHelper tfbh(true);
 
     // Handle self for object closures (closures defined inside methods)
-    QoreObject* self = const_cast<QoreObject*>(cb->getObject());
+    QoreObject* self = cb ? const_cast<QoreObject*>(cb->getObject()) : nullptr;
     std::optional<QoreClosureSelfContextHelper> csch;
     if (self) {
         csch.emplace(self);
@@ -7807,6 +7807,85 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     }
 
     return toBits(val);
+}
+
+static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* cn,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    if (check_stack(xsink)) {
+        return toBits(QoreValue());
+    }
+    if (!cn) {
+        xsink->raiseException("JIT-ERROR",
+            "missing closure expression for immediate closure call");
+        return toBits(QoreValue());
+    }
+
+    const LVarSet* vlist = cn->getVList();
+    UserClosureFunction* uf = cn->getFunction();
+    const AbstractQoreFunctionVariant* variant = uf ? uf->first() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!cn->isInMethod() && (!vlist || vlist->empty()) && uvb
+            && uvb->isStaticallyFastCallEligible()
+            && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+        uint64_t leaf_result;
+        if (!uvb->hasCachedAOT()
+                && tryExecClosureNativeLeaf(nullptr, uvb, args, nargs,
+                    arg_cleanups, leaf_result)) {
+            return leaf_result;
+        }
+        return execClosureDirect(nullptr, uvb, nargs, args, xsink, arg_cleanups);
+    }
+
+    uint64_t closure_bits = qore_rt_create_closure(cn, xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    uint64_t result = qore_rt_call_closure_fast_impl(closure_bits, args,
+        arg_cleanups, nargs, xsink);
+    fromBits(closure_bits).discard(xsink);
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure(
+        const QoreClosureParseNode* cn, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    return qore_rt_call_immediate_closure_impl(cn, args, nullptr, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_consume_args(
+        const QoreClosureParseNode* cn, uint64_t* args, uint64_t** arg_cleanups,
+        int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_immediate_closure_impl(cn, args, arg_cleanups, nargs, xsink);
+}
+
+static const QoreClosureParseNode* qore_rt_get_closure_expr_aot(
+        QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    QoreValue expr = fromBits(ctx->exprs[idx]);
+    const QoreClosureParseNode* cn =
+        dynamic_cast<const QoreClosureParseNode*>(expr.getInternalNode());
+    if (!cn) {
+        xsink->raiseException("AOT-ERROR",
+            "invalid expression for immediate closure AOT call");
+    }
+    return cn;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_aot(
+        QoreAOTContext* ctx, int32_t idx, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    const QoreClosureParseNode* cn = qore_rt_get_closure_expr_aot(ctx, idx, xsink);
+    return cn ? qore_rt_call_immediate_closure_impl(cn, args, nullptr, nargs, xsink)
+              : toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_aot_consume_args(
+        QoreAOTContext* ctx, int32_t idx, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    const QoreClosureParseNode* cn = qore_rt_get_closure_expr_aot(ctx, idx, xsink);
+    return cn ? qore_rt_call_immediate_closure_impl(cn, args, arg_cleanups,
+                    nargs, xsink)
+              : toBits(QoreValue());
 }
 
 // --- Fast function call with explicit target (multi-function module compilation) ---
@@ -11691,6 +11770,51 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fas
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_call_closure_fast_consume_args(ref_bits, args,
         arg_cleanups, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_call_immediate_closure_throwing(const QoreClosureParseNode* cn,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_immediate_closure(cn, args, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_call_immediate_closure_consume_args_throwing(
+        const QoreClosureParseNode* cn, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_immediate_closure_consume_args(cn, args,
+        arg_cleanups, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_call_immediate_closure_aot_throwing(QoreAOTContext* ctx, int32_t idx,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_immediate_closure_aot(ctx, idx, args, nargs,
+        xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_call_immediate_closure_aot_consume_args_throwing(QoreAOTContext* ctx,
+        int32_t idx, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_immediate_closure_aot_consume_args(ctx, idx,
+        args, arg_cleanups, nargs, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

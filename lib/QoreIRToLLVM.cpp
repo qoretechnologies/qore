@@ -1305,6 +1305,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     local_cleanup_allocas.clear();
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
+    immediate_closure_creates.clear();
 
     for (LocalVar* lv : func.all_body_locals) {
         if (lv) {
@@ -5636,6 +5637,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Compute remaining use counts for each register and identify registers
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
+    immediate_closure_creates.clear();
     dot_eval_only_bases.clear();
     weak_assigned_locals.clear();
     weak_load_result_ids.clear();
@@ -5644,10 +5646,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<uint32_t> dot_eval_base_candidates;
     std::unordered_set<uint32_t> non_dot_eval_uses;
     std::unordered_map<uint32_t, int> to_bool_uses;
+    std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
+    std::vector<const QoreIRInstruction*> closure_call_candidates;
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
                 continue;
+            }
+            if (inst_ptr->opcode == QoreIROpcode::CreateClosure) {
+                closure_definitions[inst_ptr->result.id] =
+                    static_cast<const QoreIRCreateClosureInstruction*>(inst_ptr.get());
+            } else if (inst_ptr->opcode == QoreIROpcode::CallClosureDirect
+                    && !inst_ptr->operands.empty()) {
+                closure_call_candidates.push_back(inst_ptr.get());
             }
             if ((inst_ptr->opcode == QoreIROpcode::ListGetInt
                     || inst_ptr->opcode == QoreIROpcode::ListGetFloat)
@@ -5734,6 +5745,34 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
                 }
+            }
+        }
+    }
+    if (std::getenv("QORE_DISABLE_IMMEDIATE_CLOSURE_FUSION") == nullptr) {
+        size_t closure_candidate_count = 0;
+        for (const QoreIRInstruction* call : closure_call_candidates) {
+            if (closure_candidate_count++ && !(closure_candidate_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM immediate closure fusion analysis")) {
+                error = "cancelled during LLVM immediate closure fusion analysis";
+                return false;
+            }
+            uint32_t closure_id = call->operands[0].id;
+            auto def = closure_definitions.find(closure_id);
+            auto uses = operand_remaining_uses.find(closure_id);
+            if (def == closure_definitions.end() || uses == operand_remaining_uses.end()
+                    || uses->second != 1) {
+                continue;
+            }
+            const QoreIRCreateClosureInstruction* create = def->second;
+            const QoreClosureParseNode* closure = create->closure_node;
+            if (!closure) {
+                closure = dynamic_cast<const QoreClosureParseNode*>(
+                    create->expr.getInternalNode());
+            }
+            const LVarSet* vlist = closure ? closure->getVList() : nullptr;
+            if (closure && !closure->isInMethod() && (!vlist || vlist->empty())) {
+                immediate_closure_creates[closure_id] = create;
             }
         }
     }
@@ -13963,9 +14002,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::CallClosureDirect: {
             // operands[0] = closure/callref value, operands[1..n] = args
-            auto* ref = getVal(inst->operands[0].id, error);
-            if (!ref) { return false; }
-            llvm::Value* ref_boxed = boxValue(ref, inst->operands[0].id);
+            auto immediate_it = immediate_closure_creates.find(
+                    inst->operands[0].id);
+            bool immediate_closure = immediate_it != immediate_closure_creates.end();
+            llvm::Value* ref_boxed = nullptr;
+            if (!immediate_closure) {
+                auto* ref = getVal(inst->operands[0].id, error);
+                if (!ref) { return false; }
+                ref_boxed = boxValue(ref, inst->operands[0].id);
+            }
 
             // Build args array from operands[1..]
             llvm::Value* args_array;
@@ -13979,7 +14024,69 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
             llvm::Value* result;
-            if (has_arg_cleanups) {
+            if (immediate_closure) {
+                const QoreIRCreateClosureInstruction* create = immediate_it->second;
+                if (aot_mode) {
+                    QoreValue expr_val = create->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
+                            expr_bits);
+                    if (has_arg_cleanups) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, ptr_type, i32_type,
+                             ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_aot_consume_args", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_aot_consume_args_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             args_array, arg_cleanups, nargs_val, xsink_arg},
+                            module, llvm_func, inst);
+                    } else {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_aot", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_aot_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             args_array, nargs_val, xsink_arg}, module, llvm_func, inst);
+                    }
+                } else {
+                    const QoreClosureParseNode* closure = create->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            create->expr.getInternalNode());
+                    }
+                    llvm::Value* closure_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(closure)), ptr_type);
+                    if (has_arg_cleanups) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_consume_args", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_consume_args_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                            {closure_ptr, args_array, arg_cleanups, nargs_val,
+                             xsink_arg}, module, llvm_func, inst);
+                    } else {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure", ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_call_immediate_closure_throwing", ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                            {closure_ptr, args_array, nargs_val, xsink_arg},
+                            module, llvm_func, inst);
+                    }
+                }
+            } else if (has_arg_cleanups) {
                 auto ft = llvm::FunctionType::get(i64_type,
                         {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction(
@@ -14874,6 +14981,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::CreateClosure: {
             const auto* ccinst = static_cast<const QoreIRCreateClosureInstruction*>(inst);
+            if (immediate_closure_creates.count(inst->result.id)) {
+                values[inst->result.id] = llvm::ConstantInt::get(i64_type,
+                    VAL_NOTHING);
+                nanboxed_values.insert(inst->result.id);
+                return true;
+            }
             llvm::Value* result;
             if (aot_mode) {
                 QoreValue expr_val = ccinst->expr;
