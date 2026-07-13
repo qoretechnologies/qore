@@ -364,6 +364,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_get_aot_call_target_context) },
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
+    { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -11516,6 +11517,11 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
 extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
         QoreAOTContext* ctx, int32_t slot) {
     return qore_rt_get_aot_call_target_context(ctx, slot, nullptr);
+}
+
+extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
+    QoreValue receiver = fromBits(value);
+    return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

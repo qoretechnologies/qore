@@ -4069,15 +4069,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
-                    if (implicit_self) {
-                        effect_only_candidates.emplace_back(variant,
-                            std::unique_ptr<QoreIRFunction>(ir_func));
-                        ir_func = nullptr;
-                    } else {
-                        context_candidates.emplace_back(variant,
-                            std::unique_ptr<QoreIRFunction>(ir_func));
-                        ir_func = nullptr;
-                    }
+                    context_candidates.emplace_back(variant,
+                        std::unique_ptr<QoreIRFunction>(ir_func));
+                    ir_func = nullptr;
                 }
                 delete ir_func;
             }

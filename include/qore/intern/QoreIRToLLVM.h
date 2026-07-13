@@ -612,7 +612,10 @@ private:
             const std::vector<llvm::Value*>& boxed_args,
             llvm::Value* args_array, llvm::Value* arg_cleanups,
             int nargs, bool has_arg_cleanups, const char* fallback_name,
-            const char* fallback_consume_name, std::string& error);
+            const char* fallback_consume_name, std::string& error,
+            llvm::Value* object_base = nullptr,
+            const char* fallback_throwing_name = nullptr,
+            const char* fallback_consume_throwing_name = nullptr);
 
     // Emit an imported pure scalar leaf body. Returns nullptr when the summary
     // is absent, disabled, or not valid for the supplied native arguments.

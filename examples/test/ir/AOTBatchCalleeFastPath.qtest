@@ -156,6 +156,20 @@ final class SelfEffects {
     }
 }
 
+final class ObjectLeaf {
+    int pair(int a, int b) {
+        return a * 10 + b;
+    }
+
+    int affine(int value) {
+        return value * 3 + 1;
+    }
+
+    float scale(float value) {
+        return value * 1.5;
+    }
+}
+
 int sub leaf(int x) {
     return x + 1;
 }
@@ -265,6 +279,18 @@ string sub map_store_checks() {
     return string(ints[-1]) + \":\" + string(floats[-1]) + \":\" + string(big[-1]);
 }
 
+string sub object_leaf_checks() {
+    ObjectLeaf leaf();
+    int caught;
+    try {
+        caught = leaf.affine(3);
+    } catch (hash<auto> ex) {
+        caught = -1;
+    }
+    return string(leaf.pair(1, 2)) + \":\" + string(caught)
+        + \":\" + string(int(leaf.scale(4.0) * 10.0));
+}
+
 int sub default_helper(int x = 7) {
     return x * 3;
 }
@@ -282,7 +308,8 @@ string sub caller() {
         + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
         + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
         + \":\" + string(StaticHelper::refTry()) + \":\" + string(StaticHelper::failTry())
-        + \":\" + string(compound_try()) + \":\" + effects.run() + \":\" + map_store_checks();
+        + \":\" + string(compound_try()) + \":\" + effects.run() + \":\" + map_store_checks()
+        + \":\" + object_leaf_checks();
 }
 
 printf(\"%s\\n\", caller());
@@ -479,7 +506,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627\n"
+if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
