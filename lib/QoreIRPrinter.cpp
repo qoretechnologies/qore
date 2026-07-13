@@ -344,6 +344,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::PopImplicitElement: return "pop.implicit.element";
         case QoreIROpcode::HashKeyAccess: return "hash.key.access";
         case QoreIROpcode::HashKeyAccessInt: return "hash.key.access.int";
+        case QoreIROpcode::HashKeyAccessHash: return "hash.key.access.hash";
+        case QoreIROpcode::HashKeyAccessHashGuarded: return "hash.key.access.hash.guarded";
         case QoreIROpcode::LoadSelfMember: return "load.self.member";
         case QoreIROpcode::LoadStaticVar: return "load.static.var";
         case QoreIROpcode::NewObject: return "new.object";
@@ -525,7 +527,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " <lvalue>";
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyAccess
-                    || inst->opcode == QoreIROpcode::HashKeyAccessInt) {
+                    || inst->opcode == QoreIROpcode::HashKeyAccessInt
+                    || inst->opcode == QoreIROpcode::HashKeyAccessHash
+                    || inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded) {
                 auto* hka_inst = dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst.get());
                 if (hka_inst) {
                     out << " ." << hka_inst->key_name;

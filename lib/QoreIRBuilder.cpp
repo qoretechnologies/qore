@@ -606,6 +606,15 @@ QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccessInt(const char
     return inst;
 }
 
+QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccessHash(const char* key_name,
+        bool guarded, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name,
+        guarded ? QoreIROpcode::HashKeyAccessHashGuarded : QoreIROpcode::HashKeyAccessHash);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInvokeInstruction* QoreIRBuilder::createInvokeHashKeyAccess(const char* key_name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,

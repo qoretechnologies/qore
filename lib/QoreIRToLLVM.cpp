@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 384,
+static_assert(QORE_IR_MAX_OPCODE == 386,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -14226,7 +14226,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             return true;
         }
-        case QoreIROpcode::HashKeyAccess: {
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded: {
             const auto* hka_inst = static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
             auto* base = getVal(inst->operands[0].id, error);
             if (!base) {
@@ -14236,14 +14238,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Constant* key_const = builder->CreateGlobalString(hka_inst->key_name,
                     "hash_key");
             bool prehashed = qore_ir_use_prehashed_keys();
-            const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+            bool preserve_weak_result = dot_eval_only_bases.count(inst->result.id);
+            bool known_hash = inst->opcode == QoreIROpcode::HashKeyAccessHash;
+            bool guarded_hash = inst->opcode == QoreIROpcode::HashKeyAccessHashGuarded;
+            const char* helper_name = preserve_weak_result
                     ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
                         : "qore_rt_hash_key_access_for_call")
+                    : known_hash
+                        ? (prehashed ? "qore_rt_hash_key_access_hash_prehashed"
+                            : "qore_rt_hash_key_access_hash")
+                    : guarded_hash
+                        ? (prehashed ? "qore_rt_hash_key_access_hash_guarded_prehashed"
+                            : "qore_rt_hash_key_access_hash_guarded")
                     : (prehashed ? "qore_rt_hash_key_access_prehashed"
                         : "qore_rt_hash_key_access");
-            const char* helper_throwing_name = dot_eval_only_bases.count(inst->result.id)
+            const char* helper_throwing_name = preserve_weak_result
                     ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed_throwing"
                         : "qore_rt_hash_key_access_for_call_throwing")
+                    : known_hash
+                        ? (prehashed ? "qore_rt_hash_key_access_hash_prehashed_throwing"
+                            : "qore_rt_hash_key_access_hash_throwing")
+                    : guarded_hash
+                        ? (prehashed ? "qore_rt_hash_key_access_hash_guarded_prehashed_throwing"
+                            : "qore_rt_hash_key_access_hash_guarded_throwing")
                     : (prehashed ? "qore_rt_hash_key_access_prehashed_throwing"
                         : "qore_rt_hash_key_access_throwing");
             if (prehashed) {

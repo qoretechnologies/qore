@@ -9142,6 +9142,17 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     return lowerExprOpOrInvoke(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc, error);
 }
 
+static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
+    const QoreTypeInfo* reference_target = QoreTypeInfo::getReferenceTarget(type_info);
+    if (reference_target) {
+        type_info = reference_target;
+    }
+    return type_info == hashTypeInfo || type_info == hashOrNothingTypeInfo
+        || type_info == autoHashTypeInfo || type_info == autoHashOrNothingTypeInfo
+        || QoreTypeInfo::getReturnComplexHashOrNothing(type_info)
+        || QoreTypeInfo::getUniqueReturnHashDecl(type_info);
+}
+
 QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
@@ -9200,7 +9211,34 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
                 hka_inst->operands = operands;
                 result = hka_inst->result;
             } else {
-                auto* hka_inst = builder.createHashKeyAccess(key_str, op->loc);
+                const VarRefNode* base_var = dynamic_cast<const VarRefNode*>(
+                    op->getLeft().getInternalNode());
+                const QoreIRValueFacts* facts = builder.getFunction()->getValueFacts(base_val);
+                bool assigned_hash = false;
+                if (facts && facts->assigned_state == QoreIRAssignedState::Assigned
+                        && facts->never_nothing
+                        && base_var && base_var->getType() == VT_LOCAL && base_var->ref.id
+                        && !QoreTypeInfo::getReferenceTarget(base_type)
+                        && QoreTypeInfo::parseReturns(base_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+                    size_t check_count = 0;
+                    for (const auto& [index, parameter] : builder.getFunction()->param_local_vars) {
+                        (void)index;
+                        if (++check_count % 100 == 0
+                                && qore_check_cancel(nullptr, "IR typed hash parameter analysis")) {
+                            error = "cancelled during IR typed hash parameter analysis";
+                            return QoreIRValue();
+                        }
+                        if (parameter == base_var->ref.id) {
+                            assigned_hash = true;
+                            break;
+                        }
+                    }
+                }
+                bool typed_hash = assigned_hash || qore_ir_is_explicit_hash_value_type(base_type);
+                auto* hka_inst = typed_hash
+                    && std::getenv("QORE_DISABLE_IR_TYPED_HASH_KEY_ACCESS") == nullptr
+                    ? builder.createHashKeyAccessHash(key_str, !assigned_hash, op->loc)
+                    : builder.createHashKeyAccess(key_str, op->loc);
                 hka_inst->operands = operands;
                 result = hka_inst->result;
             }

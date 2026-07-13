@@ -116,6 +116,8 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRHashKeyAccessInstruction* createHashKeyAccessInt(const char* key_name,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRHashKeyAccessInstruction* createHashKeyAccessHash(const char* key_name, bool guarded,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInvokeInstruction* createInvokeHashKeyAccess(const char* key_name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,

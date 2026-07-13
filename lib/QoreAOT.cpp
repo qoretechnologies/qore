@@ -1093,7 +1093,10 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ListGetFloat:
         case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
-        case QoreIROpcode::HashKeyAccessInt:   return QORE_AOT_FEAT_HASH_KEY_ACCESS;
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+            return QORE_AOT_FEAT_HASH_KEY_ACCESS;
         case QoreIROpcode::HashKeyStore:
         case QoreIROpcode::HashKeyStoreDynamic: return QORE_AOT_FEAT_HASH_KEY_STORE;
         case QoreIROpcode::ListIndexAccess:

@@ -4,8 +4,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class JITSmokeTest
@@ -6049,6 +6049,37 @@ printf(\"%s\\n\", result);
             string result = trim(runScript(code, mode));
             assertEq("nothing", result,
                     sprintf("missing key plain hash try-catch %s", mode));
+        }
+
+        # A declared hash lvalue is still NOTHING before assignment and after
+        # remove/delete. An exact, non-reference parameter is assigned by binding.
+        code = "%modern
+int sub readValue(hash<auto> arg) {
+    return arg.value;
+}
+auto sub readRemovedValue(hash<auto> arg) {
+    remove arg;
+    return arg.value;
+}
+hash<auto> h;
+auto before = h.value;
+h = {\"value\": 42};
+auto assigned = h.value;
+int parameter = readValue({\"value\": 44});
+auto removed_parameter = readRemovedValue({\"value\": 45});
+remove h;
+auto removed = h.value;
+h = {\"value\": 43};
+delete h;
+auto deleted = h.value;
+printf(\"%s:%d:%d:%s:%s:%s\\n\", exists before ? \"set\" : \"nothing\", assigned, parameter,
+    exists removed_parameter ? \"set\" : \"nothing\",
+    exists removed ? \"set\" : \"nothing\", exists deleted ? \"set\" : \"nothing\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("nothing:42:44:nothing:nothing:nothing", result,
+                    sprintf("hash key access assigned-state guard %s", mode));
         }
     }
 

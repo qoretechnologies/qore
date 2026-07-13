@@ -1441,6 +1441,8 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
     switch (inst.opcode) {
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
         case QoreIROpcode::EqHard:
         case QoreIROpcode::NeHard:
         case QoreIROpcode::ToBool:

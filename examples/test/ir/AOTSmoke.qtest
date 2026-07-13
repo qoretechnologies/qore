@@ -8831,6 +8831,35 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT map hash key add computation");
 
+        # Exercise both serialized typed-hash access variants: an unassigned or
+        # removed lvalue needs a NOTHING guard; an exact parameter is assigned by binding.
+        code = "%modern
+int sub readValue(hash<auto> arg) {
+    return arg.value;
+}
+auto sub readRemovedValue(hash<auto> arg) {
+    remove arg;
+    return arg.value;
+}
+hash<auto> h;
+auto before = h.value;
+h = {\"value\": 42};
+auto assigned = h.value;
+int parameter = readValue({\"value\": 44});
+auto removed_parameter = readRemovedValue({\"value\": 45});
+remove h;
+auto removed = h.value;
+h = {\"value\": 43};
+delete h;
+auto deleted = h.value;
+printf(\"%s:%d:%d:%s:%s:%s\\n\", exists before ? \"set\" : \"nothing\", assigned, parameter,
+    exists removed_parameter ? \"set\" : \"nothing\",
+    exists removed ? \"set\" : \"nothing\", exists deleted ? \"set\" : \"nothing\");
+";
+        aot_out = compileAndRun(code);
+        interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT hash key access assigned-state guards");
+
         # Direct-index select on typed list
         code = "%modern
 list<int> nums = (1, -2, 3, -4, 5);

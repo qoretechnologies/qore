@@ -762,6 +762,16 @@ uint64_t qore_rt_hash_key_access_prehashed(uint64_t hash_val, const char* key,
 uint64_t qore_rt_hash_key_access_for_call_prehashed(uint64_t hash_val, const char* key,
         uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
 
+//! Constant-key access when the operand is proven to be an assigned hash.
+uint64_t qore_rt_hash_key_access_hash(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_hash_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Constant-key access on an explicit hash type that may still be NOTHING.
+uint64_t qore_rt_hash_key_access_hash_guarded(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uint64_t hash_val, const char* key,
+        uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
 //! Look up a key known to have an int value; returns NOTHING if unavailable.
 uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
 uint64_t qore_rt_hash_key_access_int_prehashed(uint64_t hash_val, const char* key,
