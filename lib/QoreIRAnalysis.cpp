@@ -996,6 +996,261 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
     return true;
 }
 
+static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
+        size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT")) {
+        return 0;
+    }
+
+    struct InstructionPosition {
+        QoreIRInstruction* inst = nullptr;
+        size_t block = 0;
+        size_t offset = 0;
+    };
+    std::unordered_map<uint32_t, InstructionPosition> definitions;
+    std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_accesses;
+    std::unordered_set<const LocalVar*> path_locals;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fixed-list scalar replacement analysis")) {
+                return 0;
+            }
+            QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id,
+                    InstructionPosition{inst, block_id, offset});
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::InstantiateLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                if (local_inst->local) {
+                    local_accesses[local_inst->local].push_back(
+                        {inst, block_id, offset});
+                }
+            }
+            switch (inst->opcode) {
+                case QoreIROpcode::LValuePathAssign:
+                case QoreIROpcode::LValuePathCompound:
+                case QoreIROpcode::LValuePathUnary:
+                case QoreIROpcode::LValuePathBinaryMut:
+                case QoreIROpcode::LValuePathTernary: {
+                    const auto* path = static_cast<const QoreIRLValuePathInstruction*>(inst);
+                    if (!path->path.empty()
+                            && path->path.front().kind == LVPathStepKind::LocalVar) {
+                        auto* local = reinterpret_cast<const LocalVar*>(
+                            path->path.front().ref_ptr);
+                        if (local) {
+                            path_locals.insert(local);
+                        }
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    size_t scalarized = 0;
+
+    for (const auto& [local, accesses] : local_accesses) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fixed-list scalar replacement candidate analysis")) {
+            return 0;
+        }
+        if (!local || path_locals.count(local) || local->closureUse()
+                || QoreTypeInfo::isReference(local->getTypeInfo())
+                || !func.ir_only_locals.count(reinterpret_cast<const void*>(local))) {
+            continue;
+        }
+        const QoreTypeInfo* element_type =
+            QoreTypeInfo::getUniqueReturnComplexList(local->getTypeInfo());
+        QoreIRValueRepresentation expected_representation;
+        if (element_type == bigIntTypeInfo) {
+            expected_representation = QoreIRValueRepresentation::NativeInt;
+        } else if (element_type == floatTypeInfo) {
+            expected_representation = QoreIRValueRepresentation::NativeFloat;
+        } else {
+            continue;
+        }
+
+        const InstructionPosition* store_pos = nullptr;
+        std::vector<const InstructionPosition*> load_positions;
+        std::vector<const QoreIRInstruction*> local_cleanup;
+        bool invalid = false;
+        for (const InstructionPosition& position : accesses) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fixed-list scalar replacement local analysis")) {
+                return 0;
+            }
+            if (position.inst->opcode == QoreIROpcode::StoreLocal) {
+                if (store_pos) {
+                    invalid = true;
+                    break;
+                }
+                store_pos = &position;
+            } else if (position.inst->opcode == QoreIROpcode::LoadLocal) {
+                load_positions.push_back(&position);
+            } else if (position.inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                local_cleanup.push_back(position.inst);
+            } else {
+                invalid = true;
+                break;
+            }
+        }
+        if (invalid || !store_pos || load_positions.empty()
+                || store_pos->inst->operands.size() != 1
+                || store_pos->inst->result.isValid()
+                || static_cast<const QoreIRLocalInstruction*>(
+                    store_pos->inst)->weak) {
+            continue;
+        }
+        auto make_it = definitions.find(store_pos->inst->operands[0].id);
+        if (make_it == definitions.end()
+                || make_it->second.inst->opcode != QoreIROpcode::MakeList
+                || make_it->second.inst->exception_target
+                || make_it->second.block != store_pos->block
+                || make_it->second.offset >= store_pos->offset
+                || make_it->second.inst->operands.empty()) {
+            continue;
+        }
+        QoreIRInstruction* make = make_it->second.inst;
+        auto make_uses = uses.find(make->result.id);
+        if (make_uses == uses.end() || make_uses->second.size() != 1
+                || make_uses->second.front().inst != store_pos->inst) {
+            continue;
+        }
+        for (QoreIRValue operand : make->operands) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fixed-list scalar operand analysis")) {
+                return 0;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(operand);
+            if (!facts || facts->representation != expected_representation
+                    || facts->assigned_state != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing) {
+                invalid = true;
+                break;
+            }
+        }
+        if (invalid) {
+            continue;
+        }
+
+        std::vector<const QoreIRInstruction*> reads;
+        std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
+        for (const InstructionPosition* load_pos : load_positions) {
+            if (load_pos->block != store_pos->block
+                    || load_pos->offset <= store_pos->offset
+                    || load_pos->inst->exception_target) {
+                invalid = true;
+                break;
+            }
+            auto load_uses = uses.find(load_pos->inst->result.id);
+            if (load_uses == uses.end() || load_uses->second.empty()) {
+                invalid = true;
+                break;
+            }
+            for (const QoreIRScalarUse& use : load_uses->second) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR fixed-list scalar read analysis")) {
+                    return 0;
+                }
+                if (!use.inst || use.block_id != store_pos->block
+                        || use.inst->opcode != QoreIROpcode::ListIndexDynamic
+                        || use.inst->exception_target || !use.inst->result.isValid()
+                        || use.inst->operands.size() != 2
+                        || use.inst->operands[0].id != load_pos->inst->result.id) {
+                    invalid = true;
+                    break;
+                }
+                const auto* index_inst = static_cast<const QoreIRExprInstruction*>(use.inst);
+                if (!index_inst->list_selector_kinds.empty()) {
+                    invalid = true;
+                    break;
+                }
+                auto index_it = definitions.find(use.inst->operands[1].id);
+                if (index_it == definitions.end()
+                        || index_it->second.inst->opcode != QoreIROpcode::ConstInt) {
+                    invalid = true;
+                    break;
+                }
+                int64_t index = static_cast<const QoreIRConstInstruction*>(
+                    index_it->second.inst)->constant.int_value;
+                if (index < 0 || static_cast<size_t>(index) >= make->operands.size()) {
+                    invalid = true;
+                    break;
+                }
+                candidate_replacements.emplace(use.inst->result.id,
+                    make->operands[static_cast<size_t>(index)]);
+                reads.push_back(use.inst);
+            }
+            if (invalid) {
+                break;
+            }
+        }
+        if (invalid || candidate_replacements.empty()) {
+            continue;
+        }
+        eliminated.insert(make);
+        eliminated.insert(store_pos->inst);
+        for (const InstructionPosition* load_pos : load_positions) {
+            eliminated.insert(load_pos->inst);
+        }
+        eliminated.insert(reads.begin(), reads.end());
+        eliminated.insert(local_cleanup.begin(), local_cleanup.end());
+        replacements.insert(candidate_replacements.begin(), candidate_replacements.end());
+        ++scalarized;
+    }
+
+    if (!scalarized) {
+        return 0;
+    }
+    for (auto& [result_id, replacement] : replacements) {
+        std::unordered_set<uint32_t> seen{result_id};
+        while (true) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fixed-list scalar replacement normalization")) {
+                return 0;
+            }
+            auto next = replacements.find(replacement.id);
+            if (next == replacements.end()) {
+                break;
+            }
+            if (!seen.insert(replacement.id).second) {
+                return 0;
+            }
+            replacement = next->second;
+        }
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            // Complete the committed rewrite even if cancellation is requested.
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR fixed-list scalar replacement");
+            }
+            if (eliminated.count(it->get())) {
+                it = instructions.erase(it);
+            } else {
+                (void)qore_ir_rewrite_value_operands(
+                    **it, replacements, check_count, false);
+                ++it;
+            }
+        }
+    }
+    return scalarized;
+}
+
 struct QoreIRScalarExpressionKey {
     QoreIROpcode opcode = QoreIROpcode::ConstNothing;
     uint64_t constant_bits = 0;
@@ -2263,6 +2518,9 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         }
         return;
     }
+    size_t check_count = 0;
+    local_stats.fixed_lists_scalarized =
+        qore_ir_scalar_replace_fixed_lists(func, check_count);
     QoreIRControlFlowGraph cfg(func);
     if (cfg.cancelled) {
         if (stats) {
@@ -2271,7 +2529,6 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         return;
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
-    size_t check_count = 0;
     bool has_list_push = false;
     if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
         for (const QoreIRBasicBlock* block : cfg.blocks) {

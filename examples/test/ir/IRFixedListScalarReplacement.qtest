@@ -1,0 +1,112 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub scalarInt(int base) {
+    list<int> values = (base, base + 1, base + 2);
+    return values[1] + values[2];
+}
+
+float sub scalarFloat(float base) {
+    list<float> values = (base, base + 1.0);
+    return values[1];
+}
+
+int sub dynamicIndex(int index) {
+    list<int> values = (7, 8, 9);
+    return values[index];
+}
+
+int sub mutatedList() {
+    list<int> values = (1, 2);
+    values[0] = 7;
+    return values[0] + values[1];
+}
+
+list<int> sub escapedList() {
+    list<int> values = (3, 4);
+    return values;
+}
+
+bool sub outOfRange() {
+    list<int> values = (5, 6);
+    return values[2] === NOTHING;
+}
+
+string sub boxedElement() {
+    list<string> values = (\"a\", \"b\");
+    return values[1];
+}
+
+printf(\"%d:%.1f:%d:%d:%d:%d:%s\\n\", scalarInt(4), scalarFloat(1.5),
+    dynamicIndex(2), mutatedList(), escapedList().size(), outOfRange(), boxedElement());
+";
+
+string script_path = "/tmp/qore-ir-fixed-list-scalar-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(bool disabled) {
+    string exe = "/tmp/qore-ir-fixed-list-scalar-" + string(getpid())
+        + (disabled ? "-disabled" : "");
+    string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 " : "",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "11:2.5:9:9:2:1:b\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot(False);
+string disabled_aot = runAot(True);
+if (aot != expected || disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
+        expected, aot, disabled_aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
+        || stats !~ /IR-OPT: scalarFloat:.*scalar-lists=1/) {
+    printf("missing fixed-list scalar replacement:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
+        || stats !~ /IR-OPT: mutatedList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: escapedList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: outOfRange:.*scalar-lists=0/
+        || stats !~ /IR-OPT: boxedElement:.*scalar-lists=0/) {
+    printf("unsafe fixed-list scalar replacement:\n%s", stats);
+    exit(2);
+}

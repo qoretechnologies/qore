@@ -71,6 +71,7 @@ struct QoreIROptimizationStats {
     size_t instructions_hoisted = 0;
     size_t scalar_loads_forwarded = 0;
     size_t scalar_expressions_eliminated = 0;
+    size_t fixed_lists_scalarized = 0;
     size_t constant_branches_folded = 0;
     size_t borrowed_list_reads = 0;
     size_t bounded_typed_list_reads = 0;
