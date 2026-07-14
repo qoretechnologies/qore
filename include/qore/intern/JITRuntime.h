@@ -844,6 +844,9 @@ uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, ui
 //! Format one boxed integer according to compiler-validated fixed %d metadata.
 uint64_t qore_rt_sprintf_int_fixed(uint64_t literal, uint64_t value, int64_t metadata);
 
+//! Append a string value in place when the left string has one owner, or copy it otherwise.
+uint64_t qore_rt_string_append_cow(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.

@@ -7127,6 +7127,14 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             && isNeverNothingFloat(left_analysis)
             && isNeverNothingFloat(right_analysis))) {
         opcode = QoreIROpcode::AddAssignFloat;
+    } else if (!std::getenv("QORE_DISABLE_IR_STRING_APPEND_COW")
+            && isLocalNonClosureVar(left_var)
+            && left_var->getTypeInfo() == stringTypeInfo
+            && getAnalysis(right_expr, right_analysis)
+            && right_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && right_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+            && QoreTypeInfo::isType(selectAnalysisType(right_analysis), NT_STRING)) {
+        opcode = QoreIROpcode::AppendStringCow;
     }
     QoreIRValue result = lowerBinaryOpOrInvoke(opcode, expr, left_value, right, op->loc, error);
     if (!result.isValid()) {

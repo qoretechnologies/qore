@@ -16476,6 +16476,8 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
             || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
             || (ii->invoke_opcode == QoreIROpcode::AddString
                 && ii->operands.size() >= 2)
+            || (ii->invoke_opcode == QoreIROpcode::AppendStringCow
+                && ii->operands.size() >= 2)
             || (ii->invoke_opcode == QoreIROpcode::StringConcat
                 && !ii->operands.empty())
             || ((ii->invoke_opcode == QoreIROpcode::StringJoinStart

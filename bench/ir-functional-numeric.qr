@@ -172,6 +172,18 @@ int sub sprintfMapJoin(list<int> data, int rounds) {
     return checksum;
 }
 
+int sub appendLocalString(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string value = "";
+        for (int j = 0; j < 256; ++j) {
+            value += "abcdefgh";
+        }
+        checksum += value.size();
+    }
+    return checksum;
+}
+
 string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
 int rounds = ENV.QORE_BENCH_ROUNDS
     ? ENV.QORE_BENCH_ROUNDS.toInt()
@@ -228,6 +240,9 @@ switch (kernel) {
         break;
     case "sprintf-map-join":
         printf("%d\n", sprintfMapJoin(makeIntData(), rounds));
+        break;
+    case "append-local-string":
+        printf("%d\n", appendLocalString(rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

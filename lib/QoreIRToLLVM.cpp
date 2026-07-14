@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 396,
+static_assert(QORE_IR_MAX_OPCODE == 397,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -7551,6 +7551,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             return true;
         }
+        case QoreIROpcode::AppendStringCow: {
+            auto* lhs = getVal(inst->operands[0].id, error);
+            auto* rhs = getVal(inst->operands[1].id, error);
+            if (!lhs || !rhs) { return false; }
+            llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+            llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_string_append_cow",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::StringConcat: {
             // Multi-string concatenation - a + b + c + d in single pass
             llvm::Value* args_array;
@@ -10030,6 +10045,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
                 // String concatenation does not modify locals.
+
+            } else if (inv->invoke_opcode == QoreIROpcode::AppendStringCow
+                    && inv->operands.size() >= 2) {
+                auto* lhs = getVal(inv->operands[0].id, error);
+                auto* rhs = getVal(inv->operands[1].id, error);
+                if (!lhs || !rhs) { return false; }
+                llvm::Value* lhs_boxed = boxValue(lhs, inv->operands[0].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inv->operands[1].id);
+                auto helper = module.getOrInsertFunction("qore_rt_string_append_cow",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
 
             } else if (inv->invoke_opcode == QoreIROpcode::StringConcat
                     && !inv->operands.empty()) {

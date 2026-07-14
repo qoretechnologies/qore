@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 396,
+static_assert(QORE_IR_MAX_OPCODE == 397,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4240,6 +4240,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::AddAny:
         case QoreIROpcode::AddTimeout:
         case QoreIROpcode::AddString:
+        case QoreIROpcode::AppendStringCow:
         case QoreIROpcode::StringConcat:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
@@ -11475,6 +11476,7 @@ load_local_done:
             case QoreIROpcode::AddAny:
             case QoreIROpcode::AddTimeout:
             case QoreIROpcode::AddString:
+            case QoreIROpcode::AppendStringCow:
             case QoreIROpcode::SubInt:
             case QoreIROpcode::SubFloat:
             case QoreIROpcode::SubAny:
@@ -14891,6 +14893,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             }
             return QoreValue(result);
         }
+        case QoreIROpcode::AppendStringCow:
+            return fromBits(qore_rt_string_append_cow(toBits(left), toBits(right), xsink));
         case QoreIROpcode::SubInt:
             return QoreValue(left.getAsBigInt() - right.getAsBigInt());
         case QoreIROpcode::SubFloat:

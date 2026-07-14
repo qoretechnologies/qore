@@ -1589,6 +1589,7 @@ static bool writeInvoke(AOTInstWriteCtx& ctx) {
     } else if (ii->invoke_opcode == QoreIROpcode::CallClosureDirect
             || (isUnaryInvokeOpcode(ii->invoke_opcode) && !ii->operands.empty())
             || (isBinaryInvokeOpcode(ii->invoke_opcode) && ii->operands.size() >= 2)
+            || (ii->invoke_opcode == QoreIROpcode::AppendStringCow && ii->operands.size() >= 2)
             || (isRangeSliceOpcode(ii->invoke_opcode) && ii->operands.size() >= 3)
             || (ii->invoke_opcode == QoreIROpcode::ListAssignAny && ii->operands.size() >= 2)) {
         if (!ctx.writeExpr(ctx.writer, QoreValue())) {

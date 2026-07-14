@@ -263,6 +263,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
+    { "qore_rt_string_append_cow", reinterpret_cast<void*>(&qore_rt_string_append_cow) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
@@ -6579,6 +6580,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t r
     QoreStringNodeValueHelper rs(rv);
     QoreStringNode* result = new QoreStringNode(**ls);
     result->concat(*rs, xsink);
+    if (xsink && *xsink) {
+        result->deref();
+        return toBits(QoreValue());
+    }
+    return toBits(QoreValue(result));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
+        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
+    QoreValue left = fromBits(left_bits);
+    QoreValue right = fromBits(right_bits);
+    if (left.isNullOrNothing()) {
+        return toBits(right.refSelf());
+    }
+    if (left.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    QoreStringNode* left_string = left.get<QoreStringNode>();
+    if (right.isNullOrNothing()) {
+        left_string->ref();
+        return left_bits;
+    }
+    if (right.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    QoreStringNode* right_node = right.get<QoreStringNode>();
+    QoreStringValueHelper right_string(right);
+    QoreStringNode* result;
+    if (left_string != right_node && left_string->reference_count() == 1) {
+        result = left_string;
+        result->ref();
+    } else {
+        result = new QoreStringNode(*left_string);
+    }
+    result->concat(*right_string, xsink);
     if (xsink && *xsink) {
         result->deref();
         return toBits(QoreValue());
