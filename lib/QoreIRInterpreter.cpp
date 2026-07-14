@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 393,
+static_assert(QORE_IR_MAX_OPCODE == 395,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4389,11 +4389,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         // handler, but the operands are already evaluated SSA values.
         case QoreIROpcode::RangeSliceAny:
         case QoreIROpcode::RangeSliceInt:
-        case QoreIROpcode::RangeSliceFloat: {
+        case QoreIROpcode::RangeSliceFloat:
+        case QoreIROpcode::StringJoinStart:
+        case QoreIROpcode::StringJoinAppend: {
             if (inv->operands.size() < 3) {
                 if (xsink) {
                     xsink->raiseException("IR-EXEC-ERROR",
-                        "RangeSlice invoke requires three operands; got %zu",
+                        "ternary invoke requires three operands; got %zu",
                         inv->operands.size());
                 }
                 return QoreValue();
@@ -11771,7 +11773,9 @@ load_local_done:
             case QoreIROpcode::MapSelectAny:
             case QoreIROpcode::MapSelectList:
             case QoreIROpcode::HashMapAny:
-            case QoreIROpcode::HashMap: {
+            case QoreIROpcode::HashMap:
+            case QoreIROpcode::StringJoinStart:
+            case QoreIROpcode::StringJoinAppend: {
                 QoreValue res;
                 if (inst->operands.empty()) {
                     // Delegate-to-AST: operands are empty, expression stored in inst->expr
@@ -16289,6 +16293,10 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
                 first.refSelf(), second.refSelf(), third.refSelf())), xsink);
             return evalAndRef(*node, xsink);
         }
+        case QoreIROpcode::StringJoinStart:
+            return fromBits(qore_rt_string_join_start(toBits(first), toBits(second), toBits(third), xsink));
+        case QoreIROpcode::StringJoinAppend:
+            return fromBits(qore_rt_string_join_append(toBits(first), toBits(second), toBits(third), xsink));
         default:
             break;
     }

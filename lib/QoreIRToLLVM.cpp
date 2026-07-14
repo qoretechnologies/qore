@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 393,
+static_assert(QORE_IR_MAX_OPCODE == 395,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -10044,6 +10044,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 // String concatenation does not modify locals.
 
+            } else if ((inv->invoke_opcode == QoreIROpcode::StringJoinStart
+                        || inv->invoke_opcode == QoreIROpcode::StringJoinAppend)
+                    && inv->operands.size() >= 3) {
+                auto* first = getVal(inv->operands[0].id, error);
+                auto* separator = getVal(inv->operands[1].id, error);
+                auto* value = getVal(inv->operands[2].id, error);
+                if (!first || !separator || !value) { return false; }
+                llvm::Value* first_boxed = boxValue(first, inv->operands[0].id);
+                llvm::Value* separator_boxed = boxValue(separator, inv->operands[1].id);
+                llvm::Value* value_boxed = boxValue(value, inv->operands[2].id);
+                const char* helper_name = inv->invoke_opcode == QoreIROpcode::StringJoinStart
+                    ? "qore_rt_string_join_start" : "qore_rt_string_join_append";
+                auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                    {first_boxed, separator_boxed, value_boxed, xsink_arg});
+                // The owned accumulator is internal to the fused fold.
+
             } else if ((inv->invoke_opcode == QoreIROpcode::EqString
                         || inv->invoke_opcode == QoreIROpcode::NeString
                         || inv->invoke_opcode == QoreIROpcode::LtString
@@ -18388,6 +18407,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_foldl_string_join_checked",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, separator_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::StringJoinStart:
+        case QoreIROpcode::StringJoinAppend: {
+            auto* first = getVal(inst->operands[0].id, error);
+            auto* separator = getVal(inst->operands[1].id, error);
+            auto* value = getVal(inst->operands[2].id, error);
+            if (!first || !separator || !value) { return false; }
+            llvm::Value* first_boxed = boxValue(first, inst->operands[0].id);
+            llvm::Value* separator_boxed = boxValue(separator, inst->operands[1].id);
+            llvm::Value* value_boxed = boxValue(value, inst->operands[2].id);
+            const char* helper_name = inst->opcode == QoreIROpcode::StringJoinStart
+                ? "qore_rt_string_join_start" : "qore_rt_string_join_append";
+            auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper,
+                {first_boxed, separator_boxed, value_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

@@ -136,6 +136,24 @@ int sub foldJoinString(*list<string> data, int rounds) {
     return checksum;
 }
 
+int sub mapJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map $1, data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
+int sub selectMapJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map $1, (select data, $# % 2 == 0)));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
 int rounds = ENV.QORE_BENCH_ROUNDS
     ? ENV.QORE_BENCH_ROUNDS.toInt()
@@ -180,6 +198,12 @@ switch (kernel) {
         break;
     case "fold-join-string":
         printf("%d\n", foldJoinString(makeStringData(), rounds));
+        break;
+    case "map-join-string":
+        printf("%d\n", mapJoinString(makeStringData(), rounds));
+        break;
+    case "select-map-join-string":
+        printf("%d\n", selectMapJoinString(makeStringData(), rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

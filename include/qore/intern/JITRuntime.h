@@ -835,6 +835,12 @@ uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsi
 uint64_t qore_rt_foldl_string_join_checked(uint64_t list_val, uint64_t separator_val,
         ExceptionSink* xsink);
 
+//! Start and extend an accumulator owned exclusively by fused string-join IR.
+uint64_t qore_rt_string_join_start(uint64_t first, uint64_t separator, uint64_t value,
+        ExceptionSink* xsink);
+uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, uint64_t value,
+        ExceptionSink* xsink);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.

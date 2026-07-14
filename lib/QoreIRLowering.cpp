@@ -12649,6 +12649,8 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
             LazyPipelineRoot root;
             root.kind = LazyPipelineRoot::Foldl;
             root.fold_expr = &foldl->getFoldExpression();
+            root.list_element_type = QoreTypeInfo::getReturnComplexListOrNothing(
+                getExprTypeInfo(foldl->getRight()));
             root.loc = foldl->loc;
             return lowerLazyPipelineFused(base_source, source_stages, root, error);
         }
@@ -15651,6 +15653,30 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     bool build_result_list = root_list && need_result;
     bool root_foldl = root.kind == LazyPipelineRoot::Foldl;
 
+    QoreIRValue string_join_separator;
+    bool root_string_join = false;
+    bool map_only_pipeline = root_foldl && !source_stages.empty();
+    for (size_t i = 0; map_only_pipeline && i < source_stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fused map string join analysis")) {
+            error = "fused map string join analysis cancelled";
+            return QoreIRValue();
+        }
+        map_only_pipeline = source_stages[i].kind == LazyPipelineStage::Map;
+    }
+    if (root_foldl && !std::getenv("QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN")
+            && root.list_element_type
+            && QoreTypeInfo::parseReturns(root.list_element_type, NT_STRING) == QTI_IDENT
+            && map_only_pipeline) {
+        QoreValue separator;
+        if (analyzeStringJoinFoldPattern(*root.fold_expr, separator)) {
+            string_join_separator = lowerConstant(separator, error);
+            if (!string_join_separator.isValid()) {
+                return QoreIRValue();
+            }
+            root_string_join = true;
+        }
+    }
+
     std::vector<LazyPipelineStage> stages = source_stages;
     if (root_streaming && !root_terminal) {
         LazyPipelineStage::Kind kind;
@@ -15759,6 +15785,27 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return fold_result;
     };
 
+    auto lower_string_join_op = [&](QoreIROpcode opcode, QoreIRValue accum_val,
+            QoreIRValue element_val) -> QoreIRValue {
+        bool should_invoke = !exception_stack.empty() && expressionCanThrow(*root.fold_expr);
+        if (!should_invoke) {
+            return builder.createTernaryOp(opcode, accum_val, string_join_separator,
+                element_val, loc)->result;
+        }
+
+        QoreIRBasicBlock* normal_block = createBlock("stream.fused.join.invoke.cont");
+        if (!normal_block) {
+            error = "IR builder failed to create fused string join continuation block";
+            return QoreIRValue();
+        }
+        auto* inst = builder.createInvoke(*root.fold_expr,
+            {accum_val, string_join_separator, element_val}, normal_block,
+            exception_stack.back(), loc);
+        inst->invoke_opcode = opcode;
+        builder.setBlock(normal_block);
+        return inst->result;
+    };
+
     auto emit_negative_limit_throw = [&](const char* name, const QoreProgramLocation* stage_loc) {
         QoreIRValue err = builder.createConstString("STREAMING-OPERATOR-ERROR", stage_loc)->result;
         QoreIRValue msg = builder.createConstString(
@@ -15822,6 +15869,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     QoreIRValue fold_initial_accum;
     QoreIRValue fold_initial_has_accum;
+    QoreIRValue fold_initial_join_started;
 
     builder.setBlock(preheader_block);
     QoreIRValue result_list;
@@ -15839,6 +15887,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (root_foldl) {
         fold_initial_accum = builder.createConstNothing(loc)->result;
         fold_initial_has_accum = builder.createConstBool(false, loc)->result;
+        if (root_string_join) {
+            fold_initial_join_started = builder.createConstBool(false, loc)->result;
+        }
     }
     {
         auto* br = builder.createBranch(header_block, loc);
@@ -15851,6 +15902,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue count;
         QoreIRValue fold_accum;
         QoreIRValue fold_has_accum;
+        QoreIRValue fold_join_started;
     };
 
     struct FusedContinuePath {
@@ -15893,6 +15945,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRPhiInstruction* count_phi = nullptr;
     QoreIRPhiInstruction* fold_accum_phi = nullptr;
     QoreIRPhiInstruction* fold_has_accum_phi = nullptr;
+    QoreIRPhiInstruction* fold_join_started_phi = nullptr;
     QoreIRValue root_index;
     QoreIRValue count_value;
     if (root_terminal) {
@@ -15905,11 +15958,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     }
     QoreIRValue fold_accum;
     QoreIRValue fold_has_accum;
+    QoreIRValue fold_join_started;
     if (root_foldl) {
         fold_accum_phi = builder.createPhi({}, loc);
         fold_accum = fold_accum_phi->result;
         fold_has_accum_phi = builder.createPhi({}, loc);
         fold_has_accum = fold_has_accum_phi->result;
+        if (root_string_join) {
+            fold_join_started_phi = builder.createPhi({}, loc);
+            fold_join_started = fold_join_started_phi->result;
+        }
     }
 
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -15939,7 +15997,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue element_val = next_inst->result;
 
     builder.setBlock(body_block);
-    FusedLoopState state{stage_indices, root_index, count_value, fold_accum, fold_has_accum};
+    FusedLoopState state{
+        stage_indices, root_index, count_value, fold_accum, fold_has_accum, fold_join_started};
     QoreIRValue one = builder.createConstInt(1, loc)->result;
 
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -16098,16 +16157,54 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
         builder.setBlock(init_accum_block);
         QoreIRValue true_val = builder.createConstBool(true, loc)->result;
+        QoreIRValue false_val = root_string_join
+            ? builder.createConstBool(false, loc)->result : QoreIRValue();
         QoreIRValue init_accum_val = builder.createRefSelf(element_val, loc)->result;
         QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
 
         builder.setBlock(fold_block);
-        QoreIRValue fold_result = lower_fold_expr(state.fold_accum, element_val);
-        if (!fold_result.isValid()) {
-            return QoreIRValue();
+        QoreIRValue fold_result;
+        QoreIRBasicBlock* fold_exit_block = nullptr;
+        if (root_string_join) {
+            QoreIRBasicBlock* join_start_block = createBlock("stream.fused.join.start");
+            QoreIRBasicBlock* join_append_block = createBlock("stream.fused.join.append");
+            QoreIRBasicBlock* join_cont_block = createBlock("stream.fused.join.cont");
+            if (!join_start_block || !join_append_block || !join_cont_block) {
+                error = "IR builder failed to create fused string join blocks";
+                return QoreIRValue();
+            }
+            builder.createBranchIf(state.fold_join_started, join_append_block, join_start_block, loc);
+
+            builder.setBlock(join_start_block);
+            QoreIRValue start_result = lower_string_join_op(
+                QoreIROpcode::StringJoinStart, state.fold_accum, element_val);
+            if (!start_result.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* join_start_exit = builder.getBlock();
+            builder.createBranch(join_cont_block, loc);
+
+            builder.setBlock(join_append_block);
+            QoreIRValue append_result = lower_string_join_op(
+                QoreIROpcode::StringJoinAppend, state.fold_accum, element_val);
+            if (!append_result.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRBasicBlock* join_append_exit = builder.getBlock();
+            builder.createBranch(join_cont_block, loc);
+
+            builder.setBlock(join_cont_block);
+            fold_result = builder.createPhi(
+                {{start_result, join_start_exit}, {append_result, join_append_exit}}, loc)->result;
+            fold_exit_block = join_cont_block;
+        } else {
+            fold_result = lower_fold_expr(state.fold_accum, element_val);
+            if (!fold_result.isValid()) {
+                return QoreIRValue();
+            }
+            fold_exit_block = builder.getBlock();
         }
-        QoreIRBasicBlock* fold_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
 
         builder.setBlock(fold_cont_block);
@@ -16118,6 +16215,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         FusedLoopState next_state = state;
         next_state.fold_accum = next_accum_phi->result;
         next_state.fold_has_accum = next_has_phi->result;
+        if (root_string_join) {
+            auto* next_join_started_phi = builder.createPhi(
+                {{false_val, init_accum_exit_block}, {true_val, fold_exit_block}}, loc);
+            next_state.fold_join_started = next_join_started_phi->result;
+        }
         add_continue(next_state, loc);
     } else if (op->getKind() == QoreStreamingOperatorNode::Count) {
         QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
@@ -16249,6 +16351,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             }
             fold_has_accum_phi->incoming.push_back({path.state.fold_has_accum, path.block});
             fold_has_accum_phi->operands.push_back(path.state.fold_has_accum);
+        }
+    }
+    if (fold_join_started_phi) {
+        fold_join_started_phi->incoming.push_back({fold_initial_join_started, preheader_block});
+        fold_join_started_phi->operands.push_back(fold_initial_join_started);
+        size_t path_count = 0;
+        for (const FusedContinuePath& path : continue_paths) {
+            if (++path_count % 100 == 0
+                    && qore_check_cancel(nullptr, "fused string join state incoming lowering")) {
+                error = "fused string join state incoming lowering cancelled";
+                return QoreIRValue();
+            }
+            fold_join_started_phi->incoming.push_back({path.state.fold_join_started, path.block});
+            fold_join_started_phi->operands.push_back(path.state.fold_join_started);
         }
     }
 

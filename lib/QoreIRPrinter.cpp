@@ -307,6 +307,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::FusedMapFoldlSumOffsetInt: return "fused.map.foldl.sum.offset.int";
         case QoreIROpcode::FusedMapFoldlSumOffsetFloat: return "fused.map.foldl.sum.offset.float";
         case QoreIROpcode::FoldlStringJoin: return "foldl.string.join";
+        case QoreIROpcode::StringJoinStart: return "string.join.start";
+        case QoreIROpcode::StringJoinAppend: return "string.join.append";
         case QoreIROpcode::MapSelectAny: return "map.select.any";
         case QoreIROpcode::HashMapAny: return "hash.map.any";
         case QoreIROpcode::HashMapSelectAny: return "hash.map.select.any";

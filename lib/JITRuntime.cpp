@@ -260,6 +260,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
     { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
+    { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
+    { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
@@ -6400,6 +6402,99 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
         }
     }
     return toBits(QoreValue(result.release()));
+}
+
+static bool qore_rt_is_optional_string(const QoreValue& value) {
+    return value.isNothing() || value.getType() == NT_STRING;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_join_start(
+        uint64_t first_bits, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue first = fromBits(first_bits);
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue value = fromBits(value_bits);
+    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(first)
+            || !qore_rt_is_optional_string(value)) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in fused string join");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreStringValueHelper separator(separator_value);
+    const QoreEncoding* encoding = separator->getEncoding();
+    size_t reserve_size = separator->size();
+    bool can_reserve = true;
+    auto add_reserve_size = [&reserve_size, &can_reserve](size_t size) {
+        if (size > std::numeric_limits<size_t>::max() - reserve_size) {
+            can_reserve = false;
+        } else {
+            reserve_size += size;
+        }
+    };
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        encoding = first_string->getEncoding();
+        add_reserve_size(first_string->size());
+    }
+    if (value.getType() == NT_STRING) {
+        QoreStringValueHelper string(value);
+        add_reserve_size(string->size());
+    }
+
+    QoreStringNodeHolder result(new QoreStringNode(encoding));
+    if (can_reserve) {
+        result->reserve(reserve_size);
+    }
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        result->concat(*first_string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    result->concat(*separator, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (value.getType() == NT_STRING) {
+        QoreStringValueHelper string(value);
+        result->concat(*string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return toBits(QoreValue(result.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
+        uint64_t accumulator_bits, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue accumulator = fromBits(accumulator_bits);
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue value = fromBits(value_bits);
+    if (accumulator.getType() != NT_STRING || separator_value.getType() != NT_STRING
+            || !qore_rt_is_optional_string(value)) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in fused string join");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreStringNode* result = accumulator.get<QoreStringNode>();
+    QoreStringValueHelper separator(separator_value);
+    result->concat(*separator, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (value.getType() == NT_STRING) {
+        QoreStringValueHelper string(value);
+        result->concat(*string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    result->ref();
+    return toBits(accumulator);
 }
 
 // Typed string concatenation - both operands are known to be strings at compile time
