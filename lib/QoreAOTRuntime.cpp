@@ -10927,10 +10927,12 @@ struct AotModuleState {
     int num_funcs = 0;
     //! Modules that should be reexported (from %requires(reexport) directives)
     std::vector<std::string> reexport_deps;
-    //! Serialized metadata for deferred init function processing in ns_init
-    std::vector<uint8_t> metadata;
+    //! Serialized metadata retained only when deferred init cannot reuse an open reader.
+    std::shared_ptr<const std::vector<uint8_t>> metadata;
     //! Reader opened during module_init and reused by deferred ns_init work.
     std::shared_ptr<QoreAOTBinaryReader> init_reader;
+    //! Debug metadata shared by regular and deferred-init contexts.
+    std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
     //! Init function descriptors (target type, ns path, item name) read during module_init
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     //! Target programs where init functions have completed for this module
@@ -10953,6 +10955,11 @@ struct AotModuleState {
     module-manager mutex while running module init code, so this state cannot rely on QoreModuleManager locking.
 */
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
+
+static bool useAOTSharedInitMetadata() {
+    static const bool enabled = getenv("QORE_DISABLE_AOT_SHARED_INIT_METADATA") == nullptr;
+    return enabled;
+}
 
 //! Current module being initialized (valid only during qore_aot_module_init / _init_v2)
 static QoreProgram* aot_module_pgm = nullptr;
@@ -11155,8 +11162,9 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     const QoreAOTFunc* init_funcs = nullptr;
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
-    std::vector<uint8_t> init_metadata;
+    std::shared_ptr<const std::vector<uint8_t>> init_metadata;
     std::shared_ptr<QoreAOTBinaryReader> cached_init_reader;
+    std::shared_ptr<const QoreAOTDebugMetadata> cached_debug_metadata;
     std::vector<AOTInitFuncDescriptor> init_descriptors;
     std::string mod_path;
 
@@ -11167,12 +11175,13 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
                 mod_name.c_str(), it != aot_module_map.end(),
                 it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
-                it != aot_module_map.end() ? it->second.metadata.size() : 0,
+                it != aot_module_map.end() && it->second.metadata
+                    ? it->second.metadata->size() : 0,
                 it != aot_module_map.end() ? it->second.num_funcs : 0);
         }
         if (it == aot_module_map.end()
                 || it->second.init_descriptors.empty()
-                || it->second.metadata.empty()
+                || (!it->second.init_reader && !it->second.metadata)
                 || it->second.merged_pgms.find(tpgm) == it->second.merged_pgms.end()
                 || it->second.init_done_pgms.find(tpgm) != it->second.init_done_pgms.end()
                 || it->second.init_in_progress_pgms.find(tpgm)
@@ -11186,8 +11195,13 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
         init_metadata = it->second.metadata;
         cached_init_reader = it->second.init_reader;
+        cached_debug_metadata = it->second.debug_metadata;
         init_descriptors = it->second.init_descriptors;
         mod_path = it->second.path;
+    }
+
+    if (!useAOTSharedInitMetadata() && init_metadata) {
+        init_metadata = std::make_shared<const std::vector<uint8_t>>(*init_metadata);
     }
 
     result.attempted = true;
@@ -11235,8 +11249,8 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     const QoreAOTBinaryReader* init_reader = cached_init_reader.get();
     if (!init_reader) {
         std::string reader_error;
-        if (!fallback_init_reader.open(init_metadata.data(),
-                static_cast<uint32_t>(init_metadata.size()), reader_error)) {
+        if (!init_metadata || !fallback_init_reader.open(init_metadata->data(),
+                static_cast<uint32_t>(init_metadata->size()), reader_error)) {
             return finish(false, true, std::string("metadata open failed: ") + reader_error);
         }
         init_reader = &fallback_init_reader;
@@ -11250,8 +11264,11 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     std::vector<AOTInitFuncExecInfo> init_func_contexts;
     int registered = 0;
     std::vector<std::string> registration_errors;
-    auto debug_metadata = makeAOTDebugMetadata(*init_reader,
-        init_metadata.data(), static_cast<int>(init_metadata.size()));
+    auto debug_metadata = cached_debug_metadata;
+    if (!debug_metadata && init_metadata) {
+        debug_metadata = makeAOTDebugMetadata(*init_reader,
+            init_metadata->data(), static_cast<int>(init_metadata->size()));
+    }
     registerAOTFunctionsFromSlotMaps(*init_reader, init_root_priv,
         init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
         &registration_errors, debug_metadata);
@@ -11293,7 +11310,7 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm) {
             for (const auto& entry : aot_module_map) {
                 const AotModuleState& state = entry.second;
                 if (!state.init_descriptors.empty()
-                        && !state.metadata.empty()
+                        && (state.init_reader || state.metadata)
                         && state.merged_pgms.find(tpgm) != state.merged_pgms.end()
                         && state.init_done_pgms.find(tpgm) == state.init_done_pgms.end()
                         && state.init_in_progress_pgms.find(tpgm)
@@ -13514,6 +13531,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     }
     AOT_TRACE("deserializeIntoProgram done");
 
+    std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
+
     // Advisory source staleness check.  Feature compatibility is a hard error
     // in QoreAOTBinaryDeserializer::openAndDeserializeShells() before
     // schema-dependent metadata is read.
@@ -13543,6 +13562,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Register pre-compiled AOT functions using slot maps (v3 uses metadata
     // deserialization — no AST available, must use slot map path)
     if (num_functions > 0 && functions) {
+        debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
+            metadata, metadata_len);
         std::unordered_map<std::string, const QoreAOTFunc*> func_map;
         for (int i = 0; i < num_functions; ++i) {
             if (functions[i].name && functions[i].fn_ptr) {
@@ -13555,8 +13576,6 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
         std::vector<std::string> registration_errors;
         bool registration_parse_ctx_failed = false;
-        auto debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
-            metadata, metadata_len);
         {
             // Slot-map registration resolves call/constructor variants while
             // rebuilding runtime contexts.  Those lookups consult both the
@@ -13666,15 +13685,22 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.reexport_deps = std::move(reexport_deps);
         state.init_descriptors = std::move(init_descriptors);
         state.path = module_context_path ? module_context_path : "";
-        // Store metadata copy for ns_init to build init function contexts
+        // Keep the open reader and debug payload alive for deferred init instead
+        // of copying the complete module metadata again.
         if (!state.init_descriptors.empty()) {
-            state.metadata.assign(metadata, metadata + metadata_len);
             static const bool cache_init_reader =
                 std::getenv("QORE_DISABLE_AOT_INIT_READER_CACHE") == nullptr;
             if (cache_init_reader) {
                 state.init_reader = std::make_shared<QoreAOTBinaryReader>(deserializer.takeReader());
                 state.init_reader->wrap_const_ref_in_rcr = false;
                 state.init_reader->defer_unresolved_const_refs = false;
+            }
+            if (useAOTSharedInitMetadata()) {
+                state.debug_metadata = debug_metadata;
+            }
+            if (!cache_init_reader || !useAOTSharedInitMetadata()) {
+                state.metadata = std::make_shared<const std::vector<uint8_t>>(
+                    metadata, metadata + metadata_len);
             }
         }
         aot_module_map[mod_name] = std::move(state);
