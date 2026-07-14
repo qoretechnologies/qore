@@ -8076,6 +8076,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     // 6. Read blocks and instructions
+    const bool disable_trace_cache = getenv("QORE_DISABLE_AOT_IR_TRACE_CACHE") != nullptr;
+    const char* cached_trace = disable_trace_cache ? nullptr : getenv("QORE_AOT_TRACE_IR_DESER");
     for (int i = 0; i < num_blocks; ++i) {
         const char* block_name = reader.readStringRef(ptr);
         bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
@@ -8086,7 +8088,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
         for (int j = 0; j < num_insts; ++j) {
             const uint8_t* inst_start = ptr;
-            if (const char* trace = getenv("QORE_AOT_TRACE_IR_DESER")) {
+            if (const char* trace = disable_trace_cache
+                    ? getenv("QORE_AOT_TRACE_IR_DESER") : cached_trace) {
                 bool match = !*trace || (func->name.find(trace) != std::string::npos);
                 if (match && ptr + 3 <= end) {
                     uint16_t peek_opcode = static_cast<uint16_t>(ptr[0] | (static_cast<uint16_t>(ptr[1]) << 8));
@@ -8109,7 +8112,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                     + ": " + error;
                 return nullptr;
             }
-            if (const char* trace = getenv("QORE_AOT_TRACE_IR_DESER")) {
+            if (const char* trace = disable_trace_cache
+                    ? getenv("QORE_AOT_TRACE_IR_DESER") : cached_trace) {
                 bool match = !*trace || (func->name.find(trace) != std::string::npos);
                 if (match) {
                     fprintf(stderr,
