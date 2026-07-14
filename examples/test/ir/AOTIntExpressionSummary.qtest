@@ -27,6 +27,14 @@ int sub bounded_expr(int a, int b, int c) {
     return (a * 3 + b * 5) - (c * 7) + (a * b) - 11;
 }
 
+int sub bitwise_expr(int a, int b, int c) {
+    return (a & b) ^ (b | c);
+}
+
+int sub nested_bitwise_expr(int a, int b, int c) {
+    return bitwise_expr(a, b, c) + leaf(a);
+}
+
 int sub divide_expr(int left, int right) {
     return left / right;
 }
@@ -60,10 +68,12 @@ string sub consumerCode() {
     } catch (hash<auto> ex) {
         removed_rejected = True;
     }
-    printf(\"%d:%d:%d:%d:%d:%d\\n\",
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         bounded_expr(2, 3, 4),
         bounded_expr(9223372036854775807, 2, -3),
-        pair(5, -2), too_large(1), missing_rejected, removed_rejected);
+        pair(5, -2), bitwise_expr(6, 3, 12),
+        nested_bitwise_expr(6, 3, 12), too_large(1),
+        missing_rejected, removed_rejected);
     return 0;
 }
 ";
@@ -106,9 +116,11 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"11\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"12\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {

@@ -277,7 +277,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 11;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 12;
 
 //! Serialized node in a bounded pure native-integer expression summary.
 struct QoreAOTIntExpressionNodeRecord {

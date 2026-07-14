@@ -3862,6 +3862,15 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 case AOTIntExpressionNodeKind::Mul:
                     value = builder->CreateMul(lhs, rhs);
                     break;
+                case AOTIntExpressionNodeKind::And:
+                    value = builder->CreateAnd(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Or:
+                    value = builder->CreateOr(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Xor:
+                    value = builder->CreateXor(lhs, rhs);
+                    break;
                 default:
                     return nullptr;
             }

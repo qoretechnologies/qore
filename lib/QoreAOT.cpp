@@ -4337,6 +4337,15 @@ static bool qore_aot_collect_int_expression_summaries(
             case QoreIROpcode::MulInt:
                 kind = AOTIntExpressionNodeKind::Mul;
                 break;
+            case QoreIROpcode::AndInt:
+                kind = AOTIntExpressionNodeKind::And;
+                break;
+            case QoreIROpcode::OrInt:
+                kind = AOTIntExpressionNodeKind::Or;
+                break;
+            case QoreIROpcode::XorInt:
+                kind = AOTIntExpressionNodeKind::Xor;
+                break;
             default:
                 return -1;
         }
@@ -4461,7 +4470,10 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
                 case QoreIROpcode::AddInt:
                 case QoreIROpcode::SubInt:
-                case QoreIROpcode::MulInt: {
+                case QoreIROpcode::MulInt:
+                case QoreIROpcode::AndInt:
+                case QoreIROpcode::OrInt:
+                case QoreIROpcode::XorInt: {
                     if (inst->operands.size() != 2) {
                         state = VisitState::Failed;
                         return false;
@@ -4472,11 +4484,30 @@ static bool qore_aot_collect_int_expression_summaries(
                         state = VisitState::Failed;
                         return false;
                     }
-                    AOTIntExpressionNodeKind kind = inst->opcode == QoreIROpcode::AddInt
-                        ? AOTIntExpressionNodeKind::Add
-                        : inst->opcode == QoreIROpcode::SubInt
-                        ? AOTIntExpressionNodeKind::Sub
-                        : AOTIntExpressionNodeKind::Mul;
+                    AOTIntExpressionNodeKind kind;
+                    switch (inst->opcode) {
+                        case QoreIROpcode::AddInt:
+                            kind = AOTIntExpressionNodeKind::Add;
+                            break;
+                        case QoreIROpcode::SubInt:
+                            kind = AOTIntExpressionNodeKind::Sub;
+                            break;
+                        case QoreIROpcode::MulInt:
+                            kind = AOTIntExpressionNodeKind::Mul;
+                            break;
+                        case QoreIROpcode::AndInt:
+                            kind = AOTIntExpressionNodeKind::And;
+                            break;
+                        case QoreIROpcode::OrInt:
+                            kind = AOTIntExpressionNodeKind::Or;
+                            break;
+                        case QoreIROpcode::XorInt:
+                            kind = AOTIntExpressionNodeKind::Xor;
+                            break;
+                        default:
+                            state = VisitState::Failed;
+                            return false;
+                    }
                     result = append_binary(expression, kind, lhs->second, rhs->second);
                     break;
                 }
@@ -5882,7 +5913,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         for (size_t i = 0; i < rec.int_expression_nodes.size(); ++i) {
             const auto& input = rec.int_expression_nodes[i];
             if (input.kind < static_cast<uint8_t>(AOTIntExpressionNodeKind::Param)
-                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Mul)) {
+                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Xor)) {
                 return false;
             }
             AOTIntExpressionNodeInfo node;

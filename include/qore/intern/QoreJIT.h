@@ -112,6 +112,9 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     Add = 3,
     Sub = 4,
     Mul = 5,
+    And = 6,
+    Or = 7,
+    Xor = 8,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;
