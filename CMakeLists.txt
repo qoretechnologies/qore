@@ -948,8 +948,13 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     include(ExternalProject)
     set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
     set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
+    # The source location may be overridden with a local path (e.g. a tarball vendored into a CI image) to avoid a
+    # network fetch at build time.  It must be jemalloc 5.3.0: the pinned SHA-256 below is verified whether the
+    # source is downloaded or taken from a local path, so an override cannot substitute a different tree.
+    set(QORE_JEMALLOC_URL "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2"
+        CACHE STRING "URL or local path to the jemalloc 5.3.0 source tarball linked into libqore on musl targets")
     ExternalProject_Add(jemalloc_ext
-        URL https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
+        URL ${QORE_JEMALLOC_URL}
         URL_HASH SHA256=2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa
         PREFIX ${QORE_JEMALLOC_PREFIX}
         CONFIGURE_COMMAND <SOURCE_DIR>/configure
