@@ -3980,6 +3980,12 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 value = builder->CreateCall(to_int, {boxed});
             }
+        } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
+            if (node.lhs >= values.size()
+                    || values[node.lhs]->getType() != i64_type) {
+                return nullptr;
+            }
+            value = builder->CreateNeg(values[node.lhs]);
         } else {
             if (node.lhs >= values.size() || node.rhs >= values.size()) {
                 return nullptr;
@@ -4005,6 +4011,20 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 case AOTIntExpressionNodeKind::Mul:
                     value = builder->CreateMul(lhs, rhs);
                     break;
+                case AOTIntExpressionNodeKind::Div: {
+                    auto helper = module.getOrInsertFunction("qore_rt_div_int",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, ptr_type}, false));
+                    value = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+                    break;
+                }
+                case AOTIntExpressionNodeKind::Mod: {
+                    auto helper = module.getOrInsertFunction("qore_rt_mod_int",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, ptr_type}, false));
+                    value = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+                    break;
+                }
                 case AOTIntExpressionNodeKind::And:
                     value = builder->CreateAnd(lhs, rhs);
                     break;
@@ -4013,6 +4033,12 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     break;
                 case AOTIntExpressionNodeKind::Xor:
                     value = builder->CreateXor(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Shl:
+                    value = builder->CreateShl(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Shr:
+                    value = builder->CreateAShr(lhs, rhs);
                     break;
                 case AOTIntExpressionNodeKind::Eq:
                     value = builder->CreateICmpEQ(lhs, rhs);
@@ -4067,6 +4093,7 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 > QORE_AOT_FLOAT_EXPRESSION_MAX_NODES) {
         return nullptr;
     }
+    llvm::Module& module = *builder->GetInsertBlock()->getModule();
     std::vector<llvm::Value*> values;
     values.reserve(info.float_expression.nodes.size());
     for (const auto& node : info.float_expression.nodes) {
@@ -4082,6 +4109,12 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
             }
         } else if (node.kind == AOTFloatExpressionNodeKind::Constant) {
             value = llvm::ConstantFP::get(double_type, node.constant);
+        } else if (node.kind == AOTFloatExpressionNodeKind::Neg) {
+            if (node.lhs >= values.size()
+                    || values[node.lhs]->getType() != double_type) {
+                return nullptr;
+            }
+            value = builder->CreateFNeg(values[node.lhs]);
         } else {
             if (node.lhs >= values.size() || node.rhs >= values.size()) {
                 return nullptr;
@@ -4101,6 +4134,13 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                 case AOTFloatExpressionNodeKind::Mul:
                     value = builder->CreateFMul(lhs, rhs);
                     break;
+                case AOTFloatExpressionNodeKind::Div: {
+                    auto helper = module.getOrInsertFunction("qore_rt_div_float",
+                        llvm::FunctionType::get(double_type,
+                            {double_type, double_type, ptr_type}, false));
+                    value = builder->CreateCall(helper, {lhs, rhs, xsink_arg});
+                    break;
+                }
                 default:
                     return nullptr;
             }

@@ -130,6 +130,11 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     StringContains = 21,
     StringFind = 22,
     StringRFind = 23,
+    Div = 24,
+    Mod = 25,
+    Shl = 26,
+    Shr = 27,
+    Neg = 28,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;
@@ -159,6 +164,8 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     Add = 3,
     Sub = 4,
     Mul = 5,
+    Div = 6,
+    Neg = 7,
 };
 
 constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 16;

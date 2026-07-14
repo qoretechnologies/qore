@@ -52,6 +52,10 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::AddInt:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::MulInt:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShrInt:
         case QoreIROpcode::AndInt:
         case QoreIROpcode::OrInt:
         case QoreIROpcode::XorInt:
@@ -63,6 +67,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::MulFloat:
+        case QoreIROpcode::DivFloat:
         case QoreIROpcode::UnaryMinusFloat:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
             break;

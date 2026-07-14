@@ -55,6 +55,18 @@ float sub divide_float_expr(float a, float b) {
     return a / b;
 }
 
+float sub negate_float_expr(float value) {
+    return -value;
+}
+
+float sub nested_divide_float_expr(float a, float b, float adjustment) {
+    return -divide_float_expr(a, b) + adjustment;
+}
+
+float sub multiple_divide_float_expr(float a, float b, float c) {
+    return a / b + b / c;
+}
+
 int sub string_measure_expr(string value, int adjustment) {
     return value.size() * 3 + value.length() * 5 + adjustment;
 }
@@ -105,6 +117,42 @@ int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
 
 int sub divide_expr(int left, int right) {
     return left / right;
+}
+
+int sub nested_divide_expr(int left, int right, int adjustment) {
+    return divide_expr(left, right) * 3 - -adjustment;
+}
+
+int sub modulo_expr(int left, int right) {
+    return left % right;
+}
+
+int sub constant_shift_expr(int value) {
+    return (value << 3) + (value >> 2);
+}
+
+int sub dynamic_shift_expr(int value, int amount) {
+    return value << amount;
+}
+
+int sub negative_shift_expr(int value) {
+    return value << -1;
+}
+
+int sub wide_shift_expr(int value) {
+    return value >> 64;
+}
+
+int sub negate_expr(int value) {
+    return -value;
+}
+
+int sub multiple_divide_expr(int left, int right) {
+    return left / right + left / (right + 1);
+}
+
+int sub conditional_divide_expr(int left, int right) {
+    return left > 0 ? left / right : right;
 }
 
 int sub side_effect_expr(int value) {
@@ -197,6 +245,45 @@ string sub consumerCode() {
         string_find_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 2, 5),
         string_rfind_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 5),
         string_expression_rejected, encoding_rejected);
+    bool divide_zero = False;
+    try {
+        divide_expr(1, 0);
+    } catch (hash<auto> ex) {
+        divide_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool modulo_zero = False;
+    try {
+        modulo_expr(1, 0);
+    } catch (hash<auto> ex) {
+        modulo_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool float_zero = False;
+    try {
+        divide_float_expr(1.0, 0.0);
+    } catch (hash<auto> ex) {
+        float_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    bool float_negative_zero = False;
+    try {
+        divide_float_expr(1.0, -0.0);
+    } catch (hash<auto> ex) {
+        float_negative_zero = ex.err == \"DIVISION-BY-ZERO\";
+    }
+    printf(\"scalar-expr:%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%.17g:%.17g:%d:%d:%d:%d:%d\\n\",
+        divide_expr(17, 3),
+        nested_divide_expr(17, 3, 4),
+        modulo_expr(17, 5),
+        constant_shift_expr(9),
+        dynamic_shift_expr(9, 3),
+        negate_expr(-17),
+        multiple_divide_expr(24, 3),
+        conditional_divide_expr(24, 3),
+        divide_float_expr(7.0, 2.0),
+        nested_divide_float_expr(7.0, 2.0, 1.25),
+        negate_float_expr(0.0),
+        multiple_divide_float_expr(12.0, 3.0, 2.0),
+        divide_float_expr(1.0, @nan@).nanp(),
+        divide_zero, modulo_zero, float_zero, float_negative_zero);
     return 0;
 }
 ";
@@ -239,7 +326,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"16\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"17\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -248,7 +335,10 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"16\"/)
         || !(provider_index =~ /\"qore_path\": \"nested_compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -265,7 +355,23 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"16\"/)
         || !(provider_index =~ /\"kind\": 22/)
         || !(provider_index =~ /\"kind\": 23/)
         || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
-        || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_divide_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"modulo_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"constant_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"dynamic_shift_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"negative_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"wide_shift_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"negate_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"conditional_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"kind\": 24/)
+        || !(provider_index =~ /\"kind\": 25/)
+        || !(provider_index =~ /\"kind\": 26/)
+        || !(provider_index =~ /\"kind\": 27/)
+        || !(provider_index =~ /\"kind\": 28/)
+        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 6/)
+        || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 7/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
     printf("unexpected integer expression metadata:\n%s", provider_index);

@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub scalarDivScore(int value, int divisor, int adjustment) {
+    return value / divisor + adjustment * 3;
+}
+
+int sub nestedScalarDivScore(int value, int divisor, int adjustment) {
+    return scalarDivScore(value, divisor, adjustment) * 5 - -adjustment;
+}
+
+int sub scalarModScore(int value, int divisor, int adjustment) {
+    return value % divisor + adjustment * 7;
+}
+
+int sub scalarShiftScore(int value, int adjustment) {
+    return (value << 3) + (value >> 2) - adjustment;
+}
+
+int sub scalarNegScore(int value, int adjustment) {
+    return -value + adjustment * 11;
+}
+
+float sub scalarFloatScore(float value, float divisor, float adjustment) {
+    return -(value / divisor) + adjustment * 0.25;
+}
+
+float sub nestedScalarFloatScore(float value, float divisor, float adjustment) {
+    return scalarFloatScore(value, divisor, adjustment) * 0.5 - -adjustment;
+}

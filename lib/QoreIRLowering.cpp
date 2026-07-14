@@ -8660,6 +8660,16 @@ QoreIRValue QoreIRLowering::lowerUnaryMinus(const QoreValue& expr, std::string& 
             op = QoreIROpcode::UnaryMinusFloat;
         }
     }
+    if (op == QoreIROpcode::UnaryMinusAny) {
+        const QoreIRValueFacts* facts = builder.getFunction()->getValueFacts(value);
+        if (facts && facts->assigned_state == QoreIRAssignedState::Assigned && facts->never_nothing) {
+            if (facts->representation == QoreIRValueRepresentation::NativeInt) {
+                op = QoreIROpcode::UnaryMinusInt;
+            } else if (facts->representation == QoreIRValueRepresentation::NativeFloat) {
+                op = QoreIROpcode::UnaryMinusFloat;
+            }
+        }
+    }
     return lowerUnaryOpOrInvoke(op, expr, value, minus->loc, error);
 }
 
