@@ -15655,18 +15655,33 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     QoreIRValue string_join_separator;
     bool root_string_join = false;
-    bool map_only_pipeline = root_foldl && !source_stages.empty();
-    for (size_t i = 0; map_only_pipeline && i < source_stages.size(); ++i) {
+    bool supported_string_join_pipeline = root_foldl && !source_stages.empty();
+    bool filtered_string_join_pipeline = false;
+    for (size_t i = 0; supported_string_join_pipeline && i < source_stages.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused map string join analysis")) {
             error = "fused map string join analysis cancelled";
             return QoreIRValue();
         }
-        map_only_pipeline = source_stages[i].kind == LazyPipelineStage::Map;
+        switch (source_stages[i].kind) {
+            case LazyPipelineStage::Map:
+                break;
+            case LazyPipelineStage::Select:
+            case LazyPipelineStage::MapSelect:
+                filtered_string_join_pipeline = true;
+                break;
+            default:
+                supported_string_join_pipeline = false;
+                break;
+        }
+    }
+    if (filtered_string_join_pipeline
+            && std::getenv("QORE_DISABLE_IR_FUSED_FILTERED_STRING_JOIN")) {
+        supported_string_join_pipeline = false;
     }
     if (root_foldl && !std::getenv("QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN")
             && root.list_element_type
             && QoreTypeInfo::parseReturns(root.list_element_type, NT_STRING) == QTI_IDENT
-            && map_only_pipeline) {
+            && supported_string_join_pipeline) {
         QoreValue separator;
         if (analyzeStringJoinFoldPattern(*root.fold_expr, separator)) {
             string_join_separator = lowerConstant(separator, error);

@@ -55,6 +55,13 @@ auto map_empty_result = (foldl \$1 + \", \" + \$2, (map \$1, empty));
 auto map_singleton_result = (foldl \$1 + \", \" + \$2, (map \$1, singleton));
 auto map_singleton_missing_result = (foldl \$1 + \", \" + \$2, (map \$1, singleton_missing));
 auto map_index_result = (foldl \$1 + \", \" + \$2, (map sprintf(\"%d:%s\", \$#, \$1), regular));
+auto select_map_result = (foldl \$1 + \", \" + \$2,
+    (map sprintf(\"%d:%s\", \$#, \$1), (select regular, \$# % 2 == 0)));
+auto select_first_result = (foldl \$1 + \", \" + \$2, (map \$1, (select regular, \$# > 0)));
+auto select_none_result = (foldl \$1 + \", \" + \$2, (map \$1, (select regular, False)));
+auto select_sparse_result = (foldl \$1 + \", \" + \$2, (map \$1, (select all_missing, \$# % 2 == 0)));
+auto map_select_result = (foldl \$1 + \", \" + \$2, (map sprintf(\"%d:%s\", \$#, \$1),
+    regular, \$# % 2 == 0));
 
 string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
 list<string> mixed = (latin1, \"d\\u00e9j\\u00e0\");
@@ -79,7 +86,7 @@ try {
 }
 
 printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|\"
-    + \"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+    + \"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     regular_result, sparse_result, first_missing_result, all_missing_result,
     exists missing_result ? string(missing_result) : \"NOTHING\",
     exists empty_result ? string(empty_result) : \"NOTHING\",
@@ -95,7 +102,10 @@ printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|\"
     exists map_empty_result ? string(map_empty_result) : \"NOTHING\",
     map_singleton_result,
     exists map_singleton_missing_result ? string(map_singleton_missing_result) : \"NOTHING\",
-    map_index_result, convert_encoding(map_mixed_result, \"UTF-8\"), map_exception);
+    map_index_result, convert_encoding(map_mixed_result, \"UTF-8\"), map_exception,
+    select_map_result, select_first_result,
+    exists select_none_result ? string(select_none_result) : \"NOTHING\",
+    select_sparse_result, map_select_result);
 ";
 
 string script_path = "/tmp/qore-aot-string-fold-join-" + string(getpid()) + ".qr";
@@ -124,7 +134,8 @@ string expected = "alpha, beta, gamma|alpha, , gamma|, beta|, , |NOTHING|NOTHING
     + "optional, value|NOTHING|alpha, beta, gamma|alpha / beta / gamma|caf\u00e9, d\u00e9j\u00e0|"
     + "ISO-8859-1|ENCODING-CONVERSION-ERROR|"
     + "alpha, beta, gamma|, beta|, , |NOTHING|NOTHING|solo|NOTHING|"
-    + "0:alpha, 1:beta, 2:gamma|caf\u00e9, d\u00e9j\u00e0|ENCODING-CONVERSION-ERROR\n";
+    + "0:alpha, 1:beta, 2:gamma|caf\u00e9, d\u00e9j\u00e0|ENCODING-CONVERSION-ERROR|"
+    + "0:alpha, 1:gamma|beta, gamma|NOTHING|, |0:alpha, 2:gamma\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -146,6 +157,7 @@ if (ir_dump !~ /string\.join\.start/ || ir_dump !~ /string\.join\.append/) {
 
 hash<string, string> aot_modes = {
     "-enabled": "",
+    "-filtered-fallback": "QORE_DISABLE_IR_FUSED_FILTERED_STRING_JOIN=1",
     "-fallback": "QORE_DISABLE_IR_FOLDL_STRING_JOIN=1 QORE_DISABLE_IR_FUSED_MAP_STRING_JOIN=1",
 };
 foreach string suffix in (keys aot_modes) {
