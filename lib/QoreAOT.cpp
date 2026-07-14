@@ -1493,6 +1493,7 @@ enum class AOTMetadataCompressionPolicy {
     Auto,
     None,
     Zlib,
+    Zstd,
 };
 
 static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
@@ -1506,9 +1507,12 @@ static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
     if (!strcmp(mode, "zlib") || !strcmp(mode, "on") || !strcmp(mode, "1")) {
         return AOTMetadataCompressionPolicy::Zlib;
     }
+    if (!strcmp(mode, "zstd") || !strcmp(mode, "2")) {
+        return AOTMetadataCompressionPolicy::Zstd;
+    }
 
     if (qccAOTVerbose()) {
-        printf("%signoring invalid QORE_AOT_METADATA_COMPRESSION=%s (expected auto, none, zlib)\n",
+        printf("%signoring invalid QORE_AOT_METADATA_COMPRESSION=%s (expected auto, none, zlib, zstd)\n",
             QCC_LOG_PREFIX, mode);
     }
     return AOTMetadataCompressionPolicy::Auto;
@@ -1537,13 +1541,19 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
     std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
     std::vector<uint8_t> compressed_post;
     std::string compress_error;
-    if (compressMetadata(post_header, compressed_post, compress_error)) {
+    bool use_zstd = policy == AOTMetadataCompressionPolicy::Auto
+        || policy == AOTMetadataCompressionPolicy::Zstd;
+    bool compressed = use_zstd
+        ? compressMetadataZstd(post_header, compressed_post, compress_error)
+        : compressMetadata(post_header, compressed_post, compress_error);
+    if (compressed) {
         int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
         if (report_metadata) {
             printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
                 100.0 * compressed_total / (int)metadata.size());
         }
-        metadata[AOT_HEADER_COMPRESSION_OFFSET] = 1;
+        metadata[AOT_HEADER_COMPRESSION_OFFSET] = use_zstd
+            ? QORE_AOT_COMPRESSION_ZSTD : QORE_AOT_COMPRESSION_ZLIB;
         metadata.resize(AOT_HEADER_BYTES);
         metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
     } else if (report_metadata) {

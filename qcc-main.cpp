@@ -60,6 +60,7 @@
 #include <utime.h>
 #include <unistd.h>
 #include <zlib.h>
+#include <zstd.h>
 
 #include <llvm/Object/Binary.h>
 #include <llvm/Object/ObjectFile.h>
@@ -912,7 +913,7 @@ static void print_usage(const char* prog) {
     printf("      --include-source   Embed source text in AOT metadata\n");
     printf("      --strip-source     Strip source text (default)\n");
     printf("      --aot-metadata-compression=MODE\n"
-           "                         Metadata compression policy: auto, none, zlib\n"
+           "                         Metadata compression policy: auto, none, zlib, zstd\n"
            "                         (default: auto)\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");
@@ -1134,9 +1135,10 @@ static int parse_options_cmdline(int argc, char** argv) {
                 save_temps = true;
                 break;
             case 0x109:  // --aot-metadata-compression
-                if (strcmp(optarg, "auto") && strcmp(optarg, "none") && strcmp(optarg, "zlib")) {
+                if (strcmp(optarg, "auto") && strcmp(optarg, "none")
+                        && strcmp(optarg, "zlib") && strcmp(optarg, "zstd")) {
                     fprintf(stderr, "error: invalid --aot-metadata-compression value '%s' "
-                        "(must be auto, none, or zlib)\n", optarg);
+                        "(must be auto, none, zlib, or zstd)\n", optarg);
                     return 1;
                 }
                 metadata_compression = optarg;
@@ -1317,7 +1319,7 @@ static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& 
     }
 
     uint8_t compression = data[34];
-    if (compression == 0) {
+    if (compression == QORE_AOT_COMPRESSION_NONE) {
         uint32_t section_count = read_u32_le(data + 16);
         if (section_count > 100000) {
             return false;
@@ -1352,7 +1354,7 @@ static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& 
         return true;
     }
 
-    if (compression == 1) {
+    if (compression == QORE_AOT_COMPRESSION_ZLIB) {
         if (avail < QORE_AOT_HEADER_SIZE + 4) {
             return false;
         }
@@ -1385,6 +1387,28 @@ static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& 
             return false;
         }
         len = QORE_AOT_HEADER_SIZE + 4 + consumed;
+        return len <= avail;
+    }
+
+    if (compression == QORE_AOT_COMPRESSION_ZSTD) {
+        if (avail < QORE_AOT_HEADER_SIZE + 4) {
+            return false;
+        }
+        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
+        if (uncompressed_size > 100 * 1024 * 1024) {
+            return false;
+        }
+        if (!uncompressed_size) {
+            len = QORE_AOT_HEADER_SIZE + 4;
+            return true;
+        }
+        const uint8_t* frame = data + QORE_AOT_HEADER_SIZE + 4;
+        size_t frame_size = ZSTD_findFrameCompressedSize(frame,
+            avail - QORE_AOT_HEADER_SIZE - 4);
+        if (ZSTD_isError(frame_size)) {
+            return false;
+        }
+        len = QORE_AOT_HEADER_SIZE + 4 + frame_size;
         return len <= avail;
     }
 
@@ -3360,7 +3384,13 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     const QoreAOTBinaryHeader& hdr = reader.getHeader();
     const char* label = reader.getLabel();
     printf("  AOT metadata #%zu (%s):\n", index, blob.source.c_str());
-    printf("    size: %zu bytes%s\n", blob.bytes.size(), hdr.compression ? " compressed" : "");
+    const char* compression_name = hdr.compression == QORE_AOT_COMPRESSION_ZSTD ? "zstd"
+        : (hdr.compression == QORE_AOT_COMPRESSION_ZLIB ? "zlib" : nullptr);
+    printf("    size: %zu bytes%s", blob.bytes.size(), compression_name ? " compressed" : "");
+    if (compression_name) {
+        printf(" (%s)", compression_name);
+    }
+    printf("\n");
     printf("    label: %s\n", label ? label : "");
     printf("    kind:%s%s\n",
         (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",

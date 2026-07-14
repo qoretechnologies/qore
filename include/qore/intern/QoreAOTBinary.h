@@ -130,8 +130,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
 //! v10: callable generic type-parameter declarations are preserved in variant signatures
 //! v11: all serialized source line numbers use signed 32-bit values
+//! v12: Zstandard metadata compression is supported and used by default
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 11;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 12;
+
+constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
+constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
+constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
 
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
@@ -551,7 +556,7 @@ struct QoreAOTBinaryHeader {
     uint8_t qore_version_major;  //!< Qore version major that compiled this binary
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
-    uint8_t compression;         //!< compression method (0=none, 1=zlib)
+    uint8_t compression;         //!< QORE_AOT_COMPRESSION_* value
     uint8_t reserved;            //!< reserved for future use (must be 0)
     int64_t parse_options_hi;    //!< high 64 bits of parse options (64-127)
     uint64_t source_hash;        //!< xxHash64 of source file bytes (0 = not set)
@@ -3379,6 +3384,11 @@ bool compressMetadata(const std::vector<uint8_t>& input,
     std::vector<uint8_t>& output,
     std::string& error);
 
+//! Compress metadata using Zstandard
+bool compressMetadataZstd(const std::vector<uint8_t>& input,
+    std::vector<uint8_t>& output,
+    std::string& error);
+
 //! Decompress metadata blob using zlib
 /** Decompresses metadata previously compressed by compressMetadata().
 
@@ -3389,6 +3399,11 @@ bool compressMetadata(const std::vector<uint8_t>& input,
     @return true on success, false on decompression failure
 */
 bool decompressMetadata(const uint8_t* input, size_t input_len,
+    std::vector<uint8_t>& output,
+    std::string& error);
+
+//! Decompress metadata encoded by compressMetadataZstd()
+bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
     std::vector<uint8_t>& output,
     std::string& error);
 

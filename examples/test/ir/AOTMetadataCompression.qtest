@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+string source_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + ".qr";
+{
+    File source();
+    source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+    source.write("%modern\nprintf(\"compression-ok\\n\");\n");
+}
+
+foreach string mode in ("auto", "zstd", "zlib", "none") {
+    string exe_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + "-" + mode;
+    string compile_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s --aot-metadata-compression=%s -O3 -o %s %s 2>&1",
+        libqore_dir, qcc_bin, mode, exe_path, source_path));
+    if (!is_file(exe_path)) {
+        printf("%s metadata compilation failed:\n%s", mode, compile_out);
+        unlink(source_path);
+        exit(2);
+    }
+
+    string execution_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, exe_path));
+    if (execution_out != "compression-ok\n") {
+        printf("%s metadata execution mismatch:\n%s", mode, execution_out);
+        unlink(source_path);
+        unlink(exe_path);
+        exit(2);
+    }
+
+    string dump_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-info %s 2>&1",
+        libqore_dir, qcc_bin, exe_path));
+    bool expected_compression = mode == "none"
+        ? !(dump_out =~ /bytes compressed/)
+        : (mode == "zlib"
+            ? dump_out =~ /bytes compressed \(zlib\)/
+            : dump_out =~ /bytes compressed \(zstd\)/);
+    if (!expected_compression) {
+        printf("%s metadata dump mismatch:\n%s", mode, dump_out);
+        unlink(source_path);
+        unlink(exe_path);
+        exit(2);
+    }
+    unlink(exe_path);
+}
+
+unlink(source_path);

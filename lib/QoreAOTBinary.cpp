@@ -169,6 +169,7 @@
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
+#include <zstd.h>
 
 static thread_local std::string qore_aot_expr_serialization_error;
 
@@ -3607,8 +3608,8 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         return false;
     }
 
-    // Readers accept the previous format so installed version-9 qmods remain
-    // usable while version 10 adds callable type-parameter metadata.
+    // Keep the supported version range broad enough for installed qmods from
+    // earlier releases while rejecting artifacts newer than this runtime.
     if (header.version < QORE_AOT_BINARY_MIN_VERSION
             || header.version > QORE_AOT_BINARY_VERSION) {
         error = "unsupported binary format version " + std::to_string(header.version)
@@ -3633,11 +3634,15 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
 
     // Handle decompression if needed (before reading section directory and string pool)
     // When compressed, the entire post-header region is compressed
-    if (header.compression == 1) {
+    if (header.compression == QORE_AOT_COMPRESSION_ZLIB
+            || header.compression == QORE_AOT_COMPRESSION_ZSTD) {
         const uint8_t* compressed_start = data + header_size;
         size_t compressed_len = in_size - header_size;
         std::string decomp_error;
-        if (!decompressMetadata(compressed_start, compressed_len, decompressed_body, decomp_error)) {
+        bool decompressed = header.compression == QORE_AOT_COMPRESSION_ZSTD
+            ? decompressMetadataZstd(compressed_start, compressed_len, decompressed_body, decomp_error)
+            : decompressMetadata(compressed_start, compressed_len, decompressed_body, decomp_error);
+        if (!decompressed) {
             error = "failed to decompress metadata: " + decomp_error;
             return false;
         }
@@ -3647,6 +3652,9 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         data = decompressed_body.data();
         total_size = static_cast<uint32_t>(decompressed_body.size());
         ptr = data;  // Reset ptr to start of decompressed data (start of section directory)
+    } else if (header.compression != QORE_AOT_COMPRESSION_NONE) {
+        error = "unsupported metadata compression method " + std::to_string(header.compression);
+        return false;
     }
 
     // Read section directory
@@ -18369,6 +18377,43 @@ bool compressMetadata(const std::vector<uint8_t>& input,
     return true;
 }
 
+bool compressMetadataZstd(const std::vector<uint8_t>& input,
+        std::vector<uint8_t>& output,
+        std::string& error) {
+    if (input.size() > UINT32_MAX) {
+        error = "metadata is too large for the binary format";
+        return false;
+    }
+
+    uint32_t orig_size = static_cast<uint32_t>(input.size());
+    if (!orig_size) {
+        output.assign(4, 0);
+        return true;
+    }
+
+    size_t bound = ZSTD_compressBound(input.size());
+    if (ZSTD_isError(bound) || bound > SIZE_MAX - 4) {
+        error = "cannot allocate Zstandard metadata compression buffer";
+        return false;
+    }
+    output.resize(4 + bound);
+    output[0] = static_cast<uint8_t>(orig_size & 0xFF);
+    output[1] = static_cast<uint8_t>((orig_size >> 8) & 0xFF);
+    output[2] = static_cast<uint8_t>((orig_size >> 16) & 0xFF);
+    output[3] = static_cast<uint8_t>((orig_size >> 24) & 0xFF);
+
+    size_t compressed_size = ZSTD_compress(output.data() + 4, bound,
+        input.data(), input.size(), ZSTD_CLEVEL_DEFAULT);
+    if (ZSTD_isError(compressed_size)) {
+        error = "Zstandard compression failed: ";
+        error += ZSTD_getErrorName(compressed_size);
+        output.clear();
+        return false;
+    }
+    output.resize(4 + compressed_size);
+    return true;
+}
+
 bool decompressMetadata(const uint8_t* input, size_t input_len,
         std::vector<uint8_t>& output,
         std::string& error) {
@@ -18417,5 +18462,47 @@ bool decompressMetadata(const uint8_t* input, size_t input_len,
         return false;
     }
 
+    return true;
+}
+
+bool decompressMetadataZstd(const uint8_t* input, size_t input_len,
+        std::vector<uint8_t>& output,
+        std::string& error) {
+    if (input_len < 4) {
+        error = "compressed metadata too short (need at least 4 bytes for size prefix)";
+        return false;
+    }
+
+    uint32_t orig_size = static_cast<uint32_t>(input[0])
+        | (static_cast<uint32_t>(input[1]) << 8)
+        | (static_cast<uint32_t>(input[2]) << 16)
+        | (static_cast<uint32_t>(input[3]) << 24);
+    if (!orig_size) {
+        output.clear();
+        return true;
+    }
+
+    static constexpr size_t MAX_DECOMPRESSED = 100 * 1024 * 1024;
+    if (orig_size > MAX_DECOMPRESSED) {
+        error = "decompressed metadata size " + std::to_string(orig_size)
+            + " exceeds maximum allowed (" + std::to_string(MAX_DECOMPRESSED) + " bytes)";
+        return false;
+    }
+
+    output.resize(orig_size);
+    size_t decompressed_size = ZSTD_decompress(output.data(), output.size(),
+        input + 4, input_len - 4);
+    if (ZSTD_isError(decompressed_size)) {
+        error = "Zstandard decompression failed: ";
+        error += ZSTD_getErrorName(decompressed_size);
+        output.clear();
+        return false;
+    }
+    if (decompressed_size != orig_size) {
+        error = "decompressed size " + std::to_string(decompressed_size)
+            + " does not match expected size " + std::to_string(orig_size);
+        output.clear();
+        return false;
+    }
     return true;
 }

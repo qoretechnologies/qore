@@ -2624,7 +2624,8 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
-target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+target_include_directories(qcc PRIVATE ${ZSTD_INCLUDE_DIRS} ${ZSTD_INCLUDE_DIR})
+target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${ZSTD_LIBRARIES} ${ZSTD_LIBRARY} ${CMAKE_DL_LIBS})
 target_compile_definitions(qcc PRIVATE
     QORE_QCC_SOURCE_INCLUDE_DIR="${CMAKE_SOURCE_DIR}/include"
     QORE_QCC_BUILD_INCLUDE_DIR="${CMAKE_BINARY_DIR}/include"
