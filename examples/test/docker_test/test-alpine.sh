@@ -47,6 +47,10 @@ if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
     NEED_RELEASE_BUILD=0
 fi
 
+# jemalloc: libqore links it in place of musl's allocator on musl targets (see CMakeLists.txt)
+echo "-- ensuring jemalloc is installed --"
+apk add --no-cache jemalloc-dev jemalloc-static
+
 # ensure LLVM static libraries are installed (needed for JIT/AOT linking)
 # Alpine splits static libs into -static and -gtest packages
 echo "-- ensuring LLVM static libraries --"

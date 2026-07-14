@@ -912,6 +912,41 @@ endif()
 # Always defined since lz4 is now required
 set(HAVE_LZ4 TRUE)
 
+# musl's allocator (mallocng) releases freed memory to the kernel almost immediately, so allocation-heavy
+# workloads - above all LLVM, which every AOT compilation runs - spend most of their time in mmap/munmap/madvise
+# and page faults instead of in user code; an AOT batch that takes 12s with glibc takes 60s on musl, 165s of it
+# in the kernel.  jemalloc restores parity (11s, 0.6s system time) at the same peak RSS, so every musl build of
+# libqore links it in statically.
+#
+# it has to be linked into libqore itself and not just added as a DT_NEEDED dependency: musl resolves symbols
+# breadth-first, so libc is reached before any second-level dependency of libqore and keeps ownership of malloc.
+# libqore precedes libc in the DT_NEEDED list of every binary that links it, so when libqore defines malloc, that
+# definition is the one the whole process uses.
+OPTION(QORE_DISABLE_JEMALLOC "do not link jemalloc into libqore on musl targets" OFF)
+set(QORE_MUSL FALSE)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine
+        OUTPUT_VARIABLE QORE_TARGET_TRIPLE OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if (QORE_TARGET_TRIPLE MATCHES "musl")
+        set(QORE_MUSL TRUE)
+    endif()
+endif()
+
+set(QORE_JEMALLOC_LIBRARY)
+if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
+    # the PIC archive is the only one that can be linked into a shared library
+    find_library(QORE_JEMALLOC_STATIC_LIBRARY NAMES jemalloc_pic)
+    if (QORE_JEMALLOC_STATIC_LIBRARY)
+        message(STATUS "Found jemalloc (musl target): ${QORE_JEMALLOC_STATIC_LIBRARY}")
+        set(QORE_JEMALLOC_LIBRARY ${QORE_JEMALLOC_STATIC_LIBRARY})
+    else()
+        message(FATAL_ERROR "jemalloc is required on musl targets; libqore links it in place of musl's allocator, "
+            "which is several times slower for the allocation patterns of LLVM and therefore of AOT compilation.  "
+            "Install it (Alpine: apk add jemalloc-static jemalloc-dev), or configure with "
+            "-DQORE_DISABLE_JEMALLOC=ON to build against musl's allocator anyway.")
+    endif()
+endif()
+
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)
@@ -2314,6 +2349,16 @@ string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
+
+# link jemalloc ahead of everything else and with --whole-archive, so that libqore exports the complete allocator
+# API (malloc/free/realloc/posix_memalign/operator new/... ) and not just the members that satisfy its own
+# undefined symbols; a partially-exported allocator would let some allocations reach musl's malloc while their
+# frees reach jemalloc's
+if (QORE_JEMALLOC_LIBRARY)
+    set_property(TARGET libqore APPEND_STRING PROPERTY LINK_FLAGS
+        " -Wl,--whole-archive ${QORE_JEMALLOC_LIBRARY} -Wl,--no-whole-archive")
+endif()
+
 # Link LLVM libraries by explicit library path when available so installed
 # binaries do not inherit LLVM development directories in their RUNPATH.
 # Otherwise fall back to the imported LLVM target.

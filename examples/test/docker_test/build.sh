@@ -88,6 +88,12 @@ if ! pkg-config --exists libutf8proc 2>/dev/null \
     fi
 fi
 
+# jemalloc: on musl targets libqore links it in place of musl's allocator (see CMakeLists.txt)
+if command -v apk > /dev/null 2>&1 && [ ! -f /usr/lib/libjemalloc_pic.a ]; then
+    echo && echo "-- installing jemalloc development files --"
+    apk add --no-cache jemalloc-dev jemalloc-static
+fi
+
 # install tree-sitter CLI for astparser module build
 if ! command -v tree-sitter > /dev/null 2>&1; then
     echo && echo "-- installing tree-sitter CLI --"
