@@ -707,7 +707,11 @@ enum class QoreIROpcode : uint16_t {
     TypedForeachNextBool = 389,
     TypedForeachNextString = 390,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (391, 392, ...)
+    //! Fuse map-by-constant-offset with a sum fold without materializing the mapped list.
+    FusedMapFoldlSumOffsetInt = 391,
+    FusedMapFoldlSumOffsetFloat = 392,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (393, 394, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -715,8 +719,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::TypedForeachNextString);
-static_assert(QORE_IR_MAX_OPCODE == 390, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::FusedMapFoldlSumOffsetFloat);
+static_assert(QORE_IR_MAX_OPCODE == 392, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

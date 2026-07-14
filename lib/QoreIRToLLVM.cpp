@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 390,
+static_assert(QORE_IR_MAX_OPCODE == 392,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -18240,7 +18240,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // foldl $1 + $2, (map $1 * c, list) -> sum(list[i] * c)
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_sum_scale", false, false, false, error);
+                        "fused_sum_scale", false, false, FusedMapMode::Scale, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             auto* scale = getVal(inst->operands[1].id, error);
@@ -18258,7 +18258,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::FusedMapFoldlSumScaleFloat: {
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_sum_scalef", true, false, false, error);
+                        "fused_sum_scalef", true, false, FusedMapMode::Scale, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             auto* scale = getVal(inst->operands[1].id, error);
@@ -18277,7 +18277,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // foldl $1 + $2, (map $1 * $1, list) -> sum(list[i]^2)
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_sum_square", false, false, true, error);
+                        "fused_sum_square", false, false, FusedMapMode::Square, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
@@ -18293,7 +18293,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::FusedMapFoldlSumSquareFloat: {
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_sum_squaref", true, false, true, error);
+                        "fused_sum_squaref", true, false, FusedMapMode::Square, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             if (!list) { return false; }
@@ -18310,7 +18310,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // foldl $1 * $2, (map $1 * c, list) -> prod(list[i] * c)
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_prod_scale", false, true, false, error);
+                        "fused_prod_scale", false, true, FusedMapMode::Scale, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             auto* scale = getVal(inst->operands[1].id, error);
@@ -18328,7 +18328,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::FusedMapFoldlProdScaleFloat: {
             if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
                 return emitFusedMapFoldLoop(inst, module, llvm_func,
-                        "fused_prod_scalef", true, true, false, error);
+                        "fused_prod_scalef", true, true, FusedMapMode::Scale, error);
             }
             auto* list = getVal(inst->operands[0].id, error);
             auto* scale = getVal(inst->operands[1].id, error);
@@ -18338,6 +18338,42 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_prod_scale_float_checked",
                     llvm::FunctionType::get(i64_type, {i64_type, double_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, scale_float, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlSumOffsetInt: {
+            if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
+                return emitFusedMapFoldLoop(inst, module, llvm_func,
+                        "fused_sum_offset", false, false, FusedMapMode::Offset, error);
+            }
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_int = ensureIntTypeInline(offset, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_offset_int_checked",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::FusedMapFoldlSumOffsetFloat: {
+            if (aot_mode && !std::getenv("QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS")) {
+                return emitFusedMapFoldLoop(inst, module, llvm_func,
+                        "fused_sum_offsetf", true, false, FusedMapMode::Offset, error);
+            }
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_float = ensureFloatType(offset, inst->operands[1].id, module);
+            auto helper = module.getOrInsertFunction("qore_rt_fused_map_foldl_sum_offset_float_checked",
+                    llvm::FunctionType::get(i64_type, {i64_type, double_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, offset_float, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
@@ -21627,21 +21663,21 @@ bool QoreIRToLLVM::emitFoldReverseLoop(const QoreIRInstruction* inst, llvm::Modu
 
 bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Module& module,
         llvm::Function* llvm_func, const char* label, bool is_float,
-        bool product, bool square, std::string& error) {
+        bool product, FusedMapMode map_mode, std::string& error) {
     auto* list = getVal(inst->operands[0].id, error);
     if (!list) {
         return false;
     }
     llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-    llvm::Value* scale = nullptr;
-    if (!square) {
-        scale = getVal(inst->operands[1].id, error);
-        if (!scale) {
+    llvm::Value* map_constant = nullptr;
+    if (map_mode != FusedMapMode::Square) {
+        map_constant = getVal(inst->operands[1].id, error);
+        if (!map_constant) {
             return false;
         }
-        scale = is_float
-            ? ensureFloatTypeInline(scale, inst->operands[1].id, module)
-            : ensureIntTypeInline(scale, inst->operands[1].id);
+        map_constant = is_float
+            ? ensureFloatTypeInline(map_constant, inst->operands[1].id, module)
+            : ensureIntTypeInline(map_constant, inst->operands[1].id);
     }
 
     auto size_helper = module.getOrInsertFunction("qore_rt_list_size",
@@ -21680,7 +21716,30 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
         data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
     }
     llvm::Value* data = builder->CreateCall(data_helper, {list_boxed}, "fold_data");
-    builder->CreateBr(loop_bb);
+    llvm::Value* first_boxed = builder->CreateLoad(i64_type, data);
+
+    // Exact typed lists can still contain NOTHING in sparse or unassigned slots.
+    // Reuse the normal boxed conversion path so those values retain Qore semantics.
+    nanboxed_values.insert(inst->result.id);
+    llvm::Value* first_elem = is_float
+        ? ensureFloatTypeInline(first_boxed, inst->result.id, module)
+        : ensureIntTypeInline(first_boxed, inst->result.id);
+    llvm::Value* first_mapped;
+    if (map_mode == FusedMapMode::Square) {
+        first_mapped = is_float
+            ? builder->CreateFMul(first_elem, first_elem)
+            : builder->CreateMul(first_elem, first_elem);
+    } else if (map_mode == FusedMapMode::Offset) {
+        first_mapped = is_float
+            ? builder->CreateFAdd(first_elem, map_constant)
+            : builder->CreateAdd(first_elem, map_constant);
+    } else {
+        first_mapped = is_float
+            ? builder->CreateFMul(first_elem, map_constant)
+            : builder->CreateMul(first_elem, map_constant);
+    }
+    llvm::BasicBlock* init_end = builder->GetInsertBlock();
+    builder->CreateCondBr(builder->CreateICmpEQ(size, one), box_bb, loop_bb);
 
     builder->SetInsertPoint(loop_bb);
     llvm::Type* elem_type = is_float ? double_type : i64_type;
@@ -21707,17 +21766,20 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_phi);
     llvm::Value* boxed = builder->CreateLoad(i64_type, entry);
 
-    // Exact typed lists can still contain NOTHING in sparse or unassigned slots.
-    // Reuse the normal boxed conversion path so those values retain Qore semantics.
-    nanboxed_values.insert(inst->result.id);
     llvm::Value* elem = is_float
         ? ensureFloatTypeInline(boxed, inst->result.id, module)
         : ensureIntTypeInline(boxed, inst->result.id);
     llvm::Value* mapped;
-    if (square) {
+    if (map_mode == FusedMapMode::Square) {
         mapped = is_float ? builder->CreateFMul(elem, elem) : builder->CreateMul(elem, elem);
+    } else if (map_mode == FusedMapMode::Offset) {
+        mapped = is_float
+            ? builder->CreateFAdd(elem, map_constant)
+            : builder->CreateAdd(elem, map_constant);
     } else {
-        mapped = is_float ? builder->CreateFMul(elem, scale) : builder->CreateMul(elem, scale);
+        mapped = is_float
+            ? builder->CreateFMul(elem, map_constant)
+            : builder->CreateMul(elem, map_constant);
     }
     llvm::Value* next_acc;
     if (product) {
@@ -21730,18 +21792,19 @@ bool QoreIRToLLVM::emitFusedMapFoldLoop(const QoreIRInstruction* inst, llvm::Mod
     llvm::BasicBlock* loop_end = builder->GetInsertBlock();
     builder->CreateCondBr(done, box_bb, loop_bb);
 
-    idx_phi->addIncoming(zero, init_bb);
+    idx_phi->addIncoming(one, init_end);
     idx_phi->addIncoming(next_idx, loop_end);
-    llvm::Value* identity = is_float
-        ? static_cast<llvm::Value*>(llvm::ConstantFP::get(double_type, product ? 1.0 : 0.0))
-        : static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, product ? 1 : 0));
-    acc_phi->addIncoming(identity, init_bb);
+    acc_phi->addIncoming(first_mapped, init_end);
     acc_phi->addIncoming(next_acc, loop_end);
-    checkpoint_phi->addIncoming(checkpoint_interval, init_bb);
+    checkpoint_phi->addIncoming(checkpoint_interval, init_end);
     checkpoint_phi->addIncoming(load_checkpoint, loop_end);
 
     builder->SetInsertPoint(box_bb);
-    llvm::Value* boxed_result = is_float ? boxFloat(next_acc) : boxIntInline(next_acc);
+    llvm::PHINode* final_acc = builder->CreatePHI(elem_type, 2,
+            std::string(label) + "_acc");
+    final_acc->addIncoming(first_mapped, init_end);
+    final_acc->addIncoming(next_acc, loop_end);
+    llvm::Value* boxed_result = is_float ? boxFloat(final_acc) : boxIntInline(final_acc);
     llvm::BasicBlock* box_end = builder->GetInsertBlock();
     builder->CreateBr(exit_bb);
 

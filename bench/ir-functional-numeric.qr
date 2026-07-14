@@ -61,6 +61,22 @@ float sub fusedSumScaleFloat(list<float> data, int rounds) {
     return checksum;
 }
 
+int sub fusedSumOffsetInt(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 + 3, data));
+    }
+    return checksum;
+}
+
+float sub fusedSumOffsetFloat(list<float> data, int rounds) {
+    float checksum = 0.0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += (foldl $1 + $2, (map $1 + 3.0, data));
+    }
+    return checksum;
+}
+
 float sub fusedSumSquareFloat(list<float> data, int rounds) {
     float checksum = 0.0;
     for (int i = 0; i < rounds; ++i) {
@@ -103,8 +119,10 @@ int sub selectPositiveInt(list<int> data, int rounds) {
     return checksum;
 }
 
-string kernel = ARGV.size() ? ARGV[0] : "fold-sum-int";
-int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 20000;
+string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
+int rounds = ENV.QORE_BENCH_ROUNDS
+    ? ENV.QORE_BENCH_ROUNDS.toInt()
+    : (ARGV.size() > 1 ? ARGV[1].toInt() : 20000);
 
 switch (kernel) {
     case "fold-sum-int":
@@ -121,6 +139,12 @@ switch (kernel) {
         break;
     case "fused-sum-scale-float":
         printf("%.1f\n", fusedSumScaleFloat(makeFloatData(), rounds));
+        break;
+    case "fused-sum-offset-int":
+        printf("%d\n", fusedSumOffsetInt(makeIntData(), rounds));
+        break;
+    case "fused-sum-offset-float":
+        printf("%.1f\n", fusedSumOffsetFloat(makeFloatData(), rounds));
         break;
     case "fused-sum-square-float":
         printf("%.1f\n", fusedSumSquareFloat(makeFloatData(), rounds));

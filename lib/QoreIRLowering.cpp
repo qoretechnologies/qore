@@ -12617,8 +12617,11 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
                     || map_opcode == QoreIROpcode::MapScaleFloat;
                 bool square = map_opcode == QoreIROpcode::MapSquareInt
                     || map_opcode == QoreIROpcode::MapSquareFloat;
+                bool offset = map_opcode == QoreIROpcode::MapOffsetInt
+                    || map_opcode == QoreIROpcode::MapOffsetFloat;
+                bool offset_enabled = !std::getenv("QORE_DISABLE_IR_FUSED_SUM_OFFSET");
                 specialized_map_fold = exact_list_source
-                    && ((sum && (scale || square)) || (product && scale));
+                    && ((sum && (scale || square || (offset && offset_enabled))) || (product && scale));
             }
         }
         if (!source_stages.empty() && !specialized_map_fold) {
@@ -12649,7 +12652,7 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
             QoreValue map_constant_val;
             QoreIROpcode map_opcode = analyzeMapPattern(inner_map->getLeft(), map_result_type, map_constant_val);
 
-            // Only fuse for scale ($1 * c) or square ($1 * $1) patterns with sum
+            // Only fuse patterns with direct single-pass implementations.
             QoreIROpcode fused_opcode = QoreIROpcode::FoldlAny;
             bool needs_constant = true;
 
@@ -12660,7 +12663,8 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
             bool is_float = (opt_opcode == QoreIROpcode::FoldlSumFloat ||
                             opt_opcode == QoreIROpcode::FoldlProdFloat ||
                             map_opcode == QoreIROpcode::MapScaleFloat ||
-                            map_opcode == QoreIROpcode::MapSquareFloat);
+                            map_opcode == QoreIROpcode::MapSquareFloat ||
+                            map_opcode == QoreIROpcode::MapOffsetFloat);
 
             // If opcodes don't indicate float, check element type as additional validation
             if (!is_float) {
@@ -12685,6 +12689,11 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
                     fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumSquareFloat
                                            : QoreIROpcode::FusedMapFoldlSumSquareInt;
                     needs_constant = false;
+                } else if (!std::getenv("QORE_DISABLE_IR_FUSED_SUM_OFFSET")
+                        && (map_opcode == QoreIROpcode::MapOffsetInt
+                            || map_opcode == QoreIROpcode::MapOffsetFloat)) {
+                    fused_opcode = is_float ? QoreIROpcode::FusedMapFoldlSumOffsetFloat
+                                           : QoreIROpcode::FusedMapFoldlSumOffsetInt;
                 }
             } else if (opt_opcode == QoreIROpcode::FoldlProdInt || opt_opcode == QoreIROpcode::FoldlProdFloat) {
                 // foldl $1 * $2, (map ..., list)

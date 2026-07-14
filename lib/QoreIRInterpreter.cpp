@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 390,
+static_assert(QORE_IR_MAX_OPCODE == 392,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4373,6 +4373,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FusedMapFoldlSumSquareFloat:
         case QoreIROpcode::FusedMapFoldlProdScaleInt:
         case QoreIROpcode::FusedMapFoldlProdScaleFloat:
+        case QoreIROpcode::FusedMapFoldlSumOffsetInt:
+        case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -11570,6 +11572,8 @@ load_local_done:
             case QoreIROpcode::FusedMapFoldlSumSquareFloat:
             case QoreIROpcode::FusedMapFoldlProdScaleInt:
             case QoreIROpcode::FusedMapFoldlProdScaleFloat:
+            case QoreIROpcode::FusedMapFoldlSumOffsetInt:
+            case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -15993,8 +15997,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return QoreValue();
             }
             int64_t scale = right.getAsBigInt();
-            int64_t result = 0;
-            for (size_t i = 0; i < sz; ++i) {
+            int64_t result = l->retrieveEntry(0).getAsBigInt() * scale;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl sum-scale int")) {
                     return QoreValue();
@@ -16013,8 +16017,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return QoreValue();
             }
             double scale = right.getAsFloat();
-            double result = 0.0;
-            for (size_t i = 0; i < sz; ++i) {
+            double result = l->retrieveEntry(0).getAsFloat() * scale;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl sum-scale float")) {
                     return QoreValue();
@@ -16034,8 +16038,9 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return QoreValue();
             }
-            int64_t result = 0;
-            for (size_t i = 0; i < sz; ++i) {
+            int64_t first = l->retrieveEntry(0).getAsBigInt();
+            int64_t result = first * first;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl sum-square int")) {
                     return QoreValue();
@@ -16054,8 +16059,9 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (sz == 0) {
                 return QoreValue();
             }
-            double result = 0.0;
-            for (size_t i = 0; i < sz; ++i) {
+            double first = l->retrieveEntry(0).getAsFloat();
+            double result = first * first;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl sum-square float")) {
                     return QoreValue();
@@ -16077,8 +16083,8 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return QoreValue();
             }
             int64_t scale = right.getAsBigInt();
-            int64_t result = 1;
-            for (size_t i = 0; i < sz; ++i) {
+            int64_t result = l->retrieveEntry(0).getAsBigInt() * scale;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl prod-scale int")) {
                     return QoreValue();
@@ -16097,13 +16103,53 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return QoreValue();
             }
             double scale = right.getAsFloat();
-            double result = 1.0;
-            for (size_t i = 0; i < sz; ++i) {
+            double result = l->retrieveEntry(0).getAsFloat() * scale;
+            for (size_t i = 1; i < sz; ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink,
                         "fused map/foldl prod-scale float")) {
                     return QoreValue();
                 }
                 result *= l->retrieveEntry(i).getAsFloat() * scale;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlSumOffsetInt: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue();
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue();
+            }
+            int64_t offset = right.getAsBigInt();
+            int64_t result = l->retrieveEntry(0).getAsBigInt() + offset;
+            for (size_t i = 1; i < sz; ++i) {
+                if (!(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-offset int")) {
+                    return QoreValue();
+                }
+                result += l->retrieveEntry(i).getAsBigInt() + offset;
+            }
+            return QoreValue(result);
+        }
+        case QoreIROpcode::FusedMapFoldlSumOffsetFloat: {
+            if (left.getType() != NT_LIST) {
+                return QoreValue();
+            }
+            const QoreListNode* l = left.get<const QoreListNode>();
+            size_t sz = l->size();
+            if (sz == 0) {
+                return QoreValue();
+            }
+            double offset = right.getAsFloat();
+            double result = l->retrieveEntry(0).getAsFloat() + offset;
+            for (size_t i = 1; i < sz; ++i) {
+                if (!(i % 100) && qore_check_cancel(xsink,
+                        "fused map/foldl sum-offset float")) {
+                    return QoreValue();
+                }
+                result += l->retrieveEntry(i).getAsFloat() + offset;
             }
             return QoreValue(result);
         }

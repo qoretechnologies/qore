@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[391] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[393] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -291,12 +291,12 @@ constexpr OpcodeInfo OPCODE_REGISTRY[391] = {
     { "FusedMapSelectOffsetPositiveFloat", false, false, false,  2, "FusedMapSelectOffsetPositiveFloat", false, true , "ParseNode", true , false, false, false, false }, // 230
     { "FusedMapSelectSquarePositiveInt", false, false, false,  2, "FusedMapSelectSquarePositiveInt", false, true , "ParseNode", true , false, false, false, false }, // 231
     { "FusedMapSelectSquarePositiveFloat", false, false, false,  2, "FusedMapSelectSquarePositiveFloat", false, true , "ParseNode", true , false, false, false, false }, // 232
-    { "FusedMapFoldlSumScaleInt"      , false, false, false,  2, "FusedMapFoldlSumScaleInt", false, true , "ParseNode", true , false, true , false, true  }, // 233
-    { "FusedMapFoldlSumScaleFloat"    , false, false, false,  2, "FusedMapFoldlSumScaleFloat", false, true , "ParseNode", true , false, true , false, true  }, // 234
-    { "FusedMapFoldlSumSquareInt"     , false, false, false,  2, "FusedMapFoldlSumSquareInt", false, true , "ParseNode", true , false, true , false, true  }, // 235
-    { "FusedMapFoldlSumSquareFloat"   , false, false, false,  2, "FusedMapFoldlSumSquareFloat", false, true , "ParseNode", true , false, true , false, true  }, // 236
-    { "FusedMapFoldlProdScaleInt"     , false, false, false,  2, "FusedMapFoldlProdScaleInt", false, true , "ParseNode", true , false, true , false, true  }, // 237
-    { "FusedMapFoldlProdScaleFloat"   , false, false, false,  2, "FusedMapFoldlProdScaleFloat", false, true , "ParseNode", true , false, true , false, true  }, // 238
+    { "FusedMapFoldlSumScaleInt"      , true , false, false,  2, "FusedMapFoldlSumScaleInt", false, true , "ParseNode", true , false, true , false, true  }, // 233
+    { "FusedMapFoldlSumScaleFloat"    , true , false, false,  2, "FusedMapFoldlSumScaleFloat", false, true , "ParseNode", true , false, true , false, true  }, // 234
+    { "FusedMapFoldlSumSquareInt"     , true , false, false,  2, "FusedMapFoldlSumSquareInt", false, true , "ParseNode", true , false, true , false, true  }, // 235
+    { "FusedMapFoldlSumSquareFloat"   , true , false, false,  2, "FusedMapFoldlSumSquareFloat", false, true , "ParseNode", true , false, true , false, true  }, // 236
+    { "FusedMapFoldlProdScaleInt"     , true , false, false,  2, "FusedMapFoldlProdScaleInt", false, true , "ParseNode", true , false, true , false, true  }, // 237
+    { "FusedMapFoldlProdScaleFloat"   , true , false, false,  2, "FusedMapFoldlProdScaleFloat", false, true , "ParseNode", true , false, true , false, true  }, // 238
     { "MapSelectAny"                  , false, false, false, -1, "MapSelectAny", false, true , "ParseNode", true , false, false, false, false }, // 239
     { "HashMapAny"                    , false, false, false, -1, "HashMapAny", false, true , "ParseNode", true , false, false, false, false }, // 240
     { "HashMapSelectAny"              , false, false, false, -1, "HashMapSelectAny", false, true , "ParseNode", true , false, false, false, false }, // 241
@@ -449,12 +449,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[391] = {
     { "TypedForeachNextFloat"          , false, true , true ,  3, "Advance exact list<float> foreach", false, true , "ForEachStatement", true , false, true , false, false }, // 388
     { "TypedForeachNextBool"           , false, true , true ,  3, "Advance exact list<bool> foreach", false, true , "ForEachStatement", true , false, true , false, false }, // 389
     { "TypedForeachNextString"         , false, true , true ,  3, "Advance exact list<string> foreach", false, true , "ForEachStatement", true , false, true , false, false }, // 390
+    { "FusedMapFoldlSumOffsetInt"      , true , false, false,  2, "FusedMapFoldlSumOffsetInt", false, true , "ParseNode", true , false, true , false, true  }, // 391
+    { "FusedMapFoldlSumOffsetFloat"    , true , false, false,  2, "FusedMapFoldlSumOffsetFloat", false, true , "ParseNode", true , false, true , false, true  }, // 392
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 391,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 391"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 393,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 393"
 );
 
 //! ============================================================================
