@@ -1019,7 +1019,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             for (const auto& node : info.int_expression.nodes) {
                 entry.int_expression_nodes.push_back({
                     static_cast<uint8_t>(node.kind), node.lhs, node.rhs,
-                    node.param, node.constant});
+                    node.third, node.param, node.constant});
             }
             fast_entries.emplace(variant, std::move(entry));
         }
@@ -4291,6 +4291,63 @@ static bool qore_aot_collect_int_expression_summaries(
         node.rhs = static_cast<uint8_t>(rhs);
         return append_node(expression, node);
     };
+    auto append_select = [&](AOTIntExpressionInfo& expression,
+            int condition, int true_value, int false_value) {
+        if (condition < 0 || true_value < 0 || false_value < 0
+                || condition > UINT8_MAX || true_value > UINT8_MAX
+                || false_value > UINT8_MAX) {
+            return -1;
+        }
+        AOTIntExpressionNodeInfo node;
+        node.kind = AOTIntExpressionNodeKind::Select;
+        node.lhs = static_cast<uint8_t>(condition);
+        node.rhs = static_cast<uint8_t>(true_value);
+        node.third = static_cast<uint8_t>(false_value);
+        return append_node(expression, node);
+    };
+    auto get_binary_kind = [](QoreIROpcode opcode,
+            AOTIntExpressionNodeKind& kind) -> bool {
+        switch (opcode) {
+            case QoreIROpcode::AddInt:
+                kind = AOTIntExpressionNodeKind::Add;
+                return true;
+            case QoreIROpcode::SubInt:
+                kind = AOTIntExpressionNodeKind::Sub;
+                return true;
+            case QoreIROpcode::MulInt:
+                kind = AOTIntExpressionNodeKind::Mul;
+                return true;
+            case QoreIROpcode::AndInt:
+                kind = AOTIntExpressionNodeKind::And;
+                return true;
+            case QoreIROpcode::OrInt:
+                kind = AOTIntExpressionNodeKind::Or;
+                return true;
+            case QoreIROpcode::XorInt:
+                kind = AOTIntExpressionNodeKind::Xor;
+                return true;
+            case QoreIROpcode::EqInt:
+                kind = AOTIntExpressionNodeKind::Eq;
+                return true;
+            case QoreIROpcode::NeInt:
+                kind = AOTIntExpressionNodeKind::Ne;
+                return true;
+            case QoreIROpcode::LtInt:
+                kind = AOTIntExpressionNodeKind::Lt;
+                return true;
+            case QoreIROpcode::LeInt:
+                kind = AOTIntExpressionNodeKind::Le;
+                return true;
+            case QoreIROpcode::GtInt:
+                kind = AOTIntExpressionNodeKind::Gt;
+                return true;
+            case QoreIROpcode::GeInt:
+                kind = AOTIntExpressionNodeKind::Ge;
+                return true;
+            default:
+                return false;
+        }
+    };
     auto append_scalar = [&](const AOTScalarLeafInfo& leaf,
             const std::vector<int>& args, AOTIntExpressionInfo& expression) -> int {
         auto get_operand = [&](int8_t param, int64_t constant) {
@@ -4321,35 +4378,51 @@ static bool qore_aot_collect_int_expression_summaries(
             }
             return result;
         }
-        if (leaf.kind != AOTScalarLeafKind::IntBinary) {
+        auto append_affine = [&](int64_t scale, int64_t offset) {
+            if (args.size() != 1) {
+                return -1;
+            }
+            int result = scale ? args[0] : append_constant(expression, 0);
+            if (scale != 0 && scale != 1) {
+                result = append_binary(expression, AOTIntExpressionNodeKind::Mul,
+                    result, append_constant(expression, scale));
+            }
+            if (result >= 0 && offset) {
+                result = append_binary(expression, AOTIntExpressionNodeKind::Add,
+                    result, append_constant(expression, offset));
+            }
+            return result;
+        };
+        bool is_select = leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue
+            || leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue
+            || leaf.kind == AOTScalarLeafKind::IntAffineSelect;
+        if (leaf.kind != AOTScalarLeafKind::IntBinary && !is_select) {
             return -1;
         }
         int lhs = get_operand(leaf.lhs_param, leaf.lhs_int);
         int rhs = get_operand(leaf.rhs_param, leaf.rhs_int);
         AOTIntExpressionNodeKind kind;
-        switch (static_cast<QoreIROpcode>(leaf.opcode)) {
-            case QoreIROpcode::AddInt:
-                kind = AOTIntExpressionNodeKind::Add;
-                break;
-            case QoreIROpcode::SubInt:
-                kind = AOTIntExpressionNodeKind::Sub;
-                break;
-            case QoreIROpcode::MulInt:
-                kind = AOTIntExpressionNodeKind::Mul;
-                break;
-            case QoreIROpcode::AndInt:
-                kind = AOTIntExpressionNodeKind::And;
-                break;
-            case QoreIROpcode::OrInt:
-                kind = AOTIntExpressionNodeKind::Or;
-                break;
-            case QoreIROpcode::XorInt:
-                kind = AOTIntExpressionNodeKind::Xor;
-                break;
-            default:
-                return -1;
+        if (lhs < 0 || rhs < 0
+                || !get_binary_kind(static_cast<QoreIROpcode>(leaf.opcode), kind)) {
+            return -1;
         }
-        return append_binary(expression, kind, lhs, rhs);
+        if (!is_select) {
+            return append_binary(expression, kind, lhs, rhs);
+        }
+        int condition = append_binary(expression, kind, lhs, rhs);
+        int true_value;
+        int false_value;
+        if (leaf.kind == AOTScalarLeafKind::IntSelectLhsIfTrue) {
+            true_value = lhs;
+            false_value = rhs;
+        } else if (leaf.kind == AOTScalarLeafKind::IntSelectRhsIfTrue) {
+            true_value = rhs;
+            false_value = lhs;
+        } else {
+            true_value = append_affine(leaf.true_scale, leaf.true_offset);
+            false_value = append_affine(leaf.false_scale, leaf.false_offset);
+        }
+        return append_select(expression, condition, true_value, false_value);
     };
     auto append_expression = [&](const AOTIntExpressionInfo& source,
             const std::vector<int>& args, AOTIntExpressionInfo& expression) -> int {
@@ -4362,6 +4435,11 @@ static bool qore_aot_collect_int_expression_summaries(
                     ? args[static_cast<size_t>(node.param)] : -1;
             } else if (node.kind == AOTIntExpressionNodeKind::Constant) {
                 result = append_constant(expression, node.constant);
+            } else if (node.kind == AOTIntExpressionNodeKind::Select
+                    && node.lhs < mapped.size() && node.rhs < mapped.size()
+                    && node.third < mapped.size()) {
+                result = append_select(expression, mapped[node.lhs],
+                    mapped[node.rhs], mapped[node.third]);
             } else if (node.lhs < mapped.size() && node.rhs < mapped.size()) {
                 result = append_binary(expression, node.kind,
                     mapped[node.lhs], mapped[node.rhs]);
@@ -4401,8 +4479,8 @@ static bool qore_aot_collect_int_expression_summaries(
         state = VisitState::Visiting;
         auto func_it = function_map.find(variant);
         const QoreIRFunction* func = func_it == function_map.end() ? nullptr : func_it->second;
-        if (!func || func->blocks.size() != 1 || !func->blocks.front()
-                || func->blocks.front()->instructions.size() > 32
+        if (!func || (func->blocks.size() != 1 && func->blocks.size() != 3
+                    && func->blocks.size() != 4)
                 || callee->second.return_kind != BatchCalleeReturnKind::NativeInt
                 || callee->second.num_params > QORE_AOT_INT_EXPRESSION_MAX_NODES
                 || callee->second.param_kinds.size() != callee->second.num_params
@@ -4417,6 +4495,13 @@ static bool qore_aot_collect_int_expression_summaries(
                     })) {
             state = VisitState::Failed;
             return false;
+        }
+        size_t instruction_count = 0;
+        for (const auto& block : func->blocks) {
+            if (!block || (instruction_count += block->instructions.size()) > 32) {
+                state = VisitState::Failed;
+                return false;
+            }
         }
 
         std::unordered_map<const LocalVar*, int8_t> params;
@@ -4440,92 +4525,60 @@ static bool qore_aot_collect_int_expression_summaries(
 
         AOTIntExpressionInfo expression;
         std::unordered_map<uint32_t, int> values;
-        const QoreIRReturnInstruction* ret = nullptr;
-        for (const auto& inst_ptr : func->blocks.front()->instructions) {
-            if (!inst_ptr || inst_ptr->exception_target || ret) {
-                state = VisitState::Failed;
-                return false;
-            }
-            const QoreIRInstruction* inst = inst_ptr.get();
+        auto append_instruction = [&](const QoreIRInstruction* inst,
+                std::unordered_map<uint32_t, int>& block_values) -> bool {
             int result = -1;
-            switch (inst->opcode) {
-                case QoreIROpcode::DebugBlock:
-                case QoreIROpcode::PushTempMark:
-                case QoreIROpcode::DiscardTemps:
-                    continue;
-                case QoreIROpcode::LoadLocal: {
-                    const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
-                    auto param = params.find(load->local);
-                    if (param == params.end()) {
-                        state = VisitState::Failed;
-                        return false;
-                    }
-                    result = append_param(expression, param->second);
-                    break;
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (param == params.end()) {
+                    return false;
                 }
-                case QoreIROpcode::ConstInt: {
-                    const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
-                    result = append_constant(expression, constant->constant.int_value);
-                    break;
+                result = append_param(expression, param->second);
+            } else if (inst->opcode == QoreIROpcode::ConstInt) {
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                result = append_constant(expression, constant->constant.int_value);
+            } else if (inst->opcode == QoreIROpcode::ToBool) {
+                if (inst->operands.size() != 1) {
+                    return false;
                 }
-                case QoreIROpcode::AddInt:
-                case QoreIROpcode::SubInt:
-                case QoreIROpcode::MulInt:
-                case QoreIROpcode::AndInt:
-                case QoreIROpcode::OrInt:
-                case QoreIROpcode::XorInt: {
+                auto operand = block_values.find(inst->operands[0].id);
+                if (operand == block_values.end() || operand->second < 0
+                        || static_cast<size_t>(operand->second) >= expression.nodes.size()) {
+                    return false;
+                }
+                AOTIntExpressionNodeKind kind =
+                    expression.nodes[static_cast<size_t>(operand->second)].kind;
+                if (kind < AOTIntExpressionNodeKind::Eq
+                        || kind > AOTIntExpressionNodeKind::Ge) {
+                    return false;
+                }
+                result = operand->second;
+            } else {
+                AOTIntExpressionNodeKind kind;
+                if (get_binary_kind(inst->opcode, kind)) {
                     if (inst->operands.size() != 2) {
-                        state = VisitState::Failed;
                         return false;
                     }
-                    auto lhs = values.find(inst->operands[0].id);
-                    auto rhs = values.find(inst->operands[1].id);
-                    if (lhs == values.end() || rhs == values.end()) {
-                        state = VisitState::Failed;
+                    auto lhs = block_values.find(inst->operands[0].id);
+                    auto rhs = block_values.find(inst->operands[1].id);
+                    if (lhs == block_values.end() || rhs == block_values.end()) {
                         return false;
-                    }
-                    AOTIntExpressionNodeKind kind;
-                    switch (inst->opcode) {
-                        case QoreIROpcode::AddInt:
-                            kind = AOTIntExpressionNodeKind::Add;
-                            break;
-                        case QoreIROpcode::SubInt:
-                            kind = AOTIntExpressionNodeKind::Sub;
-                            break;
-                        case QoreIROpcode::MulInt:
-                            kind = AOTIntExpressionNodeKind::Mul;
-                            break;
-                        case QoreIROpcode::AndInt:
-                            kind = AOTIntExpressionNodeKind::And;
-                            break;
-                        case QoreIROpcode::OrInt:
-                            kind = AOTIntExpressionNodeKind::Or;
-                            break;
-                        case QoreIROpcode::XorInt:
-                            kind = AOTIntExpressionNodeKind::Xor;
-                            break;
-                        default:
-                            state = VisitState::Failed;
-                            return false;
                     }
                     result = append_binary(expression, kind, lhs->second, rhs->second);
-                    break;
-                }
-                case QoreIROpcode::CallDirect: {
+                } else if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
                     auto nested = batch_callees.find(call->variant);
                     if (call->has_ref_args || nested == batch_callees.end()
                             || inst->operands.size() != nested->second.num_params
                             || !derive(call->variant, depth + 1)) {
-                        state = VisitState::Failed;
                         return false;
                     }
                     std::vector<int> args;
                     args.reserve(inst->operands.size());
                     for (const QoreIRValue& operand : inst->operands) {
-                        auto arg = values.find(operand.id);
-                        if (arg == values.end()) {
-                            state = VisitState::Failed;
+                        auto arg = block_values.find(operand.id);
+                        if (arg == block_values.end()) {
                             return false;
                         }
                         args.push_back(arg->second);
@@ -4533,20 +4586,195 @@ static bool qore_aot_collect_int_expression_summaries(
                     result = nested->second.int_expression
                         ? append_expression(nested->second.int_expression, args, expression)
                         : append_scalar(nested->second.scalar_leaf, args, expression);
-                    break;
-                }
-                case QoreIROpcode::Return:
-                    ret = static_cast<const QoreIRReturnInstruction*>(inst);
-                    continue;
-                default:
-                    state = VisitState::Failed;
+                } else {
                     return false;
+                }
             }
             if (result < 0 || !inst->result.isValid()) {
+                return false;
+            }
+            block_values.emplace(inst->result.id, result);
+            return true;
+        };
+        auto is_ignored = [](QoreIROpcode opcode) {
+            return opcode == QoreIROpcode::DebugBlock
+                || opcode == QoreIROpcode::PushTempMark
+                || opcode == QoreIROpcode::DiscardTemps;
+        };
+        if (func->blocks.size() >= 3) {
+            const QoreIRBranchIfInstruction* branch = nullptr;
+            for (const auto& inst_ptr : func->blocks.front()->instructions) {
+                if (!inst_ptr || inst_ptr->exception_target || branch) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (is_ignored(inst->opcode)) {
+                    continue;
+                }
+                if (inst->opcode == QoreIROpcode::BrIf) {
+                    branch = static_cast<const QoreIRBranchIfInstruction*>(inst);
+                    continue;
+                }
+                if (!append_instruction(inst, values)) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+            }
+            auto condition = branch ? values.find(branch->condition.id) : values.end();
+            if (!branch || !branch->true_target || !branch->false_target
+                    || branch->true_target == branch->false_target
+                    || condition == values.end()
+                    || condition->second < 0
+                    || static_cast<size_t>(condition->second) >= expression.nodes.size()) {
                 state = VisitState::Failed;
                 return false;
             }
-            values.emplace(inst->result.id, result);
+            AOTIntExpressionNodeKind condition_kind =
+                expression.nodes[static_cast<size_t>(condition->second)].kind;
+            if (condition_kind < AOTIntExpressionNodeKind::Eq
+                    || condition_kind > AOTIntExpressionNodeKind::Ge) {
+                state = VisitState::Failed;
+                return false;
+            }
+            if (func->blocks.size() == 4) {
+                auto get_arm_values = [&](const QoreIRBasicBlock* block,
+                        std::unordered_map<uint32_t, int>& block_values,
+                        const QoreIRBasicBlock*& target) -> bool {
+                    block_values = values;
+                    for (const auto& inst_ptr : block->instructions) {
+                        if (!inst_ptr || inst_ptr->exception_target || target) {
+                            return false;
+                        }
+                        const QoreIRInstruction* inst = inst_ptr.get();
+                        if (is_ignored(inst->opcode)) {
+                            continue;
+                        }
+                        if (inst->opcode == QoreIROpcode::Br) {
+                            target = static_cast<const QoreIRBranchInstruction*>(inst)->target;
+                        } else if (!append_instruction(inst, block_values)) {
+                            return false;
+                        }
+                    }
+                    return target != nullptr;
+                };
+                std::unordered_map<uint32_t, int> true_values;
+                std::unordered_map<uint32_t, int> false_values;
+                const QoreIRBasicBlock* true_merge = nullptr;
+                const QoreIRBasicBlock* false_merge = nullptr;
+                if (!get_arm_values(branch->true_target, true_values, true_merge)
+                        || !get_arm_values(branch->false_target, false_values, false_merge)
+                        || true_merge != false_merge || !true_merge
+                        || true_merge == func->blocks.front().get()
+                        || true_merge == branch->true_target
+                        || true_merge == branch->false_target) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                const QoreIRPhiInstruction* phi = nullptr;
+                const QoreIRReturnInstruction* ret = nullptr;
+                for (const auto& inst_ptr : true_merge->instructions) {
+                    if (!inst_ptr || inst_ptr->exception_target || ret) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                    const QoreIRInstruction* inst = inst_ptr.get();
+                    if (is_ignored(inst->opcode)) {
+                        continue;
+                    }
+                    if (inst->opcode == QoreIROpcode::Phi && !phi) {
+                        phi = static_cast<const QoreIRPhiInstruction*>(inst);
+                    } else if (inst->opcode == QoreIROpcode::Return && phi) {
+                        ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                    } else {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                }
+                if (!phi || phi->incoming.size() != 2 || !phi->result.isValid()
+                        || !ret || !ret->has_value || ret->value.id != phi->result.id) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                int true_value = -1;
+                int false_value = -1;
+                for (const auto& incoming : phi->incoming) {
+                    if (incoming.block == branch->true_target) {
+                        auto value = true_values.find(incoming.value.id);
+                        true_value = value == true_values.end() ? -1 : value->second;
+                    } else if (incoming.block == branch->false_target) {
+                        auto value = false_values.find(incoming.value.id);
+                        false_value = value == false_values.end() ? -1 : value->second;
+                    } else {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                }
+                int result = append_select(expression, condition->second,
+                    true_value, false_value);
+                if (result < 0
+                        || result != static_cast<int>(expression.nodes.size() - 1)) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                callee->second.int_expression = std::move(expression);
+                state = VisitState::Success;
+                return true;
+            }
+            auto get_return = [&](const QoreIRBasicBlock* block) -> int {
+                std::unordered_map<uint32_t, int> block_values = values;
+                const QoreIRReturnInstruction* ret = nullptr;
+                for (const auto& inst_ptr : block->instructions) {
+                    if (!inst_ptr || inst_ptr->exception_target || ret) {
+                        return -1;
+                    }
+                    const QoreIRInstruction* inst = inst_ptr.get();
+                    if (is_ignored(inst->opcode)) {
+                        continue;
+                    }
+                    if (inst->opcode == QoreIROpcode::Return) {
+                        ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                    } else if (!append_instruction(inst, block_values)) {
+                        return -1;
+                    }
+                }
+                if (!ret || !ret->has_value) {
+                    return -1;
+                }
+                auto result = block_values.find(ret->value.id);
+                return result == block_values.end() ? -1 : result->second;
+            };
+            int true_value = get_return(branch->true_target);
+            int false_value = get_return(branch->false_target);
+            int result = append_select(expression, condition->second,
+                true_value, false_value);
+            if (result < 0 || result != static_cast<int>(expression.nodes.size() - 1)) {
+                state = VisitState::Failed;
+                return false;
+            }
+            callee->second.int_expression = std::move(expression);
+            state = VisitState::Success;
+            return true;
+        }
+
+        const QoreIRReturnInstruction* ret = nullptr;
+        for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (!inst_ptr || inst_ptr->exception_target || ret) {
+                state = VisitState::Failed;
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (is_ignored(inst->opcode)) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::Return) {
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                continue;
+            }
+            if (!append_instruction(inst, values)) {
+                state = VisitState::Failed;
+                return false;
+            }
         }
         if (!ret || !ret->has_value) {
             state = VisitState::Failed;
@@ -4554,7 +4782,9 @@ static bool qore_aot_collect_int_expression_summaries(
         }
         auto result = values.find(ret->value.id);
         if (result == values.end()
-                || result->second != static_cast<int>(expression.nodes.size() - 1)) {
+                || result->second != static_cast<int>(expression.nodes.size() - 1)
+                || (expression.nodes.back().kind >= AOTIntExpressionNodeKind::Eq
+                    && expression.nodes.back().kind <= AOTIntExpressionNodeKind::Ge)) {
             state = VisitState::Failed;
             return false;
         }
@@ -5910,21 +6140,25 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             return false;
         }
         info.int_expression.nodes.reserve(rec.int_expression_nodes.size());
+        std::vector<uint8_t> node_is_bool;
+        node_is_bool.reserve(rec.int_expression_nodes.size());
         for (size_t i = 0; i < rec.int_expression_nodes.size(); ++i) {
             const auto& input = rec.int_expression_nodes[i];
             if (input.kind < static_cast<uint8_t>(AOTIntExpressionNodeKind::Param)
-                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Xor)) {
+                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Select)) {
                 return false;
             }
             AOTIntExpressionNodeInfo node;
             node.kind = static_cast<AOTIntExpressionNodeKind>(input.kind);
             node.lhs = input.lhs;
             node.rhs = input.rhs;
+            node.third = input.third;
             node.param = input.param;
             node.constant = input.constant;
             if (node.kind == AOTIntExpressionNodeKind::Param) {
                 if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
                         || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX
                         || node.constant
                         || info.param_kinds[static_cast<unsigned>(node.param)]
                             != BatchCalleeParamKind::NativeInt
@@ -5932,14 +6166,33 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     return false;
                 }
             } else if (node.kind == AOTIntExpressionNodeKind::Constant) {
-                if (node.param != -1 || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX) {
+                if (node.param != -1 || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX) {
                     return false;
                 }
             } else if (node.param != -1 || node.constant
                     || node.lhs >= i || node.rhs >= i) {
                 return false;
             }
+            bool is_comparison = node.kind >= AOTIntExpressionNodeKind::Eq
+                && node.kind <= AOTIntExpressionNodeKind::Ge;
+            if (node.kind == AOTIntExpressionNodeKind::Select) {
+                if (node.third >= i || !node_is_bool[node.lhs]
+                        || node_is_bool[node.rhs] || node_is_bool[node.third]) {
+                    return false;
+                }
+            } else if (node.kind != AOTIntExpressionNodeKind::Param
+                    && node.kind != AOTIntExpressionNodeKind::Constant) {
+                if (node.third != UINT8_MAX || node_is_bool[node.lhs]
+                        || node_is_bool[node.rhs]) {
+                    return false;
+                }
+            }
             info.int_expression.nodes.push_back(node);
+            node_is_bool.push_back(is_comparison);
+        }
+        if (node_is_bool.back()) {
+            return false;
         }
     }
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {

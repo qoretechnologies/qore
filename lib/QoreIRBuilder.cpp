@@ -1044,6 +1044,40 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
     for (const auto& inc : incoming) {
         inst->operands.push_back(inc.value);
     }
+    if (!incoming.empty()) {
+        const QoreIRValueFacts* first = func->getValueFacts(incoming.front().value);
+        bool assigned = first
+            && first->assigned_state == QoreIRAssignedState::Assigned;
+        bool never_nothing = first && first->never_nothing;
+        const QoreTypeInfo* type_info = first ? first->type_info : nullptr;
+        for (size_t i = 1; i < incoming.size()
+                && (assigned || never_nothing || type_info); ++i) {
+            if (!(i % 100) && qore_check_cancel(nullptr, "IR phi fact propagation")) {
+                assigned = false;
+                never_nothing = false;
+                type_info = nullptr;
+                break;
+            }
+            const QoreIRValueFacts* facts = func->getValueFacts(incoming[i].value);
+            assigned = assigned && facts
+                && facts->assigned_state == QoreIRAssignedState::Assigned;
+            never_nothing = never_nothing && facts && facts->never_nothing;
+            if (!facts || facts->type_info != type_info) {
+                type_info = nullptr;
+            }
+        }
+        if (assigned || never_nothing || type_info) {
+            QoreIRValueFacts facts;
+            facts.type_info = type_info;
+            facts.assigned_state = assigned
+                ? QoreIRAssignedState::Assigned : QoreIRAssignedState::Unknown;
+            facts.representation = value_kind == QoreIRPhiValueKind::NativeInt
+                ? QoreIRValueRepresentation::NativeInt
+                : QoreIRValueRepresentation::Boxed;
+            facts.never_nothing = assigned && never_nothing;
+            func->setValueFacts(inst->result, facts);
+        }
+    }
     return inst;
 }
 

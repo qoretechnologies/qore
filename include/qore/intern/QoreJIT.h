@@ -115,6 +115,13 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     And = 6,
     Or = 7,
     Xor = 8,
+    Eq = 9,
+    Ne = 10,
+    Lt = 11,
+    Le = 12,
+    Gt = 13,
+    Ge = 14,
+    Select = 15,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;
@@ -124,6 +131,7 @@ struct AOTIntExpressionNodeInfo {
     AOTIntExpressionNodeKind kind = AOTIntExpressionNodeKind::Constant;
     uint8_t lhs = UINT8_MAX;
     uint8_t rhs = UINT8_MAX;
+    uint8_t third = UINT8_MAX;
     int8_t param = -1;
     int64_t constant = 0;
 };

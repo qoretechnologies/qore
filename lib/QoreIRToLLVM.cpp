@@ -3852,6 +3852,15 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
             }
             llvm::Value* lhs = values[node.lhs];
             llvm::Value* rhs = values[node.rhs];
+            if (node.kind == AOTIntExpressionNodeKind::Select) {
+                if (node.third >= values.size() || lhs->getType() != i1_type
+                        || rhs->getType() != i64_type
+                        || values[node.third]->getType() != i64_type) {
+                    return nullptr;
+                }
+            } else if (lhs->getType() != i64_type || rhs->getType() != i64_type) {
+                return nullptr;
+            }
             switch (node.kind) {
                 case AOTIntExpressionNodeKind::Add:
                     value = builder->CreateAdd(lhs, rhs);
@@ -3870,6 +3879,27 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     break;
                 case AOTIntExpressionNodeKind::Xor:
                     value = builder->CreateXor(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Eq:
+                    value = builder->CreateICmpEQ(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Ne:
+                    value = builder->CreateICmpNE(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Lt:
+                    value = builder->CreateICmpSLT(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Le:
+                    value = builder->CreateICmpSLE(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Gt:
+                    value = builder->CreateICmpSGT(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Ge:
+                    value = builder->CreateICmpSGE(lhs, rhs);
+                    break;
+                case AOTIntExpressionNodeKind::Select:
+                    value = builder->CreateSelect(lhs, rhs, values[node.third]);
                     break;
                 default:
                     return nullptr;
