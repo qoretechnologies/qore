@@ -3801,6 +3801,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
     return toBits(QoreValue(str));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_int_to_string(int64_t value) {
+    return toBits(QoreValue(new QoreStringNodeMaker(QLLD, value)));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue val = fromBits(val_bits);
     QoreStringNode* str;

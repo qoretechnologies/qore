@@ -1,0 +1,39 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 5000000;
+    string mode = ENV.QORE_BENCH_MODE ? ENV.QORE_BENCH_MODE : "all";
+    string prefix = "record-";
+    string suffix = "value";
+    string source = "Dvorak-Dvorak-Dvorak";
+    int checksum = 0;
+    if (mode == "concat") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(prefix, suffix).size();
+        }
+    } else if (mode == "concat3") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatTriple(prefix, "middle-", suffix).size();
+        }
+    } else if (mode == "convert") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += convertInt(i & 1023).size();
+        }
+    } else if (mode == "substr") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += sliceString(source, i & 7, 6).size();
+        }
+    } else {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(prefix, suffix).size();
+            checksum += concatTriple(prefix, "middle-", suffix).size();
+            checksum += convertInt(i & 1023).size();
+            checksum += sliceString(source, i & 7, 6).size();
+        }
+    }
+    printf("%d\n", checksum);
+    return 0;
+}

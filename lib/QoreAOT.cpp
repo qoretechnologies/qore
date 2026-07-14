@@ -3497,7 +3497,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     }
 
     std::unordered_map<uint32_t, int8_t> values;
-    const QoreIRDotEvalMethodDirectInstruction* operation = nullptr;
+    const QoreIRInstruction* operation = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -3519,10 +3519,13 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
                 break;
             }
             case QoreIROpcode::DotEvalMethodDirect:
+            case QoreIROpcode::AddString:
+            case QoreIROpcode::StringConcat:
+            case QoreIROpcode::ToString:
                 if (operation || !inst->result.isValid()) {
                     return false;
                 }
-                operation = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                operation = inst;
                 break;
             case QoreIROpcode::Return:
                 ret = static_cast<const QoreIRReturnInstruction*>(inst);
@@ -3531,10 +3534,8 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
                 return false;
         }
     }
-    if (!operation || !operation->pseudo || operation->has_ref_args
-            || !operation->qc || strcmp(operation->qc->getName(), "<string>")
-            || !operation->pseudo_base_known_assigned_string
-            || !ret || !ret->has_value || ret->value.id != operation->result.id
+    if (!operation || !ret || !ret->has_value
+            || ret->value.id != operation->result.id
             || operation->operands.empty() || operation->operands.size() > 3) {
         return false;
     }
@@ -3546,6 +3547,44 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         auto value = values.find(operation->operands[operand].id);
         return value == values.end() ? -1 : value->second;
     };
+    if (operation->opcode == QoreIROpcode::AddString
+            || operation->opcode == QoreIROpcode::StringConcat
+            || operation->opcode == QoreIROpcode::ToString) {
+        result.base_param = get_param(0);
+        result.arg0_param = get_param(1);
+        result.arg1_param = get_param(2);
+        if (result.base_param < 0) {
+            return false;
+        }
+        if (operation->opcode == QoreIROpcode::AddString) {
+            if (operation->operands.size() != 2 || result.arg0_param < 0) {
+                return false;
+            }
+            result.kind = AOTStringOpKind::Concat;
+            return true;
+        }
+        if (operation->opcode == QoreIROpcode::StringConcat) {
+            if (operation->operands.size() != 3 || result.arg0_param < 0
+                    || result.arg1_param < 0) {
+                return false;
+            }
+            result.kind = AOTStringOpKind::Concat3;
+            return true;
+        }
+        if (operation->operands.size() != 1) {
+            return false;
+        }
+        result.kind = AOTStringOpKind::IntToString;
+        return true;
+    }
+
+    const auto* method_op =
+        static_cast<const QoreIRDotEvalMethodDirectInstruction*>(operation);
+    if (!method_op->pseudo || method_op->has_ref_args
+            || !method_op->qc || strcmp(method_op->qc->getName(), "<string>")
+            || !method_op->pseudo_base_known_assigned_string) {
+        return false;
+    }
     result.base_param = get_param(0);
     result.arg0_param = get_param(1);
     result.arg1_param = get_param(2);
@@ -3553,10 +3592,10 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         return false;
     }
 
-    QoreIRIntrinsic intrinsic = operation->intrinsic;
+    QoreIRIntrinsic intrinsic = method_op->intrinsic;
     if (intrinsic == QoreIRIntrinsic::None) {
-        intrinsic = qore_ir_resolve_pseudo_intrinsic(operation->method,
-            operation->qc, operation->fallback_method_name);
+        intrinsic = qore_ir_resolve_pseudo_intrinsic(method_op->method,
+            method_op->qc, method_op->fallback_method_name);
     }
     switch (intrinsic) {
         case QoreIRIntrinsic::Size:
@@ -3576,7 +3615,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         case QoreIRIntrinsic::StringEndsWith:
         case QoreIRIntrinsic::StringContains:
             if (operation->operands.size() != 2 || result.arg0_param < 0
-                    || !operation->pseudo_arg0_known_assigned_string) {
+                    || !method_op->pseudo_arg0_known_assigned_string) {
                 return false;
             }
             result.kind = intrinsic == QoreIRIntrinsic::StringStartsWith
@@ -3588,10 +3627,10 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         case QoreIRIntrinsic::StringRFind:
             if ((operation->operands.size() != 2 && operation->operands.size() != 3)
                     || result.arg0_param < 0
-                    || !operation->pseudo_arg0_known_assigned_string
+                    || !method_op->pseudo_arg0_known_assigned_string
                     || (operation->operands.size() == 3
                         && (result.arg1_param < 0
-                            || !operation->pseudo_arg1_known_assigned_int))) {
+                            || !method_op->pseudo_arg1_known_assigned_int))) {
                 return false;
             }
             result.kind = intrinsic == QoreIRIntrinsic::StringFind
@@ -3600,10 +3639,10 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
         case QoreIRIntrinsic::StringSubstr:
             if ((operation->operands.size() != 2 && operation->operands.size() != 3)
                     || result.arg0_param < 0
-                    || !operation->pseudo_arg0_known_assigned_int
+                    || !method_op->pseudo_arg0_known_assigned_int
                     || (operation->operands.size() == 3
                         && (result.arg1_param < 0
-                            || !operation->pseudo_arg1_known_assigned_int))) {
+                            || !method_op->pseudo_arg1_known_assigned_int))) {
                 return false;
             }
             result.kind = AOTStringOpKind::Substr;
@@ -5771,7 +5810,38 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
         AOTStringOpInfo string_op;
         if (qore_aot_get_string_op(*func, *sig, string_op)) {
-            callee_it->second.string_op = string_op;
+            auto param_kind_is = [&](int8_t param, BatchCalleeParamKind kind) {
+                return param >= 0
+                    && static_cast<size_t>(param) < callee_it->second.param_kinds.size()
+                    && callee_it->second.param_kinds[static_cast<size_t>(param)] == kind;
+            };
+            auto rejects_nothing = [&](int8_t param) {
+                return param < 0
+                    || (static_cast<size_t>(param)
+                            < callee_it->second.param_rejects_nothing.size()
+                        && callee_it->second.param_rejects_nothing[
+                            static_cast<size_t>(param)]);
+            };
+            bool valid = true;
+            if (string_op.kind == AOTStringOpKind::Concat
+                    || string_op.kind == AOTStringOpKind::Concat3) {
+                valid = callee_it->second.return_kind == BatchCalleeReturnKind::Boxed
+                    && param_kind_is(string_op.base_param, BatchCalleeParamKind::Boxed)
+                    && param_kind_is(string_op.arg0_param, BatchCalleeParamKind::Boxed)
+                    && (string_op.kind != AOTStringOpKind::Concat3
+                        || param_kind_is(string_op.arg1_param,
+                            BatchCalleeParamKind::Boxed));
+            } else if (string_op.kind == AOTStringOpKind::IntToString) {
+                valid = callee_it->second.return_kind == BatchCalleeReturnKind::Boxed
+                    && param_kind_is(string_op.base_param,
+                        BatchCalleeParamKind::NativeInt);
+            }
+            valid = valid && rejects_nothing(string_op.base_param)
+                && rejects_nothing(string_op.arg0_param)
+                && rejects_nothing(string_op.arg1_param);
+            if (valid) {
+                callee_it->second.string_op = string_op;
+            }
         }
         AOTCollectionOpInfo collection_op;
         if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
@@ -6571,7 +6641,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             && (!info.implicit_self_method || info.num_params)) {
         return false;
     }
-    if (rec.string_op_kind > static_cast<uint8_t>(AOTStringOpKind::Substr)
+    if (rec.string_op_kind > static_cast<uint8_t>(AOTStringOpKind::IntToString)
             || rec.string_op_base_param < -1 || rec.string_op_arg0_param < -1
             || rec.string_op_arg1_param < -1
             || rec.string_op_base_param >= static_cast<int>(info.num_params)
@@ -6590,14 +6660,19 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         }
     } else {
         bool no_arg = info.string_op.kind == AOTStringOpKind::Size
-            || info.string_op.kind == AOTStringOpKind::Length;
+            || info.string_op.kind == AOTStringOpKind::Length
+            || info.string_op.kind == AOTStringOpKind::IntToString;
         bool optional_arg1 = info.string_op.kind == AOTStringOpKind::Find
             || info.string_op.kind == AOTStringOpKind::RFind
             || info.string_op.kind == AOTStringOpKind::Substr;
+        bool required_arg1 = info.string_op.kind == AOTStringOpKind::Concat3;
         bool boxed_result = info.string_op.kind == AOTStringOpKind::StartsWith
             || info.string_op.kind == AOTStringOpKind::EndsWith
             || info.string_op.kind == AOTStringOpKind::Contains
-            || info.string_op.kind == AOTStringOpKind::Substr;
+            || info.string_op.kind == AOTStringOpKind::Substr
+            || info.string_op.kind == AOTStringOpKind::Concat
+            || info.string_op.kind == AOTStringOpKind::Concat3
+            || info.string_op.kind == AOTStringOpKind::IntToString;
         auto rejects_nothing = [&](int8_t param) {
             return param < 0 || (static_cast<size_t>(param)
                 < info.param_rejects_nothing.size()
@@ -6607,7 +6682,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 || (no_arg && (info.string_op.arg0_param != -1
                     || info.string_op.arg1_param != -1))
                 || (!no_arg && info.string_op.arg0_param < 0)
-                || (!optional_arg1 && info.string_op.arg1_param != -1)
+                || (required_arg1 && info.string_op.arg1_param < 0)
+                || (!required_arg1 && !optional_arg1
+                    && info.string_op.arg1_param != -1)
                 || !rejects_nothing(info.string_op.base_param)
                 || !rejects_nothing(info.string_op.arg0_param)
                 || !rejects_nothing(info.string_op.arg1_param)
@@ -6616,6 +6693,26 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 || (!boxed_result
                     && info.return_kind != BatchCalleeReturnKind::Boxed
                     && info.return_kind != BatchCalleeReturnKind::NativeInt)) {
+            return false;
+        }
+        auto param_kind_is = [&](int8_t param, BatchCalleeParamKind kind) {
+            return param >= 0 && static_cast<size_t>(param) < info.param_kinds.size()
+                && info.param_kinds[static_cast<size_t>(param)] == kind;
+        };
+        if ((info.string_op.kind == AOTStringOpKind::Concat
+                || info.string_op.kind == AOTStringOpKind::Concat3)
+                && (!param_kind_is(info.string_op.base_param,
+                        BatchCalleeParamKind::Boxed)
+                    || !param_kind_is(info.string_op.arg0_param,
+                        BatchCalleeParamKind::Boxed)
+                    || (info.string_op.kind == AOTStringOpKind::Concat3
+                        && !param_kind_is(info.string_op.arg1_param,
+                            BatchCalleeParamKind::Boxed)))) {
+            return false;
+        }
+        if (info.string_op.kind == AOTStringOpKind::IntToString
+                && !param_kind_is(info.string_op.base_param,
+                    BatchCalleeParamKind::NativeInt)) {
             return false;
         }
     }

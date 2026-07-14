@@ -395,6 +395,9 @@ uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* 
 uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
 
+//! Convert an assigned native integer to a referenced string without boxing it first.
+uint64_t qore_rt_int_to_string(int64_t value);
+
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.
 uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,

@@ -208,6 +208,9 @@ enum class AOTStringOpKind : uint8_t {
     Find = 6,
     RFind = 7,
     Substr = 8,
+    Concat = 9,
+    Concat3 = 10,
+    IntToString = 11,
 };
 
 struct AOTStringOpInfo {

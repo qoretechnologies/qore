@@ -4319,8 +4319,15 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
     };
 
     llvm::Value* base = get_param(op.base_param);
-    if (!base || getFastEntryParamKind(info, static_cast<unsigned>(op.base_param))
-            != BatchCalleeParamKind::Boxed) {
+    if (!base) {
+        return nullptr;
+    }
+    BatchCalleeParamKind base_kind = getFastEntryParamKind(info,
+        static_cast<unsigned>(op.base_param));
+    if ((op.kind == AOTStringOpKind::IntToString
+            && base_kind != BatchCalleeParamKind::NativeInt)
+            || (op.kind != AOTStringOpKind::IntToString
+                && base_kind != BatchCalleeParamKind::Boxed)) {
         return nullptr;
     }
     switch (op.kind) {
@@ -4394,6 +4401,61 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
             return builder->CreateCall(helper,
                 {base, start, length,
                  llvm::ConstantInt::get(i32_type, op.arg1_param >= 0), xsink_arg});
+        }
+        case AOTStringOpKind::Concat: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed) {
+                return nullptr;
+            }
+            llvm::Value* right = get_param(op.arg0_param);
+            if (!right || getFastEntryParamKind(info,
+                    static_cast<unsigned>(op.arg0_param))
+                    != BatchCalleeParamKind::Boxed) {
+                return nullptr;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_string_add_typed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, i64_type, ptr_type}, false));
+            return builder->CreateCall(helper, {base, right, xsink_arg});
+        }
+        case AOTStringOpKind::Concat3: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed) {
+                return nullptr;
+            }
+            llvm::Value* middle = get_param(op.arg0_param);
+            llvm::Value* right = get_param(op.arg1_param);
+            if (!middle || !right
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(op.arg0_param))
+                        != BatchCalleeParamKind::Boxed
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(op.arg1_param))
+                        != BatchCalleeParamKind::Boxed) {
+                return nullptr;
+            }
+            llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+            llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                llvm_func->getEntryBlock().begin());
+            llvm::Value* args = ab.CreateAlloca(i64_type,
+                llvm::ConstantInt::get(i32_type, 3));
+            llvm::Value* values[] = {base, middle, right};
+            for (int i = 0; i < 3; ++i) {
+                llvm::Value* slot = builder->CreateGEP(i64_type, args,
+                    llvm::ConstantInt::get(i32_type, i));
+                builder->CreateStore(values[i], slot);
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_string_concat_multi",
+                llvm::FunctionType::get(i64_type,
+                    {ptr_type, i32_type, ptr_type}, false));
+            return builder->CreateCall(helper,
+                {args, llvm::ConstantInt::get(i32_type, 3), xsink_arg});
+        }
+        case AOTStringOpKind::IntToString: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed) {
+                return nullptr;
+            }
+            auto helper = module.getOrInsertFunction("qore_rt_int_to_string",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            return builder->CreateCall(helper, {base});
         }
         default:
             return nullptr;

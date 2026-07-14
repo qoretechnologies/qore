@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub concatPair(string left, string right) {
+    return left + right;
+}
+
+string sub concatTriple(string first, string second, string third) {
+    return first + second + third;
+}
+
+string sub convertInt(int value) {
+    return string(value);
+}
+
+string sub sliceString(string value, int start, int length) {
+    return value.substr(start, length);
+}

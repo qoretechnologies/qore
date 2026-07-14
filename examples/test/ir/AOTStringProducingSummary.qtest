@@ -1,0 +1,179 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub providerCode() {
+    return "string sub concatPair(string left, string right) {
+    return left + right;
+}
+
+string sub concatTriple(string first, string second, string third) {
+    return first + second + third;
+}
+
+string sub convertInt(int value) {
+    return string(value);
+}
+
+string sub sliceString(string value, int start, int length) {
+    return value.substr(start, length);
+}
+
+string sub optionalConcat(*string left, *string right) {
+    return left + right;
+}
+
+string sub optionalConvert(*int value) {
+    return string(value);
+}
+";
+}
+
+string sub consumerCode() {
+    return "int sub main() {
+    string missing;
+    bool missing_rejected = False;
+    try {
+        concatPair(missing, \"tail\");
+    } catch (hash<auto> ex) {
+        missing_rejected = True;
+    }
+    string removed = \"old\";
+    remove removed;
+    bool removed_rejected = False;
+    try {
+        concatTriple(\"head\", removed, \"tail\");
+    } catch (hash<auto> ex) {
+        removed_rejected = True;
+    }
+    int missing_int;
+    bool missing_int_rejected = False;
+    try {
+        convertInt(missing_int);
+    } catch (hash<auto> ex) {
+        missing_int_rejected = True;
+    }
+
+    string utf8 = \"Dvo\\u0159\\u00e1k\";
+    string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
+    bool encoding_rejected = False;
+    try {
+        concatPair(convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
+    } catch (hash<auto> ex) {
+        encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    *string optional_string;
+    *int optional_int;
+    printf(\"%s|%s|%s|%s|%s|%s|%s|%y|%y|%d|%d|%d|%d\\n\",
+        concatPair(\"left\", \"right\"),
+        concatPair(latin1, convert_encoding(\" d\\u00e9j\\u00e0\", \"ISO-8859-1\")),
+        concatTriple(\"one\", \"two\", \"three\"),
+        convertInt(9223372036854775807),
+        convertInt(-9223372036854775807 - 1),
+        sliceString(utf8, 1, 3),
+        sliceString(latin1, 1, 3),
+        optionalConcat(optional_string, \"tail\"),
+        optionalConvert(optional_int),
+        missing_rejected, removed_rejected, missing_int_rejected,
+        encoding_rejected);
+    return 0;
+}
+";
+}
+
+string root = "/tmp/qore-aot-string-producing-summary-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write("%modern\n\n" + providerCode());
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write("%modern\n\n" + consumerCode());
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write("%modern\n\n" + providerCode() + consumerCode() + "\nmain();\n");
+combined_file.close();
+
+string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s", libqore_dir, qcc_bin, provider_qo));
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"18\"/)
+        || !(provider_index =~ /\"qore_path\": \"concatPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 9/)
+        || !(provider_index =~ /\"qore_path\": \"concatTriple\(string,string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 10/)
+        || !(provider_index =~ /\"qore_path\": \"convertInt\(int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 11/)
+        || !(provider_index =~ /\"qore_path\": \"sliceString\(string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 8/)
+        || !(provider_index =~ /\"qore_path\": \"optionalConcat\(\*string,\*string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
+        || !(provider_index =~ /\"qore_path\": \"optionalConvert\(\*int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)) {
+    printf("unexpected string-producing metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_OP_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, enabled_exe));
+string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}
