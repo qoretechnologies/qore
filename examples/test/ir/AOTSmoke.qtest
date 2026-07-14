@@ -167,6 +167,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT .qo debugger regex extract keeps global flag",
             \testQoDebuggerRegexExtractGlobal());
+        addTestCase("AOT stripped debugger statement locations",
+            \testStrippedDebuggerStatementLocations());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
@@ -4205,6 +4207,28 @@ sub main() {
             libqore_dir, app_path));
         assertEq("[\"$local:a\", \"$local:b\"]\nEXIT=0\n", run_out,
             "source-stripped debugger IR preserves regex extract /g");
+    }
+
+    testStrippedDebuggerStatementLocations() {
+        hash<auto> result = compileWithFlags("%modern
+%allow-debugger
+
+int sub debug_probe() {
+    int value = 41;
+    ++value;
+    return value;
+}
+
+ProgramControl pc = ProgramControl::getProgram();
+int sid = pc.findStatementId(\"\", 6);
+hash<StatementInfo> info = pc.getStatementIdInfo(sid);
+printf(\"%d:%d\\n\", info.start_line, debug_probe());
+", ("--strip-source",), NOTHING);
+
+        assertTrue(result.compiled,
+            "qcc compiles stripped debugger statement-location probe: " + result.compile_out);
+        assertEq("6:42\n", result.run_out,
+            "stripped debugger resolves the exact interior statement line");
     }
 
     testExitCode() {

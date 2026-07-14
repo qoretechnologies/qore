@@ -6460,7 +6460,17 @@ static QoreAOTContext* buildContextFromSlotMap(
             fprintf(stderr, "[aot-slot-reg] '%s': stmt loc entries=%u off=%zu\n",
                 name, num_stmt_locs, static_cast<size_t>(ptr - entry_payload_start));
         }
-        if (num_stmt_locs > 0 && pgm) {
+        // Statement-location records exist only for ProgramControl/debugger
+        // lookup.  Every public lookup checks PO_ALLOW_DEBUGGER first, so
+        // materializing statement objects for programs that cannot be debugged
+        // creates unreachable state and substantial startup allocation cost.
+        // Keep an eager diagnostic mode for same-build performance and
+        // compatibility comparisons.
+        static const bool eager_stmt_locs =
+            getenv("QORE_DISABLE_AOT_LAZY_STMT_LOCS") != nullptr;
+        bool materialize_stmt_locs = pgm
+            && (eager_stmt_locs || (pgm->getParseOptions() & PO_ALLOW_DEBUGGER));
+        if (num_stmt_locs > 0 && materialize_stmt_locs) {
             qore_program_private* pp = qore_program_private::get(*pgm);
             AutoLocker al(&pp->plock);
             for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
