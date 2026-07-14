@@ -11257,6 +11257,11 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     // Store value to list element (COW-safe via QoreIRListIndexStoreInstruction)
     auto* store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
     store_inst->loc = loc;
+    // the store can throw (element type coercion, invalid index), so it must unwind to the enclosing catch block,
+    // exactly as the equivalent hash store does in emitHashKeyDirectStore()
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(list_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(index_val);

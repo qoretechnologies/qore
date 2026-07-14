@@ -6432,8 +6432,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             ctx->locs = static_cast<const QoreProgramLocation**>(
                 calloc(num_loc_entries, sizeof(const QoreProgramLocation*)));
             for (uint32_t i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
-                uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
-                uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+                int start_line = qore_aot_read_line(reader, ptr);
+                int end_line = qore_aot_read_line(reader, ptr);
                 const char* loc_file = reader.readStringRef(ptr);
                 if (start_line > 0) {
                     // Intern the file name in the program's string pool —
@@ -6464,8 +6464,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             qore_program_private* pp = qore_program_private::get(*pgm);
             AutoLocker al(&pp->plock);
             for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
-                uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
-                uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+                int start_line = qore_aot_read_line(reader, ptr);
+                int end_line = qore_aot_read_line(reader, ptr);
                 int64_t offset = QoreAOTBinaryReader::readI64(ptr);
                 const char* loc_file = reader.readStringRef(ptr);
                 const char* loc_source = reader.readStringRef(ptr);
@@ -6489,8 +6489,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
         } else {
             for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
-                (void)QoreAOTBinaryReader::readU16(ptr);
-                (void)QoreAOTBinaryReader::readU16(ptr);
+                (void)qore_aot_read_line(reader, ptr);
+                (void)qore_aot_read_line(reader, ptr);
                 (void)QoreAOTBinaryReader::readI64(ptr);
                 (void)reader.readStringRef(ptr);
                 (void)reader.readStringRef(ptr);
@@ -7679,8 +7679,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // Intern via qore_program_private::addString() so the string lives in the
     // program's str_vec pool for the program's lifetime, matching how the
     // parser's addFile() already stores filenames for JIT/source-parsed code.
-    uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
-    uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+    int start_line = qore_aot_read_line(reader, ptr);
+    int end_line = qore_aot_read_line(reader, ptr);
     const char* loc_file = reader.readStringRef(ptr);
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)

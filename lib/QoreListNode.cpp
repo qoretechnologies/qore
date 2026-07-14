@@ -36,6 +36,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 
+#include <limits>
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -404,6 +405,19 @@ int QoreListNode::merge(const QoreListNode* list, ExceptionSink* xsink) {
 
 int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
     assert(reference_count() == 1);
+    // a negative index cast to size_t arrives here as SIZE_MAX; "index + 1" would then wrap to 0, resize(0) would
+    // be a no-op, and "priv->entry[index]" would address memory before the start of the entry array.  Callers must
+    // resolve negative indices themselves (see PO_NEGATIVE_OFFSETS handling in the lvalue, JIT, AOT, and IR paths),
+    // so reaching this with SIZE_MAX is a caller bug, but never corrupt the heap because of one
+    assert(index != std::numeric_limits<size_t>::max());
+    if (index == std::numeric_limits<size_t>::max()) {
+        val.discard(xsink);
+        if (xsink) {
+            xsink->raiseException("LIST-INDEX-ERROR", "cannot set a list entry at an index equal to the maximum "
+                "value of the index type; the list cannot be resized to hold it");
+        }
+        return -1;
+    }
     if (index >= priv->length) {
         priv->resize(index + 1);
     }

@@ -129,8 +129,9 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v8: serialized Phi instructions include the PHI value representation kind
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
 //! v10: callable generic type-parameter declarations are preserved in variant signatures
+//! v11: all serialized source line numbers use signed 32-bit values
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 10;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 11;
 
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
@@ -1040,6 +1041,36 @@ public:
     }
 };
 
+//! Serializes a source line number in the current wire format.
+/** Source line numbers were originally written as u16, which silently truncated any file with more than 65535 lines
+    and made lines 32768 - 65535 deserialize as negative numbers (Qorus generates single source files well over
+    32767 lines). Version 11 and later use u32; the legacy encoding is retained when reading older blobs.
+
+    -1 (unknown location) round-trips in both encodings.
+*/
+DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
+    writer.writeU32(static_cast<uint32_t>(line));
+}
+
+//! Deserializes a source line number written by qore_aot_write_line()
+/** @param signed_legacy if true, the legacy u16 encoding is sign-extended (matching the call sites that stored the
+    value in an int16_t); if false, it is zero-extended (matching the call sites that stored it in a uint16_t).  The
+    distinction only affects legacy blobs; the wide encoding is always sign-preserving.
+*/
+DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        bool signed_legacy = true) {
+    if (reader.getHeader().version >= 11) {
+        return static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
+    }
+    uint16_t v = QoreAOTBinaryReader::readU16(ptr);
+    return signed_legacy ? static_cast<int>(static_cast<int16_t>(v)) : static_cast<int>(v);
+}
+
+//! Returns the serialized size in bytes of a single source line number in the given blob
+DLLLOCAL static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
+    return reader.getHeader().version >= 11 ? 4 : 2;
+}
+
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
 /** In batch mode (multiple AOT blobs registered into one Program),
     every session's methods reference the same builtin types (`string`,
@@ -1748,8 +1779,8 @@ struct AOTCompiledFuncWithSlots {
     const QoreIRFunction* debug_ir = nullptr;
     //! AOT location table entry (owns the file string copy)
     struct AOTLocEntry {
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         std::string file;
     };
     //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
@@ -1760,8 +1791,8 @@ struct AOTCompiledFuncWithSlots {
     std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         int64_t offset = 0;
         std::string file;
         std::string source;
@@ -2179,8 +2210,8 @@ class QoreAOTBinaryDeserializer {
     struct PendingBCAEntry {
         qore_classid_t classid;
         std::string base_path;
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         size_t eval_result_size = 0;
         std::vector<size_t> source_to_param;
         std::vector<PendingBCAArgBlob> arg_blobs;
@@ -2266,7 +2297,7 @@ private:
     const QoreClass* resolveClassRefForSession(const char* class_ref,
         const std::unordered_map<std::string, QoreClass*>* local_class_map = nullptr,
         bool pseudo = false) const;
-    const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
+    const QoreProgramLocation* getBlobLocation(int32_t start_line = 0, int32_t end_line = 0) const;
     bool deserializeShellsFromOpenReader(std::string& error);
 
 public:

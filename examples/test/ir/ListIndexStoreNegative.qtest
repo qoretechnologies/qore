@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# ListIndexStore negative-index and exception-routing tests — verifies identical behavior across ast/ir/jit modes
+#
+# The IR interpreter's ListIndexStore opcode used to pass the index straight to QoreListNode::setEntry(size_t): a
+# negative index arrived there as SIZE_MAX, "index + 1" wrapped to 0 so the list was never resized, and the store
+# then wrote 8 bytes before the start of the entry array, corrupting the heap.  It also never routed exceptions to
+# the instruction's exception target, so a throw from inside the store escaped the enclosing try/catch in the IR and
+# JIT tiers.  Both are exercised here through every execution tier, since only the IR tier was affected.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ListIndexStoreNegativeTest
+
+class ListIndexStoreNegativeTest inherits QUnit::Test {
+    private {
+        # the constant-index lowering fast path (isConstIndexListSubscript()) is what emits ListIndexStore, so every
+        # case below must use a literal index, not a variable
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("ListIndexStoreNegativeTest", "1.0", \ARGV) {
+        addTestCase("negative index resolves from the end", \testNegativeIndexFromEnd());
+        addTestCase("negative index out of range throws", \testNegativeIndexOutOfRange());
+        addTestCase("negative index without negative offsets throws", \testNegativeIndexNoNegativeOffsets());
+        addTestCase("negative index on auto-vivified list throws", \testNegativeIndexAutoVivify());
+        addTestCase("element type coercion error is catchable", \testCoercionErrorIsCatchable());
+        addTestCase("auto-vivified list stores at a positive index", \testAutoVivifyPositiveIndex());
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return "";
+        }
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+            qore_bin, mode, script.path, out.path, err.path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+                testSkip("exec-mode option not supported");
+                return "";
+            }
+            # any other non-zero status means the store aborted (heap corruption) or threw an uncaught exception;
+            # both are failures, so report the stderr output to make the cause visible
+            throw "EXEC-ERROR", sprintf("%y in %y mode exited with status %d: %s", cmd, mode, rc, err_output);
+        }
+        return ReadOnlyFile::readTextFile(out.path) ?? "";
+    }
+
+    private assertSameInAllModes(string code, string expected, string desc) {
+        foreach string mode in (Modes) {
+            assertEq(expected, runInMode(code, mode), sprintf("%s (%s)", desc, mode));
+        }
+    }
+
+    testNegativeIndexFromEnd() {
+        # with %negative-offsets in effect, l[-1] addresses the last element; before the fix the IR tier wrote
+        # before the start of the list's entry array instead, corrupting the heap and aborting the process
+        string code = "
+sub t() {
+    list<auto> l = (1, 2, 3);
+    l[-1] = 99;
+    l[-3] = 11;
+    printf(\"%y\\n\", l);
+}
+t();
+";
+        assertSameInAllModes(code, "[11, 2, 99]\n", "negative index from end");
+    }
+
+    testNegativeIndexOutOfRange() {
+        # a negative index whose magnitude exceeds the list size cannot be resolved from the end
+        string code = "
+sub t() {
+    list<auto> l = (1, 2, 3);
+    try {
+        l[-4] = 99;
+        printf(\"no exception\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s\\n\", ex.err);
+    }
+}
+t();
+";
+        assertSameInAllModes(code, "NEGATIVE-LIST-INDEX\n", "negative index out of range");
+    }
+
+    testNegativeIndexNoNegativeOffsets() {
+        string code = "
+%no-negative-offsets
+sub t() {
+    *list<auto> l;
+    try {
+        l[-1] = 99;
+        printf(\"no exception\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s\\n\", ex.err);
+    }
+}
+t();
+";
+        assertSameInAllModes(code, "NEGATIVE-LIST-INDEX\n", "negative index with %no-negative-offsets");
+    }
+
+    testNegativeIndexAutoVivify() {
+        # the list does not exist yet, so a negative index cannot be resolved from the end even with
+        # %negative-offsets in effect
+        string code = "
+sub t() {
+    *list<auto> l;
+    try {
+        l[-2] = 99;
+        printf(\"no exception\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s\\n\", ex.err);
+    }
+}
+t();
+";
+        assertSameInAllModes(code, "NEGATIVE-LIST-INDEX\n", "negative index on auto-vivified list");
+    }
+
+    testCoercionErrorIsCatchable() {
+        # a value that cannot be coerced to the list's element type must raise an exception that the enclosing catch
+        # block sees; the IR and JIT tiers used to let it escape the function entirely
+        string code = "
+sub t(auto v) {
+    list<int> l = (1, 2, 3);
+    try {
+        l[0] = v;
+        printf(\"no exception\\n\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"%s\\n\", ex.err);
+    }
+    printf(\"%y\\n\", l);
+}
+t(new Mutex());
+";
+        assertSameInAllModes(code, "RUNTIME-TYPE-ERROR\n[1, 2, 3]\n", "coercion error is catchable");
+    }
+
+    testAutoVivifyPositiveIndex() {
+        # the auto-vivify path must still work; entries below the index are padded with NOTHING
+        string code = "
+sub t() {
+    *list<auto> l;
+    l[2] = 99;
+    printf(\"%y %d\\n\", l, l.size());
+}
+t();
+";
+        assertSameInAllModes(code, "[null, null, 99] 3\n", "auto-vivify at a positive index");
+    }
+}

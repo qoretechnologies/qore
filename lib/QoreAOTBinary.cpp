@@ -8315,23 +8315,22 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     // Per-variant signature start/end lines — plumbed into the reader's
     // setupFromAOTMetadata call so `sig->getParseLocation()` reports real
     // line numbers instead of 0.  Gated on QORE_AOT_FEAT_SIG_LINES so older
-    // readers skip these bytes and newer readers expect them.  Stored as
-    // int16_t to match QoreProgramLineLocation's on-heap representation.
-    int16_t sig_first = 0, sig_last = 0;
+    // readers skip these bytes and newer readers expect them.
+    int sig_first = 0, sig_last = 0;
     if (usig) {
         if (const QoreProgramLocation* vloc = usig->getParseLocation()) {
             sig_first = vloc->start_line;
             sig_last  = vloc->end_line;
         }
     }
-    writer.writeU16(static_cast<uint16_t>(sig_first));
-    writer.writeU16(static_cast<uint16_t>(sig_last));
+    qore_aot_write_line(writer, sig_first);
+    qore_aot_write_line(writer, sig_last);
 
     // Function-entry StatementBlock line range.  This is distinct from the
     // signature location: source-stripped AOT keeps no executable body, but
     // ProgramControl::findFunctionStatementId() must still resolve to a stable
     // statement id with source-like entry location metadata.
-    int16_t entry_first = 0, entry_last = 0;
+    int entry_first = 0, entry_last = 0;
     if (uvb) {
         if (StatementBlock* sb = uvb->getStatementBlock()) {
             if (const QoreProgramLocation* sloc = sb->loc) {
@@ -8340,8 +8339,8 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             }
         }
     }
-    writer.writeU16(static_cast<uint16_t>(entry_first));
-    writer.writeU16(static_cast<uint16_t>(entry_last));
+    qore_aot_write_line(writer, entry_first);
+    qore_aot_write_line(writer, entry_last);
 
     // Source-stripped variants do not keep executable AST statement bodies.
     // Preserve the body block parse options so runtime dispatch still applies
@@ -9777,10 +9776,8 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 // Write base class path for runtime resolution
                                 std::string base_path = aotBCAClassRef(mi.method, bca);
                                 writer.writeStringRef(base_path.c_str());
-                                writer.writeU16(static_cast<uint16_t>(
-                                    bca->loc ? bca->loc->start_line : 0));
-                                writer.writeU16(static_cast<uint16_t>(
-                                    bca->loc ? bca->loc->end_line : 0));
+                                qore_aot_write_line(writer, bca->loc ? bca->loc->start_line : 0);
+                                qore_aot_write_line(writer, bca->loc ? bca->loc->end_line : 0);
 
                                 // Serialize args as individual native expression blobs.
                                 // Legacy readers still understand EXPR_TREE blobs when the
@@ -12109,8 +12106,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         }
         traceEntryOffset("after loc count");
         for (auto& loc : func.aot_locs) {
-            writer.writeU16(static_cast<uint16_t>(loc.start_line));
-            writer.writeU16(static_cast<uint16_t>(loc.end_line));
+            qore_aot_write_line(writer, loc.start_line);
+            qore_aot_write_line(writer, loc.end_line);
             writer.writeStringRef(loc.file.c_str());
         }
         traceEntryOffset("after loc table");
@@ -12122,8 +12119,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         }
         traceEntryOffset("after stmt-loc count");
         for (auto& loc : func.aot_stmt_locs) {
-            writer.writeU16(static_cast<uint16_t>(loc.start_line));
-            writer.writeU16(static_cast<uint16_t>(loc.end_line));
+            qore_aot_write_line(writer, loc.start_line);
+            qore_aot_write_line(writer, loc.end_line);
             writer.writeI64(loc.offset);
             writer.writeStringRef(loc.file.c_str());
             writer.writeStringRef(loc.source.c_str());
@@ -12699,12 +12696,12 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
 
     // Write source location for runtime exception stack traces (AOT location table)
     if (inst->loc && inst->loc->start_line > 0) {
-        writer.writeU16(static_cast<uint16_t>(inst->loc->start_line));
-        writer.writeU16(static_cast<uint16_t>(inst->loc->end_line));
+        qore_aot_write_line(writer, inst->loc->start_line);
+        qore_aot_write_line(writer, inst->loc->end_line);
         writer.writeStringRef(inst->loc->getFile() ? inst->loc->getFile() : "");
     } else {
-        writer.writeU16(0);  // start_line=0 signals "no location"
-        writer.writeU16(0);
+        qore_aot_write_line(writer, 0);  // start_line=0 signals "no location"
+        qore_aot_write_line(writer, 0);
         writer.writeStringRef("");
     }
 
@@ -13525,8 +13522,8 @@ bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
     return true;
 }
 
-const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int16_t start_line,
-        int16_t end_line) const {
+const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int32_t start_line,
+        int32_t end_line) const {
     if (!pgm) {
         return &loc_builtin;
     }
@@ -15888,12 +15885,12 @@ static bool skipAOTVariantSignature(const QoreAOTBinaryReader& reader,
     uint16_t sig_flags = QoreAOTBinaryReader::readU16(ptr);
 
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
-        QoreAOTBinaryReader::readU16(ptr);
-        QoreAOTBinaryReader::readU16(ptr);
+        qore_aot_read_line(reader, ptr);
+        qore_aot_read_line(reader, ptr);
     }
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
-        QoreAOTBinaryReader::readU16(ptr);
-        QoreAOTBinaryReader::readU16(ptr);
+        qore_aot_read_line(reader, ptr);
+        qore_aot_read_line(reader, ptr);
     }
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
         QoreAOTBinaryReader::readI64(ptr);
@@ -15949,8 +15946,8 @@ static bool readAndSetupVariantSignature(
         UserVariantBase* uvb,
         bool& sig_has_ellipsis,
         bool& needs_extra_args_flag,
-        int16_t& entry_first_line,
-        int16_t& entry_last_line,
+        int& entry_first_line,
+        int& entry_last_line,
         QoreParseOptions& variant_parse_options,
         std::string& error,
         const QoreClass* classTypeInfo = nullptr,
@@ -16006,18 +16003,19 @@ static bool readAndSetupVariantSignature(
 
     // Per-variant signature start/end lines — present iff the blob
     // advertises QORE_AOT_FEAT_SIG_LINES.  Older blobs (pre-feat) don't
-    // have these 4 bytes and continue to report line 0.
-    int16_t sig_first_line = 0;
-    int16_t sig_last_line  = 0;
+    // have this pair and continue to report line 0. Version 11 stores each
+    // line in 4 bytes; versions 9-10 use the legacy 2-byte representation.
+    int sig_first_line = 0;
+    int sig_last_line  = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
-        sig_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
-        sig_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+        sig_first_line = qore_aot_read_line(reader, ptr);
+        sig_last_line  = qore_aot_read_line(reader, ptr);
     }
     entry_first_line = 0;
     entry_last_line = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
-        entry_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
-        entry_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+        entry_first_line = qore_aot_read_line(reader, ptr);
+        entry_last_line  = qore_aot_read_line(reader, ptr);
     }
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
         int64_t po_lo = QoreAOTBinaryReader::readI64(ptr);
@@ -16338,7 +16336,7 @@ static bool readAndSetupVariantSignature(
 }
 
 static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
-        int16_t entry_first_line, int16_t entry_last_line,
+        int entry_first_line, int entry_last_line,
         const QoreParseOptions& variant_parse_options) {
     assert(pgm);
     assert(uvb);
@@ -16424,8 +16422,8 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
-            int16_t entry_first_line = 0;
-            int16_t entry_last_line = 0;
+            int entry_first_line = 0;
+            int entry_last_line = 0;
             QoreParseOptions variant_parse_options;
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
@@ -16589,8 +16587,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
-            int16_t entry_first_line = 0;
-            int16_t entry_last_line = 0;
+            int entry_first_line = 0;
+            int entry_last_line = 0;
             QoreParseOptions variant_parse_options;
             uint64_t t_sig0 = time_on ? now_us() : 0;
             if (time_on) {
@@ -16662,8 +16660,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             const char* base_path = reader.readStringRef(ptr);
                             entry.base_path = base_path ? base_path : "";
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_LINES) != 0) {
-                                entry.start_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
-                                entry.end_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+                                entry.start_line = qore_aot_read_line(reader, ptr);
+                                entry.end_line = qore_aot_read_line(reader, ptr);
                             }
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_NAMED_ARG_MAP) != 0) {
                                 entry.eval_result_size = QoreAOTBinaryReader::readU16(ptr);
