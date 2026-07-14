@@ -836,7 +836,10 @@ public:
     virtual ~QoreIRInstruction() = default;
 
     QoreIROpcode opcode;
-    int16_t cached_start_line;  // -1 = no loc, >=0 = loc->start_line (fills padding after opcode)
+    // -1 = no loc, >=0 = loc->start_line (fills the padding after the opcode, so 32 bits are free here); must be
+    // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
+    // debug line-change gate below reports the wrong line
+    int32_t cached_start_line;
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
