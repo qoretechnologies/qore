@@ -46,7 +46,7 @@ auto sub parse_json(string val) {
 %endif
 
 module QoreLlmUtils {
-    version = "1.1.0";
+    version = "1.1.1";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
         "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
     author = "Qore Technologies, s.r.o.";

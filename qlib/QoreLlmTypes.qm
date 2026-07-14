@@ -28,7 +28,7 @@
 %requires reflection
 
 module QoreLlmTypes {
-    version = "1.0.0";
+    version = "1.0.1";
     desc = "user module providing the provider-neutral hashdecls and abstract "
         "provider classes shared by QoreLlmUtils and LLM provider modules";
     author = "Qore Technologies, s.r.o.";
@@ -76,6 +76,12 @@ module QoreLlmTypes {
       and capability description
 
     @section qorellmtypesrelnotes Release Notes
+
+    @subsection qorellmtypes_1_0_1 QoreLlmTypes 1.0.1
+    - Added @ref QoreLlmUtils::ChatToolCall::thought_signature so a provider's
+      opaque reasoning signature survives the conversation: Gemini 3.x rejects
+      any follow-up request that replays a tool call without the signature it
+      returned with that call
 
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - Initial release; extracted from the QoreLlmUtils module to break a
@@ -234,6 +240,14 @@ public hashdecl ChatToolCall {
     string name;
     #! Parsed arguments hash to pass to the tool
     *hash<auto> arguments;
+    #! Opaque provider reasoning signature that must be echoed back with the call
+    /** Gemini 3.x returns a \c thoughtSignature on each \c functionCall part and rejects any
+        follow-up request that replays the call without it (HTTP 400, "Function call is missing a
+        thought_signature in functionCall parts").  The value is provider-opaque: it is never
+        inspected, only carried through the conversation and returned verbatim.  Providers that do
+        not use reasoning signatures leave this unset.
+    */
+    *string thought_signature;
 }
 
 #! A content part in a multimodal message (text, image, or file)

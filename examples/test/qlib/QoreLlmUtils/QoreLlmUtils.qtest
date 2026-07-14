@@ -160,6 +160,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
             \geminiToolCallResponseTest());
+        addTestCase("LlmBackend gemini tool call reasoning signature round trip",
+            \geminiToolCallThoughtSignatureTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
@@ -1076,6 +1078,93 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].path);
         assertEq("lookup customer",
             gemini_handler.requests[0].body.contents[0].parts[0].text);
+    }
+
+    #! Gemini 3.x rejects a replayed function call that lost its reasoning signature
+    /** The signature arrives as a sibling of `functionCall` on the response part and must be echoed
+        back verbatim on the `functionCall` part of the follow-up request, or the API answers
+        HTTP 400 "Function call is missing a thought_signature in functionCall parts".  It has to
+        survive the round trip through the backend's neutral OpenAI-shaped conversation format.
+    */
+    geminiToolCallThoughtSignatureTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": ({
+                    "code": 200,
+                    "body": {
+                        "candidates": ({
+                            "finishReason": "STOP",
+                            "content": {
+                                "parts": ({
+                                    "thoughtSignature": "sig-abc-123",
+                                    "functionCall": {
+                                        "name": "lookup",
+                                        "args": {"key": "customer"},
+                                    },
+                                }, {
+                                    "thoughtSignature": "sig-def-456",
+                                    "functionCall": {
+                                        "name": "lookup",
+                                        "args": {"key": "order"},
+                                    },
+                                },),
+                            },
+                        },),
+                        "usageMetadata": {"totalTokenCount": 4},
+                    },
+                }, {
+                    "code": 200,
+                    "body": {
+                        "candidates": ({
+                            "finishReason": "STOP",
+                            "content": {"parts": ({"text": "done"},)},
+                        },),
+                        "usageMetadata": {"totalTokenCount": 6},
+                    },
+                }),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "lookup customer"},
+        ), (
+            <ToolDefinition>{"name": "lookup"},
+        ));
+
+        assertEq("tool_use", rv.stop_reason);
+        assertEq("sig-abc-123", rv.tool_calls[0].thought_signature,
+            "the reasoning signature is parsed from the response part");
+        assertEq("sig-def-456", rv.tool_calls[1].thought_signature,
+            "each function call carries its own reasoning signature");
+
+        # replay the tool calls with their results, exactly as an agent loop does
+        hash<ChatResponse> rv2 = llm.chat((
+            <ChatMessage>{"role": "user", "content": "lookup customer"},
+            <ChatMessage>{
+                "role": "assistant",
+                "tool_calls": rv.tool_calls,
+            },
+            <ChatMessage>{
+                "role": "tool",
+                "name": "lookup",
+                "tool_call_id": rv.tool_calls[0].id,
+                "content": "{\"result\":\"ok\"}",
+            },
+        ), (
+            <ToolDefinition>{"name": "lookup"},
+        ));
+        assertEq("done", rv2.content);
+
+        list<auto> replayed =
+            gemini_handler.requests[1].body.contents[1].parts;
+        assertEq("lookup", replayed[0].functionCall.name,
+            "the assistant turn replays the function call");
+        assertEq("sig-abc-123", replayed[0].thoughtSignature,
+            "the replayed function call carries its reasoning signature back");
+        assertEq("sig-def-456", replayed[1].thoughtSignature,
+            "every replayed function call carries its own signature back");
     }
 
     geminiOpenAiChatCompletionsFacadeTest() {
