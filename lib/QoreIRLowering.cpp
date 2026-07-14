@@ -12314,6 +12314,27 @@ static QoreIROpcode analyzeFoldPattern(const QoreValue& fold_expr, const QoreTyp
     return QoreIROpcode::FoldlAny;
 }
 
+// Detect the left-associative string join body `$1 + <literal> + $2`.
+static bool analyzeStringJoinFoldPattern(const QoreValue& fold_expr, QoreValue& separator) {
+    const auto* outer = dynamic_cast<const QorePlusOperatorNode*>(fold_expr.getInternalNode());
+    if (!outer) {
+        return false;
+    }
+    const auto* arg2 = dynamic_cast<const QoreImplicitArgumentNode*>(outer->getRight().getInternalNode());
+    const auto* inner = dynamic_cast<const QorePlusOperatorNode*>(outer->getLeft().getInternalNode());
+    if (!arg2 || arg2->getOffset() != 1 || !inner) {
+        return false;
+    }
+    const auto* arg1 = dynamic_cast<const QoreImplicitArgumentNode*>(inner->getLeft().getInternalNode());
+    QoreValue candidate = inner->getRight();
+    if (!arg1 || arg1->getOffset() != 0
+            || !dynamic_cast<const QoreStringNode*>(candidate.getInternalNode())) {
+        return false;
+    }
+    separator = candidate;
+    return true;
+}
+
 // Pattern analysis for optimized map operations
 // Returns optimized opcode if pattern detected, or MapAny for fallback
 // For scale/offset patterns, constant_val is set to the constant operand
@@ -12630,6 +12651,42 @@ QoreIRValue QoreIRLowering::lowerFoldl(const QoreValue& expr, std::string& error
             root.fold_expr = &foldl->getFoldExpression();
             root.loc = foldl->loc;
             return lowerLazyPipelineFused(base_source, source_stages, root, error);
+        }
+    }
+
+    if (!std::getenv("QORE_DISABLE_IR_FOLDL_STRING_JOIN")) {
+        const QoreTypeInfo* source_type = getExprTypeInfo(foldl->getRight());
+        const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(source_type);
+        QoreValue separator;
+        if (element_type && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT
+                && analyzeStringJoinFoldPattern(foldl->getLeft(), separator)) {
+            QoreIRValue list = lowerExpression(foldl->getRight(), error);
+            if (!list.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue separator_ir = lowerConstant(separator, error);
+            if (!separator_ir.isValid()) {
+                return QoreIRValue();
+            }
+
+            QoreIRValue result;
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                auto* inst = builder.createInvoke(expr, {list, separator_ir}, normal_block,
+                    exception_stack.back(), foldl->loc);
+                inst->invoke_opcode = QoreIROpcode::FoldlStringJoin;
+                builder.setBlock(normal_block);
+                result = inst->result;
+            } else {
+                result = builder.createBinaryOp(QoreIROpcode::FoldlStringJoin,
+                    list, separator_ir, foldl->loc)->result;
+            }
+            maybeInsertNotNothingGuard(result, &expr, foldl->loc, nullptr);
+            return result;
         }
     }
 

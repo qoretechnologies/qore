@@ -831,6 +831,10 @@ uint64_t qore_rt_list_assignment_value_throwing(uint64_t value, int64_t index, E
 //! Falls back to qore_rt_add_any if either operand is not a string.
 uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+//! Fold an exact list<string> with a constant separator; returns a referenced string or NOTHING.
+uint64_t qore_rt_foldl_string_join_checked(uint64_t list_val, uint64_t separator_val,
+        ExceptionSink* xsink);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.

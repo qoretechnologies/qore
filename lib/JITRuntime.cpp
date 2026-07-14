@@ -56,6 +56,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -258,6 +259,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
+    { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
@@ -6317,6 +6319,87 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t righ
     }
     // Not both strings: fall back to generic add
     return qore_rt_add_any(left, right, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
+        uint64_t list_val, uint64_t separator_val, ExceptionSink* xsink) {
+    QoreValue value = fromBits(list_val);
+    QoreValue separator_value = fromBits(separator_val);
+    if (value.getType() != NT_LIST || separator_value.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    size_t size = list->size();
+    if (!size) {
+        return toBits(QoreValue());
+    }
+    if (size == 1) {
+        return toBits(list->retrieveEntry(0).refSelf());
+    }
+
+    QoreStringValueHelper separator(separator_value);
+    QoreValue first = list->retrieveEntry(0);
+    const QoreEncoding* encoding = separator->getEncoding();
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        encoding = first_string->getEncoding();
+    }
+
+    size_t reserve_size = 0;
+    bool can_reserve = true;
+    auto add_reserve_size = [&reserve_size, &can_reserve](size_t length) {
+        if (length > std::numeric_limits<size_t>::max() - reserve_size) {
+            can_reserve = false;
+        } else {
+            reserve_size += length;
+        }
+    };
+    if (separator->size() > std::numeric_limits<size_t>::max() / (size - 1)) {
+        can_reserve = false;
+    } else {
+        add_reserve_size(separator->size() * (size - 1));
+    }
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "foldl string join sizing")) {
+            return toBits(QoreValue());
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.getType() == NT_STRING) {
+            QoreStringValueHelper string(entry);
+            add_reserve_size(string->size());
+        }
+    }
+
+    QoreStringNodeHolder result(new QoreStringNode(encoding));
+    if (can_reserve) {
+        result->reserve(reserve_size);
+    }
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        result->concat(*first_string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    for (size_t i = 1; i < size; ++i) {
+        if (!(i % 100) && qore_check_cancel(xsink, "foldl string join")) {
+            return toBits(QoreValue());
+        }
+        result->concat(*separator, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.getType() == NT_STRING) {
+            QoreStringValueHelper string(entry);
+            result->concat(*string, xsink);
+            if (xsink && *xsink) {
+                return toBits(QoreValue());
+            }
+        }
+    }
+    return toBits(QoreValue(result.release()));
 }
 
 // Typed string concatenation - both operands are known to be strings at compile time

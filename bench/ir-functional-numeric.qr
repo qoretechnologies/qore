@@ -21,6 +21,14 @@ list<float> sub makeFloatData() {
     return data;
 }
 
+list<string> sub makeStringData() {
+    list<string> data = ();
+    for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, sprintf("item-%04d", i);
+    }
+    return data;
+}
+
 int sub foldSumInt(list<int> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -119,6 +127,15 @@ int sub selectPositiveInt(list<int> data, int rounds) {
     return checksum;
 }
 
+int sub foldJoinString(*list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, data);
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
 int rounds = ENV.QORE_BENCH_ROUNDS
     ? ENV.QORE_BENCH_ROUNDS.toInt()
@@ -160,6 +177,9 @@ switch (kernel) {
         break;
     case "select-positive-int":
         printf("%d\n", selectPositiveInt(makeIntData(), rounds));
+        break;
+    case "fold-join-string":
+        printf("%d\n", foldJoinString(makeStringData(), rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);
