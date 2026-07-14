@@ -14,16 +14,20 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
     private {
         string qore_bin;
         string qore_build_dir;
-        string qore_dir;
+        *string qore_dir;
     }
 
     constructor() : QUnit::Test("CMakeBuildHelpersTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR ?? dirname(qore_bin));
+        qore_build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
+            ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
         qore_dir = qore_build_dir + "/cmake";
         if (!is_file(qore_dir + "/QoreConfig.cmake")
                 && is_file(qore_dir + "/Qore/QoreConfig.cmake")) {
             qore_dir += "/Qore";
+        }
+        if (!is_file(qore_dir + "/QoreConfig.cmake")) {
+            qore_dir = NOTHING;
         }
 
         addTestCase("exported Qore CMake build helpers", \testExportedHelpers());
@@ -85,10 +89,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
     \"flags=${SAMPLE_FLAGS}\\n\")
 ");
 
-        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s",
-            src_dir, build_dir, qore_dir));
+        string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
+            src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
         assertTrue(is_file(build_dir + "/helper-vars.txt"),
-            "configured with build-tree Qore package: " + configure);
+            "configured with Qore package: " + configure);
 
         string vars = read(build_dir + "/helper-vars.txt");
         assertTrue(vars.find("qcc=") != -1, "qcc command exported: " + vars);
@@ -368,8 +372,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\")
 ");
 
-        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s",
-            src_dir, build_dir, qore_dir));
+        string configure = run(sprintf("cd %s && cmake -S . -B %s%s",
+            src_dir, build_dir, qore_dir ? " -DQore_DIR=" + qore_dir : ""));
         assertTrue(is_file(build_dir + "/qo-vars.txt"),
             "configured generic qcc helper project: " + configure);
 
