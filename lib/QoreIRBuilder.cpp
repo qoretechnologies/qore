@@ -193,6 +193,8 @@ void QoreIRBuilder::setFunction(QoreIRFunction* n_func) {
     // (e.g. from a function whose lowering aborted on error) so scope ids never
     // leak across functions.  Ids stay globally monotonic and are not reset.
     temp_scope_id_stack.clear();
+    exception_temp_scope_id = 0;
+    exception_temp_scope_id_stack.clear();
 }
 
 void QoreIRBuilder::setBlock(QoreIRBasicBlock* n_block) {
@@ -630,6 +632,7 @@ QoreIRInvokeInstruction* QoreIRBuilder::createInvokeHashKeyAccess(const char* ke
     inst->operands = operands;
     inst->invoke_opcode = QoreIROpcode::HashKeyAccess;
     inst->invoke_key_name = key_name;
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -986,6 +989,7 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
     inst->operands = args;
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1027,6 +1031,7 @@ QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMe
     inst->operands = operands;
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1036,6 +1041,7 @@ QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, cons
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1232,6 +1238,10 @@ QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* 
         inst->temp_scope_id = temp_scope_id_stack.back();
         temp_scope_id_stack.pop_back();
     }
+    if (!exception_temp_scope_id_stack.empty()) {
+        exception_temp_scope_id = exception_temp_scope_id_stack.back();
+        exception_temp_scope_id_stack.pop_back();
+    }
     return inst;
 }
 
@@ -1240,7 +1250,27 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     inst->loc = loc;
     inst->temp_scope_id = next_temp_scope_id++;
     temp_scope_id_stack.push_back(inst->temp_scope_id);
+    exception_temp_scope_id_stack.push_back(exception_temp_scope_id);
+    exception_temp_scope_id = inst->temp_scope_id;
     return inst;
+}
+
+void QoreIRBuilder::setExceptionTempScopeId(uint32_t id) {
+    exception_temp_scope_id = id;
+}
+
+uint32_t QoreIRBuilder::getExceptionTempScopeId() const {
+    return exception_temp_scope_id;
+}
+
+void QoreIRBuilder::abandonTempScope() {
+    if (!temp_scope_id_stack.empty()) {
+        temp_scope_id_stack.pop_back();
+    }
+    if (!exception_temp_scope_id_stack.empty()) {
+        exception_temp_scope_id = exception_temp_scope_id_stack.back();
+        exception_temp_scope_id_stack.pop_back();
+    }
 }
 
 QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc) {

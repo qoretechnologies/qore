@@ -6325,6 +6325,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     std::unordered_map<uint32_t, int32_t> weak_load_temp_slots;
     auto& borrowed_temp_remaining = frame.borrowed_temp_remaining;
     auto& borrowed_temp_active = frame.borrowed_temp_active;
+    struct TempCleanupMark {
+        uint32_t scope_id;
+        size_t cleanup_size;
+    };
+    std::vector<TempCleanupMark> temp_cleanup_marks;
 
     auto releaseWeakLoadTemp = [&](uint32_t id) {
         if (id >= values.size()) {
@@ -6408,6 +6413,53 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             --borrowed_temp_active;
             values[id] = QoreValue();
         }
+    };
+
+    auto cleanupToTempScope = [&](uint32_t scope_id, bool no_throw, bool fallback_to_nearest = false) {
+        if (!scope_id && !fallback_to_nearest) {
+            return;
+        }
+        auto mark = std::find_if(temp_cleanup_marks.rbegin(), temp_cleanup_marks.rend(),
+            [scope_id](const TempCleanupMark& candidate) {
+                return candidate.scope_id == scope_id;
+            });
+        if (mark == temp_cleanup_marks.rend() && fallback_to_nearest && !temp_cleanup_marks.empty()) {
+            mark = temp_cleanup_marks.rbegin();
+        }
+        if (mark == temp_cleanup_marks.rend()) {
+            return;
+        }
+        size_t mark_index = temp_cleanup_marks.size() - 1
+            - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark));
+        size_t cleanup_size = mark->cleanup_size;
+        ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
+        unsigned cancel_countdown = 100;
+        while (cleanup.size() > cleanup_size) {
+            if (!--cancel_countdown) {
+                qore_check_cancel(xsink, "IR temporary cleanup");
+                cancel_countdown = 100;
+            }
+            uint32_t id = cleanup.back();
+            cleanup.pop_back();
+            if (id >= values.size()) {
+                continue;
+            }
+            QoreValue& slot = values[id];
+            if (cleanup_log && slot.hasNode()) {
+                if (slot.getType() == NT_STRING) {
+                    QoreStringValueHelper str(slot);
+                    cleanup_log->push_back(str->getBuffer());
+                } else {
+                    cleanup_log->push_back(slot.getTypeName());
+                }
+            }
+            slot.discard(eff_xsink);
+            slot = QoreValue();
+            weak_load_temp_slots.erase(id);
+            releaseBorrowedTemp(id);
+        }
+        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + mark_index, temp_cleanup_marks.end());
+        ephemeral_weak_ref_slots.clear();
     };
 
     const std::vector<uint8_t>& return_protected_slots = func.interpreter_return_protected_slots;
@@ -7478,7 +7530,7 @@ next_instruction:
                     if (!inv->exception_target) {
                         return returnAfterUnhandledException();
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupToTempScope(inv->temp_scope_id, true);
                     if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
                         fprintf(stderr, "[ir-exception] func='%s' branch-exception xsink=%d target=%p\n",
                             func.name.c_str(), xsink && *xsink ? 1 : 0,
@@ -11152,6 +11204,7 @@ load_local_done:
                 // (cleanup entries store instruction result slot ids bounded by
                 // the per-function value pool size), and cleanupValues already
                 // skips such out-of-range ids safely on exception unwind.
+                temp_cleanup_marks.push_back({inst->temp_scope_id, cleanup.size()});
                 cleanup.push_back(UINT32_MAX);
                 ++ip;
                 break;
@@ -11177,26 +11230,7 @@ load_local_done:
                 // destructor-raised exceptions propagate.  If no sentinel is
                 // present (malformed IR), falls back to a full drain rather
                 // than looping forever.
-                while (!cleanup.empty()) {
-                    uint32_t id = cleanup.back();
-                    cleanup.pop_back();
-                    if (id == UINT32_MAX) {
-                        break;  // matching mark popped
-                    }
-                    if (id < values.size()) {
-                        QoreValue& slot = values[id];
-                        if (cleanup_log && slot.hasNode()) {
-                            if (slot.getType() == NT_STRING) {
-                                QoreStringValueHelper str(slot);
-                                cleanup_log->push_back(str->getBuffer());
-                            } else {
-                                cleanup_log->push_back(slot.getTypeName());
-                            }
-                        }
-                        slot.discard(xsink);
-                        slot = QoreValue();
-                    }
-                }
+                cleanupToTempScope(inst->temp_scope_id, false, true);
                 while (!weak_load_temp_slots.empty()) {
                     uint32_t id = weak_load_temp_slots.begin()->first;
                     releaseWeakLoadTemp(id);
@@ -13733,10 +13767,10 @@ lvalue_path_unary_done:
                     }
                     if (xsink && *xsink) {
                         // On exception, branch to exception target
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (!invoke_inst->exception_target) {
                             return returnAfterUnhandledException(true);
                         }
+                        cleanupToTempScope(invoke_inst->temp_scope_id, true);
                         prev_block = block;
                         block = invoke_inst->exception_target;
                         ip = 0;
@@ -13796,10 +13830,10 @@ lvalue_path_unary_done:
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     if (!invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);
                     }
+                    cleanupToTempScope(invoke_inst->temp_scope_id, true);
                     prev_block = block;
                     block = invoke_inst->exception_target;
                     ip = 0;
@@ -14058,10 +14092,10 @@ lvalue_path_unary_done:
 
                 if (xsink && *xsink) {
                     // On exception, branch to exception target
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     if (!de_invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);
                     }
+                    cleanupToTempScope(de_invoke_inst->temp_scope_id, true);
                     prev_block = block;
                     block = de_invoke_inst->exception_target;
                     ip = 0;

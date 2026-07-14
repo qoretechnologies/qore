@@ -303,6 +303,32 @@ string sub stringReassignmentSnapshot() {
     return result + \":\" + values[0];
 }
 
+nothing sub throwNoTemp() {
+    throw \"EXPECTED\", \"no temporary\";
+}
+
+string sub throwWithTemp(string value) {
+    throw \"EXPECTED\", value;
+}
+
+string sub exceptionSnapshot() {
+    list<string> values = (\"a\", \"b\");
+    string result;
+    foreach string value in (values) {
+        try {
+            throwNoTemp();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        result += value;
+        try {
+            throwWithTemp(value);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        result += value;
+    }
+    return result;
+}
+
 string action = ARGV.size() ? ARGV[0] : \"\";
 if (action == \"sparse-int\") {
     sparseInt();
@@ -340,12 +366,12 @@ if (!(maybeAssignedString(False) === NOTHING)
         stringMutationSnapshot(), stringReassignmentSnapshot());
     exit(2);
 }
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\", sumInt((1, 2, 3, 4)),
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s\\n\", sumInt((1, 2, 3, 4)),
     sumFloat((1.5, 2.5, 3.0)), countBool((True, False, True)), unassigned(), empty(), removed(),
     deleted(), optional(NOTHING), optional((8, 9)), optionalBool(NOTHING),
     optionalBool((False, True, True)), sparseAuto(), controlFlow((1, 2, 3, 4, 5)),
     returnFromLoop((1, 2, 3, 4)), nested((1, 2), (3, 4)), basic ? 0 : mutationSnapshot(),
-    basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")));
+    basic ? 0 : reassignmentSnapshot(), genericList((\"a\", \"b\")), exceptionSnapshot());
 ";
 
 string script_path = "/tmp/qore-ir-typed-foreach-" + string(getpid()) + ".qr";
@@ -374,7 +400,7 @@ string sub runAot(bool disabled, string arg) {
         libqore_dir, exe, arg));
 }
 
-string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab\n";
+string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
@@ -382,7 +408,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab\n";
+string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb\n";
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode, True, "basic");
     if (actual != basic_expected) {
@@ -436,6 +462,7 @@ if (stats !~ /IR-OPT: sumInt:.*typed-foreach=1/
         || stats !~ /IR-OPT: firstString:.*typed-foreach=1/
         || stats !~ /IR-OPT: stringMutationSnapshot:.*typed-foreach=1/
         || stats !~ /IR-OPT: stringReassignmentSnapshot:.*typed-foreach=1/
+        || stats !~ /IR-OPT: exceptionSnapshot:.*typed-foreach=1/
         || stats !~ /IR-OPT: nested:.*typed-foreach=2/) {
     printf("missing typed foreach lowering:\n%s", stats);
     exit(2);

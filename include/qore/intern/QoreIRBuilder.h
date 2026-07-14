@@ -280,6 +280,12 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+    //! Set the statement temp scope that caught invoke exceptions must unwind.
+    void setExceptionTempScopeId(uint32_t id);
+    //! Return the statement temp scope currently assigned to invoke instructions.
+    uint32_t getExceptionTempScopeId() const;
+    //! Drop the current temp scope after lowering emits a terminating instruction.
+    void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
     QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
@@ -363,6 +369,8 @@ private:
     // QoreIRInstruction::temp_scope_id.
     uint32_t next_temp_scope_id = 1;
     std::vector<uint32_t> temp_scope_id_stack;
+    uint32_t exception_temp_scope_id = 0;
+    std::vector<uint32_t> exception_temp_scope_id_stack;
 };
 
 #endif

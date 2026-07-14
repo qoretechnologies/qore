@@ -3370,10 +3370,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // critical for e.g. a `foreach` list expression's iterator temp, which
         // lives in the cleanup vector across every body-statement boundary.
         bool statement_needs_cleanup = statementMayCreateNodeTemp(*it);
+        uint32_t previous_exception_temp_scope_id = builder.getExceptionTempScopeId();
         if (statement_needs_cleanup) {
             builder.createPushTempMark((*it)->loc);
+        } else {
+            builder.setExceptionTempScopeId(0);
         }
         if (!lowerStatement(*it, error)) {
+            if (statement_needs_cleanup) {
+                builder.abandonTempScope();
+            } else {
+                builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
+            }
             if (pushed_lvar_exception_target) {
                 exception_stack.pop_back();
             }
@@ -3389,11 +3397,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (blockHasTerminator(builder.getBlock())) {
             // Terminator (Return/Throw/Branch) handles full cleanup including
             // any markers; skip DiscardTemps emission.
+            if (statement_needs_cleanup) {
+                builder.abandonTempScope();
+            } else {
+                builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
+            }
             terminated = true;
             break;
         }
         if (statement_needs_cleanup) {
             builder.createDiscardTemps((*it)->loc);
+        } else {
+            builder.setExceptionTempScopeId(previous_exception_temp_scope_id);
         }
     }
 
