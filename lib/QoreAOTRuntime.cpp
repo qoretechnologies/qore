@@ -981,7 +981,30 @@ static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const Qor
     return variant;
 }
 
-const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+struct AOTSlotResolutionCache {
+    QoreProgram* pgm;
+    std::unordered_map<std::string, const FunctionEntry*> functions;
+    std::unordered_map<std::string, const QoreClass*> classes;
+};
+
+static thread_local AOTSlotResolutionCache* current_aot_slot_resolution_cache = nullptr;
+
+class AOTSlotResolutionCacheScope {
+public:
+    explicit AOTSlotResolutionCacheScope(AOTSlotResolutionCache* cache)
+            : previous(current_aot_slot_resolution_cache) {
+        current_aot_slot_resolution_cache = cache;
+    }
+
+    ~AOTSlotResolutionCacheScope() {
+        current_aot_slot_resolution_cache = previous;
+    }
+
+private:
+    AOTSlotResolutionCache* previous;
+};
+
+static const FunctionEntry* resolveAOTFunctionEntryForSlotUncached(QoreProgram* pgm, const char* name) {
     qore_program_private* pp = qore_program_private::get(*pgm);
     if (const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*pp->RootNS, name)) {
         return fe;
@@ -1023,6 +1046,23 @@ const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, 
         }
     }
     return nullptr;
+}
+
+const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name) {
+    AOTSlotResolutionCache* cache = current_aot_slot_resolution_cache;
+    if (!cache || cache->pgm != pgm || !name || !*name) {
+        return resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    }
+
+    auto i = cache->functions.find(name);
+    if (i != cache->functions.end()) {
+        return i->second;
+    }
+    const FunctionEntry* fe = resolveAOTFunctionEntryForSlotUncached(pgm, name);
+    if (fe) {
+        cache->functions.emplace(name, fe);
+    }
+    return fe;
 }
 
 QoreValue qore_aot_make_deferred_function_call(QoreProgram* pgm, const char* name, QoreParseListNode* args) {
@@ -1844,14 +1884,33 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
 
 const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
         const char* class_ref, bool pseudo) {
+    AOTSlotResolutionCache* cache = current_aot_slot_resolution_cache;
+    std::string cache_key;
+    if (cache && cache->pgm == pgm && class_ref && *class_ref) {
+        cache_key.reserve(strlen(class_ref) + 1);
+        cache_key.push_back(pseudo ? 'P' : 'C');
+        cache_key.append(class_ref);
+        auto i = cache->classes.find(cache_key);
+        if (i != cache->classes.end()) {
+            return i->second;
+        }
+    }
+
     AOTClassRef ref = decodeAOTClassRef(class_ref);
     const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref.path, pseudo);
     if (qc || !ref.module || !*ref.module) {
+        if (qc && cache && cache->pgm == pgm) {
+            cache->classes.emplace(std::move(cache_key), qc);
+        }
         return qc;
     }
 
     QoreProgram* module_pgm = MM.findUserModuleProgram(ref.module);
-    return resolveAOTClassRefInProgram(module_pgm, ref.path, pseudo);
+    qc = resolveAOTClassRefInProgram(module_pgm, ref.path, pseudo);
+    if (qc && cache && cache->pgm == pgm) {
+        cache->classes.emplace(std::move(cache_key), qc);
+    }
+    return qc;
 }
 
 static std::string describeAOTClassRef(const char* class_ref) {
@@ -8354,6 +8413,10 @@ static void registerAOTFunctionsFromSlotMaps(
         int* ignored_unlinked_functions = nullptr,
         AOTClosureRuntimeBindingMap* external_closure_bindings = nullptr,
         const QoreAOTBinaryDeserializer* deserialized_variants = nullptr) {
+    const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
+    AOTSlotResolutionCache resolution_cache{pgm};
+    AOTSlotResolutionCacheScope resolution_cache_scope(use_resolution_cache ? &resolution_cache : nullptr);
+
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     if (!sec) {
         printd(0, "AOT v2: no SLOT_MAPS section found\n");
