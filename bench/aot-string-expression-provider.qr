@@ -1,0 +1,19 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub stringExpressionScore(string value, string pattern, int adjustment) {
+    return value.contains(pattern)
+        ? value.length() + adjustment
+        : value.size() - adjustment;
+}
+
+int sub stringFindScore(string value, string pattern, int adjustment) {
+    return value.find(pattern) + value.length() + adjustment;
+}
+
+int sub nestedStringExpressionScore(string value, string pattern, int adjustment) {
+    return stringExpressionScore(value, pattern, adjustment) * 3
+        + value.length() * 2 + adjustment;
+}

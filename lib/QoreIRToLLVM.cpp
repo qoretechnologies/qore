@@ -3833,25 +3833,57 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         return nullptr;
     }
     std::vector<unsigned> optional_source_params;
+    auto add_optional_source = [&](int param) -> bool {
+        if (param < 0 || static_cast<size_t>(param) >= native_args.size()) {
+            return false;
+        }
+        unsigned index = static_cast<unsigned>(param);
+        if (!fastEntryParamRejectsNothing(info, index)
+                && std::find(optional_source_params.begin(), optional_source_params.end(), index)
+                    == optional_source_params.end()) {
+            optional_source_params.push_back(index);
+        }
+        return true;
+    };
     for (const auto& node : info.int_expression.nodes) {
         bool source = node.kind == AOTIntExpressionNodeKind::ListSize
             || node.kind == AOTIntExpressionNodeKind::StringSize
             || node.kind == AOTIntExpressionNodeKind::StringLength;
-        if (!source) {
-            continue;
-        }
-        if (node.param < 0 || static_cast<size_t>(node.param) >= native_args.size()) {
+        bool string_operation = node.kind >= AOTIntExpressionNodeKind::StringStartsWith
+            && node.kind <= AOTIntExpressionNodeKind::StringRFind;
+        if (source && !add_optional_source(node.param)) {
             return nullptr;
         }
-        unsigned param = static_cast<unsigned>(node.param);
-        if (!fastEntryParamRejectsNothing(info, param)
-                && std::find(optional_source_params.begin(), optional_source_params.end(), param)
-                    == optional_source_params.end()) {
-            optional_source_params.push_back(param);
+        if (string_operation
+                && (!add_optional_source(node.param)
+                    || !add_optional_source(node.lhs))) {
+            return nullptr;
         }
     }
     if (!optional_source_params.empty() && !fallback_fn) {
         return nullptr;
+    }
+
+    llvm::BasicBlock* assigned_bb = nullptr;
+    llvm::BasicBlock* fallback_bb = nullptr;
+    llvm::BasicBlock* merge_bb = nullptr;
+    if (!optional_source_params.empty()) {
+        llvm::Value* assigned = nullptr;
+        for (unsigned param : optional_source_params) {
+            llvm::Value* source = native_args[param];
+            if (source->getType() != i64_type) {
+                return nullptr;
+            }
+            llvm::Value* current = builder->CreateICmpNE(source,
+                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            assigned = assigned ? builder->CreateAnd(assigned, current) : current;
+        }
+        llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+        assigned_bb = llvm::BasicBlock::Create(ctx, "aot.int.source.assigned", llvm_func);
+        fallback_bb = llvm::BasicBlock::Create(ctx, "aot.int.source.nothing", llvm_func);
+        merge_bb = llvm::BasicBlock::Create(ctx, "aot.int.source.merge", llvm_func);
+        builder->CreateCondBr(assigned, assigned_bb, fallback_bb);
+        builder->SetInsertPoint(assigned_bb);
     }
 
     std::vector<llvm::Value*> values;
@@ -3893,6 +3925,57 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 auto helper = module.getOrInsertFunction(name,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 llvm::Value* boxed = builder->CreateCall(helper, {base});
+                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                value = builder->CreateCall(to_int, {boxed});
+            }
+        } else if (node.kind >= AOTIntExpressionNodeKind::StringStartsWith
+                && node.kind <= AOTIntExpressionNodeKind::StringRFind) {
+            if (node.param < 0
+                    || static_cast<size_t>(node.param) >= native_args.size()
+                    || node.lhs >= native_args.size()
+                    || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
+                        != BatchCalleeParamKind::Boxed
+                    || getFastEntryParamKind(info, node.lhs)
+                        != BatchCalleeParamKind::Boxed) {
+                return nullptr;
+            }
+            llvm::Value* base = native_args[static_cast<size_t>(node.param)];
+            llvm::Value* pattern = native_args[node.lhs];
+            if (base->getType() != i64_type || pattern->getType() != i64_type) {
+                return nullptr;
+            }
+            bool predicate = node.kind <= AOTIntExpressionNodeKind::StringContains;
+            if (predicate) {
+                int operation = node.kind == AOTIntExpressionNodeKind::StringStartsWith ? 0
+                    : node.kind == AOTIntExpressionNodeKind::StringEndsWith ? 1 : 2;
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_pseudo_string_predicate_noguard",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i32_type, ptr_type}, false));
+                llvm::Value* boxed = builder->CreateCall(helper,
+                    {base, pattern, llvm::ConstantInt::get(i32_type, operation), xsink_arg});
+                auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                value = builder->CreateICmpNE(builder->CreateCall(to_bool, {boxed}),
+                    llvm::ConstantInt::get(i64_type, 0));
+            } else {
+                int64_t default_offset = node.kind == AOTIntExpressionNodeKind::StringFind
+                    ? 0 : -1;
+                llvm::Value* offset = node.rhs == UINT8_MAX
+                    ? static_cast<llvm::Value*>(llvm::ConstantInt::get(i64_type, default_offset))
+                    : node.rhs < values.size() ? values[node.rhs] : nullptr;
+                if (!offset || offset->getType() != i64_type) {
+                    return nullptr;
+                }
+                const char* name = node.kind == AOTIntExpressionNodeKind::StringFind
+                    ? "qore_rt_pseudo_string_find_noguard"
+                    : "qore_rt_pseudo_string_rfind_noguard";
+                auto helper = module.getOrInsertFunction(name,
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i64_type, ptr_type}, false));
+                llvm::Value* boxed = builder->CreateCall(helper,
+                    {base, pattern, offset, xsink_arg});
                 auto to_int = module.getOrInsertFunction("qore_rt_to_int",
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 value = builder->CreateCall(to_int, {boxed});
@@ -3963,27 +4046,8 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         return result;
     }
 
-    llvm::Value* assigned = nullptr;
-    for (unsigned param : optional_source_params) {
-        llvm::Value* value = native_args[param];
-        if (value->getType() != i64_type) {
-            return nullptr;
-        }
-        llvm::Value* current = builder->CreateICmpNE(value,
-            llvm::ConstantInt::get(i64_type, VAL_NOTHING));
-        assigned = assigned ? builder->CreateAnd(assigned, current) : current;
-    }
-    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
-    llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
-        ctx, "aot.int.source.assigned", llvm_func);
-    llvm::BasicBlock* fallback_bb = llvm::BasicBlock::Create(
-        ctx, "aot.int.source.nothing", llvm_func);
-    llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(
-        ctx, "aot.int.source.merge", llvm_func);
-    builder->CreateCondBr(assigned, assigned_bb, fallback_bb);
-    builder->SetInsertPoint(assigned_bb);
-    builder->CreateBr(merge_bb);
     assigned_bb = builder->GetInsertBlock();
+    builder->CreateBr(merge_bb);
     builder->SetInsertPoint(fallback_bb);
     llvm::Value* fallback_result = builder->CreateCall(fallback_fn, native_args);
     builder->CreateBr(merge_bb);

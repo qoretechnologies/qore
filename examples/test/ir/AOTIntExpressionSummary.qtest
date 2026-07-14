@@ -67,6 +67,38 @@ int sub optional_string_measure_expr(*string value, int adjustment) {
     return value.size() * 3 + value.length() * 5 + adjustment;
 }
 
+int sub string_starts_expr(string value, string pattern, int adjustment) {
+    return value.startsWith(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_ends_expr(string value, string pattern, int adjustment) {
+    return value.endsWith(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_contains_expr(string value, string pattern, int adjustment) {
+    return value.contains(pattern)
+        ? value.length() + adjustment : value.size() - adjustment;
+}
+
+int sub string_find_expr(string value, string pattern, int offset, int adjustment) {
+    return value.find(pattern, offset) + adjustment;
+}
+
+int sub string_rfind_expr(string value, string pattern, int adjustment) {
+    return value.rfind(pattern) + adjustment;
+}
+
+int sub multiple_string_ops_expr(string value, string pattern, int adjustment) {
+    return value.find(pattern) + value.rfind(pattern) + adjustment;
+}
+
+int sub nested_string_expr(string value, string pattern, int adjustment) {
+    return string_contains_expr(value, pattern, adjustment) * 3
+        + value.length() * 2 + adjustment;
+}
+
 int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
     return left.size() * 7 + right.size() * 5 + adjustment * 3;
 }
@@ -117,6 +149,12 @@ string sub consumerCode() {
     } catch (hash<auto> ex) {
         optional_nothing_rejected = True;
     }
+    bool string_expression_rejected = False;
+    try {
+        string_contains_expr(missing_string, \"x\", 1);
+    } catch (hash<auto> ex) {
+        string_expression_rejected = True;
+    }
     printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%d:%d:%d:%.17g:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         bounded_expr(2, 3, 4),
         bounded_expr(9223372036854775807, 2, -3),
@@ -138,6 +176,27 @@ string sub consumerCode() {
         optional_nothing_rejected,
         missing_string_rejected,
         list_measure_expr((1, 2, 3), (4, 5), 6));
+    string utf8 = \"a\u00e9bc\u00e9\";
+    string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
+    bool encoding_rejected = False;
+    try {
+        string_contains_expr(convert_encoding(\"ascii\", \"US-ASCII\"), \"\u00df\", 1);
+    } catch (hash<auto> ex) {
+        encoding_rejected = True;
+    }
+    printf(\"string-expr:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+        string_starts_expr(utf8, \"a\u00e9\", 2),
+        string_ends_expr(utf8, \"c\u00e9\", 3),
+        string_contains_expr(utf8, \"\u00e9b\", 4),
+        string_contains_expr(utf8, \"zz\", 4),
+        string_find_expr(utf8, \"\u00e9\", 2, 5),
+        string_rfind_expr(utf8, \"\u00e9\", 5),
+        multiple_string_ops_expr(utf8, \"\u00e9\", 5),
+        nested_string_expr(utf8, \"\u00e9\", 2),
+        string_contains_expr(latin1, convert_encoding(\"\u00e9b\", \"ISO-8859-1\"), 4),
+        string_find_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 2, 5),
+        string_rfind_expr(latin1, convert_encoding(\"\u00e9\", \"ISO-8859-1\"), 5),
+        string_expression_rejected, encoding_rejected);
     return 0;
 }
 ";
@@ -180,7 +239,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"15\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"16\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -193,6 +252,18 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"15\"/)
         || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_starts_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_ends_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_contains_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_find_expr\(string,string,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"string_rfind_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multiple_string_ops_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"nested_string_expr\(string,string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 19/)
+        || !(provider_index =~ /\"kind\": 20/)
+        || !(provider_index =~ /\"kind\": 21/)
+        || !(provider_index =~ /\"kind\": 22/)
+        || !(provider_index =~ /\"kind\": 23/)
         || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
