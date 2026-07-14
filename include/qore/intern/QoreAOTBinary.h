@@ -2039,6 +2039,20 @@ class QoreAOTBinaryDeserializer {
     std::vector<std::string> class_signature_hashes;
     std::vector<std::string> class_injected_paths;
 
+    // Exact native slot key -> variant bindings populated while functions and
+    // methods are deserialized.  Slot registration can consume these pointers
+    // directly instead of walking the namespace/class tree and rebuilding each
+    // variant signature a second time.  Only variants that have SLOT_MAPS
+    // entries are retained, and the map lives no longer than this session.
+    struct SlotVariantBinding {
+        UserVariantBase* variant = nullptr;
+        const qore_class_private* class_ctx = nullptr;
+    };
+    std::unordered_set<std::string> slot_map_names;
+    bool has_slot_map_section = false;
+    bool cache_slot_variant_bindings = true;
+    std::unordered_map<std::string, SlotVariantBinding> slot_variant_bindings;
+
     //! Batch-wide class lookup map installed by QoreAOTBinaryMultiDeserializer.
     //! Pending defaults can reference classes from sibling .qo sessions; the
     //! per-session class_list map is not sufficient for those references.
@@ -2347,6 +2361,25 @@ public:
         if (type_resolver) {
             type_resolver->setSharedCache(shared);
         }
+    }
+
+    /** Return the exact deserialized variant for a native SLOT_MAPS key.
+        @param key the exact native slot key
+        @param class_ctx receives the owning class for method variants, or nullptr for functions
+        @return the matching variant, or nullptr if no exact binding was cached
+    */
+    UserVariantBase* findSlotMapVariant(const char* key,
+            const qore_class_private*& class_ctx) const {
+        class_ctx = nullptr;
+        if (!key) {
+            return nullptr;
+        }
+        auto i = slot_variant_bindings.find(key);
+        if (i == slot_variant_bindings.end()) {
+            return nullptr;
+        }
+        class_ctx = i->second.class_ctx;
+        return i->second.variant;
     }
 
     //! Add this session's class shells to a caller-owned lookup map, including

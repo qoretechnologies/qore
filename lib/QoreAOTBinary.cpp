@@ -13606,6 +13606,17 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
     if (!resolveTypeTable(error)) {
         return false;
     }
+    slot_map_names.clear();
+    has_slot_map_section = false;
+    if (!collectAOTSlotMapFunctionNames(reader, slot_map_names,
+            has_slot_map_section, error)) {
+        return false;
+    }
+    slot_variant_bindings.clear();
+    cache_slot_variant_bindings = getenv("QORE_DISABLE_AOT_SLOT_VARIANT_BINDINGS") == nullptr;
+    if (cache_slot_variant_bindings) {
+        slot_variant_bindings.reserve(slot_map_names.size());
+    }
 
     bool time_on = getenv("QORE_AOT_PHASE_TIMING") != nullptr;
     auto now_us = [] () -> uint64_t {
@@ -16452,6 +16463,14 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
 
         // Create the QoreFunction
         QoreFunction* func = new QoreFunction(name);
+        std::string qualified_name;
+        if (has_slot_map_section && cache_slot_variant_bindings) {
+            ns_list[ns_idx]->getPath(qualified_name);
+            if (!qualified_name.empty()) {
+                qualified_name += "::";
+            }
+            qualified_name += name;
+        }
 
         for (uint32_t v = 0; v < num_variants; ++v) {
             uint8_t vflags = 0;
@@ -16498,6 +16517,13 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
 
             // Add variant to function via the parse-time API, then commit
             func->addPendingVariant(ufv);
+            if (has_slot_map_section && cache_slot_variant_bindings) {
+                std::string variant_key = getVariantKey(qualified_name.c_str(), ufv);
+                if (slot_map_names.find(variant_key) != slot_map_names.end()) {
+                    slot_variant_bindings.emplace(std::move(variant_key),
+                        SlotVariantBinding{ufv, nullptr});
+                }
+            }
         }
 
         // Commit all pending variants to the committed list
@@ -16538,11 +16564,6 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     };
     uint64_t local_alloc_us = 0, local_sig_us = 0, local_add_us = 0;
     uint64_t local_variants = 0;
-    bool has_slot_map_section = false;
-    std::unordered_set<std::string> slot_map_names;
-    if (!collectAOTSlotMapFunctionNames(reader, slot_map_names, has_slot_map_section, error)) {
-        return false;
-    }
     const bool has_const_methods = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_METHODS) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
@@ -16758,6 +16779,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 continue;
             }
 
+            std::string variant_key;
+            if (has_slot_map_section && cache_slot_variant_bindings) {
+                variant_key = getAOTMethodVariantKey(qc, method_name, is_static != 0, mvb);
+            }
+
             if (has_slot_map_section && !is_static && !is_constructor && !is_destructor && !is_copy
                     && !is_abstract) {
                 // Empty inherited shells emitted by older qmods carry no body
@@ -16769,7 +16795,9 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 // silently falling back to the base class implementation.
                 bool has_body_lines = (entry_first_line != 0) || (entry_last_line != 0);
                 if (!has_body_lines) {
-                    std::string variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
+                    if (variant_key.empty()) {
+                        variant_key = getAOTMethodVariantKey(qc, method_name, false, mvb);
+                    }
                     if (slot_map_names.find(variant_key) == slot_map_names.end()
                             && hasInheritedConcreteMethodVariant(qc, method_name, mvb)) {
                         printd(2, "AOT deser: skipping stale inherited method shell '%s::%s' without native slot '%s'\n",
@@ -16809,6 +16837,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             }
             if (time_on) {
                 local_add_us += now_us() - t_add0;
+            }
+            if (has_slot_map_section && cache_slot_variant_bindings
+                    && slot_map_names.find(variant_key) != slot_map_names.end()) {
+                slot_variant_bindings.emplace(std::move(variant_key),
+                    SlotVariantBinding{umv, qore_class_private::get(*qc)});
             }
         }
 
