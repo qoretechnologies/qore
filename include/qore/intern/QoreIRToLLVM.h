@@ -626,6 +626,10 @@ private:
     llvm::Value* emitAOTIntExpression(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args);
 
+    // Emit a bounded pure native-float expression summary without fast-math flags.
+    llvm::Value* emitAOTFloatExpression(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args);
+
     // Emit an imported encoding-aware string operation. Returns nullptr when
     // no valid summary is available for the supplied fast-entry arguments.
     llvm::Value* emitAOTStringOp(const BatchCalleeInfo& info,

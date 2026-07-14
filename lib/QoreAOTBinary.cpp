@@ -6626,6 +6626,15 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeU8(node.third);
         writer.writeI64(node.constant);
     }
+    assert(rec.float_expression_nodes.size() <= 16);
+    writer.writeU32(static_cast<uint32_t>(rec.float_expression_nodes.size()));
+    for (const auto& node : rec.float_expression_nodes) {
+        writer.writeU8(node.kind);
+        writer.writeU8(node.lhs);
+        writer.writeU8(node.rhs);
+        writer.writeU8(static_cast<uint8_t>(node.param));
+        writer.writeF64(node.constant);
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6715,6 +6724,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.global_int_global_scale = info.global_int_global_scale;
     rec.global_int_offset = info.global_int_offset;
     rec.int_expression_nodes = info.int_expression_nodes;
+    rec.float_expression_nodes = info.float_expression_nodes;
     native.push_back(std::move(rec));
 }
 
@@ -7988,6 +7998,30 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         }
         node.constant = QoreAOTBinaryReader::readI64(ptr);
         rec.int_expression_nodes.push_back(node);
+    }
+    if (version < 14) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX float expression metadata";
+        return false;
+    }
+    node_count = QoreAOTBinaryReader::readU32(ptr);
+    constexpr size_t float_node_size = 4 + sizeof(uint64_t);
+    if (node_count > 16
+            || node_count > static_cast<uint32_t>((end - ptr) / float_node_size)) {
+        error = "invalid SYMBOL_INDEX float expression node count";
+        return false;
+    }
+    rec.float_expression_nodes.reserve(node_count);
+    for (uint32_t i = 0; i < node_count; ++i) {
+        QoreAOTFloatExpressionNodeRecord node;
+        node.kind = QoreAOTBinaryReader::readU8(ptr);
+        node.lhs = QoreAOTBinaryReader::readU8(ptr);
+        node.rhs = QoreAOTBinaryReader::readU8(ptr);
+        node.param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+        node.constant = QoreAOTBinaryReader::readF64(ptr);
+        rec.float_expression_nodes.push_back(node);
     }
     return true;
 }

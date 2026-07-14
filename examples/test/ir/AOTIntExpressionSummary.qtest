@@ -43,6 +43,18 @@ int sub nested_compare_select_expr(int a, int b, int c) {
     return compare_select_expr(a, b, c) + 1;
 }
 
+float sub bounded_float_expr(float a, float b, float c) {
+    return (a * 1.5 + b) - c * 0.25;
+}
+
+float sub nested_float_expr(float a, float b, float c) {
+    return bounded_float_expr(a, b, c) + a * 0.125;
+}
+
+float sub divide_float_expr(float a, float b) {
+    return a / b;
+}
+
 int sub divide_expr(int left, int right) {
     return left / right;
 }
@@ -76,15 +88,20 @@ string sub consumerCode() {
     } catch (hash<auto> ex) {
         removed_rejected = True;
     }
-    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%d:%d:%d:%.17g:%d:%d\\n\",
         bounded_expr(2, 3, 4),
         bounded_expr(9223372036854775807, 2, -3),
         pair(5, -2), bitwise_expr(6, 3, 12),
         nested_bitwise_expr(6, 3, 12),
         compare_select_expr(-5, 3, 7),
         compare_select_expr(8, -3, 7),
-        nested_compare_select_expr(-5, 3, 7), too_large(1),
-        missing_rejected, removed_rejected);
+        nested_compare_select_expr(-5, 3, 7),
+        bounded_float_expr(2.0, 3.0, 4.0),
+        nested_float_expr(-2.0, 3.0, 4.0), too_large(1),
+        missing_rejected, removed_rejected,
+        bounded_float_expr(-0.0, -0.0, 0.0),
+        bounded_float_expr(@nan@, 1.0, 2.0).nanp(),
+        bounded_float_expr(@inf@, 1.0, 2.0).infp());
     return 0;
 }
 ";
@@ -127,13 +144,16 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"13\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"14\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
@@ -146,6 +166,7 @@ string enabled_compile = backquote(sprintf(
     libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
 string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT=1"
         + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
 string enabled_qo = enabled_dir + "/consumer.qo";

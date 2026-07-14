@@ -47,8 +47,9 @@ int sub benchListMeasure(int rounds) {
 }
 
 int sub main() {
-    string kernel = ARGV.size() ? ARGV[0] : "bitwise";
-    int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 10000000;
+    string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "bitwise");
+    int rounds = (ENV.QORE_BENCH_ROUNDS
+        ?? (ARGV.size() > 1 ? ARGV[1] : "10000000")).toInt();
     switch (kernel) {
         case "bitwise":
             printf("%d\n", benchBitwise(rounds));

@@ -145,6 +145,34 @@ struct AOTIntExpressionInfo {
     }
 };
 
+enum class AOTFloatExpressionNodeKind : uint8_t {
+    Param = 1,
+    Constant = 2,
+    Add = 3,
+    Sub = 4,
+    Mul = 5,
+};
+
+constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 16;
+
+//! One topologically ordered node in a bounded pure native-float expression.
+struct AOTFloatExpressionNodeInfo {
+    AOTFloatExpressionNodeKind kind = AOTFloatExpressionNodeKind::Constant;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    int8_t param = -1;
+    double constant = 0.0;
+};
+
+//! Bounded pure native-float expression; the last node is the result.
+struct AOTFloatExpressionInfo {
+    std::vector<AOTFloatExpressionNodeInfo> nodes;
+
+    explicit operator bool() const {
+        return !nodes.empty();
+    }
+};
+
 struct AOTFixedHashRemapInfo {
     std::vector<std::string> input_keys;
     std::vector<std::string> output_keys;
@@ -259,6 +287,7 @@ struct BatchCalleeInfo {
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int expression
+    AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
