@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[396] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[397] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -454,12 +454,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[396] = {
     { "FoldlStringJoin"                , true , false, false,  2, "Join exact list<string> with a constant separator", false, true , "FoldlOperatorNode", true , false, true , false, true  }, // 393
     { "StringJoinStart"                , false, true , false,  3, "Start owned fused string join accumulator", false, true , "FoldlOperatorNode", true , false, true , false, false }, // 394
     { "StringJoinAppend"               , false, true , false,  3, "Append to owned fused string join accumulator", true , true , "FoldlOperatorNode", true , false, true , false, false }, // 395
+    { "SprintfIntFixed"                , false, true , false,  3, "Format int with fixed literal %d conversion", false, false, "FunctionCallNode", true , false, true , false, false }, // 396
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 396,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 396"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 397,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 397"
 );
 
 //! ============================================================================

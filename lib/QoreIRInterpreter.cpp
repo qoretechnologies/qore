@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 395,
+static_assert(QORE_IR_MAX_OPCODE == 396,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -11775,7 +11775,8 @@ load_local_done:
             case QoreIROpcode::HashMapAny:
             case QoreIROpcode::HashMap:
             case QoreIROpcode::StringJoinStart:
-            case QoreIROpcode::StringJoinAppend: {
+            case QoreIROpcode::StringJoinAppend:
+            case QoreIROpcode::SprintfIntFixed: {
                 QoreValue res;
                 if (inst->operands.empty()) {
                     // Delegate-to-AST: operands are empty, expression stored in inst->expr
@@ -16297,6 +16298,8 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
             return fromBits(qore_rt_string_join_start(toBits(first), toBits(second), toBits(third), xsink));
         case QoreIROpcode::StringJoinAppend:
             return fromBits(qore_rt_string_join_append(toBits(first), toBits(second), toBits(third), xsink));
+        case QoreIROpcode::SprintfIntFixed:
+            return fromBits(qore_rt_sprintf_int_fixed(toBits(first), toBits(second), third.getAsBigInt()));
         default:
             break;
     }

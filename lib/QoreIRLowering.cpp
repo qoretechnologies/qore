@@ -11656,6 +11656,92 @@ bool QoreIRLowering::overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction
         && directCallVariantMayRejectRuntimeNothing(variant, parse_args, args);
 }
 
+struct QoreIRFixedSprintfIntFormat {
+    std::string literal;
+    int64_t metadata = 0;
+};
+
+static bool qore_ir_parse_fixed_sprintf_int(const QoreValue& format_value,
+        QoreIRFixedSprintfIntFormat& result) {
+    if (format_value.getType() != NT_STRING || !format_value.isValue()) {
+        return false;
+    }
+    QoreStringValueHelper format(format_value);
+    const char* str = format->getBuffer();
+    size_t size = format->size();
+    if (!str || size > std::numeric_limits<uint32_t>::max()) {
+        return false;
+    }
+
+    constexpr uint64_t LEFT = 1;
+    constexpr uint64_t PLUS = 2;
+    constexpr uint64_t SPACE = 4;
+    constexpr uint64_t ZERO = 8;
+    constexpr uint64_t MAX_WIDTH = 1000000;
+    uint64_t flags = 0;
+    uint64_t width = 0;
+    bool have_width = false;
+    bool have_conversion = false;
+    size_t prefix_size = 0;
+    result.literal.clear();
+    result.literal.reserve(size);
+
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "fixed sprintf format analysis")) {
+            return false;
+        }
+        if (str[i] != '%') {
+            result.literal.push_back(str[i]);
+            continue;
+        }
+        if (++i >= size) {
+            return false;
+        }
+        if (str[i] == '%') {
+            result.literal.push_back('%');
+            continue;
+        }
+        if (have_conversion) {
+            return false;
+        }
+        while (i < size) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "fixed sprintf flag analysis")) {
+                return false;
+            }
+            switch (str[i]) {
+                case '-': flags |= LEFT; ++i; continue;
+                case '+': flags |= PLUS; ++i; continue;
+                case ' ': flags |= SPACE; flags &= ~ZERO; ++i; continue;
+                case '0': flags |= ZERO; flags &= ~SPACE; ++i; continue;
+                default: break;
+            }
+            break;
+        }
+        while (i < size && str[i] >= '0' && str[i] <= '9') {
+            have_width = true;
+            width = width * 10 + static_cast<unsigned>(str[i] - '0');
+            if (width > MAX_WIDTH) {
+                return false;
+            }
+            ++i;
+        }
+        if (i >= size || str[i] != 'd') {
+            return false;
+        }
+        have_conversion = true;
+        prefix_size = result.literal.size();
+    }
+    if (!have_conversion) {
+        return false;
+    }
+
+    uint64_t packed = static_cast<uint32_t>(prefix_size)
+        | (flags << 32)
+        | ((have_width ? width + 1 : 0) << 36);
+    result.metadata = static_cast<int64_t>(packed);
+    return true;
+}
+
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
@@ -11666,6 +11752,39 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return hoisted;
     }
     const char* func_name = call->getName();
+    if (func_name && !strcmp(func_name, "sprintf") && !call->hasExplicitTypeArgs()
+            && !std::getenv("QORE_DISABLE_IR_FIXED_SPRINTF_INT")) {
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
+        const FunctionEntry* fe = call->getFunctionEntry();
+        std::string namespace_path;
+        if (fe && fe->getNamespace()) {
+            fe->getNamespace()->getPath(namespace_path);
+        }
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        std::vector<QoreValue> positional_args;
+        if (variant && !variant->isUser() && fe && fe->hasBuiltin() && namespace_path == "Qore"
+                && qore_ir_get_positional_call_args_no_holes(parse_args, args, 2, positional_args)
+                && positional_args.size() == 2) {
+            QoreParseAnalysis value_analysis;
+            QoreIRFixedSprintfIntFormat format;
+            if (qore_ir_parse_fixed_sprintf_int(positional_args[0], format)
+                    && getAnalysis(positional_args[1], value_analysis)
+                    && value_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && QoreTypeInfo::isType(selectAnalysisType(value_analysis), NT_INT)) {
+                QoreIRValue value = lowerExpression(positional_args[1], error);
+                if (!value.isValid()) {
+                    return QoreIRValue();
+                }
+                QoreIRValue literal = builder.createConstString(format.literal, call->loc)->result;
+                QoreIRValue metadata = builder.createConstInt(format.metadata, call->loc)->result;
+                auto* inst = builder.createTernaryOp(QoreIROpcode::SprintfIntFixed,
+                    literal, value, metadata, call->loc);
+                never_nothing_values.insert(inst->result.id);
+                return inst->result;
+            }
+        }
+    }
     if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
             && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();

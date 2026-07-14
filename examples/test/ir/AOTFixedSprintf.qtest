@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+namespace Shadow {
+    string sub sprintf(string format, int value) {
+        return \"shadow:\" + format + \"=\" + string(value);
+    }
+}
+
+int unset;
+string unset_value = sprintf(\"unset=%d\", unset);
+unset = 17;
+remove unset;
+string removed_value = sprintf(\"removed=%d\", unset);
+
+string dynamic_format = \"dynamic=%04d\";
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+    sprintf(\"plain=%d\", 42),
+    sprintf(\"negative=%d\", -42),
+    sprintf(\"zero=%08d\", 42),
+    sprintf(\"left=%-8d!\", 42),
+    sprintf(\"plus=%+d\", 42),
+    sprintf(\"percent=%%:%04d:%%\", 42),
+    unset_value, removed_value, sprintf(dynamic_format, 42),
+    sprintf(\"hex=%x\", 42), sprintf(\"pair=%d:%d\", 4, 2), Shadow::sprintf(\"%04d\", 42));
+";
+
+string script_path = "/tmp/qore-aot-fixed-sprintf-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(string suffix, string env) {
+    string exe = "/tmp/qore-aot-fixed-sprintf-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "plain=42|negative=-42|zero=00000042|left=42      !|plus=+42|"
+    + "percent=%:0042:%|unset=0|removed=0|dynamic=0042|hex=2a|pair=4:2|shadow:%04d=42\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (ir_dump !~ /sprintf\.int\.fixed/) {
+    printf("fixed sprintf opcode missing from IR dump:\n%s", ir_dump);
+    exit(2);
+}
+
+hash<string, string> aot_modes = {
+    "-enabled": "",
+    "-fallback": "QORE_DISABLE_IR_FIXED_SPRINTF_INT=1",
+};
+foreach string suffix in (keys aot_modes) {
+    string actual = runAot(suffix, aot_modes{suffix});
+    if (actual != expected) {
+        printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
+        exit(2);
+    }
+}

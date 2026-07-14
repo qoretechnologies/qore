@@ -154,6 +154,24 @@ int sub selectMapJoinString(list<string> data, int rounds) {
     return checksum;
 }
 
+int sub sprintfIntFixed(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string formatted = sprintf("row-%08d", i & 65535);
+        checksum += formatted.size();
+    }
+    return checksum;
+}
+
+int sub sprintfMapJoin(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldl $1 + ", " + $2, (map sprintf("item-%04d", $1), data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
 int rounds = ENV.QORE_BENCH_ROUNDS
     ? ENV.QORE_BENCH_ROUNDS.toInt()
@@ -204,6 +222,12 @@ switch (kernel) {
         break;
     case "select-map-join-string":
         printf("%d\n", selectMapJoinString(makeStringData(), rounds));
+        break;
+    case "sprintf-int-fixed":
+        printf("%d\n", sprintfIntFixed(rounds));
+        break;
+    case "sprintf-map-join":
+        printf("%d\n", sprintfMapJoin(makeIntData(), rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

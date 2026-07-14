@@ -262,6 +262,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
+    { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
@@ -6495,6 +6496,64 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
     }
     result->ref();
     return toBits(accumulator);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(
+        uint64_t literal_bits, uint64_t value_bits, int64_t metadata) {
+    QoreValue literal_value = fromBits(literal_bits);
+    if (literal_value.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    QoreStringValueHelper literal(literal_value);
+    uint64_t packed = static_cast<uint64_t>(metadata);
+    size_t prefix_size = static_cast<uint32_t>(packed);
+    if (prefix_size > literal->size()) {
+        return toBits(QoreValue());
+    }
+
+    constexpr uint64_t LEFT = 1;
+    constexpr uint64_t PLUS = 2;
+    constexpr uint64_t SPACE = 4;
+    constexpr uint64_t ZERO = 8;
+    uint64_t flags = (packed >> 32) & 0xf;
+    uint64_t encoded_width = packed >> 36;
+
+    char format[32];
+    char* pos = format;
+    *pos++ = '%';
+    if (flags & LEFT) {
+        *pos++ = '-';
+    }
+    if (flags & PLUS) {
+        *pos++ = '+';
+    }
+    if (encoded_width) {
+        if (flags & SPACE) {
+            *pos++ = ' ';
+        } else if (flags & ZERO) {
+            *pos++ = '0';
+        }
+        pos += snprintf(pos, sizeof(format) - static_cast<size_t>(pos - format), "%llu",
+            static_cast<unsigned long long>(encoded_width - 1));
+    }
+#ifdef _Q_WINDOWS
+    *pos++ = 'I';
+    *pos++ = '6';
+    *pos++ = '4';
+#else
+    *pos++ = 'l';
+    *pos++ = 'l';
+#endif
+    *pos++ = 'd';
+    *pos = '\0';
+
+    QoreStringNodeHolder result(new QoreStringNode(literal->getEncoding()));
+    result->reserve(literal->size() + 32);
+    result->concat(literal->getBuffer(), prefix_size);
+    result->sprintf(format, fromBits(value_bits).getAsBigInt());
+    result->concat(literal->getBuffer() + prefix_size, literal->size() - prefix_size);
+    return toBits(QoreValue(result.release()));
 }
 
 // Typed string concatenation - both operands are known to be strings at compile time

@@ -841,6 +841,9 @@ uint64_t qore_rt_string_join_start(uint64_t first, uint64_t separator, uint64_t 
 uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);
 
+//! Format one boxed integer according to compiler-validated fixed %d metadata.
+uint64_t qore_rt_sprintf_int_fixed(uint64_t literal, uint64_t value, int64_t metadata);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.
