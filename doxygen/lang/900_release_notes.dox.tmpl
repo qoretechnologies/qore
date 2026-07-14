@@ -2526,6 +2526,14 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - Build
+      - fixed \c libqore being unloadable with \c dlopen() on musl targets (Alpine Linux), which broke embedding
+        Qore in Python (\c "import qoreloader" failed with \c "initial-exec TLS resolves to dynamic definition").
+        jemalloc, which musl builds link into \c libqore in place of musl's much slower allocator, is now built
+        from source with \c --disable-initial-exec-tls: distribution packages compile jemalloc's thread-specific
+        data with the initial-exec TLS model, which musl's dynamic linker refuses in any library opened with
+        \c dlopen()
+
     - @ref mysqlsqlutilintro "MysqlSqlUtil" module
       - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
         expressions no longer pass binary-character-set operands to MySQL's ICU regular-expression engine and

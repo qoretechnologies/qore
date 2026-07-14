@@ -934,17 +934,38 @@ endif()
 
 set(QORE_JEMALLOC_LIBRARY)
 if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
+    # jemalloc is built from source rather than taken from the distribution, because it has to be built with
+    # --disable-initial-exec-tls.  Distribution packages compile jemalloc's thread-specific data (je_tsd_tls) with
+    # the initial-exec TLS model; linking that archive into libqore.so propagates an R_X86_64_TPOFF64 relocation
+    # into the library, and musl's dynamic linker refuses initial-exec TLS relocations in any object loaded with
+    # dlopen() ("initial-exec TLS resolves to dynamic definition").  libqore *is* dlopen()ed - that is how the
+    # Python module loads it, so a single such relocation makes "import qoreloader" fail outright and takes every
+    # embedded-Python user of Qore with it.  glibc absorbs this in its static TLS surplus; musl has no equivalent,
+    # so the model has to be ours to choose and not the distribution's.
+    #
+    # No --with-jemalloc-prefix: libqore must export the allocator under the standard names (see the whole-archive
+    # link below), so malloc/free/realloc/... have to stay unprefixed.
+    include(ExternalProject)
+    set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
+    set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
+    ExternalProject_Add(jemalloc_ext
+        URL https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
+        URL_HASH SHA256=2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa
+        PREFIX ${QORE_JEMALLOC_PREFIX}
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure
+            --prefix=${QORE_JEMALLOC_PREFIX}
+            --disable-initial-exec-tls
+            --disable-shared
+            --enable-static
+            "CC=${CMAKE_C_COMPILER}"
+        BUILD_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) build_lib_static
+        INSTALL_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) install_lib_static install_include
+        BUILD_BYPRODUCTS ${QORE_JEMALLOC_STATIC_LIBRARY}
+    )
+    message(STATUS "Building jemalloc from source for musl target (--disable-initial-exec-tls): "
+        "${QORE_JEMALLOC_STATIC_LIBRARY}")
     # the PIC archive is the only one that can be linked into a shared library
-    find_library(QORE_JEMALLOC_STATIC_LIBRARY NAMES jemalloc_pic)
-    if (QORE_JEMALLOC_STATIC_LIBRARY)
-        message(STATUS "Found jemalloc (musl target): ${QORE_JEMALLOC_STATIC_LIBRARY}")
-        set(QORE_JEMALLOC_LIBRARY ${QORE_JEMALLOC_STATIC_LIBRARY})
-    else()
-        message(FATAL_ERROR "jemalloc is required on musl targets; libqore links it in place of musl's allocator, "
-            "which is several times slower for the allocation patterns of LLVM and therefore of AOT compilation.  "
-            "Install it (Alpine: apk add jemalloc-static jemalloc-dev), or configure with "
-            "-DQORE_DISABLE_JEMALLOC=ON to build against musl's allocator anyway.")
-    endif()
+    set(QORE_JEMALLOC_LIBRARY ${QORE_JEMALLOC_STATIC_LIBRARY})
 endif()
 
 if (NOT (WIN32 OR MINGW OR MSYS))
@@ -2355,6 +2376,7 @@ target_link_libraries(libqore PRIVATE ${QORE_LIBS})
 # undefined symbols; a partially-exported allocator would let some allocations reach musl's malloc while their
 # frees reach jemalloc's
 if (QORE_JEMALLOC_LIBRARY)
+    add_dependencies(libqore jemalloc_ext)
     set_property(TARGET libqore APPEND_STRING PROPERTY LINK_FLAGS
         " -Wl,--whole-archive ${QORE_JEMALLOC_LIBRARY} -Wl,--no-whole-archive")
 endif()
