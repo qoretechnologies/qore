@@ -43,7 +43,7 @@ auto sub parse_json(string val) {
 %endif
 
 module GeminiBodyShape {
-    version = "1.0";
+    version = "1.0.1";
     desc = "Shared Gemini generateContent wire format: request/response shapers "
         "plus the common AbstractGeminiModelProvider base — shared between the "
         "native GeminiRestClient provider and the Vertex AI Gemini-on-Vertex "
@@ -98,6 +98,14 @@ module GeminiBodyShape {
     - @ref bareModelName() — strip \c "models/" prefix
 
     @section geminibodyshaperelnotes Release Notes
+
+    @subsection geminibodyshape_v1_0_1 GeminiBodyShape v1.0.1
+    - fixed tool calling against Gemini 3.x: the reasoning signature returned
+      alongside each \c functionCall part is now parsed into
+      @ref QoreLlmUtils::ChatToolCall::thought_signature and echoed back verbatim
+      when the call is replayed.  Without it the API rejects the follow-up request
+      with HTTP 400 ("Function call is missing a thought_signature in functionCall
+      parts"), which made every multi-turn tool conversation fail
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release: extracted from \c GeminiRestClient.qm so Vertex AI and any
@@ -663,12 +671,18 @@ public hash<auto> sub shapeChatBody(list<hash<QoreLlmUtils::ChatMessage>> messag
         parts = GeminiBodyShape::shapeContentParts(msg);
         if (msg.role == "assistant" && msg.tool_calls) {
             foreach hash<QoreLlmUtils::ChatToolCall> tc in (msg.tool_calls) {
-                push parts, {
+                hash<auto!> part = {
                     "functionCall": {
                         "name": tc.name,
                         "args": tc.arguments ?? {},
                     },
                 };
+                # Gemini 3.x rejects a replayed function call whose reasoning signature is missing,
+                # so echo back verbatim the signature returned with the original call
+                if (tc.thought_signature.val()) {
+                    part.thoughtSignature = tc.thought_signature;
+                }
+                push parts, part;
             }
         }
         if (!parts) {
@@ -735,11 +749,16 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
             if (!tool_calls) {
                 tool_calls = ();
             }
+            # the reasoning signature is a sibling of `functionCall` on the part, not a member of
+            # it; it must be carried through and echoed back on the replayed call
             push tool_calls, <QoreLlmUtils::ChatToolCall>{
                 "id": part.functionCall.id ?? sprintf("gemini-tool-%d",
                     ++tc_index),
                 "name": part.functionCall.name,
                 "arguments": part.functionCall.args ?? {},
+                "thought_signature": part.thoughtSignature.typeCode() == NT_STRING
+                    ? part.thoughtSignature
+                    : NOTHING,
             };
         }
     }
