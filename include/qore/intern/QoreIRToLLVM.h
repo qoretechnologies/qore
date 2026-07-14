@@ -636,6 +636,10 @@ private:
     llvm::Value* emitAOTStringOp(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Module& module);
 
+    //! Emit an imported bounded typed string expression.
+    llvm::Value* emitAOTStringExpression(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+
     // Emit an imported typed collection operation. Returns nullptr when no
     // valid summary is available for the supplied fast-entry arguments.
     llvm::Value* emitAOTCollectionOp(const BatchCalleeInfo& info,

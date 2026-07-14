@@ -6635,6 +6635,18 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeU8(static_cast<uint8_t>(node.param));
         writer.writeF64(node.constant);
     }
+    assert(rec.string_expression_nodes.size()
+        <= QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES);
+    writer.writeU32(static_cast<uint32_t>(rec.string_expression_nodes.size()));
+    for (const auto& node : rec.string_expression_nodes) {
+        writer.writeU8(node.kind);
+        writer.writeU8(node.lhs);
+        writer.writeU8(node.rhs);
+        writer.writeU8(node.third);
+        writer.writeU8(static_cast<uint8_t>(node.param));
+        writer.writeI64(node.int_constant);
+        writer.writeStringRef(node.string_constant.c_str());
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6725,6 +6737,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.global_int_offset = info.global_int_offset;
     rec.int_expression_nodes = info.int_expression_nodes;
     rec.float_expression_nodes = info.float_expression_nodes;
+    rec.string_expression_nodes = info.string_expression_nodes;
     native.push_back(std::move(rec));
 }
 
@@ -7981,7 +7994,7 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     }
     uint32_t node_count = QoreAOTBinaryReader::readU32(ptr);
     size_t node_size = (version >= 13 ? 5 : 4) + sizeof(uint64_t);
-    if (node_count > 16
+    if (node_count > QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES
             || node_count > static_cast<uint32_t>((end - ptr) / node_size)) {
         error = "invalid SYMBOL_INDEX integer expression node count";
         return false;
@@ -8022,6 +8035,35 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         node.param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
         node.constant = QoreAOTBinaryReader::readF64(ptr);
         rec.float_expression_nodes.push_back(node);
+    }
+    if (version < 19) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX string expression metadata";
+        return false;
+    }
+    node_count = QoreAOTBinaryReader::readU32(ptr);
+    constexpr size_t string_node_size = 5 + sizeof(uint64_t) + sizeof(uint32_t);
+    if (node_count > 16
+            || node_count > static_cast<uint32_t>((end - ptr) / string_node_size)) {
+        error = "invalid SYMBOL_INDEX string expression node count";
+        return false;
+    }
+    rec.string_expression_nodes.reserve(node_count);
+    for (uint32_t i = 0; i < node_count; ++i) {
+        QoreAOTStringExpressionNodeRecord node;
+        node.kind = QoreAOTBinaryReader::readU8(ptr);
+        node.lhs = QoreAOTBinaryReader::readU8(ptr);
+        node.rhs = QoreAOTBinaryReader::readU8(ptr);
+        node.third = QoreAOTBinaryReader::readU8(ptr);
+        node.param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+        node.int_constant = QoreAOTBinaryReader::readI64(ptr);
+        if (!readSymbolIndexString(reader, ptr, end, node.string_constant,
+                error, "string_expression.constant")) {
+            return false;
+        }
+        rec.string_expression_nodes.push_back(std::move(node));
     }
     return true;
 }

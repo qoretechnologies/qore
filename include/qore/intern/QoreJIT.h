@@ -224,6 +224,37 @@ struct AOTStringOpInfo {
     }
 };
 
+enum class AOTStringExpressionNodeKind : uint8_t {
+    StringParam = 1,
+    IntParam = 2,
+    StringConstant = 3,
+    IntConstant = 4,
+    IntToString = 5,
+    Concat = 6,
+};
+
+constexpr size_t QORE_AOT_STRING_EXPRESSION_MAX_NODES = 16;
+
+//! One topologically ordered node in a bounded typed string expression.
+struct AOTStringExpressionNodeInfo {
+    AOTStringExpressionNodeKind kind = AOTStringExpressionNodeKind::StringConstant;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    uint8_t third = UINT8_MAX;
+    int8_t param = -1;
+    int64_t int_constant = 0;
+    std::string string_constant;
+};
+
+//! Bounded typed string expression; the last node is the result.
+struct AOTStringExpressionInfo {
+    std::vector<AOTStringExpressionNodeInfo> nodes;
+
+    explicit operator bool() const {
+        return !nodes.empty();
+    }
+};
+
 enum class AOTCollectionOpKind : uint8_t {
     None = 0,
     ListSize = 1,
@@ -308,6 +339,7 @@ struct BatchCalleeInfo {
     AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
+    AOTStringExpressionInfo string_expression; //!< Importable bounded typed string expression
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
     AOTComposedIntInfo composed_int;       //!< Importable bounded size/length expression
     AOTContextIntInfo context_int;         //!< Importable affine captured-int expression

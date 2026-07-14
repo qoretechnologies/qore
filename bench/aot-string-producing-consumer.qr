@@ -26,12 +26,22 @@ int sub main() {
         for (int i = 0; i < rounds; ++i) {
             checksum += sliceString(source, i & 7, 6).size();
         }
+    } else if (mode == "format") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += formatRecord(prefix, i & 1023, suffix).size();
+        }
+    } else if (mode == "concat_slice") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatSlice(prefix, suffix, i & 3, 6).size();
+        }
     } else {
         for (int i = 0; i < rounds; ++i) {
             checksum += concatPair(prefix, suffix).size();
             checksum += concatTriple(prefix, "middle-", suffix).size();
             checksum += convertInt(i & 1023).size();
             checksum += sliceString(source, i & 7, 6).size();
+            checksum += formatRecord(prefix, i & 1023, suffix).size();
+            checksum += concatSlice(prefix, suffix, i & 3, 6).size();
         }
     }
     printf("%d\n", checksum);

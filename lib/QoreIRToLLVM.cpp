@@ -4280,6 +4280,110 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
     }
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
+        const std::vector<llvm::Value*>& native_args, llvm::Module& module) {
+    const AOTStringExpressionInfo& expression = info.string_expression;
+    if (!expression || std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
+            || expression.nodes.size() > QORE_AOT_STRING_EXPRESSION_MAX_NODES
+            || expression.nodes.back().kind != AOTStringExpressionNodeKind::Concat) {
+        return nullptr;
+    }
+
+    for (const auto& node : expression.nodes) {
+        if (node.kind != AOTStringExpressionNodeKind::StringParam
+                && node.kind != AOTStringExpressionNodeKind::IntParam) {
+            continue;
+        }
+        if (node.param < 0 || static_cast<size_t>(node.param) >= native_args.size()) {
+            return nullptr;
+        }
+        BatchCalleeParamKind expected =
+            node.kind == AOTStringExpressionNodeKind::StringParam
+            ? BatchCalleeParamKind::Boxed : BatchCalleeParamKind::NativeInt;
+        if (native_args[static_cast<size_t>(node.param)]->getType() != i64_type
+                || getFastEntryParamKind(info, static_cast<unsigned>(node.param))
+                    != expected) {
+            return nullptr;
+        }
+    }
+
+    std::vector<uint8_t> parts;
+    std::function<bool(uint8_t)> append_parts = [&](uint8_t index) -> bool {
+        if (index >= expression.nodes.size()) {
+            return false;
+        }
+        const auto& node = expression.nodes[index];
+        if (node.kind != AOTStringExpressionNodeKind::Concat) {
+            parts.push_back(index);
+            return true;
+        }
+        return append_parts(node.lhs) && append_parts(node.rhs)
+            && (node.third == UINT8_MAX || append_parts(node.third));
+    };
+    if (!append_parts(static_cast<uint8_t>(expression.nodes.size() - 1))
+            || parts.size() < 2) {
+        return nullptr;
+    }
+
+    std::vector<llvm::Value*> values(expression.nodes.size(), nullptr);
+    std::vector<uint8_t> owned_values;
+    for (size_t i = 0; i < expression.nodes.size(); ++i) {
+        const auto& node = expression.nodes[i];
+        switch (node.kind) {
+            case AOTStringExpressionNodeKind::StringParam:
+            case AOTStringExpressionNodeKind::IntParam:
+                values[i] = native_args[static_cast<size_t>(node.param)];
+                break;
+            case AOTStringExpressionNodeKind::StringConstant: {
+                llvm::Value* data = builder->CreateGlobalString(node.string_constant);
+                auto helper = module.getOrInsertFunction("qore_rt_make_string_len",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
+                values[i] = builder->CreateCall(helper,
+                    {data, llvm::ConstantInt::get(i64_type,
+                        node.string_constant.size())});
+                owned_values.push_back(static_cast<uint8_t>(i));
+                break;
+            }
+            case AOTStringExpressionNodeKind::IntConstant:
+                values[i] = llvm::ConstantInt::get(i64_type, node.int_constant);
+                break;
+            case AOTStringExpressionNodeKind::IntToString: {
+                auto helper = module.getOrInsertFunction("qore_rt_int_to_string",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                values[i] = builder->CreateCall(helper, {values[node.lhs]});
+                owned_values.push_back(static_cast<uint8_t>(i));
+                break;
+            }
+            case AOTStringExpressionNodeKind::Concat:
+                break;
+        }
+    }
+
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+        llvm_func->getEntryBlock().begin());
+    llvm::Value* args = ab.CreateAlloca(i64_type,
+        llvm::ConstantInt::get(i32_type, parts.size()));
+    for (size_t i = 0; i < parts.size(); ++i) {
+        llvm::Value* slot = builder->CreateGEP(i64_type, args,
+            llvm::ConstantInt::get(i32_type, i));
+        builder->CreateStore(values[parts[i]], slot);
+    }
+    auto concat = module.getOrInsertFunction("qore_rt_string_concat_multi",
+        llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, ptr_type}, false));
+    llvm::Value* result = builder->CreateCall(concat,
+        {args, llvm::ConstantInt::get(i32_type, parts.size()), xsink_arg});
+    if (!owned_values.empty()) {
+        auto decref = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        for (uint8_t index : owned_values) {
+            builder->CreateCall(decref, {values[index], xsink_arg});
+        }
+    }
+    return result;
+}
+
 llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module) {
     const AOTStringOpInfo& op = info.string_op;
@@ -4769,6 +4873,9 @@ llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
     }
     if (!result) {
         result = emitAOTScalarLeaf(info, native_args);
+    }
+    if (!result) {
+        result = emitAOTStringExpression(info, native_args, module);
     }
     if (!result) {
         result = emitAOTStringOp(info, native_args, module);

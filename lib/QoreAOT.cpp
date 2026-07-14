@@ -1027,6 +1027,13 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                     static_cast<uint8_t>(node.kind), node.lhs, node.rhs,
                     node.param, node.constant});
             }
+            entry.string_expression_nodes.reserve(info.string_expression.nodes.size());
+            for (const auto& node : info.string_expression.nodes) {
+                entry.string_expression_nodes.push_back({
+                    static_cast<uint8_t>(node.kind), node.lhs, node.rhs,
+                    node.third, node.param, node.int_constant,
+                    node.string_constant});
+            }
             fast_entries.emplace(variant, std::move(entry));
         }
     }
@@ -3653,6 +3660,192 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     return true;
 }
 
+static bool qore_aot_get_string_expression(const QoreIRFunction& func,
+        const UserSignature& sig, AOTStringExpressionInfo& result) {
+    if (std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
+            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || func.blocks.size() != 1 || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 32) {
+        return false;
+    }
+
+    std::unordered_map<const LocalVar*, int8_t> params;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT string expression parameter analysis")) {
+            return false;
+        }
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second
+                || param->second->closureUse()) {
+            return false;
+        }
+        params.emplace(param->second, static_cast<int8_t>(i));
+    }
+
+    auto append_node = [&](AOTStringExpressionNodeInfo node) -> int {
+        if (result.nodes.size() >= QORE_AOT_STRING_EXPRESSION_MAX_NODES) {
+            return -1;
+        }
+        result.nodes.push_back(std::move(node));
+        return static_cast<int>(result.nodes.size() - 1);
+    };
+    auto is_string_node = [&](uint8_t index) {
+        if (index >= result.nodes.size()) {
+            return false;
+        }
+        AOTStringExpressionNodeKind kind = result.nodes[index].kind;
+        return kind == AOTStringExpressionNodeKind::StringParam
+            || kind == AOTStringExpressionNodeKind::StringConstant
+            || kind == AOTStringExpressionNodeKind::IntToString
+            || kind == AOTStringExpressionNodeKind::Concat;
+    };
+    auto is_int_node = [&](uint8_t index) {
+        if (index >= result.nodes.size()) {
+            return false;
+        }
+        AOTStringExpressionNodeKind kind = result.nodes[index].kind;
+        return kind == AOTStringExpressionNodeKind::IntParam
+            || kind == AOTStringExpressionNodeKind::IntConstant;
+    };
+
+    std::unordered_map<uint32_t, uint8_t> values;
+    std::unordered_map<int8_t, uint8_t> param_nodes;
+    const QoreIRReturnInstruction* ret = nullptr;
+    unsigned concat_operations = 0;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return false;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
+                auto param = params.find(load->local);
+                if (param == params.end() || !inst->result.isValid()) {
+                    return false;
+                }
+                auto existing = param_nodes.find(param->second);
+                if (existing != param_nodes.end()) {
+                    values.emplace(inst->result.id, existing->second);
+                    break;
+                }
+                AOTStringExpressionNodeInfo node;
+                const QoreTypeInfo* ti = load->local->getTypeInfo();
+                if (QoreTypeInfo::isType(ti, NT_STRING)) {
+                    node.kind = AOTStringExpressionNodeKind::StringParam;
+                } else if (QoreTypeInfo::isType(ti, NT_INT)) {
+                    node.kind = AOTStringExpressionNodeKind::IntParam;
+                } else {
+                    return false;
+                }
+                node.param = param->second;
+                int index = append_node(std::move(node));
+                if (index < 0) {
+                    return false;
+                }
+                uint8_t node_index = static_cast<uint8_t>(index);
+                param_nodes.emplace(param->second, node_index);
+                values.emplace(inst->result.id, node_index);
+                break;
+            }
+            case QoreIROpcode::ConstString:
+            case QoreIROpcode::ConstInt: {
+                if (!inst->result.isValid()) {
+                    return false;
+                }
+                const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
+                AOTStringExpressionNodeInfo node;
+                if (inst->opcode == QoreIROpcode::ConstString) {
+                    node.kind = AOTStringExpressionNodeKind::StringConstant;
+                    node.string_constant = constant->constant.string_value;
+                } else {
+                    node.kind = AOTStringExpressionNodeKind::IntConstant;
+                    node.int_constant = constant->constant.int_value;
+                }
+                int index = append_node(std::move(node));
+                if (index < 0) {
+                    return false;
+                }
+                values.emplace(inst->result.id, static_cast<uint8_t>(index));
+                break;
+            }
+            case QoreIROpcode::ToString: {
+                if (!inst->result.isValid() || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto source = values.find(inst->operands[0].id);
+                if (source == values.end() || !is_int_node(source->second)) {
+                    return false;
+                }
+                AOTStringExpressionNodeInfo node;
+                node.kind = AOTStringExpressionNodeKind::IntToString;
+                node.lhs = source->second;
+                int index = append_node(std::move(node));
+                if (index < 0) {
+                    return false;
+                }
+                values.emplace(inst->result.id, static_cast<uint8_t>(index));
+                break;
+            }
+            case QoreIROpcode::AddAny:
+            case QoreIROpcode::AddString:
+            case QoreIROpcode::StringConcat: {
+                ++concat_operations;
+                if (!inst->result.isValid() || inst->operands.size() < 2
+                        || (inst->opcode != QoreIROpcode::StringConcat
+                            && inst->operands.size() != 2)) {
+                    return false;
+                }
+                std::vector<uint8_t> parts;
+                parts.reserve(inst->operands.size());
+                for (const QoreIRValue& operand : inst->operands) {
+                    auto part = values.find(operand.id);
+                    if (part == values.end() || !is_string_node(part->second)) {
+                        return false;
+                    }
+                    parts.push_back(part->second);
+                }
+                while (parts.size() > 1) {
+                    size_t count = std::min<size_t>(3, parts.size());
+                    AOTStringExpressionNodeInfo node;
+                    node.kind = AOTStringExpressionNodeKind::Concat;
+                    node.lhs = parts[0];
+                    node.rhs = parts[1];
+                    if (count == 3) {
+                        node.third = parts[2];
+                    }
+                    int index = append_node(std::move(node));
+                    if (index < 0) {
+                        return false;
+                    }
+                    parts.erase(parts.begin(), parts.begin() + count);
+                    parts.insert(parts.begin(), static_cast<uint8_t>(index));
+                }
+                values.emplace(inst->result.id, parts.front());
+                break;
+            }
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return false;
+        }
+    }
+    if (!concat_operations || !ret || !ret->has_value || result.nodes.empty()) {
+        return false;
+    }
+    auto return_value = values.find(ret->value.id);
+    return return_value != values.end()
+        && return_value->second == result.nodes.size() - 1
+        && result.nodes.back().kind == AOTStringExpressionNodeKind::Concat;
+}
+
 static bool qore_aot_get_collection_op(const QoreIRFunction& func,
         const UserSignature& sig, AOTCollectionOpInfo& result) {
     if (std::getenv("QORE_DISABLE_AOT_COLLECTION_OP_IMPORT")
@@ -5843,6 +6036,40 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 callee_it->second.string_op = string_op;
             }
         }
+        AOTStringExpressionInfo string_expression;
+        if (!callee_it->second.string_op
+                && qore_aot_get_string_expression(*func, *sig, string_expression)
+                && callee_it->second.return_kind == BatchCalleeReturnKind::Boxed) {
+            bool valid = true;
+            for (const auto& node : string_expression.nodes) {
+                if (node.kind != AOTStringExpressionNodeKind::StringParam
+                        && node.kind != AOTStringExpressionNodeKind::IntParam) {
+                    continue;
+                }
+                if (node.param < 0
+                        || static_cast<size_t>(node.param)
+                            >= callee_it->second.param_kinds.size()
+                        || static_cast<size_t>(node.param)
+                            >= callee_it->second.param_rejects_nothing.size()
+                        || !callee_it->second.param_rejects_nothing[
+                            static_cast<size_t>(node.param)]) {
+                    valid = false;
+                    break;
+                }
+                BatchCalleeParamKind expected =
+                    node.kind == AOTStringExpressionNodeKind::StringParam
+                    ? BatchCalleeParamKind::Boxed
+                    : BatchCalleeParamKind::NativeInt;
+                if (callee_it->second.param_kinds[static_cast<size_t>(node.param)]
+                        != expected) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid) {
+                callee_it->second.string_expression = std::move(string_expression);
+            }
+        }
         AOTCollectionOpInfo collection_op;
         if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
             callee_it->second.collection_op = std::move(collection_op);
@@ -6986,6 +7213,84 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 have_float_division = true;
             }
             info.float_expression.nodes.push_back(node);
+        }
+    }
+    if (!rec.string_expression_nodes.empty()) {
+        if (rec.string_expression_nodes.size()
+                    > QORE_AOT_STRING_EXPRESSION_MAX_NODES
+                || info.return_kind != BatchCalleeReturnKind::Boxed
+                || info.string_op) {
+            return false;
+        }
+        info.string_expression.nodes.reserve(rec.string_expression_nodes.size());
+        std::vector<uint8_t> node_is_string;
+        node_is_string.reserve(rec.string_expression_nodes.size());
+        for (size_t i = 0; i < rec.string_expression_nodes.size(); ++i) {
+            const auto& input = rec.string_expression_nodes[i];
+            if (input.kind
+                        < static_cast<uint8_t>(AOTStringExpressionNodeKind::StringParam)
+                    || input.kind
+                        > static_cast<uint8_t>(AOTStringExpressionNodeKind::Concat)) {
+                return false;
+            }
+            AOTStringExpressionNodeInfo node;
+            node.kind = static_cast<AOTStringExpressionNodeKind>(input.kind);
+            node.lhs = input.lhs;
+            node.rhs = input.rhs;
+            node.third = input.third;
+            node.param = input.param;
+            node.int_constant = input.int_constant;
+            node.string_constant = input.string_constant;
+            bool is_string = node.kind != AOTStringExpressionNodeKind::IntParam
+                && node.kind != AOTStringExpressionNodeKind::IntConstant;
+            if (node.kind == AOTStringExpressionNodeKind::StringParam
+                    || node.kind == AOTStringExpressionNodeKind::IntParam) {
+                BatchCalleeParamKind expected =
+                    node.kind == AOTStringExpressionNodeKind::StringParam
+                    ? BatchCalleeParamKind::Boxed
+                    : BatchCalleeParamKind::NativeInt;
+                if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
+                        || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX || node.int_constant
+                        || !node.string_constant.empty()
+                        || info.param_kinds[static_cast<unsigned>(node.param)]
+                            != expected
+                        || !info.param_rejects_nothing[
+                            static_cast<unsigned>(node.param)]) {
+                    return false;
+                }
+            } else if (node.kind == AOTStringExpressionNodeKind::StringConstant) {
+                if (node.param != -1 || node.lhs != UINT8_MAX
+                        || node.rhs != UINT8_MAX || node.third != UINT8_MAX
+                        || node.int_constant) {
+                    return false;
+                }
+            } else if (node.kind == AOTStringExpressionNodeKind::IntConstant) {
+                if (node.param != -1 || node.lhs != UINT8_MAX
+                        || node.rhs != UINT8_MAX || node.third != UINT8_MAX
+                        || !node.string_constant.empty()) {
+                    return false;
+                }
+            } else if (node.kind == AOTStringExpressionNodeKind::IntToString) {
+                if (node.param != -1 || node.lhs >= i || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX || node.int_constant
+                        || !node.string_constant.empty() || node_is_string[node.lhs]) {
+                    return false;
+                }
+            } else if (node.param != -1 || node.lhs >= i || node.rhs >= i
+                    || node.int_constant || !node.string_constant.empty()
+                    || !node_is_string[node.lhs] || !node_is_string[node.rhs]
+                    || (node.third != UINT8_MAX
+                        && (node.third >= i || !node_is_string[node.third]))) {
+                return false;
+            }
+            info.string_expression.nodes.push_back(std::move(node));
+            node_is_string.push_back(is_string);
+        }
+        if (!node_is_string.back()
+                || info.string_expression.nodes.back().kind
+                    != AOTStringExpressionNodeKind::Concat) {
+            return false;
         }
     }
     if (info.scalar_leaf.kind != AOTScalarLeafKind::None) {

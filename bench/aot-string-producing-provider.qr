@@ -18,3 +18,11 @@ string sub convertInt(int value) {
 string sub sliceString(string value, int start, int length) {
     return value.substr(start, length);
 }
+
+string sub formatRecord(string prefix, int value, string suffix) {
+    return prefix + ":" + string(value) + ":" + suffix;
+}
+
+string sub concatSlice(string left, string right, int start, int length) {
+    return (left + right).substr(start, length);
+}

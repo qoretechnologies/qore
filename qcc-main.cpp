@@ -5069,6 +5069,18 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
             node.lhs, node.rhs, node.param, node.constant);
     }
     printf("]");
+    printf(", \"string_expression_nodes\": [");
+    for (size_t i = 0; i < rec.string_expression_nodes.size(); ++i) {
+        const auto& node = rec.string_expression_nodes[i];
+        printf("%s{\"kind\": %u, \"lhs\": %u, \"rhs\": %u, \"third\": %u"
+            ", \"param\": %d, \"int_constant\": " QLLD
+            ", \"string_constant\": ", i ? ", " : "", node.kind,
+            node.lhs, node.rhs, node.third, node.param,
+            static_cast<long long>(node.int_constant));
+        json_print_string(node.string_constant);
+        printf("}");
+    }
+    printf("]");
     printf("}");
 }
 
@@ -5668,6 +5680,18 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             fprintf(f, "%s{\"kind\": %u, \"lhs\": %u, \"rhs\": %u, \"param\": %d"
                 ", \"constant\": %.17g}", j ? ", " : "", node.kind,
                 node.lhs, node.rhs, node.param, node.constant);
+        }
+        fputc(']', f);
+        fputs(", \"string_expression_nodes\": [", f);
+        for (size_t j = 0; j < rec.string_expression_nodes.size(); ++j) {
+            const auto& node = rec.string_expression_nodes[j];
+            fprintf(f, "%s{\"kind\": %u, \"lhs\": %u, \"rhs\": %u, \"third\": %u"
+                ", \"param\": %d, \"int_constant\": " QLLD
+                ", \"string_constant\": ", j ? ", " : "", node.kind,
+                node.lhs, node.rhs, node.third, node.param,
+                static_cast<long long>(node.int_constant));
+            json_file_string(f, node.string_constant);
+            fputc('}', f);
         }
         fputc(']', f);
         fputc('}', f);

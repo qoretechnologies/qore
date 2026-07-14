@@ -278,7 +278,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 18;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 19;
 
 //! Serialized node in a bounded pure native-integer expression summary.
 struct QoreAOTIntExpressionNodeRecord {
@@ -297,6 +297,19 @@ struct QoreAOTFloatExpressionNodeRecord {
     uint8_t rhs = UINT8_MAX;
     int8_t param = -1;
     double constant = 0.0;
+};
+
+//! Serialized node in a bounded typed string expression summary.
+constexpr size_t QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES = 16;
+
+struct QoreAOTStringExpressionNodeRecord {
+    uint8_t kind = 0;
+    uint8_t lhs = UINT8_MAX;
+    uint8_t rhs = UINT8_MAX;
+    uint8_t third = UINT8_MAX;
+    int8_t param = -1;
+    int64_t int_constant = 0;
+    std::string string_constant;
 };
 
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRESENT = 0x0001; //!< Record describes a callable fast entry
@@ -362,6 +375,7 @@ struct QoreAOTSymbolIndexRecord {
     int64_t global_int_offset = 0;
     std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
     std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
+    std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -408,6 +422,7 @@ struct QoreAOTFastEntryIndexInfo {
     int64_t global_int_offset = 0;
     std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
     std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
+    std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.
