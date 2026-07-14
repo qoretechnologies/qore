@@ -122,6 +122,9 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     Gt = 13,
     Ge = 14,
     Select = 15,
+    ListSize = 16,
+    StringSize = 17,
+    StringLength = 18,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;

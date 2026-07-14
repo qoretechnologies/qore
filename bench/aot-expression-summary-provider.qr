@@ -19,6 +19,6 @@ int sub stringMeasureExpression(string value, int adjustment) {
     return value.size() * 3 + value.length() * 5 + adjustment;
 }
 
-int sub listMeasureExpression(list<int> values, int adjustment) {
-    return values.size() * 7 + adjustment * 3;
+int sub listMeasureExpression(list<int> values, list<int> other, int adjustment) {
+    return values.size() * 7 + other.size() * 5 + adjustment * 3;
 }

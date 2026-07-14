@@ -4256,14 +4256,21 @@ static bool qore_aot_collect_int_expression_summaries(
     auto append_node = [](AOTIntExpressionInfo& expression,
             const AOTIntExpressionNodeInfo& node) -> int {
         if (node.kind == AOTIntExpressionNodeKind::Param
-                || node.kind == AOTIntExpressionNodeKind::Constant) {
+                || node.kind == AOTIntExpressionNodeKind::Constant
+                || node.kind == AOTIntExpressionNodeKind::ListSize
+                || node.kind == AOTIntExpressionNodeKind::StringSize
+                || node.kind == AOTIntExpressionNodeKind::StringLength) {
             for (size_t i = 0; i < expression.nodes.size(); ++i) {
                 const auto& existing = expression.nodes[i];
                 if (existing.kind == node.kind
                         && ((node.kind == AOTIntExpressionNodeKind::Param
                                 && existing.param == node.param)
                             || (node.kind == AOTIntExpressionNodeKind::Constant
-                                && existing.constant == node.constant))) {
+                                && existing.constant == node.constant)
+                            || ((node.kind == AOTIntExpressionNodeKind::ListSize
+                                    || node.kind == AOTIntExpressionNodeKind::StringSize
+                                    || node.kind == AOTIntExpressionNodeKind::StringLength)
+                                && existing.param == node.param))) {
                     return static_cast<int>(i);
                 }
             }
@@ -4284,6 +4291,13 @@ static bool qore_aot_collect_int_expression_summaries(
         AOTIntExpressionNodeInfo node;
         node.kind = AOTIntExpressionNodeKind::Constant;
         node.constant = constant;
+        return append_node(expression, node);
+    };
+    auto append_source = [&](AOTIntExpressionInfo& expression,
+            AOTIntExpressionNodeKind kind, int8_t param) {
+        AOTIntExpressionNodeInfo node;
+        node.kind = kind;
+        node.param = param;
         return append_node(expression, node);
     };
     auto append_binary = [&](AOTIntExpressionInfo& expression,
@@ -4431,7 +4445,8 @@ static bool qore_aot_collect_int_expression_summaries(
         return append_select(expression, condition, true_value, false_value);
     };
     auto append_expression = [&](const AOTIntExpressionInfo& source,
-            const std::vector<int>& args, AOTIntExpressionInfo& expression) -> int {
+            const std::vector<int>& args, const std::vector<int8_t>& boxed_args,
+            AOTIntExpressionInfo& expression) -> int {
         std::vector<int> mapped;
         mapped.reserve(source.nodes.size());
         for (const auto& node : source.nodes) {
@@ -4441,6 +4456,14 @@ static bool qore_aot_collect_int_expression_summaries(
                     ? args[static_cast<size_t>(node.param)] : -1;
             } else if (node.kind == AOTIntExpressionNodeKind::Constant) {
                 result = append_constant(expression, node.constant);
+            } else if (node.kind == AOTIntExpressionNodeKind::ListSize
+                    || node.kind == AOTIntExpressionNodeKind::StringSize
+                    || node.kind == AOTIntExpressionNodeKind::StringLength) {
+                result = node.param >= 0
+                        && static_cast<size_t>(node.param) < boxed_args.size()
+                        && boxed_args[static_cast<size_t>(node.param)] >= 0
+                    ? append_source(expression, node.kind,
+                        boxed_args[static_cast<size_t>(node.param)]) : -1;
             } else if (node.kind == AOTIntExpressionNodeKind::Select
                     && node.lhs < mapped.size() && node.rhs < mapped.size()
                     && node.third < mapped.size()) {
@@ -4456,6 +4479,16 @@ static bool qore_aot_collect_int_expression_summaries(
             mapped.push_back(result);
         }
         return mapped.empty() ? -1 : mapped.back();
+    };
+
+    enum class BoxedSourceParamKind : uint8_t {
+        None,
+        List,
+        String,
+    };
+    struct ExpressionParamInfo {
+        int8_t index = -1;
+        BoxedSourceParamKind boxed_kind = BoxedSourceParamKind::None;
     };
 
     std::function<bool(const AbstractQoreFunctionVariant*, unsigned)> derive;
@@ -4493,11 +4526,8 @@ static bool qore_aot_collect_int_expression_summaries(
                 || callee->second.param_rejects_nothing.size() != callee->second.num_params
                 || std::any_of(callee->second.param_kinds.begin(),
                     callee->second.param_kinds.end(), [](BatchCalleeParamKind kind) {
-                        return kind != BatchCalleeParamKind::NativeInt;
-                    })
-                || std::any_of(callee->second.param_rejects_nothing.begin(),
-                    callee->second.param_rejects_nothing.end(), [](uint8_t value) {
-                        return !value;
+                        return kind != BatchCalleeParamKind::NativeInt
+                            && kind != BatchCalleeParamKind::Boxed;
                     })) {
             state = VisitState::Failed;
             return false;
@@ -4510,7 +4540,7 @@ static bool qore_aot_collect_int_expression_summaries(
             }
         }
 
-        std::unordered_map<const LocalVar*, int8_t> params;
+        std::unordered_map<const LocalVar*, ExpressionParamInfo> params;
         for (unsigned i = 0; i < callee->second.num_params; ++i) {
             if (i && !(i % 100)
                     && qore_check_cancel(nullptr,
@@ -4521,16 +4551,32 @@ static bool qore_aot_collect_int_expression_summaries(
             }
             auto param = func->param_local_vars.find(i);
             if (param == func->param_local_vars.end() || !param->second
-                    || param->second->closureUse()
-                    || param->second->getTypeInfo() != bigIntTypeInfo) {
+                    || param->second->closureUse()) {
                 state = VisitState::Failed;
                 return false;
             }
-            params.emplace(param->second, static_cast<int8_t>(i));
+            const QoreTypeInfo* type = param->second->getTypeInfo();
+            ExpressionParamInfo param_info;
+            param_info.index = static_cast<int8_t>(i);
+            if (callee->second.param_kinds[i] == BatchCalleeParamKind::NativeInt) {
+                if (type != bigIntTypeInfo || !callee->second.param_rejects_nothing[i]) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+            } else if (QoreTypeInfo::getBaseType(type) == NT_LIST) {
+                param_info.boxed_kind = BoxedSourceParamKind::List;
+            } else if (QoreTypeInfo::getBaseType(type) == NT_STRING) {
+                param_info.boxed_kind = BoxedSourceParamKind::String;
+            } else {
+                state = VisitState::Failed;
+                return false;
+            }
+            params.emplace(param->second, param_info);
         }
 
         AOTIntExpressionInfo expression;
         std::unordered_map<uint32_t, int> values;
+        std::unordered_map<uint32_t, ExpressionParamInfo> boxed_values;
         auto append_instruction = [&](const QoreIRInstruction* inst,
                 std::unordered_map<uint32_t, int>& block_values) -> bool {
             int result = -1;
@@ -4540,10 +4586,55 @@ static bool qore_aot_collect_int_expression_summaries(
                 if (param == params.end()) {
                     return false;
                 }
-                result = append_param(expression, param->second);
+                if (param->second.boxed_kind != BoxedSourceParamKind::None) {
+                    if (!inst->result.isValid()) {
+                        return false;
+                    }
+                    boxed_values.emplace(inst->result.id, param->second);
+                    return true;
+                }
+                result = append_param(expression, param->second.index);
             } else if (inst->opcode == QoreIROpcode::ConstInt) {
                 const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
                 result = append_constant(expression, constant->constant.int_value);
+            } else if (inst->opcode == QoreIROpcode::ListSize) {
+                if (inst->operands.size() != 1) {
+                    return false;
+                }
+                auto base = boxed_values.find(inst->operands[0].id);
+                if (base == boxed_values.end()
+                        || base->second.boxed_kind != BoxedSourceParamKind::List) {
+                    return false;
+                }
+                result = append_source(expression,
+                    AOTIntExpressionNodeKind::ListSize, base->second.index);
+            } else if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                if (inst->operands.size() != 1) {
+                    return false;
+                }
+                auto base = boxed_values.find(inst->operands[0].id);
+                const auto* op = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                if (base == boxed_values.end()
+                        || base->second.boxed_kind != BoxedSourceParamKind::String
+                        || !op->pseudo || op->has_ref_args || !op->qc
+                        || strcmp(op->qc->getName(), "<string>")) {
+                    return false;
+                }
+                QoreIRIntrinsic intrinsic = op->intrinsic;
+                if (intrinsic == QoreIRIntrinsic::None) {
+                    intrinsic = qore_ir_resolve_pseudo_intrinsic(op->method,
+                        op->qc, op->fallback_method_name);
+                }
+                AOTIntExpressionNodeKind source_kind;
+                if (intrinsic == QoreIRIntrinsic::Size
+                        || intrinsic == QoreIRIntrinsic::StringStrlen) {
+                    source_kind = AOTIntExpressionNodeKind::StringSize;
+                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+                    source_kind = AOTIntExpressionNodeKind::StringLength;
+                } else {
+                    return false;
+                }
+                result = append_source(expression, source_kind, base->second.index);
             } else if (inst->opcode == QoreIROpcode::ToBool) {
                 if (inst->operands.size() != 1) {
                     return false;
@@ -4581,16 +4672,26 @@ static bool qore_aot_collect_int_expression_summaries(
                         return false;
                     }
                     std::vector<int> args;
+                    std::vector<int8_t> boxed_args;
                     args.reserve(inst->operands.size());
+                    boxed_args.reserve(inst->operands.size());
                     for (const QoreIRValue& operand : inst->operands) {
                         auto arg = block_values.find(operand.id);
-                        if (arg == block_values.end()) {
+                        if (arg != block_values.end()) {
+                            args.push_back(arg->second);
+                            boxed_args.push_back(-1);
+                            continue;
+                        }
+                        auto boxed_arg = boxed_values.find(operand.id);
+                        if (boxed_arg == boxed_values.end()) {
                             return false;
                         }
-                        args.push_back(arg->second);
+                        args.push_back(-1);
+                        boxed_args.push_back(boxed_arg->second.index);
                     }
                     result = nested->second.int_expression
-                        ? append_expression(nested->second.int_expression, args, expression)
+                        ? append_expression(nested->second.int_expression, args,
+                            boxed_args, expression)
                         : append_scalar(nested->second.scalar_leaf, args, expression);
                 } else {
                     return false;
@@ -6434,7 +6535,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         for (size_t i = 0; i < rec.int_expression_nodes.size(); ++i) {
             const auto& input = rec.int_expression_nodes[i];
             if (input.kind < static_cast<uint8_t>(AOTIntExpressionNodeKind::Param)
-                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Select)) {
+                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::StringLength)) {
                 return false;
             }
             AOTIntExpressionNodeInfo node;
@@ -6444,6 +6545,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             node.third = input.third;
             node.param = input.param;
             node.constant = input.constant;
+            bool is_source = node.kind == AOTIntExpressionNodeKind::ListSize
+                || node.kind == AOTIntExpressionNodeKind::StringSize
+                || node.kind == AOTIntExpressionNodeKind::StringLength;
             if (node.kind == AOTIntExpressionNodeKind::Param) {
                 if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
                         || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
@@ -6459,6 +6563,14 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                         || node.third != UINT8_MAX) {
                     return false;
                 }
+            } else if (is_source) {
+                if (node.param < 0 || node.param >= static_cast<int>(info.num_params)
+                        || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX || node.constant
+                        || info.param_kinds[static_cast<unsigned>(node.param)]
+                            != BatchCalleeParamKind::Boxed) {
+                    return false;
+                }
             } else if (node.param != -1 || node.constant
                     || node.lhs >= i || node.rhs >= i) {
                 return false;
@@ -6471,7 +6583,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     return false;
                 }
             } else if (node.kind != AOTIntExpressionNodeKind::Param
-                    && node.kind != AOTIntExpressionNodeKind::Constant) {
+                    && node.kind != AOTIntExpressionNodeKind::Constant && !is_source) {
                 if (node.third != UINT8_MAX || node_is_bool[node.lhs]
                         || node_is_bool[node.rhs]) {
                     return false;

@@ -624,7 +624,8 @@ private:
 
     // Emit a bounded pure native-integer expression summary.
     llvm::Value* emitAOTIntExpression(const BatchCalleeInfo& info,
-            const std::vector<llvm::Value*>& native_args);
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            llvm::Function* fallback_fn);
 
     // Emit a bounded pure native-float expression summary without fast-math flags.
     llvm::Value* emitAOTFloatExpression(const BatchCalleeInfo& info,

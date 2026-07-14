@@ -55,6 +55,22 @@ float sub divide_float_expr(float a, float b) {
     return a / b;
 }
 
+int sub string_measure_expr(string value, int adjustment) {
+    return value.size() * 3 + value.length() * 5 + adjustment;
+}
+
+int sub nested_string_measure_expr(string value, int adjustment) {
+    return string_measure_expr(value, adjustment) + value.size();
+}
+
+int sub optional_string_measure_expr(*string value, int adjustment) {
+    return value.size() * 3 + value.length() * 5 + adjustment;
+}
+
+int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
+    return left.size() * 7 + right.size() * 5 + adjustment * 3;
+}
+
 int sub divide_expr(int left, int right) {
     return left / right;
 }
@@ -88,7 +104,20 @@ string sub consumerCode() {
     } catch (hash<auto> ex) {
         removed_rejected = True;
     }
-    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%d:%d:%d:%.17g:%d:%d\\n\",
+    string missing_string;
+    bool missing_string_rejected = False;
+    try {
+        string_measure_expr(missing_string, 1);
+    } catch (hash<auto> ex) {
+        missing_string_rejected = True;
+    }
+    bool optional_nothing_rejected = False;
+    try {
+        optional_string_measure_expr(NOTHING, 7);
+    } catch (hash<auto> ex) {
+        optional_nothing_rejected = True;
+    }
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%.17g:%.17g:%d:%d:%d:%.17g:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
         bounded_expr(2, 3, 4),
         bounded_expr(9223372036854775807, 2, -3),
         pair(5, -2), bitwise_expr(6, 3, 12),
@@ -101,7 +130,14 @@ string sub consumerCode() {
         missing_rejected, removed_rejected,
         bounded_float_expr(-0.0, -0.0, 0.0),
         bounded_float_expr(@nan@, 1.0, 2.0).nanp(),
-        bounded_float_expr(@inf@, 1.0, 2.0).infp());
+        bounded_float_expr(@inf@, 1.0, 2.0).infp(),
+        string_measure_expr(\"ascii\", 2),
+        string_measure_expr(\"Dvo\\u0159\\u00e1k\", 3),
+        nested_string_measure_expr(\"Dvo\\u0159\\u00e1k\", 3),
+        optional_string_measure_expr(\"ascii\", 4),
+        optional_nothing_rejected,
+        missing_string_rejected,
+        list_measure_expr((1, 2, 3), (4, 5), 6));
     return 0;
 }
 ";
@@ -144,7 +180,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"14\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"15\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -154,6 +190,10 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"14\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_string_measure_expr\(string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"optional_string_measure_expr\(\*string,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
