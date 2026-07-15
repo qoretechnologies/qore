@@ -183,7 +183,9 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
 }
 
 static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
-        const QoreIRInstruction* inst, bool& has_ref_args) {
+        const QoreIRInstruction* inst, bool& has_ref_args,
+        const std::unordered_map<uint32_t,
+            const AbstractQoreFunctionVariant*>* closure_values = nullptr) {
     has_ref_args = true;
     if (!inst) {
         return nullptr;
@@ -209,9 +211,45 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
             has_ref_args = call->has_ref_args;
             return call->variant;
         }
+        case QoreIROpcode::CallClosureDirect: {
+            const auto* call = static_cast<const QoreIRExprInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            if (!closure_values || inst->operands.empty()) {
+                return nullptr;
+            }
+            auto closure = closure_values->find(inst->operands[0].id);
+            return closure == closure_values->end() ? nullptr : closure->second;
+        }
+        case QoreIROpcode::Invoke: {
+            const auto* call = static_cast<const QoreIRInvokeInstruction*>(inst);
+            if (call->invoke_opcode != QoreIROpcode::CallClosureDirect) {
+                return nullptr;
+            }
+            has_ref_args = call->has_ref_args;
+            if (!closure_values || inst->operands.empty()) {
+                return nullptr;
+            }
+            auto closure = closure_values->find(inst->operands[0].id);
+            return closure == closure_values->end() ? nullptr : closure->second;
+        }
         default:
             return nullptr;
     }
+}
+
+static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
+        const QoreIRInstruction* inst) {
+    if (!inst || inst->opcode != QoreIROpcode::CreateClosure) {
+        return nullptr;
+    }
+    const auto* create = static_cast<const QoreIRCreateClosureInstruction*>(inst);
+    const QoreClosureParseNode* closure = create->closure_node;
+    if (!closure) {
+        closure = dynamic_cast<const QoreClosureParseNode*>(
+            create->expr.getInternalNode());
+    }
+    const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+    return ucf ? ucf->first() : nullptr;
 }
 
 bool qore_ir_compute_function_effect_summaries(
@@ -276,6 +314,21 @@ bool qore_ir_compute_function_effect_summaries(
         if (!qore_ir_get_native_unsafe_locals(*func, initially_assigned).empty()) {
             effect.local_never_returns_nothing = false;
         }
+        std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+            closure_values;
+        for (const auto& block : func->blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR function closure value analysis")) {
+                    return false;
+                }
+                const AbstractQoreFunctionVariant* closure =
+                    qore_ir_get_created_closure_variant(inst_ptr.get());
+                if (closure && inst_ptr->result.isValid()) {
+                    closure_values.emplace(inst_ptr->result.id, closure);
+                }
+            }
+        }
         std::unordered_map<uint32_t, size_t> loaded_params;
         for (const auto& block : func->blocks) {
             if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
@@ -308,11 +361,16 @@ bool qore_ir_compute_function_effect_summaries(
                 }
                 bool has_ref_args = true;
                 const AbstractQoreFunctionVariant* callee =
-                    qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+                    qore_ir_get_resolved_effect_callee(inst, has_ref_args,
+                        &closure_values);
                 if (callee || (inst && (inst->opcode == QoreIROpcode::CallDirect
                         || inst->opcode == QoreIROpcode::CallStaticDirect
                         || inst->opcode == QoreIROpcode::CallMethodDirect
-                        || inst->opcode == QoreIROpcode::InvokeMethodDirect))) {
+                        || inst->opcode == QoreIROpcode::InvokeMethodDirect
+                        || inst->opcode == QoreIROpcode::CallClosureDirect
+                        || (inst->opcode == QoreIROpcode::Invoke
+                            && static_cast<const QoreIRInvokeInstruction*>(inst)
+                                ->invoke_opcode == QoreIROpcode::CallClosureDirect)))) {
                     if (has_ref_args || !callee) {
                         effect.local_may_invalidate = true;
                     } else {
@@ -401,11 +459,16 @@ bool qore_ir_compute_function_effect_summaries(
                     }
                     bool has_ref_args = true;
                     const AbstractQoreFunctionVariant* callee =
-                        qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+                        qore_ir_get_resolved_effect_callee(inst, has_ref_args,
+                            &closure_values);
                     if (callee || inst->opcode == QoreIROpcode::CallDirect
                             || inst->opcode == QoreIROpcode::CallStaticDirect
                             || inst->opcode == QoreIROpcode::CallMethodDirect
-                            || inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                            || inst->opcode == QoreIROpcode::InvokeMethodDirect
+                            || inst->opcode == QoreIROpcode::CallClosureDirect
+                            || (inst->opcode == QoreIROpcode::Invoke
+                                && static_cast<const QoreIRInvokeInstruction*>(inst)
+                                    ->invoke_opcode == QoreIROpcode::CallClosureDirect)) {
                         if (!callee || has_ref_args) {
                             effect.param_noescape[param_index] = false;
                             return;

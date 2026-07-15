@@ -15870,6 +15870,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? immediate_closure_node->getFunction() : nullptr;
             const AbstractQoreFunctionVariant* immediate_variant = immediate_ucf
                 ? immediate_ucf->first() : nullptr;
+            const BatchCalleeInfo* immediate_closure_summary = nullptr;
+            bool closure_effect_summary_disabled = aot_mode
+                ? std::getenv("QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY") != nullptr
+                : std::getenv("QORE_DISABLE_JIT_CLOSURE_EFFECT_SUMMARY") != nullptr;
+            if (!closure_effect_summary_disabled && immediate_variant && batch_callees) {
+                auto summary = batch_callees->find(immediate_variant);
+                if (summary != batch_callees->end()) {
+                    immediate_closure_summary = &summary->second;
+                }
+            }
             if (immediate_closure && !aot_mode && current_ir_func
                     && immediate_variant && batch_callees
                     && std::getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
@@ -15931,6 +15941,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (callee->second.never_returns_nothing) {
                             known_not_nothing_values.insert(inst->result.id);
                         }
+                        if (callee->second.may_invalidate_external_caches) {
+                            reloadAllLocalsFromRuntime(module, llvm_func, true);
+                        }
                         emitExceptionCheck(module, llvm_func, inst);
                         return true;
                     }
@@ -15950,14 +15963,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? closure_uvb->getUserSignature() : nullptr;
                 std::vector<BatchCalleeParamKind> closure_param_kinds =
                     qore_ir_get_signature_param_kinds(closure_sig);
-                const QoreTypeInfo* closure_return_type = closure_sig
-                    ? closure_sig->getReturnTypeInfo() : nullptr;
-                bool closure_rejects_nothing = QoreTypeInfo::hasType(closure_return_type)
-                    && !QoreTypeInfo::parseAcceptsReturns(
-                        closure_return_type, NT_NOTHING);
+                bool closure_never_returns_nothing = immediate_closure_summary
+                    && immediate_closure_summary->never_returns_nothing;
                 BatchCalleeReturnKind closure_return_kind =
                     qore_ir_get_fast_entry_return_kind(
-                        variant, closure_rejects_nothing);
+                        variant, closure_never_returns_nothing);
                 if (closure && !closure->isInMethod()
                         && (!captures || captures->empty()) && variant
                         && qore_ir_native_closure_call_eligible(variant,
@@ -16046,17 +16056,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* result = emitMaybeInvoke(dispatch,
                         throwing_dispatch, call_args, module, llvm_func, inst);
                     result->setName("native_closure_result");
-                    // The dispatch symbol may be defined as the generic fallback
-                    // when the closure body is not context-independent. Preserve
-                    // ordinary no-reference call invalidation at the call site;
-                    // this is a no-op when all caller locals are IR-only.
-                    reloadAllLocalsFromRuntime(module, llvm_func, true);
+                    if (!immediate_closure_summary
+                            || immediate_closure_summary->may_invalidate_external_caches) {
+                        reloadAllLocalsFromRuntime(module, llvm_func, true);
+                    }
                     values[inst->result.id] = result;
                     if (closure_return_kind == BatchCalleeReturnKind::Boxed) {
                         nanboxed_values.insert(inst->result.id);
                         trackResultForCleanup(result, inst->result.id, llvm_func);
                     }
-                    if (closure_rejects_nothing) {
+                    if (closure_never_returns_nothing) {
                         known_not_nothing_values.insert(inst->result.id);
                     }
                     emitExceptionCheck(module, llvm_func, inst);
@@ -16184,10 +16193,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             auto* closure_inst = static_cast<const QoreIRExprInstruction*>(inst);
-            reloadAllLocalsFromRuntime(module, llvm_func, !closure_inst->has_ref_args);
+            bool closure_may_invalidate = closure_inst->has_ref_args
+                || !immediate_closure_summary
+                || immediate_closure_summary->may_invalidate_external_caches;
+            if (closure_may_invalidate) {
+                reloadAllLocalsFromRuntime(module, llvm_func,
+                    !closure_inst->has_ref_args);
+            }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (immediate_closure_summary
+                    && immediate_closure_summary->never_returns_nothing) {
+                known_not_nothing_values.insert(inst->result.id);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

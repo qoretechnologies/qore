@@ -136,6 +136,13 @@ string sub exercise() {
     code<bool(float)> nan_check = bool sub (float value) {
         return value.nanp();
     };
+    code<int(int)> pure_delta = int sub (int value) {
+        return value & 1;
+    };
+    list<int> effect_state = (0,);
+    for (int i = 0; i < 6; ++i) {
+        effect_state[0] += pure_delta(i);
+    }
 
     int first = add(4);
     int changed = bump();
@@ -185,12 +192,12 @@ string sub exercise() {
     } catch (hash<auto> ex) {
         typed_errors += ex.err == \"RUNTIME-OVERLOAD-ERROR\";
     }
-    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%.1f:%d:%s:%d:%d\",
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%.1f:%d:%s:%d:%d:%d\",
         first, changed, second, outer_changed, initialized, added, decremented,
         writeback_counter, unset_writeback, captured_multiply(7), guarded_multiply(7), defaulted(), ref_value,
         loop(5), nested_call(), object_adder(2), recursive(5), guarded(-1),
         branched(8), branched(9), mod_zero_caught, adjusted, differs_result,
-        described, typed_errors, nan_result);
+        described, typed_errors, nan_result, effect_state[0]);
 }
 
 if (getenv(\"QORE_TEST_AOT_CLOSURE_EH\")) {
@@ -219,6 +226,7 @@ string compile_out = backquote(sprintf(
     "QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, source_path));
 string disabled_compile_out = backquote(sprintf(
+    "QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY=1 "
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
@@ -242,19 +250,21 @@ string fallback_eh_out = backquote(sprintf(
     "QORE_TEST_AOT_CLOSURE_EH=1 QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, exe_path));
 string disabled_out = backquote(sprintf(
+    "QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY=1 "
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
 string disabled_eh_out = backquote(sprintf(
+    "QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY=1 "
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1\n";
+string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1/)
+        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3/)
         || !(ast_eh_out =~ /DIVISION-BY-ZERO/)
         || !(native_eh_out =~ /DIVISION-BY-ZERO/) || native_eh_out =~ /terminate called/
         || !(fallback_eh_out =~ /DIVISION-BY-ZERO/) || fallback_eh_out =~ /terminate called/

@@ -1147,6 +1147,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         info.approach_b_eligible = callee.approach_b_eligible;
         info.num_params = callee.num_params;
         auto summary = effect_summaries.find(callee.variant);
+        info.may_invalidate_external_caches = summary == effect_summaries.end()
+            || summary->second.may_invalidate_external_caches;
         info.never_returns_nothing = summary != effect_summaries.end()
             && summary->second.never_returns_nothing;
         info.return_kind = qore_ir_get_fast_entry_return_kind(

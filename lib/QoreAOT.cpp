@@ -7126,7 +7126,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 context_candidates.emplace_back(variant, std::unique_ptr<QoreIRFunction>(ir_func));
                 ir_func = nullptr;
             }
-            delete ir_func;
+            if (ir_func) {
+                effect_only_candidates.emplace_back(variant,
+                    std::unique_ptr<QoreIRFunction>(ir_func));
+            }
         }
     }
 
@@ -7281,7 +7284,102 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
                 }
-                delete ir_func;
+                if (ir_func) {
+                    effect_only_candidates.emplace_back(variant,
+                        std::unique_ptr<QoreIRFunction>(ir_func));
+                }
+            }
+        }
+    }
+
+    // Closure variants are not namespace members, so collect their bodies from
+    // already-lowered owners. The effect-only IR lets the normal interprocedural
+    // analysis prove caller-cache effects and assigned returns before owner LLVM
+    // lowering; closure code generation still owns its separately lowered body.
+    std::vector<const QoreIRFunction*> closure_scan;
+    closure_scan.reserve(context_candidates.size() + effect_only_candidates.size());
+    size_t closure_collect_count = 0;
+    for (const auto* candidates : {&context_candidates, &effect_only_candidates}) {
+        for (const auto& [variant, func] : *candidates) {
+            if (closure_collect_count++ && !(closure_collect_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT closure effect candidate collection")) {
+                return false;
+            }
+            (void)variant;
+            closure_scan.push_back(func.get());
+        }
+    }
+    size_t closure_scan_count = 0;
+    for (size_t scan_index = 0; scan_index < closure_scan.size(); ++scan_index) {
+        if (scan_index && !(scan_index % 100)
+                && qore_check_cancel(nullptr, "AOT closure effect owner analysis")) {
+            return false;
+        }
+        const QoreIRFunction* owner_ir = closure_scan[scan_index];
+        if (!owner_ir) {
+            continue;
+        }
+        for (const auto& block : owner_ir->blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (closure_scan_count++ && !(closure_scan_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT closure effect instruction analysis")) {
+                    return false;
+                }
+                if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure) {
+                    continue;
+                }
+                const auto* create = static_cast<const QoreIRCreateClosureInstruction*>(
+                    inst_ptr.get());
+                const QoreClosureParseNode* closure = create->closure_node;
+                if (!closure) {
+                    closure = dynamic_cast<const QoreClosureParseNode*>(
+                        create->expr.getInternalNode());
+                }
+                const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+                const AbstractQoreFunctionVariant* closure_variant = ucf ? ucf->first() : nullptr;
+                UserVariantBase* closure_uvb = closure_variant
+                    ? const_cast<AbstractQoreFunctionVariant*>(closure_variant)->getUserVariantBase()
+                    : nullptr;
+                if (!closure_uvb || aot_batch_callee_map.count(closure_variant)) {
+                    continue;
+                }
+
+                QoreIRFunction* closure_ir = nullptr;
+                std::string closure_error;
+                std::string closure_name = "__aot_closure_effect::"
+                    + std::to_string(effect_only_candidates.size());
+                if (tryLowerFunction(closure_uvb, closure_name.c_str(), pgm,
+                        closure_ir, closure_error) != 0 || !closure_ir) {
+                    delete closure_ir;
+                    continue;
+                }
+                const UserSignature* sig = closure_uvb->getUserSignature();
+                qoreAOTPruneClosureIRBodyLocals(closure_ir, sig,
+                    const_cast<UserClosureFunction*>(ucf)->getVList());
+                if (sig) {
+                    for (unsigned p = 0; p < sig->numParams(); ++p) {
+                        if (p && !(p % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT closure effect parameter analysis")) {
+                            delete closure_ir;
+                            return false;
+                        }
+                        closure_ir->param_local_vars[static_cast<int>(p)] = sig->lv[p];
+                    }
+                }
+
+                BatchCalleeInfo info;
+                info.name = closure_name;
+                info.num_params = sig ? sig->numParams() : 0;
+                info.param_kinds = qore_ir_get_fast_entry_param_kinds(*closure_ir, sig);
+                info.param_rejects_nothing =
+                    qore_ir_get_fast_entry_param_rejects_nothing(sig);
+                aot_batch_callee_map.emplace(closure_variant, std::move(info));
+                closure_scan.push_back(closure_ir);
+                effect_only_candidates.emplace_back(closure_variant,
+                    std::unique_ptr<QoreIRFunction>(closure_ir));
             }
         }
     }
@@ -8335,11 +8433,18 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         const UserSignature* sig = variant ? variant->getUserSignature() : nullptr;
         std::vector<BatchCalleeParamKind> dispatch_param_kinds =
             qore_ir_get_signature_param_kinds(sig);
-        const QoreTypeInfo* dispatch_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
-        bool dispatch_rejects_nothing = QoreTypeInfo::hasType(dispatch_return_type)
-            && !QoreTypeInfo::parseAcceptsReturns(dispatch_return_type, NT_NOTHING);
+        const BatchCalleeInfo* closure_effect = nullptr;
+        if (aot_batch_callee_map
+                && std::getenv("QORE_DISABLE_AOT_CLOSURE_EFFECT_SUMMARY") == nullptr) {
+            auto effect = aot_batch_callee_map->find(abstract_variant);
+            if (effect != aot_batch_callee_map->end()) {
+                closure_effect = &effect->second;
+            }
+        }
+        bool dispatch_never_returns_nothing = closure_effect
+            && closure_effect->never_returns_nothing;
         BatchCalleeReturnKind dispatch_return_kind = qore_ir_get_fast_entry_return_kind(
-            abstract_variant, dispatch_rejects_nothing);
+            abstract_variant, dispatch_never_returns_nothing);
         if (!variant) {
             if (!defineAOTClosureDispatch(ctx, module, dispatch, nullptr, 0)) {
                 setAOTCompileFatal(fatal_error, "closure", dispatch_name,
@@ -8479,11 +8584,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 BatchCalleeInfo> empty_batch_callees;
             const auto& batch_callees = aot_batch_callee_map
                 ? *aot_batch_callee_map : empty_batch_callees;
-            const QoreTypeInfo* return_type = sig->getReturnTypeInfo();
-            bool rejects_nothing_return = QoreTypeInfo::hasType(return_type)
-                && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING);
             BatchCalleeReturnKind return_kind = qore_ir_get_fast_entry_return_kind(
-                variant, rejects_nothing_return);
+                variant, dispatch_never_returns_nothing);
             std::vector<BatchCalleeParamKind> param_kinds =
                 qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
             bool typed_signature_matches = return_kind == dispatch_return_kind
@@ -8557,7 +8659,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     fast_lowerer.setFastEntryMode(fast_name, &param_map,
                         &param_kind_map, &borrowed_params,
-                        return_kind, rejects_nothing_return);
+                        return_kind, dispatch_never_returns_nothing);
                     fast_lowered = fast_lowerer.lowerFunction(*ir_func, module,
                         fast_error);
                 }
