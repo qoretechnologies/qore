@@ -1114,6 +1114,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         auto summary = effect_summaries.find(callee.variant);
         info.never_returns_nothing = summary != effect_summaries.end()
             && summary->second.never_returns_nothing;
+        info.return_kind = qore_ir_get_fast_entry_return_kind(
+            callee.variant, info.never_returns_nothing);
         if (info.approach_b_eligible) {
             info.fast_name = callee.ir_func->name + "_fast";
             const UserVariantBase* uvb = callee.variant->getUserVariantBase();
@@ -1182,7 +1184,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             fast_params.push_back(qore_jit_fast_entry_param_type(kind, i64_ty, double_ty));
         }
         fast_params.push_back(ptr_ty);  // xsink
-        auto* fast_fn_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+        llvm::Type* fast_return_ty = info_it->second.return_kind
+                == BatchCalleeReturnKind::NativeFloat
+            ? double_ty : i64_ty;
+        auto* fast_fn_type = llvm::FunctionType::get(fast_return_ty, fast_params, false);
         std::string fast_name = callee.ir_func->name + "_fast";
         llvm::Function* fast_fn = llvm::Function::Create(fast_fn_type,
                 llvm::Function::ExternalLinkage, fast_name, *module);
@@ -1329,6 +1334,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Use pre-copied callee_names (not callee.ir_func->name) as LLVM may have
     // corrupted adjacent heap memory during addIRModule()/lookup() above.
     for (size_t i = 0; i < callees.size(); ++i) {
+        if (callees[i].batch_only) {
+            continue;
+        }
         auto callee_sym = jit->lookup(callee_names[i]);
         if (!callee_sym) {
             // Non-fatal: callees that fail lookup will fall back to runtime dispatch
@@ -1550,6 +1558,9 @@ void QoreJIT::bgCompileThreadLoop() {
         if (work.has_callees) {
             for (size_t i = 0; i < work.callees.size(); ++i) {
                 const auto& callee = work.callees[i];
+                if (callee.batch_only) {
+                    continue;
+                }
                 JitFunctionPtr callee_fn = lookupFunction(saved_callee_names[i]);
                 if (callee_fn && callee.variant) {
                     const UserVariantBase* callee_uvb = callee.variant->getUserVariantBase();

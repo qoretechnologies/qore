@@ -5508,7 +5508,8 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
     return func;
 }
 
-void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure) const {
+void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
+        bool promote_to_ir) const {
     // Only %modern functions may be IR-lowered.  The eager-compile path
     // (eagerlyCompileAllFunctions()) and threshold-promotion path both gate on
     // the *program's* parse options, but a %modern program can legitimately
@@ -5546,9 +5547,11 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         return;
     }
     cached_ir = func;
-    current_tier.store(TIER_IR, std::memory_order_release);
-    printd(3, "UserVariantBase::attemptIRLowering() '%s' promoted to IR tier (%d guards)\n",
-        name, func->num_guards);
+    if (promote_to_ir) {
+        current_tier.store(TIER_IR, std::memory_order_release);
+    }
+    printd(3, "UserVariantBase::attemptIRLowering() '%s' cached IR%s (%d guards)\n",
+        name, promote_to_ir ? " and promoted to IR tier" : "", func->num_guards);
 }
 
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
@@ -5636,7 +5639,8 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     return true;
 }
 
-// Collect direct and transitive callees from an IR function's CallDirect instructions.
+// Collect direct and transitive callees from an IR function's direct calls and
+// noncapturing closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
 static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunction& func,
         QoreProgram* root_pgm) {
@@ -5657,6 +5661,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 }
                 const AbstractQoreFunctionVariant* variant = nullptr;
                 const char* callee_name = nullptr;
+                bool batch_only = false;
 
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
@@ -5675,6 +5680,23 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                                 callee_name = call->getFunction()->getName();
                             }
                         }
+                    }
+                } else if (inst->opcode == QoreIROpcode::CreateClosure
+                        && getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
+                    const auto* create =
+                        static_cast<const QoreIRCreateClosureInstruction*>(inst.get());
+                    const QoreClosureParseNode* closure = create->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            create->expr.getInternalNode());
+                    }
+                    const LVarSet* captures = closure ? closure->getVList() : nullptr;
+                    const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+                    if (closure && !closure->isInMethod()
+                            && (!captures || captures->empty()) && ucf) {
+                        variant = ucf->first();
+                        callee_name = ucf->getName();
+                        batch_only = true;
                     }
                 }
 
@@ -5709,7 +5731,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     }
                     // Force IR lowering for the callee — must go through forceIRLowering
                     // which handles the call_once flag properly
-                    uvb->forceIRLowering(callee_name);
+                    uvb->forceIRLowering(callee_name, false, !batch_only);
                     callee_ir = uvb->getCachedIR();
                     if (!callee_ir) {
                         continue;
@@ -5737,7 +5759,8 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     uvb->getDeoptCounterPtr(),
                     variant,
                     approach_b,
-                    num_params
+                    num_params,
+                    batch_only
                 });
                 if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
                     worklist.push_back(callee_ir);
@@ -6461,9 +6484,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // Check for IR promotion
     if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
-        std::call_once(ir_lower_once, [this, name]() {
-            attemptIRLowering(name);
-        });
+        if (cached_ir) {
+            // Batch compilation can lower an internal closure without publishing
+            // its IR tier.  Publish that already-cached body once the closure
+            // independently reaches the normal IR threshold.
+            current_tier.store(TIER_IR, std::memory_order_release);
+        } else {
+            std::call_once(ir_lower_once, [this, name]() {
+                attemptIRLowering(name);
+            });
+        }
         // If promotion succeeded, the next call will use IR tier
     }
 

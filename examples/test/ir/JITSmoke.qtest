@@ -6060,6 +6060,30 @@ printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
                     sprintf("immediate noncapturing closure fusion %s", mode));
         }
 
+        # Caching a native body for a noncapturing closure must not bypass
+        # overload binding for a value that became NOTHING after remove.
+        code = "%modern
+string sub run() {
+    code<int(int)> increment = int sub (int value) { return value + 1; };
+    int value = 4;
+    int assigned = increment(value);
+    remove value;
+    string error;
+    try {
+        increment(value);
+    } catch (hash<ExceptionInfo> ex) {
+        error = ex.err;
+    }
+    return sprintf(\"%d:%s\", assigned, error);
+}
+printf(\"%s\\n\", run());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("5:RUNTIME-OVERLOAD-ERROR", result,
+                    sprintf("native closure removed argument guard %s", mode));
+        }
+
         # A comparison with a second use must retain its boxed Qore bool value
         code = "%modern
 auto lhs = 2;

@@ -5292,6 +5292,28 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         int nargs, const uint64_t* args, ExceptionSink* xsink,
         uint64_t** arg_cleanups = nullptr);
 
+static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
+        const uint64_t* args, int nargs, ExceptionSink* xsink) {
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig || nargs != static_cast<int>(sig->numParams())) {
+        return false;
+    }
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(xsink,
+                    "native closure runtime argument binding analysis")) {
+            return false;
+        }
+        QoreValue value = fromBits(args[i]);
+        if (value.isNothing() || value.needsEval()
+                || !QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
+                    value.getTypeInfo())) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
         const UserVariantBase* uvb, uint64_t* args, int nargs,
         uint64_t** arg_cleanups, uint64_t& result_bits) {
@@ -5358,13 +5380,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
                     && tryExecClosureNativeLeaf(node, uvb, nullptr, 0, nullptr, leaf_result)) {
                 return leaf_result;
             }
             return execClosureDirect(cb, uvb, 0, nullptr, xsink);
+        }
+        if (*xsink) {
+            return toBits(QoreValue());
         }
         // Fall through to execValue for closures without cached IR/JIT
         QoreValue result = const_cast<QoreClosureBase*>(cb)->execValue(nullptr, xsink);
@@ -5404,13 +5430,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
                     && tryExecClosureNativeLeaf(node, uvb, &arg0_bits, 1, nullptr, leaf_result)) {
                 return leaf_result;
             }
             return execClosureDirect(cb, uvb, 1, &arg0_bits, xsink);
+        }
+        if (*xsink) {
+            return toBits(QoreValue());
         }
         // Fall through to execValue for closures without cached IR/JIT
     }
@@ -5458,7 +5488,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+                && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
                     && tryExecClosureNativeLeaf(node, uvb, args, nargs, arg_cleanups,
@@ -5466,6 +5497,9 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
                 return leaf_result;
             }
             return execClosureDirect(cb, uvb, nargs, args, xsink, arg_cleanups);
+        }
+        if (*xsink) {
+            return toBits(QoreValue());
         }
         // Fall through to execValue for closures without cached IR/JIT
     }
@@ -8358,7 +8392,8 @@ static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* 
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!cn->isInMethod() && (!vlist || vlist->empty()) && uvb
             && uvb->isStaticallyFastCallEligible()
-            && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
+            && (uvb->hasCachedFunction() || uvb->getCachedIR())
+            && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
         uint64_t leaf_result;
         if (!uvb->hasCachedAOT()
                 && tryExecClosureNativeLeaf(nullptr, uvb, args, nargs,
@@ -8366,6 +8401,9 @@ static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* 
             return leaf_result;
         }
         return execClosureDirect(nullptr, uvb, nargs, args, xsink, arg_cleanups);
+    }
+    if (*xsink) {
+        return toBits(QoreValue());
     }
 
     uint64_t closure_bits = qore_rt_create_closure(cn, xsink);

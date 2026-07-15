@@ -389,6 +389,7 @@ public:
         const AbstractQoreFunctionVariant* variant;
         bool approach_b_eligible = false;    //!< True if callee can use direct LLVM arg passing
         unsigned num_params = 0;             //!< Number of parameters (for fast entry signature)
+        bool batch_only = false;              //!< Do not publish or promote this internal callee
     };
     bool compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,

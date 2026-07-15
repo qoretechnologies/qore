@@ -462,7 +462,8 @@ static bool qore_ir_native_int_closure_call_eligible(
     if (!sig || !QoreTypeInfo::hasType(return_type)
             || QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
             || !QoreTypeInfo::isType(return_type, NT_INT)
-            || QoreTypeInfo::getReturnEnum(return_type)) {
+            || QoreTypeInfo::getReturnEnum(return_type)
+            || nargs != static_cast<int>(sig->numParams())) {
         return false;
     }
     for (int i = 0; i < nargs; ++i) {
@@ -15785,17 +15786,64 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto immediate_it = immediate_closure_creates.find(
                     inst->operands[0].id);
             bool immediate_closure = immediate_it != immediate_closure_creates.end();
+            const QoreIRCreateClosureInstruction* immediate_create =
+                immediate_closure ? immediate_it->second : nullptr;
+            const QoreClosureParseNode* immediate_closure_node =
+                immediate_create ? immediate_create->closure_node : nullptr;
+            if (!immediate_closure_node && immediate_create) {
+                immediate_closure_node = dynamic_cast<const QoreClosureParseNode*>(
+                    immediate_create->expr.getInternalNode());
+            }
+            const UserClosureFunction* immediate_ucf = immediate_closure_node
+                ? immediate_closure_node->getFunction() : nullptr;
+            const AbstractQoreFunctionVariant* immediate_variant = immediate_ucf
+                ? immediate_ucf->first() : nullptr;
+            if (immediate_closure && !aot_mode && current_ir_func
+                    && immediate_variant && batch_callees
+                    && std::getenv("QORE_DISABLE_JIT_NATIVE_CLOSURES") == nullptr) {
+                auto callee = batch_callees->find(immediate_variant);
+                const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
+                int native_nargs = static_cast<int>(inst->operands.size()) - 1;
+                if (callee != batch_callees->end()
+                        && callee->second.approach_b_eligible
+                        && callee->second.return_kind == BatchCalleeReturnKind::NativeInt
+                        && qore_ir_native_int_closure_call_eligible(immediate_variant,
+                            closure_call->expr, current_ir_func, inst->operands,
+                            1, native_nargs)) {
+                    llvm::Function* fast_fn = module.getFunction(callee->second.fast_name);
+                    if (fast_fn) {
+                        std::vector<llvm::Value*> call_args;
+                        call_args.reserve(static_cast<size_t>(native_nargs) + 1);
+                        for (int i = 0; i < native_nargs; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM JIT native closure argument lowering")) {
+                                error = "cancelled during LLVM JIT native closure argument lowering";
+                                return false;
+                            }
+                            llvm::Value* arg = getVal(inst->operands[1 + i].id, error);
+                            if (!arg) {
+                                return false;
+                            }
+                            call_args.push_back(ensureIntTypeInline(arg,
+                                inst->operands[1 + i].id));
+                        }
+                        call_args.push_back(xsink_arg);
+                        llvm::Value* result = builder->CreateCall(fast_fn, call_args,
+                            "jit_native_closure_result");
+                        values[inst->result.id] = result;
+                        known_not_nothing_values.insert(inst->result.id);
+                        emitExceptionCheck(module, llvm_func, inst);
+                        return true;
+                    }
+                }
+            }
             if (immediate_closure && aot_mode && current_ir_func
                     && std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI") == nullptr) {
-                const QoreIRCreateClosureInstruction* create = immediate_it->second;
-                const QoreClosureParseNode* closure = create->closure_node;
-                if (!closure) {
-                    closure = dynamic_cast<const QoreClosureParseNode*>(
-                        create->expr.getInternalNode());
-                }
+                const QoreIRCreateClosureInstruction* create = immediate_create;
+                const QoreClosureParseNode* closure = immediate_closure_node;
                 const LVarSet* captures = closure ? closure->getVList() : nullptr;
-                const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
-                const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+                const AbstractQoreFunctionVariant* variant = immediate_variant;
                 const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
                 if (closure && !closure->isInMethod()

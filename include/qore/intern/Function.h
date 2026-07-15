@@ -899,7 +899,8 @@ protected:
         under --exec-mode=ir/jit/tiered so IR gaps surface as parse errors
         rather than silently falling back to AST.
     */
-    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false) const;
+    DLLLOCAL void attemptIRLowering(const char* name, bool raise_on_failure = false,
+            bool promote_to_ir = true) const;
     DLLLOCAL QoreIRFunction* lowerIRFunction(const char* name, const std::string& unique_name,
             const QoreTypeInfo* specialization_receiver_type_info,
             const QoreTypeParamInstantiation* specialization_type_param_instantiation,
@@ -1086,10 +1087,12 @@ public:
     }
 
     //! Force IR lowering (thread-safe via call_once).  Used by batch compilation
-    //! to ensure callees have IR before the root function is JIT-compiled.
-    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false) const {
-        std::call_once(ir_lower_once, [this, name, raise_on_failure]() {
-            attemptIRLowering(name, raise_on_failure);
+    //! to ensure callees have IR before the root function is JIT-compiled.  Set
+    //! promote_to_ir=false when the IR is only an internal batch body.
+    DLLLOCAL void forceIRLowering(const char* name, bool raise_on_failure = false,
+            bool promote_to_ir = true) const {
+        std::call_once(ir_lower_once, [this, name, raise_on_failure, promote_to_ir]() {
+            attemptIRLowering(name, raise_on_failure, promote_to_ir);
         });
     }
 

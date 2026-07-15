@@ -4001,6 +4001,20 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
             callee_ir->direct_params_eligible,
         };
     }
+    if (nargs != static_cast<int>(num_params)) {
+        return false;
+    }
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(xsink,
+                    "IR inline closure argument assignment analysis")) {
+            result = QoreValue();
+            return true;
+        }
+        if (fromBits(args[i]).isNothing()) {
+            return false;
+        }
+    }
     if (nargs == 0 && simple_increment
             && tryExecuteSimpleClosureIncrement(cb, simple_increment->local,
                 simple_increment->delta, result, xsink)) {
