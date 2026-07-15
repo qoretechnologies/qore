@@ -4734,6 +4734,55 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     */
     public const string OP_IN_SELECT = "in_select";
 
+    #! Normalizes a digest algorithm name for the @ref DP_FUNC_DIGEST expression
+    /** Lower-cases the value and strips \c "-", \c "_", and space characters so that, for example,
+        \c "SHA-256" and \c "sha256" are treated identically.
+
+        @param alg the algorithm argument; must be a string literal
+
+        @return the normalized algorithm name (ex: \c "sha256")
+
+        @throw DIGEST-ERROR the algorithm argument is not a string literal
+
+        @since %SqlUtil 1.9
+    */
+    public string sub sqlutil_normalize_digest_algorithm(auto alg) {
+        if (alg.typeCode() != NT_STRING) {
+            throw "DIGEST-ERROR", sprintf("the digest algorithm argument must be a string literal; got "
+                "%y (type %y)", alg, alg.type());
+        }
+        return regex_subst(alg.lwr(), "[-_ ]", "", RE_Global);
+    }
+
+    #! Normalizes and validates the digest output encoding for the @ref DP_FUNC_DIGEST expression
+    /** @param enc the encoding argument; must be missing or one of \c "hex", \c "base64", or
+        \c "binary" (case-insensitive)
+
+        @return the normalized encoding: \c "hex" (the default when missing), \c "base64", or
+        \c "binary"
+
+        @throw DIGEST-ERROR the encoding argument is not a valid string literal encoding value
+
+        @since %SqlUtil 1.9
+    */
+    public string sub sqlutil_normalize_digest_encoding(auto enc) {
+        if (!exists enc) {
+            return "hex";
+        }
+        if (enc.typeCode() != NT_STRING) {
+            throw "DIGEST-ERROR", sprintf("the digest encoding argument must be a string literal; got "
+                "%y (type %y)", enc, enc.type());
+        }
+        switch (enc.lwr()) {
+            case "hex":
+            case "base64":
+            case "binary":
+                return enc.lwr();
+        }
+        throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y; expected \"hex\", \"base64\", "
+            "or \"binary\"", enc);
+    }
+
     #! Default expressions to be supported by all SqlUtil modules
     public const hash<auto> DefaultExpressionMap = {
         # first the "AND" and "OR" "operators"
@@ -5712,6 +5761,30 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                 return sprintf("coalesce(%s)", (foldl $1 + ", " + $2,
                     (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args)));
+            },
+        },
+        # --- Encryption and hashing functions ---
+        # Default: no portable ANSI SQL digest exists; drivers that support server-side digests
+        # override this entry with native code.  Unsupported drivers raise a clear error.
+        DP_FUNC_DIGEST: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_DIGEST,
+                "display_name": "digest",
+                "short_desc": "Computes a cryptographic digest",
+                "desc": "Returns the cryptographic digest of the input data in the requested output "
+                    "encoding: `hex` (the default) and `base64` return a string, `binary` returns "
+                    "the raw digest as a binary value",
+                "symbol": "get_digest()",
+                "groups": "Encryption and Hashing",
+                "role": ER_All,
+                "args": (DataProviderSignatureDataType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringType),
+                "return_type": AbstractDataProviderTypeMap."data",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                throw "DIGEST-ERROR", sprintf("the %y expression is not supported by the %y driver",
+                    DP_FUNC_DIGEST, info.table.getDriverName());
             },
         },
         # --- String functions ---

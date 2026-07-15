@@ -1863,6 +1863,43 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         #! Expression map for PostgreSQL
         const PgsqlExpressionMap = DefaultExpressionMap + {
+            # PostgreSQL server-side digest: sha2 family via the built-in shaNNN(bytea) functions
+            # (no pgcrypto required) and md5 via the built-in md5(text) function; sha1 is not a
+            # built-in (it requires the pgcrypto extension) so it is rejected here.
+            DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                    string enc = sqlutil_normalize_digest_encoding(args[2]);
+                    string v = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string core;
+                    switch (alg) {
+                        case "md5":
+                            core = sprintf("decode(md5(%s), 'hex')", v);
+                            break;
+                        case "sha224":
+                        case "sha256":
+                        case "sha384":
+                        case "sha512":
+                            core = sprintf("%s(convert_to(%s, 'UTF8'))", alg, v);
+                            break;
+                        default:
+                            throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                                "PostgreSQL driver; supported algorithms: md5, sha224, sha256, sha384, "
+                                "sha512", alg);
+                    }
+                    switch (enc) {
+                        case "binary":
+                            return core;
+                        case "hex":
+                            return sprintf("encode(%s, 'hex')", core);
+                        case "base64":
+                            # strip the newlines PostgreSQL inserts into base64 output every 76 chars
+                            return sprintf("translate(encode(%s, 'base64'), chr(10), '')", core);
+                    }
+                    throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                },
+            },
             COP_CAST: {
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,

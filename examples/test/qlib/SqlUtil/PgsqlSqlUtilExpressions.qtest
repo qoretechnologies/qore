@@ -103,6 +103,7 @@ class PgsqlExpressionTest inherits QUnit::Test {
         # Date/string function tests
         addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
         addTestCase("DP_FUNC_SUBSTR", \testDpFuncSubstr());
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
 
         # Test format conversion helper
         addTestCase("convertDateFormat", \testConvertDateFormat());
@@ -548,6 +549,7 @@ class PgsqlExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(DP_OP_HAS_VALUE));
         assertTrue(emap.hasKey(DP_FUNC_FORMAT_DATE));
         assertTrue(emap.hasKey(DP_FUNC_SUBSTR));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
 
         # verify existing operators are still present
         assertTrue(emap.hasKey(COP_CAST));
@@ -560,5 +562,39 @@ class PgsqlExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        string name = table.selectRow({"columns": "name", "where": {"id": 1}}).name;
+
+        # PostgreSQL supports md5 and the SHA-2 family via built-in functions (no pgcrypto required)
+        foreach string alg in (("md5", "sha224", "sha256", "sha384", "sha512")) {
+            assertEq(digest(alg, name),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "binary")), 1).d);
+            assertEq(digest(alg, name).toHex(),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "hex")), 1).d);
+            string b64 = selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "base64")), 1).d;
+            assertEq(make_base64_string(digest(alg, name)), b64);
+            assertEq(-1, b64.find("\n"));  # server-side base64 must not wrap
+        }
+
+        # default output encoding is hex
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256")), 1).d);
+
+        # algorithm name normalization (case and separators)
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "SHA-256")), 1).d);
+
+        # sha1 requires the pgcrypto extension and is rejected
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha1", "hex")), 1);
+        });
+        # invalid output encoding is rejected
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "bogus")), 1);
+        });
     }
 }

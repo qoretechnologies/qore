@@ -1508,6 +1508,46 @@ end";
 
             #! MySQL Expression map
             const MysqlExpressionMap = DefaultExpressionMap + {
+                # MySQL server-side digest: md5()/sha1() and sha2() return lowercase hex strings;
+                # binary is produced with unhex() and base64 with to_base64() (whose 76-char line
+                # wrapping is stripped).  Supports md5, sha1, sha224, sha256, sha384, and sha512.
+                DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                        string enc = sqlutil_normalize_digest_encoding(args[2]);
+                        string v = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string hexexpr;
+                        switch (alg) {
+                            case "md5":
+                                hexexpr = sprintf("md5(%s)", v);
+                                break;
+                            case "sha1":
+                                hexexpr = sprintf("sha1(%s)", v);
+                                break;
+                            case "sha224":
+                            case "sha256":
+                            case "sha384":
+                            case "sha512":
+                                hexexpr = sprintf("sha2(%s, %s)", v, alg.substr(3));
+                                break;
+                            default:
+                                throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by "
+                                    "the MySQL driver; supported algorithms: md5, sha1, sha224, sha256, "
+                                    "sha384, sha512", alg);
+                        }
+                        switch (enc) {
+                            case "hex":
+                                return hexexpr;
+                            case "binary":
+                                return sprintf("unhex(%s)", hexexpr);
+                            case "base64":
+                                # strip the newlines to_base64() inserts every 76 characters
+                                return sprintf("replace(to_base64(unhex(%s)), char(10), '')", hexexpr);
+                        }
+                        throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                    },
+                },
                 COP_CAST: {
                     "exp": <DataProviderExpressionInfo>{
                         "type": DET_Operator,

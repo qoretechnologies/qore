@@ -2286,6 +2286,38 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         #! Oracle Expression map
         const OracleExpressionMap = DefaultExpressionMap + {
+            # Oracle server-side digest via STANDARD_HASH (returns RAW); supports MD5, SHA1, SHA256,
+            # SHA384, and SHA512 (SHA224 is not supported by STANDARD_HASH).  base64 output is not
+            # available portably in pure SQL and is rejected.
+            DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                    string enc = sqlutil_normalize_digest_encoding(args[2]);
+                    string v = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    hash<string, string> algmap = {
+                        "md5": "MD5", "sha1": "SHA1", "sha256": "SHA256", "sha384": "SHA384",
+                        "sha512": "SHA512",
+                    };
+                    *string oalg = algmap{alg};
+                    if (!oalg) {
+                        throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                            "Oracle driver; supported algorithms: md5, sha1, sha256, sha384, sha512",
+                            alg);
+                    }
+                    string core = sprintf("standard_hash(%s, '%s')", v, oalg);
+                    switch (enc) {
+                        case "binary":
+                            return core;
+                        case "hex":
+                            return sprintf("lower(rawtohex(%s))", core);
+                        case "base64":
+                            throw "DIGEST-ERROR", "base64 digest output encoding is not supported by "
+                                "the Oracle driver";
+                    }
+                    throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                },
+            },
             OP_SUBSTR: DefaultExpressionMap{OP_SUBSTR} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],

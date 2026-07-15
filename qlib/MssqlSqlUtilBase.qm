@@ -1322,6 +1322,37 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
 
         #! Mssql Expression map
         const MssqlExpressionMap = DefaultExpressionMap + {
+            # SQL Server server-side digest via HASHBYTES (returns varbinary); supports MD5, SHA1,
+            # SHA2_256, and SHA2_512 (SHA224/SHA384 are not supported by HASHBYTES).  base64 output
+            # requires a non-portable XML idiom and is rejected.
+            DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                    string enc = sqlutil_normalize_digest_encoding(args[2]);
+                    string v = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    hash<string, string> algmap = {
+                        "md5": "MD5", "sha1": "SHA1", "sha256": "SHA2_256", "sha512": "SHA2_512",
+                    };
+                    *string malg = algmap{alg};
+                    if (!malg) {
+                        throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                            "Microsoft SQL Server driver; supported algorithms: md5, sha1, sha256, "
+                            "sha512", alg);
+                    }
+                    string core = sprintf("hashbytes('%s', %s)", malg, v);
+                    switch (enc) {
+                        case "binary":
+                            return core;
+                        case "hex":
+                            return sprintf("lower(convert(varchar(max), %s, 2))", core);
+                        case "base64":
+                            throw "DIGEST-ERROR", "base64 digest output encoding is not supported by "
+                                "the Microsoft SQL Server driver";
+                    }
+                    throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                },
+            },
             OP_SUBSTR: DefaultExpressionMap{OP_SUBSTR} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],

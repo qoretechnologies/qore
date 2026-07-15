@@ -117,6 +117,12 @@ populate: {exp: now}
 populate: {exp: coalesce, args: [{field: legacy_status}, "unknown"]}
 # → UPDATE t SET status = coalesce(legacy_status, 'unknown') WHERE status IS NULL
 
+# Cryptographic digest — portable DPQL expression that renders to each database's native
+# hashing functions; args are (value, algorithm, output-encoding).  The output encoding is
+# "hex" (the default), "base64", or "binary"; use "binary" to fill a binary/bytea column.
+populate: {exp: digest, args: [{field: name}, "sha256", "binary"]}
+# → UPDATE t SET name_sha256 = sha256(convert_to(name, 'UTF8')) WHERE name_sha256 IS NULL  (on pgsql)
+
 # Per-driver SQL escape hatch — for DB-specific functions not in the expression map
 populate:
   sql:
@@ -125,6 +131,18 @@ populate:
     mysql: "UNHEX(SHA2(name, 256))"
 # → UPDATE t SET name_sha256 = digest(name, 'sha256') WHERE name_sha256 IS NULL  (on pgsql)
 ```
+
+The `digest` expression maps to native server-side hashing per driver, raising `DIGEST-ERROR` for
+combinations a database cannot support:
+
+| Driver | Algorithms | Output encodings |
+| --- | --- | --- |
+| PostgreSQL | md5, sha224, sha256, sha384, sha512 | hex, base64, binary |
+| Oracle | md5, sha1, sha256, sha384, sha512 | hex, binary |
+| MySQL | md5, sha1, sha224, sha256, sha384, sha512 | hex, base64, binary |
+| MS SQL Server | md5, sha1, sha256, sha512 | hex, binary |
+| Firebird (4+) | md5, sha1, sha256, sha512 | hex, base64, binary |
+| SQLite | *(none — no built-in hash functions)* | — |
 
 `populate` works with or without `notnull`. If `notnull: true` is set, the constraint is applied
 after the backfill. If `notnull` is not set, the backfill runs but no NOT NULL constraint is added.
