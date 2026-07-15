@@ -40,6 +40,7 @@
 #include <ctime>
 #include <string>
 #include <functional>
+#include <deque>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -2033,6 +2034,39 @@ class QoreClass;
 */
 class UserConstructorVariant;
 
+//! Non-owning view of a serialized value in an open AOT metadata reader.
+struct QoreAOTDeferredValueBlob {
+    const uint8_t* ptr = nullptr;
+    size_t len = 0;
+
+    bool empty() const { return !len; }
+    const uint8_t* data() const { return ptr; }
+    size_t size() const { return len; }
+    void assign(const uint8_t* data, size_t size) {
+        ptr = data;
+        len = size;
+    }
+    void clear() {
+        ptr = nullptr;
+        len = 0;
+    }
+};
+
+//! Null-terminated string view backed by an open AOT metadata reader.
+struct QoreAOTStringRef {
+    const char* ptr = "";
+
+    QoreAOTStringRef() = default;
+    QoreAOTStringRef(const char* value) : ptr(value ? value : "") {
+    }
+    QoreAOTStringRef& operator=(const char* value) {
+        ptr = value ? value : "";
+        return *this;
+    }
+    bool empty() const { return !*ptr; }
+    const char* c_str() const { return ptr; }
+};
+
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
     QoreAOTTypeResolver* type_resolver = nullptr;
@@ -2042,7 +2076,7 @@ class QoreAOTBinaryDeserializer {
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
     std::vector<std::string> class_signature_hashes;
-    std::vector<std::string> class_injected_paths;
+    std::vector<QoreAOTStringRef> class_injected_paths;
 
     // Exact native slot key -> variant bindings populated while functions and
     // methods are deserialized.  Slot registration can consume these pointers
@@ -2074,8 +2108,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending base class info for two-pass class resolution
     struct PendingBaseClass {
-        std::string base_path;
-        std::string type_path;
+        QoreAOTStringRef base_path;
+        QoreAOTStringRef type_path;
         uint8_t access;  //!< ClassAccess value for the base class inheritance
         bool is_virtual;
     };
@@ -2087,8 +2121,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending instance member info for two-pass class resolution
     struct PendingInstanceMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         uint8_t flags = 0;  // bit 0 = transient
         QoreValue default_val;
@@ -2127,14 +2161,14 @@ class QoreAOTBinaryDeserializer {
         //! Serialized default payload.  Member records are read while only
         //! declaration shells exist; nested const refs inside values must be
         //! materialized after the batch-wide constant registration phase.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
     // Pending static member info for two-pass class resolution
     struct PendingStaticMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
@@ -2155,20 +2189,20 @@ class QoreAOTBinaryDeserializer {
         //! Same deferred-native-expression channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_native_blob;
         //! Same serialized-default channel as PendingInstanceMember.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
     // Pending class constant info for two-pass class resolution
     struct PendingClassConstant {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
         //! Serialized value payload. Class constants are registered as shells
         //! before this blob is deserialized so nested VT_CONST_REF entries can
         //! resolve against same-class or same-module constants.
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
@@ -2183,8 +2217,8 @@ class QoreAOTBinaryDeserializer {
     // default (`hash<X>()`, `list<X>()`, `hash<string, X>()`) need to
     // wait until resolveHashdeclMembers to produce a final QoreValue.
     struct PendingHashdeclMember {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         QoreValue default_val;
 
         // Deferred VT_ENUM: pending_enum_path::pending_enum_member.
@@ -2218,8 +2252,8 @@ class QoreAOTBinaryDeserializer {
 
     // Pending typedef info for two-pass resolution
     struct PendingTypedef {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint32_t ns_idx;
         bool is_pub;
     };
@@ -2228,7 +2262,7 @@ class QoreAOTBinaryDeserializer {
     // Pending enum base type info for two-pass resolution
     struct PendingEnumBaseType {
         QoreEnumDecl* ed;
-        std::string base_type_path;
+        QoreAOTStringRef base_type_path;
     };
     std::vector<PendingEnumBaseType> pending_enum_base_types;
 
@@ -2274,6 +2308,12 @@ public:
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
 
+    //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
+    //! The pointed-to vector buffers remain stable when the outer vector grows.
+    std::unique_ptr<std::vector<std::vector<uint8_t>>> deferred_value_copies;
+    //! Legacy owned strings used only for deterministic reader-string A/B tests.
+    std::unique_ptr<std::deque<std::string>> deferred_string_copies;
+
     //! Pre-resolved per-blob type table.  Populated at the start of
     //! phase 2b (deserializeFunctionsAndMethods) by reading the
     //! TYPE_TABLE section and resolving every entry via `type_resolver`.
@@ -2304,6 +2344,9 @@ private:
     //! cross-blob complex types resolve correctly.
     bool resolveTypeTable(std::string& error);
     bool resolvePluginImports(std::string& error);
+    QoreAOTStringRef makeDeferredStringRef(const char* value);
+    bool readDeferredValueBlob(const uint8_t*& ptr, const uint8_t* end,
+        std::string& error, QoreAOTDeferredValueBlob& value_blob);
 
     bool deserializeNamespaces(std::string& error);
     bool deserializeClasses(std::string& error);

@@ -1202,6 +1202,20 @@ static void qoreAOTAddClassLookupAliases(
     }
 }
 
+static bool qoreAOTUseDeserializerReservations() {
+    static const bool enabled = getenv("QORE_DISABLE_AOT_DESERIALIZER_RESERVATIONS") == nullptr;
+    return enabled;
+}
+
+template <typename Container>
+static void qoreAOTReserveAdditional(Container& container, size_t additional) {
+    if (!qoreAOTUseDeserializerReservations() || !additional
+            || additional > container.max_size() - container.size()) {
+        return;
+    }
+    container.reserve(container.size() + additional);
+}
+
 static const QoreClass* qoreAOTResolveClassRefForDeserialization(
         QoreProgram* pgm,
         const char* class_ref,
@@ -1828,14 +1842,37 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
     }
 }
 
-static bool readDeferredClassConstantValue(const QoreAOTBinaryReader& reader,
-        const uint8_t*& ptr, const uint8_t* end, std::string& error,
-        std::vector<uint8_t>& value_blob) {
+QoreAOTStringRef QoreAOTBinaryDeserializer::makeDeferredStringRef(const char* value) {
+    static const bool use_reader_strings =
+        getenv("QORE_DISABLE_AOT_BORROWED_STRING_REFS") == nullptr;
+    if (use_reader_strings) {
+        return value;
+    }
+    if (!deferred_string_copies) {
+        deferred_string_copies = std::make_unique<std::deque<std::string>>();
+    }
+    deferred_string_copies->emplace_back(value ? value : "");
+    return deferred_string_copies->back().c_str();
+}
+
+bool QoreAOTBinaryDeserializer::readDeferredValueBlob(const uint8_t*& ptr,
+        const uint8_t* end, std::string& error, QoreAOTDeferredValueBlob& value_blob) {
     const uint8_t* start = ptr;
     if (!skipAOTSerializedValue(reader, ptr, end, error)) {
         return false;
     }
-    value_blob.assign(start, ptr);
+    static const bool use_borrowed_blobs =
+        getenv("QORE_DISABLE_AOT_BORROWED_DEFERRED_VALUES") == nullptr;
+    if (use_borrowed_blobs) {
+        value_blob.assign(start, ptr - start);
+    } else {
+        if (!deferred_value_copies) {
+            deferred_value_copies = std::make_unique<std::vector<std::vector<uint8_t>>>();
+        }
+        deferred_value_copies->emplace_back(start, ptr);
+        const std::vector<uint8_t>& copy = deferred_value_copies->back();
+        value_blob.assign(copy.data(), copy.size());
+    }
     return true;
 }
 
@@ -5721,6 +5758,7 @@ static bool collectAOTSlotMapFunctionNames(const QoreAOTBinaryReader& reader,
     }
 
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
+    qoreAOTReserveAdditional(slot_map_names, num_funcs);
     for (uint32_t i = 0; i < num_funcs && ptr + sizeof(uint32_t) <= end; ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT slot map name collection")) {
             error = "operation cancelled during AOT slot map name collection";
@@ -13983,6 +14021,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     class_list.resize(count);
     class_signature_hashes.resize(count);
     class_injected_paths.resize(count);
+    qoreAOTReserveAdditional(pending_bases, count);
+    qoreAOTReserveAdditional(pending_instance_members, count);
+    qoreAOTReserveAdditional(pending_static_members, count);
+    qoreAOTReserveAdditional(pending_class_constants, count);
     const bool has_class_hash = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
     const bool has_class_injection
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
@@ -14008,6 +14050,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     qore_root_ns_private* root_priv = static_cast<qore_root_ns_private*>(
         qore_ns_private::get(*pp->RootNS));
     std::unordered_map<std::string, QoreClass*> pending_class_map;
+    if (count <= pending_class_map.max_size() / 2) {
+        qoreAOTReserveAdditional(pending_class_map, static_cast<size_t>(count) * 2);
+    }
     struct ClassMapRAII {
         ClassMapRAII(const std::unordered_map<std::string, QoreClass*>* p) {
             g_aot_pending_class_map = p;
@@ -14045,6 +14090,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
             type_params.reserve(type_param_count);
             std::unordered_set<std::string> seen_type_params;
+            qoreAOTReserveAdditional(seen_type_params, type_param_count);
             for (uint32_t j = 0; j < type_param_count; ++j) {
                 if (j && !(j % 100)
                         && qore_check_cancel(nullptr, "AOT class type parameter deserialization")) {
@@ -14169,8 +14215,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* base_type_path = has_class_param_bases ? reader.readStringRef(ptr) : nullptr;
             if (base_path && *base_path) {
                 PendingBaseClass pbc;
-                pbc.base_path = base_path;
-                pbc.type_path = base_type_path ? base_type_path : "";
+                pbc.base_path = makeDeferredStringRef(base_path);
+                pbc.type_path = makeDeferredStringRef(base_type_path);
                 pbc.access = access;
                 pbc.is_virtual = (is_virtual != 0);
                 bases.push_back(std::move(pbc));
@@ -14181,7 +14227,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (class_already_existed) {
             bases.clear();
         } else if (injected_path && *injected_path) {
-            class_injected_paths[i] = injected_path;
+            class_injected_paths[i] = makeDeferredStringRef(injected_path);
         }
         pending_bases.push_back(std::move(bases));
 
@@ -14199,14 +14245,13 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             QoreValue default_val;
             PendingInstanceMember pim;
-            pim.name = mname ? mname : "";
-            pim.type_path = mtype_path ? mtype_path : "";
+            pim.name = makeDeferredStringRef(mname);
+            pim.type_path = makeDeferredStringRef(mtype_path);
             pim.access = maccess;
             pim.flags = mflags;
             if (has_default) {
-                if (!readDeferredClassConstantValue(reader, ptr, end, error,
-                        pim.value_blob)) {
-                    error = "instance member '" + pim.name + "' default: " + error;
+                if (!readDeferredValueBlob(ptr, end, error, pim.value_blob)) {
+                    error = "instance member '" + std::string(pim.name.c_str()) + "' default: " + error;
                     return false;
                 }
             }
@@ -14239,14 +14284,13 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             // write-side layout: u8 has_value + optional value.
             QoreValue default_val;
             PendingStaticMember psm;
-            psm.name = sm_name ? sm_name : "";
-            psm.type_path = sm_type_path ? sm_type_path : "";
+            psm.name = makeDeferredStringRef(sm_name);
+            psm.type_path = makeDeferredStringRef(sm_type_path);
             psm.access = sm_access;
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
-                if (!readDeferredClassConstantValue(reader, ptr, end, error,
-                        psm.value_blob)) {
-                    error = "static member '" + psm.name + "': " + error;
+                if (!readDeferredValueBlob(ptr, end, error, psm.value_blob)) {
+                    error = "static member '" + std::string(psm.name.c_str()) + "': " + error;
                     return false;
                 }
             }
@@ -14277,17 +14321,16 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* ctype_path = reader.readStringRef(ptr);
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
             uint8_t cpending = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
-            std::vector<uint8_t> value_blob;
-            if (!readDeferredClassConstantValue(reader, ptr, end, error,
-                    value_blob)) {
+            QoreAOTDeferredValueBlob value_blob;
+            if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
                 return false;
             }
 
             if (!class_already_existed && cname && *cname) {
                 PendingClassConstant pcc;
-                pcc.name = cname;
-                pcc.type_path = ctype_path ? ctype_path : "";
+                pcc.name = makeDeferredStringRef(cname);
+                pcc.type_path = makeDeferredStringRef(ctype_path);
                 pcc.access = caccess;
                 pcc.pending_init = (cpending != 0);
                 pcc.value_blob = std::move(value_blob);
@@ -14299,6 +14342,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
     if (has_class_injection) {
         std::unordered_map<std::string, QoreClass*> all_class_map;
+        if (class_list.size() <= all_class_map.max_size() / 2) {
+            qoreAOTReserveAdditional(all_class_map, class_list.size() * 2);
+        }
         for (uint32_t i = 0; i < class_list.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class injection map build")) {
                 error = "AOT class injection map build cancelled";
@@ -14318,7 +14364,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const QoreClass* injected = resolveClassRefForSession(
                 class_injected_paths[i].c_str(), &all_class_map);
             if (!injected) {
-                error = "cannot resolve injected target class '" + class_injected_paths[i] + "' for class '"
+                error = "cannot resolve injected target class '"
+                    + std::string(class_injected_paths[i].c_str()) + "' for class '"
                     + std::string(class_list[i]->getName()) + "'";
                 return false;
             }
@@ -14335,6 +14382,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
 
     // Build a map from class path to class_list index for newly deserialized classes
     std::unordered_map<std::string, uint32_t> path_to_idx;
+    qoreAOTReserveAdditional(path_to_idx, count);
     for (uint32_t i = 0; i < count; ++i) {
         if (!class_list[i] || preexisting_classes.count(i)) {
             continue;
@@ -14355,7 +14403,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 continue;
             }
             for (auto& pbc : pending_bases[i]) {
-                auto it = path_to_idx.find(pbc.base_path);
+                auto it = path_to_idx.find(pbc.base_path.c_str());
                 if (it != path_to_idx.end() && it->second != i) {
                     // Base class is also newly deserialized — must be processed first
                     dependents[it->second].push_back(i);
@@ -14417,7 +14465,8 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                     std::string type_error;
                     const QoreTypeInfo* base_type = type_resolver->resolve(pbc.type_path.c_str(), type_error);
                     if (!base_type) {
-                        error = "cannot resolve parameterized base type '" + pbc.type_path + "' for class '" +
+                        error = "cannot resolve parameterized base type '" + std::string(pbc.type_path.c_str())
+                            + "' for class '" +
                             std::string(qc->getName()) + "'";
                         if (!type_error.empty()) {
                             error += ": ";
@@ -14443,7 +14492,7 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                     pbc.base_path.c_str(), base->getID(),
                     qc->getName(), qc->getID());
             } else {
-                error = "cannot resolve base class '" + pbc.base_path + "' for class '" +
+                error = "cannot resolve base class '" + std::string(pbc.base_path.c_str()) + "' for class '" +
                     std::string(qc->getName()) + "'";
                 pending_bases.clear();
                 return false;
@@ -14979,7 +15028,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 error = "AOT cannot resolve deferred value for class constant '";
                 error += qc->getName();
                 error += "::";
-                error += pcc.name;
+                error += pcc.name.c_str();
                 error += "': constant entry was not registered";
                 return false;
             }
@@ -15002,7 +15051,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 error = "AOT cannot deserialize value for class constant '";
                 error += qc->getName();
                 error += "::";
-                error += pcc.name;
+                error += pcc.name.c_str();
                 error += "': ";
                 error += value_error;
                 return false;
@@ -15012,7 +15061,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
                 error = "AOT class constant value did not consume serialized payload for '";
                 error += qc->getName();
                 error += "::";
-                error += pcc.name;
+                error += pcc.name.c_str();
                 error += "'";
                 return false;
             }
@@ -15287,8 +15336,8 @@ bool QoreAOTBinaryDeserializer::resolveTypedefs(std::string& error) {
 
         if (resolved_count == 0 && !unresolved.empty()) {
             // No progress - circular reference or genuinely missing type
-            error = "cannot resolve type '" + unresolved[0].type_path +
-                "' for typedef '" + unresolved[0].name + "'";
+            error = "cannot resolve type '" + std::string(unresolved[0].type_path.c_str())
+                + "' for typedef '" + unresolved[0].name.c_str() + "'";
             pending_typedefs.clear();
             return false;
         }
@@ -15304,7 +15353,7 @@ bool QoreAOTBinaryDeserializer::resolveEnumBaseTypes(std::string& error) {
     for (auto& pebt : pending_enum_base_types) {
         const QoreTypeInfo* base_ti = type_resolver->resolve(pebt.base_type_path.c_str(), error);
         if (!error.empty()) {
-            error = "cannot resolve base type '" + pebt.base_type_path +
+            error = "cannot resolve base type '" + std::string(pebt.base_type_path.c_str()) +
                 "' for enum '" + std::string(pebt.ed->getName()) + "': " + error;
             pending_enum_base_types.clear();
             return false;
@@ -15341,6 +15390,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
     };
     std::vector<HashdeclInfo> hashdecl_list;
     hashdecl_list.reserve(count);
+    qoreAOTReserveAdditional(pending_hashdecl_members, count);
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
@@ -15405,8 +15455,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         // Local MemberInfo mirrors PendingHashdeclMember's deferred-resolution
         // fields so readDeferredMemberDefault instantiates against it.
         struct MemberInfo {
-            std::string name;
-            std::string type_path;
+            QoreAOTStringRef name;
+            QoreAOTStringRef type_path;
             QoreValue default_val;
             std::string pending_enum_path;
             std::string pending_enum_member;
@@ -15441,14 +15491,14 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
 
         for (uint32_t j = 0; j < num_members; ++j) {
             MemberInfo mi;
-            mi.name = reader.readStringRef(ptr);
-            mi.type_path = reader.readStringRef(ptr);
+            mi.name = makeDeferredStringRef(reader.readStringRef(ptr));
+            mi.type_path = makeDeferredStringRef(reader.readStringRef(ptr));
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
                 if (!readDeferredMemberDefault(reader, ptr, end, error,
                         mi.default_val, mi)) {
                     error = "hashdecl '" + std::string(name ? name : "(null)")
-                        + "' member '" + mi.name + "' default: " + error;
+                        + "' member '" + mi.name.c_str() + "' default: " + error;
                     return false;
                 }
             }
@@ -15594,7 +15644,7 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
 
         // Read members first to collect info
         struct EnumMemberInfo {
-            std::string name;
+            QoreAOTStringRef name;
             QoreValue val;
         };
         std::vector<EnumMemberInfo> members;
@@ -15603,10 +15653,11 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         members.reserve(num_members);
         for (uint32_t j = 0; j < num_members; ++j) {
             EnumMemberInfo emi;
-            emi.name = reader.readStringRef(ptr);
+            emi.name = makeDeferredStringRef(reader.readStringRef(ptr));
             emi.val = reader.readValue(ptr, end, error);
             if (!error.empty()) {
-                error = "enum '" + std::string(name ? name : "(null)") + "' member '" + emi.name + "': " + error;
+                error = "enum '" + std::string(name ? name : "(null)") + "' member '"
+                    + emi.name.c_str() + "': " + error;
                 return false;
             }
             members.push_back(std::move(emi));
@@ -15625,7 +15676,7 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
         if (base_type_path && *base_type_path) {
             PendingEnumBaseType pebt;
             pebt.ed = ed;
-            pebt.base_type_path = base_type_path;
+            pebt.base_type_path = makeDeferredStringRef(base_type_path);
             pending_enum_base_types.push_back(std::move(pebt));
         }
         qore_enum_decl_private* edp = qore_enum_decl_private::get(*ed);
@@ -15681,6 +15732,7 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
 
     // Store typedefs for later resolution (after all hashdecls/enums exist)
+    qoreAOTReserveAdditional(pending_typedefs, count);
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* type_path = reader.readStringRef(ptr);
@@ -15696,8 +15748,8 @@ bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {
 
         if (name && *name) {
             PendingTypedef pt;
-            pt.name = name;
-            pt.type_path = type_path ? type_path : "";
+            pt.name = makeDeferredStringRef(name);
+            pt.type_path = makeDeferredStringRef(type_path);
             pt.ns_idx = ns_idx;
             pt.is_pub = (is_pub != 0);
             pending_typedefs.push_back(std::move(pt));
@@ -15725,14 +15777,14 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
 
     struct PendingNamespaceConstant {
-        std::string name;
-        std::string type_path;
+        QoreAOTStringRef name;
+        QoreAOTStringRef type_path;
         uint32_t ns_idx;
         uint8_t access;
         uint8_t is_pub;
         uint8_t pending;
         const QoreTypeInfo* type_info = nullptr;
-        std::vector<uint8_t> value_blob;
+        QoreAOTDeferredValueBlob value_blob;
     };
 
     std::vector<PendingNamespaceConstant> pending_constants;
@@ -15750,8 +15802,8 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         uint8_t is_pub = QoreAOTBinaryReader::readU8(ptr);
         uint8_t pending = has_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
 
-        std::vector<uint8_t> value_blob;
-        if (!readDeferredClassConstantValue(reader, ptr, end, error, value_blob)) {
+        QoreAOTDeferredValueBlob value_blob;
+        if (!readDeferredValueBlob(ptr, end, error, value_blob)) {
             error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
             return false;
         }
@@ -15807,7 +15859,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
                 /*aot_deferred=*/true);
         }
 
-        pending_constants.push_back({name, type_path ? type_path : "", ns_idx,
+        pending_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
             access, is_pub, pending, ti, std::move(value_blob)});
     }
 
@@ -15830,7 +15882,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
         if (!ce) {
             error = "AOT cannot resolve deferred value for namespace constant '";
-            error += pc.name;
+            error += pc.name.c_str();
             error += "': constant entry was not registered";
             return false;
         }
@@ -15850,13 +15902,13 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         QoreValue val = reader.readValue(vptr, vend, value_error);
         if (!value_error.empty()) {
             val.discard(nullptr);
-            error = "namespace constant '" + pc.name + "': " + value_error;
+            error = "namespace constant '" + std::string(pc.name.c_str()) + "': " + value_error;
             return false;
         }
         if (vptr != vend) {
             val.discard(nullptr);
             error = "AOT namespace constant value did not consume serialized payload for '";
-            error += pc.name;
+            error += pc.name.c_str();
             error += "'";
             return false;
         }
