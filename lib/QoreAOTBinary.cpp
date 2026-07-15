@@ -2352,6 +2352,38 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     if (ce) {
         return ce;
     }
+
+    // AOT constant shells are registered before the next root-index rebuild.
+    // Resolve an exact namespace path through the pending namespace tree so
+    // same-batch constant values do not require publishing every root index
+    // merely to reference a sibling shell.
+    const char* pending_path = fqn;
+    if (pending_path[0] == ':' && pending_path[1] == ':') {
+        pending_path += 2;
+    }
+    NamedScope pending_scope(pending_path);
+    if (pending_scope.size()) {
+        qore_ns_private* ns = qore_ns_private::get(*pp->RootNS);
+        bool found_scope = true;
+        for (unsigned i = 0; i + 1 < pending_scope.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT pending constant namespace lookup")) {
+                return nullptr;
+            }
+            QoreNamespace* child = ns->parseFindLocalNamespace(pending_scope[i]);
+            if (!child) {
+                found_scope = false;
+                break;
+            }
+            ns = qore_ns_private::get(*child);
+        }
+        if (found_scope) {
+            ce = ns->constant.findEntry(pending_scope.getIdentifier());
+            if (ce) {
+                return ce;
+            }
+        }
+    }
+
     // Try class constant lookup: path format "ClassName::ConstName"
     std::string path(fqn);
     size_t sep = path.rfind("::");
@@ -2363,6 +2395,14 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        const char* pending_class_path = class_path.c_str();
+        if (pending_class_path[0] == ':' && pending_class_path[1] == ':') {
+            pending_class_path += 2;
+        }
+        qc = qore_root_ns_private::parseFindClass(
+            *pp->RootNS, &loc_builtin, pending_class_path);
+    }
     if (!qc) {
         return nullptr;
     }
@@ -15771,7 +15811,11 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             access, is_pub, pending, ti, std::move(value_blob)});
     }
 
-    rebuildAOTRootIndexes(pgm);
+    static const bool use_pending_constant_lookup =
+        getenv("QORE_DISABLE_AOT_PENDING_CONSTANT_LOOKUP") == nullptr;
+    if (!use_pending_constant_lookup) {
+        rebuildAOTRootIndexes(pgm);
+    }
 
     for (size_t i = 0; i < pending_constants.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace constant value resolution")) {
