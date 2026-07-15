@@ -8111,6 +8111,11 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         csch.emplace(self);
     }
 
+    // Static-method closures have no captured object, but they still retain the
+    // lexical class context needed for private access and nested closure creation.
+    OptionalClassOnlySubstitutionHelper cosh(
+        self || !cb ? nullptr : cb->getClassCtx());
+
     // For object closures, establish the captured self in both TLS stores so that
     // implicit method calls (SelfFunctionCallNode) and LoadSelfMember resolve
     // against the closure's captured self, not the caller's context.
