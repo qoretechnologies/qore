@@ -10172,6 +10172,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     error = "unsupported return value type for LLVM lowering";
                     return false;
                 }
+                if (!fast_entry_name.empty() && boxed_return
+                        && fast_entry_rejects_nothing_return) {
+                    llvm::BasicBlock* reject = llvm::BasicBlock::Create(
+                        ctx, "return_nothing", llvm_func);
+                    llvm::BasicBlock* cont = llvm::BasicBlock::Create(
+                        ctx, "return_assigned", llvm_func);
+                    llvm::Value* is_nothing = builder->CreateICmpEQ(return_value,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                    builder->CreateCondBr(is_nothing, reject, cont);
+                    builder->SetInsertPoint(reject);
+                    auto raise = module.getOrInsertFunction("qore_rt_raise_return_nothing",
+                        llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    builder->CreateCall(raise, {xsink_arg});
+                    builder->CreateBr(cont);
+                    builder->SetInsertPoint(cont);
+                }
                 // Deferred exception check for init functions (Phase 3: LLVM hang fix).
                 // Placed before incref so the exception path (→ error_return_block) has no
                 // unmatched incref. The success path (→ cont) handles incref + cleanup + ret.
@@ -10225,6 +10241,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ReturnNothing: {
+            if (!fast_entry_name.empty() && fast_entry_rejects_nothing_return) {
+                auto raise = module.getOrInsertFunction("qore_rt_raise_return_nothing",
+                    llvm::FunctionType::get(void_type, {ptr_type}, false));
+                builder->CreateCall(raise, {xsink_arg});
+            }
             // Deferred exception check for init functions (Phase 3: LLVM hang fix)
             if (deferred_exception_checking && deferred_check_needed) {
                 auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",

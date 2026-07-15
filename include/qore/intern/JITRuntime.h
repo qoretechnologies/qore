@@ -229,6 +229,9 @@ void qore_rt_deopt(void* deopt_counter_ptr);
 //! Check if a NaN-boxed QoreValue is not NOTHING; returns 1 if not NOTHING, 0 otherwise
 int64_t qore_rt_guard_not_nothing(uint64_t val);
 
+//! Raise the runtime type error required when a non-NOTHING return yields NOTHING.
+void qore_rt_raise_return_nothing(ExceptionSink* xsink);
+
 //! Check if a NaN-boxed QoreValue is an int; returns 1 if int, 0 otherwise
 int64_t qore_rt_guard_int(uint64_t val);
 

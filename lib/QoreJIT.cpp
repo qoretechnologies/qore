@@ -1114,15 +1114,6 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         auto summary = effect_summaries.find(callee.variant);
         info.never_returns_nothing = summary != effect_summaries.end()
             && summary->second.never_returns_nothing;
-        const AbstractFunctionSignature* signature = callee.variant
-            ? const_cast<AbstractQoreFunctionVariant*>(callee.variant)->getSignature()
-            : nullptr;
-        const QoreTypeInfo* return_type = signature
-            ? signature->getReturnTypeInfo() : nullptr;
-        if (!info.never_returns_nothing && QoreTypeInfo::hasType(return_type)
-                && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
-            info.approach_b_eligible = false;
-        }
         if (info.approach_b_eligible) {
             info.fast_name = callee.ir_func->name + "_fast";
             const UserVariantBase* uvb = callee.variant->getUserVariantBase();
@@ -1265,7 +1256,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
             fast_lowering.setBatchCallees(&batch_callee_map);
             fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
-            fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map);
+            const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
+            bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
+                && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
+            fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
+                nullptr, callee_info.return_kind, fast_rejects_nothing_return);
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
                 // Fast entry failure is non-fatal: fall back to standard entry
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",

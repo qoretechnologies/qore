@@ -6040,13 +6040,6 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 summary.never_returns_nothing;
             callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
                 variant, summary.never_returns_nothing);
-            const AbstractFunctionSignature* sig =
-                const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature();
-            const QoreTypeInfo* return_type = sig ? sig->getReturnTypeInfo() : nullptr;
-            if (!summary.never_returns_nothing && QoreTypeInfo::hasType(return_type)
-                    && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
-                callee_it->second.approach_b_eligible = false;
-            }
             if (!disable_noescape_params) {
                 callee_it->second.param_noescape = summary.param_noescape;
             }
@@ -8417,8 +8410,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             = fast_info_it == aot_batch_callee_map->end()
                                 ? BatchCalleeReturnKind::Boxed
                                 : fast_info_it->second.return_kind;
+                        const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
+                        bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
+                            && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                &param_kind_map, &borrowed_param_map, fast_return_kind);
+                                &param_kind_map, &borrowed_param_map, fast_return_kind,
+                                fast_rejects_nothing_return);
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
@@ -8785,8 +8782,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 = fast_info_it == aot_batch_callee_map->end()
                                     ? BatchCalleeReturnKind::Boxed
                                     : fast_info_it->second.return_kind;
+                            const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
+                            bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
+                                && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
-                                    &param_kind_map, &borrowed_param_map, fast_return_kind);
+                                    &param_kind_map, &borrowed_param_map, fast_return_kind,
+                                    fast_rejects_nothing_return);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
                                 printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",

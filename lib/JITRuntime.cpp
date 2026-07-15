@@ -166,6 +166,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow) },
     { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
+    { "qore_rt_raise_return_nothing", reinterpret_cast<void*>(&qore_rt_raise_return_nothing) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -1211,6 +1212,11 @@ extern "C" DLLEXPORT void qore_rt_deopt(void* deopt_counter_ptr) {
 extern "C" DLLEXPORT int64_t qore_rt_guard_not_nothing(uint64_t val) {
     QoreValue v = fromBits(val);
     return v.isNothing() ? 0 : 1;
+}
+
+extern "C" DLLEXPORT void qore_rt_raise_return_nothing(ExceptionSink* xsink) {
+    xsink->raiseException("RUNTIME-TYPE-ERROR",
+        "cannot return NOTHING from code with a declared non-NOTHING return type");
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_guard_int(uint64_t val) {
