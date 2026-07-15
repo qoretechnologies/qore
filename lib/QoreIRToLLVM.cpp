@@ -1397,6 +1397,8 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    guarded_stored_closure_creates.clear();
+    guarded_stored_closure_identity_allocas.clear();
     elided_closure_local_accesses.clear();
 
     for (LocalVar* lv : func.all_body_locals) {
@@ -6899,6 +6901,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    guarded_stored_closure_creates.clear();
+    guarded_stored_closure_identity_allocas.clear();
     elided_closure_local_accesses.clear();
     dot_eval_only_bases.clear();
     weak_assigned_locals.clear();
@@ -7148,27 +7152,57 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 auto loads = local_load_instructions.find(local);
                 const void* local_key = reinterpret_cast<const void*>(local);
-                if (!local || local->closureUse()
-                        || !func.ir_only_locals.count(local_key)
-                        || stores.size() != 1 || loads == local_load_instructions.end()
+                if (!local || stores.size() != 1
+                        || loads == local_load_instructions.end()
                         || loads->second.empty()) {
                     continue;
                 }
                 const QoreIRLocalInstruction* store = stores.front();
-                if (store->opcode != QoreIROpcode::StoreLocal || store->is_ref
-                        || store->weak
-                        || !store->initial_assignment || store->operands.size() != 1
-                        || !entry_instructions.count(store)) {
+                bool guarded_top_level = aot_mode && local->isTopLevel()
+                    && std::getenv("QORE_DISABLE_AOT_GUARDED_STORED_CLOSURE") == nullptr;
+                if ((store->opcode != QoreIROpcode::StoreLocal
+                        && store->opcode != QoreIROpcode::StoreClosure)
+                        || store->is_ref || store->weak
+                        || !store->initial_assignment || store->operands.size() != 1) {
                     continue;
                 }
                 uint32_t closure_id = store->operands[0].id;
                 auto definition = closure_definitions.find(closure_id);
-                auto create_uses = operand_remaining_uses.find(closure_id);
                 if (definition == closure_definitions.end()
+                        || !get_noncapturing_closure(definition->second)) {
+                    continue;
+                }
+
+                if (guarded_top_level) {
+                    size_t guarded_load_i = 0;
+                    for (const QoreIRLocalInstruction* load : loads->second) {
+                        if (guarded_load_i++ && !(guarded_load_i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM guarded stored closure load-use analysis")) {
+                            error = "cancelled during LLVM guarded stored closure load-use analysis";
+                            return false;
+                        }
+                        auto uses = operand_remaining_uses.find(load->result.id);
+                        auto call = closure_calls_by_value.find(load->result.id);
+                        if (!load->is_ref && uses != operand_remaining_uses.end()
+                                && uses->second == 1
+                                && call != closure_calls_by_value.end()
+                                && !call->second->operands.empty()
+                                && call->second->operands[0].id == load->result.id) {
+                            guarded_stored_closure_creates[load->result.id] =
+                                definition->second;
+                        }
+                    }
+                    continue;
+                }
+
+                auto create_uses = operand_remaining_uses.find(closure_id);
+                if (local->closureUse() || !func.ir_only_locals.count(local_key)
+                        || store->opcode != QoreIROpcode::StoreLocal
                         || create_uses == operand_remaining_uses.end()
                         || create_uses->second != 1
-                        || !entry_instructions.count(definition->second)
-                        || !get_noncapturing_closure(definition->second)) {
+                        || !entry_instructions.count(store)
+                        || !entry_instructions.count(definition->second)) {
                     continue;
                 }
 
@@ -7211,6 +7245,30 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     elided_closure_local_accesses.insert(load);
                 }
             }
+        }
+    }
+    if (!guarded_stored_closure_creates.empty()) {
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(&entry, entry.begin());
+        size_t guarded_identity_count = 0;
+        for (const auto& [load_id, create] : guarded_stored_closure_creates) {
+            (void)load_id;
+            if (guarded_identity_count++ && !(guarded_identity_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM guarded stored closure identity setup")) {
+                error = "cancelled during LLVM guarded stored closure identity setup";
+                return false;
+            }
+            if (!create || guarded_stored_closure_identity_allocas.count(
+                    create->result.id)) {
+                continue;
+            }
+            llvm::AllocaInst* identity = alloca_builder.CreateAlloca(
+                i64_type, nullptr, "stored_closure_identity");
+            alloca_builder.CreateStore(
+                llvm::ConstantInt::get(i64_type, VAL_NOTHING), identity);
+            guarded_stored_closure_identity_allocas[create->result.id] = identity;
+            registerPersistentCleanupAlloca(identity);
         }
     }
     // A register is a "DotEval-only base" if it appears as a base but never
@@ -15858,8 +15916,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto immediate_it = immediate_closure_creates.find(
                     inst->operands[0].id);
             bool immediate_closure = immediate_it != immediate_closure_creates.end();
+            auto guarded_it = guarded_stored_closure_creates.find(
+                    inst->operands[0].id);
+            bool guarded_stored_closure = guarded_it
+                != guarded_stored_closure_creates.end();
             const QoreIRCreateClosureInstruction* immediate_create =
-                immediate_closure ? immediate_it->second : nullptr;
+                immediate_closure ? immediate_it->second
+                    : guarded_stored_closure ? guarded_it->second : nullptr;
             const QoreClosureParseNode* immediate_closure_node =
                 immediate_create ? immediate_create->closure_node : nullptr;
             if (!immediate_closure_node && immediate_create) {
@@ -15949,7 +16012,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
             }
-            if (immediate_closure && aot_mode && current_ir_func
+            llvm::Value* guarded_ref_boxed = nullptr;
+            llvm::Value* guarded_identity = nullptr;
+            if (guarded_stored_closure) {
+                llvm::Value* guarded_ref = getVal(inst->operands[0].id, error);
+                if (!guarded_ref) {
+                    return false;
+                }
+                guarded_ref_boxed = boxValue(guarded_ref, inst->operands[0].id);
+                auto identity = guarded_stored_closure_identity_allocas.find(
+                    immediate_create->result.id);
+                if (identity == guarded_stored_closure_identity_allocas.end()) {
+                    error = "missing guarded stored closure identity";
+                    return false;
+                }
+                guarded_identity = builder->CreateLoad(i64_type,
+                    identity->second, "stored_closure_expected");
+            }
+            if ((immediate_closure || guarded_stored_closure)
+                    && aot_mode && current_ir_func
                     && std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI") == nullptr) {
                 const QoreIRCreateClosureInstruction* create = immediate_create;
                 const QoreClosureParseNode* closure = immediate_closure_node;
@@ -15963,11 +16044,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ? closure_uvb->getUserSignature() : nullptr;
                 std::vector<BatchCalleeParamKind> closure_param_kinds =
                     qore_ir_get_signature_param_kinds(closure_sig);
-                bool closure_never_returns_nothing = immediate_closure_summary
+                bool closure_never_returns_nothing = !guarded_stored_closure
+                    && immediate_closure_summary
                     && immediate_closure_summary->never_returns_nothing;
                 BatchCalleeReturnKind closure_return_kind =
-                    qore_ir_get_fast_entry_return_kind(
-                        variant, closure_never_returns_nothing);
+                    guarded_stored_closure ? BatchCalleeReturnKind::Boxed
+                        : qore_ir_get_fast_entry_return_kind(
+                            variant, closure_never_returns_nothing);
                 if (closure && !closure->isInMethod()
                         && (!captures || captures->empty()) && variant
                         && qore_ir_native_closure_call_eligible(variant,
@@ -15979,7 +16062,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
                         expr_bits);
                     std::vector<llvm::Type*> param_types;
-                    param_types.reserve(static_cast<size_t>(native_nargs) + 2);
+                    param_types.reserve(static_cast<size_t>(native_nargs) + 4);
+                    if (guarded_stored_closure) {
+                        param_types.push_back(i64_type);
+                        param_types.push_back(i64_type);
+                    }
                     for (int i = 0; i < native_nargs; ++i) {
                         if (i && !(i % 100)
                                 && qore_check_cancel(nullptr,
@@ -16004,7 +16091,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto dispatch_type = llvm::FunctionType::get(
                         dispatch_return_type, param_types, false);
                     std::string dispatch_name = current_ir_func->name
-                        + "_closure_native_dispatch_" + std::to_string(slot);
+                        + (guarded_stored_closure
+                            ? "_closure_native_guarded_dispatch_"
+                            : "_closure_native_dispatch_")
+                        + std::to_string(slot);
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
                     llvm::FunctionCallee throwing_dispatch = dispatch;
@@ -16022,7 +16112,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     raw_arg_ids.reserve(static_cast<size_t>(native_nargs));
                     boxed_args.reserve(static_cast<size_t>(native_nargs));
                     std::vector<llvm::Value*> call_args;
-                    call_args.reserve(static_cast<size_t>(native_nargs) + 2);
+                    call_args.reserve(static_cast<size_t>(native_nargs) + 4);
+                    if (guarded_stored_closure) {
+                        call_args.push_back(guarded_ref_boxed);
+                        call_args.push_back(guarded_identity);
+                    }
                     for (int i = 0; i < native_nargs; ++i) {
                         if (i && !(i % 100)
                                 && qore_check_cancel(nullptr,
@@ -16056,7 +16150,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* result = emitMaybeInvoke(dispatch,
                         throwing_dispatch, call_args, module, llvm_func, inst);
                     result->setName("native_closure_result");
-                    if (!immediate_closure_summary
+                    if (guarded_stored_closure || !immediate_closure_summary
                             || immediate_closure_summary->may_invalidate_external_caches) {
                         reloadAllLocalsFromRuntime(module, llvm_func, true);
                     }
@@ -16073,7 +16167,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             llvm::Value* ref_boxed = nullptr;
-            if (!immediate_closure) {
+            if (guarded_stored_closure) {
+                ref_boxed = guarded_ref_boxed;
+            } else if (!immediate_closure) {
                 auto* ref = getVal(inst->operands[0].id, error);
                 if (!ref) { return false; }
                 ref_boxed = boxValue(ref, inst->operands[0].id);
@@ -16193,7 +16289,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             auto* closure_inst = static_cast<const QoreIRExprInstruction*>(inst);
-            bool closure_may_invalidate = closure_inst->has_ref_args
+            bool closure_may_invalidate = guarded_stored_closure
+                || closure_inst->has_ref_args
                 || !immediate_closure_summary
                 || immediate_closure_summary->may_invalidate_external_caches;
             if (closure_may_invalidate) {
@@ -16203,7 +16300,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
-            if (immediate_closure_summary
+            if (!guarded_stored_closure && immediate_closure_summary
                     && immediate_closure_summary->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
@@ -17108,6 +17205,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "qore_rt_create_closure_throwing", cc_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {cn_as_ptr, xsink_arg}, module, llvm_func, inst);
+            }
+            auto guarded_identity = guarded_stored_closure_identity_allocas.find(
+                inst->result.id);
+            if (guarded_identity != guarded_stored_closure_identity_allocas.end()) {
+                auto refself = module.getOrInsertFunction("qore_rt_refself",
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                auto decref = module.getOrInsertFunction("qore_rt_decref",
+                    llvm::FunctionType::get(void_type,
+                        {i64_type, ptr_type}, false));
+                llvm::Value* retained = builder->CreateCall(refself, {result});
+                llvm::Value* old = builder->CreateLoad(i64_type,
+                    guarded_identity->second);
+                builder->CreateStore(retained, guarded_identity->second);
+                builder->CreateCall(decref, {old, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

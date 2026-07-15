@@ -9001,6 +9001,20 @@ int nonleaf = (int sub (int x) {
 string temporary = (string sub (string value) { return value + \"!\"; })(\"a\" + \"b\");
 int captured_result = (int sub (int x) { return captured + x; })(5);
 code<int(int)> stored = int sub (int x) { return x * 2; };
+code<int(int)> guarded_stored = int sub (int x) { return x + 1; };
+nothing sub replace_guarded_stored() {
+    guarded_stored = int sub (int x) { return x + 10; };
+}
+int guarded_initial = guarded_stored(2);
+replace_guarded_stored();
+int guarded_replaced = guarded_stored(2);
+remove guarded_stored;
+int guarded_removed_error = 0;
+try {
+    guarded_stored(2);
+} catch (hash<ExceptionInfo> ex) {
+    guarded_removed_error = 1;
+}
 string sub stored_direct_cases() {
     code<int(int)> transform = int sub (int x) {
         int value = x + 1;
@@ -9050,6 +9064,8 @@ printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
     captured_result, stored(6), object.run(2), error);
 printf(\"%d:%d\\n\", fallback_reload, closure_reload);
 printf(\"%s\\n\", stored_direct_cases());
+printf(\"%d:%d:%d\\n\", guarded_initial, guarded_replaced,
+    guarded_removed_error);
 ";
         aot_out = compileAndRun(code);
         interp_out = runInterpreted(code);

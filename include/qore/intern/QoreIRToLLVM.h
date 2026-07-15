@@ -463,6 +463,14 @@ private:
     // changing the identity of any closure value visible to Qore code.
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
         immediate_closure_creates;
+    // Top-level closure locals can be changed by called code outside the owner
+    // IR. Loads mapped here use a retained closure-identity guard before the
+    // native direct path and retain the ordinary dynamic fallback.
+    std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
+        guarded_stored_closure_creates;
+    // Function-lifetime retained references used for inline identity guards.
+    std::unordered_map<uint32_t, llvm::AllocaInst*>
+        guarded_stored_closure_identity_allocas;
     // StoreLocal/LoadLocal instructions eliminated when an entry-assigned,
     // noncapturing closure local is used only as a direct call target.
     std::unordered_set<const QoreIRInstruction*> elided_closure_local_accesses;
