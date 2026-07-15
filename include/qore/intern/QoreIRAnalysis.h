@@ -16,6 +16,7 @@
 
 #include <functional>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -102,6 +103,13 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
 bool qore_ir_compute_function_effect_summaries(
     const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
     std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries);
+
+//! Returns locals that cannot safely use native scalar storage because a load may
+//! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was
+//! cancelled. @p initially_assigned contains locals that are assigned on function
+//! entry, normally signature parameters.
+DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
+    const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned);
 
 //! Run conservative, semantics-preserving optimizations on a lowered function.
 //! @param func function to optimize in place

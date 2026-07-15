@@ -360,13 +360,6 @@ DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const
 DLLLOCAL BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
         const AbstractQoreFunctionVariant* variant, bool never_returns_nothing);
 
-//! Returns locals that cannot safely use native scalar storage because a load may
-//! observe NOTHING, a lvalue mutation bypasses StoreLocal, or the analysis was
-//! cancelled. @p initially_assigned contains locals that are assigned on function
-//! entry, normally signature parameters.
-DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
-        const QoreIRFunction& ir_func, const std::unordered_set<const void*>& initially_assigned);
-
 class QoreJIT {
 public:
     enum class DeoptPolicy {

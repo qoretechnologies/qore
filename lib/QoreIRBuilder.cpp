@@ -1218,6 +1218,9 @@ QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QorePro
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->result = func->createValue();
+    if (const QoreIRValueFacts* facts = func->getValueFacts(value)) {
+        func->setValueFacts(inst->result, *facts);
+    }
     return inst;
 }
 

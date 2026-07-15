@@ -262,6 +262,20 @@ bool qore_ir_compute_function_effect_summaries(
                 effect.param_noescape[param_index] = false;
             }
         }
+        std::unordered_set<const void*> initially_assigned;
+        for (const auto& [index, local] : func->param_local_vars) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR function assigned parameter analysis")) {
+                return false;
+            }
+            (void)index;
+            if (local) {
+                initially_assigned.insert(reinterpret_cast<const void*>(local));
+            }
+        }
+        if (!qore_ir_get_native_unsafe_locals(*func, initially_assigned).empty()) {
+            effect.local_never_returns_nothing = false;
+        }
         std::unordered_map<uint32_t, size_t> loaded_params;
         for (const auto& block : func->blocks) {
             if (qore_ir_analysis_cancelled(check_count, "IR function effect analysis")) {
@@ -284,7 +298,8 @@ bool qore_ir_compute_function_effect_summaries(
                     effect.saw_return = true;
                     const QoreIRValueFacts* facts = ret->has_value
                         ? func->getValueFacts(ret->value) : nullptr;
-                    if (!facts || !facts->never_nothing) {
+                    if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                            || !facts->never_nothing) {
                         effect.local_never_returns_nothing = false;
                     }
                 } else if (inst && inst->opcode == QoreIROpcode::ReturnNothing) {

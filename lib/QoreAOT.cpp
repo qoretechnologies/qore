@@ -5053,9 +5053,14 @@ static bool qore_aot_collect_int_expression_summaries(
         state = VisitState::Visiting;
         auto func_it = function_map.find(variant);
         const QoreIRFunction* func = func_it == function_map.end() ? nullptr : func_it->second;
+        BatchCalleeReturnKind proven_return_kind = callee->second.return_kind;
+        if (proven_return_kind != BatchCalleeReturnKind::NativeInt) {
+            proven_return_kind = qore_ir_get_fast_entry_return_kind(variant, true);
+        }
         if (!func || (func->blocks.size() != 1 && func->blocks.size() != 3
                     && func->blocks.size() != 4)
-                || callee->second.return_kind != BatchCalleeReturnKind::NativeInt
+                || (callee->second.return_kind != BatchCalleeReturnKind::NativeInt
+                    && proven_return_kind != BatchCalleeReturnKind::NativeInt)
                 || callee->second.num_params > QORE_AOT_INT_EXPRESSION_MAX_NODES
                 || callee->second.param_kinds.size() != callee->second.num_params
                 || callee->second.param_rejects_nothing.size() != callee->second.num_params
@@ -5112,24 +5117,99 @@ static bool qore_aot_collect_int_expression_summaries(
         AOTIntExpressionInfo expression;
         std::unordered_map<uint32_t, int> values;
         std::unordered_map<uint32_t, ExpressionParamInfo> boxed_values;
+        std::unordered_map<const LocalVar*, int> local_values;
+        auto is_exact_int_local = [](const LocalVar* local) {
+            return local && !local->closureUse()
+                && !QoreTypeInfo::isReference(local->getTypeInfo())
+                && local->getTypeInfo() == bigIntTypeInfo;
+        };
+        std::vector<std::pair<int8_t, const LocalVar*>> native_params;
+        native_params.reserve(params.size());
+        for (const auto& [local, param] : params) {
+            if (param.boxed_kind == BoxedSourceParamKind::None) {
+                native_params.emplace_back(param.index, local);
+            }
+        }
+        std::sort(native_params.begin(), native_params.end());
+        for (const auto& [index, local] : native_params) {
+            int value = append_param(expression, index);
+            if (value < 0) {
+                state = VisitState::Failed;
+                return false;
+            }
+            local_values.emplace(local, value);
+        }
         auto append_instruction = [&](const QoreIRInstruction* inst,
                 std::unordered_map<uint32_t, int>& block_values,
+                std::unordered_map<const LocalVar*, int>& block_locals,
                 bool allow_fallible_operations) -> bool {
             int result = -1;
             if (inst->opcode == QoreIROpcode::LoadLocal) {
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst);
-                auto param = params.find(load->local);
-                if (param == params.end()) {
-                    return false;
-                }
-                if (param->second.boxed_kind != BoxedSourceParamKind::None) {
-                    if (!inst->result.isValid()) {
+                auto local = block_locals.find(load->local);
+                if (local != block_locals.end()) {
+                    result = local->second;
+                } else {
+                    auto param = params.find(load->local);
+                    if (param == params.end()) {
                         return false;
                     }
-                    boxed_values.emplace(inst->result.id, param->second);
+                    if (param->second.boxed_kind != BoxedSourceParamKind::None) {
+                        if (!inst->result.isValid()) {
+                            return false;
+                        }
+                        boxed_values.emplace(inst->result.id, param->second);
+                        return true;
+                    }
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLocal) {
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (store->weak || !is_exact_int_local(store->local)
+                        || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto source = block_values.find(inst->operands[0].id);
+                if (source == block_values.end()) {
+                    return false;
+                }
+                block_locals[store->local] = source->second;
+                return true;
+            } else if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!is_exact_int_local(local->local)) {
+                    return false;
+                }
+                block_locals.erase(local->local);
+                return true;
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                const auto* increment =
+                    static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+                auto current = block_locals.find(increment->local);
+                if (!is_exact_int_local(increment->local)
+                        || current == block_locals.end()) {
+                    return false;
+                }
+                int delta = append_constant(expression, increment->delta);
+                result = append_binary(expression, AOTIntExpressionNodeKind::Add,
+                    current->second, delta);
+                if (result < 0) {
+                    return false;
+                }
+                current->second = result;
+                if (!inst->result.isValid()) {
                     return true;
                 }
-                result = append_param(expression, param->second.index);
+            } else if (inst->opcode == QoreIROpcode::RefSelf) {
+                if (!inst->result.isValid() || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto source = block_values.find(inst->operands[0].id);
+                if (source == block_values.end()) {
+                    return false;
+                }
+                block_values.emplace(inst->result.id, source->second);
+                return true;
             } else if (inst->opcode == QoreIROpcode::ConstInt) {
                 const auto* constant = static_cast<const QoreIRConstInstruction*>(inst);
                 result = append_constant(expression, constant->constant.int_value);
@@ -5250,7 +5330,27 @@ static bool qore_aot_collect_int_expression_summaries(
                 result = operand->second;
             } else {
                 AOTIntExpressionNodeKind kind;
-                if (get_binary_kind(inst->opcode, kind)) {
+                bool compound = false;
+                switch (inst->opcode) {
+                    case QoreIROpcode::AddAssignInt:
+                    case QoreIROpcode::AddAssignAny:
+                        kind = AOTIntExpressionNodeKind::Add;
+                        compound = true;
+                        break;
+                    case QoreIROpcode::SubAssignInt:
+                    case QoreIROpcode::SubAssignAny:
+                        kind = AOTIntExpressionNodeKind::Sub;
+                        compound = true;
+                        break;
+                    case QoreIROpcode::MulAssignInt:
+                    case QoreIROpcode::MulAssignAny:
+                        kind = AOTIntExpressionNodeKind::Mul;
+                        compound = true;
+                        break;
+                    default:
+                        break;
+                }
+                if (compound || get_binary_kind(inst->opcode, kind)) {
                     if (inst->operands.size() != 2
                             || (!allow_fallible_operations
                                 && is_fallible_node(kind))) {
@@ -5330,7 +5430,7 @@ static bool qore_aot_collect_int_expression_summaries(
                     branch = static_cast<const QoreIRBranchIfInstruction*>(inst);
                     continue;
                 }
-                if (!append_instruction(inst, values, true)) {
+                if (!append_instruction(inst, values, local_values, true)) {
                     state = VisitState::Failed;
                     return false;
                 }
@@ -5344,17 +5444,23 @@ static bool qore_aot_collect_int_expression_summaries(
                 state = VisitState::Failed;
                 return false;
             }
-            AOTIntExpressionNodeKind condition_kind =
-                expression.nodes[static_cast<size_t>(condition->second)].kind;
-            if (!is_bool_node(condition_kind)) {
-                state = VisitState::Failed;
-                return false;
+            int condition_value = condition->second;
+            if (!is_bool_node(expression.nodes[static_cast<size_t>(condition_value)].kind)) {
+                int zero = append_constant(expression, 0);
+                condition_value = append_binary(expression,
+                    AOTIntExpressionNodeKind::Ne, condition_value, zero);
+                if (condition_value < 0) {
+                    state = VisitState::Failed;
+                    return false;
+                }
             }
             if (func->blocks.size() == 4) {
                 auto get_arm_values = [&](const QoreIRBasicBlock* block,
                         std::unordered_map<uint32_t, int>& block_values,
+                        std::unordered_map<const LocalVar*, int>& block_locals,
                         const QoreIRBasicBlock*& target) -> bool {
                     block_values = values;
+                    block_locals = local_values;
                     for (const auto& inst_ptr : block->instructions) {
                         if (!inst_ptr || inst_ptr->exception_target || target) {
                             return false;
@@ -5365,7 +5471,8 @@ static bool qore_aot_collect_int_expression_summaries(
                         }
                         if (inst->opcode == QoreIROpcode::Br) {
                             target = static_cast<const QoreIRBranchInstruction*>(inst)->target;
-                        } else if (!append_instruction(inst, block_values, false)) {
+                        } else if (!append_instruction(inst, block_values,
+                                block_locals, false)) {
                             return false;
                         }
                     }
@@ -5373,10 +5480,14 @@ static bool qore_aot_collect_int_expression_summaries(
                 };
                 std::unordered_map<uint32_t, int> true_values;
                 std::unordered_map<uint32_t, int> false_values;
+                std::unordered_map<const LocalVar*, int> true_locals;
+                std::unordered_map<const LocalVar*, int> false_locals;
                 const QoreIRBasicBlock* true_merge = nullptr;
                 const QoreIRBasicBlock* false_merge = nullptr;
-                if (!get_arm_values(branch->true_target, true_values, true_merge)
-                        || !get_arm_values(branch->false_target, false_values, false_merge)
+                if (!get_arm_values(branch->true_target, true_values,
+                            true_locals, true_merge)
+                        || !get_arm_values(branch->false_target, false_values,
+                            false_locals, false_merge)
                         || true_merge != false_merge || !true_merge
                         || true_merge == func->blocks.front().get()
                         || true_merge == branch->true_target
@@ -5384,7 +5495,46 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
-                const QoreIRPhiInstruction* phi = nullptr;
+
+                std::unordered_map<const LocalVar*, int> merge_locals;
+                struct MergeLocalValue {
+                    uint32_t slot;
+                    const LocalVar* local;
+                    int true_value;
+                    int false_value;
+                };
+                std::vector<MergeLocalValue> merged_values;
+                merged_values.reserve(true_locals.size());
+                for (const auto& [local, true_value] : true_locals) {
+                    auto false_value = false_locals.find(local);
+                    if (false_value == false_locals.end()) {
+                        continue;
+                    }
+                    auto slot = func->local_var_slots.find(local);
+                    if (slot == func->local_var_slots.end()) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                    merged_values.push_back({slot->second, local,
+                        true_value, false_value->second});
+                }
+                std::sort(merged_values.begin(), merged_values.end(),
+                    [](const MergeLocalValue& lhs, const MergeLocalValue& rhs) {
+                        return lhs.slot < rhs.slot;
+                    });
+                for (const auto& merged : merged_values) {
+                    int value = merged.true_value == merged.false_value
+                        ? merged.true_value
+                        : append_select(expression, condition_value,
+                            merged.true_value, merged.false_value);
+                    if (value < 0) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                    merge_locals.emplace(merged.local, value);
+                }
+
+                std::unordered_map<uint32_t, int> merge_values = values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : true_merge->instructions) {
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -5395,47 +5545,63 @@ static bool qore_aot_collect_int_expression_summaries(
                     if (is_ignored(inst->opcode)) {
                         continue;
                     }
-                    if (inst->opcode == QoreIROpcode::Phi && !phi) {
-                        phi = static_cast<const QoreIRPhiInstruction*>(inst);
-                    } else if (inst->opcode == QoreIROpcode::Return && phi) {
+                    if (inst->opcode == QoreIROpcode::Phi) {
+                        const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
+                        if (!phi->result.isValid() || phi->incoming.size() != 2) {
+                            state = VisitState::Failed;
+                            return false;
+                        }
+                        int true_value = -1;
+                        int false_value = -1;
+                        for (const auto& incoming : phi->incoming) {
+                            if (incoming.block == branch->true_target) {
+                                auto value = true_values.find(incoming.value.id);
+                                true_value = value == true_values.end() ? -1 : value->second;
+                            } else if (incoming.block == branch->false_target) {
+                                auto value = false_values.find(incoming.value.id);
+                                false_value = value == false_values.end() ? -1 : value->second;
+                            } else {
+                                state = VisitState::Failed;
+                                return false;
+                            }
+                        }
+                        int result = append_select(expression, condition_value,
+                            true_value, false_value);
+                        if (result < 0) {
+                            state = VisitState::Failed;
+                            return false;
+                        }
+                        merge_values.emplace(phi->result.id, result);
+                    } else if (inst->opcode == QoreIROpcode::Return) {
                         ret = static_cast<const QoreIRReturnInstruction*>(inst);
-                    } else {
+                    } else if (!append_instruction(inst, merge_values,
+                            merge_locals, false)) {
                         state = VisitState::Failed;
                         return false;
                     }
                 }
-                if (!phi || phi->incoming.size() != 2 || !phi->result.isValid()
-                        || !ret || !ret->has_value || ret->value.id != phi->result.id) {
+                if (!ret || !ret->has_value) {
                     state = VisitState::Failed;
                     return false;
                 }
-                int true_value = -1;
-                int false_value = -1;
-                for (const auto& incoming : phi->incoming) {
-                    if (incoming.block == branch->true_target) {
-                        auto value = true_values.find(incoming.value.id);
-                        true_value = value == true_values.end() ? -1 : value->second;
-                    } else if (incoming.block == branch->false_target) {
-                        auto value = false_values.find(incoming.value.id);
-                        false_value = value == false_values.end() ? -1 : value->second;
-                    } else {
-                        state = VisitState::Failed;
-                        return false;
-                    }
-                }
-                int result = append_select(expression, condition->second,
-                    true_value, false_value);
-                if (result < 0
-                        || result != static_cast<int>(expression.nodes.size() - 1)) {
+                auto return_value = merge_values.find(ret->value.id);
+                if (return_value == merge_values.end()
+                        || return_value->second
+                            != static_cast<int>(expression.nodes.size() - 1)
+                        || is_bool_node(expression.nodes.back().kind)) {
                     state = VisitState::Failed;
                     return false;
                 }
                 callee->second.int_expression = std::move(expression);
+                callee->second.never_returns_nothing = true;
+                callee->second.return_kind = proven_return_kind;
+                callee->second.approach_b_eligible = true;
                 state = VisitState::Success;
                 return true;
             }
             auto get_return = [&](const QoreIRBasicBlock* block) -> int {
                 std::unordered_map<uint32_t, int> block_values = values;
+                std::unordered_map<const LocalVar*, int> block_locals = local_values;
                 const QoreIRReturnInstruction* ret = nullptr;
                 for (const auto& inst_ptr : block->instructions) {
                     if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -5447,7 +5613,8 @@ static bool qore_aot_collect_int_expression_summaries(
                     }
                     if (inst->opcode == QoreIROpcode::Return) {
                         ret = static_cast<const QoreIRReturnInstruction*>(inst);
-                    } else if (!append_instruction(inst, block_values, false)) {
+                    } else if (!append_instruction(inst, block_values,
+                            block_locals, false)) {
                         return -1;
                     }
                 }
@@ -5459,13 +5626,16 @@ static bool qore_aot_collect_int_expression_summaries(
             };
             int true_value = get_return(branch->true_target);
             int false_value = get_return(branch->false_target);
-            int result = append_select(expression, condition->second,
+            int result = append_select(expression, condition_value,
                 true_value, false_value);
             if (result < 0 || result != static_cast<int>(expression.nodes.size() - 1)) {
                 state = VisitState::Failed;
                 return false;
             }
             callee->second.int_expression = std::move(expression);
+            callee->second.never_returns_nothing = true;
+            callee->second.return_kind = proven_return_kind;
+            callee->second.approach_b_eligible = true;
             state = VisitState::Success;
             return true;
         }
@@ -5484,7 +5654,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 ret = static_cast<const QoreIRReturnInstruction*>(inst);
                 continue;
             }
-            if (!append_instruction(inst, values, true)) {
+            if (!append_instruction(inst, values, local_values, true)) {
                 state = VisitState::Failed;
                 return false;
             }
@@ -5501,6 +5671,9 @@ static bool qore_aot_collect_int_expression_summaries(
             return false;
         }
         callee->second.int_expression = std::move(expression);
+        callee->second.never_returns_nothing = true;
+        callee->second.return_kind = proven_return_kind;
+        callee->second.approach_b_eligible = true;
         state = VisitState::Success;
         return true;
     };
@@ -5867,6 +6040,13 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 summary.never_returns_nothing;
             callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
                 variant, summary.never_returns_nothing);
+            const AbstractFunctionSignature* sig =
+                const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature();
+            const QoreTypeInfo* return_type = sig ? sig->getReturnTypeInfo() : nullptr;
+            if (!summary.never_returns_nothing && QoreTypeInfo::hasType(return_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+                callee_it->second.approach_b_eligible = false;
+            }
             if (!disable_noescape_params) {
                 callee_it->second.param_noescape = summary.param_noescape;
             }
@@ -6629,7 +6809,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
                 && qore_check_cancel(nullptr, "AOT fast-entry return ABI declaration")) {
             return false;
         }
-        if (!info.approach_b_eligible || info.fast_name.empty()) {
+        if (info.fast_name.empty()) {
             continue;
         }
         llvm::Function* old_fn = module.getFunction(info.fast_name);
@@ -6637,6 +6817,9 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
             assert(old_fn->empty());
             assert(old_fn->use_empty());
             old_fn->eraseFromParent();
+        }
+        if (!info.approach_b_eligible) {
+            continue;
         }
         std::vector<llvm::Type*> params;
         params.reserve(info.num_params + 2);
@@ -8031,7 +8214,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 std::string fast_entry_name;
                 std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                 std::vector<uint8_t> fast_entry_param_rejects_nothing;
-                bool fast_entry_eligible = !metadata_only && isAOTFastEntryEligible(ir_func, uvb);
+                bool analyzed_fast_entry_eligible = true;
+                if (aot_batch_callee_map) {
+                    auto analyzed = aot_batch_callee_map->find(variant);
+                    analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
+                        && analyzed->second.approach_b_eligible;
+                }
+                bool fast_entry_eligible = !metadata_only && analyzed_fast_entry_eligible
+                    && isAOTFastEntryEligible(ir_func, uvb);
                 bool self_rec_eligible = fast_entry_eligible && hasAOTSelfRecursiveCall(ir_func);
                 if (fast_entry_eligible) {
                     fast_entry_name = ir_func->name + "_fast";
@@ -8426,7 +8616,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
                     bool implicit_self_fast_entry = !metadata_only
                         && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth);
+                    bool analyzed_fast_entry_eligible = true;
+                    if (aot_batch_callee_map) {
+                        auto analyzed = aot_batch_callee_map->find(variant);
+                        analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
+                            && analyzed->second.approach_b_eligible;
+                    }
                     bool fast_entry_eligible = !metadata_only
+                        && analyzed_fast_entry_eligible
                         && isAOTFastMethodCallEligible(variant)
                         && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
                             || implicit_self_fast_entry);

@@ -5288,6 +5288,32 @@ printf(\"%d\\n\", compute_factorials());
             assertEq("4037913", result,
                     sprintf("batch recursive %s", mode));
         }
+
+        # Test 6: an exact return type does not imply an assigned return value
+        code = "%modern
+int sub maybe_result(int choose) {
+    int value;
+    if (choose) {
+        value = 9;
+    }
+    return value;
+}
+string sub check_result() {
+    int assigned = maybe_result(1);
+    try {
+        maybe_result(0);
+        return \"missing error\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%d:%s\", assigned, ex.err);
+    }
+}
+printf(\"%s\\n\", check_result());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("9:RUNTIME-TYPE-ERROR", result,
+                    sprintf("batch unassigned return %s", mode));
+        }
     }
 
     testDirectIndexFoldl() {

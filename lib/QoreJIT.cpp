@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreJIT.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cstdio>
@@ -1082,6 +1083,25 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     auto module = std::make_unique<llvm::Module>("qore_jit_batch_" + root_func_name, *ctx);
     module->setDataLayout(jit->getDataLayout());
 
+    std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>
+        effect_functions;
+    effect_functions.reserve(callees.size());
+    size_t effect_function_count = 0;
+    for (const auto& callee : callees) {
+        if (++effect_function_count % 100 == 0
+                && qore_check_cancel(nullptr, "JIT batch effect function collection")) {
+            error = "cancelled during JIT batch effect function collection";
+            return false;
+        }
+        effect_functions.emplace_back(callee.variant, callee.ir_func);
+    }
+    std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>
+        effect_summaries;
+    if (!qore_ir_compute_function_effect_summaries(effect_functions, effect_summaries)) {
+        error = "cancelled during JIT batch function effect analysis";
+        return false;
+    }
+
     // Build the batch callee map: variant → BatchCalleeInfo
     // This tells the lowerer which CallDirect targets are in-module
     // and whether they support direct LLVM arg passing (Approach B)
@@ -1091,6 +1111,18 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         info.name = callee.ir_func->name;
         info.approach_b_eligible = callee.approach_b_eligible;
         info.num_params = callee.num_params;
+        auto summary = effect_summaries.find(callee.variant);
+        info.never_returns_nothing = summary != effect_summaries.end()
+            && summary->second.never_returns_nothing;
+        const AbstractFunctionSignature* signature = callee.variant
+            ? const_cast<AbstractQoreFunctionVariant*>(callee.variant)->getSignature()
+            : nullptr;
+        const QoreTypeInfo* return_type = signature
+            ? signature->getReturnTypeInfo() : nullptr;
+        if (!info.never_returns_nothing && QoreTypeInfo::hasType(return_type)
+                && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+            info.approach_b_eligible = false;
+        }
         if (info.approach_b_eligible) {
             info.fast_name = callee.ir_func->name + "_fast";
             const UserVariantBase* uvb = callee.variant->getUserVariantBase();
@@ -1138,10 +1170,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Forward-declare fast entry functions for Approach B eligible callees:
     // uint64_t callee_fast(arg0, arg1, ..., ptr xsink)
     for (const auto& callee : callees) {
-        if (!callee.approach_b_eligible) {
+        auto info_it = batch_callee_map.find(callee.variant);
+        if (info_it == batch_callee_map.end()
+                || !info_it->second.approach_b_eligible) {
             continue;
         }
-        auto info_it = batch_callee_map.find(callee.variant);
         const std::vector<BatchCalleeParamKind>* param_kinds =
             info_it != batch_callee_map.end() ? &info_it->second.param_kinds : nullptr;
         auto* double_ty = llvm::Type::getDoubleTy(*ctx);
@@ -1205,7 +1238,9 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
 
         // Lower fast entry for Approach B eligible callees (even if standard entry
         // is already compiled — the fast entry is new and needs its body)
-        if (callee.approach_b_eligible) {
+        auto fast_info = batch_callee_map.find(callee.variant);
+        if (fast_info != batch_callee_map.end()
+                && fast_info->second.approach_b_eligible) {
             std::string fast_name = callee.ir_func->name + "_fast";
             llvm::Function* fast_fn = module->getFunction(fast_name);
             assert(fast_fn && "fast entry function must be forward-declared");

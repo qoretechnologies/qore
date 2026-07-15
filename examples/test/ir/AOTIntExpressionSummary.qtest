@@ -155,6 +155,51 @@ int sub conditional_divide_expr(int left, int right) {
     return left > 0 ? left / right : right;
 }
 
+int sub local_branch_expr(int value) {
+    int local = value + 1;
+    if (local % 2) {
+        local *= 3;
+    } else {
+        local += 7;
+    }
+    return local * local - value;
+}
+
+int sub asymmetric_param_expr(int value, int choose) {
+    if (choose) {
+        value += 5;
+    } else {
+    }
+    return value * 2;
+}
+
+int sub maybe_unassigned_local(int choose) {
+    int local;
+    if (choose) {
+        local = 9;
+    }
+    return local;
+}
+
+int sub maybe_removed_local(int choose) {
+    int local = 4;
+    if (choose) {
+        remove local;
+    } else {
+        local += 3;
+    }
+    return local;
+}
+
+int sub maybe_removed_param(int value, int choose) {
+    if (choose) {
+        remove value;
+    } else {
+        value += 3;
+    }
+    return value;
+}
+
 int sub side_effect_expr(int value) {
     side_effect_value = value;
     return value + 1;
@@ -284,6 +329,29 @@ string sub consumerCode() {
         multiple_divide_float_expr(12.0, 3.0, 2.0),
         divide_float_expr(1.0, @nan@).nanp(),
         divide_zero, modulo_zero, float_zero, float_negative_zero);
+    bool unassigned_local_rejected = False;
+    try {
+        maybe_unassigned_local(0);
+    } catch (hash<auto> ex) {
+        unassigned_local_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool removed_local_rejected = False;
+    try {
+        maybe_removed_local(1);
+    } catch (hash<auto> ex) {
+        removed_local_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool removed_param_rejected = False;
+    try {
+        maybe_removed_param(4, 1);
+    } catch (hash<auto> ex) {
+        removed_param_rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"local-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        local_branch_expr(3), local_branch_expr(4),
+        asymmetric_param_expr(10, 0), asymmetric_param_expr(10, 1),
+        unassigned_local_rejected, removed_local_rejected,
+        removed_param_rejected);
     return 0;
 }
 ";
@@ -365,6 +433,11 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"19\"/)
         || !(provider_index =~ /\"qore_path\": \"negate_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"multiple_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"conditional_divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"local_branch_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"asymmetric_param_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_unassigned_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_removed_local\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"maybe_removed_param\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"kind\": 24/)
         || !(provider_index =~ /\"kind\": 25/)
         || !(provider_index =~ /\"kind\": 26/)
