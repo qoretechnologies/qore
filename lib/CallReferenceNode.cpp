@@ -587,12 +587,19 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
     // try to resolve a method call if bare references are allowed
     // and we are parsing in an object context
     if (parse_check_parse_option(PO_ALLOW_BARE_REFS) && parse_context.oflag) {
-        const QoreClass* qc = parse_context.class_ctx;
-        const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), str);
-        if (m) {
-            val = new ParseSelfMethodReferenceNode(loc, m);
-            delete this;
-            return 0;
+        // resolve the unqualified self-method reference against the ambient lexical class rather than
+        // parse_context.class_ctx: they are not always the same object, and class_ctx is not guaranteed to be
+        // set whenever oflag is (e.g. in a base-constructor argument list oflag is set but class_ctx is null,
+        // while the lexical class is the derived class being constructed). Using parse_get_class() keeps
+        // self-method reference resolution consistent with bare self-member resolution (see
+        // parseResolveBarewordIntern()) and avoids dereferencing a null class context
+        if (QoreClass* qc = parse_get_class()) {
+            const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
+            if (m) {
+                val = new ParseSelfMethodReferenceNode(loc, m);
+                delete this;
+                return 0;
+            }
         }
     } else if (parse_context.class_ctx) {
         qore_class_private* priv = qore_class_private::get(*const_cast<QoreClass*>(parse_context.class_ctx));

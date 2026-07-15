@@ -10,10 +10,38 @@
 
 class C { m() {print("ERROR!\n");} int get(int x = 0) {return 1 + x;}}
 
+# base class that stores and later invokes a call reference passed to its constructor
+class BcaBase {
+    private { code cb; }
+    constructor(code cb) { self.cb = cb; }
+    auto callCb() { return cb(); }
+    string baseHandler() { return "base"; }
+}
+
+# unqualified \handler() as a base-constructor argument: must resolve to the derived method
+# (this previously crashed the parser with SIGSEGV because the base-constructor-argument parse
+# context left class_ctx null while oflag was set)
+class BcaDerivedUnqualified inherits BcaBase {
+    constructor() : BcaBase(\handler()) {}
+    private string handler() { return "derived-unqualified"; }
+}
+
+# qualified \self.handler() form in a base-constructor argument
+class BcaDerivedQualified inherits BcaBase {
+    constructor() : BcaBase(\self.handler()) {}
+    private string handler() { return "derived-qualified"; }
+}
+
+# unqualified reference to an inherited base-class method as a base-constructor argument
+class BcaDerivedBaseMethod inherits BcaBase {
+    constructor() : BcaBase(\baseHandler()) {}
+}
+
 class CallRefTest inherits QUnit::Test {
     constructor() : QUnit::Test("CallRef Test", "1.0") {
         addTestCase("Test", \test());
         addTestCase("issue 2145", \issue2145());
+        addTestCase("base constructor arg call reference", \baseCtorArgCallRef());
         set_return_value(main());
     }
 
@@ -37,6 +65,33 @@ class CallRefTest inherits QUnit::Test {
             code c = \obj.m();
             delete p;
             assertThrows("PROGRAM-ERROR", c);
+        }
+    }
+
+    baseCtorArgCallRef() {
+        # unqualified self-method call reference in a base-constructor argument list resolves to the
+        # derived method and can be invoked later (previously crashed the parser with SIGSEGV)
+        {
+            BcaDerivedUnqualified d();
+            assertEq("derived-unqualified", d.callCb());
+        }
+        # the qualified \self.handler() form resolves the same way
+        {
+            BcaDerivedQualified d();
+            assertEq("derived-qualified", d.callCb());
+        }
+        # an unqualified reference to an inherited base-class method also resolves
+        {
+            BcaDerivedBaseMethod d();
+            assertEq("base", d.callCb());
+        }
+        # a reference to a non-existent method in a base-constructor argument must raise a clean
+        # PARSE-EXCEPTION rather than crashing the process
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "cannot be resolved", \p.parse(),
+                ("class B { constructor(code cb) {} } "
+                 "class D inherits B { constructor() : B(\\nosuchmethod()) {} }", "bca-parse-error"));
         }
     }
 
