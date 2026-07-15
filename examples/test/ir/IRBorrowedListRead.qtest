@@ -134,8 +134,10 @@ if (aot != expected) {
     exit(2);
 }
 
-string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
-    libqore_dir, qore_bin, script_path));
+# Keep the borrowed-read pass observable when the map expression can otherwise be
+# fused into MapHashKeyOffsetAny before its inner loop is emitted.
+string stats = backquote(sprintf("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY=1 QORE_IR_OPT_STATS=1 "
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1", libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: safeIdentity:.*borrowed-list=1/
         || stats !~ /IR-OPT: safeSelect:.*borrowed-list=1/
         || stats !~ /IR-OPT: safeMap:.*borrowed-list=1/
