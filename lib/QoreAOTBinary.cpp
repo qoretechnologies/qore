@@ -5406,28 +5406,43 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     // Try builtin types (fast path)
     const QoreTypeInfo* result = resolveBuiltin(path);
 
-    // Hashdecl type paths must resolve to the canonical TypedHashDecl type object.
     if (!result) {
-        result = resolveHashDeclType(path);
-    }
+        static const bool use_shape_dispatch =
+            getenv("QORE_DISABLE_AOT_TYPE_SHAPE_DISPATCH") == nullptr;
+        if (use_shape_dispatch) {
+            const char* shape = *path == '*' ? path + 1 : path;
+            if (!strncmp(shape, "hash<", 5)) {
+                // Hashdecl type paths must resolve to the canonical
+                // TypedHashDecl type object before the general complex path.
+                result = resolveHashDeclType(path);
+            } else if (!strncmp(shape, "enum<", 5)) {
+                result = resolveEnumType(path);
+            } else if (!strncmp(shape, "hashdecl_typeparam<", 19)
+                    || !strncmp(shape, "typeparam<", 10)) {
+                result = resolveTypeParameterType(path);
+            } else if (strchr(shape, '|')) {
+                // QoreTypeInfo::getPath() can emit compact top-level union
+                // spellings such as "int|float|number".
+                result = resolveUnionShorthandType(path);
+            }
+        } else {
+            result = resolveHashDeclType(path);
+            if (!result) {
+                result = resolveEnumType(path);
+            }
+            if (!result) {
+                result = resolveTypeParameterType(path);
+            }
+            if (!result) {
+                result = resolveUnionShorthandType(path);
+            }
+        }
 
-    if (!result) {
-        result = resolveEnumType(path);
-    }
-
-    if (!result) {
-        result = resolveTypeParameterType(path);
-    }
-
-    // QoreTypeInfo::getPath() can emit compact top-level union spellings such
-    // as "int|float|number"; keep that canonical spelling round-trippable.
-    if (!result) {
-        result = resolveUnionShorthandType(path);
-    }
-
-    // Try the parser-based resolver for complex types (handles everything)
-    if (!result) {
-        result = resolveComplexType(path);
+        // The parser-based resolver handles both unmatched shapes and valid
+        // shaped paths that require its fallback semantics.
+        if (!result) {
+            result = resolveComplexType(path);
+        }
     }
 
     if (result) {
