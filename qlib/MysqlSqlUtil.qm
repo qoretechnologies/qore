@@ -1538,12 +1538,16 @@ end";
                         }
                         switch (enc) {
                             case "hex":
-                                return hexexpr;
+                                # cast to char so the result is a string, not a binary value
+                                # (MySQL/MariaDB may type hashing-function output as VARBINARY)
+                                return sprintf("cast(%s as char)", hexexpr);
                             case "binary":
                                 return sprintf("unhex(%s)", hexexpr);
                             case "base64":
-                                # strip the newlines to_base64() inserts every 76 characters
-                                return sprintf("replace(to_base64(unhex(%s)), char(10), '')", hexexpr);
+                                # strip the newlines to_base64() inserts every 76 characters, and
+                                # cast to char since to_base64() returns a binary value
+                                return sprintf("cast(replace(to_base64(unhex(%s)), char(10), '') as char)",
+                                    hexexpr);
                         }
                         throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
                     },
