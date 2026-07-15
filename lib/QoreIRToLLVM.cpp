@@ -6309,7 +6309,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             const char* s = getenv("QORE_AOT_EH_MAX_CALLS");
             return s ? std::atoi(s) : 100;
         }();
-        aot_eh_enabled = !env_no_eh && env_explicit_eh && aot_mode;
+        // Typed fast entries are called both from local Qore try blocks and
+        // from EH adapters. Keep their bodies check-based so they always
+        // return with xsink populated; the call site then either branches to
+        // its Qore exception target or translates the failure to C++ unwind.
+        aot_eh_enabled = !env_no_eh && env_explicit_eh && aot_mode
+            && fast_entry_name.empty();
         if (aot_eh_enabled && env_eh_max_calls > 0) {
             int call_like = 0;
             for (const auto& block : func.blocks) {
@@ -6320,6 +6325,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                             || op == QoreIROpcode::CallDirect
                             || op == QoreIROpcode::CallStaticDirect
                             || op == QoreIROpcode::CallMethodDirect
+                            || op == QoreIROpcode::CallClosureDirect
                             || op == QoreIROpcode::DotEvalMethodDirect
                             || op == QoreIROpcode::InvokeMethodDirect
                             || op == QoreIROpcode::InvokeDotEvalMethodDirect) {
@@ -15991,6 +15997,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         + "_closure_native_dispatch_" + std::to_string(slot);
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
+                    llvm::FunctionCallee throwing_dispatch = dispatch;
+                    if (aot_eh_enabled && !inst->exception_target) {
+                        throwing_dispatch = module.getOrInsertFunction(
+                            dispatch_name + "_throwing", dispatch_type);
+                    }
                     BatchCalleeInfo dispatch_info;
                     dispatch_info.num_params = static_cast<unsigned>(native_nargs);
                     dispatch_info.param_kinds = closure_param_kinds;
@@ -16032,8 +16043,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     call_args.push_back(aot_ctx_arg);
                     call_args.push_back(xsink_arg);
-                    llvm::Value* result = builder->CreateCall(dispatch, call_args,
-                        "native_closure_result");
+                    llvm::Value* result = emitMaybeInvoke(dispatch,
+                        throwing_dispatch, call_args, module, llvm_func, inst);
+                    result->setName("native_closure_result");
                     // The dispatch symbol may be defined as the generic fallback
                     // when the closure body is not context-independent. Preserve
                     // ordinary no-reference call invalidation at the call site;

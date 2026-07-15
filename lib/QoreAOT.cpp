@@ -8031,6 +8031,12 @@ static std::string qoreAOTClosureNativeDispatchName(
         + std::to_string(expr_index);
 }
 
+static std::string qoreAOTClosureNativeThrowingDispatchName(
+        const std::string& owner_symbol, size_t expr_index) {
+    return qoreAOTClosureNativeDispatchName(owner_symbol, expr_index)
+        + "_throwing";
+}
+
 //! Define the internal call-site dispatch used by a fused noncapturing closure.
 /** When @p fast_fn is null, the body is the exact generic helper fallback.  A
     native-int fast body is used only for call sites whose SSA argument facts
@@ -8236,6 +8242,47 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
     return true;
 }
 
+//! Define the C++ EH adapter for a typed closure call-site dispatcher.
+/** The normal dispatcher reports Qore exceptions through xsink. This internal
+    adapter preserves the exact typed ABI and converts an xsink failure to the
+    QoreJITException consumed by the caller's invoke landing pad. */
+static bool defineAOTClosureNativeThrowingDispatch(llvm::LLVMContext& ctx,
+        llvm::Module& module, llvm::Function* dispatch,
+        llvm::Function* throwing_dispatch) {
+    if (!throwing_dispatch || !throwing_dispatch->empty()) {
+        return true;
+    }
+    if (!dispatch || dispatch->getFunctionType() != throwing_dispatch->getFunctionType()
+            || !throwing_dispatch->arg_size()) {
+        return false;
+    }
+
+    throwing_dispatch->setLinkage(llvm::GlobalValue::InternalLinkage);
+    throwing_dispatch->addFnAttr(llvm::Attribute::NoInline);
+    throwing_dispatch->addFnAttr(llvm::Attribute::Cold);
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", throwing_dispatch);
+    llvm::IRBuilder<> builder(entry);
+    std::vector<llvm::Value*> args;
+    args.reserve(throwing_dispatch->arg_size());
+    unsigned index = 0;
+    for (llvm::Argument& arg : throwing_dispatch->args()) {
+        if (index && !(index % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT native closure throwing dispatch argument forwarding")) {
+            return false;
+        }
+        args.push_back(&arg);
+        ++index;
+    }
+    llvm::Value* result = builder.CreateCall(dispatch, args);
+    auto check_throw = module.getOrInsertFunction("qore_rt_check_throw",
+        llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+            {llvm::PointerType::get(ctx, 0)}, false));
+    builder.CreateCall(check_throw, {args.back()});
+    builder.CreateRet(result);
+    return true;
+}
+
 //! Compile closure bodies referenced by one compiled body's expression slots.
 /** Closure entries are appended immediately after their owner.  This ordering lets
     runtime slot-map reconstruction create the closure variant from the owner's
@@ -8275,6 +8322,11 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             qoreAOTClosureNativeDispatchName(
                 compiled_funcs[owner_index].llvm_symbol, expr_index);
         llvm::Function* native_dispatch = module.getFunction(native_dispatch_name);
+        std::string native_throwing_dispatch_name =
+            qoreAOTClosureNativeThrowingDispatchName(
+                compiled_funcs[owner_index].llvm_symbol, expr_index);
+        llvm::Function* native_throwing_dispatch = module.getFunction(
+            native_throwing_dispatch_name);
 
         const UserClosureFunction* ucf = owner_expr.closure_func;
         const AbstractQoreFunctionVariant* abstract_variant = ucf->first();
@@ -8302,6 +8354,13 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     "cancelled");
                 return false;
             }
+            if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
+                    native_dispatch, native_throwing_dispatch)) {
+                setAOTCompileFatal(fatal_error, "closure",
+                    native_throwing_dispatch_name,
+                    "typed throwing fallback dispatch lowering", "cancelled");
+                return false;
+            }
             continue;
         }
 
@@ -8321,6 +8380,13 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 setAOTCompileFatal(fatal_error, "closure",
                     native_dispatch_name, "typed fallback dispatch lowering",
                     "cancelled");
+                return false;
+            }
+            if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
+                    native_dispatch, native_throwing_dispatch)) {
+                setAOTCompileFatal(fatal_error, "closure",
+                    native_throwing_dispatch_name,
+                    "typed throwing fallback dispatch lowering", "cancelled");
                 return false;
             }
             continue;
@@ -8345,6 +8411,13 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 setAOTCompileFatal(fatal_error, "closure",
                     native_dispatch_name, "typed fallback dispatch lowering",
                     "cancelled");
+                return false;
+            }
+            if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
+                    native_dispatch, native_throwing_dispatch)) {
+                setAOTCompileFatal(fatal_error, "closure",
+                    native_throwing_dispatch_name,
+                    "typed throwing fallback dispatch lowering", "cancelled");
                 return false;
             }
             continue;
@@ -8528,6 +8601,14 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             delete ir_func;
             setAOTCompileFatal(fatal_error, "closure", native_dispatch_name,
                 "typed direct dispatch lowering", "cancelled");
+            return false;
+        }
+        if (!defineAOTClosureNativeThrowingDispatch(ctx, module,
+                native_dispatch, native_throwing_dispatch)) {
+            delete ir_func;
+            setAOTCompileFatal(fatal_error, "closure",
+                native_throwing_dispatch_name,
+                "typed throwing direct dispatch lowering", "cancelled");
             return false;
         }
 

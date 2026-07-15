@@ -46,6 +46,7 @@
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreJITException.h"
 
 
 #include <atomic>
@@ -811,7 +812,13 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                 }
             }
 
-            uint64_t result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+            uint64_t result_bits = 0;
+            try {
+                result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+            } catch (const QoreJITException&) {
+                // The raise site has already populated xsink. Keep the normal
+                // top-level cleanup and Qore exception propagation path intact.
+            }
 
             // Uninstantiate nested locals after AOT execution (reverse order)
             for (auto it = nested_locals.rbegin(); it != nested_locals.rend(); ++it) {

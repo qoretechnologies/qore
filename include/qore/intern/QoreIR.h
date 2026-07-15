@@ -2135,8 +2135,9 @@ public:
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception, const QoreValue& n_expr = QoreValue())
             : QoreIRInstruction(QoreIROpcode::InvokeMethodDirect),
               method(n_method), qc(n_qc), variant(n_variant),
-              normal_target(n_normal), exception_target(n_exception),
+              normal_target(n_normal),
               expr(n_expr) {
+        exception_target = n_exception;
         if (expr) expr.ref();
     }
 
@@ -2151,7 +2152,6 @@ public:
     const QoreClass* qc = nullptr;              //!< The class containing the method
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (for fast call path)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
-    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
 
@@ -2246,7 +2246,8 @@ public:
             QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
             : QoreIRInstruction(QoreIROpcode::InvokeDotEvalMethodDirect),
               method(n_method), qc(n_qc), variant(n_variant), expr(n_expr), pseudo(n_pseudo),
-              normal_target(n_normal), exception_target(n_exception) {
+              normal_target(n_normal) {
+        exception_target = n_exception;
         expr.ref();
     }
 
@@ -2272,7 +2273,6 @@ public:
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
-    QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
@@ -2476,8 +2476,8 @@ public:
     QoreIRInvokeInstruction(const QoreValue& n_expr, QoreIRBasicBlock* n_normal, QoreIRBasicBlock* n_exception)
             : QoreIRInstruction(QoreIROpcode::Invoke),
             expr(n_expr),
-            normal_target(n_normal),
-            exception_target(n_exception) {
+            normal_target(n_normal) {
+        exception_target = n_exception;
         expr.ref();
     }
 
@@ -2488,7 +2488,6 @@ public:
     QoreValue expr;
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
-    QoreIRBasicBlock* exception_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
     bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
     bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee

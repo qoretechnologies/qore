@@ -31,6 +31,15 @@ class Box {
     }
 }
 
+int sub throwThroughNativeClosure(reference<int> marker) {
+    code<int(int, int)> divide = int sub (int value, int divisor) {
+        return value % divisor;
+    };
+    list<string> pending_cleanup = (\"owned\",);
+    marker = pending_cleanup.size();
+    return divide(1, 0) + pending_cleanup.size();
+}
+
 string sub exercise() {
     int captured = 3;
     code<int(int)> add = int sub (int value) {
@@ -184,7 +193,12 @@ string sub exercise() {
         described, typed_errors, nan_result);
 }
 
-printf(\"%s\\n\", exercise());
+if (getenv(\"QORE_TEST_AOT_CLOSURE_EH\")) {
+    int eh_marker = 0;
+    throwThroughNativeClosure(\\eh_marker);
+} else {
+    printf(\"%s\\n\", exercise());
+}
 ";
 }
 
@@ -199,8 +213,10 @@ string disabled_exe_path = exe_path + "-disabled";
 
 string ast_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
     libqore_dir, qore_bin, source_path));
+string ast_eh_out = backquote(sprintf("QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
 string compile_out = backquote(sprintf(
-    "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    "QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, source_path));
 string disabled_compile_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
@@ -218,18 +234,34 @@ if (!(compile_out =~ /compiled native closure/)) {
 
 string native_out = backquote(sprintf(
     "QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+string native_eh_out = backquote(sprintf(
+    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
 string fallback_out = backquote(sprintf(
     "QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+string fallback_eh_out = backquote(sprintf(
+    "QORE_TEST_AOT_CLOSURE_EH=1 QORE_DISABLE_AOT_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, exe_path));
 string disabled_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
+string disabled_eh_out = backquote(sprintf(
+    "QORE_DISABLE_IR_NATIVE_INT_PROGRAM_INLINE=1 QORE_DISABLE_IR_NATIVE_CLOSURE_INCREMENT_INLINE=1 "
+    "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
+    "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe_path));
 string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1/)) {
+        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1/)
+        || !(ast_eh_out =~ /DIVISION-BY-ZERO/)
+        || !(native_eh_out =~ /DIVISION-BY-ZERO/) || native_eh_out =~ /terminate called/
+        || !(fallback_eh_out =~ /DIVISION-BY-ZERO/) || fallback_eh_out =~ /terminate called/
+        || !(disabled_eh_out =~ /DIVISION-BY-ZERO/)) {
     printf("native closure execution mismatch\nAST:\n%sNative:\n%sFallback:\n%sDisabled:\n%sCompile:\n%s",
         ast_out, native_out, fallback_out, disabled_out, compile_out);
+    printf("\nAST EH:\n%sNative EH:\n%sFallback EH:\n%sDisabled EH:\n%s",
+        ast_eh_out, native_eh_out, fallback_eh_out, disabled_eh_out);
     exit(2);
 }
