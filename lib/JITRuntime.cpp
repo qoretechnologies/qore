@@ -2603,7 +2603,15 @@ static bool qore_rt_apply_complex_hash_value_type(const QoreHashNode* h, const c
         return true;
     }
     const QoreTypeInfo* vti = h->getValueTypeInfo();
+    qore_type_t result_type = result.getType();
+    static const bool exact_scalar_enabled =
+        std::getenv("QORE_DISABLE_FAST_HASH_SCALAR_ACCEPTANCE") == nullptr;
+    bool exact_scalar_type = exact_scalar_enabled
+        && ((vti == bigIntTypeInfo && result_type == NT_INT)
+            || (vti == floatTypeInfo && result_type == NT_FLOAT)
+            || (vti == boolTypeInfo && result_type == NT_BOOLEAN));
     if (!QoreTypeInfo::hasType(vti) || vti == autoTypeInfo || vti == anyTypeInfo
+            || exact_scalar_type
             || QoreTypeInfo::runtimeAcceptsValue(vti, result) != QTI_NOT_EQUAL) {
         return true;
     }
