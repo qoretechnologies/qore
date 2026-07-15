@@ -5831,6 +5831,8 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
     const QoreListNode* list = value.get<const QoreListNode>();
     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
     size_t size = list->size();
+    static const bool scalar_fast_path =
+        std::getenv("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY_SCALAR_FAST_PATH") == nullptr;
     for (size_t i = 0; i < size; ++i) {
         if (i && !(i % 100) && qore_check_cancel(xsink, "map hash-key offset")) {
             return toBits(QoreValue());
@@ -5844,6 +5846,16 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
             if (*xsink) {
                 return toBits(QoreValue());
             }
+        }
+
+        qore_type_t key_type = key_value->getType();
+        if (scalar_fast_path && (key_type == NT_NOTHING || key_type == NT_INT
+                || key_type == NT_CHAR || key_type == NT_BOOLEAN)) {
+            result->push(key_value->getAsBigInt() + offset, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            continue;
         }
 
         ValueHolder mapped(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny,
