@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[398] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[399] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -456,12 +456,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[398] = {
     { "StringJoinAppend"               , false, true , false,  3, "Append to owned fused string join accumulator", true , true , "FoldlOperatorNode", true , false, true , false, false }, // 395
     { "SprintfIntFixed"                , false, true , false,  3, "Format int with fixed literal %d conversion", false, false, "FunctionCallNode", true , false, true , false, false }, // 396
     { "AppendStringCow"                , false, true , false,  2, "Append typed string with copy-on-write", true , true , "QorePlusEqualsOperatorNode", true , false, true , false, false }, // 397
+    { "MapHashKeyOffsetAny"            , true , false, false,  2, "Map constant hash key plus integer with dynamic semantics", false, true , "QoreMapOperatorNode", true , false, true , false, false }, // 398
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 398,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 398"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 399,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 399"
 );
 
 //! ============================================================================

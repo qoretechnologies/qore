@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 397,
+static_assert(QORE_IR_MAX_OPCODE == 398,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -9001,6 +9001,24 @@ load_local_done:
                         }
                     }
                     out = result.release();
+                }
+                setValueSlot(values, mhk->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(mhk->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::MapHashKeyOffsetAny: {
+                const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+                QoreValue list_val = getIRValue(values, mhk->operands[0]);
+                int64_t offset = getIRValue(values, mhk->operands[1]).getAsBigInt();
+                QoreValue out = fromBits(qore_rt_map_hash_key_offset_any(toBits(list_val),
+                    mhk->key1.c_str(), offset, xsink));
+                if (*xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 setValueSlot(values, mhk->result.id, out, xsink);
                 if (out.hasNode()) {

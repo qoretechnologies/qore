@@ -8812,6 +8812,28 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT MapHashKeyOffsetInt matches interpreter");
 
+        # Dynamic hash values need the generic addition semantics, including a
+        # NOTHING value from an unassigned typed-list element.  The reversed
+        # expression is deliberately not fused because dynamic + is ordered.
+        code = "%modern
+list<hash<auto>> mixed = ({\"val\": \"a\"}, {\"val\": 2});
+list<auto> dynamic = map ($1.val + 7), mixed;
+list<hash<auto>> sparse = ();
+sparse[1] = {\"val\": 2};
+list<auto> guarded = map ($1.val + 7), sparse;
+list<auto> reversed = map (7 + $1.val), mixed;
+printf(\"%s:%s:%s:%s:%s:%s\\n\", dynamic[0], dynamic[1],
+    guarded[0].type(), guarded[0], guarded[1], reversed[0]);
+";
+        hash<auto> dynamic_result = compileWithFlags(code, ("--opt-level=3",));
+        interp_out = runInterpreted(code);
+        assertTrue(dynamic_result.compiled,
+            "AOT MapHashKeyOffsetAny executable compiled: " + dynamic_result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(dynamic_result.compile_out),
+            "AOT MapHashKeyOffsetAny has complete native metadata: " + dynamic_result.compile_out);
+        assertEq(interp_out, dynamic_result.run_out,
+            "AOT MapHashKeyOffsetAny semantics match interpreter");
+
         # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
         code = "%modern
 list<hash<auto>> items = ({\"val\": 5}, {\"val\": 10}, {\"val\": 15});

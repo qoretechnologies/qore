@@ -256,6 +256,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int) },
     { "qore_rt_select_hash_key_positive_int_prehashed",
         reinterpret_cast<void*>(&qore_rt_select_hash_key_positive_int_prehashed) },
+    { "qore_rt_map_hash_key_offset_any_prehashed",
+        reinterpret_cast<void*>(&qore_rt_map_hash_key_offset_any_prehashed) },
+    { "qore_rt_map_hash_key_offset_any",
+        reinterpret_cast<void*>(&qore_rt_map_hash_key_offset_any) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
@@ -5806,6 +5810,57 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_int(uint64_t list_val,
         }
     }
     return toBits(result.release());
+}
+
+static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
+        const char* key, size_t key_hash, bool prehashed, int64_t offset,
+        ExceptionSink* xsink) {
+    QoreValue value = fromBits(list_val);
+    if (value.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+    size_t size = list->size();
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "map hash-key offset")) {
+            return toBits(QoreValue());
+        }
+
+        QoreValue element = list->retrieveEntry(i);
+        ValueHolder key_value(xsink);
+        if (element.getType() == NT_HASH) {
+            key_value = fromBits(qore_rt_hash_key_access_hash_impl(toBits(element), key,
+                key_hash, prehashed, xsink));
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+        }
+
+        ValueHolder mapped(QoreIRInterpreter::evalBinary(QoreIROpcode::AddAny,
+            *key_value, QoreValue(offset), xsink), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        result->push(mapped.release(), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return toBits(result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_any(uint64_t list_val,
+        const char* key, int64_t offset, ExceptionSink* xsink) {
+    return qore_rt_map_hash_key_offset_any_impl(list_val, key, 0, false, offset, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_any_prehashed(
+        uint64_t list_val, const char* key, uint64_t hash64, uint32_t hash32,
+        int64_t offset, ExceptionSink* xsink) {
+    return qore_rt_map_hash_key_offset_any_impl(list_val, key,
+        qore_rt_select_precomputed_hash(hash64, hash32), true, offset, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, const char* key, int64_t scale) {

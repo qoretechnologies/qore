@@ -820,6 +820,12 @@ uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val, const char* key
 uint64_t qore_rt_select_hash_key_positive_int_prehashed(uint64_t list_val,
         const char* key, uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
 
+//! Map `hash-key + integer` over a typed hash list while preserving dynamic addition semantics.
+uint64_t qore_rt_map_hash_key_offset_any(uint64_t list_val, const char* key,
+        int64_t offset, ExceptionSink* xsink);
+uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char* key,
+        uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
+
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.
 uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink);

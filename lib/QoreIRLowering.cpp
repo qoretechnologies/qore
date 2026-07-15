@@ -12645,6 +12645,11 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, std::str
                 constant_val = right;
                 return QoreIROpcode::MapHashKeyOffsetInt;
             }
+            if (!std::getenv("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY")) {
+                key_name = k;
+                constant_val = right;
+                return QoreIROpcode::MapHashKeyOffsetAny;
+            }
         }
 
         // Pattern: const + $1.key
@@ -13131,7 +13136,9 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
             QoreValue hk_constant;
             QoreIROpcode hk_opcode = analyzeMapHashKeyPattern(map->getLeft(), key_name, hk_constant);
 
-            if (hk_opcode != QoreIROpcode::MapAny) {
+            if (hk_opcode != QoreIROpcode::MapAny
+                    && (hk_opcode != QoreIROpcode::MapHashKeyOffsetAny
+                        || exception_stack.empty())) {
                 // Check if value type is known int for MapHashKeyInt detection
                 if (hk_opcode == QoreIROpcode::MapHashKeyValue) {
                     // Check if the value type for this key is known to be int
@@ -13142,26 +13149,28 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
                     }
                 }
 
-                // Lower the input list
+                // Lower all operands before creating the specialized instruction so that the
+                // resulting IR remains in SSA definition order for AOT compilation.
                 QoreIRValue list_val = lowerExpression(map->getRight(), error);
                 if (!list_val.isValid()) {
                     return QoreIRValue();
                 }
 
-                // Create the specialized instruction
-                auto* inst = builder.createMapHashKey(hk_opcode, key_name.c_str(), nullptr, map->loc);
-                inst->operands.push_back(list_val);
-
-                // For offset/scale patterns, add the constant operand
+                QoreIRValue const_ir;
                 if (hk_opcode == QoreIROpcode::MapHashKeyOffsetInt
-                        || hk_opcode == QoreIROpcode::MapHashKeyScaleInt) {
-                    QoreIRValue const_ir = lowerConstant(hk_constant, error);
+                        || hk_opcode == QoreIROpcode::MapHashKeyScaleInt
+                        || hk_opcode == QoreIROpcode::MapHashKeyOffsetAny) {
+                    const_ir = lowerConstant(hk_constant, error);
                     if (!const_ir.isValid()) {
                         return QoreIRValue();
                     }
-                    inst->operands.push_back(const_ir);
                 }
 
+                auto* inst = builder.createMapHashKey(hk_opcode, key_name.c_str(), nullptr, map->loc);
+                inst->operands.push_back(list_val);
+                if (const_ir.isValid()) {
+                    inst->operands.push_back(const_ir);
+                }
                 return inst->result;
             }
         }

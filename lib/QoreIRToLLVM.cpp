@@ -47,7 +47,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 397,
+static_assert(QORE_IR_MAX_OPCODE == 398,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -18375,6 +18375,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            return true;
+        }
+        case QoreIROpcode::MapHashKeyOffsetAny: {
+            const auto* mhk = static_cast<const QoreIRMapHashKeyInstruction*>(inst);
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* offset = getVal(inst->operands[1].id, error);
+            if (!list || !offset) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* offset_int = ensureIntTypeInline(offset, inst->operands[1].id);
+            llvm::Constant* key_const = builder->CreateGlobalString(mhk->key1,
+                "map_hk_any_key");
+            QoreIRPrecomputedStringHash key_hash = qore_ir_precompute_string_hash(mhk->key1);
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_map_hash_key_offset_any_prehashed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key_const,
+                llvm::ConstantInt::get(i64_type, key_hash.hash64),
+                llvm::ConstantInt::get(i32_type, key_hash.hash32), offset_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::HashMapTwoKeys: {

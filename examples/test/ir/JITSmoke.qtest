@@ -5670,6 +5670,24 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
                     sprintf("MapHashKeyOffsetInt %s", mode));
         }
 
+        # Dynamic hash values preserve ordinary addition semantics and unassigned
+        # typed-list elements still evaluate as NOTHING before the addition.
+        code = "%modern
+list<hash<auto>> mixed = ({\"val\": \"a\"}, {\"val\": 2});
+list<auto> dynamic = map ($1.val + 7), mixed;
+list<hash<auto>> sparse = ();
+sparse[1] = {\"val\": 2};
+list<auto> guarded = map ($1.val + 7), sparse;
+list<auto> reversed = map (7 + $1.val), mixed;
+printf(\"%s:%s:%s:%s:%s:%s\\n\", dynamic[0], dynamic[1],
+    guarded[0].type(), guarded[0], guarded[1], reversed[0]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("a7:9:integer:7:9:7a", result,
+                    sprintf("MapHashKeyOffsetAny semantics %s", mode));
+        }
+
         # MapHashKeyScaleInt: map ($1.key * N), list<hash<auto>>
         code = "%modern
 list<hash<auto>> items = ({\"val\": 2}, {\"val\": 3}, {\"val\": 5});
