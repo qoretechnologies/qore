@@ -591,13 +591,27 @@ static bool isAOTFastMethodCallEligible(const AbstractQoreFunctionVariant* varia
             && variant->getUserVariantBase()->isStaticallyFastCallEligible();
 }
 
-//! Check if a final-class instance method can reuse the caller's implicit self
+static bool isAOTNonOverridableMethodTarget(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant) {
+    if (qc && qc->isFinal()) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+        return false;
+    }
+    const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+    return method_variant && method_variant->isFinal();
+}
+
+//! Check if a non-overridable instance method can reuse the caller's implicit self
 //! context in a direct AOT fast entry. Any explicit or opaque AST access to the
 //! synthetic self local still requires the normal method frame and TLS slot.
 static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method) {
+        const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method,
+        const AbstractQoreFunctionVariant* variant) {
     static const bool enabled = getenv("QORE_DISABLE_AOT_SELF_FAST_ENTRY") == nullptr;
-    if (!enabled || !qc || !qc->isFinal() || !method || method->isStatic()
+    if (!enabled || !qc || !isAOTNonOverridableMethodTarget(qc, variant)
+            || !method || method->isStatic()
             || method->getClass() != qc || ir_func->has_opaque_ast_local_access
             || ir_func->has_explicit_self_local_access
             || !isAOTFastEntryEligible(ir_func, uvb)) {
@@ -7055,7 +7069,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
 
                 ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
-                    ir_func, uvb, qc, meth);
+                    ir_func, uvb, qc, meth, variant);
                 if ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
                         || implicit_self) {
                     const UserSignature* sig = uvb->getUserSignature();
@@ -8612,7 +8626,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
                     bool implicit_self_fast_entry = !metadata_only
-                        && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth);
+                        && isAOTImplicitSelfFastEntryEligible(
+                            ir_func, uvb, qc, meth, variant);
                     bool analyzed_fast_entry_eligible = true;
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);

@@ -69,6 +69,18 @@ static bool qore_ir_use_prehashed_keys() {
     return enabled;
 }
 
+static bool qore_ir_is_non_overridable_method_target(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant) {
+    if (qc && qc->isFinal()) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+        return false;
+    }
+    const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+    return method_variant && method_variant->isFinal();
+}
+
 // Pseudo dot-eval helpers such as size()/className() cannot be blindly inlined:
 // AST semantics first check object methods and hash member callrefs, then fall
 // back to pseudo-method dispatch.  The qore_rt_pseudo_* helpers intentionally
@@ -12922,7 +12934,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Function* aot_self_batch_fn = nullptr;
             if (aot_mode && batch_callees && direct_inst->variant
                     && direct_inst->method && direct_inst->qc
-                    && direct_inst->qc->isFinal()
+                    && qore_ir_is_non_overridable_method_target(
+                        direct_inst->qc, direct_inst->variant)
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(direct_inst->variant);
@@ -13132,7 +13145,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Function* aot_self_batch_fn = nullptr;
             if (aot_mode && batch_callees && invoke_inst->variant
                     && invoke_inst->method && invoke_inst->qc
-                    && invoke_inst->qc->isFinal()
+                    && qore_ir_is_non_overridable_method_target(
+                        invoke_inst->qc, invoke_inst->variant)
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->has_ref_args) {
                 auto it = batch_callees->find(invoke_inst->variant);
@@ -13579,7 +13593,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Function* aot_object_batch_fn = nullptr;
             if (aot_mode && batch_callees && direct_inst->variant
                     && direct_inst->method && direct_inst->qc
-                    && direct_inst->qc->isFinal()
+                    && qore_ir_is_non_overridable_method_target(
+                        direct_inst->qc, direct_inst->variant)
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->pseudo && !direct_inst->has_ref_args
                     && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
@@ -14080,7 +14095,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Function* aot_object_batch_fn = nullptr;
             if (aot_mode && batch_callees && invoke_inst->variant
                     && invoke_inst->method && invoke_inst->qc
-                    && invoke_inst->qc->isFinal()
+                    && qore_ir_is_non_overridable_method_target(
+                        invoke_inst->qc, invoke_inst->variant)
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->pseudo && !invoke_inst->has_ref_args
                     && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)

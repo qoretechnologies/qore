@@ -167,6 +167,34 @@ printf(\"%%d\\n\", a.compute());
 ", iterations / 10);
 
     # ==========================================================================
+    # Test 3b: final method in a non-final class
+    # ==========================================================================
+    string final_method_code = sprintf("%%modern
+
+class FinalMethodAccum {
+    private {
+        int total = 0;
+    }
+
+    final int add(int x) {
+        total += x;
+        return total;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result = self.add(1);
+        }
+        return result;
+    }
+}
+
+FinalMethodAccum a();
+printf(\"%%d\\n\", a.compute());
+", iterations / 10);
+
+    # ==========================================================================
     # Test 4: obj.method() calls - DotEvalMethodDirect
     # ==========================================================================
     string dot_eval_code = sprintf("%%modern
@@ -456,6 +484,7 @@ printf(\"%%d\\n\", sum);
         "loop": loop_code,
         "fibonacci": fib_code,
         "self_method": self_method_code,
+        "final_method": final_method_code,
         "dot_eval": dot_eval_code,
         "dot_eval_try": dot_eval_try_code,
         "static_call": static_call_code,

@@ -29,6 +29,21 @@ class Holder {
     }
 }
 
+class FinalMethodHolder {
+    private {
+        int value = 0;
+    }
+
+    final int add(int delta) {
+        value += delta;
+        return value;
+    }
+
+    int run() {
+        return self.add(2) * 10 + self.add(3);
+    }
+}
+
 class StaticHelper {
     static int twice(int x) {
         return x * 2;
@@ -301,9 +316,11 @@ string sub method_helper(Holder h) {
 
 string sub caller() {
     Holder h(\"ctx-ok\");
+    FinalMethodHolder final_method_holder();
     SelfHelper sh();
     SelfEffects effects();
-    return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(StaticHelper::combo(4))
+    return string(nested_helper(40)) + \":\" + method_helper(h) + \":\" + string(final_method_holder.run())
+        + \":\" + string(final_method_holder.add(4)) + \":\" + string(StaticHelper::combo(4))
         + \":\" + string(StaticHelper::comboTry(4)) + \":\" + string(default_helper())
         + \":\" + string(rec_sum(5)) + \":\" + string(float_check()) + \":\" + sh.run()
         + \":\" + closure_leaf_checks() + \":\" + string(ref_try()) + \":\" + string(fail_try())
@@ -366,8 +383,8 @@ printf(\"%s\\n\", rec(1));
 string sub selfMethodUnassignedScriptCode() {
     return "%modern
 
-final class SelfUnassigned {
-    int add(int x) {
+class SelfUnassigned {
+    final int add(int x) {
         return x + 1;
     }
 
@@ -659,7 +676,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60\n"
+if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);

@@ -10541,6 +10541,18 @@ static bool qore_ir_type_may_require_dot_eval_name_dispatch(const QoreTypeInfo* 
     return false;
 }
 
+static bool qore_ir_method_target_is_final(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant) {
+    if (qc && qc->isFinal()) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+        return false;
+    }
+    const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+    return method_variant && method_variant->isFinal();
+}
+
 QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
@@ -10558,7 +10570,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         const QoreMethod* method = m->getMethod();
         const QoreClass* qc = m->getClass();
         const AbstractQoreFunctionVariant* variant = m->getVariant();
-        if (method && qc && qc->isFinal()
+        if (method && qc && qore_ir_method_target_is_final(qc, variant)
                 && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
                     variant, m->getParseArgs(), m->getArgs())) {
             std::vector<QoreIRValue> lowered_args;
@@ -12237,13 +12249,13 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     // Check for devirtualization opportunities
     // We can bypass virtual dispatch if:
     // 1. The method is resolved at parse time, AND
-    // 2. The class is final (cannot have subclasses, so no override possible)
+    // 2. The class or resolved method variant is final (so no override is possible)
     const QoreMethod* method = call->getMethod();
     const QoreClass* qc = call->getClass();
-    if (method && qc && qc->isFinal()
+    if (method && qc && qore_ir_method_target_is_final(qc, call->getVariant())
             && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
                 call->getVariant(), call->getParseArgs(), call->getArgs())) {
-        // Safe devirtualization - the class is final, so no subclass can override
+        // Safe devirtualization: the resolved target cannot be overridden.
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();  // method calls can always throw
