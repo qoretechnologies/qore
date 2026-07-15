@@ -1638,11 +1638,14 @@ public const hash<auto> ExtendedExpressionImplementations = {
             "type": DET_Function,
             "name": DP_FUNC_DIGEST,
             "display_name": "digest",
-            "short_desc": "Computes a cryptographic digest (hex string)",
-            "desc": "Returns the digest of the input data as a hex string",
+            "short_desc": "Computes a cryptographic digest",
+            "desc": "Returns the cryptographic digest of the input data in the requested output "
+                "encoding: `hex` (the default) and `base64` return a string, `binary` returns the "
+                "raw digest as a binary value",
             "symbol": "get_digest()",
             "groups": "Encryption and Hashing",
-            "args": (DataProviderSignatureDataType, DataProviderSignatureStringType),
+            "args": (DataProviderSignatureDataType, DataProviderSignatureStringType,
+                DataProviderSignatureOptionalStringType),
             "arg_info": (
                 <DataProviderArgInfo>{
                     "display_name": "Value",
@@ -1654,13 +1657,30 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     "short_desc": "The algorithm (e.g., 'sha256', 'md5')",
                     "desc": "The cryptographic algorithm to use",
                 },
+                <DataProviderArgInfo>{
+                    "display_name": "Output Encoding",
+                    "short_desc": "Output encoding: \"hex\" (default), \"base64\", or \"binary\"",
+                    "desc": "The encoding of the returned digest; `hex` (the default) and `base64` "
+                        "return a string, `binary` returns the raw digest as a binary value",
+                },
             ),
-            "return_type": AbstractDataProviderTypeMap."string",
+            "return_type": AbstractDataProviderTypeMap."data",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             data val = dp_eval_arg(rec, exp, 0, tc);
             string d = dp_eval_arg(rec, exp, 1, tc);
-            return digest(d, val).toHex();
+            *string enc = dp_eval_arg(rec, exp, 2, tc);
+            binary b = digest(d, val);
+            switch (exists enc ? enc.lwr() : "hex") {
+                case "hex":
+                    return b.toHex();
+                case "base64":
+                    return make_base64_string(b);
+                case "binary":
+                    return b;
+            }
+            throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y; expected \"hex\", "
+                "\"base64\", or \"binary\"", enc);
         },
     },
     DP_FUNC_HMAC: {

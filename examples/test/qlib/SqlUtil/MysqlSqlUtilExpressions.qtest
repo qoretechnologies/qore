@@ -106,6 +106,7 @@ class MysqlExpressionTest inherits QUnit::Test {
         addTestCase("convertDateFormat", \testConvertDateFormat());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
 
         set_return_value(main());
@@ -569,5 +570,35 @@ class MysqlExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        string name = table.selectRow({"columns": "name", "where": {"id": 1}}).name;
+
+        # MySQL supports md5(), sha1(), and the SHA-2 family via sha2()
+        foreach string alg in (("md5", "sha1", "sha224", "sha256", "sha384", "sha512")) {
+            assertEq(digest(alg, name),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "binary")), 1).d);
+            assertEq(digest(alg, name).toHex(),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "hex")), 1).d);
+            string b64 = selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "base64")), 1).d;
+            assertEq(make_base64_string(digest(alg, name)), b64);
+            assertEq(-1, b64.find("\n"));  # to_base64() line wrapping must be stripped
+        }
+
+        # default output encoding is hex; algorithm names are case/separator-insensitive
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "SHA-256")), 1).d);
+
+        # unknown algorithm and invalid encoding are rejected
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha3-256", "hex")), 1);
+        });
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "bogus")), 1);
+        });
     }
 }

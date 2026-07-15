@@ -1019,6 +1019,36 @@ auto v = c.name;
 
             #! Firebird Expression map
             const FirebirdExpressionMap = DefaultExpressionMap + {
+                # Firebird server-side digest via CRYPT_HASH (Firebird 4+), returning VARBINARY;
+                # supports MD5, SHA1, SHA256, and SHA512 (the SHA-2 variants SHA224/SHA384 are not
+                # available).  hex/base64 output use HEX_ENCODE()/BASE64_ENCODE() (Firebird 4+).
+                DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                        string enc = sqlutil_normalize_digest_encoding(args[2]);
+                        string v = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        hash<string, string> algmap = {
+                            "md5": "MD5", "sha1": "SHA1", "sha256": "SHA256", "sha512": "SHA512",
+                        };
+                        *string falg = algmap{alg};
+                        if (!falg) {
+                            throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                                "Firebird driver; supported algorithms: md5, sha1, sha256, sha512", alg);
+                        }
+                        # the algorithm is a CRYPT_HASH keyword, not a quoted string
+                        string core = sprintf("crypt_hash(%s using %s)", v, falg);
+                        switch (enc) {
+                            case "binary":
+                                return core;
+                            case "hex":
+                                return sprintf("lower(hex_encode(%s))", core);
+                            case "base64":
+                                return sprintf("base64_encode(%s)", core);
+                        }
+                        throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                    },
+                },
                 COP_AS: {
                     "exp": <DataProviderExpressionInfo>{
                         "type": DET_Operator,
