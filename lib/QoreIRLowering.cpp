@@ -7421,7 +7421,16 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     QoreIROpcode opcode = QoreIROpcode::MulAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
-    if ((isIntConstant(op->getLeft()) && isIntConstant(right_expr))
+    bool assigned_int_local = std::getenv(
+            "QORE_DISABLE_IR_ASSIGNED_COMPOUND_SPECIALIZATION") == nullptr
+        && parse_context && left_var->getType() == VT_LOCAL && left_var->ref.id
+        && parse_context->isLocalDefinitelyAssigned(left_var->ref.id)
+        && QoreTypeInfo::isType(left_var->getTypeInfo(), NT_INT)
+        && !QoreTypeInfo::getReturnEnum(left_var->getTypeInfo());
+    if ((assigned_int_local && (isIntConstant(right_expr)
+            || (getAnalysis(right_expr, right_analysis)
+                && isNeverNothingInt(right_analysis))))
+        || (isIntConstant(op->getLeft()) && isIntConstant(right_expr))
         || (getAnalysis(op->getLeft(), left_analysis)
             && getAnalysis(right_expr, right_analysis)
             && isNeverNothingInt(left_analysis)

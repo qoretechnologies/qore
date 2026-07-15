@@ -844,6 +844,26 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // A closure body does not execute in the enclosing function's AST frame.
+    // Only its explicit capture list can reference enclosing locals.
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        if (const LVarSet* vlist = closure->getVList()) {
+            size_t capture_i = 0;
+            for (LocalVar* lv : *vlist) {
+                if (capture_i++ && !(capture_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "IR closure capture local analysis")) {
+                    unknown_node_found = true;
+                    return;
+                }
+                if (lv) {
+                    ast_locals.insert(reinterpret_cast<const void*>(lv));
+                }
+            }
+        }
+        return;
+    }
+
     // Object method reference: \obj.method() — recurse into the object expression
     if (ntype == NT_OBJMETHREF) {
         if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
@@ -1148,7 +1168,6 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::CallIndirect:
         case QoreIROpcode::CallMethod:
         case QoreIROpcode::CallStatic:
-        case QoreIROpcode::CallClosureDirect:
             return &static_cast<const QoreIRExprInstruction*>(inst)->expr;
 
         // CallDirect, CallStaticDirect, DotEvalMethodDirect, and InvokeDotEvalMethodDirect have expr fields,
@@ -1157,6 +1176,7 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         // AST-visible locals, allowing parameters to be properly classified as IR-only.
         case QoreIROpcode::CallDirect:
         case QoreIROpcode::CallStaticDirect:
+        case QoreIROpcode::CallClosureDirect:
         case QoreIROpcode::DotEvalMethodDirect:
         case QoreIROpcode::InvokeDotEvalMethodDirect:
             return nullptr;

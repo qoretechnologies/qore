@@ -514,6 +514,29 @@ for (int i = 0; i < %d; ++i) {
 printf(\"%%d\\n\", sum);
 ", iterations / 10);
 
+    # ==========================================================================
+    # Test 18b: function-local noncapturing closure with direct-only uses
+    # ==========================================================================
+    string closure_noncapturing_local_code = sprintf("%%modern
+int sub run(int iterations) {
+    code<int(int)> transform = int sub(int x) {
+        int value = x + 1;
+        if (value %% 2) {
+            value *= 3;
+        } else {
+            value += 7;
+        }
+        return value * value - x;
+    };
+    int sum = 0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += transform(i %% 1000);
+    }
+    return sum;
+}
+printf(\"%%d\\n\", run(%d));
+", iterations / 10);
+
     hash<string, string> tests = {
         "loop": loop_code,
         "fibonacci": fib_code,
@@ -538,6 +561,7 @@ printf(\"%%d\\n\", sum);
         "closure_noncapturing": closure_noncapturing_code,
         "function_noncapturing_branch": function_noncapturing_branch_code,
         "closure_noncapturing_branch": closure_noncapturing_branch_code,
+        "closure_noncapturing_local": closure_noncapturing_local_code,
     };
 
     string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";

@@ -463,6 +463,9 @@ private:
     // changing the identity of any closure value visible to Qore code.
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
         immediate_closure_creates;
+    // StoreLocal/LoadLocal instructions eliminated when an entry-assigned,
+    // noncapturing closure local is used only as a direct call target.
+    std::unordered_set<const QoreIRInstruction*> elided_closure_local_accesses;
 
     // Comparison result IDs consumed exclusively by ToBool.  These can remain
     // native i1 through LLVM lowering instead of being boxed and decoded again.

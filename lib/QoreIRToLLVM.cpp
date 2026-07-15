@@ -307,6 +307,10 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
+    if (const auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+    }
     return nullptr;
 }
 
@@ -394,15 +398,25 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
         return false;
     }
 
-    // AOT slot preparation can retain a call expression without its argument
-    // lists. In that representation the already-bound IR operands are the only
-    // source of argument type facts. Do not override explicit AST binding
-    // metadata when it is still present.
+    // AOT slot preparation can retain a call expression without parsed type
+    // metadata. In that representation the already-bound IR operands are the
+    // source of argument type facts. Call-reference nodes also retain argument
+    // lists but do not expose a parsed type vector, so validate that no named or
+    // variable binding is required before using the SSA facts.
     const QoreParseListNode* parse_args = nullptr;
     const QoreListNode* args = nullptr;
-    qore_ir_get_call_parsed_arg_types(expr, parse_args, args);
-    if (parse_args || args) {
+    const type_vec_t* arg_types = qore_ir_get_call_parsed_arg_types(expr, parse_args, args);
+    if (arg_types) {
         return false;
+    }
+    if (parse_args && (parse_args->hasNamedArgs() || parse_args->isVariableList())) {
+        return false;
+    }
+    if (args) {
+        const qore_list_private* args_priv = qore_list_private::get(args);
+        if (args_priv && args_priv->hasCallArgEvalMap()) {
+            return false;
+        }
     }
 
     for (int i = 0; i < nargs; ++i) {
@@ -418,6 +432,16 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
         const QoreIRValueFacts* facts = ir_func->getValueFacts(operands[arg_start + i]);
         if (!facts || !facts->type_info
                 || !QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+            return false;
+        }
+    }
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "IR fast-entry operand default-argument eligibility")) {
+            return false;
+        }
+        if (sig->hasDefaultArg(i)) {
             return false;
         }
     }
@@ -1319,6 +1343,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    elided_closure_local_accesses.clear();
 
     for (LocalVar* lv : func.all_body_locals) {
         if (lv) {
@@ -6777,6 +6802,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    elided_closure_local_accesses.clear();
     dot_eval_only_bases.clear();
     weak_assigned_locals.clear();
     weak_load_result_ids.clear();
@@ -6787,14 +6813,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_map<uint32_t, int> to_bool_uses;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
     std::vector<const QoreIRInstruction*> closure_call_candidates;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> closure_calls_by_value;
+    std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
+        local_load_instructions;
+    std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
+        local_store_instructions;
+    std::unordered_set<const QoreIRInstruction*> entry_instructions;
     std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
     std::unordered_map<const LocalVar*, size_t> local_load_counts;
     std::unordered_set<const LocalVar*> stored_locals;
     std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
     for (const auto& block : func.blocks) {
+        bool entry_block = block.get() == func.blocks.front().get();
         for (const auto& inst_ptr : block->instructions) {
             if (!inst_ptr) {
                 continue;
+            }
+            if (entry_block) {
+                entry_instructions.insert(inst_ptr.get());
             }
             if (inst_ptr->result.isValid()) {
                 value_definitions[inst_ptr->result.id] = inst_ptr.get();
@@ -6803,12 +6839,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 const auto* load = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (load->local) {
                     ++local_load_counts[load->local];
+                    local_load_instructions[load->local].push_back(load);
                 }
             } else if (inst_ptr->opcode == QoreIROpcode::StoreLocal
                     || inst_ptr->opcode == QoreIROpcode::StoreClosure) {
                 const auto* store = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (store->local) {
                     stored_locals.insert(store->local);
+                    local_store_instructions[store->local].push_back(store);
                 }
             }
             if (inst_ptr->opcode == QoreIROpcode::CreateClosure) {
@@ -6817,6 +6855,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             } else if (inst_ptr->opcode == QoreIROpcode::CallClosureDirect
                     && !inst_ptr->operands.empty()) {
                 closure_call_candidates.push_back(inst_ptr.get());
+                closure_calls_by_value.emplace(inst_ptr->operands[0].id,
+                    inst_ptr.get());
             }
             if ((inst_ptr->opcode == QoreIROpcode::ListGetInt
                     || inst_ptr->opcode == QoreIROpcode::ListGetFloat)
@@ -6969,6 +7009,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
     if (std::getenv("QORE_DISABLE_IMMEDIATE_CLOSURE_FUSION") == nullptr) {
+        auto get_noncapturing_closure = [](const QoreIRCreateClosureInstruction* create) {
+            const QoreClosureParseNode* closure = create->closure_node;
+            if (!closure) {
+                closure = dynamic_cast<const QoreClosureParseNode*>(
+                    create->expr.getInternalNode());
+            }
+            const LVarSet* vlist = closure ? closure->getVList() : nullptr;
+            return closure && !closure->isInMethod() && (!vlist || vlist->empty())
+                ? closure : nullptr;
+        };
         size_t closure_candidate_count = 0;
         for (const QoreIRInstruction* call : closure_call_candidates) {
             if (closure_candidate_count++ && !(closure_candidate_count % 100)
@@ -6985,14 +7035,84 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 continue;
             }
             const QoreIRCreateClosureInstruction* create = def->second;
-            const QoreClosureParseNode* closure = create->closure_node;
-            if (!closure) {
-                closure = dynamic_cast<const QoreClosureParseNode*>(
-                    create->expr.getInternalNode());
-            }
-            const LVarSet* vlist = closure ? closure->getVList() : nullptr;
-            if (closure && !closure->isInMethod() && (!vlist || vlist->empty())) {
+            if (get_noncapturing_closure(create)) {
                 immediate_closure_creates[closure_id] = create;
+            }
+        }
+
+        if (std::getenv("QORE_DISABLE_STORED_CLOSURE_FUSION") == nullptr) {
+            size_t local_candidate_count = 0;
+            for (const auto& [local, stores] : local_store_instructions) {
+                if (local_candidate_count++ && !(local_candidate_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM stored closure fusion analysis")) {
+                    error = "cancelled during LLVM stored closure fusion analysis";
+                    return false;
+                }
+                auto loads = local_load_instructions.find(local);
+                const void* local_key = reinterpret_cast<const void*>(local);
+                if (!local || local->closureUse()
+                        || !func.ir_only_locals.count(local_key)
+                        || stores.size() != 1 || loads == local_load_instructions.end()
+                        || loads->second.empty()) {
+                    continue;
+                }
+                const QoreIRLocalInstruction* store = stores.front();
+                if (store->opcode != QoreIROpcode::StoreLocal || store->is_ref
+                        || store->weak
+                        || !store->initial_assignment || store->operands.size() != 1
+                        || !entry_instructions.count(store)) {
+                    continue;
+                }
+                uint32_t closure_id = store->operands[0].id;
+                auto definition = closure_definitions.find(closure_id);
+                auto create_uses = operand_remaining_uses.find(closure_id);
+                if (definition == closure_definitions.end()
+                        || create_uses == operand_remaining_uses.end()
+                        || create_uses->second != 1
+                        || !entry_instructions.count(definition->second)
+                        || !get_noncapturing_closure(definition->second)) {
+                    continue;
+                }
+
+                bool eligible = true;
+                size_t load_i = 0;
+                for (const QoreIRLocalInstruction* load : loads->second) {
+                    if (load_i++ && !(load_i % 100)
+                            && qore_check_cancel(nullptr,
+                                "LLVM stored closure load-use analysis")) {
+                        error = "cancelled during LLVM stored closure load-use analysis";
+                        return false;
+                    }
+                    auto uses = operand_remaining_uses.find(load->result.id);
+                    auto call = closure_calls_by_value.find(load->result.id);
+                    if (load->is_closure || load->is_ref
+                            || uses == operand_remaining_uses.end()
+                            || uses->second != 1
+                            || call == closure_calls_by_value.end()
+                            || call->second->operands.empty()
+                            || call->second->operands[0].id != load->result.id) {
+                        eligible = false;
+                        break;
+                    }
+                }
+                if (!eligible) {
+                    continue;
+                }
+
+                immediate_closure_creates[closure_id] = definition->second;
+                elided_closure_local_accesses.insert(store);
+                size_t elide_i = 0;
+                for (const QoreIRLocalInstruction* load : loads->second) {
+                    if (elide_i++ && !(elide_i % 100)
+                            && qore_check_cancel(nullptr,
+                                "LLVM stored closure access elimination")) {
+                        error = "cancelled during LLVM stored closure access elimination";
+                        return false;
+                    }
+                    immediate_closure_creates[load->result.id] = definition->second;
+                    elided_closure_local_accesses.insert(load);
+                }
             }
         }
     }
@@ -8307,6 +8427,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Local variable operations ===
         case QoreIROpcode::LoadLocal: {
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (elided_closure_local_accesses.count(inst)) {
+                values[inst->result.id] = llvm::ConstantInt::get(i64_type,
+                    VAL_NOTHING);
+                nanboxed_values.insert(inst->result.id);
+                return true;
+            }
             auto key = reinterpret_cast<const void*>(linst->local);
             bool is_native_int = native_int_locals.count(key) > 0;
             bool is_native_float = native_float_locals.count(key) > 0;
@@ -8617,6 +8743,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::StoreLocal: {
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (elided_closure_local_accesses.count(inst)) {
+                return true;
+            }
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             if (inst->redundant_store) {
@@ -15663,6 +15792,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
                             "qore_rt_call_immediate_closure_aot", ft);
+                        const QoreClosureParseNode* closure = create->closure_node;
+                        if (!closure) {
+                            closure = dynamic_cast<const QoreClosureParseNode*>(
+                                create->expr.getInternalNode());
+                        }
+                        const LVarSet* captures = closure ? closure->getVList() : nullptr;
+                        const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+                        const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+                        const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
+                        if (current_ir_func && closure && !closure->isInMethod()
+                                && (!captures || captures->empty()) && variant
+                                && std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY") == nullptr
+                                && qore_ir_fast_entry_operands_need_no_binding(variant,
+                                    closure_call->expr, current_ir_func, inst->operands,
+                                    1, nargs)) {
+                            std::string dispatch_name = current_ir_func->name
+                                + "_closure_dispatch_" + std::to_string(slot);
+                            helper = module.getOrInsertFunction(dispatch_name, ft);
+                        }
                         auto helper_throwing = module.getOrInsertFunction(
                             "qore_rt_call_immediate_closure_aot_throwing", ft);
                         result = emitMaybeInvoke(helper, helper_throwing,

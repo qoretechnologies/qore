@@ -8993,6 +8993,39 @@ int nonleaf = (int sub (int x) {
 string temporary = (string sub (string value) { return value + \"!\"; })(\"a\" + \"b\");
 int captured_result = (int sub (int x) { return captured + x; })(5);
 code<int(int)> stored = int sub (int x) { return x * 2; };
+string sub stored_direct_cases() {
+    code<int(int)> transform = int sub (int x) {
+        int value = x + 1;
+        if (value % 2) {
+            value *= 3;
+        } else {
+            value += 7;
+        }
+        return value * value - x;
+    };
+    int first = transform(8);
+    int second = transform(9);
+
+    code<int(int)> reassigned = int sub (int x) { return x + 1; };
+    reassigned = int sub (int x) { return x + 2; };
+    code<int(int)> defaulted = int sub (int x = 5) { return x * 2; };
+
+    string thrown;
+    code<int(int)> throwing = int sub (int x) {
+        throw \"STORED-CLOSURE\", string(x);
+    };
+    try {
+        throwing(7);
+    } catch (hash<ExceptionInfo> ex) {
+        thrown = ex.err;
+    }
+
+    int removed = 4;
+    remove removed;
+    removed *= 3;
+    return sprintf(\"%d:%d:%d:%d:%s:%y\", first, second,
+        reassigned(4), defaulted(), thrown, removed);
+}
 string error;
 try {
     (int sub (int x) { throw \"IMMEDIATE-CLOSURE\", string(x); })(7);
@@ -9002,6 +9035,7 @@ try {
 ImmediateClosureTest object();
 printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
     captured_result, stored(6), object.run(2), error);
+printf(\"%s\\n\", stored_direct_cases());
 ";
         aot_out = compileAndRun(code);
         interp_out = runInterpreted(code);
