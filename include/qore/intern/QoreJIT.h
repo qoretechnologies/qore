@@ -135,6 +135,7 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     Shl = 26,
     Shr = 27,
     Neg = 28,
+    HashKeyInt = 29,
 };
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;
@@ -147,6 +148,7 @@ struct AOTIntExpressionNodeInfo {
     uint8_t third = UINT8_MAX;
     int8_t param = -1;
     int64_t constant = 0;
+    std::string key;
 };
 
 //! Bounded pure native-integer expression; the last node is the result.

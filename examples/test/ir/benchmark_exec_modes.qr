@@ -327,6 +327,21 @@ printf(\"%%d\\n\", total);
 ", iterations / 10000);
 
     # ==========================================================================
+    # Test 9c: direct function with guarded typed hash-key arithmetic
+    # ==========================================================================
+    string function_hash_expression_code = sprintf("%%modern
+int sub project(hash<string, int> row, int delta) {
+    return row.value * 3 + delta;
+}
+hash<string, int> row = {\"value\": 7};
+int total = 0;
+for (int i = 0; i < %d; ++i) {
+    total += project(row, i %% 5);
+}
+printf(\"%%d\\n\", total);
+", iterations / 10);
+
+    # ==========================================================================
     # Test 10: map hash body over list<hash<auto>> (hash remapping pattern)
     # ==========================================================================
     string map_hash_body_code = sprintf("%%modern
@@ -492,6 +507,7 @@ printf(\"%%d\\n\", sum);
         "map_int": map_int_code,
         "map_hash_expr": map_hash_expr_code,
         "map_hash_lookup": map_hash_lookup_code,
+        "function_hash_expression": function_hash_expression_code,
         "map_hash_body": map_hash_body_code,
         "select_hash": select_hash_code,
         "select_hash_lookup": select_hash_lookup_code,

@@ -115,6 +115,14 @@ int sub list_measure_expr(list<int> left, list<int> right, int adjustment) {
     return left.size() * 7 + right.size() * 5 + adjustment * 3;
 }
 
+int sub hash_value_expr(hash<string, int> row, int adjustment) {
+    return row.value * 3 + adjustment;
+}
+
+int sub nested_hash_value_expr(hash<string, int> row, int adjustment) {
+    return hash_value_expr(row, adjustment) * 2 + 1;
+}
+
 int sub divide_expr(int left, int right) {
     return left / right;
 }
@@ -352,6 +360,15 @@ string sub consumerCode() {
         asymmetric_param_expr(10, 0), asymmetric_param_expr(10, 1),
         unassigned_local_rejected, removed_local_rejected,
         removed_param_rejected);
+    hash<string, int> hash_present = {\"value\": 7};
+    hash<string, int> hash_missing = {};
+    hash<string, int> hash_removed = {\"value\": 9};
+    remove hash_removed.value;
+    printf(\"hash-expr:%d:%d:%d:%d\\n\",
+        hash_value_expr(hash_present, 2),
+        nested_hash_value_expr(hash_present, 2),
+        hash_value_expr(hash_missing, 2),
+        hash_value_expr(hash_removed, 3));
     return 0;
 }
 ";
@@ -394,7 +411,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"19\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"20\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -423,6 +440,9 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"19\"/)
         || !(provider_index =~ /\"kind\": 22/)
         || !(provider_index =~ /\"kind\": 23/)
         || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 29[^\n]*\"key\": \"value\"/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"modulo_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)

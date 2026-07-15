@@ -9272,10 +9272,20 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         }
         std::vector<QoreIRValue> operands{base_val};
         QoreIRValue result;
-        bool should_invoke = !exception_stack.empty() && expressionCanThrow(expr);
+        const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
+        const QoreTypeInfo* base_value_type =
+            QoreTypeInfo::getReferenceTarget(base_type);
+        if (!base_value_type) {
+            base_value_type = base_type;
+        }
+        const QoreTypeInfo* hash_val_type =
+            QoreTypeInfo::getReturnComplexHashOrNothing(base_value_type);
+        bool known_int_hash = hash_val_type
+            && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT;
+        bool should_invoke = !known_int_hash
+            && !exception_stack.empty() && expressionCanThrow(expr);
         // Plain hash<auto> (no hashdecl, not object) never throws on key access
         if (should_invoke) {
-            const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
             if (QoreTypeInfo::parseReturns(base_type, NT_HASH) == QTI_IDENT
                     && !QoreTypeInfo::getUniqueReturnHashDecl(base_type)
                     && !QoreTypeInfo::getUniqueReturnClass(base_type)) {
@@ -9295,10 +9305,7 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
             result = inst->result;
         } else {
             // Check if value type is known int for HashKeyAccessInt optimization
-            const QoreTypeInfo* base_type = getExprTypeInfo(op->getLeft());
-            const QoreTypeInfo* hash_val_type = QoreTypeInfo::getUniqueReturnComplexHash(base_type);
-            if (hash_val_type
-                    && QoreTypeInfo::parseReturns(hash_val_type, NT_INT) == QTI_IDENT) {
+            if (known_int_hash) {
                 // Native int return - no refcounting needed
                 auto* hka_inst = builder.createHashKeyAccessInt(key_str, op->loc);
                 hka_inst->operands = operands;
