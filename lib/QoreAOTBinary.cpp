@@ -3632,6 +3632,9 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
 // ---- QoreAOTBinaryReader ----
 
 bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error) {
+    section_stored_sizes.clear();
+    decompressed_sections.clear();
+    decompressed_string_pool.clear();
     data = in_data;
     total_size = in_size;
 
@@ -3731,55 +3734,159 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
         data = decompressed_body.data();
         total_size = static_cast<uint32_t>(decompressed_body.size());
         ptr = data;  // Reset ptr to start of decompressed data (start of section directory)
-    } else if (header.compression != QORE_AOT_COMPRESSION_NONE) {
+    } else if (header.compression != QORE_AOT_COMPRESSION_NONE
+            && header.compression != QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
         error = "unsupported metadata compression method " + std::to_string(header.compression);
         return false;
     }
 
-    // Read section directory
-    uint32_t section_dir_size = header.section_count * sizeof(QoreAOTSectionHeader);
-    uint32_t needed = header_size + section_dir_size;
-    if (total_size < needed) {
+    // Read section directory. Validate before multiplying or allocating so a
+    // malformed count cannot wrap the byte count or trigger an oversized vector.
+    size_t remaining = static_cast<size_t>((data + total_size) - ptr);
+    if (header.section_count > remaining / sizeof(QoreAOTSectionHeader)) {
         error = "binary too small for section directory";
         return false;
     }
+    uint32_t section_dir_size = header.section_count * sizeof(QoreAOTSectionHeader);
 
     sections.resize(header.section_count);
     for (uint32_t i = 0; i < header.section_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT section-directory read")) {
+            error = "operation cancelled during AOT section-directory read";
+            return false;
+        }
         sections[i].type = readU16(ptr);
         sections[i].reserved = readU16(ptr);
         sections[i].offset = readU32(ptr);
         sections[i].size = readU32(ptr);
     }
 
-    // Read string pool size
-    if (ptr + 4 > data + total_size) {
+    // Read stored string pool size
+    if (static_cast<size_t>((data + total_size) - ptr) < 4) {
         error = "binary too small for string pool size";
         return false;
     }
-    string_pool_size = readU32(ptr);
+    uint32_t stored_string_pool_size = readU32(ptr);
 
     // Validate string pool
-    if (ptr + string_pool_size > data + total_size) {
+    if (stored_string_pool_size > static_cast<size_t>((data + total_size) - ptr)) {
         error = "binary too small for string pool data";
         return false;
     }
-    string_pool = reinterpret_cast<const char*>(ptr);
-    ptr += string_pool_size;
+    if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD
+            && header.reserved == QORE_AOT_COMPRESSION_ZSTD) {
+        std::string decomp_error;
+        if (!decompressMetadataZstd(ptr, stored_string_pool_size,
+                decompressed_string_pool, decomp_error)) {
+            error = "failed to decompress metadata string pool: " + decomp_error;
+            return false;
+        }
+        string_pool = reinterpret_cast<const char*>(decompressed_string_pool.data());
+        string_pool_size = static_cast<uint32_t>(decompressed_string_pool.size());
+    } else {
+        if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD
+                && header.reserved != QORE_AOT_COMPRESSION_NONE) {
+            error = "unsupported string-pool compression method " + std::to_string(header.reserved);
+            return false;
+        }
+        string_pool = reinterpret_cast<const char*>(ptr);
+        string_pool_size = stored_string_pool_size;
+    }
+    ptr += stored_string_pool_size;
 
     // Remaining data is the data area
     data_area = ptr;
     data_area_size = static_cast<uint32_t>((data + total_size) - ptr);
 
-    // Validate section offsets
-    for (auto& sec : sections) {
-        if (sec.offset + sec.size > data_area_size) {
+    section_stored_sizes.resize(sections.size());
+    decompressed_sections.resize(sections.size());
+    uint64_t sectioned_uncompressed_size = header_size + section_dir_size + 4 + string_pool_size;
+
+    // Validate section offsets. Section-compressed headers carry the stored
+    // size on disk; expose the original size to section consumers.
+    for (size_t i = 0; i < sections.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT section validation")) {
+            error = "operation cancelled during AOT section validation";
+            return false;
+        }
+        auto& sec = sections[i];
+        section_stored_sizes[i] = sec.size;
+        if (sec.offset > data_area_size || sec.size > data_area_size - sec.offset) {
             error = "section offset/size exceeds data area";
             return false;
+        }
+        if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
+            if (sec.reserved == QORE_AOT_COMPRESSION_ZSTD) {
+                if (sec.size < 4) {
+                    error = "compressed section is too short for its size prefix";
+                    return false;
+                }
+                const uint8_t* section_data = data_area + sec.offset;
+                sec.size = static_cast<uint32_t>(section_data[0])
+                    | (static_cast<uint32_t>(section_data[1]) << 8)
+                    | (static_cast<uint32_t>(section_data[2]) << 16)
+                    | (static_cast<uint32_t>(section_data[3]) << 24);
+                if (!sec.size) {
+                    error = "compressed section has an invalid zero decompressed size";
+                    return false;
+                }
+                if (sec.size > 100 * 1024 * 1024) {
+                    error = "decompressed section exceeds maximum allowed size";
+                    return false;
+                }
+            } else if (sec.reserved != QORE_AOT_COMPRESSION_NONE) {
+                error = "unsupported section compression method " + std::to_string(sec.reserved);
+                return false;
+            }
+        } else if (sec.reserved != 0) {
+            error = "invalid reserved section header field";
+            return false;
+        }
+        if (header.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
+            sectioned_uncompressed_size += sec.size;
+            if (sectioned_uncompressed_size > 100 * 1024 * 1024) {
+                error = "decompressed sectioned metadata exceeds maximum allowed size";
+                return false;
+            }
         }
     }
 
     return true;
+}
+
+const uint8_t* QoreAOTBinaryReader::getSectionData(const QoreAOTSectionHeader& section) const {
+    if (!data_area) {
+        return nullptr;
+    }
+    uintptr_t base = reinterpret_cast<uintptr_t>(sections.data());
+    uintptr_t address = reinterpret_cast<uintptr_t>(&section);
+    if (address < base) {
+        return nullptr;
+    }
+    uintptr_t delta = address - base;
+    if (delta >= sections.size() * sizeof(QoreAOTSectionHeader)
+            || delta % sizeof(QoreAOTSectionHeader)) {
+        return nullptr;
+    }
+    size_t index = delta / sizeof(QoreAOTSectionHeader);
+    uint32_t stored_size = section_stored_sizes[index];
+    if (section.offset > data_area_size || stored_size > data_area_size - section.offset) {
+        return nullptr;
+    }
+    if (header.compression != QORE_AOT_COMPRESSION_SECTIONED_ZSTD
+            || section.reserved == QORE_AOT_COMPRESSION_NONE) {
+        return data_area + section.offset;
+    }
+    auto& decompressed = decompressed_sections[index];
+    if (decompressed.empty()) {
+        std::string error;
+        if (!decompressMetadataZstd(data_area + section.offset, stored_size, decompressed, error)
+                || decompressed.size() != section.size) {
+            decompressed.clear();
+            return nullptr;
+        }
+    }
+    return decompressed.data();
 }
 
 static bool qoreAOTGetPluginImportModuleName(const QoreAOTBinaryReader& reader,

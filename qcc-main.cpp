@@ -913,7 +913,8 @@ static void print_usage(const char* prog) {
     printf("      --include-source   Embed source text in AOT metadata\n");
     printf("      --strip-source     Strip source text (default)\n");
     printf("      --aot-metadata-compression=MODE\n"
-           "                         Metadata compression policy: auto, none, zlib, zstd\n"
+           "                         Metadata compression policy: auto, none, zlib, zstd,\n"
+           "                         sectioned\n"
            "                         (default: auto)\n");
     printf("      --strip-debug-info Strip DWARF debug info (faster compile, no debugger)\n");
     printf("  -g                     Emit DWARF debug info (default)\n");
@@ -1136,9 +1137,10 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x109:  // --aot-metadata-compression
                 if (strcmp(optarg, "auto") && strcmp(optarg, "none")
-                        && strcmp(optarg, "zlib") && strcmp(optarg, "zstd")) {
+                        && strcmp(optarg, "zlib") && strcmp(optarg, "zstd")
+                        && strcmp(optarg, "sectioned")) {
                     fprintf(stderr, "error: invalid --aot-metadata-compression value '%s' "
-                        "(must be auto, none, zlib, or zstd)\n", optarg);
+                        "(must be auto, none, zlib, zstd, or sectioned)\n", optarg);
                     return 1;
                 }
                 metadata_compression = optarg;
@@ -1319,7 +1321,8 @@ static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& 
     }
 
     uint8_t compression = data[34];
-    if (compression == QORE_AOT_COMPRESSION_NONE) {
+    if (compression == QORE_AOT_COMPRESSION_NONE
+            || compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
         uint32_t section_count = read_u32_le(data + 16);
         if (section_count > 100000) {
             return false;
@@ -1339,6 +1342,9 @@ static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& 
         uint64_t data_area_size = 0;
         const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
         for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT metadata-length scan")) {
+                return false;
+            }
             uint32_t offset = read_u32_le(sec + 4);
             uint32_t size = read_u32_le(sec + 8);
             uint64_t end = static_cast<uint64_t>(offset) + size;
@@ -3385,7 +3391,8 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     const char* label = reader.getLabel();
     printf("  AOT metadata #%zu (%s):\n", index, blob.source.c_str());
     const char* compression_name = hdr.compression == QORE_AOT_COMPRESSION_ZSTD ? "zstd"
-        : (hdr.compression == QORE_AOT_COMPRESSION_ZLIB ? "zlib" : nullptr);
+        : (hdr.compression == QORE_AOT_COMPRESSION_ZLIB ? "zlib"
+        : (hdr.compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD ? "sectioned-zstd" : nullptr));
     printf("    size: %zu bytes%s", blob.bytes.size(), compression_name ? " compressed" : "");
     if (compression_name) {
         printf(" (%s)", compression_name);

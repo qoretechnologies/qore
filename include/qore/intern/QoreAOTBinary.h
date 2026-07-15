@@ -131,13 +131,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v9: optional CALL_RELOCATIONS section describes pre-resolved direct call slots
 //! v10: callable generic type-parameter declarations are preserved in variant signatures
 //! v11: all serialized source line numbers use signed 32-bit values
-//! v12: Zstandard metadata compression is supported and used by default
+//! v12: whole-body and sectioned Zstandard metadata compression are supported
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 constexpr uint16_t QORE_AOT_BINARY_VERSION = 12;
 
 constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
+constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
 
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
@@ -539,9 +540,9 @@ enum class QoreAOTContainerValueType : uint8_t {
 //! Section header in the binary format
 struct QoreAOTSectionHeader {
     uint16_t type;      //!< QoreAOTSectionType
-    uint16_t reserved;  //!< reserved for future use
+    uint16_t reserved;  //!< per-section QORE_AOT_COMPRESSION_* value in sectioned metadata
     uint32_t offset;    //!< byte offset from start of data area
-    uint32_t size;      //!< size in bytes
+    uint32_t size;      //!< stored size on disk; exposed as decompressed size by the reader
 };
 
 //! Binary file header (60 bytes total, no version dispatch needed)
@@ -558,7 +559,7 @@ struct QoreAOTBinaryHeader {
     uint8_t qore_version_minor;  //!< Qore version minor
     uint16_t qore_version_patch; //!< Qore version patch
     uint8_t compression;         //!< QORE_AOT_COMPRESSION_* value
-    uint8_t reserved;            //!< reserved for future use (must be 0)
+    uint8_t reserved;            //!< string-pool codec for sectioned metadata; otherwise 0
     int64_t parse_options_hi;    //!< high 64 bits of parse options (64-127)
     uint64_t source_hash;        //!< xxHash64 of source file bytes (0 = not set)
     uint64_t feature_flags;      //!< QORE_AOT_FEAT_* bitset of required IR features
@@ -859,6 +860,10 @@ public:
 };
 
 //! Binary format reader for AOT metadata
+/** Reader instances are confined to one metadata deserialization session and
+    are not thread-safe. Sectioned metadata populates lazy decompression buffers
+    from getSectionData().
+*/
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
     uint32_t total_size = 0;
@@ -880,14 +885,21 @@ class QoreAOTBinaryReader {
     // Holds decompressed data if compression was used
     std::vector<uint8_t> decompressed_body;
 
+    // Holds the eagerly decompressed shared string pool for sectioned metadata.
+    std::vector<uint8_t> decompressed_string_pool;
+
+    // Physical section sizes and lazily decompressed section payloads for
+    // QORE_AOT_COMPRESSION_SECTIONED_ZSTD metadata.
+    std::vector<uint32_t> section_stored_sizes;
+    mutable std::vector<std::vector<uint8_t>> decompressed_sections;
+
 public:
     //! Releases the decompressed metadata pool and invalidates the reader
-    /** The AOT metadata blob is stored compressed in the binary and inflated into
-        @ref decompressed_body at open() time; every section pointer (@ref data,
-        @ref data_area, @ref string_pool) points INTO that buffer.  For a large
-        program the inflated pool is substantial (it dominates the process's heap
-        at startup), and it is only needed while the namespace tree, classes,
-        functions, and slot maps are being deserialized.
+    /** Whole-body compressed metadata is inflated into @ref decompressed_body at
+        open() time. Sectioned metadata uses @ref decompressed_string_pool and
+        lazily populated @ref decompressed_sections instead. For a large program
+        these buffers are substantial, and they are only needed while the namespace
+        tree, classes, functions, and slot maps are being deserialized.
 
         Once deserialization and function registration are complete, nothing may
         reference the pool any more: string refs that outlive it (e.g.
@@ -902,6 +914,9 @@ public:
     DLLLOCAL void releaseDecompressedBody() {
         // free the buffer's storage (clear() alone would keep the capacity)
         std::vector<uint8_t>().swap(decompressed_body);
+        std::vector<uint8_t>().swap(decompressed_string_pool);
+        std::vector<uint32_t>().swap(section_stored_sizes);
+        std::vector<std::vector<uint8_t>>().swap(decompressed_sections);
         data = nullptr;
         total_size = 0;
         data_area = nullptr;
@@ -971,12 +986,7 @@ public:
     /** @param section the section header
         @return pointer to the section data, or nullptr if invalid
     */
-    const uint8_t* getSectionData(const QoreAOTSectionHeader& section) const {
-        if (!data_area || section.offset + section.size > data_area_size) {
-            return nullptr;
-        }
-        return data_area + section.offset;
-    }
+    const uint8_t* getSectionData(const QoreAOTSectionHeader& section) const;
 
     //! Get a string from the string pool
     /** @param offset byte offset into the string pool

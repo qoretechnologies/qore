@@ -16,7 +16,7 @@ string source_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + 
     source.write("%modern\nprintf(\"compression-ok\\n\");\n");
 }
 
-foreach string mode in ("auto", "zstd", "zlib", "none") {
+foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
     string exe_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + "-" + mode;
     string compile_out = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s --aot-metadata-compression=%s -O3 -o %s %s 2>&1",
@@ -42,7 +42,9 @@ foreach string mode in ("auto", "zstd", "zlib", "none") {
         ? !(dump_out =~ /bytes compressed/)
         : (mode == "zlib"
             ? dump_out =~ /bytes compressed \(zlib\)/
-            : dump_out =~ /bytes compressed \(zstd\)/);
+            : (mode == "sectioned"
+                ? dump_out =~ /bytes compressed \(sectioned-zstd\)/
+                : dump_out =~ /bytes compressed \(zstd\)/));
     if (!expected_compression) {
         printf("%s metadata dump mismatch:\n%s", mode, dump_out);
         unlink(source_path);

@@ -1494,6 +1494,7 @@ enum class AOTMetadataCompressionPolicy {
     None,
     Zlib,
     Zstd,
+    SectionedZstd,
 };
 
 static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
@@ -1510,12 +1511,164 @@ static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
     if (!strcmp(mode, "zstd") || !strcmp(mode, "2")) {
         return AOTMetadataCompressionPolicy::Zstd;
     }
+    if (!strcmp(mode, "sectioned") || !strcmp(mode, "sectioned-zstd") || !strcmp(mode, "3")) {
+        return AOTMetadataCompressionPolicy::SectionedZstd;
+    }
 
     if (qccAOTVerbose()) {
-        printf("%signoring invalid QORE_AOT_METADATA_COMPRESSION=%s (expected auto, none, zlib, zstd)\n",
+        printf("%signoring invalid QORE_AOT_METADATA_COMPRESSION=%s "
+            "(expected auto, none, zlib, zstd, sectioned)\n",
             QCC_LOG_PREFIX, mode);
     }
     return AOTMetadataCompressionPolicy::Auto;
+}
+
+static uint16_t readAOTMetadataU16(const uint8_t* ptr) {
+    return static_cast<uint16_t>(ptr[0])
+        | (static_cast<uint16_t>(ptr[1]) << 8);
+}
+
+static uint32_t readAOTMetadataU32(const uint8_t* ptr) {
+    return static_cast<uint32_t>(ptr[0])
+        | (static_cast<uint32_t>(ptr[1]) << 8)
+        | (static_cast<uint32_t>(ptr[2]) << 16)
+        | (static_cast<uint32_t>(ptr[3]) << 24);
+}
+
+static void writeAOTMetadataU16(uint8_t* ptr, uint16_t value) {
+    ptr[0] = static_cast<uint8_t>(value);
+    ptr[1] = static_cast<uint8_t>(value >> 8);
+}
+
+static void writeAOTMetadataU32(uint8_t* ptr, uint32_t value) {
+    ptr[0] = static_cast<uint8_t>(value);
+    ptr[1] = static_cast<uint8_t>(value >> 8);
+    ptr[2] = static_cast<uint8_t>(value >> 16);
+    ptr[3] = static_cast<uint8_t>(value >> 24);
+}
+
+static bool finalizeAOTSectionedMetadataCompression(std::vector<uint8_t>& metadata,
+        std::string& error) {
+    static constexpr uint32_t AOT_HEADER_BYTES = 60;
+    static constexpr uint32_t AOT_SECTION_HEADER_BYTES = 12;
+    static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
+
+    if (metadata.size() < AOT_HEADER_BYTES) {
+        error = "AOT metadata is too short for sectioned compression";
+        return false;
+    }
+    uint32_t section_count = readAOTMetadataU32(metadata.data() + 16);
+    if (section_count > (metadata.size() - AOT_HEADER_BYTES) / AOT_SECTION_HEADER_BYTES) {
+        error = "invalid AOT section count for sectioned compression";
+        return false;
+    }
+    size_t directory_size = static_cast<size_t>(section_count) * AOT_SECTION_HEADER_BYTES;
+    size_t string_pool_size_pos = AOT_HEADER_BYTES + directory_size;
+    if (string_pool_size_pos + 4 > metadata.size()) {
+        error = "missing AOT string pool for sectioned compression";
+        return false;
+    }
+    uint32_t string_pool_size = readAOTMetadataU32(metadata.data() + string_pool_size_pos);
+    size_t data_area_pos = string_pool_size_pos + 4 + string_pool_size;
+    if (data_area_pos > metadata.size()) {
+        error = "invalid AOT string pool for sectioned compression";
+        return false;
+    }
+
+    std::vector<uint8_t> output(metadata.begin(), metadata.begin() + string_pool_size_pos);
+    output[AOT_HEADER_COMPRESSION_OFFSET] = QORE_AOT_COMPRESSION_SECTIONED_ZSTD;
+    const uint8_t* string_pool_data = metadata.data() + string_pool_size_pos + 4;
+    std::vector<uint8_t> string_pool_input(string_pool_data, string_pool_data + string_pool_size);
+    std::vector<uint8_t> compressed_string_pool;
+    std::string string_pool_error;
+    bool compressed_pool = string_pool_size
+        && compressMetadataZstd(string_pool_input, compressed_string_pool, string_pool_error)
+        && compressed_string_pool.size() < string_pool_size;
+    const std::vector<uint8_t>* stored_string_pool = compressed_pool
+        ? &compressed_string_pool : &string_pool_input;
+    if (stored_string_pool->size() > UINT32_MAX) {
+        error = "sectioned AOT string pool exceeds the binary format limit";
+        return false;
+    }
+    output[AOT_HEADER_COMPRESSION_OFFSET + 1] = compressed_pool
+        ? QORE_AOT_COMPRESSION_ZSTD : QORE_AOT_COMPRESSION_NONE;
+    size_t pool_size_pos = output.size();
+    output.resize(output.size() + 4);
+    writeAOTMetadataU32(output.data() + pool_size_pos,
+        static_cast<uint32_t>(stored_string_pool->size()));
+    output.insert(output.end(), stored_string_pool->begin(), stored_string_pool->end());
+    size_t output_data_area_pos = output.size();
+    for (uint32_t i = 0; i < section_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT section compression")) {
+            error = "operation cancelled during AOT section compression";
+            return false;
+        }
+        size_t header_pos = AOT_HEADER_BYTES + static_cast<size_t>(i) * AOT_SECTION_HEADER_BYTES;
+        uint16_t type = readAOTMetadataU16(metadata.data() + header_pos);
+        uint32_t offset = readAOTMetadataU32(metadata.data() + header_pos + 4);
+        uint32_t size = readAOTMetadataU32(metadata.data() + header_pos + 8);
+        if (offset > metadata.size() - data_area_pos
+                || size > metadata.size() - data_area_pos - offset) {
+            error = "invalid AOT section bounds for sectioned compression";
+            return false;
+        }
+        if (output.size() - output_data_area_pos > UINT32_MAX) {
+            error = "sectioned AOT metadata data area exceeds the binary format limit";
+            return false;
+        }
+        writeAOTMetadataU32(output.data() + header_pos + 4,
+            static_cast<uint32_t>(output.size() - output_data_area_pos));
+
+        const uint8_t* section_data = metadata.data() + data_area_pos + offset;
+        bool compress_section = type == static_cast<uint16_t>(QoreAOTSectionType::SLOT_MAPS)
+            || type == static_cast<uint16_t>(QoreAOTSectionType::SYMBOL_INDEX);
+        if (compress_section && size) {
+            std::vector<uint8_t> input(section_data, section_data + size);
+            std::vector<uint8_t> compressed;
+            std::string section_error;
+            if (!compressMetadataZstd(input, compressed, section_error)) {
+                error = "cannot compress AOT section " + std::to_string(type) + ": " + section_error;
+                return false;
+            }
+            if (compressed.size() < size) {
+                writeAOTMetadataU16(output.data() + header_pos + 2, QORE_AOT_COMPRESSION_ZSTD);
+                writeAOTMetadataU32(output.data() + header_pos + 8,
+                    static_cast<uint32_t>(compressed.size()));
+                output.insert(output.end(), compressed.begin(), compressed.end());
+                continue;
+            }
+        }
+
+        writeAOTMetadataU16(output.data() + header_pos + 2, QORE_AOT_COMPRESSION_NONE);
+        writeAOTMetadataU32(output.data() + header_pos + 8, size);
+        output.insert(output.end(), section_data, section_data + size);
+    }
+    metadata = std::move(output);
+    return true;
+}
+
+static uint32_t getAOTMetadataSectionSize(const std::vector<uint8_t>& metadata,
+        QoreAOTSectionType wanted_type) {
+    static constexpr uint32_t AOT_HEADER_BYTES = 60;
+    static constexpr uint32_t AOT_SECTION_HEADER_BYTES = 12;
+    if (metadata.size() < AOT_HEADER_BYTES) {
+        return 0;
+    }
+    uint32_t section_count = readAOTMetadataU32(metadata.data() + 16);
+    if (section_count > (metadata.size() - AOT_HEADER_BYTES) / AOT_SECTION_HEADER_BYTES) {
+        return 0;
+    }
+    for (uint32_t i = 0; i < section_count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT section lookup")) {
+            return 0;
+        }
+        size_t header_pos = AOT_HEADER_BYTES + static_cast<size_t>(i) * AOT_SECTION_HEADER_BYTES;
+        if (readAOTMetadataU16(metadata.data() + header_pos)
+                == static_cast<uint16_t>(wanted_type)) {
+            return readAOTMetadataU32(metadata.data() + header_pos + 8);
+        }
+    }
+    return 0;
 }
 
 static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
@@ -1538,6 +1691,30 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
         return;
     }
 
+    if (policy == AOTMetadataCompressionPolicy::SectionedZstd) {
+        size_t original_size = metadata.size();
+        std::string compress_error;
+        if (finalizeAOTSectionedMetadataCompression(metadata, compress_error)) {
+            if (report_metadata) {
+                printf(" (section-compressed to %zu bytes, %.1f%%)\n", metadata.size(),
+                    100.0 * metadata.size() / original_size);
+            }
+        } else if (report_metadata) {
+            printf("\n");
+        }
+        return;
+    }
+
+    std::vector<uint8_t> sectioned_candidate;
+    bool sectioned_candidate_ready = false;
+    if (policy == AOTMetadataCompressionPolicy::Auto
+            && getAOTMetadataSectionSize(metadata, QoreAOTSectionType::SYMBOL_INDEX) >= 512 * 1024) {
+        sectioned_candidate = metadata;
+        std::string sectioned_error;
+        sectioned_candidate_ready = finalizeAOTSectionedMetadataCompression(
+            sectioned_candidate, sectioned_error);
+    }
+
     std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES, metadata.end());
     std::vector<uint8_t> compressed_post;
     std::string compress_error;
@@ -1547,15 +1724,33 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
         ? compressMetadataZstd(post_header, compressed_post, compress_error)
         : compressMetadata(post_header, compressed_post, compress_error);
     if (compressed) {
-        int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
+        size_t compressed_total = AOT_HEADER_BYTES + compressed_post.size();
+        // Sectioned metadata avoids inflating a large linker-only symbol index
+        // during runtime load. Bound its metadata-size premium to 15% so auto
+        // does not exchange disproportionate artifact growth for startup work.
+        if (sectioned_candidate_ready
+                && sectioned_candidate.size() <= compressed_total + compressed_total * 15 / 100) {
+            if (report_metadata) {
+                printf(" (section-compressed to %zu bytes, %.1f%%)\n", sectioned_candidate.size(),
+                    100.0 * sectioned_candidate.size() / metadata.size());
+            }
+            metadata = std::move(sectioned_candidate);
+            return;
+        }
         if (report_metadata) {
-            printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                100.0 * compressed_total / (int)metadata.size());
+            printf(" (compressed to %zu bytes, %.1f%%)\n", compressed_total,
+                100.0 * compressed_total / metadata.size());
         }
         metadata[AOT_HEADER_COMPRESSION_OFFSET] = use_zstd
             ? QORE_AOT_COMPRESSION_ZSTD : QORE_AOT_COMPRESSION_ZLIB;
         metadata.resize(AOT_HEADER_BYTES);
         metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
+    } else if (sectioned_candidate_ready) {
+        if (report_metadata) {
+            printf(" (section-compressed to %zu bytes, %.1f%%)\n", sectioned_candidate.size(),
+                100.0 * sectioned_candidate.size() / metadata.size());
+        }
+        metadata = std::move(sectioned_candidate);
     } else if (report_metadata) {
         printf("\n");
     }
