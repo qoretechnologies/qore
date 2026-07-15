@@ -62,6 +62,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::CmpInt:
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::UnaryMinusInt:
+        case QoreIROpcode::ToInt:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
             break;
         case QoreIROpcode::AddFloat:
@@ -69,6 +70,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::MulFloat:
         case QoreIROpcode::DivFloat:
         case QoreIROpcode::UnaryMinusFloat:
+        case QoreIROpcode::ToFloat:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
             break;
         case QoreIROpcode::EqInt:
@@ -83,6 +85,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::GtFloat:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::GeFloat:
+        case QoreIROpcode::ToBool:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
             break;
         default:
@@ -902,6 +905,7 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
+    qore_ir_set_opcode_value_facts(func, inst->result, op);
     return inst;
 }
 

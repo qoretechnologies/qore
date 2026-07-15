@@ -113,6 +113,20 @@ string sub exercise() {
         }
         return 0;
     };
+    code<float(float, bool, string)> adjust = float sub (
+            float value, bool add, string suffix) {
+        return add ? value + suffix.size() : value - suffix.size();
+    };
+    code<bool(bool, bool)> differs = bool sub (bool left, bool right) {
+        return left != right;
+    };
+    code<string(float, bool, string)> describe = string sub (
+            float value, bool enabled, string label) {
+        return sprintf(\"%.1f:%d:%s\", value, enabled ? 1 : 0, label);
+    };
+    code<bool(float)> nan_check = bool sub (float value) {
+        return value.nanp();
+    };
 
     int first = add(4);
     int changed = bump();
@@ -136,11 +150,38 @@ string sub exercise() {
     } catch (hash<auto> ex) {
         mod_zero_caught = 1;
     }
-    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+    float adjusted = adjust(3.5, True, \"xy\");
+    int differs_result = differs(True, False) ? 1 : 0;
+    string described = describe(2.5, False, \"ok\");
+    int nan_result = nan_check(-@nan@) ? 1 : 0;
+    float unset_float = 1.0;
+    bool unset_bool = True;
+    string unset_string = \"x\";
+    remove unset_float;
+    remove unset_bool;
+    remove unset_string;
+    int typed_errors = 0;
+    try {
+        adjust(unset_float, True, \"x\");
+    } catch (hash<auto> ex) {
+        typed_errors += ex.err == \"RUNTIME-OVERLOAD-ERROR\";
+    }
+    try {
+        adjust(1.0, unset_bool, \"x\");
+    } catch (hash<auto> ex) {
+        typed_errors += ex.err == \"RUNTIME-OVERLOAD-ERROR\";
+    }
+    try {
+        adjust(1.0, True, unset_string);
+    } catch (hash<auto> ex) {
+        typed_errors += ex.err == \"RUNTIME-OVERLOAD-ERROR\";
+    }
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%.1f:%d:%s:%d:%d\",
         first, changed, second, outer_changed, initialized, added, decremented,
         writeback_counter, unset_writeback, captured_multiply(7), guarded_multiply(7), defaulted(), ref_value,
         loop(5), nested_call(), object_adder(2), recursive(5), guarded(-1),
-        branched(8), branched(9), mod_zero_caught);
+        branched(8), branched(9), mod_zero_caught, adjusted, differs_result,
+        described, typed_errors, nan_result);
 }
 
 printf(\"%s\\n\", exercise());
@@ -184,10 +225,10 @@ string disabled_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1\n";
+string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1/)) {
+        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1/)) {
     printf("native closure execution mismatch\nAST:\n%sNative:\n%sFallback:\n%sDisabled:\n%sCompile:\n%s",
         ast_out, native_out, fallback_out, disabled_out, compile_out);
     exit(2);

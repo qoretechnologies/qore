@@ -638,6 +638,32 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
             kinds[i] = BatchCalleeParamKind::NativeInt;
         } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
+        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+            kinds[i] = BatchCalleeParamKind::NativeBool;
+        }
+    }
+    return kinds;
+}
+
+std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
+        const UserSignature* sig) {
+    unsigned num_params = sig ? sig->numParams() : 0;
+    std::vector<BatchCalleeParamKind> kinds(num_params, BatchCalleeParamKind::Boxed);
+    for (unsigned i = 0; i < num_params; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "IR typed signature parameter ABI analysis")) {
+            return std::vector<BatchCalleeParamKind>(
+                num_params, BatchCalleeParamKind::Boxed);
+        }
+        const LocalVar* lv = sig->lv[i];
+        const QoreTypeInfo* ti = lv ? lv->getTypeInfo() : nullptr;
+        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+            kinds[i] = BatchCalleeParamKind::NativeInt;
+        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+            kinds[i] = BatchCalleeParamKind::NativeFloat;
+        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+            kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
     return kinds;
@@ -683,12 +709,21 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
+    if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        return BatchCalleeReturnKind::NativeBool;
+    }
     return BatchCalleeReturnKind::Boxed;
 }
 
 static llvm::Type* qore_jit_fast_entry_param_type(BatchCalleeParamKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
-    return kind == BatchCalleeParamKind::NativeFloat ? double_ty : i64_ty;
+    if (kind == BatchCalleeParamKind::NativeFloat) {
+        return double_ty;
+    }
+    if (kind == BatchCalleeParamKind::NativeBool) {
+        return llvm::Type::getInt1Ty(i64_ty->getContext());
+    }
+    return i64_ty;
 }
 
 // Tiered compilation threshold defaults (overridable via QORE_IR_THRESHOLD / QORE_JIT_THRESHOLD env vars)
@@ -1184,9 +1219,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             fast_params.push_back(qore_jit_fast_entry_param_type(kind, i64_ty, double_ty));
         }
         fast_params.push_back(ptr_ty);  // xsink
-        llvm::Type* fast_return_ty = info_it->second.return_kind
-                == BatchCalleeReturnKind::NativeFloat
-            ? double_ty : i64_ty;
+        llvm::Type* fast_return_ty = i64_ty;
+        if (info_it->second.return_kind == BatchCalleeReturnKind::NativeFloat) {
+            fast_return_ty = double_ty;
+        } else if (info_it->second.return_kind == BatchCalleeReturnKind::NativeBool) {
+            fast_return_ty = llvm::Type::getInt1Ty(*ctx);
+        }
         auto* fast_fn_type = llvm::FunctionType::get(fast_return_ty, fast_params, false);
         std::string fast_name = callee.ir_func->name + "_fast";
         llvm::Function* fast_fn = llvm::Function::Create(fast_fn_type,

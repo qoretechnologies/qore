@@ -73,12 +73,14 @@ enum class BatchCalleeParamKind : uint8_t {
     Boxed = 0,
     NativeInt = 1,
     NativeFloat = 2,
+    NativeBool = 3,
 };
 
 enum class BatchCalleeReturnKind : uint8_t {
     Boxed = 0,
     NativeInt = 1,
     NativeFloat = 2,
+    NativeBool = 3,
 };
 
 enum class AOTScalarLeafKind : uint8_t {
@@ -352,6 +354,12 @@ struct BatchCalleeInfo {
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.
 DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         const QoreIRFunction& ir_func, const UserSignature* sig);
+
+//! Derive a stable typed call ABI from exact declared parameter types.  Unlike
+//! fast-entry kinds, these kinds do not depend on one lowered body and can be
+//! reconstructed independently by an AOT closure caller and its dispatcher.
+DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
+        const UserSignature* sig);
 
 //! Derive fast-entry parameter NOTHING rejection metadata from the signature.
 DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig);

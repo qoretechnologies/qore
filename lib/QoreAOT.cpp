@@ -534,12 +534,24 @@ static bool aotEmitDebugInfo() {
 
 static llvm::Type* qore_aot_fast_entry_param_type(BatchCalleeParamKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
-    return kind == BatchCalleeParamKind::NativeFloat ? double_ty : i64_ty;
+    if (kind == BatchCalleeParamKind::NativeFloat) {
+        return double_ty;
+    }
+    if (kind == BatchCalleeParamKind::NativeBool) {
+        return llvm::Type::getInt1Ty(i64_ty->getContext());
+    }
+    return i64_ty;
 }
 
 static llvm::Type* qore_aot_fast_entry_return_type(BatchCalleeReturnKind kind,
         llvm::Type* i64_ty, llvm::Type* double_ty) {
-    return kind == BatchCalleeReturnKind::NativeFloat ? double_ty : i64_ty;
+    if (kind == BatchCalleeReturnKind::NativeFloat) {
+        return double_ty;
+    }
+    if (kind == BatchCalleeReturnKind::NativeBool) {
+        return llvm::Type::getInt1Ty(i64_ty->getContext());
+    }
+    return i64_ty;
 }
 
 //! Check if an AOT function can have an Approach B fast entry.
@@ -3547,20 +3559,43 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::ConstEnum:
                 case QoreIROpcode::ConstChar:
                 case QoreIROpcode::AddInt:
+                case QoreIROpcode::AddFloat:
                 case QoreIROpcode::SubInt:
+                case QoreIROpcode::SubFloat:
                 case QoreIROpcode::MulInt:
+                case QoreIROpcode::MulFloat:
                 case QoreIROpcode::MulAssignInt:
                 case QoreIROpcode::DivInt:
+                case QoreIROpcode::DivFloat:
                 case QoreIROpcode::ModInt:
+                case QoreIROpcode::AndInt:
+                case QoreIROpcode::OrInt:
+                case QoreIROpcode::XorInt:
+                case QoreIROpcode::ShlInt:
+                case QoreIROpcode::ShrInt:
                 case QoreIROpcode::EqInt:
+                case QoreIROpcode::EqFloat:
                 case QoreIROpcode::NeInt:
+                case QoreIROpcode::NeFloat:
                 case QoreIROpcode::LtInt:
+                case QoreIROpcode::LtFloat:
                 case QoreIROpcode::LeInt:
+                case QoreIROpcode::LeFloat:
                 case QoreIROpcode::GtInt:
+                case QoreIROpcode::GtFloat:
                 case QoreIROpcode::GeInt:
+                case QoreIROpcode::GeFloat:
+                case QoreIROpcode::CmpInt:
+                case QoreIROpcode::CmpFloat:
                 case QoreIROpcode::ToInt:
+                case QoreIROpcode::ToFloat:
                 case QoreIROpcode::ToBool:
+                case QoreIROpcode::Not:
+                case QoreIROpcode::IsNullOrNothing:
+                case QoreIROpcode::UnaryMinusInt:
+                case QoreIROpcode::UnaryMinusFloat:
                 case QoreIROpcode::GuardInt:
+                case QoreIROpcode::GuardFloat:
                 case QoreIROpcode::RefSelf:
                 case QoreIROpcode::Phi:
                 case QoreIROpcode::Br:
@@ -3603,6 +3638,19 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                                 local_inst->local)
                             || native_unsafe_locals.count(
                                 reinterpret_cast<const void*>(local_inst->local))) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::DotEvalMethodDirect: {
+                    const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                    bool context_free_string_size = call->pseudo
+                        && call->pseudo_base_known_assigned_string
+                        && call->operands.size() == 1
+                        && (call->intrinsic == QoreIRIntrinsic::Size
+                            || call->intrinsic == QoreIRIntrinsic::StringStrlen
+                            || call->intrinsic == QoreIRIntrinsic::StringLength);
+                    if (!context_free_string_size) {
                         return false;
                     }
                     break;
@@ -7343,7 +7391,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             cancelled = true;
             return false;
         }
-        if (kind > static_cast<uint8_t>(BatchCalleeParamKind::NativeFloat)) {
+        if (kind > static_cast<uint8_t>(BatchCalleeParamKind::NativeBool)) {
             return false;
         }
         info.param_kinds.push_back(static_cast<BatchCalleeParamKind>(kind));
@@ -7357,7 +7405,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
     info.never_returns_nothing =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
-    if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeFloat)) {
+    if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeBool)) {
         return false;
     }
     info.return_kind = static_cast<BatchCalleeReturnKind>(rec.fast_return_kind);
@@ -7977,9 +8025,9 @@ static std::string qoreAOTClosureDispatchName(const std::string& owner_symbol,
     return owner_symbol + "_closure_dispatch_" + std::to_string(expr_index);
 }
 
-static std::string qoreAOTClosureNativeIntDispatchName(
+static std::string qoreAOTClosureNativeDispatchName(
         const std::string& owner_symbol, size_t expr_index) {
-    return owner_symbol + "_closure_native_int_dispatch_"
+    return owner_symbol + "_closure_native_dispatch_"
         + std::to_string(expr_index);
 }
 
@@ -8056,14 +8104,15 @@ static bool defineAOTClosureDispatch(llvm::LLVMContext& ctx, llvm::Module& modul
     return true;
 }
 
-//! Define a native-int closure call ABI with a fully cleaned generic fallback.
-/** The typed ABI lets an eligible caller pass SSA integers directly and receive
-    a native result.  If no context-independent fast body was emitted, this
-    wrapper reconstructs the ordinary boxed call without transferring ownership
-    to the caller. */
-static bool defineAOTClosureNativeIntDispatch(llvm::LLVMContext& ctx,
+//! Define a typed closure call ABI with a fully cleaned generic fallback.
+/** The ABI passes proven assigned scalar arguments natively and preserves boxed
+    arguments. If no context-independent fast body was emitted, this wrapper
+    reconstructs the ordinary boxed call without transferring caller ownership. */
+static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         llvm::Module& module, llvm::Function* dispatch,
-        llvm::Function* fast_fn, size_t expr_index) {
+        llvm::Function* fast_fn, size_t expr_index,
+        const std::vector<BatchCalleeParamKind>& param_kinds,
+        BatchCalleeReturnKind return_kind) {
     if (!dispatch || !dispatch->empty()) {
         return true;
     }
@@ -8074,7 +8123,13 @@ static bool defineAOTClosureNativeIntDispatch(llvm::LLVMContext& ctx,
     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
     auto* i32_ty = llvm::Type::getInt32Ty(ctx);
     auto* ptr_ty = llvm::PointerType::get(ctx, 0);
+    constexpr uint64_t double_encode_offset = 0x0001000000000000ULL;
+    constexpr uint64_t val_false = 0xFFFB000000000002ULL;
+    constexpr uint64_t val_true = 0xFFFB000000000003ULL;
     unsigned num_params = static_cast<unsigned>(dispatch->arg_size() - 2);
+    if (param_kinds.size() != num_params) {
+        return false;
+    }
     llvm::Value* aot_ctx = dispatch->getArg(num_params);
     llvm::Value* xsink = dispatch->getArg(num_params + 1);
     dispatch->setLinkage(llvm::GlobalValue::InternalLinkage);
@@ -8101,8 +8156,8 @@ static bool defineAOTClosureNativeIntDispatch(llvm::LLVMContext& ctx,
 
     llvm::Value* args_array = llvm::ConstantPointerNull::get(
         llvm::cast<llvm::PointerType>(ptr_ty));
-    std::vector<llvm::Value*> boxed_args;
-    boxed_args.reserve(num_params);
+    std::vector<llvm::Value*> owned_boxed_args;
+    owned_boxed_args.reserve(num_params);
     if (num_params) {
         args_array = builder.CreateAlloca(i64_ty,
             llvm::ConstantInt::get(i32_ty, num_params), "closure_args");
@@ -8111,12 +8166,29 @@ static bool defineAOTClosureNativeIntDispatch(llvm::LLVMContext& ctx,
         for (unsigned i = 0; i < num_params; ++i) {
             if (i && !(i % 100)
                     && qore_check_cancel(nullptr,
-                        "AOT native closure fallback argument boxing")) {
+                        "AOT typed closure fallback argument boxing")) {
                 return false;
             }
-            llvm::Value* boxed = builder.CreateCall(box_int,
-                {dispatch->getArg(i)});
-            boxed_args.push_back(boxed);
+            llvm::Value* arg = dispatch->getArg(i);
+            llvm::Value* boxed = arg;
+            if (param_kinds[i] == BatchCalleeParamKind::NativeInt) {
+                boxed = builder.CreateCall(box_int, {arg});
+                owned_boxed_args.push_back(boxed);
+            } else if (param_kinds[i] == BatchCalleeParamKind::NativeFloat) {
+                llvm::Value* raw_bits = builder.CreateBitCast(arg, i64_ty);
+                llvm::Value* colliding_nan = builder.CreateICmpUGE(raw_bits,
+                    llvm::ConstantInt::get(i64_ty, 0xFFF8000000000000ULL));
+                llvm::Value* positive_nan = builder.CreateAnd(raw_bits,
+                    llvm::ConstantInt::get(i64_ty, 0x7FFFFFFFFFFFFFFFULL));
+                llvm::Value* safe_bits = builder.CreateSelect(
+                    colliding_nan, positive_nan, raw_bits);
+                boxed = builder.CreateAdd(safe_bits,
+                    llvm::ConstantInt::get(i64_ty, double_encode_offset));
+            } else if (param_kinds[i] == BatchCalleeParamKind::NativeBool) {
+                boxed = builder.CreateSelect(arg,
+                    llvm::ConstantInt::get(i64_ty, val_true),
+                    llvm::ConstantInt::get(i64_ty, val_false));
+            }
             llvm::Value* slot = builder.CreateInBoundsGEP(i64_ty, args_array,
                 llvm::ConstantInt::get(i32_ty, i));
             builder.CreateStore(boxed, slot);
@@ -8133,19 +8205,34 @@ static bool defineAOTClosureNativeIntDispatch(llvm::LLVMContext& ctx,
     auto decref = module.getOrInsertFunction("qore_rt_decref",
         llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
             {i64_ty, ptr_ty}, false));
-    for (unsigned i = 0; i < boxed_args.size(); ++i) {
+    for (unsigned i = 0; i < owned_boxed_args.size(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
-                    "AOT native closure fallback argument cleanup")) {
+                    "AOT typed closure fallback argument cleanup")) {
             return false;
         }
-        builder.CreateCall(decref, {boxed_args[i], xsink});
+        builder.CreateCall(decref, {owned_boxed_args[i], xsink});
     }
-    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-        llvm::FunctionType::get(i64_ty, {i64_ty}, false));
-    llvm::Value* native_result = builder.CreateCall(to_int, {boxed_result});
-    builder.CreateCall(decref, {boxed_result, xsink});
-    builder.CreateRet(native_result);
+    llvm::Value* result = boxed_result;
+    if (return_kind == BatchCalleeReturnKind::NativeInt) {
+        auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+            llvm::FunctionType::get(i64_ty, {i64_ty}, false));
+        result = builder.CreateCall(to_int, {boxed_result});
+    } else if (return_kind == BatchCalleeReturnKind::NativeFloat) {
+        auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+            llvm::FunctionType::get(llvm::Type::getDoubleTy(ctx), {i64_ty}, false));
+        result = builder.CreateCall(to_float, {boxed_result});
+    } else if (return_kind == BatchCalleeReturnKind::NativeBool) {
+        auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+            llvm::FunctionType::get(i64_ty, {i64_ty}, false));
+        llvm::Value* bool_result = builder.CreateCall(to_bool, {boxed_result});
+        result = builder.CreateICmpNE(bool_result,
+            llvm::ConstantInt::get(i64_ty, 0));
+    }
+    if (return_kind != BatchCalleeReturnKind::Boxed) {
+        builder.CreateCall(decref, {boxed_result, xsink});
+    }
+    builder.CreateRet(result);
     return true;
 }
 
@@ -8184,25 +8271,34 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         std::string dispatch_name = qoreAOTClosureDispatchName(
             compiled_funcs[owner_index].llvm_symbol, expr_index);
         llvm::Function* dispatch = module.getFunction(dispatch_name);
-        std::string native_int_dispatch_name =
-            qoreAOTClosureNativeIntDispatchName(
+        std::string native_dispatch_name =
+            qoreAOTClosureNativeDispatchName(
                 compiled_funcs[owner_index].llvm_symbol, expr_index);
-        llvm::Function* native_int_dispatch =
-            module.getFunction(native_int_dispatch_name);
+        llvm::Function* native_dispatch = module.getFunction(native_dispatch_name);
 
         const UserClosureFunction* ucf = owner_expr.closure_func;
+        const AbstractQoreFunctionVariant* abstract_variant = ucf->first();
         auto* variant = static_cast<UserClosureVariant*>(
-            const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
+            const_cast<AbstractQoreFunctionVariant*>(abstract_variant));
+        const UserSignature* sig = variant ? variant->getUserSignature() : nullptr;
+        std::vector<BatchCalleeParamKind> dispatch_param_kinds =
+            qore_ir_get_signature_param_kinds(sig);
+        const QoreTypeInfo* dispatch_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
+        bool dispatch_rejects_nothing = QoreTypeInfo::hasType(dispatch_return_type)
+            && !QoreTypeInfo::parseAcceptsReturns(dispatch_return_type, NT_NOTHING);
+        BatchCalleeReturnKind dispatch_return_kind = qore_ir_get_fast_entry_return_kind(
+            abstract_variant, dispatch_rejects_nothing);
         if (!variant) {
             if (!defineAOTClosureDispatch(ctx, module, dispatch, nullptr, 0)) {
                 setAOTCompileFatal(fatal_error, "closure", dispatch_name,
                     "fallback dispatch lowering", "cancelled");
                 return false;
             }
-            if (!defineAOTClosureNativeIntDispatch(ctx, module,
-                    native_int_dispatch, nullptr, expr_index)) {
+            if (!defineAOTClosureNativeDispatch(ctx, module,
+                    native_dispatch, nullptr, expr_index,
+                    dispatch_param_kinds, dispatch_return_kind)) {
                 setAOTCompileFatal(fatal_error, "closure",
-                    native_int_dispatch_name, "native fallback dispatch lowering",
+                    native_dispatch_name, "typed fallback dispatch lowering",
                     "cancelled");
                 return false;
             }
@@ -8219,10 +8315,11 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     "fallback dispatch lowering", "cancelled");
                 return false;
             }
-            if (!defineAOTClosureNativeIntDispatch(ctx, module,
-                    native_int_dispatch, nullptr, expr_index)) {
+            if (!defineAOTClosureNativeDispatch(ctx, module,
+                    native_dispatch, nullptr, expr_index,
+                    dispatch_param_kinds, dispatch_return_kind)) {
                 setAOTCompileFatal(fatal_error, "closure",
-                    native_int_dispatch_name, "native fallback dispatch lowering",
+                    native_dispatch_name, "typed fallback dispatch lowering",
                     "cancelled");
                 return false;
             }
@@ -8242,17 +8339,17 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     "fallback dispatch lowering", "cancelled");
                 return false;
             }
-            if (!defineAOTClosureNativeIntDispatch(ctx, module,
-                    native_int_dispatch, nullptr, expr_index)) {
+            if (!defineAOTClosureNativeDispatch(ctx, module,
+                    native_dispatch, nullptr, expr_index,
+                    dispatch_param_kinds, dispatch_return_kind)) {
                 setAOTCompileFatal(fatal_error, "closure",
-                    native_int_dispatch_name, "native fallback dispatch lowering",
+                    native_dispatch_name, "typed fallback dispatch lowering",
                     "cancelled");
                 return false;
             }
             continue;
         }
 
-        const UserSignature* sig = variant->getUserSignature();
         qoreAOTPruneClosureIRBodyLocals(ir_func, sig,
             const_cast<UserClosureFunction*>(ucf)->getVList());
         if (sig) {
@@ -8294,14 +8391,14 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         const LVarSet* closure_captures =
             const_cast<UserClosureFunction*>(ucf)->getVList();
         bool closure_fast_eligible = sig && isAOTFastEntryEligible(ir_func, variant);
-        if ((dispatch || native_int_dispatch) && getenv("QORE_AOT_DEBUG")) {
+        if ((dispatch || native_dispatch) && getenv("QORE_AOT_DEBUG")) {
             fprintf(stderr,
                 "AOT: direct closure candidate '%s': sig=%d captures=%zu eligible=%d\n",
                 native_key.c_str(), sig != nullptr,
                 closure_captures ? closure_captures->size() : 0,
                 closure_fast_eligible);
         }
-        if ((dispatch || native_int_dispatch) && !metadata_only
+        if ((dispatch || native_dispatch) && !metadata_only
                 && std::getenv("QORE_DISABLE_AOT_DIRECT_CLOSURE_FAST_ENTRY") == nullptr
                 && sig && (!closure_captures || closure_captures->empty())
                 && closure_fast_eligible) {
@@ -8316,31 +8413,39 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 variant, rejects_nothing_return);
             std::vector<BatchCalleeParamKind> param_kinds =
                 qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
-            bool native_int_signature = return_kind == BatchCalleeReturnKind::NativeInt;
-            for (size_t p = 0; native_int_signature && p < param_kinds.size(); ++p) {
-                if (p && !(p % 100)
-                        && qore_check_cancel(nullptr,
-                            "AOT direct closure fast-entry signature analysis")) {
-                    native_int_signature = false;
-                    break;
-                }
-                native_int_signature = param_kinds[p] == BatchCalleeParamKind::NativeInt;
-            }
+            bool typed_signature_matches = return_kind == dispatch_return_kind
+                && param_kinds == dispatch_param_kinds;
             bool context_independent = qore_aot_fast_entry_is_context_independent(
                 variant, *ir_func, batch_callees);
             if (getenv("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
-                    "AOT: direct closure proof '%s': native-int=%d context-independent=%d\n",
-                    native_key.c_str(), native_int_signature, context_independent);
+                    "AOT: direct closure proof '%s': typed-abi=%d context-independent=%d\n",
+                    native_key.c_str(), typed_signature_matches, context_independent);
             }
-            if (native_int_signature && context_independent) {
+            if (typed_signature_matches && context_independent) {
                 std::string fast_name = llvm_symbol + "_direct_fast";
                 auto* i64_ty = llvm::Type::getInt64Ty(ctx);
+                auto* double_ty = llvm::Type::getDoubleTy(ctx);
                 auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-                std::vector<llvm::Type*> fast_params(sig->numParams(), i64_ty);
+                std::vector<llvm::Type*> fast_params;
+                fast_params.reserve(sig->numParams() + 2);
+                for (unsigned p = 0; p < sig->numParams(); ++p) {
+                    if (p && !(p % 100)
+                            && qore_check_cancel(nullptr,
+                                "AOT typed closure fast-entry parameter declaration")) {
+                        delete ir_func;
+                        setAOTCompileFatal(fatal_error, "closure", native_key,
+                            "typed fast-entry parameter declaration", "cancelled");
+                        return false;
+                    }
+                    fast_params.push_back(qore_aot_fast_entry_param_type(
+                        param_kinds[p], i64_ty, double_ty));
+                }
                 fast_params.push_back(ptr_ty);
                 fast_params.push_back(ptr_ty);
-                auto* fast_type = llvm::FunctionType::get(i64_ty, fast_params, false);
+                auto* fast_type = llvm::FunctionType::get(
+                    qore_aot_fast_entry_return_type(return_kind, i64_ty, double_ty),
+                    fast_params, false);
                 direct_fast_fn = module.getFunction(fast_name);
                 if (!direct_fast_fn) {
                     direct_fast_fn = llvm::Function::Create(fast_type,
@@ -8361,7 +8466,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     const void* key = reinterpret_cast<const void*>(sig->lv[p]);
                     param_map[key] = direct_fast_fn->getArg(p);
-                    param_kind_map[key] = BatchCalleeParamKind::NativeInt;
+                    param_kind_map[key] = param_kinds[p];
                     direct_fast_fn->getArg(p)->setName(
                         std::string("arg") + std::to_string(p));
                 }
@@ -8379,7 +8484,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     fast_lowerer.setFastEntryMode(fast_name, &param_map,
                         &param_kind_map, &borrowed_params,
-                        BatchCalleeReturnKind::NativeInt, true);
+                        return_kind, rejects_nothing_return);
                     fast_lowered = fast_lowerer.lowerFunction(*ir_func, module,
                         fast_error);
                 }
@@ -8395,18 +8500,34 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
             }
         }
 
-        if (!defineAOTClosureDispatch(ctx, module, dispatch, direct_fast_fn,
+        bool legacy_native_int = direct_fast_fn
+            && dispatch_return_kind == BatchCalleeReturnKind::NativeInt;
+        for (size_t p = 0; legacy_native_int && p < dispatch_param_kinds.size(); ++p) {
+            if (p && !(p % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT legacy closure dispatch ABI analysis")) {
+                delete ir_func;
+                setAOTCompileFatal(fatal_error, "closure", native_key,
+                    "legacy dispatch ABI analysis", "cancelled");
+                return false;
+            }
+            legacy_native_int = dispatch_param_kinds[p]
+                == BatchCalleeParamKind::NativeInt;
+        }
+        if (!defineAOTClosureDispatch(ctx, module, dispatch,
+                legacy_native_int ? direct_fast_fn : nullptr,
                 sig ? sig->numParams() : 0)) {
             delete ir_func;
             setAOTCompileFatal(fatal_error, "closure", dispatch_name,
                 "direct dispatch lowering", "cancelled");
             return false;
         }
-        if (!defineAOTClosureNativeIntDispatch(ctx, module,
-                native_int_dispatch, direct_fast_fn, expr_index)) {
+        if (!defineAOTClosureNativeDispatch(ctx, module,
+                native_dispatch, direct_fast_fn, expr_index,
+                dispatch_param_kinds, dispatch_return_kind)) {
             delete ir_func;
-            setAOTCompileFatal(fatal_error, "closure", native_int_dispatch_name,
-                "native direct dispatch lowering", "cancelled");
+            setAOTCompileFatal(fatal_error, "closure", native_dispatch_name,
+                "typed direct dispatch lowering", "cancelled");
             return false;
         }
 

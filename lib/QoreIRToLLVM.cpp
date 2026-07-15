@@ -448,38 +448,54 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
     return true;
 }
 
-static bool qore_ir_native_int_closure_call_eligible(
+static bool qore_ir_native_closure_call_eligible(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
-        int arg_start, int nargs) {
+        int arg_start, int nargs,
+        const std::vector<BatchCalleeParamKind>& param_kinds) {
     if (!qore_ir_fast_entry_operands_need_no_binding(variant, expr, ir_func,
             operands, arg_start, nargs)) {
         return false;
     }
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    const QoreTypeInfo* return_type = sig ? sig->getReturnTypeInfo() : nullptr;
-    if (!sig || !QoreTypeInfo::hasType(return_type)
-            || QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
-            || !QoreTypeInfo::isType(return_type, NT_INT)
-            || QoreTypeInfo::getReturnEnum(return_type)
-            || nargs != static_cast<int>(sig->numParams())) {
+    if (!sig || nargs != static_cast<int>(sig->numParams())
+            || param_kinds.size() != sig->numParams()) {
         return false;
     }
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
-                    "IR native closure call ABI eligibility")) {
+                    "IR typed closure call ABI eligibility")) {
             return false;
         }
-        const QoreTypeInfo* param_type = sig->lv[i]->getTypeInfo();
+        BatchCalleeParamKind kind = param_kinds[static_cast<size_t>(i)];
         const QoreIRValueFacts* facts = ir_func->getValueFacts(
             operands[arg_start + i]);
-        if (!QoreTypeInfo::isType(param_type, NT_INT)
-                || QoreTypeInfo::getReturnEnum(param_type)
-                || !facts || facts->assigned_state != QoreIRAssignedState::Assigned
-                || !facts->never_nothing
-                || facts->representation != QoreIRValueRepresentation::NativeInt) {
+        const LocalVar* param = sig->lv[static_cast<unsigned>(i)];
+        const QoreTypeInfo* param_type = param ? param->getTypeInfo() : nullptr;
+        bool rejects_nothing = QoreTypeInfo::hasType(param_type)
+            && !QoreTypeInfo::parseAcceptsReturns(param_type, NT_NOTHING);
+        if (rejects_nothing && (!facts
+                || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing)) {
+            return false;
+        }
+        if (kind == BatchCalleeParamKind::Boxed) {
+            continue;
+        }
+        if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing) {
+            return false;
+        }
+        bool representation_matches =
+            (kind == BatchCalleeParamKind::NativeInt
+                && facts->representation == QoreIRValueRepresentation::NativeInt)
+            || (kind == BatchCalleeParamKind::NativeFloat
+                && facts->representation == QoreIRValueRepresentation::NativeFloat)
+            || (kind == BatchCalleeParamKind::NativeBool
+                && facts->representation == QoreIRValueRepresentation::NativeBool);
+        if (!representation_matches) {
             return false;
         }
     }
@@ -1625,6 +1641,11 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                     continue;
                 }
                 if (is_native_float && arg_kind == BatchCalleeParamKind::NativeFloat) {
+                    alloca_builder.CreateStore(arg_val, alloca);
+                    local_allocas[key] = alloca;
+                    continue;
+                }
+                if (is_native_bool && arg_kind == BatchCalleeParamKind::NativeBool) {
                     alloca_builder.CreateStore(arg_val, alloca);
                     local_allocas[key] = alloca;
                     continue;
@@ -3824,6 +3845,9 @@ llvm::Constant* QoreIRToLLVM::getNothingReturnValue() const {
     if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
         return llvm::ConstantFP::get(double_type, 0.0);
     }
+    if (fast_entry_return_kind == BatchCalleeReturnKind::NativeBool) {
+        return llvm::ConstantInt::getFalse(ctx);
+    }
     return llvm::ConstantInt::get(i64_type,
         fast_entry_return_kind == BatchCalleeReturnKind::NativeInt ? 0 : VAL_NOTHING);
 }
@@ -3852,6 +3876,9 @@ llvm::Value* QoreIRToLLVM::getFastEntryCallArgument(const BatchCalleeInfo& info,
         if (kind == BatchCalleeParamKind::NativeFloat) {
             return llvm::ConstantFP::get(double_type, 0.0);
         }
+        if (kind == BatchCalleeParamKind::NativeBool) {
+            return llvm::ConstantInt::getFalse(ctx);
+        }
         if (kind == BatchCalleeParamKind::NativeInt) {
             return llvm::ConstantInt::get(i64_type, 0);
         }
@@ -3863,6 +3890,18 @@ llvm::Value* QoreIRToLLVM::getFastEntryCallArgument(const BatchCalleeInfo& info,
     }
     if (kind == BatchCalleeParamKind::NativeFloat) {
         return ensureFloatType(raw_args[index], raw_arg_ids[index], module);
+    }
+    if (kind == BatchCalleeParamKind::NativeBool) {
+        llvm::Value* value = raw_args[index];
+        if (value->getType() == i1_type) {
+            return value;
+        }
+        if (nanboxed_values.count(raw_arg_ids[index])) {
+            auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            value = builder->CreateCall(to_bool, {value});
+        }
+        return builder->CreateICmpNE(value, llvm::ConstantInt::get(i64_type, 0));
     }
     return boxed_args[index];
 }
@@ -5224,6 +5263,16 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         auto decref = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         builder->CreateCall(decref, {boxed_result, xsink_arg});
+    } else if (callee_info.return_kind == BatchCalleeReturnKind::NativeBool) {
+        auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        llvm::Value* boxed_result = fallback_result;
+        llvm::Value* bool_result = builder->CreateCall(to_bool, {boxed_result});
+        fallback_result = builder->CreateICmpNE(bool_result,
+            llvm::ConstantInt::get(i64_type, 0));
+        auto decref = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref, {boxed_result, xsink_arg});
     }
     builder->CreateBr(merge_bb);
     fallback_bb = builder->GetInsertBlock();
@@ -6561,6 +6610,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 native_int_locals.erase(entry.first);
                 native_bool_locals.erase(entry.first);
                 native_float_locals.insert(entry.first);
+            } else if (kind == BatchCalleeParamKind::NativeBool) {
+                native_int_locals.erase(entry.first);
+                native_float_locals.erase(entry.first);
+                native_bool_locals.insert(entry.first);
             } else {
                 native_int_locals.erase(entry.first);
                 native_float_locals.erase(entry.first);
@@ -10394,6 +10447,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return_value = ensureIntTypeInline(val, ret->value.id);
                 } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
                     return_value = ensureFloatType(val, ret->value.id, module);
+                } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeBool) {
+                    if (val->getType() == i1_type) {
+                        return_value = val;
+                    } else {
+                        llvm::Value* bool_value = val;
+                        if (nanboxed_values.count(ret->value.id)) {
+                            auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                            bool_value = builder->CreateCall(to_bool, {val});
+                        }
+                        return_value = builder->CreateICmpNE(bool_value,
+                            llvm::ConstantInt::get(i64_type, 0));
+                    }
                 } else if (nanboxed_values.count(ret->value.id)) {
                     return_value = val;
                 } else if (val->getType() == i64_type) {
@@ -15806,12 +15872,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
                 if (callee != batch_callees->end()
                         && callee->second.approach_b_eligible
-                        && callee->second.return_kind == BatchCalleeReturnKind::NativeInt
-                        && qore_ir_native_int_closure_call_eligible(immediate_variant,
+                        && qore_ir_native_closure_call_eligible(immediate_variant,
                             closure_call->expr, current_ir_func, inst->operands,
-                            1, native_nargs)) {
+                            1, native_nargs, callee->second.param_kinds)) {
                     llvm::Function* fast_fn = module.getFunction(callee->second.fast_name);
                     if (fast_fn) {
+                        std::vector<llvm::Value*> raw_args;
+                        std::vector<uint32_t> raw_arg_ids;
+                        std::vector<llvm::Value*> boxed_args;
+                        raw_args.reserve(static_cast<size_t>(native_nargs));
+                        raw_arg_ids.reserve(static_cast<size_t>(native_nargs));
+                        boxed_args.reserve(static_cast<size_t>(native_nargs));
                         std::vector<llvm::Value*> call_args;
                         call_args.reserve(static_cast<size_t>(native_nargs) + 1);
                         for (int i = 0; i < native_nargs; ++i) {
@@ -15825,14 +15896,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             if (!arg) {
                                 return false;
                             }
-                            call_args.push_back(ensureIntTypeInline(arg,
-                                inst->operands[1 + i].id));
+                            raw_args.push_back(arg);
+                            raw_arg_ids.push_back(inst->operands[1 + i].id);
+                            BatchCalleeParamKind kind = getFastEntryParamKind(
+                                callee->second, static_cast<unsigned>(i));
+                            boxed_args.push_back(kind == BatchCalleeParamKind::Boxed
+                                ? boxValue(arg, inst->operands[1 + i].id) : nullptr);
+                        }
+                        for (unsigned i = 0; i < callee->second.num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM JIT typed closure ABI argument lowering")) {
+                                error = "cancelled during LLVM JIT typed closure ABI argument lowering";
+                                return false;
+                            }
+                            call_args.push_back(getFastEntryCallArgument(
+                                callee->second, i, raw_args, raw_arg_ids,
+                                boxed_args, module));
                         }
                         call_args.push_back(xsink_arg);
                         llvm::Value* result = builder->CreateCall(fast_fn, call_args,
                             "jit_native_closure_result");
                         values[inst->result.id] = result;
-                        known_not_nothing_values.insert(inst->result.id);
+                        if (callee->second.return_kind == BatchCalleeReturnKind::Boxed) {
+                            nanboxed_values.insert(inst->result.id);
+                            trackResultForCleanup(result, inst->result.id, llvm_func);
+                        }
+                        if (callee->second.never_returns_nothing) {
+                            known_not_nothing_values.insert(inst->result.id);
+                        }
                         emitExceptionCheck(module, llvm_func, inst);
                         return true;
                     }
@@ -15846,25 +15938,68 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const AbstractQoreFunctionVariant* variant = immediate_variant;
                 const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
                 int native_nargs = static_cast<int>(inst->operands.size()) - 1;
+                const UserVariantBase* closure_uvb = variant
+                    ? variant->getUserVariantBase() : nullptr;
+                const UserSignature* closure_sig = closure_uvb
+                    ? closure_uvb->getUserSignature() : nullptr;
+                std::vector<BatchCalleeParamKind> closure_param_kinds =
+                    qore_ir_get_signature_param_kinds(closure_sig);
+                const QoreTypeInfo* closure_return_type = closure_sig
+                    ? closure_sig->getReturnTypeInfo() : nullptr;
+                bool closure_rejects_nothing = QoreTypeInfo::hasType(closure_return_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(
+                        closure_return_type, NT_NOTHING);
+                BatchCalleeReturnKind closure_return_kind =
+                    qore_ir_get_fast_entry_return_kind(
+                        variant, closure_rejects_nothing);
                 if (closure && !closure->isInMethod()
                         && (!captures || captures->empty()) && variant
-                        && qore_ir_native_int_closure_call_eligible(variant,
+                        && qore_ir_native_closure_call_eligible(variant,
                             closure_call->expr, current_ir_func, inst->operands,
-                            1, native_nargs)) {
+                            1, native_nargs, closure_param_kinds)) {
                     QoreValue expr_val = create->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
                         expr_bits);
-                    std::vector<llvm::Type*> param_types(native_nargs, i64_type);
+                    std::vector<llvm::Type*> param_types;
+                    param_types.reserve(static_cast<size_t>(native_nargs) + 2);
+                    for (int i = 0; i < native_nargs; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM AOT typed closure ABI declaration")) {
+                            error = "cancelled during LLVM AOT typed closure ABI declaration";
+                            return false;
+                        }
+                        BatchCalleeParamKind kind = closure_param_kinds[
+                            static_cast<size_t>(i)];
+                        param_types.push_back(kind == BatchCalleeParamKind::NativeFloat
+                            ? double_type
+                            : kind == BatchCalleeParamKind::NativeBool
+                                ? i1_type : i64_type);
+                    }
                     param_types.push_back(ptr_type);
                     param_types.push_back(ptr_type);
-                    auto dispatch_type = llvm::FunctionType::get(i64_type,
-                        param_types, false);
+                    llvm::Type* dispatch_return_type = closure_return_kind
+                            == BatchCalleeReturnKind::NativeFloat
+                        ? double_type
+                        : closure_return_kind == BatchCalleeReturnKind::NativeBool
+                            ? i1_type : i64_type;
+                    auto dispatch_type = llvm::FunctionType::get(
+                        dispatch_return_type, param_types, false);
                     std::string dispatch_name = current_ir_func->name
-                        + "_closure_native_int_dispatch_" + std::to_string(slot);
+                        + "_closure_native_dispatch_" + std::to_string(slot);
                     auto dispatch = module.getOrInsertFunction(dispatch_name,
                         dispatch_type);
+                    BatchCalleeInfo dispatch_info;
+                    dispatch_info.num_params = static_cast<unsigned>(native_nargs);
+                    dispatch_info.param_kinds = closure_param_kinds;
+                    std::vector<llvm::Value*> raw_args;
+                    std::vector<uint32_t> raw_arg_ids;
+                    std::vector<llvm::Value*> boxed_args;
+                    raw_args.reserve(static_cast<size_t>(native_nargs));
+                    raw_arg_ids.reserve(static_cast<size_t>(native_nargs));
+                    boxed_args.reserve(static_cast<size_t>(native_nargs));
                     std::vector<llvm::Value*> call_args;
                     call_args.reserve(static_cast<size_t>(native_nargs) + 2);
                     for (int i = 0; i < native_nargs; ++i) {
@@ -15878,8 +16013,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (!arg) {
                             return false;
                         }
-                        call_args.push_back(ensureIntTypeInline(arg,
-                            inst->operands[1 + i].id));
+                        raw_args.push_back(arg);
+                        raw_arg_ids.push_back(inst->operands[1 + i].id);
+                        boxed_args.push_back(closure_param_kinds[
+                                static_cast<size_t>(i)]
+                                == BatchCalleeParamKind::Boxed
+                            ? boxValue(arg, inst->operands[1 + i].id) : nullptr);
+                    }
+                    for (unsigned i = 0; i < dispatch_info.num_params; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM AOT typed closure call argument lowering")) {
+                            error = "cancelled during LLVM AOT typed closure call argument lowering";
+                            return false;
+                        }
+                        call_args.push_back(getFastEntryCallArgument(dispatch_info,
+                            i, raw_args, raw_arg_ids, boxed_args, module));
                     }
                     call_args.push_back(aot_ctx_arg);
                     call_args.push_back(xsink_arg);
@@ -15891,6 +16040,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // this is a no-op when all caller locals are IR-only.
                     reloadAllLocalsFromRuntime(module, llvm_func, true);
                     values[inst->result.id] = result;
+                    if (closure_return_kind == BatchCalleeReturnKind::Boxed) {
+                        nanboxed_values.insert(inst->result.id);
+                        trackResultForCleanup(result, inst->result.id, llvm_func);
+                    }
+                    if (closure_rejects_nothing) {
+                        known_not_nothing_values.insert(inst->result.id);
+                    }
                     emitExceptionCheck(module, llvm_func, inst);
                     return true;
                 }

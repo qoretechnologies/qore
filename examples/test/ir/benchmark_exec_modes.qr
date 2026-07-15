@@ -537,6 +537,52 @@ int sub run(int iterations) {
 printf(\"%%d\\n\", run(%d));
 ", iterations / 10);
 
+    # ==========================================================================
+    # Tests 19-21: typed noncapturing closure call ABI
+    # ==========================================================================
+    string closure_native_float_code = sprintf("%%modern
+float sub run(int iterations, float seed) {
+    code<float(float)> adjust = float sub(float value) {
+        return value * 1.25 + 0.5;
+    };
+    float sum = 0.0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += adjust(seed);
+    }
+    return sum;
+}
+printf(\"%%.1f\\n\", run(%d, 2.5));
+", iterations / 10);
+
+    string closure_native_bool_code = sprintf("%%modern
+int sub run(int iterations) {
+    code<bool(bool)> invert = bool sub(bool value) {
+        return !value;
+    };
+    int count = 0;
+    for (int i = 0; i < iterations; ++i) {
+        count += int(invert((i %% 3) == 0));
+    }
+    return count;
+}
+printf(\"%%d\\n\", run(%d));
+", iterations / 10);
+
+    string closure_native_mixed_code = sprintf("%%modern
+int sub run(int iterations, float seed, string label) {
+    code<int(float, bool, string)> score = int sub(float value, bool add, string text) {
+        int result = int(value) + text.size();
+        return add ? result : -result;
+    };
+    int sum = 0;
+    for (int i = 0; i < iterations; ++i) {
+        sum += score(seed, (i %% 2) == 0, label);
+    }
+    return sum;
+}
+printf(\"%%d\\n\", run(%d, 2.5, \"abcd\"));
+", iterations / 10);
+
     hash<string, string> tests = {
         "loop": loop_code,
         "fibonacci": fib_code,
@@ -562,6 +608,9 @@ printf(\"%%d\\n\", run(%d));
         "function_noncapturing_branch": function_noncapturing_branch_code,
         "closure_noncapturing_branch": closure_noncapturing_branch_code,
         "closure_noncapturing_local": closure_noncapturing_local_code,
+        "closure_native_float": closure_native_float_code,
+        "closure_native_bool": closure_native_bool_code,
+        "closure_native_mixed": closure_native_mixed_code,
     };
 
     string qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
