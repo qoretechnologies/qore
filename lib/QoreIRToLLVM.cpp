@@ -448,6 +448,43 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
     return true;
 }
 
+static bool qore_ir_native_int_closure_call_eligible(
+        const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
+        int arg_start, int nargs) {
+    if (!qore_ir_fast_entry_operands_need_no_binding(variant, expr, ir_func,
+            operands, arg_start, nargs)) {
+        return false;
+    }
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    const QoreTypeInfo* return_type = sig ? sig->getReturnTypeInfo() : nullptr;
+    if (!sig || !QoreTypeInfo::hasType(return_type)
+            || QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
+            || !QoreTypeInfo::isType(return_type, NT_INT)
+            || QoreTypeInfo::getReturnEnum(return_type)) {
+        return false;
+    }
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "IR native closure call ABI eligibility")) {
+            return false;
+        }
+        const QoreTypeInfo* param_type = sig->lv[i]->getTypeInfo();
+        const QoreIRValueFacts* facts = ir_func->getValueFacts(
+            operands[arg_start + i]);
+        if (!QoreTypeInfo::isType(param_type, NT_INT)
+                || QoreTypeInfo::getReturnEnum(param_type)
+                || !facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing
+                || facts->representation != QoreIRValueRepresentation::NativeInt) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool qore_llvm_is_aot_deferred_source_function_call(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return false;
@@ -15748,6 +15785,68 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto immediate_it = immediate_closure_creates.find(
                     inst->operands[0].id);
             bool immediate_closure = immediate_it != immediate_closure_creates.end();
+            if (immediate_closure && aot_mode && current_ir_func
+                    && std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI") == nullptr) {
+                const QoreIRCreateClosureInstruction* create = immediate_it->second;
+                const QoreClosureParseNode* closure = create->closure_node;
+                if (!closure) {
+                    closure = dynamic_cast<const QoreClosureParseNode*>(
+                        create->expr.getInternalNode());
+                }
+                const LVarSet* captures = closure ? closure->getVList() : nullptr;
+                const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+                const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+                const auto* closure_call = static_cast<const QoreIRExprInstruction*>(inst);
+                int native_nargs = static_cast<int>(inst->operands.size()) - 1;
+                if (closure && !closure->isInMethod()
+                        && (!captures || captures->empty()) && variant
+                        && qore_ir_native_int_closure_call_eligible(variant,
+                            closure_call->expr, current_ir_func, inst->operands,
+                            1, native_nargs)) {
+                    QoreValue expr_val = create->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(
+                        expr_bits);
+                    std::vector<llvm::Type*> param_types(native_nargs, i64_type);
+                    param_types.push_back(ptr_type);
+                    param_types.push_back(ptr_type);
+                    auto dispatch_type = llvm::FunctionType::get(i64_type,
+                        param_types, false);
+                    std::string dispatch_name = current_ir_func->name
+                        + "_closure_native_int_dispatch_" + std::to_string(slot);
+                    auto dispatch = module.getOrInsertFunction(dispatch_name,
+                        dispatch_type);
+                    std::vector<llvm::Value*> call_args;
+                    call_args.reserve(static_cast<size_t>(native_nargs) + 2);
+                    for (int i = 0; i < native_nargs; ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM native closure call argument lowering")) {
+                            error = "cancelled during LLVM native closure call argument lowering";
+                            return false;
+                        }
+                        auto* arg = getVal(inst->operands[1 + i].id, error);
+                        if (!arg) {
+                            return false;
+                        }
+                        call_args.push_back(ensureIntTypeInline(arg,
+                            inst->operands[1 + i].id));
+                    }
+                    call_args.push_back(aot_ctx_arg);
+                    call_args.push_back(xsink_arg);
+                    llvm::Value* result = builder->CreateCall(dispatch, call_args,
+                        "native_closure_result");
+                    // The dispatch symbol may be defined as the generic fallback
+                    // when the closure body is not context-independent. Preserve
+                    // ordinary no-reference call invalidation at the call site;
+                    // this is a no-op when all caller locals are IR-only.
+                    reloadAllLocalsFromRuntime(module, llvm_func, true);
+                    values[inst->result.id] = result;
+                    emitExceptionCheck(module, llvm_func, inst);
+                    return true;
+                }
+            }
             llvm::Value* ref_boxed = nullptr;
             if (!immediate_closure) {
                 auto* ref = getVal(inst->operands[0].id, error);

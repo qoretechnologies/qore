@@ -8984,7 +8984,15 @@ class ImmediateClosureTest {
     }
 }
 int captured = 10;
+int closure_reload = 1;
+sub mutate_closure_reload() {
+    closure_reload = 41;
+}
 int pure = (int sub (int x) { return x + 1; })(4);
+int fallback_reload = (int sub (int x) {
+    mutate_closure_reload();
+    return int(string(x));
+})(5);
 int nonleaf = (int sub (int x) {
     int total = 0;
     for (int i = 0; i < x; ++i) total += i;
@@ -9006,6 +9014,11 @@ string sub stored_direct_cases() {
     int first = transform(8);
     int second = transform(9);
 
+    code<int(int)> boxed_fallback = int sub (int x) {
+        return int(string(x)) + 1;
+    };
+    int big_fallback = boxed_fallback(1152921504606846976);
+
     code<int(int)> reassigned = int sub (int x) { return x + 1; };
     reassigned = int sub (int x) { return x + 2; };
     code<int(int)> defaulted = int sub (int x = 5) { return x * 2; };
@@ -9023,7 +9036,7 @@ string sub stored_direct_cases() {
     int removed = 4;
     remove removed;
     removed *= 3;
-    return sprintf(\"%d:%d:%d:%d:%s:%y\", first, second,
+    return sprintf(\"%d:%d:%d:%d:%d:%s:%y\", first, second, big_fallback,
         reassigned(4), defaulted(), thrown, removed);
 }
 string error;
@@ -9035,6 +9048,7 @@ try {
 ImmediateClosureTest object();
 printf(\"%d:%d:%s:%d:%d:%d:%s\\n\", pure, nonleaf, temporary,
     captured_result, stored(6), object.run(2), error);
+printf(\"%d:%d\\n\", fallback_reload, closure_reload);
 printf(\"%s\\n\", stored_direct_cases());
 ";
         aot_out = compileAndRun(code);
