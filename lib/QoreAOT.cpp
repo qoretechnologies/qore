@@ -3497,6 +3497,19 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         return false;
     }
 
+    std::unordered_set<const void*> initially_assigned_locals;
+    initially_assigned_locals.reserve(sig->numParams());
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT native local assignment analysis")) {
+            return false;
+        }
+        initially_assigned_locals.insert(reinterpret_cast<const void*>(sig->lv[i]));
+    }
+    const std::unordered_set<const void*> native_unsafe_locals =
+        qore_ir_get_native_unsafe_locals(ir_func, initially_assigned_locals);
+
     std::unordered_set<const LocalVar*> context_independent_locals;
     context_independent_locals.reserve(sig->numParams() + ir_func.all_body_locals.size());
     for (unsigned i = 0; i < sig->numParams(); ++i) {
@@ -3562,7 +3575,9 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::LoadLocal: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!linst->local || linst->is_closure || linst->is_ref
-                            || !context_independent_locals.count(linst->local)) {
+                            || !context_independent_locals.count(linst->local)
+                            || native_unsafe_locals.count(
+                                reinterpret_cast<const void*>(linst->local))) {
                         return false;
                     }
                     break;
@@ -3571,7 +3586,9 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::UninstantiateLocal: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!linst->local || linst->is_closure || linst->is_ref
-                            || !context_independent_locals.count(linst->local)) {
+                            || !context_independent_locals.count(linst->local)
+                            || native_unsafe_locals.count(
+                                reinterpret_cast<const void*>(linst->local))) {
                         return false;
                     }
                     break;
@@ -3583,7 +3600,9 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                             || QoreTypeInfo::isReference(
                                 local_inst->local->getTypeInfo())
                             || !context_independent_locals.count(
-                                local_inst->local)) {
+                                local_inst->local)
+                            || native_unsafe_locals.count(
+                                reinterpret_cast<const void*>(local_inst->local))) {
                         return false;
                     }
                     break;
