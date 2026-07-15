@@ -148,6 +148,8 @@
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/QorePluginRegistry.h"
 
+#include <string_view>
+
 #include <qore/QoreBigFloatNode.h>
 #include <qore/QoreBigIntNode.h>
 #include <qore/QoreBufferNode.h>
@@ -4448,6 +4450,24 @@ static const BuiltinTypeEntry builtin_types[] = {
 };
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolveBuiltin(const char* path) {
+    static const bool use_index = getenv("QORE_DISABLE_AOT_BUILTIN_TYPE_INDEX") == nullptr;
+    if (use_index) {
+        using builtin_type_index_t = std::unordered_map<std::string_view, const QoreTypeInfo**>;
+        static const builtin_type_index_t builtin_type_index = []() {
+            builtin_type_index_t index;
+            index.reserve((sizeof(builtin_types) / sizeof(*builtin_types)) - 1);
+            for (const BuiltinTypeEntry* entry = builtin_types; entry->name; ++entry) {
+                index.emplace(entry->name, entry->type_ptr);
+            }
+            return index;
+        }();
+        auto i = builtin_type_index.find(path);
+        if (i != builtin_type_index.end()) {
+            return *i->second;
+        }
+        return nullptr;
+    }
+
     for (const BuiltinTypeEntry* entry = builtin_types; entry->name; ++entry) {
         if (strcmp(path, entry->name) == 0) {
             return *entry->type_ptr;
