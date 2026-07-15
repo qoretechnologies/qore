@@ -69,6 +69,10 @@ static bool qore_ir_use_prehashed_keys() {
     return enabled;
 }
 
+static bool qore_ir_use_typed_map_fusion(bool aot_mode, const char* aot_disable_env) {
+    return std::getenv(aot_mode ? aot_disable_env : "QORE_DISABLE_JIT_TYPED_MAP_FUSION") == nullptr;
+}
+
 static bool qore_ir_is_non_overridable_method_target(const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant) {
     if (qc && qc->isFinal()) {
@@ -884,6 +888,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_create_sized_list_by_type_path",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_create_fixed_list_typed",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
     // list_set_int: (i64, i64, i64) -> void
     module.getOrInsertFunction("qore_rt_list_set_int",
             llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
@@ -893,6 +899,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // list_set_value: (i64, i64, i64) -> void
     module.getOrInsertFunction("qore_rt_list_set_value",
             llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_list_set_value_checked",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_list_set_value_checked_throwing",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, ptr_type}, false));
     // get_object_class: (i64) -> i64
     module.getOrInsertFunction("qore_rt_get_object_class",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -15663,12 +15673,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* cap = getVal(inst->operands[0].id, error);
             if (!cap) { return false; }
             llvm::Value* cap_int = ensureIntTypeInline(cap, inst->operands[0].id);
-            bool exact_scalar_output = aot_mode
-                && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
+            bool exact_scalar_output = qore_ir_use_typed_map_fusion(aot_mode,
+                    "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION")
                 && (QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
                     || QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT);
             const char* helper_name = exact_scalar_output
-                ? "qore_rt_create_fixed_list_by_type_path"
+                ? (aot_mode ? "qore_rt_create_fixed_list_by_type_path"
+                            : "qore_rt_create_fixed_list_typed")
                 : (aot_mode ? "qore_rt_create_sized_list_by_type_path"
                             : "qore_rt_create_sized_list_typed");
             auto helper = module.getOrInsertFunction(helper_name,
@@ -15681,7 +15692,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             trackResultForCleanup(result, inst->result.id, llvm_func);
             if (exact_scalar_output) {
                 emitExceptionCheck(module, llvm_func, inst);
-                if (std::getenv("QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST") == nullptr) {
+                if (qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST")) {
                     auto data_helper = module.getOrInsertFunction(
                             "qore_rt_list_get_mutable_data_unchecked",
                             llvm::FunctionType::get(ptr_type, {i64_type}, false));
@@ -15699,8 +15711,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed});
             values[inst->result.id] = result;
-            if (aot_mode && direct_typed_list_read_sources.count(inst->operands[0].id)
-                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST") == nullptr) {
+            if (direct_typed_list_read_sources.count(inst->operands[0].id)
+                    && qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_TYPED_LIST_DATA_HOIST")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
                 typed_list_data_ptrs[inst->operands[0].id] =
@@ -15717,7 +15730,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* result;
-            if (aot_mode && std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS") == nullptr) {
+            if (qore_ir_use_typed_map_fusion(aot_mode,
+                    "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
                 if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
@@ -15750,7 +15764,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* result;
-            if (aot_mode && std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS") == nullptr) {
+            if (qore_ir_use_typed_map_fusion(aot_mode,
+                    "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_READS")) {
                 auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
                         llvm::FunctionType::get(ptr_type, {i64_type}, false));
                 if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
@@ -15848,56 +15863,118 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool assigned_native = facts
                 && facts->assigned_state == QoreIRAssignedState::Assigned
                 && facts->never_nothing;
-            if (aot_mode && assigned_native
-                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
-                    && QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
-                    && facts->representation == QoreIRValueRepresentation::NativeInt) {
-                llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
-                if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
-                    auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
-                            llvm::FunctionType::get(ptr_type, {i64_type}, false));
-                    auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
-                    llvm::Value* data = data_it != typed_list_data_ptrs.end()
-                        ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
-                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+            bool typed_specialization = qore_ir_use_typed_map_fusion(aot_mode,
+                "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION");
+            bool exact_int_element = QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT;
+            bool exact_float_element = QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT;
+            auto get_output_data = [&]() -> llvm::Value* {
+                auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
+                        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                return data_it != typed_list_data_ptrs.end()
+                    ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
+            };
+            auto emit_checked_store = [&](llvm::Value* val_boxed) {
+                auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* val_ref = builder->CreateCall(refself_fn, {val_boxed});
+                auto checked_ft = llvm::FunctionType::get(void_type,
+                    {i64_type, i64_type, i64_type, ptr_type}, false);
+                auto checked_fn = module.getOrInsertFunction("qore_rt_list_set_value_checked", checked_ft);
+                auto throwing_fn = module.getOrInsertFunction(
+                    "qore_rt_list_set_value_checked_throwing", checked_ft);
+                emitMaybeInvoke(checked_fn, throwing_fn,
+                    {list_boxed, idx_int, val_ref, xsink_arg}, module, llvm_func, inst);
+                emitExceptionCheck(module, llvm_func, inst);
+            };
+            auto emit_unchecked_store = [&](llvm::Value* val_boxed) {
+                auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* val_ref = builder->CreateCall(refself_fn, {val_boxed});
+                auto helper = module.getOrInsertFunction("qore_rt_list_set_value",
+                        llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
+                builder->CreateCall(helper, {list_boxed, idx_int, val_ref});
+            };
+            auto emit_int_store = [&](llvm::Value* val_int) {
+                if (qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
+                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
+                        get_output_data(), idx_int);
                     builder->CreateStore(boxInt(val_int), entry);
-                    return true;
+                    return;
                 }
                 auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
                 builder->CreateCall(helper, {list_boxed, idx_int, val_int});
-                return true;
-            }
-            if (aot_mode && assigned_native
-                    && std::getenv("QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION") == nullptr
-                    && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
-                    && facts->representation == QoreIRValueRepresentation::NativeFloat) {
-                llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
-                if (std::getenv("QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES") == nullptr) {
-                    auto data_helper = module.getOrInsertFunction("qore_rt_list_get_mutable_data_unchecked",
-                            llvm::FunctionType::get(ptr_type, {i64_type}, false));
-                    auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
-                    llvm::Value* data = data_it != typed_list_data_ptrs.end()
-                        ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
-                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+            };
+            auto emit_float_store = [&](llvm::Value* val_float) {
+                if (qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
+                    llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
+                        get_output_data(), idx_int);
                     builder->CreateStore(boxFloat(val_float), entry);
-                    return true;
+                    return;
                 }
                 auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
                         llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
                 builder->CreateCall(helper, {list_boxed, idx_int, val_float});
+            };
+            if (assigned_native && typed_specialization && exact_int_element
+                    && facts->representation == QoreIRValueRepresentation::NativeInt
+                    && !nanboxed_values.count(inst->operands[2].id)) {
+                llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
+                emit_int_store(val_int);
+                return true;
+            }
+            if (assigned_native && typed_specialization && exact_float_element
+                    && facts->representation == QoreIRValueRepresentation::NativeFloat
+                    && val->getType() == double_type) {
+                llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
+                emit_float_store(val_float);
+                return true;
+            }
+            bool exact_value_type = facts && facts->type_info
+                && ((exact_int_element
+                        && QoreTypeInfo::parseReturns(facts->type_info, NT_INT) == QTI_IDENT)
+                    || (exact_float_element
+                        && QoreTypeInfo::parseReturns(facts->type_info, NT_FLOAT) == QTI_IDENT));
+            if (typed_specialization && exact_value_type
+                    && nanboxed_values.count(inst->operands[2].id)
+                    && val->getType() == i64_type) {
+                llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
+                llvm::Value* is_nothing = builder->CreateICmpEQ(val_boxed,
+                    llvm::ConstantInt::get(i64_type, VAL_NOTHING), "typed_map_value_is_nothing");
+                llvm::BasicBlock* checked_block = llvm::BasicBlock::Create(ctx,
+                    "typed_map_checked_store", llvm_func);
+                llvm::BasicBlock* direct_block = llvm::BasicBlock::Create(ctx,
+                    "typed_map_direct_store", llvm_func);
+                llvm::BasicBlock* cont_block = llvm::BasicBlock::Create(ctx,
+                    "typed_map_store_cont", llvm_func);
+                auto* weights = llvm::MDBuilder(ctx).createBranchWeights(1, 999);
+                builder->CreateCondBr(is_nothing, checked_block, direct_block, weights);
+
+                builder->SetInsertPoint(checked_block);
+                emit_checked_store(val_boxed);
+                if (!builder->GetInsertBlock()->getTerminator()) {
+                    builder->CreateBr(cont_block);
+                }
+
+                builder->SetInsertPoint(direct_block);
+                if (exact_int_element) {
+                    emit_int_store(ensureIntTypeInline(val_boxed, inst->operands[2].id));
+                } else {
+                    emit_float_store(ensureFloatType(val_boxed, inst->operands[2].id, module));
+                }
+                builder->CreateBr(cont_block);
+                builder->SetInsertPoint(cont_block);
                 return true;
             }
             llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
-            // refSelf before ownership transfer: the value may also be tracked by
-            // trackResultForCleanup (invoke results) or boxValue's internal cleanup
-            // (big int boxing), so the list needs its own reference
-            auto refself_fn = module.getOrInsertFunction("qore_rt_refself",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-            llvm::Value* val_ref = builder->CreateCall(refself_fn, {val_boxed});
-            auto helper = module.getOrInsertFunction("qore_rt_list_set_value",
-                    llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
-            builder->CreateCall(helper, {list_boxed, idx_int, val_ref});
+            if (QoreTypeInfo::hasType(inst->element_type)) {
+                emit_checked_store(val_boxed);
+            } else {
+                emit_unchecked_store(val_boxed);
+            }
             return true;
         }
         case QoreIROpcode::GetObjectClass: {

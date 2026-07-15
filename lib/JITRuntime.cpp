@@ -5209,14 +5209,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list_by_type_path(int64_t cap
     return qore_rt_create_sized_list_typed(capacity, element_type, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_create_fixed_list_by_type_path(int64_t size,
-        const char* element_type_path, ExceptionSink* xsink) {
-    const QoreTypeInfo* element_type = qore_rt_resolve_element_type_path(element_type_path,
-        "CreateSizedList", xsink);
-    if (!element_type) {
-        return toBits(QoreValue());
-    }
-    ReferenceHolder<QoreListNode> list(new QoreListNode(element_type), xsink);
+extern "C" DLLEXPORT uint64_t qore_rt_create_fixed_list_typed(int64_t size,
+        const QoreTypeInfo* element_type, ExceptionSink* xsink) {
+    element_type = qore_substitute_type_params_if_needed(element_type);
+    ReferenceHolder<QoreListNode> list(new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
     if (size > 0) {
         qore_list_private* priv = qore_list_private::get(**list);
         priv->reserve(static_cast<size_t>(size));
@@ -5229,6 +5225,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_fixed_list_by_type_path(int64_t siz
         priv->length = static_cast<size_t>(size);
     }
     return toBits(QoreValue(list.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_fixed_list_by_type_path(int64_t size,
+        const char* element_type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* element_type = qore_rt_resolve_element_type_path(element_type_path,
+        "CreateSizedList", xsink);
+    if (!element_type) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_create_fixed_list_typed(size, element_type, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value) {
@@ -5270,6 +5276,37 @@ extern "C" DLLEXPORT void qore_rt_list_set_value(uint64_t list_bits, int64_t ind
         if (needs_scan(val)) {
             priv->incScanCount(1);
         }
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_list_set_value_checked(uint64_t list_bits, int64_t index,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue list_value = fromBits(list_bits);
+    ValueHolder value(fromBits(value_bits), xsink);
+    if (list_value.getType() != NT_LIST) {
+        return;
+    }
+    QoreListNode* list = list_value.get<QoreListNode>();
+    qore_list_private* priv = qore_list_private::get(*list);
+    if (priv->checkVal(value, xsink)) {
+        return;
+    }
+    QoreValue stored = value.release();
+    priv->setListTypeFromNewElementType(stored.getFullTypeInfo());
+    priv->getEntryReference(static_cast<size_t>(index)) = stored;
+    if (static_cast<size_t>(index) >= priv->length) {
+        priv->length = static_cast<size_t>(index) + 1;
+    }
+    if (needs_scan(stored)) {
+        priv->incScanCount(1);
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_list_set_value_checked_throwing(
+        uint64_t list_bits, int64_t index, uint64_t value_bits, ExceptionSink* xsink) {
+    qore_rt_list_set_value_checked(list_bits, index, value_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
     }
 }
 

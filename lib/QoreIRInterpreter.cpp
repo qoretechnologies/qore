@@ -7195,15 +7195,32 @@ next_instruction:
                         stored = val.hasNode() ? val.refSelf() : val;
                     }
                     qore_list_private* priv = qore_list_private::get(*l);
-                    // Track element type for correct list<T> type info at runtime
-                    priv->setListTypeFromNewElementType(stored.getTypeInfo());
-                    priv->getEntryReference(static_cast<size_t>(index)) = stored;
-                    if (static_cast<size_t>(index) >= priv->length) {
-                        priv->length = static_cast<size_t>(index) + 1;
+                    ValueHolder checked(stored, xsink);
+                    bool valid = !QoreTypeInfo::hasType(inst->element_type)
+                        || !priv->checkVal(checked, xsink);
+                    if (valid) {
+                        stored = checked.release();
+                        // Track element type for correct list<T> type info at runtime
+                        priv->setListTypeFromNewElementType(stored.getTypeInfo());
+                        priv->getEntryReference(static_cast<size_t>(index)) = stored;
+                        if (static_cast<size_t>(index) >= priv->length) {
+                            priv->length = static_cast<size_t>(index) + 1;
+                        }
+                        if (needs_scan(stored)) {
+                            priv->incScanCount(1);
+                        }
                     }
-                    if (needs_scan(stored)) {
-                        priv->incScanCount(1);
+                }
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
                     }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 ++ip;
                 break;

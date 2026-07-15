@@ -301,6 +301,7 @@ class AOTSmokeTest inherits QUnit::Test {
         # Map optimization opcodes
         addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
         addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
+        addTestCase("AOT typed map assigned-state guards", \testAOTTypedMapAssignedState());
         addTestCase("AOT direct-index map-select implicit arg cleanup",
             \testAOTDirectIndexMapSelectImplicitArgCleanup());
         # AOT Binary Format v1 tests
@@ -9096,6 +9097,40 @@ printf(\"%d:%s:%s:%s\\n\", selected.size(), comparison.type(), comparison, condi
         aot_out = compileAndRun(code);
         interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT native boolean comparison consumers");
+    }
+
+    testAOTTypedMapAssignedState() {
+        string code = "%modern
+list<int> input = (1, 2, 3);
+int value;
+try {
+    auto unassigned = (map value, input);
+    printf(\"unexpected: %y\\n\", unassigned);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+value = 4;
+printf(\"%y\\n\", (map value, input));
+remove value;
+try {
+    auto removed = (map value, input);
+    printf(\"unexpected: %y\\n\", removed);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float float_value;
+try {
+    auto unassigned_float = (map float_value, input);
+    printf(\"unexpected: %y\\n\", unassigned_float);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float_value = 1.5;
+printf(\"%y\\n\", (map float_value, input));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed map assigned-state guards match interpreter");
     }
 
     testAOTDirectIndexMapSelectImplicitArgCleanup() {

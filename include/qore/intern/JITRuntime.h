@@ -898,6 +898,8 @@ uint64_t qore_rt_create_sized_list_typed(int64_t capacity, const QoreTypeInfo* e
 uint64_t qore_rt_create_sized_list_by_type_path(int64_t capacity, const char* element_type_path,
         ExceptionSink* xsink);
 //! Create an exact typed list at its final size for direct scalar map output stores.
+uint64_t qore_rt_create_fixed_list_typed(int64_t size, const QoreTypeInfo* element_type,
+        ExceptionSink* xsink);
 uint64_t qore_rt_create_fixed_list_by_type_path(int64_t size, const char* element_type_path,
         ExceptionSink* xsink);
 
@@ -910,6 +912,13 @@ void qore_rt_list_set_float(uint64_t list_bits, int64_t index, double value);
 //! Set any element in list at index (for pre-sized typed map output). No bounds check.
 //! Takes ownership of the reference (no additional ref needed).
 void qore_rt_list_set_value(uint64_t list_bits, int64_t index, uint64_t value_bits);
+
+//! Checked variant preserving typed list assignment and exception semantics.
+//! Takes ownership of the value reference.
+void qore_rt_list_set_value_checked(uint64_t list_bits, int64_t index, uint64_t value_bits,
+        ExceptionSink* xsink);
+void qore_rt_list_set_value_checked_throwing(uint64_t list_bits, int64_t index,
+        uint64_t value_bits, ExceptionSink* xsink);
 
 //! Increment reference count for heap-allocated values; no-op for inline values.
 uint64_t qore_rt_refself(uint64_t bits);

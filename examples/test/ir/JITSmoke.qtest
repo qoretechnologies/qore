@@ -5461,6 +5461,44 @@ printf(\"%d\\n\", result.size());
             string result = trim(runScript(map_size, mode));
             assertEq("5", result, sprintf("map size direct-index %s", mode));
         }
+
+        # A declared scalar is still NOTHING before assignment and after remove.
+        # The typed-map fast path must guard those states before a direct store.
+        string map_assigned_state = "%modern
+list<int> input = (1, 2, 3);
+int value;
+try {
+    auto unassigned = (map value, input);
+    printf(\"unexpected: %y\\n\", unassigned);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+value = 4;
+printf(\"%y\\n\", (map value, input));
+remove value;
+try {
+    auto removed = (map value, input);
+    printf(\"unexpected: %y\\n\", removed);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float float_value;
+try {
+    auto unassigned_float = (map float_value, input);
+    printf(\"unexpected: %y\\n\", unassigned_float);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s\\n\", ex.err);
+}
+float_value = 1.5;
+printf(\"%y\\n\", (map float_value, input));
+";
+        string map_assigned_expected = "RUNTIME-TYPE-ERROR\n[4, 4, 4]\nRUNTIME-TYPE-ERROR\n"
+            + "RUNTIME-TYPE-ERROR\n[1.5, 1.5, 1.5]";
+        foreach string mode in ("ast", "ir", "tiered", "jit") {
+            string result = trim(runScript(map_assigned_state, mode));
+            assertEq(map_assigned_expected, result,
+                sprintf("typed map assigned-state guard %s", mode));
+        }
     }
 
     testCallClosureDirect() {
