@@ -6487,14 +6487,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
     }
 
     QoreStringNode* result = accumulator.get<QoreStringNode>();
+    // The accumulator is created by StringJoinStart and cannot escape the
+    // fused fold before completion.  Its additional references are compiler
+    // cleanup aliases, never user aliases or string views, so mutating through
+    // the private primitive is safe and keeps the join linear.
+    qore_string_private* result_priv = qore_string_private::get(*result);
     QoreStringValueHelper separator(separator_value);
-    result->concat(*separator, xsink);
+    result_priv->concat(*separator, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
     if (value.getType() == NT_STRING) {
         QoreStringValueHelper string(value);
-        result->concat(*string, xsink);
+        result_priv->concat(*string, xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
@@ -6616,7 +6621,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
     QoreStringNode* result;
     if (left_string != right_node && left_string->reference_count() == 1) {
         result = left_string;
+        result->concat(*right_string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
         result->ref();
+        return toBits(QoreValue(result));
     } else {
         result = new QoreStringNode(*left_string);
     }
