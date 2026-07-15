@@ -185,6 +185,18 @@ final class ObjectLeaf {
     }
 }
 
+class SpeculativeObjectLeaf {
+    int affine(int value) {
+        return value * 3 + 1;
+    }
+}
+
+class SpeculativeObjectOverride inherits SpeculativeObjectLeaf {
+    int affine(int value) {
+        return value * 5 + 100;
+    }
+}
+
 int sub leaf(int x) {
     return x + 1;
 }
@@ -296,6 +308,8 @@ string sub map_store_checks() {
 
 string sub object_leaf_checks() {
     ObjectLeaf leaf();
+    SpeculativeObjectLeaf exact();
+    SpeculativeObjectLeaf overridden = new SpeculativeObjectOverride();
     int caught;
     try {
         caught = leaf.affine(3);
@@ -303,7 +317,8 @@ string sub object_leaf_checks() {
         caught = -1;
     }
     return string(leaf.pair(1, 2)) + \":\" + string(caught)
-        + \":\" + string(int(leaf.scale(4.0) * 10.0));
+        + \":\" + string(int(leaf.scale(4.0) * 10.0))
+        + \":\" + string(exact.affine(4)) + \":\" + string(overridden.affine(4));
 }
 
 int sub default_helper(int x = 7) {
@@ -676,7 +691,7 @@ script.close();
 
 string ast = runScript(script_path);
 string aot = runAot(script_path);
-if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60\n"
+if (ast != "83:ctx-ok:25:9:10:10:21:15:90:2:5:12:7:5:9:1:5:60:13:4:9:55:9:5:5:11:5:12:3:5:5:1:6:4.5:1125899906842627:12:10:60:13:120\n"
         || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);

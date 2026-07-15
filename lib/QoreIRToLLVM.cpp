@@ -4990,7 +4990,8 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         const char* fallback_name, const char* fallback_consume_name,
         std::string& error, llvm::Value* object_base,
         const char* fallback_throwing_name,
-        const char* fallback_consume_throwing_name) {
+        const char* fallback_consume_throwing_name,
+        bool require_exact_object_class) {
     auto ctx_helper = module.getOrInsertFunction(
             "qore_rt_try_get_aot_call_target_context",
             llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
@@ -5034,6 +5035,17 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         object_valid = builder->CreateICmpNE(object_valid,
             llvm::ConstantInt::get(i32_type, 0));
         can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
+        if (require_exact_object_class) {
+            auto exact_helper = module.getOrInsertFunction(
+                "qore_rt_object_has_exact_aot_target_class",
+                llvm::FunctionType::get(i32_type,
+                    {ptr_type, i32_type, i64_type}, false));
+            llvm::Value* exact_class = builder->CreateCall(exact_helper,
+                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), object_base});
+            exact_class = builder->CreateICmpNE(exact_class,
+                llvm::ConstantInt::get(i32_type, 0));
+            can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, exact_class);
+        }
     }
     for (unsigned i = 0; i < callee_info.num_params && i < boxed_args.size(); ++i) {
         if (i && !(i % 100)
@@ -13634,10 +13646,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
             llvm::Function* aot_object_batch_fn = nullptr;
+            bool aot_object_batch_requires_exact_class = false;
+            bool object_target_non_overridable = direct_inst->variant
+                && direct_inst->qc
+                && qore_ir_is_non_overridable_method_target(
+                    direct_inst->qc, direct_inst->variant);
             if (aot_mode && batch_callees && direct_inst->variant
                     && direct_inst->method && direct_inst->qc
-                    && qore_ir_is_non_overridable_method_target(
-                        direct_inst->qc, direct_inst->variant)
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->pseudo && !direct_inst->has_ref_args
                     && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
@@ -13645,7 +13660,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 auto it = batch_callees->find(direct_inst->variant);
-                if (base_facts
+                if (object_target_non_overridable && base_facts
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == direct_inst->qc
                         && it != batch_callees->end()
@@ -13663,6 +13678,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && it->second.context_independent_fast_entry
+                        && (object_target_non_overridable
+                            || !std::getenv(
+                                "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant)
                         && qore_ir_fast_entry_operands_need_no_binding(
@@ -13671,6 +13689,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
+                        aot_object_batch_requires_exact_class =
+                            !object_target_non_overridable;
                     }
                 }
             }
@@ -13943,7 +13963,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "qore_rt_dot_eval_method_direct_aot_consume_args", error,
                         base_boxed,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
-                        "qore_rt_dot_eval_method_direct_aot_consume_args_throwing");
+                        "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
+                        aot_object_batch_requires_exact_class);
                     if (!call_result) {
                         return false;
                     }
@@ -14136,10 +14157,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
             llvm::Function* aot_object_batch_fn = nullptr;
+            bool aot_object_batch_requires_exact_class = false;
+            bool object_target_non_overridable = invoke_inst->variant
+                && invoke_inst->qc
+                && qore_ir_is_non_overridable_method_target(
+                    invoke_inst->qc, invoke_inst->variant);
             if (aot_mode && batch_callees && invoke_inst->variant
                     && invoke_inst->method && invoke_inst->qc
-                    && qore_ir_is_non_overridable_method_target(
-                        invoke_inst->qc, invoke_inst->variant)
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->pseudo && !invoke_inst->has_ref_args
                     && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)
@@ -14147,7 +14171,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 auto it = batch_callees->find(invoke_inst->variant);
-                if (base_facts
+                if (object_target_non_overridable && base_facts
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == invoke_inst->qc
                         && it != batch_callees->end()
@@ -14165,6 +14189,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && it->second.context_independent_fast_entry
+                        && (object_target_non_overridable
+                            || !std::getenv(
+                                "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(invoke_inst->variant)
                         && qore_ir_fast_entry_operands_need_no_binding(
@@ -14173,6 +14200,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     aot_object_batch_fn = module.getFunction(it->second.fast_name);
                     if (aot_object_batch_fn) {
                         aot_object_batch_callee = &it->second;
+                        aot_object_batch_requires_exact_class =
+                            !object_target_non_overridable;
                     }
                 }
             }
@@ -14445,7 +14474,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "qore_rt_dot_eval_method_direct_aot_consume_args", error,
                         base_boxed,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
-                        "qore_rt_dot_eval_method_direct_aot_consume_args_throwing");
+                        "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
+                        aot_object_batch_requires_exact_class);
                     if (!call_result) {
                         return false;
                     }

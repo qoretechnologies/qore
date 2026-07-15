@@ -603,14 +603,16 @@ static bool isAOTNonOverridableMethodTarget(const QoreClass* qc,
     return method_variant && method_variant->isFinal();
 }
 
-//! Check if a non-overridable instance method can reuse the caller's implicit self
-//! context in a direct AOT fast entry. Any explicit or opaque AST access to the
-//! synthetic self local still requires the normal method frame and TLS slot.
+//! Check if an instance-method body can reuse the caller's implicit self context
+//! in a direct AOT fast entry. Overridable targets additionally require a guarded
+//! exact-class call site. Any explicit or opaque AST access to the synthetic self
+//! local still requires the normal method frame and TLS slot.
 static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
         const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method,
-        const AbstractQoreFunctionVariant* variant) {
+        const AbstractQoreFunctionVariant* variant, bool allow_overridable = false) {
     static const bool enabled = getenv("QORE_DISABLE_AOT_SELF_FAST_ENTRY") == nullptr;
-    if (!enabled || !qc || !isAOTNonOverridableMethodTarget(qc, variant)
+    if (!enabled || !qc
+            || (!allow_overridable && !isAOTNonOverridableMethodTarget(qc, variant))
             || !method || method->isStatic()
             || method->getClass() != qc || ir_func->has_opaque_ast_local_access
             || ir_func->has_explicit_self_local_access
@@ -6915,6 +6917,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
         effect_only_candidates;
+    std::unordered_set<const AbstractQoreFunctionVariant*> exact_class_only_methods;
 
     // Walk functions
     size_t func_i = 0;
@@ -7122,8 +7125,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 }
 
                 ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
+                static const bool speculative_object_fast_entry =
+                    std::getenv("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY") == nullptr;
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
-                    ir_func, uvb, qc, meth, variant);
+                    ir_func, uvb, qc, meth, variant, speculative_object_fast_entry);
                 if ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
                         || implicit_self) {
                     const UserSignature* sig = uvb->getUserSignature();
@@ -7170,6 +7175,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     info.param_kinds = std::move(param_kinds);
                     info.param_rejects_nothing = std::move(param_rejects_nothing);
                     aot_batch_callee_map[variant] = std::move(info);
+                    if (!isAOTNonOverridableMethodTarget(qc, variant)) {
+                        exact_class_only_methods.insert(variant);
+                    }
                     context_candidates.emplace_back(variant,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
@@ -7183,10 +7191,23 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
     }
+    resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
+    size_t exact_method_i = 0;
+    for (const auto* variant : exact_class_only_methods) {
+        if (exact_method_i++ && !(exact_method_i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT speculative method fast-entry pruning")) {
+            return false;
+        }
+        auto info = aot_batch_callee_map.find(variant);
+        if (info != aot_batch_callee_map.end()
+                && !info->second.context_independent_fast_entry) {
+            info->second.approach_b_eligible = false;
+        }
+    }
     if (!refreshAOTBatchFastEntryDeclarations(ctx, module, aot_batch_callee_map)) {
         return false;
     }
-    resolveAOTBatchContextIndependentFastEntries(context_candidates, aot_batch_callee_map);
 
     size_t ns_i = 0;
     for (auto& ni : ns->nsl.nsmap) {
@@ -8695,9 +8716,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     std::string fast_entry_name;
                     std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
+                    static const bool speculative_object_fast_entry =
+                        std::getenv("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY") == nullptr;
                     bool implicit_self_fast_entry = !metadata_only
-                        && isAOTImplicitSelfFastEntryEligible(
-                            ir_func, uvb, qc, meth, variant);
+                        && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth,
+                            variant, speculative_object_fast_entry);
                     bool analyzed_fast_entry_eligible = true;
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);

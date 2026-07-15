@@ -1087,6 +1087,9 @@ QoreAOTContext* qore_rt_try_get_aot_call_target_context(QoreAOTContext* ctx, int
 //! Returns true when an assigned object receiver is still valid.
 //! Used to guard receiver-independent AOT method fast entries.
 int qore_rt_object_is_valid(uint64_t value);
+//! Returns true when a valid object receiver has the exact class stored in an AOT call-target slot.
+int qore_rt_object_has_exact_aot_target_class(QoreAOTContext* ctx, int32_t slot,
+        uint64_t value);
 
 //! AOT fast direct call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,

@@ -223,6 +223,25 @@ printf(\"%%d\\n\", result);
 ", iterations / 10);
 
     # ==========================================================================
+    # Test 4b: guarded non-final obj.method() call with a context-free body
+    # ==========================================================================
+    string dot_eval_pure_code = sprintf("%%modern
+
+class PureProcessor {
+    int process(int x) {
+        return x * 3 + 1;
+    }
+}
+
+PureProcessor p();
+int result = 0;
+for (int i = 0; i < %d; ++i) {
+    result += p.process(i %% 7);
+}
+printf(\"%%d\\n\", result);
+", iterations / 10);
+
+    # ==========================================================================
     # Test 5: obj.method() in try/catch - InvokeDotEvalMethodDirect
     # ==========================================================================
     string dot_eval_try_code = sprintf("%%modern
@@ -501,6 +520,7 @@ printf(\"%%d\\n\", sum);
         "self_method": self_method_code,
         "final_method": final_method_code,
         "dot_eval": dot_eval_code,
+        "dot_eval_pure": dot_eval_pure_code,
         "dot_eval_try": dot_eval_try_code,
         "static_call": static_call_code,
         "foldl": foldl_code,
