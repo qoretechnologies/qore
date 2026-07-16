@@ -306,6 +306,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testAOTDirectIndexMapSelectImplicitArgCleanup());
         addTestCase("AOT typed scalar select construction",
             \testAOTTypedScalarSelectConstruction());
+        addTestCase("AOT typed scalar map-select construction",
+            \testAOTTypedScalarMapSelectConstruction());
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
@@ -9173,6 +9175,38 @@ printf(\"%s|%d:%d|%s:%d|%d|%s|%d\\n\", partial.join(\",\"),
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT typed scalar select matches interpreter");
+    }
+
+    testAOTTypedScalarMapSelectConstruction() {
+        string code = "%modern
+list<int> input = (1, 2, 3);
+int value;
+list<string> errors;
+try {
+    auto unassigned = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+value = 7;
+list<int> assigned = (map value, input, $1 > 1);
+remove value;
+try {
+    auto removed = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> mapped_ints = (map $1 * 2, input, $1 != 2);
+list<float> mapped_floats = (map $1 + 0.5, input, $1 >= 2);
+list<int> none = (map $1 * 2, input, False);
+list<int> empty_input = ();
+list<int> empty = (map $1 * 2, empty_input, True);
+printf(\"%s|%s|%s|%s|%d:%d\\n\", errors.join(\",\"),
+    assigned.join(\",\"), mapped_ints.join(\",\"), mapped_floats.join(\",\"),
+    none.size(), empty.size());
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed scalar map-select matches interpreter");
     }
 
     testCompileV1Binary() {

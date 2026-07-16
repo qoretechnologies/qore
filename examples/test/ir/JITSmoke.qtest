@@ -3870,6 +3870,42 @@ printf(\"%s\\n\", (foldl $1 + \",\" + $2, result));
             assertEq("1:bob,2:charlie", result,
                     sprintf("map+select with index %s", mode));
         }
+
+        # Exact scalar map results use fresh reserved output storage. A direct
+        # typed lvalue still needs a NOTHING guard until it is assigned and
+        # after remove.
+        code = "%modern
+list<int> input = (1, 2, 3);
+int value;
+list<string> errors;
+try {
+    auto unassigned = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+value = 7;
+list<int> assigned = (map value, input, $1 > 1);
+remove value;
+try {
+    auto removed = (map value, input, True);
+} catch (hash<ExceptionInfo> ex) {
+    errors += ex.err;
+}
+list<int> mapped_ints = (map $1 * 2, input, $1 != 2);
+list<float> mapped_floats = (map $1 + 0.5, input, $1 >= 2);
+list<int> none = (map $1 * 2, input, False);
+list<int> empty_input = ();
+list<int> empty = (map $1 * 2, empty_input, True);
+printf(\"%s|%s|%s|%s|%d:%d\\n\", errors.join(\",\"),
+    assigned.join(\",\"), mapped_ints.join(\",\"), mapped_floats.join(\",\"),
+    none.size(), empty.size());
+";
+        string expected = "RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR|7,7|2,6|2.5,3.5|0:0";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq(expected, result,
+                    sprintf("typed scalar map-select construction %s", mode));
+        }
     }
 
     testHashMapNative() {

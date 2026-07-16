@@ -82,6 +82,11 @@ public:
         return returnTypeInfo;
     }
 
+    //! Returns the mapped expression element type for IR lowering.
+    DLLLOCAL const QoreTypeInfo* getMapExpType() const {
+        return expTypeInfo;
+    }
+
     //! Returns the iterator expression (e[1]) for nested map chain detection
     DLLLOCAL const QoreValue& getIteratorExpr() const {
         return e[1];

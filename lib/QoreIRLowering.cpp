@@ -14835,6 +14835,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // e[0] = map expression, e[1] = iterator/input, e[2] = select predicate
 
+    const QoreTypeInfo* map_type = ms->getMapExpType();
+    bool map_is_int = QoreTypeInfo::parseReturns(map_type, NT_INT) == QTI_IDENT;
+    bool map_is_float = QoreTypeInfo::parseReturns(map_type, NT_FLOAT) == QTI_IDENT;
+    bool use_typed_scalar_construction = need_result && (map_is_int || map_is_float);
+
     // Check if the input list has a known element type for direct-index optimization
     const QoreTypeInfo* list_type = getExprTypeInfo(ms->get(1));
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
@@ -14890,7 +14895,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
         QoreIRValue result_list;
         if (need_result) {
-            result_list = builder.createEmptyList(ms->loc)->result;
+            QoreIRInstruction* result_inst = use_typed_scalar_construction
+                ? builder.createSizedList(list_size, ms->loc, map_type)
+                : builder.createEmptyList(ms->loc);
+            result_inst->list_reserve_only = use_typed_scalar_construction;
+            result_list = result_inst->result;
         }
         {
             auto* br = builder.createBranch(header_block, ms->loc);
@@ -14902,6 +14911,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         auto* index_phi = builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
+        QoreIRPhiInstruction* output_index_phi = use_typed_scalar_construction
+            ? builder.createPhi({}, ms->loc, QoreIRPhiValueKind::NativeInt) : nullptr;
+        QoreIRValue output_index = output_index_phi
+            ? output_index_phi->result : QoreIRValue();
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
             ms->loc)->result;
@@ -14939,6 +14952,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         QoreIRValue predicate_bool = builder.createUnaryOp(QoreIROpcode::ToBool, predicate_result,
             ms->loc)->result;
+        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
         builder.createBranchIf(predicate_bool, append_block, cont_block, ms->loc);
 
         // Append block: evaluate map expression and append to result
@@ -14982,10 +14996,28 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         }
 
         if (need_result) {
-            builder.createListAppend(result_list, map_result, ms->loc);
+            if (use_typed_scalar_construction) {
+                // LLVM selects a guardless native store only from lowered
+                // Assigned + never-NOTHING facts.  Otherwise ListSetValue
+                // retains the inline NOTHING guard and checked failure path.
+                auto* store = builder.createListSetValue(result_list, output_index,
+                    map_result, ms->loc, map_type);
+                if (!exception_stack.empty()) {
+                    store->exception_target = exception_stack.back();
+                }
+            } else {
+                builder.createListAppend(result_list, map_result, ms->loc);
+            }
         } else {
             builder.createDiscardTemps(ms->loc);
         }
+        QoreIRValue selected_output_index = output_index;
+        if (use_typed_scalar_construction) {
+            QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
+            selected_output_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                output_index, one, ms->loc)->result;
+        }
+        QoreIRBasicBlock* append_exit_block = builder.getBlock();
         builder.createBranch(cont_block, ms->loc);
 
         // Continue block: increment index, loop back
@@ -14994,6 +15026,15 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         if (needs_implicit_push) {
             builder.createPopImplicitArg(old_argv, ms->loc);
             builder.createPopImplicitElement(old_element, ms->loc);
+        }
+
+        QoreIRValue next_output_index;
+        if (use_typed_scalar_construction) {
+            std::vector<QoreIRPhiIncoming> output_incoming;
+            output_incoming.push_back({output_index, predicate_exit_block});
+            output_incoming.push_back({selected_output_index, append_exit_block});
+            next_output_index = builder.createPhi(output_incoming, ms->loc,
+                QoreIRPhiValueKind::NativeInt)->result;
         }
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;
@@ -15012,9 +15053,18 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         index_phi->incoming.push_back({next_index, cont_exit_block});
         index_phi->operands.push_back(zero);
         index_phi->operands.push_back(next_index);
+        if (output_index_phi) {
+            output_index_phi->incoming.push_back({zero, preheader_block});
+            output_index_phi->incoming.push_back({next_output_index, cont_exit_block});
+            output_index_phi->operands.push_back(zero);
+            output_index_phi->operands.push_back(next_output_index);
+        }
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
+        if (use_typed_scalar_construction) {
+            builder.createListSetLength(result_list, output_index, ms->loc);
+        }
         builder.createBranch(final_block, ms->loc);
 
         builder.setBlock(nothing_block);
