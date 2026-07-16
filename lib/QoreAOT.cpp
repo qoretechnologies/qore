@@ -57,6 +57,16 @@
 #include <unordered_set>
 #include <unistd.h>
 
+// Platform-specific headers for querying available physical memory, used to
+// cap the AOT batch worker-thread count so a large parallel -O3 codegen run
+// cannot exhaust RAM and trip the OOM killer (see qoreAotAvailableMemoryBytes).
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -14948,7 +14958,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         int* compiled_count_out = nullptr,
         bool report_artifact = true,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
-            shared_batch_callees = nullptr) {
+            shared_batch_callees = nullptr,
+        const AOTConstantReverseMap* shared_const_reverse_map = nullptr) {
     // Global LLVM target init is process-wide and not safe to call
     // concurrently; run it exactly once so this emit can be invoked from a
     // batch worker-thread pool (compileScriptFilesBatch parallel codegen).
@@ -14985,7 +14996,22 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
 
     qore_program_private* pp = qore_program_private::get(*qpgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
-    AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+    // The reverse map is derived entirely from the shared committed program's
+    // root namespace and is treated read-only across the codegen path (it is
+    // passed as const throughout; the pending-init path builds filtered copies
+    // rather than mutating it).  In the batch case it is identical for every
+    // file, so compileScriptFilesBatch builds it once and shares it across
+    // workers to avoid rebuilding it per file (up to N-files times).  Fall back
+    // to a local build when no shared map is supplied.
+    AOTConstantReverseMap local_const_reverse_map;
+    const AOTConstantReverseMap* const_reverse_map_ptr;
+    if (shared_const_reverse_map) {
+        const_reverse_map_ptr = shared_const_reverse_map;
+    } else {
+        local_const_reverse_map = buildConstantReverseMap(root_ns);
+        const_reverse_map_ptr = &local_const_reverse_map;
+    }
+    const AOTConstantReverseMap& const_reverse_map = *const_reverse_map_ptr;
 
     if (shared_batch_callees
             && !declareAOTSharedFastEntryFunctions(ctx, *module, *shared_batch_callees)) {
@@ -15329,6 +15355,347 @@ static void apply_parse_defines(QoreProgram* pgm,
     }
 }
 
+#if defined(__linux__)
+// Read a single leading unsigned decimal integer from `path` into `out`.
+// Returns false if the file is unreadable or does not begin with a digit (e.g.
+// the cgroup-v2 "max" sentinel that means "no limit").  Allocation-free: uses a
+// small stack buffer and raw open/read/close, so it does not perturb the
+// codegen heap (see qoreAotAvailableMemoryBytes for why that matters).
+static bool qoreAotReadLeadingUintFile(const char* path, uint64_t& out) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return false;
+    }
+    char buf[64];
+    ssize_t n;
+    do {
+        n = read(fd, buf, sizeof(buf) - 1);
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    if (n <= 0) {
+        return false;
+    }
+    buf[n] = '\0';
+    const char* p = buf;
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+    if (*p < '0' || *p > '9') {
+        return false;
+    }
+    uint64_t v = 0;
+    while (*p >= '0' && *p <= '9') {
+        v = v * 10 + static_cast<uint64_t>(*p - '0');
+        ++p;
+    }
+    out = v;
+    return true;
+}
+
+// Extract this process's cgroup path into `out` for the given controller.
+// `v2` selects the unified hierarchy (the "0::<path>" line of /proc/self/cgroup);
+// otherwise the v1 line whose controller list contains "memory".  Returns false
+// if no matching line is found.  Allocation-free.
+static bool qoreAotReadSelfCgroupPath(bool v2, char* out, size_t out_size) {
+    int fd = open("/proc/self/cgroup", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return false;
+    }
+    char buf[2048];
+    ssize_t n;
+    do {
+        n = read(fd, buf, sizeof(buf) - 1);
+    } while (n < 0 && errno == EINTR);
+    close(fd);
+    if (n <= 0) {
+        return false;
+    }
+    buf[n] = '\0';
+    // Lines look like "hierarchy-id:controllers:path".  v2 uses id 0 and an
+    // empty controller field ("0::/path"); v1 lists controllers ("N:memory:/p").
+    for (char* line = buf; line && *line; ) {
+        char* nl = strchr(line, '\n');
+        if (nl) {
+            *nl = '\0';
+        }
+        char* c1 = strchr(line, ':');
+        char* c2 = c1 ? strchr(c1 + 1, ':') : nullptr;
+        if (c1 && c2) {
+            bool match;
+            if (v2) {
+                match = (c1 - line == 1) && line[0] == '0' && (c2 - (c1 + 1) == 0);
+            } else {
+                // controller field is c1+1 .. c2; look for the "memory" token
+                *c2 = '\0';
+                match = strstr(c1 + 1, "memory") != nullptr;
+                *c2 = ':';
+            }
+            if (match) {
+                size_t i = 0;
+                const char* q = c2 + 1;
+                while (*q && i < out_size - 1) {
+                    out[i++] = *q++;
+                }
+                out[i] = '\0';
+                return i > 0;
+            }
+        }
+        line = nl ? nl + 1 : nullptr;
+    }
+    return false;
+}
+
+// Return the memory still allocatable within this process's cgroup, or 0 if
+// there is no effective limit.  The binding constraint is the tightest
+// (limit - usage) over the process's cgroup and all its ancestors, so a limit
+// set on a parent slice is honored even when the leaf is unlimited.  Handles
+// cgroup v2 (memory.max / memory.current, walked up the hierarchy) and v1
+// (memory.limit_in_bytes / memory.usage_in_bytes at the process's node).  This
+// keeps the batch worker cap correct for containerized/CI and cgroup-limited
+// builds, where /proc/meminfo still reports host-wide memory rather than the
+// cgroup limit.
+static uint64_t qoreAotCgroupAvailableBytes() {
+    char rel[512];
+    // cgroup v2 unified hierarchy: walk from the process's cgroup up to root.
+    if (qoreAotReadSelfCgroupPath(true, rel, sizeof(rel)) && rel[0] == '/') {
+        uint64_t best = 0;
+        bool any = false;
+        for (;;) {
+            char path[640];
+            uint64_t limit = 0;
+            uint64_t current = 0;
+            snprintf(path, sizeof(path), "/sys/fs/cgroup%s/memory.max", rel);
+            if (qoreAotReadLeadingUintFile(path, limit)) {
+                snprintf(path, sizeof(path), "/sys/fs/cgroup%s/memory.current", rel);
+                if (qoreAotReadLeadingUintFile(path, current)) {
+                    uint64_t head = limit > current ? limit - current : 1;
+                    if (!any || head < best) {
+                        best = head;
+                        any = true;
+                    }
+                }
+            }
+            if (rel[0] == '\0') {
+                break;
+            }
+            char* slash = strrchr(rel, '/');
+            if (!slash) {
+                break;
+            }
+            *slash = '\0';
+        }
+        if (any) {
+            return best;
+        }
+        return 0;
+    }
+    // cgroup v1 memory controller: read the limit at the process's own node.
+    if (qoreAotReadSelfCgroupPath(false, rel, sizeof(rel)) && rel[0] == '/') {
+        char path[640];
+        uint64_t limit = 0;
+        uint64_t current = 0;
+        snprintf(path, sizeof(path),
+            "/sys/fs/cgroup/memory%s/memory.limit_in_bytes", rel);
+        if (qoreAotReadLeadingUintFile(path, limit)) {
+            snprintf(path, sizeof(path),
+                "/sys/fs/cgroup/memory%s/memory.usage_in_bytes", rel);
+            if (qoreAotReadLeadingUintFile(path, current)) {
+                // v1 has no "max" string; an unset limit is a huge sentinel
+                // near the top of the address space.  Treat that as "no limit".
+                if (limit < (uint64_t(1) << 62)) {
+                    return limit > current ? limit - current : 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+#endif // __linux__
+
+// Return an estimate of currently-available memory in bytes, or 0 if it cannot
+// be determined.  "Available" means memory that can be allocated without paging
+// (free + reclaimable), not total installed RAM.  On Linux this is the tighter
+// of the host figure and this process's cgroup headroom, so the cap is correct
+// both on bare metal and inside a memory-limited container.  This is used only
+// as a heuristic to bound AOT batch parallelism, so callers MUST tolerate a 0
+// (unknown) result by falling back to the CPU-count default.
+static uint64_t qoreAotAvailableMemoryBytes() {
+#if defined(__linux__)
+    // MemAvailable is the kernel's own estimate of what can be allocated
+    // without swapping; it is the most accurate host figure when /proc is
+    // readable.
+    //
+    // Read it with raw open/read/close into a stack buffer rather than stdio:
+    // this query runs between the shared parse and the codegen worker pool, and
+    // AOT object emission is (pre-existing) sensitive to heap-allocation order,
+    // so a stdio FILE allocation here would perturb the emitted .qo bytes.  A
+    // syscall-only read touches no heap and keeps the output byte-stable.
+    // MemAvailable appears within the first few lines, so one 4 KiB read covers
+    // it on any real kernel.
+    uint64_t phys = 0;
+    int fd = open("/proc/meminfo", O_RDONLY | O_CLOEXEC);
+    if (fd >= 0) {
+        char buf[4096];
+        ssize_t n;
+        do {
+            n = read(fd, buf, sizeof(buf) - 1);
+        } while (n < 0 && errno == EINTR);
+        close(fd);
+        if (n > 0) {
+            buf[n] = '\0';
+            const char* p = strstr(buf, "MemAvailable:");
+            if (p) {
+                p += sizeof("MemAvailable:") - 1;
+                while (*p == ' ' || *p == '\t') {
+                    ++p;
+                }
+                uint64_t kb = 0;
+                bool any = false;
+                while (*p >= '0' && *p <= '9') {
+                    kb = kb * 10 + static_cast<uint64_t>(*p - '0');
+                    ++p;
+                    any = true;
+                }
+                if (any) {
+                    phys = kb * 1024ull;
+                }
+            }
+        }
+    }
+    // A memory-limited cgroup (container/CI) can be far tighter than host
+    // MemAvailable; take whichever constraint is smaller.
+    uint64_t cg = qoreAotCgroupAvailableBytes();
+    if (phys && cg) {
+        return phys < cg ? phys : cg;
+    }
+    if (phys) {
+        return phys;
+    }
+    if (cg) {
+        return cg;
+    }
+    // Fall through to the sysconf fallback below if MemAvailable was missing
+    // (very old kernels) or /proc was not mounted.
+#elif defined(__APPLE__)
+    // Sum the reclaimable Mach VM page classes (free + inactive + purgeable).
+    mach_port_t host = mach_host_self();
+    vm_size_t page_size = 0;
+    uint64_t rv = 0;
+    if (host_page_size(host, &page_size) == KERN_SUCCESS) {
+        vm_statistics64_data_t vm;
+        mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+        if (host_statistics64(host, HOST_VM_INFO64,
+                reinterpret_cast<host_info64_t>(&vm), &count) == KERN_SUCCESS) {
+            uint64_t avail_pages = static_cast<uint64_t>(vm.free_count)
+                + static_cast<uint64_t>(vm.inactive_count)
+                + static_cast<uint64_t>(vm.purgeable_count);
+            rv = avail_pages * static_cast<uint64_t>(page_size);
+        }
+    }
+    mach_port_deallocate(mach_task_self(), host);
+    if (rv) {
+        return rv;
+    }
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+    // FreeBSD/DragonFly expose per-class page counters via sysctl; free +
+    // inactive + cache pages are all reclaimable for a fresh allocation.
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (page_size > 0) {
+        auto add_pages = [](const char* name, uint64_t& acc) -> bool {
+            unsigned val = 0;
+            size_t len = sizeof(val);
+            if (sysctlbyname(name, &val, &len, nullptr, 0) == 0) {
+                acc += static_cast<uint64_t>(val);
+                return true;
+            }
+            return false;
+        };
+        uint64_t pages = 0;
+        bool any = false;
+        any |= add_pages("vm.stats.vm.v_free_count", pages);
+        any |= add_pages("vm.stats.vm.v_inactive_count", pages);
+        add_pages("vm.stats.vm.v_cache_count", pages);
+        if (any) {
+            return pages * static_cast<uint64_t>(page_size);
+        }
+    }
+#endif
+    // Portable fallback: sysconf reports the count of physical pages not
+    // currently in use.  Available on Linux (no /proc), OpenBSD, NetBSD,
+    // Solaris, and others.  If the platform lacks it we return 0 (unknown).
+#if defined(_SC_AVPHYS_PAGES) && defined(_SC_PAGESIZE)
+    long avail_pages = sysconf(_SC_AVPHYS_PAGES);
+    long page_size = sysconf(_SC_PAGESIZE);
+    if (avail_pages > 0 && page_size > 0) {
+        return static_cast<uint64_t>(avail_pages) * static_cast<uint64_t>(page_size);
+    }
+#endif
+    return 0;
+}
+
+// Choose the AOT batch worker-thread count.  An explicit QORE_AOT_BATCH_JOBS
+// always wins (1 = serial, identical to the pre-parallel path).  Otherwise the
+// default is hardware concurrency, but capped by available memory so a large
+// parallel -O3 codegen run cannot exhaust RAM: each worker runs an independent
+// LLVM -O3 backend on top of the shared parsed program, and on a big core file
+// set that private working set is on the order of ~1 GB per worker.
+//
+// @param num_entries number of files in the batch (final clamp; never spin up
+//        more workers than files)
+static unsigned qoreAotChooseBatchJobs(size_t num_entries) {
+    unsigned hw = std::thread::hardware_concurrency();
+    unsigned jobs = hw ? hw : 1;
+    bool explicit_jobs = false;
+
+    if (const char* j = getenv("QORE_AOT_BATCH_JOBS")) {
+        long v = strtol(j, nullptr, 10);
+        jobs = v > 0 ? static_cast<unsigned>(v) : 1;
+        explicit_jobs = true;
+    }
+
+    if (!explicit_jobs) {
+        // Per-worker peak for a single -O3 emit over a large core file.
+        // Overridable for tuning / testing without recompiling.
+        uint64_t per_worker = 1024ull * 1024ull * 1024ull; // 1 GiB default
+        if (const char* pw = getenv("QORE_AOT_BATCH_MEM_PER_JOB_MB")) {
+            long mb = strtol(pw, nullptr, 10);
+            if (mb > 0) {
+                per_worker = static_cast<uint64_t>(mb) * 1024ull * 1024ull;
+            }
+        }
+
+        uint64_t avail = qoreAotAvailableMemoryBytes();
+        if (avail && per_worker) {
+            // Reserve headroom for the shared parsed program and the rest of
+            // the system: only budget ~60% of currently-available memory for
+            // the worker pool.
+            uint64_t budget = (avail / 10) * 6;
+            unsigned mem_jobs = static_cast<unsigned>(budget / per_worker);
+            if (mem_jobs < 1) {
+                mem_jobs = 1;
+            }
+            if (mem_jobs < jobs) {
+                if (qccAOTVerbose()) {
+                    fprintf(stderr, "%sAOT batch: limiting workers to %u "
+                        "(cpu=%u) to fit ~%llu MiB available memory "
+                        "(~%llu MiB/job)\n", QCC_LOG_PREFIX, mem_jobs, jobs,
+                        (unsigned long long)(avail / (1024ull * 1024ull)),
+                        (unsigned long long)(per_worker / (1024ull * 1024ull)));
+                }
+                jobs = mem_jobs;
+            }
+        }
+    }
+
+    if (num_entries && jobs > num_entries) {
+        jobs = static_cast<unsigned>(num_entries);
+    }
+    if (!jobs) {
+        jobs = 1;
+    }
+    return jobs;
+}
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -15547,6 +15914,14 @@ bool QoreAOT::compileScriptFilesBatch(
         }
     }
 
+    // Build the constant reverse map once for the whole batch.  It is derived
+    // solely from the shared committed program's root namespace, so it is
+    // identical for every file; the emit path only reads it.  Building it here,
+    // single-threaded, avoids reconstructing it inside every per-file emit (up
+    // to jobs times concurrently) and shrinks each worker's peak footprint.
+    AOTConstantReverseMap batch_const_reverse_map =
+        buildConstantReverseMap(qore_ns_private::get(*batch_pp->RootNS));
+
     // Now emit one .qo per target using the shared parsed program.  Each
     // emit is independent — its own LLVMContext/Module, file-filtered codegen
     // (compile_file=e.canon), local result vectors, and a distinct output
@@ -15554,24 +15929,11 @@ bool QoreAOT::compileScriptFilesBatch(
     // the committed program.  So the emits run on a worker-thread pool to
     // parallelize the otherwise single-threaded -O3 LLVM backend, which
     // dominates clean-build time.  The shared parse/commit above stays
-    // single-threaded.  QORE_AOT_BATCH_JOBS overrides the worker count
-    // (default: hardware concurrency; 1 = serial, identical to the old path).
+    // single-threaded.  The worker count defaults to hardware concurrency
+    // capped by available memory (qoreAotChooseBatchJobs); QORE_AOT_BATCH_JOBS
+    // overrides it (1 = serial, identical to the old path).
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
-    unsigned jobs;
-    {
-        unsigned hw = std::thread::hardware_concurrency();
-        jobs = hw ? hw : 1;
-        if (const char* j = getenv("QORE_AOT_BATCH_JOBS")) {
-            long v = strtol(j, nullptr, 10);
-            jobs = v > 0 ? (unsigned)v : 1;
-        }
-        if (jobs > entries.size()) {
-            jobs = (unsigned)entries.size();
-        }
-        if (!jobs) {
-            jobs = 1;
-        }
-    }
+    unsigned jobs = qoreAotChooseBatchJobs(entries.size());
 
     std::atomic<size_t> next_index{0};
     std::atomic<int> total_compiled_count{0};
@@ -15615,7 +15977,8 @@ bool QoreAOT::compileScriptFilesBatch(
                     e.out_path, opt_level, target_triple, include_source,
                     per_err, e.module_cmd_begin, e.module_cmd_end,
                     &per_file_compiled_count, report_artifacts,
-                    shared_batch_callees.empty() ? nullptr : &shared_batch_callees)) {
+                    shared_batch_callees.empty() ? nullptr : &shared_batch_callees,
+                    &batch_const_reverse_map)) {
                 std::lock_guard<std::mutex> l(err_mutex);
                 if (first_error.empty()) {
                     first_error = per_err;
