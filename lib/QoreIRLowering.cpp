@@ -16057,6 +16057,26 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     bool base_source_known_collection = base_source_type
         && (QoreTypeInfo::isListType(base_source_type)
             || QoreTypeInfo::getUniqueReturnClass(base_source_type) != nullptr);
+    bool functional_stages_only = true;
+    for (size_t i = 0; i < stages.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "typed pipeline sink analysis")) {
+            error = "typed pipeline sink analysis cancelled";
+            return QoreIRValue();
+        }
+        const LazyPipelineStage& stage = stages[i];
+        if (stage.kind == LazyPipelineStage::StreamTake
+                || stage.kind == LazyPipelineStage::StreamDrop
+                || stage.kind == LazyPipelineStage::StreamTakeWhile
+                || stage.kind == LazyPipelineStage::StreamTakeUntil) {
+            functional_stages_only = false;
+            break;
+        }
+    }
+    bool result_is_int = QoreTypeInfo::parseReturns(root.list_element_type, NT_INT) == QTI_IDENT;
+    bool result_is_float = QoreTypeInfo::parseReturns(root.list_element_type, NT_FLOAT) == QTI_IDENT;
+    bool use_typed_list_sink = build_result_list && functional_stages_only
+        && QoreTypeInfo::getUniqueReturnComplexList(base_source_type)
+        && (result_is_int || result_is_float);
     bool needs_runtime_unwrap_check = root.kind == LazyPipelineRoot::List
         && need_result
         && !source_uses_iterate
@@ -16222,7 +16242,15 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 elem_type = QoreIterateOperatorNode::getElementTypeInfo(op->getSource(), source_type);
             }
         }
-        result_list = builder.createEmptyList(loc, elem_type)->result;
+        QoreIRInstruction* result_inst;
+        if (use_typed_list_sink) {
+            QoreIRValue source_size = builder.createListSize(source, loc)->result;
+            result_inst = builder.createSizedList(source_size, loc, elem_type);
+            result_inst->list_reserve_only = true;
+        } else {
+            result_inst = builder.createEmptyList(loc, elem_type);
+        }
+        result_list = result_inst->result;
     }
     if (root_foldl) {
         fold_initial_accum = builder.createConstNothing(loc)->result;
@@ -16288,10 +16316,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRPhiInstruction* fold_join_started_phi = nullptr;
     QoreIRValue root_index;
     QoreIRValue count_value;
-    if (root_terminal) {
+    if (root_terminal || use_typed_list_sink) {
         root_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
         root_index = root_index_phi->result;
-        if (op->getKind() == QoreStreamingOperatorNode::Count) {
+        if (root_terminal && op->getKind() == QoreStreamingOperatorNode::Count) {
             count_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
             count_value = count_phi->result;
         }
@@ -16481,6 +16509,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (root_list) {
         if (!need_result) {
             add_continue(state, loc);
+        } else if (use_typed_list_sink) {
+            auto* store = builder.createListSetValue(result_list, state.root_index,
+                element_val, loc, root.list_element_type);
+            if (!exception_stack.empty()) {
+                store->exception_target = exception_stack.back();
+            }
+            FusedLoopState next_state = state;
+            next_state.root_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                state.root_index, one, loc)->result;
+            add_continue(next_state, loc);
         } else {
             builder.createListAppend(result_list, element_val, loc);
             add_continue(state, loc);
@@ -16737,6 +16775,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     add_final(null_result, loc);
 
     builder.setBlock(exit_block);
+    if (use_typed_list_sink) {
+        builder.createListSetLength(result_list, root_index_phi->result, loc);
+    }
     if (root_foldl) {
         QoreIRBasicBlock* fold_result_block = createBlock("stream.fused.fold.result");
         QoreIRBasicBlock* fold_empty_block = createBlock("stream.fused.fold.empty");
