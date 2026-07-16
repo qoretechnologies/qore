@@ -9144,6 +9144,24 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
+    auto refine_fresh_lists = [&](QoreIRFunction& func) {
+        if (std::getenv("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
+            return;
+        }
+        QoreIRParamNoEscapeQuery query = [&](const AbstractQoreFunctionVariant* callee,
+                size_t arg) {
+            auto info = aot_batch_callee_map->find(callee);
+            return info != aot_batch_callee_map->end()
+                && arg < info->second.param_noescape.size()
+                && info->second.param_noescape[arg];
+        };
+        size_t changed = qore_ir_optimize_fresh_list_calls(func, query);
+        if (changed && std::getenv("QORE_IR_OPT_STATS")) {
+            fprintf(stderr, "IR-OPT-AOT-EFFECTS: %s: inplace-push=%zu\n",
+                func.name.c_str(), changed);
+        }
+    };
+
     // Track compiled variant keys to skip duplicates from iterator yielding
     // the same variant twice (committed + pending)
     std::set<std::string> local_keys;
@@ -9264,6 +9282,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
+                refine_fresh_lists(*ir_func);
                 // The LLVM symbol is sanitized for object/linker use; the
                 // namespace-qualified `variant_key` stays the AOT function
                 // table entry's `name` so runtime variant reconstruction via
@@ -9672,6 +9691,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
+                    refine_fresh_lists(*ir_func);
                     // The LLVM symbol is sanitized for object/linker use; the
                     // logical variant key remains in `cf.name` below for
                     // runtime slot-map registration.

@@ -416,6 +416,24 @@ static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
     return ucf ? ucf->first() : nullptr;
 }
 
+static bool qore_ir_is_read_only_list_use(const QoreIRInstruction& inst,
+        QoreIRValue value) {
+    if (inst.operands.empty() || inst.operands[0].id != value.id) {
+        return false;
+    }
+    switch (inst.opcode) {
+        case QoreIROpcode::ListSize:
+        case QoreIROpcode::ListGetInt:
+        case QoreIROpcode::ListGetFloat:
+        case QoreIROpcode::ListGetValue:
+        case QoreIROpcode::ListGetValueNoRef:
+        case QoreIROpcode::ListIndexDynamic:
+            return true;
+        default:
+            return false;
+    }
+}
+
 bool qore_ir_compute_function_effect_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries) {
@@ -619,6 +637,9 @@ bool qore_ir_compute_function_effect_summaries(
                         return;
                     }
                     if (inst->opcode == QoreIROpcode::Return) {
+                        return;
+                    }
+                    if (qore_ir_is_read_only_list_use(*inst, operand)) {
                         return;
                     }
                     bool has_ref_args = true;
@@ -2552,7 +2573,8 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
 
 static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
-        size_t& check_count) {
+        size_t& check_count,
+        const QoreIRParamNoEscapeQuery* param_noescape = nullptr) {
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
     for (const auto& block : cfg.blocks) {
@@ -2616,21 +2638,35 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         return use_it != uses.end() && use_it->second.size() == 1
             && use_it->second[0].inst == &store;
     };
-    auto is_read_only_list_use = [](const QoreIRInstruction& inst, QoreIRValue value) {
-        if (inst.operands.empty() || inst.operands[0].id != value.id) {
+    auto is_read_only_list_use = [&](const QoreIRInstruction& inst, QoreIRValue value) {
+        if (qore_ir_is_read_only_list_use(inst, value)) {
+            return true;
+        }
+        if (!param_noescape || (inst.opcode != QoreIROpcode::CallDirect
+                && inst.opcode != QoreIROpcode::CallStaticDirect)) {
             return false;
         }
-        switch (inst.opcode) {
-            case QoreIROpcode::ListSize:
-            case QoreIROpcode::ListGetInt:
-            case QoreIROpcode::ListGetFloat:
-            case QoreIROpcode::ListGetValue:
-            case QoreIROpcode::ListGetValueNoRef:
-            case QoreIROpcode::ListIndexDynamic:
-                return true;
-            default:
-                return false;
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(&inst, has_ref_args);
+        if (!callee || has_ref_args) {
+            return false;
         }
+        qore_type_t return_type = QoreTypeInfo::getSingleType(callee->getReturnTypeInfo());
+        if (return_type != NT_INT && return_type != NT_FLOAT && return_type != NT_BOOLEAN) {
+            return false;
+        }
+        bool found = false;
+        for (size_t arg = 0; arg < inst.operands.size(); ++arg) {
+            if (inst.operands[arg].id != value.id) {
+                continue;
+            }
+            if (!(*param_noescape)(callee, arg)) {
+                return false;
+            }
+            found = true;
+        }
+        return found;
     };
 
     using FreshLocalSet = std::unordered_set<LocalVar*>;
@@ -2664,7 +2700,7 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
                 const QoreIRLocalInstruction* store = local
                     ? get_paired_push_store(inst, local) : nullptr;
                 const QoreIRValueFacts* facts = func.getValueFacts(inst.operands[0]);
-                if (mark && store && state.count(local) && facts
+                if (mark && !inst.list_push_in_place && store && state.count(local) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
                         && facts->never_nothing && QoreTypeInfo::isListType(facts->type_info)) {
                     inst.list_push_in_place = true;
@@ -2848,7 +2884,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     }
     if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
         local_stats.in_place_list_pushes = qore_ir_mark_in_place_list_pushes(
-            func, cfg, uses, check_count);
+            func, cfg, uses, check_count, nullptr);
     }
     if (getenv("QORE_DISABLE_IR_LICM")) {
         loops.clear();
@@ -3016,4 +3052,18 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     if (stats) {
         *stats = local_stats;
     }
+}
+
+size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
+        const QoreIRParamNoEscapeQuery& param_noescape) {
+    size_t check_count = 0;
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return 0;
+    }
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+    return qore_ir_mark_in_place_list_pushes(func, cfg, uses, check_count, &param_noescape);
 }

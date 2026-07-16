@@ -65,6 +65,18 @@ nothing sub aliasedPush() {
     push values, 10;
 }
 
+int sub observeList(list<int> values) {
+    return values.size();
+}
+
+int sub noescapeCallPush() {
+    list<int> values = ();
+    push values, 1;
+    int observed = observeList(values);
+    push values, 2;
+    return observed * 100 + values.size() * 10 + values[1];
+}
+
 list<int> sub buildAndReturn() {
     list<int> values = ();
     for (int i = 0; i < 4; ++i) {
@@ -82,9 +94,9 @@ referencePush(\\reference_values);
 aliasedPush();
 list<int> expression_values = expressionPush();
 list<int> built_values = buildAndReturn();
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", assignedPush(), singlePush(), unassignedPush(),
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", assignedPush(), singlePush(), unassignedPush(),
     removedPush(), deletedPush(), softPush(), expression_values.size(), expression_values[1],
-    reference_values[1], built_values.size(), built_values[3]);
+    reference_values[1], built_values.size(), built_values[3], noescapeCallPush());
 ";
 
 string script_path = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + ".qr";
@@ -98,18 +110,23 @@ string sub runMode(string mode) {
         libqore_dir, qore_bin, mode, script_path));
 }
 
-string sub runAot() {
-    string exe = "/tmp/qore-ir-in-place-list-push-" + string(getpid());
-    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
-        libqore_dir, qcc_bin, exe, script_path));
+string sub runAot(string suffix, string env, bool expect_effect_refinement) {
+    string exe = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + suffix;
+    string compile_out = backquote(sprintf("%s QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    bool has_effect_refinement = compile_out =~ /IR-OPT-AOT-EFFECTS: noescapeCallPush: inplace-push=1/;
+    if (has_effect_refinement != expect_effect_refinement) {
+        printf("unexpected AOT effect refinement (%y):\n%s", expect_effect_refinement, compile_out);
         exit(2);
     }
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "2019:6:7:8:9:3:2:2:11:4:3\n";
+string expected = "2019:6:7:8:9:3:2:2:11:4:3:122\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -117,9 +134,10 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-string aot = runAot();
-if (aot != expected) {
-    printf("mismatch in aot\nexpected:\n%sactual:\n%s", expected, aot);
+string aot = runAot("", "", True);
+string disabled_aot = runAot("-disabled", "QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH=1", False);
+if (aot != expected || disabled_aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%sdisabled:\n%s", expected, aot, disabled_aot);
     exit(2);
 }
 

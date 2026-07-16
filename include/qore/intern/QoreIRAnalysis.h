@@ -123,4 +123,14 @@ DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
 //! @param stats optional output statistics
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats = nullptr);
 
+using QoreIRParamNoEscapeQuery =
+    std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;
+
+//! Refine fresh-list mutation after interprocedural AOT effects are available.
+//! @param func function to optimize in place
+//! @param param_noescape returns true for proven nonescaping callee arguments
+//! @return number of newly specialized list pushes
+size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
+    const QoreIRParamNoEscapeQuery& param_noescape);
+
 #endif

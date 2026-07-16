@@ -1,0 +1,22 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+const int COUNT = 2000000;
+
+int sub observe(list<int> values) {
+    return values.size();
+}
+
+int sub buildList() {
+    list<int> values = ();
+    int checksum = 0;
+    for (int i = 0; i < COUNT; ++i) {
+        checksum += observe(values);
+        push values, i;
+    }
+    return checksum + values[-1];
+}
+
+printf("%d\n", buildList());
