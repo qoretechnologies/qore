@@ -247,6 +247,10 @@ public:
 
     DLLLOCAL QoreValue eval() const;
 
+    // Returns 1 for an assigned integer, 0 for NOTHING, and -1 when the
+    // variable requires the general reference-aware evaluation path.
+    DLLLOCAL int evalInt(int64& result) const;
+
     DLLLOCAL void doDoubleDeclarationError(const QoreProgramLocation* loc) {
         // make sure types are identical or throw an exception
         if (parseTypeInfo) {

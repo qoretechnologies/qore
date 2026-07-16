@@ -297,6 +297,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot) },
     { "qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot) },
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
+    { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
     { "qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot) },
     { "qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot) },
@@ -9681,6 +9682,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32
         }
     }
     return rv;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_load_global_int_aot(QoreAOTContext* ctx,
+        int32_t idx, int32_t* assigned, ExceptionSink* xsink) {
+    assert(assigned);
+    Var* var = qore_rt_resolve_global_slot_aot(ctx, idx, xsink);
+    int64 result = 0;
+    *assigned = var ? var->evalInt(result) : -1;
+    return result;
 }
 
 extern "C" DLLEXPORT void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {

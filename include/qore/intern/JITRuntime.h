@@ -984,6 +984,10 @@ void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink
 //! Load from a global variable via AOT context slot
 uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Load an integer global without boxing; assigned receives 1, 0 for NOTHING, or -1 for fallback
+int64_t qore_rt_load_global_int_aot(QoreAOTContext* ctx, int32_t idx,
+        int32_t* assigned, ExceptionSink* xsink);
+
 //! Store to a global variable via AOT context slot
 void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 

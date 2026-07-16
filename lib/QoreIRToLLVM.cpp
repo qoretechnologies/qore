@@ -5029,29 +5029,29 @@ llvm::Value* QoreIRToLLVM::emitAOTGlobalInt(const BatchCalleeInfo& info,
         }
     }
 
-    auto load = module.getOrInsertFunction("qore_rt_load_global_aot",
-        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-    llvm::Value* boxed_global = builder->CreateCall(load,
-        {callee_ctx, llvm::ConstantInt::get(i32_type, op.global_slot), xsink_arg});
-    auto decref = module.getOrInsertFunction("qore_rt_decref",
-        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    auto load = module.getOrInsertFunction("qore_rt_load_global_int_aot",
+        llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, ptr_type, ptr_type}, false));
 
     llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(),
+        llvm_func->getEntryBlock().begin());
+    llvm::AllocaInst* assigned_ptr = entry_builder.CreateAlloca(i32_type,
+        nullptr, "aot_global_int_assigned");
+    llvm::Value* global_value = builder->CreateCall(load,
+        {callee_ctx, llvm::ConstantInt::get(i32_type, op.global_slot),
+         assigned_ptr, xsink_arg});
+    llvm::Value* assigned_status = builder->CreateLoad(i32_type, assigned_ptr);
     llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
         ctx, "aot.global.assigned", llvm_func);
     llvm::BasicBlock* fallback_bb = llvm::BasicBlock::Create(
         ctx, "aot.global.nothing", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(
         ctx, "aot.global.merge", llvm_func);
-    llvm::Value* assigned = builder->CreateICmpNE(boxed_global,
-        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    llvm::Value* assigned = builder->CreateICmpEQ(assigned_status,
+        llvm::ConstantInt::get(i32_type, 1));
     builder->CreateCondBr(assigned, assigned_bb, fallback_bb);
     builder->SetInsertPoint(assigned_bb);
-
-    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-        llvm::FunctionType::get(i64_type, {i64_type}, false));
-    llvm::Value* global_value = builder->CreateCall(to_int, {boxed_global});
-    builder->CreateCall(decref, {boxed_global, xsink_arg});
 
     llvm::Value* result = op.global_scale == 1 ? global_value
         : builder->CreateMul(global_value,
@@ -5069,7 +5069,6 @@ llvm::Value* QoreIRToLLVM::emitAOTGlobalInt(const BatchCalleeInfo& info,
     assigned_bb = builder->GetInsertBlock();
     builder->CreateBr(merge_bb);
     builder->SetInsertPoint(fallback_bb);
-    builder->CreateCall(decref, {boxed_global, xsink_arg});
     llvm::Value* fallback_result = builder->CreateCall(fallback_fn, native_args);
     builder->CreateBr(merge_bb);
     fallback_bb = builder->GetInsertBlock();
@@ -5270,6 +5269,19 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
     fast_bb = builder->GetInsertBlock();
 
     builder->SetInsertPoint(fallback_bb);
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT batch fallback argument boxing")) {
+            error = "cancelled during AOT batch fallback argument boxing";
+            return nullptr;
+        }
+        llvm::Value* boxed = boxed_args[i]
+            ? boxed_args[i] : boxValue(raw_args[i], raw_arg_ids[i]);
+        llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+            llvm::ConstantInt::get(i32_type, i));
+        builder->CreateStore(boxed, gep);
+    }
     llvm::Value* fallback_result;
     if (has_arg_cleanups) {
         auto ft = object_base
@@ -13039,7 +13051,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         is_approach_b = false;
                     }
                 }
-                bool selective_aot_boxing = aot_context_independent_fast_entry_call
+                bool selective_aot_boxing = aot_approach_b_callee
                     && !type_name_fast_path && !single_arg_fast_builtin_helper
                     && std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS") == nullptr;
                 for (int i = 0; i < nargs; ++i) {
@@ -13051,7 +13063,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                     bool needs_boxed = !selective_aot_boxing
                         || getFastEntryParamKind(*aot_approach_b_callee,
-                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed;
+                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed
+                        || (fastEntryParamRejectsNothing(*aot_approach_b_callee,
+                                static_cast<unsigned>(i))
+                            && nanboxed_values.count(raw_arg_ids[i])
+                            && !known_not_nothing_values.count(raw_arg_ids[i]));
                     boxed_args.push_back(needs_boxed
                         ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
@@ -13065,7 +13081,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     for (int i = 0; i < nargs; ++i) {
                         llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
                                 llvm::ConstantInt::get(i32_type, i));
-                        builder->CreateStore(boxed_args[i], gep);
+                        if (boxed_args[i]) {
+                            builder->CreateStore(boxed_args[i], gep);
+                        }
                     }
                 }
             }

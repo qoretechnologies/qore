@@ -389,6 +389,25 @@ QoreValue Var::eval() const {
     return val.getReferencedValue();
 }
 
+int Var::evalInt(int64& result) const {
+    if (is_thread_local) {
+        return -1;
+    }
+    QoreAutoVarRWReadLocker al(rwl);
+    QoreLValue<qore_gvar_ref_u>& val = getVal();
+    if (val.type == QV_Ref) {
+        return -1;
+    }
+    if (!val.assigned) {
+        return 0;
+    }
+    if (val.getType() != NT_INT) {
+        return -1;
+    }
+    result = val.getAsBigInt();
+    return 1;
+}
+
 void Var::deref(ExceptionSink* xsink) {
     //printd(5, "Var::deref() this: %p '%s' %d -> %d\n", this, getName(), reference_count(), reference_count() - 1);
     if (ROdereference()) {
