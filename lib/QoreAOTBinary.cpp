@@ -5846,7 +5846,7 @@ static bool isAOTLinkableMethodVariant(const QoreMethod* method, const AbstractQ
 
 //! Collect function names that have native AOT slot maps in this binary.
 static bool collectAOTSlotMapFunctionNames(const QoreAOTBinaryReader& reader,
-        std::unordered_set<std::string>& slot_map_names, bool& found_section, std::string& error) {
+        std::unordered_set<std::string_view>& slot_map_names, bool& found_section, std::string& error) {
     found_section = false;
 
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
@@ -16822,8 +16822,9 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             func->addPendingVariant(ufv);
             if (has_slot_map_section && cache_slot_variant_bindings) {
                 std::string variant_key = getVariantKey(qualified_name.c_str(), ufv);
-                if (slot_map_names.find(variant_key) != slot_map_names.end()) {
-                    slot_variant_bindings.emplace(std::move(variant_key),
+                auto slot_name = slot_map_names.find(variant_key);
+                if (slot_name != slot_map_names.end()) {
+                    slot_variant_bindings.emplace(*slot_name,
                         SlotVariantBinding{ufv, nullptr});
                 }
             }
@@ -17141,10 +17142,12 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             if (time_on) {
                 local_add_us += now_us() - t_add0;
             }
-            if (has_slot_map_section && cache_slot_variant_bindings
-                    && slot_map_names.find(variant_key) != slot_map_names.end()) {
-                slot_variant_bindings.emplace(std::move(variant_key),
-                    SlotVariantBinding{umv, qore_class_private::get(*qc)});
+            if (has_slot_map_section && cache_slot_variant_bindings) {
+                auto slot_name = slot_map_names.find(variant_key);
+                if (slot_name != slot_map_names.end()) {
+                    slot_variant_bindings.emplace(*slot_name,
+                        SlotVariantBinding{umv, qore_class_private::get(*qc)});
+                }
             }
         }
 

@@ -39,6 +39,7 @@
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <functional>
 #include <deque>
 #include <memory>
@@ -2098,10 +2099,12 @@ class QoreAOTBinaryDeserializer {
         UserVariantBase* variant = nullptr;
         const qore_class_private* class_ctx = nullptr;
     };
-    std::unordered_set<std::string> slot_map_names;
+    // Views borrow immutable names from reader's string pool and remain valid
+    // through slot registration, when these lookup tables are consumed.
+    std::unordered_set<std::string_view> slot_map_names;
     bool has_slot_map_section = false;
     bool cache_slot_variant_bindings = true;
-    std::unordered_map<std::string, SlotVariantBinding> slot_variant_bindings;
+    std::unordered_map<std::string_view, SlotVariantBinding> slot_variant_bindings;
 
     //! Batch-wide class lookup map installed by QoreAOTBinaryMultiDeserializer.
     //! Pending defaults can reference classes from sibling .qo sessions; the
@@ -2433,7 +2436,7 @@ public:
         if (!key) {
             return nullptr;
         }
-        auto i = slot_variant_bindings.find(key);
+        auto i = slot_variant_bindings.find(std::string_view(key));
         if (i == slot_variant_bindings.end()) {
             return nullptr;
         }
