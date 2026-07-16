@@ -70,6 +70,8 @@ public:
         const QoreTypeInfo* element_type = nullptr);
     QoreIRInstruction* createListAppend(QoreIRValue list, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createListSetLength(QoreIRValue list, QoreIRValue length,
+        const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListSize(QoreIRValue list, const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createListGetInt(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc = nullptr);

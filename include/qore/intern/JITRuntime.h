@@ -885,6 +885,9 @@ void qore_rt_raise_typed_foreach_nothing(int32_t value_kind, ExceptionSink* xsin
 //! Get the mutable entry array for a fresh fixed-size list owned by generated code.
 uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t list_val);
 
+//! Finalize the logical length of a fresh list after direct scalar stores.
+void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length);
+
 //! Get any element at index; returns NaN-boxed QoreValue (with +1 ref).
 //! Returns NOTHING if not a list or index out of bounds.
 uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink);

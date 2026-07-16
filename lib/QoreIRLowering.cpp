@@ -14062,6 +14062,8 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             elem_is_float = true;
         }
     }
+    bool use_typed_scalar_construction = (elem_is_int || elem_is_float)
+        && std::getenv("QORE_DISABLE_IR_TYPED_SELECT_CONSTRUCTION") == nullptr;
 
     // Evaluate the input list (left operand of select)
     QoreIRValue input_list = lowerExpression(select->getLeft(), error);
@@ -14099,7 +14101,11 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         builder.setBlock(preheader_block);
         QoreIRValue list_size = builder.createListSize(input_list, select->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
-        QoreIRValue result_list = builder.createEmptyList(select->loc, elem_type)->result;
+        QoreIRInstruction* result_inst = use_typed_scalar_construction
+            ? builder.createSizedList(list_size, select->loc, elem_type)
+            : builder.createEmptyList(select->loc, elem_type);
+        result_inst->list_reserve_only = use_typed_scalar_construction;
+        QoreIRValue result_list = result_inst->result;
         {
             auto* br = builder.createBranch(header_block, select->loc);
             setLoopCheckpointExceptionTarget(br, header_block);
@@ -14110,6 +14116,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
         auto* index_phi = builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt);
         QoreIRValue index_val = index_phi->result;
+        QoreIRPhiInstruction* output_index_phi = use_typed_scalar_construction
+            ? builder.createPhi({}, select->loc, QoreIRPhiValueKind::NativeInt) : nullptr;
+        QoreIRValue output_index = output_index_phi
+            ? output_index_phi->result : QoreIRValue();
 
         QoreIRValue at_end = builder.createBinaryOp(QoreIROpcode::GeInt, index_val, list_size,
             select->loc)->result;
@@ -14177,15 +14187,38 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             select->loc)->result;
 
         // Branch: if true append, else skip
+        QoreIRBasicBlock* predicate_exit_block = builder.getBlock();
         builder.createBranchIf(predicate_bool, append_block, cont_block, select->loc);
 
         // Append block: add element to result list
         builder.setBlock(append_block);
-        builder.createListAppend(result_list, element_val, select->loc);
+        QoreIRValue selected_output_index = output_index;
+        if (use_typed_scalar_construction) {
+            if (elem_is_int) {
+                builder.createListSetInt(result_list, output_index, element_val, select->loc);
+            } else {
+                builder.createListSetFloat(result_list, output_index, element_val, select->loc);
+            }
+            QoreIRValue one = builder.createConstInt(1, select->loc)->result;
+            selected_output_index = builder.createBinaryOp(QoreIROpcode::AddInt,
+                output_index, one, select->loc)->result;
+        } else {
+            builder.createListAppend(result_list, element_val, select->loc);
+        }
+        QoreIRBasicBlock* append_exit_block = builder.getBlock();
         builder.createBranch(cont_block, select->loc);
 
         // Continue block: increment index and loop back
         builder.setBlock(cont_block);
+
+        QoreIRValue next_output_index;
+        if (use_typed_scalar_construction) {
+            std::vector<QoreIRPhiIncoming> output_incoming;
+            output_incoming.push_back({output_index, predicate_exit_block});
+            output_incoming.push_back({selected_output_index, append_exit_block});
+            next_output_index = builder.createPhi(output_incoming, select->loc,
+                QoreIRPhiValueKind::NativeInt)->result;
+        }
 
         QoreIRValue one = builder.createConstInt(1, select->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
@@ -14203,9 +14236,18 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         index_phi->incoming.push_back({next_index, cont_exit_block});
         index_phi->operands.push_back(zero);
         index_phi->operands.push_back(next_index);
+        if (output_index_phi) {
+            output_index_phi->incoming.push_back({zero, preheader_block});
+            output_index_phi->incoming.push_back({next_output_index, cont_exit_block});
+            output_index_phi->operands.push_back(zero);
+            output_index_phi->operands.push_back(next_output_index);
+        }
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
+        if (use_typed_scalar_construction) {
+            builder.createListSetLength(result_list, output_index, select->loc);
+        }
         builder.createBranch(final_block, select->loc);
 
         builder.setBlock(nothing_block);

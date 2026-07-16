@@ -729,7 +729,10 @@ enum class QoreIROpcode : uint16_t {
     //! Map a constant hash key plus an integer offset with dynamic addition semantics.
     MapHashKeyOffsetAny = 398,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (399, 400, ...)
+    //! Set the logical length of a fresh scalar list after direct output stores.
+    ListSetLength = 399,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (400, 401, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -737,8 +740,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::MapHashKeyOffsetAny);
-static_assert(QORE_IR_MAX_OPCODE == 398, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListSetLength);
+static_assert(QORE_IR_MAX_OPCODE == 399, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -915,6 +918,7 @@ public:
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool typed_value_prevalidated = false;  // Transient: a dominating typed store validated this scalar value
+    bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
     bool redundant_store = false;  // Transient: store-back paired with list_push_in_place
 
     // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set

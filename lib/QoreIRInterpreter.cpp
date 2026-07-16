@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 398,
+static_assert(QORE_IR_MAX_OPCODE == 399,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -7222,6 +7222,20 @@ next_instruction:
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListSetLength: {
+                QoreValue list_val = getIRValue(values, inst->operands[0]);
+                QoreValue length_val = getIRValue(values, inst->operands[1]);
+                if (list_val.getType() == NT_LIST) {
+                    QoreListNode* list = list_val.get<QoreListNode>();
+                    int64_t length = length_val.getAsBigInt();
+                    qore_list_private* priv = qore_list_private::get(*list);
+                    if (length >= 0 && static_cast<size_t>(length) <= priv->length) {
+                        priv->length = static_cast<size_t>(length);
+                    }
                 }
                 ++ip;
                 break;

@@ -6215,6 +6215,30 @@ printf(\"%d\\n\", result.size());
                     sprintf("select on typed float list %s", mode));
         }
 
+        # Fresh typed result construction must publish only selected values,
+        # including all-match, no-match, empty, and removed-input paths.
+        code = "%modern
+list<int> ints = range(10);
+list<int> partial = (select ints, $1 % 3 == 0);
+list<int> all = (select ints, True);
+list<int> none = (select ints, False);
+list<int> empty_input = ();
+list<int> empty = (select empty_input, True);
+list<float> floats = (1.5, 2.5, 3.5, 0.5);
+list<float> selected_floats = (select floats, $1 >= 2.5);
+list<int> removed = range(1);
+remove removed;
+auto missing = (select removed, True);
+printf(\"%s|%d:%d|%s:%d|%d|%s|%d\\n\", partial.join(\",\"),
+    all.size(), all[-1], none.type(), none.size(), empty.size(),
+    selected_floats.join(\",\"), exists missing);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0,3,6,9|10:9|list:0|0|2.5,3.5|0", result,
+                    sprintf("typed scalar select construction %s", mode));
+        }
+
         # Map+select on typed hash list (direct-index)
         code = "%modern
 list<hash<auto>> items = ({\"name\": \"a\", \"val\": 10}, {\"name\": \"b\", \"val\": 5}, {\"name\": \"c\", \"val\": 20});

@@ -304,6 +304,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT typed map assigned-state guards", \testAOTTypedMapAssignedState());
         addTestCase("AOT direct-index map-select implicit arg cleanup",
             \testAOTDirectIndexMapSelectImplicitArgCleanup());
+        addTestCase("AOT typed scalar select construction",
+            \testAOTTypedScalarSelectConstruction());
         # AOT Binary Format v1 tests
         addTestCase("AOT v1 version field", \testVersionField());
         addTestCase("AOT v1 parse options high bits", \testPOHighBitsRoundTrip());
@@ -9149,6 +9151,28 @@ printf(\"%y\\n\", updc);
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT map-select false predicate restores implicit args");
+    }
+
+    testAOTTypedScalarSelectConstruction() {
+        string code = "%modern
+list<int> ints = range(10);
+list<int> partial = (select ints, $1 % 3 == 0);
+list<int> all = (select ints, True);
+list<int> none = (select ints, False);
+list<int> empty_input = ();
+list<int> empty = (select empty_input, True);
+list<float> floats = (1.5, 2.5, 3.5, 0.5);
+list<float> selected_floats = (select floats, $1 >= 2.5);
+list<int> removed = range(1);
+remove removed;
+auto missing = (select removed, True);
+printf(\"%s|%d:%d|%s:%d|%d|%s|%d\\n\", partial.join(\",\"),
+    all.size(), all[-1], none.type(), none.size(), empty.size(),
+    selected_floats.join(\",\"), exists missing);
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT typed scalar select matches interpreter");
     }
 
     testCompileV1Binary() {

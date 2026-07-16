@@ -48,7 +48,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 398,
+static_assert(QORE_IR_MAX_OPCODE == 399,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -903,6 +903,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_list_set_value_checked_throwing",
             llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_list_set_length_unchecked",
+            llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
     // get_object_class: (i64) -> i64
     module.getOrInsertFunction("qore_rt_get_object_class",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -15677,7 +15679,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     "QORE_DISABLE_AOT_TYPED_LIST_SET_SPECIALIZATION")
                 && (QoreTypeInfo::parseReturns(inst->element_type, NT_INT) == QTI_IDENT
                     || QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT);
-            const char* helper_name = exact_scalar_output
+            bool fixed_scalar_output = exact_scalar_output && !inst->list_reserve_only;
+            const char* helper_name = fixed_scalar_output
                 ? (aot_mode ? "qore_rt_create_fixed_list_by_type_path"
                             : "qore_rt_create_fixed_list_typed")
                 : (aot_mode ? "qore_rt_create_sized_list_by_type_path"
@@ -15829,6 +15832,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* val_int = ensureIntTypeInline(val, inst->operands[2].id);
+            auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+            if (data_it != typed_list_data_ptrs.end()
+                    && qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
+                    data_it->second, idx_int);
+                builder->CreateStore(boxInt(val_int), entry);
+                return true;
+            }
             auto helper = module.getOrInsertFunction("qore_rt_list_set_int",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
             builder->CreateCall(helper, {list_boxed, idx_int, val_int});
@@ -15844,6 +15856,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
             llvm::Value* val_float = ensureFloatType(val, inst->operands[2].id, module);
+            auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+            if (data_it != typed_list_data_ptrs.end()
+                    && qore_ir_use_typed_map_fusion(aot_mode,
+                        "QORE_DISABLE_AOT_DIRECT_TYPED_LIST_WRITES")) {
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type,
+                    data_it->second, idx_int);
+                builder->CreateStore(boxFloat(val_float), entry);
+                return true;
+            }
             auto helper = module.getOrInsertFunction("qore_rt_list_set_float",
                     llvm::FunctionType::get(void_type, {i64_type, i64_type, double_type}, false));
             builder->CreateCall(helper, {list_boxed, idx_int, val_float});
@@ -15986,6 +16007,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else {
                 emit_unchecked_store(val_boxed);
             }
+            return true;
+        }
+        case QoreIROpcode::ListSetLength: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* length = getVal(inst->operands[1].id, error);
+            if (!length) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* length_int = ensureIntTypeInline(length, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_set_length_unchecked",
+                    llvm::FunctionType::get(void_type, {i64_type, i64_type}, false));
+            builder->CreateCall(helper, {list_boxed, length_int});
             return true;
         }
         case QoreIROpcode::GetObjectClass: {

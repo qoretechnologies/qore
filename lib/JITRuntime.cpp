@@ -5162,6 +5162,17 @@ extern "C" DLLEXPORT uint64_t* qore_rt_list_get_mutable_data_unchecked(uint64_t 
     return reinterpret_cast<uint64_t*>(qore_list_private::get(*list)->entry);
 }
 
+extern "C" DLLEXPORT void qore_rt_list_set_length_unchecked(uint64_t list_val, int64_t length) {
+    QoreListNode* list = fromBits(list_val).get<QoreListNode>();
+    if (!list || length < 0) {
+        return;
+    }
+    qore_list_private* priv = qore_list_private::get(*list);
+    if (static_cast<size_t>(length) <= priv->allocated) {
+        priv->length = static_cast<size_t>(length);
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     QoreValue v = fromBits(list_val);
     if (v.getType() == NT_LIST) {

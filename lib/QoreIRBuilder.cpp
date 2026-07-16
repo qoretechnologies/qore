@@ -378,6 +378,15 @@ QoreIRInstruction* QoreIRBuilder::createListAppend(QoreIRValue list, QoreIRValue
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createListSetLength(QoreIRValue list, QoreIRValue length,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetLength);
+    inst->loc = loc;
+    inst->operands.push_back(list);
+    inst->operands.push_back(length);
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createListSize(QoreIRValue list, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSize);
     inst->loc = loc;
