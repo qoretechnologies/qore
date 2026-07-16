@@ -15957,6 +15957,56 @@ bool qore_streaming_kind_is_terminal(QoreStreamingOperatorNode::Kind kind) {
 
 }
 
+QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
+        const QoreProgramLocation* stage_loc, QoreIRValue element, QoreIRValue index, std::string& error) {
+    bool force_runtime_context = std::getenv("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT");
+    QoreIRBasicBlock* entry_block = builder.getBlock();
+    size_t insert_pos = entry_block->instructions.size();
+    QoreIRValue old_element;
+    QoreIRValue old_argv;
+    if (force_runtime_context) {
+        old_element = builder.createPushImplicitElement(index, stage_loc)->result;
+        old_argv = builder.createPushImplicitArg(element, stage_loc)->result;
+    }
+
+    VirtualImplicitContext saved = virtual_implicit;
+    virtual_implicit.arg0 = element;
+    virtual_implicit.arg1 = QoreIRValue();
+    virtual_implicit.element = index;
+    virtual_implicit.active = true;
+
+    int saved_ast_count = ast_delegate_count;
+    QoreIRValue result = lowerExpression(stage_expr, error);
+    virtual_implicit = saved;
+    if (!result.isValid()) {
+        return QoreIRValue();
+    }
+
+    bool needs_runtime_context = force_runtime_context || ast_delegate_count > saved_ast_count;
+    if (needs_runtime_context && !force_runtime_context) {
+        QoreIRFunction* function = builder.getFunction();
+        auto push_element = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+        push_element->result = function->createValue();
+        push_element->operands.push_back(index);
+        push_element->loc = stage_loc;
+        old_element = push_element->result;
+
+        auto push_argv = std::make_unique<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+        push_argv->result = function->createValue();
+        push_argv->operands.push_back(element);
+        push_argv->loc = stage_loc;
+        old_argv = push_argv->result;
+
+        entry_block->instructions.insert(entry_block->instructions.begin() + insert_pos, std::move(push_element));
+        entry_block->instructions.insert(entry_block->instructions.begin() + insert_pos + 1, std::move(push_argv));
+    }
+    if (needs_runtime_context) {
+        builder.createPopImplicitArg(old_argv, stage_loc);
+        builder.createPopImplicitElement(old_element, stage_loc);
+    }
+    return result;
+}
+
 QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         const std::vector<LazyPipelineStage>& source_stages, const LazyPipelineRoot& root, std::string& error) {
     if (!ensureBuilderContext(error)) {
@@ -16084,33 +16134,13 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         : builder.createIteratorCreate(source, nullptr, loc);
     QoreIRValue iter_val = iter_inst->result;
 
-    auto lower_with_implicit = [&](const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
-            QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
-        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stage_loc)->result;
-        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, stage_loc)->result;
-
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
-
-        QoreIRValue result = lowerExpression(stage_expr, error);
-
-        virtual_implicit = saved;
-        builder.createPopImplicitArg(old_argv, stage_loc);
-        builder.createPopImplicitElement(old_element, stage_loc);
-
-        return result;
-    };
-
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
         if (!pred || !static_cast<bool>(*pred)) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
-        QoreIRValue pred_result = lower_with_implicit(*pred, pred_loc, element_val, index_val);
+        QoreIRValue pred_result = lowerLazyPipelineStage(*pred, pred_loc, element_val, index_val, error);
         if (!pred_result.isValid()) {
             return QoreIRValue();
         }
@@ -16453,8 +16483,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             }
             case LazyPipelineStage::Map: {
                 assert(stage.primary);
-                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
-                    state.stage_indices[i]);
+                QoreIRValue map_result = lowerLazyPipelineStage(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i], error);
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
@@ -16488,8 +16518,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(map_block);
-                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
-                    state.stage_indices[i]);
+                QoreIRValue map_result = lowerLazyPipelineStage(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i], error);
                 if (!map_result.isValid()) {
                     return QoreIRValue();
                 }
@@ -16959,33 +16989,13 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         : builder.createIteratorCreate(source, nullptr, loc);
     QoreIRValue iter_val = iter_inst->result;
 
-    auto lower_with_implicit = [&](const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
-            QoreIRValue element_val, QoreIRValue index_val) -> QoreIRValue {
-        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stage_loc)->result;
-        QoreIRValue old_argv = builder.createPushImplicitArg(element_val, stage_loc)->result;
-
-        VirtualImplicitContext saved = virtual_implicit;
-        virtual_implicit.arg0 = element_val;
-        virtual_implicit.arg1 = QoreIRValue();
-        virtual_implicit.element = index_val;
-        virtual_implicit.active = true;
-
-        QoreIRValue result = lowerExpression(stage_expr, error);
-
-        virtual_implicit = saved;
-        builder.createPopImplicitArg(old_argv, stage_loc);
-        builder.createPopImplicitElement(old_element, stage_loc);
-
-        return result;
-    };
-
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
         if (!pred || !static_cast<bool>(*pred)) {
             return builder.createConstBool(true, pred_loc)->result;
         }
 
-        QoreIRValue pred_result = lower_with_implicit(*pred, pred_loc, element_val, index_val);
+        QoreIRValue pred_result = lowerLazyPipelineStage(*pred, pred_loc, element_val, index_val, error);
         if (!pred_result.isValid()) {
             return QoreIRValue();
         }
@@ -17218,8 +17228,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             }
             case LazyPipelineStage::Map: {
                 assert(stage.primary);
-                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
-                    state.stage_indices[i]);
+                QoreIRValue map_result = lowerLazyPipelineStage(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i], error);
                 if (!map_result.isValid()) {
                     return false;
                 }
@@ -17253,8 +17263,8 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
                 add_continue(updated, stage.loc);
 
                 builder.setBlock(map_block);
-                QoreIRValue map_result = lower_with_implicit(*stage.primary, stage.loc, element_val,
-                    state.stage_indices[i]);
+                QoreIRValue map_result = lowerLazyPipelineStage(*stage.primary, stage.loc, element_val,
+                    state.stage_indices[i], error);
                 if (!map_result.isValid()) {
                     return false;
                 }

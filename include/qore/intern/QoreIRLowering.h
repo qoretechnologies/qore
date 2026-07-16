@@ -306,6 +306,10 @@ private:
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
 
+    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+    QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
+        QoreIRValue element, QoreIRValue index, std::string& error);
+
     //! Shared native IR lowering for fused lazy streaming/functional pipelines.
     QoreIRValue lowerLazyPipelineFused(const QoreValue& base_source,
         const std::vector<LazyPipelineStage>& source_stages, const LazyPipelineRoot& root, std::string& error);

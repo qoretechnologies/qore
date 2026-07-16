@@ -46,6 +46,18 @@ float sub prodScaleFloat(list<float> values) {
     return (foldl \$1 * \$2, (map \$1 * 0.5, values));
 }
 
+list<int> sub capturedPipeline(list<int> values, int threshold, int scale, int offset) {
+    return (map \$1 * scale + offset, (select values, \$1 > threshold));
+}
+
+int sub capturedForeach(list<int> values, int threshold, int scale, int offset) {
+    int result = 0;
+    foreach int value in (map \$1 * scale + offset, (select values, \$1 > threshold)) {
+        result += value;
+    }
+    return result;
+}
+
 list<int> sparse_int = (1, 2, 3);
 delete sparse_int[1];
 list<float> sparse_float = (1.5, 2.5, 3.5);
@@ -60,7 +72,7 @@ auto missing_result = (foldl \$1 + \$2, (map \$1 * 2, missing));
 auto missing_offset_result = (foldl \$1 + \$2, (map \$1 + 4, missing));
 auto removed_result = (foldl \$1 + \$2, (map \$1 * 2, removed));
 auto iterator_result = (foldl \$1 + \$2, (map \$1 * 2, iterator));
-printf(\"%d:%.1f:%d:%.1f:%d:%.1f:%d:%.1f:%d:%.2f:%d:%.1f:%s:%s:%s:%d:%.1f\\n\",
+printf(\"%d:%.1f:%d:%.1f:%d:%.1f:%d:%.1f:%d:%.2f:%d:%.1f:%s:%s:%s:%d:%.1f:%y:%d\\n\",
     sumScaleInt((1, 2, 3)), sumScaleFloat((1.0, 2.0, 3.0)),
     sumSquareInt((1, 2, 3)), sumSquareFloat((1.0, 2.0, 3.0)),
     sumOffsetInt((1, 2, 3)), sumOffsetFloat((1.0, 2.0, 3.0)),
@@ -70,7 +82,8 @@ printf(\"%d:%.1f:%d:%.1f:%d:%.1f:%d:%.1f:%d:%.2f:%d:%.1f:%s:%s:%s:%d:%.1f\\n\",
     exists missing_result ? string(missing_result) : \"NOTHING\",
     exists missing_offset_result ? string(missing_offset_result) : \"NOTHING\",
     exists removed_result ? string(removed_result) : \"NOTHING\", iterator_result,
-    sumScaleFloat(negative_zero));
+    sumScaleFloat(negative_zero), capturedPipeline((1, 2, 3, 4), 2, 3, 7),
+    capturedForeach((1, 2, 3, 4), 2, 3, 7));
 ";
 
 string script_path = "/tmp/qore-aot-fused-map-fold-" + string(getpid()) + ".qr";
@@ -95,7 +108,7 @@ string sub runAot(string suffix, string env) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "12:12.0:14:14.0:18:7.5:16:6.5:48:0.75:10:14.5:NOTHING:NOTHING:NOTHING:12:-0.0\n";
+string expected = "12:12.0:14:14.0:18:7.5:16:6.5:48:0.75:10:14.5:NOTHING:NOTHING:NOTHING:12:-0.0:[16, 19]:35\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -108,6 +121,7 @@ hash<string, string> aot_modes = {
     "-native": "",
     "-helper": "QORE_DISABLE_AOT_NATIVE_FUSED_FOLDS=1",
     "-lazy": "QORE_DISABLE_IR_SPECIALIZED_MAP_FOLD_PRECEDENCE=1",
+    "-runtime-context": "QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT=1",
 };
 foreach string suffix in (keys aot_modes) {
     string env = aot_modes{suffix};
