@@ -3679,10 +3679,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "order by con.constraint_name, con.rn", name, schema);
         if (qh.constraint_name) {
             hash<auto> ch;
+            # a target is reported unqualified only when this connection resolves an unqualified name to
+            # its schema, so that the name reported here can be resolved by the caller; comparing to
+            # "public" instead would report the foreign keys of a table in the connection's own
+            # search_path schema as qualified, and so as differing from an unqualified description,
+            # making every alignment of that schema drop and re-add each foreign key
+            string default_schema = get_pgsql_default_schema(ds);
             foreach hash<auto> row in (qh.contextIterator()) {
                 reference<hash<auto>> c = \ch.(row.constraint_name);
                 c.columns.(row.source_column) = columns{row.source_column};
-                c.target.table = row.schema == "public" ? row.target_table : sprintf("%s.%s", row.schema, row.target_table);
+                c.target.table = row.schema == default_schema
+                    ? row.target_table
+                    : sprintf("%s.%s", row.schema, row.target_table);
                 c.target.columns.(row.target_column) = True;
             }
 

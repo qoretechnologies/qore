@@ -641,6 +641,35 @@ class PgsqlTest inherits SqlTestBase {
         Table qualified(ds, "public." + table.getName());
         assertEq("public", qualified.getSchemaName(), "an explicit schema overrides search_path");
 
+        # a foreign key whose target this connection resolves without a schema must be reported without
+        # one, so that it matches an unqualified schema description instead of being dropped and re-added
+        # on every alignment
+        string parent_name = ("qore_pgsql_spp_" + get_random_string()).lwr();
+        string child_name = ("qore_pgsql_spc_" + get_random_string()).lwr();
+        string fk_name = ("fk_" + child_name).lwr();
+        ds.exec(sprintf("create table %s.%s (id int primary key)", sname, parent_name));
+        ds.exec(sprintf("create table %s.%s (id int, pid int, constraint %s foreign key (pid) "
+            "references %s.%s (id))", sname, child_name, fk_name, sname, parent_name));
+        ds.commit();
+
+        PgsqlTable child(ds, child_name);
+        AbstractForeignConstraint fk = child.getForeignConstraints().memberGate(fk_name);
+        assertEq(parent_name, fk.target.table,
+            "a foreign key target in the search_path schema is reported unqualified");
+
+        # the same table reached by a qualified name on a connection whose search_path does not name its
+        # schema must report the target qualified, as the caller cannot resolve it otherwise
+        ds.exec("set search_path to public");
+        ds.commit();
+        PgsqlTable child_qualified(ds, sname + "." + child_name);
+        AbstractForeignConstraint qualified_fk =
+            child_qualified.getForeignConstraints().memberGate(fk_name);
+        assertEq(sname + "." + parent_name, qualified_fk.target.table,
+            "a foreign key target outside the connection's default schema is reported qualified");
+
+        ds.exec(sprintf("set search_path to %s", sname));
+        ds.commit();
+
         # a name with no schema must still resolve to a temporary table when search_path names a
         # schema other than "public"
         string temp_name = ("qore_pgsql_sptmp_" + get_random_string()).lwr();
