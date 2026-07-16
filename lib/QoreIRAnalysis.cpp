@@ -346,6 +346,27 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
     }
 }
 
+static bool qore_ir_variant_has_reference_params(
+        const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig) {
+        return true;
+    }
+    for (size_t i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "IR closure reference parameter analysis")) {
+            return true;
+        }
+        const QoreTypeInfo* type = sig->getParamTypeInfo(i);
+        if (type && QoreTypeInfo::isReference(type)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
         const QoreIRInstruction* inst, bool& has_ref_args,
         const std::unordered_map<uint32_t,
@@ -382,7 +403,11 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
                 return nullptr;
             }
             auto closure = closure_values->find(inst->operands[0].id);
-            return closure == closure_values->end() ? nullptr : closure->second;
+            if (closure == closure_values->end()) {
+                return nullptr;
+            }
+            has_ref_args = qore_ir_variant_has_reference_params(closure->second);
+            return closure->second;
         }
         case QoreIROpcode::Invoke: {
             const auto* call = static_cast<const QoreIRInvokeInstruction*>(inst);
@@ -394,7 +419,11 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
                 return nullptr;
             }
             auto closure = closure_values->find(inst->operands[0].id);
-            return closure == closure_values->end() ? nullptr : closure->second;
+            if (closure == closure_values->end()) {
+                return nullptr;
+            }
+            has_ref_args = qore_ir_variant_has_reference_params(closure->second);
+            return closure->second;
         }
         default:
             return nullptr;
@@ -414,6 +443,36 @@ static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
     }
     const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
     return ucf ? ucf->first() : nullptr;
+}
+
+static bool qore_ir_is_non_overridable_method_call(const QoreIRInstruction& inst) {
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    if (inst.opcode == QoreIROpcode::CallMethodDirect) {
+        const auto& call = static_cast<const QoreIRCallMethodDirectInstruction&>(inst);
+        method = call.method;
+        qc = call.qc;
+        variant = call.variant;
+    } else if (inst.opcode == QoreIROpcode::InvokeMethodDirect) {
+        const auto& call = static_cast<const QoreIRInvokeMethodDirectInstruction&>(inst);
+        method = call.method;
+        qc = call.qc;
+        variant = call.variant;
+    } else {
+        return false;
+    }
+    if (!method || !qc || method->getClass() != qc) {
+        return false;
+    }
+    if (qc->isFinal()) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+        return false;
+    }
+    const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+    return method_variant && method_variant->isFinal();
 }
 
 static bool qore_ir_is_read_only_list_use(const QoreIRInstruction& inst,
@@ -2839,6 +2898,7 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         size_t& check_count,
         const QoreIRParamNoEscapeQuery* param_noescape = nullptr) {
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*> closure_values;
     std::unordered_set<LocalVar*> candidate_locals;
     for (const auto& block : cfg.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR in-place list push definition analysis")) {
@@ -2850,6 +2910,11 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
             }
             if (inst->result.isValid()) {
                 definitions[inst->result.id] = inst.get();
+                const AbstractQoreFunctionVariant* closure =
+                    qore_ir_get_created_closure_variant(inst.get());
+                if (closure) {
+                    closure_values.emplace(inst->result.id, closure);
+                }
             }
             if (inst->opcode == QoreIROpcode::LoadLocal
                     || inst->opcode == QoreIROpcode::StoreLocal) {
@@ -2905,13 +2970,29 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
         if (qore_ir_is_read_only_list_use(inst, value)) {
             return true;
         }
-        if (!param_noescape || (inst.opcode != QoreIROpcode::CallDirect
-                && inst.opcode != QoreIROpcode::CallStaticDirect)) {
+        if (!param_noescape) {
+            return false;
+        }
+        size_t arg_offset = 0;
+        bool supported_call = inst.opcode == QoreIROpcode::CallDirect
+            || inst.opcode == QoreIROpcode::CallStaticDirect;
+        if (inst.opcode == QoreIROpcode::CallMethodDirect
+                || inst.opcode == QoreIROpcode::InvokeMethodDirect) {
+            supported_call = qore_ir_is_non_overridable_method_call(inst);
+        } else if (inst.opcode == QoreIROpcode::CallClosureDirect
+                || (inst.opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction&>(inst).invoke_opcode
+                        == QoreIROpcode::CallClosureDirect)) {
+            supported_call = true;
+            arg_offset = 1;
+        }
+        if (!supported_call) {
             return false;
         }
         bool has_ref_args = true;
         const AbstractQoreFunctionVariant* callee =
-            qore_ir_get_resolved_effect_callee(&inst, has_ref_args);
+            qore_ir_get_resolved_effect_callee(&inst, has_ref_args,
+                &closure_values);
         if (!callee || has_ref_args) {
             return false;
         }
@@ -2920,11 +3001,15 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
             return false;
         }
         bool found = false;
-        for (size_t arg = 0; arg < inst.operands.size(); ++arg) {
+        for (size_t arg = arg_offset; arg < inst.operands.size(); ++arg) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR noescape call argument analysis")) {
+                return false;
+            }
             if (inst.operands[arg].id != value.id) {
                 continue;
             }
-            if (!(*param_noescape)(callee, arg)) {
+            if (!(*param_noescape)(callee, arg - arg_offset)) {
                 return false;
             }
             found = true;

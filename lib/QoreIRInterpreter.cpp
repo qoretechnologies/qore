@@ -7010,24 +7010,15 @@ next_instruction:
                 QoreValue list_val = getIRValue(values, inst->operands[0]);
                 QoreValue push_val = getIRValue(values, inst->operands[1]);
                 QoreValue result;
-                if (list_val.getType() == NT_LIST) {
+                if (inst->list_push_in_place && list_val.getType() == NT_LIST) {
                     QoreListNode* l = list_val.get<QoreListNode>();
                     l->push(push_val.refSelf(), xsink);
-                    result = inst->list_push_in_place ? list_val : list_val.refSelf();
-                } else if (list_val.isNothing()) {
-                    // Use element type from instruction (set by lowerPush) for proper
-                    // coercion (e.g., list<softint> converts "3" to 3)
+                    result = list_val;
+                } else {
                     const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
                         inst->element_type ? inst->element_type : autoTypeInfo);
-                    QoreListNode* l = new QoreListNode(elem_type);
-                    l->push(push_val.refSelf(), xsink);
-                    result = QoreValue(l);
-                } else {
-                    if (xsink) {
-                        xsink->raiseException("PUSH-ERROR",
-                            "the lvalue argument to push is type \"%s\"; expecting \"list\"",
-                            list_val.getTypeName());
-                    }
+                    result = fromBits(qore_rt_list_push_typed(
+                        toBits(list_val), toBits(push_val), elem_type, xsink));
                 }
                 if (xsink && *xsink) {
                     result.discard(xsink);

@@ -9123,6 +9123,24 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 bool fast_lowered;
                 {
                     std::unordered_set<const void*> borrowed_params;
+                    if (closure_info) {
+                        for (unsigned p = 0; p < sig->numParams(); ++p) {
+                            if (p && !(p % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT direct closure noescape parameter mapping")) {
+                                delete ir_func;
+                                setAOTCompileFatal(fatal_error, "closure", native_key,
+                                    "direct noescape parameter mapping", "cancelled");
+                                return false;
+                            }
+                            const void* key = reinterpret_cast<const void*>(sig->lv[p]);
+                            if (p < closure_info->param_noescape.size()
+                                    && closure_info->param_noescape[p]
+                                    && param_kinds[p] == BatchCalleeParamKind::Boxed) {
+                                borrowed_params.insert(key);
+                            }
+                        }
+                    }
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);

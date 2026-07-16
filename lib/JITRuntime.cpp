@@ -3532,6 +3532,11 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
         const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     if (list_val.getType() == NT_LIST) {
         QoreListNode* l = list_val.get<QoreListNode>();
+        if (l->reference_count() > 1) {
+            QoreListNode* copy = l->copy();
+            copy->push(push_val.refSelf(), xsink);
+            return toBits(QoreValue(copy));
+        }
         l->push(push_val.refSelf(), xsink);
         // Return same list with a new reference for the caller to own
         l->ref();
