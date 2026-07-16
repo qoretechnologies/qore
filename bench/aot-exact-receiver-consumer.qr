@@ -1,0 +1,27 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+const int COUNT = 20000000;
+
+class AOTExactReceiverOverride inherits AOTExactReceiverWorker {
+    int transform(int value) {
+        return value * 5 + 100;
+    }
+}
+
+int sub runWorker(AOTExactReceiverWorker worker) {
+    int checksum = 0;
+    for (int i = 0; i < COUNT; ++i) {
+        checksum += worker.transform(i & 1023);
+    }
+    return checksum;
+}
+
+int sub main() {
+    AOTExactReceiverWorker exact();
+    AOTExactReceiverWorker overridden = new AOTExactReceiverOverride();
+    printf("%d:%d\n", runWorker(exact), overridden.transform(4));
+    return 0;
+}

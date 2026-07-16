@@ -5271,12 +5271,18 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
     llvm::Value* can_use_fast_entry = has_callee_ctx;
     if (object_base) {
-        auto valid_helper = module.getOrInsertFunction("qore_rt_object_is_valid",
-            llvm::FunctionType::get(i32_type, {i64_type}, false));
-        llvm::Value* object_valid = builder->CreateCall(valid_helper, {object_base});
-        object_valid = builder->CreateICmpNE(object_valid,
-            llvm::ConstantInt::get(i32_type, 0));
-        can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
+        // The exact-class helper also checks the receiver type and validity.
+        // Keep the standalone validity guard only for non-exact targets.
+        bool combined_exact_guard = require_exact_object_class
+            && !std::getenv("QORE_DISABLE_AOT_COMBINED_EXACT_OBJECT_GUARD");
+        if (!combined_exact_guard) {
+            auto valid_helper = module.getOrInsertFunction("qore_rt_object_is_valid",
+                llvm::FunctionType::get(i32_type, {i64_type}, false));
+            llvm::Value* object_valid = builder->CreateCall(valid_helper, {object_base});
+            object_valid = builder->CreateICmpNE(object_valid,
+                llvm::ConstantInt::get(i32_type, 0));
+            can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
+        }
         if (require_exact_object_class) {
             auto exact_helper = module.getOrInsertFunction(
                 "qore_rt_object_has_exact_aot_target_class",
