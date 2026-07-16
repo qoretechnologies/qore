@@ -338,6 +338,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
             addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
+            addTestCase("search_path schema resolution", \searchPathSchemaResolutionTest());
             addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
@@ -589,6 +590,71 @@ class PgsqlTest inherits SqlTestBase {
 
         assertEq(2, ds.selectRow(sprintf("select count(*) c from %s", tname)).c,
             "temporary table inserts use the resolved table object");
+    }
+
+    #! Tests that unqualified table names are resolved with the connection's search_path
+    /** PostgreSQL resolves an unqualified name against the connection's search_path, so an unqualified
+        table name must not be assumed to be in the \c public schema.
+    */
+    private searchPathSchemaResolutionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+        }
+
+        string sname = ("qore_pgsql_sp_" + get_random_string()).lwr();
+        string tname = ("qore_pgsql_spt_" + get_random_string()).lwr();
+        ds.exec(sprintf("create schema %s", sname));
+        on_exit {
+            ds.exec(sprintf("drop schema if exists %s cascade", sname));
+            ds.exec("set search_path to public");
+            ds.commit();
+        }
+        ds.exec(sprintf("create table %s.%s (id int, name text)", sname, tname));
+        ds.commit();
+
+        # the default search_path must continue to resolve to "public"
+        assertEq("public", get_pgsql_default_schema(ds), "default search_path resolves to public");
+
+        ds.exec(sprintf("set search_path to %s", sname));
+        ds.commit();
+
+        assertEq(sname, get_pgsql_default_schema(ds), "search_path is reported as the default schema");
+
+        Table unqualified(ds, tname);
+        assertEq(sname, unqualified.getSchemaName(), "unqualified name resolves via search_path");
+        assertEq(sname + "." + tname, unqualified.getSqlName(), "resolved SQL name is schema-qualified");
+        assertTrue(unqualified.checkExistence(), "search_path-resolved table exists");
+        assertTrue(unqualified.describe().hasKey("id"), "search_path-resolved table can be described");
+
+        # DML through the resolved object must reach the table in the search_path schema
+        unqualified.insert({"id": 1, "name": "one"});
+        ds.commit();
+        assertEq(1, ds.selectRow(sprintf("select count(*) c from %s.%s", sname, tname)).c,
+            "insert through the resolved object writes to the search_path schema");
+
+        # an explicit schema in the name must still win over search_path
+        Table qualified(ds, "public." + table.getName());
+        assertEq("public", qualified.getSchemaName(), "an explicit schema overrides search_path");
+
+        # a name with no schema must still resolve to a temporary table when search_path names a
+        # schema other than "public"
+        string temp_name = ("qore_pgsql_sptmp_" + get_random_string()).lwr();
+        ds.exec(sprintf("create temp table %s (id int)", temp_name));
+        Table temp_table(ds, temp_name);
+        assertRegex("^pg_temp", temp_table.getSchemaName(),
+            "temporary table resolves under a non-public search_path");
+        assertTrue(temp_table.checkExistence(), "temporary table exists under a non-public search_path");
+
+        # a search_path naming no existing schema must fall back to public rather than throw
+        ds.exec("set search_path to qore_pgsql_nonexistent_schema");
+        ds.commit();
+        assertEq("public", get_pgsql_default_schema(ds),
+            "an unresolvable search_path falls back to public");
     }
 
     #! Tests that bulk upsert UNNEST works with non-DatasourcePool AbstractDatasource subclasses
