@@ -14826,17 +14826,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_val_noguard(uint64_t val_bit
     return qore_rt_pseudo_val(val_bits);
 }
 
-//! Fast no-guard pseudo-method: <string>::size()/strlen() for bases proven to be assigned strings.
-extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_size_noguard(uint64_t val_bits) {
+static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_size_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
-        return toBits(QoreValue(static_cast<int64_t>(v.shortStringLen())));
+        return static_cast<int64_t>(v.shortStringLen());
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
-        return toBits(QoreValue(static_cast<int64_t>(str ? str->strlen() : 0)));
+        return static_cast<int64_t>(str ? str->strlen() : 0);
     }
-    return qore_rt_pseudo_size(val_bits);
+    return fromBits(qore_rt_pseudo_size(val_bits)).getAsBigInt();
+}
+
+//! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_size_native_noguard(uint64_t val_bits) {
+    return qore_rt_pseudo_string_size_native_impl(val_bits);
+}
+
+//! Fast no-guard pseudo-method: <string>::size()/strlen() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_size_noguard(uint64_t val_bits) {
+    return toBits(QoreValue(qore_rt_pseudo_string_size_native_impl(val_bits)));
 }
 
 static size_t qore_short_string_utf8_length(QoreValue v) {
@@ -14864,17 +14873,26 @@ static size_t qore_short_string_utf8_length(QoreValue v) {
     return len;
 }
 
-//! Fast no-guard pseudo-method: <string>::length() for bases proven to be assigned strings.
-extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_bits) {
+static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_length_native_impl(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.isShortString()) {
-        return toBits(QoreValue(static_cast<int64_t>(qore_short_string_utf8_length(v))));
+        return static_cast<int64_t>(qore_short_string_utf8_length(v));
     }
     if (v.getType() == NT_STRING) {
         const QoreStringNode* str = v.get<const QoreStringNode>();
-        return toBits(QoreValue(static_cast<int64_t>(str ? str->length() : 0)));
+        return static_cast<int64_t>(str ? str->length() : 0);
     }
-    return qore_rt_pseudo_length(val_bits);
+    return fromBits(qore_rt_pseudo_length(val_bits)).getAsBigInt();
+}
+
+//! Native scalar <string>::length() for bases proven to be assigned strings.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_length_native_noguard(uint64_t val_bits) {
+    return qore_rt_pseudo_string_length_native_impl(val_bits);
+}
+
+//! Fast no-guard pseudo-method: <string>::length() for bases proven to be assigned strings.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_length_noguard(uint64_t val_bits) {
+    return toBits(QoreValue(qore_rt_pseudo_string_length_native_impl(val_bits)));
 }
 
 //! Fast no-guard pseudo-method: <string>::sizep() for bases known as string/NOTHING.
@@ -14907,14 +14925,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_strp_noguard(uint64_t val_bi
     return toBits(QoreValue(v.isShortString() || v.getType() == NT_STRING));
 }
 
-//! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
-extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits,
+static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_impl(uint64_t val_bits,
         uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue arg = fromBits(arg_bits);
 
-    auto eval_predicate = [&](const char* pattern_ptr) -> uint64_t {
+    auto eval_predicate = [&](const char* pattern_ptr) -> int64_t {
         bool result = false;
         switch (predicate) {
             case 0:
@@ -14931,9 +14948,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t v
                     xsink->raiseException("IR-EXEC-ERROR", "invalid string predicate fast-path id %d",
                         static_cast<int>(predicate));
                 }
-                return toBits(QoreValue());
+                return 0;
         }
-        return toBits(QoreValue(result));
+        return result ? 1 : 0;
     };
 
     if (arg.isShortString() && str->getEncoding() == QCS_UTF8) {
@@ -14944,43 +14961,86 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t v
 
     QoreStringValueHelper pattern(arg, str->getEncoding(), xsink);
     if (xsink && *xsink) {
-        return toBits(QoreValue());
+        return 0;
     }
     return eval_predicate(pattern->c_str());
+}
+
+//! Native scalar pseudo-methods: <string>::startsWith()/endsWith()/contains().
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_predicate_native_noguard(uint64_t val_bits,
+        uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
+    return qore_rt_pseudo_string_predicate_native_impl(
+        val_bits, arg_bits, predicate, xsink);
+}
+
+//! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits,
+        uint64_t arg_bits, int32_t predicate, ExceptionSink* xsink) {
+    int64_t result = qore_rt_pseudo_string_predicate_native_impl(
+        val_bits, arg_bits, predicate, xsink);
+    return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result != 0));
+}
+
+static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_find_native_impl(uint64_t val_bits,
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    QoreValue substring = fromBits(substring_bits);
+    QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    qore_offset_t result = str->index(**pattern, offset, xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    return static_cast<int64_t>(result);
+}
+
+//! Native scalar <string>::find() for assigned string base and substring operands.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_find_native_noguard(uint64_t val_bits,
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+    return qore_rt_pseudo_string_find_native_impl(
+        val_bits, substring_bits, offset, xsink);
 }
 
 //! Fast no-guard pseudo-method: <string>::find() for assigned string base and substring operands.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bits,
         uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
-    QoreValue v = fromBits(val_bits);
-    QoreStringValueHelper str(v);
-    QoreValue substring = fromBits(substring_bits);
-    QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
-    if (xsink && *xsink) {
-        return toBits(QoreValue());
-    }
-    qore_offset_t result = str->index(**pattern, offset, xsink);
-    if (xsink && *xsink) {
-        return toBits(QoreValue());
-    }
-    return toBits(QoreValue(static_cast<int64_t>(result)));
+    int64_t result = qore_rt_pseudo_string_find_native_impl(
+        val_bits, substring_bits, offset, xsink);
+    return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
 }
 
-//! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
-extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits,
+static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_rfind_native_impl(uint64_t val_bits,
         uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);
     QoreStringValueHelper str(v);
     QoreValue substring = fromBits(substring_bits);
     QoreStringValueHelper pattern(substring, str->getEncoding(), xsink);
     if (xsink && *xsink) {
-        return toBits(QoreValue());
+        return 0;
     }
     qore_offset_t result = str->rindex(**pattern, offset, xsink);
     if (xsink && *xsink) {
-        return toBits(QoreValue());
+        return 0;
     }
-    return toBits(QoreValue(static_cast<int64_t>(result)));
+    return static_cast<int64_t>(result);
+}
+
+//! Native scalar <string>::rfind() for assigned string base and substring operands.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_rfind_native_noguard(uint64_t val_bits,
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+    return qore_rt_pseudo_string_rfind_native_impl(
+        val_bits, substring_bits, offset, xsink);
+}
+
+//! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits,
+        uint64_t substring_bits, int64_t offset, ExceptionSink* xsink) {
+    int64_t result = qore_rt_pseudo_string_rfind_native_impl(
+        val_bits, substring_bits, offset, xsink);
+    return xsink && *xsink ? toBits(QoreValue()) : toBits(QoreValue(result));
 }
 
 //! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.

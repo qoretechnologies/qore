@@ -3973,6 +3973,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
             || info.int_expression.nodes.size() > QORE_AOT_INT_EXPRESSION_MAX_NODES) {
         return nullptr;
     }
+    bool native_string_helpers = !std::getenv("QORE_DISABLE_AOT_NATIVE_STRING_HELPERS");
     std::vector<unsigned> optional_source_params;
     bool have_hash_key_source = false;
     auto add_optional_source = [&](int param) -> bool {
@@ -4073,14 +4074,20 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 value = builder->CreateCall(helper, {base});
             } else {
                 const char* name = node.kind == AOTIntExpressionNodeKind::StringSize
-                    ? "qore_rt_pseudo_string_size_noguard"
-                    : "qore_rt_pseudo_string_length_noguard";
+                    ? (native_string_helpers
+                        ? "qore_rt_pseudo_string_size_native_noguard"
+                        : "qore_rt_pseudo_string_size_noguard")
+                    : (native_string_helpers
+                        ? "qore_rt_pseudo_string_length_native_noguard"
+                        : "qore_rt_pseudo_string_length_noguard");
                 auto helper = module.getOrInsertFunction(name,
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
-                llvm::Value* boxed = builder->CreateCall(helper, {base});
-                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-                value = builder->CreateCall(to_int, {boxed});
+                value = builder->CreateCall(helper, {base});
+                if (!native_string_helpers) {
+                    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    value = builder->CreateCall(to_int, {value});
+                }
             }
         } else if (node.kind == AOTIntExpressionNodeKind::HashKeyInt) {
             if (node.param < 0
@@ -4134,14 +4141,19 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                 int operation = node.kind == AOTIntExpressionNodeKind::StringStartsWith ? 0
                     : node.kind == AOTIntExpressionNodeKind::StringEndsWith ? 1 : 2;
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_pseudo_string_predicate_noguard",
+                    native_string_helpers
+                        ? "qore_rt_pseudo_string_predicate_native_noguard"
+                        : "qore_rt_pseudo_string_predicate_noguard",
                     llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, i32_type, ptr_type}, false));
-                llvm::Value* boxed = builder->CreateCall(helper,
+                llvm::Value* result = builder->CreateCall(helper,
                     {base, pattern, llvm::ConstantInt::get(i32_type, operation), xsink_arg});
-                auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-                value = builder->CreateICmpNE(builder->CreateCall(to_bool, {boxed}),
+                if (!native_string_helpers) {
+                    auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    result = builder->CreateCall(to_bool, {result});
+                }
+                value = builder->CreateICmpNE(result,
                     llvm::ConstantInt::get(i64_type, 0));
             } else {
                 int64_t default_offset = node.kind == AOTIntExpressionNodeKind::StringFind
@@ -4153,16 +4165,22 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
                     return nullptr;
                 }
                 const char* name = node.kind == AOTIntExpressionNodeKind::StringFind
-                    ? "qore_rt_pseudo_string_find_noguard"
-                    : "qore_rt_pseudo_string_rfind_noguard";
+                    ? (native_string_helpers
+                        ? "qore_rt_pseudo_string_find_native_noguard"
+                        : "qore_rt_pseudo_string_find_noguard")
+                    : (native_string_helpers
+                        ? "qore_rt_pseudo_string_rfind_native_noguard"
+                        : "qore_rt_pseudo_string_rfind_noguard");
                 auto helper = module.getOrInsertFunction(name,
                     llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, i64_type, ptr_type}, false));
-                llvm::Value* boxed = builder->CreateCall(helper,
+                value = builder->CreateCall(helper,
                     {base, pattern, offset, xsink_arg});
-                auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-                    llvm::FunctionType::get(i64_type, {i64_type}, false));
-                value = builder->CreateCall(to_int, {boxed});
+                if (!native_string_helpers) {
+                    auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false));
+                    value = builder->CreateCall(to_int, {value});
+                }
             }
         } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
             if (node.lhs >= values.size()
@@ -4594,16 +4612,25 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
             llvm::FunctionType::get(i64_type, {i64_type}, false));
         return builder->CreateCall(to_int, {value});
     };
-    auto finish_int = [&](llvm::Value* boxed) -> llvm::Value* {
+    bool native_string_helpers = !std::getenv("QORE_DISABLE_AOT_NATIVE_STRING_HELPERS");
+    auto finish_int = [&](llvm::Value* result) -> llvm::Value* {
         if (info.return_kind == BatchCalleeReturnKind::Boxed) {
-            return boxed;
+            if (!native_string_helpers) {
+                return result;
+            }
+            auto box = module.getOrInsertFunction("qore_rt_box_big_int",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            return builder->CreateCall(box, {result});
         }
         if (info.return_kind != BatchCalleeReturnKind::NativeInt) {
             return nullptr;
         }
-        auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-            llvm::FunctionType::get(i64_type, {i64_type}, false));
-        return builder->CreateCall(to_int, {boxed});
+        if (!native_string_helpers) {
+            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            return builder->CreateCall(to_int, {result});
+        }
+        return result;
     };
 
     llvm::Value* base = get_param(op.base_param);
@@ -4622,8 +4649,12 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
         case AOTStringOpKind::Size:
         case AOTStringOpKind::Length: {
             const char* name = op.kind == AOTStringOpKind::Size
-                ? "qore_rt_pseudo_string_size_noguard"
-                : "qore_rt_pseudo_string_length_noguard";
+                ? (native_string_helpers
+                    ? "qore_rt_pseudo_string_size_native_noguard"
+                    : "qore_rt_pseudo_string_size_noguard")
+                : (native_string_helpers
+                    ? "qore_rt_pseudo_string_length_native_noguard"
+                    : "qore_rt_pseudo_string_length_noguard");
             auto helper = module.getOrInsertFunction(name,
                 llvm::FunctionType::get(i64_type, {i64_type}, false));
             return finish_int(builder->CreateCall(helper, {base}));
@@ -4663,8 +4694,12 @@ llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
                 return nullptr;
             }
             const char* name = op.kind == AOTStringOpKind::Find
-                ? "qore_rt_pseudo_string_find_noguard"
-                : "qore_rt_pseudo_string_rfind_noguard";
+                ? (native_string_helpers
+                    ? "qore_rt_pseudo_string_find_native_noguard"
+                    : "qore_rt_pseudo_string_find_noguard")
+                : (native_string_helpers
+                    ? "qore_rt_pseudo_string_rfind_native_noguard"
+                    : "qore_rt_pseudo_string_rfind_noguard");
             auto helper = module.getOrInsertFunction(name,
                 llvm::FunctionType::get(i64_type,
                     {i64_type, i64_type, i64_type, ptr_type}, false));
@@ -4849,15 +4884,23 @@ llvm::Value* QoreIRToLLVM::emitAOTComposedInt(const BatchCalleeInfo& info,
         result = builder->CreateCall(helper, {base});
     } else if (op.source_kind == AOTComposedIntSourceKind::StringSize
             || op.source_kind == AOTComposedIntSourceKind::StringLength) {
+        bool native_string_helpers =
+            !std::getenv("QORE_DISABLE_AOT_NATIVE_STRING_HELPERS");
         const char* name = op.source_kind == AOTComposedIntSourceKind::StringSize
-            ? "qore_rt_pseudo_string_size_noguard"
-            : "qore_rt_pseudo_string_length_noguard";
+            ? (native_string_helpers
+                ? "qore_rt_pseudo_string_size_native_noguard"
+                : "qore_rt_pseudo_string_size_noguard")
+            : (native_string_helpers
+                ? "qore_rt_pseudo_string_length_native_noguard"
+                : "qore_rt_pseudo_string_length_noguard");
         auto helper = module.getOrInsertFunction(name,
             llvm::FunctionType::get(i64_type, {i64_type}, false));
-        llvm::Value* boxed = builder->CreateCall(helper, {base});
-        auto to_int = module.getOrInsertFunction("qore_rt_to_int",
-            llvm::FunctionType::get(i64_type, {i64_type}, false));
-        result = builder->CreateCall(to_int, {boxed});
+        result = builder->CreateCall(helper, {base});
+        if (!native_string_helpers) {
+            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            result = builder->CreateCall(to_int, {result});
+        }
     } else {
         return nullptr;
     }

@@ -1253,13 +1253,31 @@ uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits, const QoreMethod*
 uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg_bits, int32_t predicate,
     ExceptionSink* xsink);
 
+//! Native scalar variant of qore_rt_pseudo_string_predicate_noguard().
+int64_t qore_rt_pseudo_string_predicate_native_noguard(uint64_t val_bits, uint64_t arg_bits,
+    int32_t predicate, ExceptionSink* xsink);
+
 //! Fast no-guard pseudo-method: <string>::find() for assigned string base and substring operands.
 uint64_t qore_rt_pseudo_string_find_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
     ExceptionSink* xsink);
 
+//! Native scalar variant of qore_rt_pseudo_string_find_noguard().
+int64_t qore_rt_pseudo_string_find_native_noguard(uint64_t val_bits, uint64_t substring_bits,
+    int64_t offset, ExceptionSink* xsink);
+
 //! Fast no-guard pseudo-method: <string>::rfind() for assigned string base and substring operands.
 uint64_t qore_rt_pseudo_string_rfind_noguard(uint64_t val_bits, uint64_t substring_bits, int64_t offset,
     ExceptionSink* xsink);
+
+//! Native scalar variant of qore_rt_pseudo_string_rfind_noguard().
+int64_t qore_rt_pseudo_string_rfind_native_noguard(uint64_t val_bits, uint64_t substring_bits,
+    int64_t offset, ExceptionSink* xsink);
+
+//! Native scalar <string>::size()/strlen() for bases proven to be assigned strings.
+int64_t qore_rt_pseudo_string_size_native_noguard(uint64_t val_bits);
+
+//! Native scalar <string>::length() for bases proven to be assigned strings.
+int64_t qore_rt_pseudo_string_length_native_noguard(uint64_t val_bits);
 
 //! Fast no-guard pseudo-method: <string>::substr() for assigned string base and int operands.
 uint64_t qore_rt_pseudo_string_substr_noguard(uint64_t val_bits, int64_t start, int64_t length,
