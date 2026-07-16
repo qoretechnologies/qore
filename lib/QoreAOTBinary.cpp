@@ -10378,6 +10378,54 @@ bool qoreAOTClosureOwnsLocal(const QoreIRFunction* closure_ir, const LocalVar* l
 
 } // anonymous namespace
 
+bool qoreAOTPrepareClosureIRLocalSlots(QoreIRFunction* closure_ir, const UserSignature* sig,
+        const LVarSet* vlist) {
+    if (!closure_ir) {
+        return true;
+    }
+    size_t local_count = 0;
+    bool added_local = false;
+    auto reserve = [&](const LocalVar* lv) -> bool {
+        if (!lv) {
+            return true;
+        }
+        if (local_count++ && !(local_count % 100)
+                && qore_check_cancel(nullptr, "AOT closure local slot preparation")) {
+            return false;
+        }
+        if (!closure_ir->local_var_slots.count(lv)) {
+            closure_ir->reserveLocalSlot(lv);
+            added_local = true;
+        }
+        return true;
+    };
+    if (sig) {
+        for (unsigned p = 0; p < sig->numParams(); ++p) {
+            if (!reserve(sig->lv[p])) {
+                return false;
+            }
+        }
+        // Lexical self must come from vlist. Reserving the closure signature's
+        // synthetic selfid would replace the captured parent object identity.
+        if (!reserve(sig->argvid)) {
+            return false;
+        }
+    }
+    if (vlist) {
+        for (LocalVar* lv : *vlist) {
+            if (!reserve(lv)) {
+                return false;
+            }
+        }
+    }
+    if (added_local) {
+        // Relocation can leave signature locals referenced only by expression
+        // metadata out of the initial slot pass. Existing IDs are preserved.
+        closure_ir->computeSlotIdsAndEmbed();
+    }
+    return true;
+}
+
 bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
         const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals) {
     std::vector<QoreAOTClosureCaptureInfo> captures;
@@ -11699,12 +11747,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 // Lower closure before writing captures so embedded expression
                 // payloads (for example \local reference expressions) can add
                 // parent locals that are absent from the parser's closure vlist.
-                const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
-                QoreIRFunction* owned_ir = nullptr;
+                QoreIRFunction* closure_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
+                std::unique_ptr<QoreIRFunction> owned_ir;
                 if (!closure_ir) {
                     std::string closure_error;
-                    owned_ir = ::lowerClosureForSerialization(variant, &closure_error);
-                    closure_ir = owned_ir;
+                    owned_ir.reset(::lowerClosureForSerialization(variant, &closure_error));
+                    closure_ir = owned_ir.get();
                     if (!closure_ir) {
                         qoreAOTSetExprSerializationError("failed to lower closure for AOT serialization in "
                             + qoreAOTDescribeExpr(expr) + ": "
@@ -11714,11 +11762,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 }
 
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-                qoreAOTPruneClosureIRBodyLocals(const_cast<QoreIRFunction*>(closure_ir), sig, vlist);
+                if (!qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
+                    qoreAOTSetExprSerializationError("cancelled while preparing closure local slots for "
+                        + qoreAOTDescribeExpr(expr));
+                    return false;
+                }
+                qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
                 if (!qoreAOTWriteClosureCaptures(writer, vlist, closure_ir, parent_locals)) {
                     qoreAOTSetExprSerializationError("closure captures exceed AOT format limit in "
                         + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
-                    delete owned_ir;
                     return false;
                 }
 
@@ -11762,12 +11814,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 if (!::serializeIRFunction(writer, *closure_ir, writeExpr)) {
                     qoreAOTSetExprSerializationError("failed to serialize closure IR for "
                         + qoreAOTDescribeExpr(expr));
-                    delete owned_ir;
                     return false;
                 }
                 uint32_t end_pos = writer.position();
                 writer.patchU32(size_pos, end_pos - size_pos - 4);
-                delete owned_ir;
                 return true;
             }
         }

@@ -1109,18 +1109,20 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
 
     // Lower closure before writing captures so embedded expression payloads
     // can contribute parent locals not present in the parser's closure vlist.
-    const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
-    QoreIRFunction* owned_ir = nullptr;
+    QoreIRFunction* closure_ir = const_cast<QoreIRFunction*>(variant->getCachedIR());
+    std::unique_ptr<QoreIRFunction> owned_ir;
     if (!closure_ir) {
         // Lower on the fly for serialization
-        owned_ir = ::lowerClosureForSerialization(variant);
-        closure_ir = owned_ir;
+        owned_ir.reset(::lowerClosureForSerialization(variant));
+        closure_ir = owned_ir.get();
     }
 
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
-    ::qoreAOTPruneClosureIRBodyLocals(const_cast<QoreIRFunction*>(closure_ir), sig, vlist);
+    if (!::qoreAOTPrepareClosureIRLocalSlots(closure_ir, sig, vlist)) {
+        return false;
+    }
+    ::qoreAOTPruneClosureIRBodyLocals(closure_ir, sig, vlist);
     if (!::qoreAOTWriteClosureCaptures(ctx.writer, vlist, closure_ir, ctx.parent_locals)) {
-        delete owned_ir;
         return false;
     }
 
@@ -1164,10 +1166,8 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         uint32_t end_pos = ctx.writer.position();
         ctx.writer.patchU32(size_pos, end_pos - size_pos - 4);
     } else {
-        delete owned_ir;
         return false;
     }
-    delete owned_ir;
     return true;
 }
 

@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTStoredCapturedClosureTest
+
+class AOTStoredCapturedClosureTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTStoredCapturedClosureTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("AOT stored closures serialize captured parameter locals",
+            \testStoredCapturedParameter());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+        f.write(body);
+    }
+
+    private string providerCode() {
+        return "%modern
+
+class CaptureUpdateContext {
+    private {
+        hash<auto> cx;
+        hash<auto> options;
+    }
+
+    constructor(hash<auto> n_cx, hash<auto> n_options) {
+        cx = n_cx;
+        options = n_options;
+    }
+
+    hash<auto> apply(int object_id) {
+        return {
+            \"action\": options.\"api-manager\".action,
+            \"object_id\": object_id,
+            \"token\": cx.token,
+        };
+    }
+}
+";
+    }
+
+    private string consumerCode() {
+        return "%modern
+
+class StoredCaptureAdapter {
+    private static hash<auto> currentById(hash<auto> cx, int object_id) {
+        return {\"current\": sprintf(\"%s-%d\", cx.token, object_id)};
+    }
+
+    private static hash<auto> executeWithAdapters(hash<auto> plan,
+            code<hash<auto>(int, hash<auto>)> updater,
+            code<hash<auto>(int)> reader) {
+        hash<auto> result = updater(plan.id, {\"action\": \"updated\"});
+        result.current = reader(plan.id).current;
+        return result;
+    }
+
+    static hash<auto> execute(hash<auto> cx, hash<auto> plan) {
+        code<hash<auto>(int, hash<auto>)> updater =
+            hash<auto> sub (int object_id, hash<auto> api_manager) {
+                CaptureUpdateContext update(cx, {
+                    \"api-manager\": api_manager,
+                });
+                return update.apply(object_id);
+            };
+        code<hash<auto>(int)> reader = hash<auto> sub (int object_id) {
+            return currentById(cx, object_id);
+        };
+        return executeWithAdapters(plan, updater, reader);
+    }
+}
+
+int sub main() {
+    hash<auto> result = StoredCaptureAdapter::execute(
+        {\"token\": \"secret\"}, {\"id\": 42});
+    printf(\"%s:%d:%s:%s\\n\", result.action, result.object_id,
+        result.token, result.current);
+    return 0;
+}
+";
+    }
+
+    testStoredCapturedParameter() {
+        TmpDir tmp("qore-aot-stored-captured-closure-");
+        string provider = tmp.path + "/capture-context.qr";
+        string source = tmp.path + "/stored-capture.qr";
+        string runner = tmp.path + "/stored-capture-runner.q";
+        string source_manifest = tmp.path + "/source-symbols.manifest";
+        string qo_dir = tmp.path + "/qo";
+        string exe = tmp.path + "/stored-capture";
+        mkdir(qo_dir);
+        write(provider, providerCode());
+        write(source, consumerCode());
+        write(runner, providerCode() + "\n" + consumerCode() + "\nmain();\n");
+        write(source_manifest, sprintf("format=1\nclass\tCaptureUpdateContext\t%s\n",
+            provider));
+
+        string expected = "updated:42:secret:secret-42\n";
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s",
+            libqore_dir, libqore_dir);
+        assertEq(expected, run(sprintf("%s %s --exec-mode=ast %s",
+            env, qore_bin, runner)), "AST baseline");
+        assertEq(expected, run(sprintf("%s %s --exec-mode=jit %s",
+            env, qore_bin, runner)), "JIT baseline");
+
+        string provider_compile_out = run(sprintf(
+            "%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+                "--source-symbol-manifest=%s --output-dir=%s %s",
+            env, qcc_bin, source_manifest, qo_dir, provider));
+        assertTrue(provider_compile_out.find("script-context .qo") != -1,
+            "capture provider compiled to .qo: " + provider_compile_out);
+        string compile_out = run(sprintf(
+            "%s QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 "
+                "%s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+                "--source-symbol-manifest=%s -L %s --output-dir=%s %s",
+            env, qcc_bin, source_manifest, qo_dir, qo_dir, source));
+        assertTrue(compile_out.find("script-context .qo") != -1,
+            "captured closure compiled to .qo: " + compile_out);
+        assertTrue(compile_out.find("compiled native closure") != -1,
+            "captured closure keeps its native body: " + compile_out);
+
+        string link_out = run(sprintf("%s %s -o %s %s/*.qo",
+            env, qcc_bin, exe, qo_dir));
+        assertTrue(is_file(exe), "captured closure .qo linked: " + link_out);
+        assertEq(expected, run(sprintf("%s %s", env, exe)),
+            "linked AOT native closure");
+        assertEq(expected, run(sprintf(
+            "%s QORE_DISABLE_AOT_NATIVE_CLOSURES=1 %s", env, exe)),
+            "linked AOT closure IR fallback");
+    }
+}
