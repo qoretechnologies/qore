@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 2000000;
+    list<bool> flags = (True, False, True, True, False, True, False, True);
+    list<string> words = ("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh");
+    int total = 0;
+    for (int round = 0; round < rounds; ++round) {
+        for (int i = 0; i < flags.size(); ++i) {
+            if (flags[i]) {
+                ++total;
+            }
+        }
+        for (int i = 0; i < words.size(); ++i) {
+            if (words[i] !== "") {
+                ++total;
+            }
+        }
+    }
+    printf("%d\n", total);
+    return 0;
+}

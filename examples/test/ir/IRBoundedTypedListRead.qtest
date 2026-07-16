@@ -32,6 +32,28 @@ float sub boundedFloat() {
     return total;
 }
 
+int sub boundedBool() {
+    list<bool> values = (True, False, True);
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub boundedString() {
+    list<string> values = (\"a\", \"bb\", \"ccc\");
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i] !== \"\") {
+            ++total;
+        }
+    }
+    return total;
+}
+
 int sub parameterInt(list<int> values) {
     int total = 0;
     for (int i = 0; i < values.size(); ++i) {
@@ -52,6 +74,26 @@ float sub parameterFloat(list<float> values) {
     float total = 0.0;
     for (int i = 0; i < values.size(); ++i) {
         total += values[i];
+    }
+    return total;
+}
+
+int sub parameterBool(list<bool> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub parameterString(list<string> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); ++i) {
+        if (values[i]) {
+            ++total;
+        }
     }
     return total;
 }
@@ -207,13 +249,19 @@ list<int> sparse_int = ();
 sparse_int[2] = 7;
 list<float> sparse_float = ();
 sparse_float[2] = 2.5;
+list<bool> sparse_bool = ();
+sparse_bool[2] = True;
+list<string> sparse_string = ();
+sparse_string[2] = \"abc\";
 
-printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y:%d:%.1f:%d:%d:%d:%d:%d:%.1f\\n\", boundedInt(),
+printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y:%d:%.1f:%d:%d:%d:%d:%d:%.1f:%d:%d:%d:%d:%d:%d\\n\", boundedInt(),
     boundedFloat(), cachedBoundInt(), cachedBoundFloat(), inclusiveBound(), negativeStart(), mutatedList(),
     maybeAssigned(False), removedList(), deletedList(), outOfRange(), oversizedCachedBound(),
     reassignedCachedBound(), staleCachedBound(), parameterInt((1, 2, 3)), parameterFloat((1.5, 2.5)),
     optionalParameter(NOTHING), mutatedParameter((4, 5)), removedParameter((6, 7)),
-    parameterBigInt((281474976710656, 3)), parameterInt(sparse_int), parameterFloat(sparse_float));
+    parameterBigInt((281474976710656, 3)), parameterInt(sparse_int), parameterFloat(sparse_float), boundedBool(),
+    boundedString(), parameterBool((True, False, True)), parameterString((\"ab\", \"cde\")),
+    parameterBool(sparse_bool), parameterString(sparse_string));
 ";
 
 string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
@@ -238,7 +286,7 @@ string sub runAot() {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null:6:4.0:0:9:0:281474976710659:7:2.5\n";
+string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null:6:4.0:0:9:0:281474976710659:7:2.5:2:3:2:2:1:1\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -261,7 +309,11 @@ if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
         || stats !~ /IR-OPT: inclusiveBound:.*bounded-list=1/
         || stats !~ /IR-OPT: parameterInt:.*bounded-list=1/
         || stats !~ /IR-OPT: parameterBigInt:.*bounded-list=1/
-        || stats !~ /IR-OPT: parameterFloat:.*bounded-list=1/) {
+        || stats !~ /IR-OPT: parameterFloat:.*bounded-list=1/
+        || stats !~ /IR-OPT: boundedBool:.*bounded-list=1/
+        || stats !~ /IR-OPT: boundedString:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterBool:.*bounded-list=1/
+        || stats !~ /IR-OPT: parameterString:.*bounded-list=1/) {
     printf("missing bounded typed-list optimization:\n%s", stats);
     exit(2);
 }

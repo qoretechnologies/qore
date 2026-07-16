@@ -2387,6 +2387,10 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         } else if (element_type == floatTypeInfo) {
             specialized_opcode = QoreIROpcode::ListGetFloat;
             representation = QoreIRValueRepresentation::NativeFloat;
+        } else if (element_type == boolTypeInfo
+                || QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT) {
+            specialized_opcode = QoreIROpcode::ListGetValue;
+            representation = QoreIRValueRepresentation::Boxed;
         } else {
             continue;
         }
@@ -2615,9 +2619,15 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 inst.opcode = specialized_opcode;
                 QoreIRValueFacts result_facts;
                 result_facts.type_info = element_type;
-                result_facts.assigned_state = QoreIRAssignedState::Assigned;
                 result_facts.representation = representation;
-                result_facts.never_nothing = true;
+                // Exact typed lists can contain unassigned sparse slots.  Native
+                // numeric reads preserve their established conversion semantics;
+                // boxed bool/string reads must continue to expose NOTHING.
+                bool native_numeric = representation == QoreIRValueRepresentation::NativeInt
+                    || representation == QoreIRValueRepresentation::NativeFloat;
+                result_facts.assigned_state = native_numeric
+                    ? QoreIRAssignedState::Assigned : QoreIRAssignedState::MaybeAssigned;
+                result_facts.never_nothing = native_numeric;
                 func.setValueFacts(inst.result, result_facts);
                 ++changed;
                 ++loop_specializations;
@@ -2967,13 +2977,13 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         }
         return;
     }
-    if (!getenv("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
-        local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
-            cfg, loops, uses, check_count);
-    }
     if (!getenv("QORE_DISABLE_IR_BOUNDED_TYPED_LIST_READS")) {
         local_stats.bounded_typed_list_reads = qore_ir_specialize_bounded_typed_list_reads(
             func, cfg, loops, check_count);
+    }
+    if (!getenv("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
+        local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
+            cfg, loops, uses, check_count);
     }
     if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
         local_stats.in_place_list_pushes = qore_ir_mark_in_place_list_pushes(
