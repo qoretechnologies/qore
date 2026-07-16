@@ -286,6 +286,20 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         # Known SHA-256 of "hello"
         assertEq("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", sha256);
 
+        # digest with explicit output encoding
+        assertEq("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            eval_expr("digest", ("hello", "sha256", "hex")));      # explicit hex == default
+        assertEq(digest("sha256", "hello").toHex(), eval_expr("digest", ("hello", "SHA-256", "HEX")));  # case/sep-insensitive
+        assertEq(make_base64_string(digest("sha256", "hello")),
+            eval_expr("digest", ("hello", "sha256", "base64")));
+        assertEq(digest("sha256", "hello"), eval_expr("digest", ("hello", "sha256", "binary")));
+        # base64 of a longer digest must not contain embedded newlines
+        string b64_512 = eval_expr("digest", ("hello", "sha512", "base64"));
+        assertEq(-1, b64_512.find("\n"));
+        assertEq(make_base64_string(digest("sha512", "hello")), b64_512);
+        # invalid encoding is rejected
+        assertThrows("DIGEST-ERROR", sub () { eval_expr("digest", ("hello", "sha256", "bogus")); });
+
         # hmac
         string hmac_val = eval_expr("hmac", ("hello", "sha256", "secret"));
         assertEq(64, hmac_val.length());

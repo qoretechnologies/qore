@@ -106,6 +106,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         addTestCase("convertDateFormat", \testConvertDateFormat());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
         addTestCase("DPQL select expressions", \testDpqlSelectExpressions());
         addTestCase("DPQL update assignment expressions", \testDpqlUpdateAssignmentExpressions());
@@ -649,6 +650,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
     }
 
     testDpqlSelectExpressions() {
@@ -789,5 +791,14 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         assertThrows("COLUMN-ERROR", "query references unknown column", \t.parseDpqlFieldExpression(),
             ("@missing", "target"),
             "unknown DPQL field in update assignment");
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # SQLite has no built-in cryptographic hash functions, so digest must raise a clear error
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "hex")), 1);
+        });
     }
 }
