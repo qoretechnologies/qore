@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 50000000;
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += nestedCfgScore((i & 1023) - 128);
+    }
+    printf("%d\n", checksum);
+    return 0;
+}

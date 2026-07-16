@@ -5235,8 +5235,11 @@ static bool qore_aot_collect_int_expression_summaries(
         if (proven_return_kind != BatchCalleeReturnKind::NativeInt) {
             proven_return_kind = qore_ir_get_fast_entry_return_kind(variant, true);
         }
+        bool nested_cfg_select = !std::getenv(
+            "QORE_DISABLE_AOT_NESTED_CFG_SELECT_IMPORT");
         if (!func || (func->blocks.size() != 1 && func->blocks.size() != 3
-                    && func->blocks.size() != 4)
+                    && func->blocks.size() != 4
+                    && (!nested_cfg_select || func->blocks.size() != 5))
                 || (callee->second.return_kind != BatchCalleeReturnKind::NativeInt
                     && proven_return_kind != BatchCalleeReturnKind::NativeInt)
                 || callee->second.num_params > QORE_AOT_INT_EXPRESSION_MAX_NODES
@@ -5647,6 +5650,134 @@ static bool qore_aot_collect_int_expression_summaries(
                     state = VisitState::Failed;
                     return false;
                 }
+            }
+            if (func->blocks.size() == 5) {
+                auto contains_branch = [&](const QoreIRBasicBlock* block) {
+                    return std::any_of(block->instructions.begin(),
+                        block->instructions.end(), [&](const auto& inst_ptr) {
+                            return inst_ptr && !is_ignored(inst_ptr->opcode)
+                                && inst_ptr->opcode == QoreIROpcode::BrIf;
+                        });
+                };
+                bool true_is_nested = contains_branch(branch->true_target);
+                bool false_is_nested = contains_branch(branch->false_target);
+                if (true_is_nested == false_is_nested) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                const QoreIRBasicBlock* nested_block = true_is_nested
+                    ? branch->true_target : branch->false_target;
+                const QoreIRBasicBlock* direct_block = true_is_nested
+                    ? branch->false_target : branch->true_target;
+
+                std::unordered_map<uint32_t, int> nested_values = values;
+                std::unordered_map<const LocalVar*, int> nested_locals = local_values;
+                const QoreIRBranchIfInstruction* nested_branch = nullptr;
+                for (const auto& inst_ptr : nested_block->instructions) {
+                    if (!inst_ptr || inst_ptr->exception_target || nested_branch) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                    const QoreIRInstruction* inst = inst_ptr.get();
+                    if (is_ignored(inst->opcode)) {
+                        continue;
+                    }
+                    if (inst->opcode == QoreIROpcode::BrIf) {
+                        nested_branch =
+                            static_cast<const QoreIRBranchIfInstruction*>(inst);
+                    } else if (!append_instruction(inst, nested_values,
+                            nested_locals, false)) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                }
+                auto nested_condition = nested_branch
+                    ? nested_values.find(nested_branch->condition.id)
+                    : nested_values.end();
+                if (!nested_branch || !nested_branch->true_target
+                        || !nested_branch->false_target
+                        || nested_branch->true_target == nested_branch->false_target
+                        || nested_condition == nested_values.end()
+                        || nested_condition->second < 0
+                        || static_cast<size_t>(nested_condition->second)
+                            >= expression.nodes.size()) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                int nested_condition_value = nested_condition->second;
+                if (!is_bool_node(expression.nodes[
+                            static_cast<size_t>(nested_condition_value)].kind)) {
+                    int zero = append_constant(expression, 0);
+                    nested_condition_value = append_binary(expression,
+                        AOTIntExpressionNodeKind::Ne,
+                        nested_condition_value, zero);
+                    if (nested_condition_value < 0) {
+                        state = VisitState::Failed;
+                        return false;
+                    }
+                }
+
+                auto get_return = [&](const QoreIRBasicBlock* block,
+                        const std::unordered_map<uint32_t, int>& initial_values,
+                        const std::unordered_map<const LocalVar*, int>& initial_locals) {
+                    std::unordered_map<uint32_t, int> block_values = initial_values;
+                    std::unordered_map<const LocalVar*, int> block_locals = initial_locals;
+                    const QoreIRReturnInstruction* ret = nullptr;
+                    for (const auto& inst_ptr : block->instructions) {
+                        if (!inst_ptr || inst_ptr->exception_target || ret) {
+                            return -1;
+                        }
+                        const QoreIRInstruction* inst = inst_ptr.get();
+                        if (is_ignored(inst->opcode)) {
+                            continue;
+                        }
+                        if (inst->opcode == QoreIROpcode::Return) {
+                            ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                        } else if (!append_instruction(inst, block_values,
+                                block_locals, false)) {
+                            return -1;
+                        }
+                    }
+                    if (!ret || !ret->has_value) {
+                        return -1;
+                    }
+                    auto value = block_values.find(ret->value.id);
+                    return value == block_values.end() ? -1 : value->second;
+                };
+
+                std::unordered_set<const QoreIRBasicBlock*> covered{
+                    func->blocks.front().get(), nested_block, direct_block,
+                    nested_branch->true_target, nested_branch->false_target};
+                if (covered.size() != 5
+                        || !std::all_of(func->blocks.begin(), func->blocks.end(),
+                            [&](const auto& block) {
+                                return block && covered.count(block.get());
+                            })) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                int direct_value = get_return(direct_block, values, local_values);
+                int nested_true_value = get_return(nested_branch->true_target,
+                    nested_values, nested_locals);
+                int nested_false_value = get_return(nested_branch->false_target,
+                    nested_values, nested_locals);
+                int nested_result = append_select(expression,
+                    nested_condition_value, nested_true_value, nested_false_value);
+                int result = append_select(expression, condition_value,
+                    true_is_nested ? nested_result : direct_value,
+                    true_is_nested ? direct_value : nested_result);
+                if (result < 0
+                        || result != static_cast<int>(expression.nodes.size() - 1)
+                        || is_bool_node(expression.nodes.back().kind)) {
+                    state = VisitState::Failed;
+                    return false;
+                }
+                callee->second.int_expression = std::move(expression);
+                callee->second.never_returns_nothing = true;
+                callee->second.return_kind = proven_return_kind;
+                callee->second.approach_b_eligible = true;
+                state = VisitState::Success;
+                return true;
             }
             if (func->blocks.size() == 4) {
                 auto get_arm_values = [&](const QoreIRBasicBlock* block,
