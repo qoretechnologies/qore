@@ -854,6 +854,14 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
         }
     }
 
+    // AOT module application can execute initializers that resolve committed
+    // methods in another Program and therefore take that Program's parse lock.
+    // Serialize cold runtime module loading before taking the target Program's
+    // parse lock so every participating thread observes the same lock order:
+    // AOT initialization, then Program parsing.  The committed-feature fast
+    // path above remains lock-free.
+    AutoLocker aot_init_al(qore_aot_get_init_execution_lock());
+
     // slow path: grab the exclusive parse lock for actual module loading
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
@@ -915,6 +923,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         return 0;
     }
 
+    // Match runTimeLoadModule()'s AOT-before-Program lock order.  This path is
+    // AOT-specific and can otherwise participate in the same cross-Program
+    // initializer deadlock.
+    AutoLocker aot_init_al(qore_aot_get_init_execution_lock());
     ProgramRuntimeParseContextHelper pah(&xsink, tpgm);
     if (xsink) {
         return -1;

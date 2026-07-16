@@ -61,6 +61,7 @@ class QoreIRLValuePathInstruction;
 class QoreMethod;
 class QoreNamespace;
 class QoreProgram;
+class QoreRecursiveThreadLock;
 class QoreStringNode;
 class QoreTypeInfo;
 class QoreValue;
@@ -478,6 +479,13 @@ extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* q
 */
 extern "C" void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, QoreNamespace* qore_ns,
     ExceptionSink* xsink);
+
+//! Returns the recursive lock serializing AOT module application and initializer execution.
+/** Slow runtime module loads take this lock before taking a target Program's parse lock.
+    This establishes one lock order for concurrent child-Program module loading and prevents
+    AOT initializer callbacks from deadlocking while resolving committed APIs in another Program.
+*/
+DLLLOCAL QoreRecursiveThreadLock& qore_aot_get_init_execution_lock();
 
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_delete()
 extern "C" void qore_aot_module_delete();
