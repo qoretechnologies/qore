@@ -48,6 +48,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstInt: return "const.int";
         case QoreIROpcode::ConstFloat: return "const.float";
         case QoreIROpcode::ConstBool: return "const.bool";
+        case QoreIROpcode::ConstBoolBoxed: return "const.bool.boxed";
         case QoreIROpcode::ConstChar: return "const.char";
         case QoreIROpcode::ConstNothing: return "const.nothing";
         case QoreIROpcode::ConstNull: return "const.null";
@@ -730,6 +731,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
             if (inst->opcode == QoreIROpcode::ConstInt
                     || inst->opcode == QoreIROpcode::ConstFloat
                     || inst->opcode == QoreIROpcode::ConstBool
+                    || inst->opcode == QoreIROpcode::ConstBoolBoxed
                     || inst->opcode == QoreIROpcode::ConstChar
                     || inst->opcode == QoreIROpcode::ConstNothing
                     || inst->opcode == QoreIROpcode::ConstNull

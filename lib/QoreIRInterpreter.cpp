@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 399,
+static_assert(QORE_IR_MAX_OPCODE == 400,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -6737,7 +6737,8 @@ next_instruction:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::ConstBool: {
+            case QoreIROpcode::ConstBool:
+            case QoreIROpcode::ConstBoolBoxed: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 setValueSlotDirect(values, cinst->result.id, QoreValue(cinst->constant.bool_value));
                 ++ip;

@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+bool sub literalVal(int value) {
+    return (value, value + 1).val();
+}
+
+bool sub literalEmpty(int value) {
+    return (value, value + 1).empty();
+}
+
+int sub queryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (literalVal(i)) {
+            ++checksum;
+        }
+        if (literalEmpty(i)) {
+            --checksum;
+        }
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 20000000;
+printf("%d\n", queryKernel(rounds));

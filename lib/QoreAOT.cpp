@@ -3570,6 +3570,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::ConstInt:
                 case QoreIROpcode::ConstFloat:
                 case QoreIROpcode::ConstBool:
+                case QoreIROpcode::ConstBoolBoxed:
                 case QoreIROpcode::ConstNothing:
                 case QoreIROpcode::ConstNull:
                 case QoreIROpcode::ConstEnum:

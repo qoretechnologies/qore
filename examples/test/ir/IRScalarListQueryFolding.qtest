@@ -103,14 +103,14 @@ string stats = backquote(sprintf(
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: literalSize:.*literal-list-queries=1/
         || stats !~ /IR-OPT: literalFloatSize:.*literal-list-queries=1/
-        || stats !~ /IR-OPT: literalBoolSize:.*literal-list-queries=1/) {
+        || stats !~ /IR-OPT: literalBoolSize:.*literal-list-queries=1/
+        || stats !~ /IR-OPT: literalEmpty:.*literal-list-queries=1/
+        || stats !~ /IR-OPT: literalVal:.*literal-list-queries=1/) {
     printf("missing scalar-list query folding:\n%s", stats);
     exit(2);
 }
 if (stats !~ /IR-OPT: boxedQuery:.*literal-list-queries=0/
         || stats !~ /IR-OPT: preservesEvaluation:.*literal-list-queries=0/
-        || stats !~ /IR-OPT: literalEmpty:.*literal-list-queries=0/
-        || stats !~ /IR-OPT: literalVal:.*literal-list-queries=0/
         || stats !~ /IR-OPT: maybeAssignedQuery:.*literal-list-queries=0/) {
     printf("unsafe scalar-list query folding:\n%s", stats);
     exit(2);

@@ -732,7 +732,10 @@ enum class QoreIROpcode : uint16_t {
     //! Set the logical length of a fresh scalar list after direct output stores.
     ListSetLength = 399,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (400, 401, ...)
+    //! Load a boolean constant in the boxed QoreValue representation.
+    ConstBoolBoxed = 400,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (401, 402, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -740,8 +743,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListSetLength);
-static_assert(QORE_IR_MAX_OPCODE == 399, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ConstBoolBoxed);
+static_assert(QORE_IR_MAX_OPCODE == 400, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
