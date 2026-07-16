@@ -1457,6 +1457,8 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
             expected_representation = QoreIRValueRepresentation::NativeInt;
         } else if (element_type == floatTypeInfo) {
             expected_representation = QoreIRValueRepresentation::NativeFloat;
+        } else if (element_type == boolTypeInfo) {
+            expected_representation = QoreIRValueRepresentation::NativeBool;
         } else {
             continue;
         }

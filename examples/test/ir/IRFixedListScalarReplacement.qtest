@@ -24,6 +24,11 @@ float sub scalarFloat(float base) {
     return values[1];
 }
 
+bool sub scalarBool(bool base) {
+    list<bool> values = (base, True, False);
+    return values[0];
+}
+
 int sub dynamicIndex(int index) {
     list<int> values = (7, 8, 9);
     return values[index];
@@ -50,7 +55,7 @@ string sub boxedElement() {
     return values[1];
 }
 
-printf(\"%d:%.1f:%d:%d:%d:%d:%s\\n\", scalarInt(4), scalarFloat(1.5),
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%s\\n\", scalarInt(4), scalarFloat(1.5), scalarBool(True),
     dynamicIndex(2), mutatedList(), escapedList().size(), outOfRange(), boxedElement());
 ";
 
@@ -78,7 +83,7 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:9:9:2:1:b\n";
+string expected = "11:2.5:1:9:9:2:1:b\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -98,7 +103,8 @@ string stats = backquote(sprintf(
     "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
-        || stats !~ /IR-OPT: scalarFloat:.*scalar-lists=1/) {
+        || stats !~ /IR-OPT: scalarFloat:.*scalar-lists=1/
+        || stats !~ /IR-OPT: scalarBool:.*scalar-lists=1/) {
     printf("missing fixed-list scalar replacement:\n%s", stats);
     exit(2);
 }
