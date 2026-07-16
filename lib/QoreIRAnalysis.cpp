@@ -1629,6 +1629,132 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
     return scalarized;
 }
 
+static size_t qore_ir_fold_scalar_list_queries(QoreIRFunction& func,
+        size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_SCALAR_LIST_QUERY_FOLDING")) {
+        return 0;
+    }
+
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR scalar-list query definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
+
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    std::unordered_map<const QoreIRInstruction*, int64_t> folded;
+    for (const auto& [result_id, definition] : definitions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR scalar-list query candidate analysis")) {
+            return 0;
+        }
+        if (!definition || definition->opcode != QoreIROpcode::MakeList
+                || definition->exception_target || definition->operands.size() > 100) {
+            continue;
+        }
+        const auto* make = static_cast<const QoreIRMakeListInstruction*>(definition);
+        QoreIRValueRepresentation expected = QoreIRValueRepresentation::Unknown;
+        if (make->typeInfo) {
+            const QoreTypeInfo* element_type =
+                QoreTypeInfo::getUniqueReturnComplexList(make->typeInfo);
+            if (element_type == bigIntTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeInt;
+            } else if (element_type == floatTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeFloat;
+            } else if (element_type == boolTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeBool;
+            } else if (element_type && element_type != autoTypeInfo
+                    && element_type != anyTypeInfo) {
+                continue;
+            }
+        }
+        bool safe_operands = true;
+        for (QoreIRValue operand : definition->operands) {
+            const QoreIRValueFacts* facts = func.getValueFacts(operand);
+            if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || (facts->representation != QoreIRValueRepresentation::NativeInt
+                        && facts->representation != QoreIRValueRepresentation::NativeFloat
+                        && facts->representation != QoreIRValueRepresentation::NativeBool)
+                    || (expected != QoreIRValueRepresentation::Unknown
+                        && facts->representation != expected)) {
+                safe_operands = false;
+                break;
+            }
+        }
+        if (!safe_operands) {
+            continue;
+        }
+
+        auto use_it = uses.find(result_id);
+        if (use_it == uses.end() || use_it->second.size() != 1
+                || !use_it->second.front().inst) {
+            continue;
+        }
+        const QoreIRInstruction* query = use_it->second.front().inst;
+        if (query->exception_target || !query->result.isValid()
+                || query->operands.size() != 1
+                || query->operands[0].id != result_id) {
+            continue;
+        }
+
+        if (query->opcode != QoreIROpcode::ListSize) {
+            continue;
+        }
+        eliminated.insert(definition);
+        folded.emplace(query, static_cast<int64_t>(definition->operands.size()));
+    }
+
+    if (folded.empty()) {
+        return 0;
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            // Complete the committed rewrite even if cancellation is requested.
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR scalar-list query folding");
+            }
+            if (eliminated.count(it->get())) {
+                it = instructions.erase(it);
+                continue;
+            }
+            auto fold_it = folded.find(it->get());
+            if (fold_it == folded.end()) {
+                ++it;
+                continue;
+            }
+            auto replacement = std::make_unique<QoreIRConstInstruction>();
+            replacement->opcode = QoreIROpcode::ConstInt;
+            replacement->loc = (*it)->loc;
+            replacement->result = (*it)->result;
+            replacement->constant.kind = QoreIRConstant::Kind::Int;
+            replacement->constant.int_value = fold_it->second;
+            QoreIRValueFacts facts;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.never_nothing = true;
+            facts.type_info = bigIntTypeInfo;
+            facts.representation = QoreIRValueRepresentation::NativeInt;
+            func.setValueFacts(replacement->result, facts);
+            *it = std::move(replacement);
+            ++it;
+        }
+    }
+    return folded.size();
+}
+
 struct QoreIRScalarExpressionKey {
     QoreIROpcode opcode = QoreIROpcode::ConstNothing;
     uint64_t constant_bits = 0;
@@ -2922,6 +3048,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         return;
     }
     size_t check_count = 0;
+    local_stats.scalar_list_queries_folded =
+        qore_ir_fold_scalar_list_queries(func, check_count);
     local_stats.fixed_lists_scalarized =
         qore_ir_scalar_replace_fixed_lists(func, check_count);
     for (const auto& block : func.blocks) {

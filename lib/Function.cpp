@@ -5421,12 +5421,13 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         return nullptr;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu scalar-lists=%zu typed-foreach=%zu branches=%zu borrowed-list=%zu bounded-list=%zu inplace-push=%zu\n",
+        fprintf(stderr, "IR-OPT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu scalar-lists=%zu literal-list-queries=%zu typed-foreach=%zu branches=%zu borrowed-list=%zu bounded-list=%zu inplace-push=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
             optimization_stats.scalar_expressions_eliminated,
             optimization_stats.fixed_lists_scalarized,
+            optimization_stats.scalar_list_queries_folded,
             optimization_stats.typed_foreach_loops,
             optimization_stats.constant_branches_folded,
             optimization_stats.borrowed_list_reads,

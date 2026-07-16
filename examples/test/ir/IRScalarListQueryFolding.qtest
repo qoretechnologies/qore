@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub literalSize(int base) {
+    return (base, base + 1, base + 2).size();
+}
+
+int sub literalFloatSize(float base) {
+    return (base, base + 1.0).size();
+}
+
+int sub literalBoolSize(bool base) {
+    return (base, base).size();
+}
+
+bool sub literalEmpty(int base) {
+    return (base, base + 1).empty();
+}
+
+bool sub literalVal(int base) {
+    return (base, base + 1).val();
+}
+
+int sub preservesEvaluation() {
+    int value = 0;
+    int size = (++value, ++value).size();
+    return size * 10 + value;
+}
+
+int sub boxedQuery() {
+    return (\"a\", \"b\").size();
+}
+
+int sub maybeAssignedQuery(bool assign) {
+    *int value;
+    if (assign) {
+        value = 7;
+    }
+    return (value, 8).size();
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d\\n\", literalSize(4), literalFloatSize(1.5),
+    literalBoolSize(True), literalEmpty(1), literalVal(1), preservesEvaluation(),
+    boxedQuery(), maybeAssignedQuery(False));
+";
+
+string script_path = "/tmp/qore-ir-scalar-list-query-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(bool disabled) {
+    string exe = "/tmp/qore-ir-scalar-list-query-" + string(getpid())
+        + (disabled ? "-disabled" : "");
+    string compile_out = backquote(sprintf(
+        "%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_SCALAR_LIST_QUERY_FOLDING=1 " : "",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "3:2:2:0:1:22:2:2\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot(False);
+string disabled_aot = runAot(True);
+if (aot != expected || disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
+        expected, aot, disabled_aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: literalSize:.*literal-list-queries=1/
+        || stats !~ /IR-OPT: literalFloatSize:.*literal-list-queries=1/
+        || stats !~ /IR-OPT: literalBoolSize:.*literal-list-queries=1/) {
+    printf("missing scalar-list query folding:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: boxedQuery:.*literal-list-queries=0/
+        || stats !~ /IR-OPT: preservesEvaluation:.*literal-list-queries=0/
+        || stats !~ /IR-OPT: literalEmpty:.*literal-list-queries=0/
+        || stats !~ /IR-OPT: literalVal:.*literal-list-queries=0/
+        || stats !~ /IR-OPT: maybeAssignedQuery:.*literal-list-queries=0/) {
+    printf("unsafe scalar-list query folding:\n%s", stats);
+    exit(2);
+}

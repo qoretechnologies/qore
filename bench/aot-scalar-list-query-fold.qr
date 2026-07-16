@@ -1,0 +1,16 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub literalQueries(int rounds) {
+    int total = 0;
+    for (int i = 0; i < rounds; ++i) {
+        total += (i, i + 1, i + 2, i + 3).size();
+        total += (i, i + 1).size();
+        total += (i, i + 1, i + 2).size();
+    }
+    return total;
+}
+
+printf("%d\n", literalQueries(int(ENV.ROUNDS ?? 1000000)));
