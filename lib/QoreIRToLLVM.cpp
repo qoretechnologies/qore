@@ -386,6 +386,74 @@ static bool qore_ir_fast_entry_args_need_no_binding(
     return true;
 }
 
+static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
+        const AbstractQoreFunctionVariant* variant,
+        const QoreValue& expr, int arg_start, int nargs) {
+    if (std::getenv("QORE_DISABLE_AOT_OPTIONAL_SCALAR_FAST_ENTRY")) {
+        return false;
+    }
+    const auto* call = expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+    const QoreFunction* function = call ? call->getFunction() : nullptr;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!function || function->numVariants() != 1 || function->first() != variant
+            || !sig || sig->hasVarargs() || arg_start < 0 || nargs < 0
+            || static_cast<unsigned>(nargs) != sig->numParams()) {
+        return false;
+    }
+
+    const QoreParseListNode* parse_args = nullptr;
+    const QoreListNode* args = nullptr;
+    const type_vec_t* arg_types = qore_ir_get_call_parsed_arg_types(
+        expr, parse_args, args);
+    if (parse_args && (parse_args->hasNamedArgs() || parse_args->isVariableList())) {
+        return false;
+    }
+    if (!parse_args && args) {
+        const qore_list_private* args_priv = qore_list_private::get(args);
+        if (args_priv && args_priv->hasCallArgEvalMap()) {
+            return false;
+        }
+    } else if (!parse_args && nargs) {
+        return false;
+    }
+    if (!arg_types
+            || arg_types->size() < static_cast<size_t>(arg_start + nargs)) {
+        return false;
+    }
+
+    bool needs_guard = false;
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT optional scalar fast-entry eligibility")) {
+            return false;
+        }
+        if (sig->hasDefaultArg(static_cast<unsigned>(i))) {
+            return false;
+        }
+        const QoreTypeInfo* param_ti = sig->lv[static_cast<unsigned>(i)]->getTypeInfo();
+        const QoreTypeInfo* arg_ti = (*arg_types)[arg_start + i];
+        if (param_ti && arg_ti
+                && QoreTypeInfo::isInputIdentical(param_ti, arg_ti)) {
+            continue;
+        }
+        bool native_scalar = QoreTypeInfo::isType(param_ti, NT_INT)
+            || QoreTypeInfo::isType(param_ti, NT_FLOAT)
+            || QoreTypeInfo::isType(param_ti, NT_BOOLEAN);
+        if (!native_scalar || !arg_ti
+                || QoreTypeInfo::parseAcceptsReturns(param_ti, NT_NOTHING)
+                || !QoreTypeInfo::parseAcceptsReturns(arg_ti, NT_NOTHING)
+                || !QoreTypeInfo::isInputIdentical(param_ti,
+                    qore_get_value_type(arg_ti))) {
+            return false;
+        }
+        needs_guard = true;
+    }
+    return needs_guard;
+}
+
 static bool qore_ir_fast_entry_operands_need_no_binding(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
@@ -5164,12 +5232,13 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         const char* fallback_consume_throwing_name,
         bool require_exact_object_class) {
     auto ctx_helper = module.getOrInsertFunction(
-            "qore_rt_try_get_aot_call_target_context",
-            llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
-    llvm::Value* callee_ctx = nullptr;
+        "qore_rt_try_get_aot_call_target_context",
+        llvm::FunctionType::get(ptr_type, {ptr_type, i32_type}, false));
+    llvm::Value* callee_ctx = callee_info.context_independent_fast_entry
+        ? aot_ctx_arg : nullptr;
     static const bool hoist_context =
         getenv("QORE_DISABLE_AOT_CALLEE_CONTEXT_HOIST") == nullptr;
-    if (hoist_context) {
+    if (!callee_ctx && hoist_context) {
         auto context_it = aot_call_target_contexts.find(slot);
         if (context_it != aot_call_target_contexts.end()) {
             callee_ctx = context_it->second;
@@ -5196,7 +5265,9 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             "aot_batch_fallback", llvm_func);
     llvm::BasicBlock* merge_bb = llvm::BasicBlock::Create(ctx,
             "aot_batch_merge", llvm_func);
-    llvm::Value* has_callee_ctx = builder->CreateICmpNE(callee_ctx,
+    llvm::Value* has_callee_ctx = callee_info.context_independent_fast_entry
+        ? llvm::ConstantInt::getTrue(ctx)
+        : builder->CreateICmpNE(callee_ctx,
             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
     llvm::Value* can_use_fast_entry = has_callee_ctx;
     if (object_base) {
@@ -13097,15 +13168,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             int nargs = total_operands - arg_start;
             const BatchCalleeInfo* aot_approach_b_callee = nullptr;
             llvm::Function* aot_approach_b_fn = nullptr;
-            if (aot_mode && batch_callees && direct_inst->variant
+            const AbstractQoreFunctionVariant* aot_direct_variant =
+                direct_inst->variant;
+            if (aot_mode && !aot_direct_variant && direct_inst->expr.hasNode()) {
+                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                    direct_inst->expr.getInternalNode());
+                const QoreFunction* function = call ? call->getFunction() : nullptr;
+                const AbstractQoreFunctionVariant* candidate = function
+                        && function->numVariants() == 1
+                    ? function->first() : nullptr;
+                if (candidate
+                        && qore_ir_fast_entry_args_allow_optional_scalar_guard(
+                            candidate, direct_inst->expr, arg_start, nargs)) {
+                    aot_direct_variant = candidate;
+                }
+            }
+            if (aot_mode && batch_callees && aot_direct_variant
                     && !direct_inst->has_ref_args) {
-                auto it = batch_callees->find(direct_inst->variant);
+                auto it = batch_callees->find(aot_direct_variant);
                 if (it != batch_callees->end()
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastFunctionCallEligible(direct_inst->variant)
-                        && qore_ir_fast_entry_args_need_no_binding(
-                            direct_inst->variant, direct_inst->expr, arg_start, nargs)) {
+                        && isFastFunctionCallEligible(aot_direct_variant)
+                        && (qore_ir_fast_entry_args_need_no_binding(
+                                aot_direct_variant, direct_inst->expr, arg_start, nargs)
+                            || qore_ir_fast_entry_args_allow_optional_scalar_guard(
+                                aot_direct_variant, direct_inst->expr, arg_start, nargs))) {
                     aot_approach_b_fn = module.getFunction(it->second.fast_name);
                     if (aot_approach_b_fn) {
                         aot_approach_b_callee = &it->second;

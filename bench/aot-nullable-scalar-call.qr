@@ -1,0 +1,30 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub scale(int value, int factor) {
+    return value * factor + 3;
+}
+
+int sub runNullable(int iterations, *int factor) {
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += scale(i % 1000, factor);
+    }
+    return result;
+}
+
+int sub runExact(int iterations, int factor) {
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += scale(i % 1000, factor);
+    }
+    return result;
+}
+
+int sub main() {
+    printf("%d\n", ENV.QORE_BENCH_EXACT
+        ? runExact(5000000, 7) : runNullable(5000000, 7));
+    return 0;
+}
