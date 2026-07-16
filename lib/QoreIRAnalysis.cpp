@@ -434,6 +434,99 @@ static bool qore_ir_is_read_only_list_use(const QoreIRInstruction& inst,
     }
 }
 
+static bool qore_ir_is_read_only_hash_use(const QoreIRInstruction& inst,
+        QoreIRValue value) {
+    if (inst.operands.empty() || inst.operands[0].id != value.id) {
+        return false;
+    }
+    switch (inst.opcode) {
+        case QoreIROpcode::HashKeyAccess:
+        case QoreIROpcode::HashKeyAccessInt:
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded:
+            return true;
+        case QoreIROpcode::Invoke: {
+            const auto& invoke = static_cast<const QoreIRInvokeInstruction&>(inst);
+            return invoke.invoke_opcode == QoreIROpcode::HashKeyAccess
+                || invoke.invoke_opcode == QoreIROpcode::HashKeyAccessInt
+                || invoke.invoke_opcode == QoreIROpcode::HashKeyAccessHash
+                || invoke.invoke_opcode == QoreIROpcode::HashKeyAccessHashGuarded;
+        }
+        default:
+            return false;
+    }
+}
+
+static bool qore_ir_is_read_only_string_intrinsic(QoreIRIntrinsic intrinsic) {
+    switch (intrinsic) {
+        case QoreIRIntrinsic::Size:
+        case QoreIRIntrinsic::Empty:
+        case QoreIRIntrinsic::StringStrlen:
+        case QoreIRIntrinsic::StringLength:
+        case QoreIRIntrinsic::StringSizeP:
+        case QoreIRIntrinsic::StringStrP:
+        case QoreIRIntrinsic::StringIntP:
+        case QoreIRIntrinsic::StringLower:
+        case QoreIRIntrinsic::StringUpper:
+        case QoreIRIntrinsic::StringToInt:
+        case QoreIRIntrinsic::StringStartsWith:
+        case QoreIRIntrinsic::StringEndsWith:
+        case QoreIRIntrinsic::StringContains:
+        case QoreIRIntrinsic::StringFind:
+        case QoreIRIntrinsic::StringRFind:
+        case QoreIRIntrinsic::StringSubstr:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool qore_ir_is_read_only_string_arg_intrinsic(QoreIRIntrinsic intrinsic) {
+    switch (intrinsic) {
+        case QoreIRIntrinsic::StringStartsWith:
+        case QoreIRIntrinsic::StringEndsWith:
+        case QoreIRIntrinsic::StringContains:
+        case QoreIRIntrinsic::StringFind:
+        case QoreIRIntrinsic::StringRFind:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool qore_ir_is_read_only_string_use(const QoreIRInstruction& inst,
+        QoreIRValue value) {
+    if (inst.operands.empty()) {
+        return false;
+    }
+    if (inst.opcode == QoreIROpcode::DotEvalMethodDirect) {
+        const auto& direct = static_cast<const QoreIRDotEvalMethodDirectInstruction&>(inst);
+        return direct.pseudo && ((inst.operands[0].id == value.id
+                && direct.pseudo_base_known_string
+                && qore_ir_is_read_only_string_intrinsic(direct.intrinsic))
+            || (inst.operands.size() > 1 && inst.operands[1].id == value.id
+                && direct.pseudo_arg0_known_string
+                && qore_ir_is_read_only_string_arg_intrinsic(direct.intrinsic)));
+    }
+    if (inst.opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+        const auto& invoke = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction&>(inst);
+        return invoke.pseudo && ((inst.operands[0].id == value.id
+                && invoke.pseudo_base_known_string
+                && qore_ir_is_read_only_string_intrinsic(invoke.intrinsic))
+            || (inst.operands.size() > 1 && inst.operands[1].id == value.id
+                && invoke.pseudo_arg0_known_string
+                && qore_ir_is_read_only_string_arg_intrinsic(invoke.intrinsic)));
+    }
+    return false;
+}
+
+static bool qore_ir_is_read_only_aggregate_use(const QoreIRInstruction& inst,
+        QoreIRValue value) {
+    return qore_ir_is_read_only_list_use(inst, value)
+        || qore_ir_is_read_only_hash_use(inst, value)
+        || qore_ir_is_read_only_string_use(inst, value);
+}
+
 bool qore_ir_compute_function_effect_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries) {
@@ -639,7 +732,7 @@ bool qore_ir_compute_function_effect_summaries(
                     if (inst->opcode == QoreIROpcode::Return) {
                         return;
                     }
-                    if (qore_ir_is_read_only_list_use(*inst, operand)) {
+                    if (qore_ir_is_read_only_aggregate_use(*inst, operand)) {
                         return;
                     }
                     bool has_ref_args = true;

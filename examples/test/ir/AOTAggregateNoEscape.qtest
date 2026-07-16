@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub readHash(hash<string, int> row) {
+    return row.a + row.b + row.c + row.d;
+}
+
+int sub readString(string value, string pattern) {
+    return value.size() + value.length() + value.find(pattern)
+        + value.rfind(pattern) + value.substr(1, 3).size()
+        + (value.startsWith(pattern) ? 1 : 0)
+        + (value.endsWith(pattern) ? 2 : 0)
+        + (value.contains(pattern) ? 4 : 0);
+}
+
+string sub aliasing() {
+    hash<string, int> row = (\"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4);
+    hash<string, int> alias = row;
+    string value = \"abcdefabc\";
+    string value_alias = value;
+    int result = readHash(row) + readString(value, \"abc\");
+    row.a = 20;
+    return sprintf(\"%d:%d:%s\", result, alias.a, value_alias);
+}
+
+string sub unassignedHash() {
+    hash<string, int> row;
+    try {
+        readHash(row);
+    } catch (hash<auto> e) {
+        return e.err == \"RUNTIME-OVERLOAD-ERROR\" || e.err == \"RUNTIME-TYPE-ERROR\"
+            ? \"rejected\" : e.err;
+    }
+    return \"missing\";
+}
+
+string sub removedString() {
+    string value = \"abc\";
+    remove value;
+    try {
+        readString(value, \"a\");
+    } catch (hash<auto> e) {
+        return e.err == \"RUNTIME-OVERLOAD-ERROR\" || e.err == \"RUNTIME-TYPE-ERROR\"
+            ? \"rejected\" : e.err;
+    }
+    return \"missing\";
+}
+
+printf(\"%s:%s:%s\\n\", aliasing(), unassignedHash(), removedString());
+";
+
+string src = "/tmp/qore-aot-aggregate-noescape-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-aggregate-noescape-" + string(getpid());
+string disabled = exe + "-disabled";
+string qo_dir = exe + "-qo";
+string disabled_qo_dir = exe + "-qo-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+mkdir(qo_dir);
+mkdir(disabled_qo_dir);
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+compile(exe, "");
+compile(disabled, "QORE_DISABLE_AOT_NOESCAPE_PARAMS=1");
+string qo_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, qo_dir, src));
+string disabled_qo_compile = backquote(sprintf(
+    "QORE_DISABLE_AOT_NOESCAPE_PARAMS=1 LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_qo_dir, src));
+string qo = qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
+string disabled_qo = disabled_qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
+if (!is_file(qo) || !is_file(disabled_qo)) {
+    printf(".qo compile failed:\nenabled:\n%sdisabled:\n%s", qo_compile, disabled_qo_compile);
+    exit(2);
+}
+string dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, qo));
+string disabled_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, disabled_qo));
+foreach string function in (("readHash", "readString")) {
+    string marker = function + "(";
+    string line;
+    foreach string candidate in (dump.split("\n")) {
+        if (candidate.find(marker) != -1
+                && candidate.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+            line = candidate;
+            break;
+        }
+    }
+    string expected_params = function == "readHash" ? "[1]" : "[1, 1]";
+    if (!line || line.find("fast_param_noescape\": " + expected_params) == -1) {
+        printf("missing aggregate noescape metadata for %s:\n%s", function, dump);
+        exit(2);
+    }
+}
+if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
+    printf("noescape metadata present in disabled control:\n%s", disabled_dump);
+    exit(2);
+}
+
+string expected = "44:1:abcdefabc:rejected:rejected\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("mismatch in aot %s\nexpected:\n%sactual:\n%s", path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);
