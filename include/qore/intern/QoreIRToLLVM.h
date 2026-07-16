@@ -212,6 +212,12 @@ private:
     // expression slot. The context mapping is immutable during an invocation.
     std::unordered_map<int32_t, llvm::Value*> aot_call_target_contexts;
 
+    // Exact-class checks for stable local receivers, materialized once in the
+    // logical function entry. Object validity remains guarded at each call.
+    std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
+        aot_exact_class_guards;
+    std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+
     // Approach B fast entry: LLVM function name override and parameter mapping.
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
     // and initializes params from fast_entry_args instead of qore_rt_load_local().
@@ -633,6 +639,7 @@ private:
             int nargs, bool has_arg_cleanups, const char* fallback_name,
             const char* fallback_consume_name, std::string& error,
             llvm::Value* object_base = nullptr,
+            uint32_t object_base_id = UINT32_MAX,
             const char* fallback_throwing_name = nullptr,
             const char* fallback_consume_throwing_name = nullptr,
             bool require_exact_object_class = false);

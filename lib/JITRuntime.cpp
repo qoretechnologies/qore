@@ -381,6 +381,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
     { "qore_rt_object_has_exact_aot_target_class",
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class) },
+    { "qore_rt_object_has_exact_aot_target_class_only",
+        reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class_only) },
     { "qore_rt_load_object_getter_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_load_object_getter_checked_aot",
@@ -12165,6 +12167,19 @@ extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class(
     const QoreClass* target_class = ctx->call_targets[slot].qc;
     const QoreObject* object = receiver.get<QoreObject>();
     return target_class && object->isValid() && object->getClass() == target_class;
+}
+
+extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class_only(
+        QoreAOTContext* ctx, int32_t slot, uint64_t value) {
+    if (!ctx || slot < 0 || slot >= ctx->num_exprs || !ctx->call_targets) {
+        return 0;
+    }
+    QoreValue receiver = fromBits(value);
+    if (receiver.getType() != NT_OBJECT) {
+        return 0;
+    }
+    const QoreClass* target_class = ctx->call_targets[slot].qc;
+    return target_class && receiver.get<QoreObject>()->getClass() == target_class;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx,

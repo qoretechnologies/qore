@@ -5228,6 +5228,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         llvm::Value* arg_cleanups, int nargs, bool has_arg_cleanups,
         const char* fallback_name, const char* fallback_consume_name,
         std::string& error, llvm::Value* object_base,
+        uint32_t object_base_id,
         const char* fallback_throwing_name,
         const char* fallback_consume_throwing_name,
         bool require_exact_object_class) {
@@ -5271,9 +5272,18 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)));
     llvm::Value* can_use_fast_entry = has_callee_ctx;
     if (object_base) {
+        const LocalVar* stable_receiver = nullptr;
+        if (require_exact_object_class
+                && !std::getenv("QORE_DISABLE_AOT_STABLE_EXACT_RECEIVER_HOIST")) {
+            auto stable_it = stable_exact_receiver_loads.find(object_base_id);
+            if (stable_it != stable_exact_receiver_loads.end()) {
+                stable_receiver = stable_it->second;
+            }
+        }
         // The exact-class helper also checks the receiver type and validity.
         // Keep the standalone validity guard only for non-exact targets.
         bool combined_exact_guard = require_exact_object_class
+            && !stable_receiver
             && !std::getenv("QORE_DISABLE_AOT_COMBINED_EXACT_OBJECT_GUARD");
         if (!combined_exact_guard) {
             auto valid_helper = module.getOrInsertFunction("qore_rt_object_is_valid",
@@ -5284,14 +5294,46 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
             can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, object_valid);
         }
         if (require_exact_object_class) {
-            auto exact_helper = module.getOrInsertFunction(
-                "qore_rt_object_has_exact_aot_target_class",
-                llvm::FunctionType::get(i32_type,
-                    {ptr_type, i32_type, i64_type}, false));
-            llvm::Value* exact_class = builder->CreateCall(exact_helper,
-                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), object_base});
-            exact_class = builder->CreateICmpNE(exact_class,
-                llvm::ConstantInt::get(i32_type, 0));
+            llvm::Value* exact_class = nullptr;
+            if (stable_receiver) {
+                auto& guards = aot_exact_class_guards[slot];
+                auto guard_it = guards.find(stable_receiver);
+                if (guard_it != guards.end()) {
+                    exact_class = guard_it->second;
+                } else {
+                    auto alloca_it = local_allocas.find(stable_receiver);
+                    auto entry_it = current_ir_func && !current_ir_func->blocks.empty()
+                        ? block_map.find(current_ir_func->blocks.front().get())
+                        : block_map.end();
+                    if (alloca_it != local_allocas.end() && entry_it != block_map.end()) {
+                        llvm::IRBuilder<> entry_builder(entry_it->second,
+                            entry_it->second->getFirstInsertionPt());
+                        llvm::Value* entry_receiver = entry_builder.CreateLoad(
+                            i64_type, alloca_it->second, "stable_exact_receiver");
+                        auto exact_helper = module.getOrInsertFunction(
+                            "qore_rt_object_has_exact_aot_target_class_only",
+                            llvm::FunctionType::get(i32_type,
+                                {ptr_type, i32_type, i64_type}, false));
+                        exact_class = entry_builder.CreateCall(exact_helper,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             entry_receiver}, "stable_exact_class");
+                        exact_class = entry_builder.CreateICmpNE(exact_class,
+                            llvm::ConstantInt::get(i32_type, 0),
+                            "stable_exact_class_ok");
+                        guards.emplace(stable_receiver, exact_class);
+                    }
+                }
+            }
+            if (!exact_class) {
+                auto exact_helper = module.getOrInsertFunction(
+                    "qore_rt_object_has_exact_aot_target_class",
+                    llvm::FunctionType::get(i32_type,
+                        {ptr_type, i32_type, i64_type}, false));
+                exact_class = builder->CreateCall(exact_helper,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), object_base});
+                exact_class = builder->CreateICmpNE(exact_class,
+                    llvm::ConstantInt::get(i32_type, 0));
+            }
             can_use_fast_entry = builder->CreateAnd(can_use_fast_entry, exact_class);
         }
     }
@@ -6930,6 +6972,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     elided_typed_foreach_refself_values.clear();
     local_allocas.clear();
     aot_call_target_contexts.clear();
+    aot_exact_class_guards.clear();
+    stable_exact_receiver_loads.clear();
     nanboxed_values.clear();
     known_not_nothing_values.clear();
     preinstantiated_entry_loads.clear();
@@ -7248,6 +7292,36 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 // All operands of non-DotEval instructions are non-DotEval uses
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
+                }
+            }
+        }
+    }
+    if (aot_mode && !func.has_opaque_ast_local_access) {
+        size_t stable_receiver_count = 0;
+        for (const auto& [local, loads] : local_load_instructions) {
+            if (stable_receiver_count++ && !(stable_receiver_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM stable exact receiver analysis")) {
+                error = "cancelled during LLVM stable exact receiver analysis";
+                return false;
+            }
+            const void* key = reinterpret_cast<const void*>(local);
+            if (!local || local->closureUse()
+                    || QoreTypeInfo::isReference(local->getTypeInfo())
+                    || stored_locals.count(local)
+                    || func.ast_referenced_locals.count(key)) {
+                continue;
+            }
+            size_t stable_load_count = 0;
+            for (const QoreIRLocalInstruction* load : loads) {
+                if (stable_load_count++ && !(stable_load_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM stable exact receiver load analysis")) {
+                    error = "cancelled during LLVM stable exact receiver load analysis";
+                    return false;
+                }
+                if (!load->is_closure && !load->is_ref && load->result.isValid()) {
+                    stable_exact_receiver_loads.emplace(load->result.id, local);
                 }
             }
         }
@@ -14620,7 +14694,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         args_array, arg_cleanups, nargs, has_arg_cleanups,
                         "qore_rt_dot_eval_object_method_direct_aot",
                         "qore_rt_dot_eval_method_direct_aot_consume_args", error,
-                        base_boxed,
+                        base_boxed, inst->operands[0].id,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
                         "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
                         aot_object_batch_requires_exact_class);
@@ -15141,7 +15215,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         args_array, arg_cleanups, nargs, has_arg_cleanups,
                         "qore_rt_dot_eval_object_method_direct_aot",
                         "qore_rt_dot_eval_method_direct_aot_consume_args", error,
-                        base_boxed,
+                        base_boxed, inst->operands[0].id,
                         "qore_rt_dot_eval_object_method_direct_aot_throwing",
                         "qore_rt_dot_eval_method_direct_aot_consume_args_throwing",
                         aot_object_batch_requires_exact_class);

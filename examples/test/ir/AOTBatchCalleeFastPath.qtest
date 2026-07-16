@@ -465,6 +465,17 @@ class CrossSpeculativeLeaf {
     }
 }
 
+class CrossDeletableLeaf {
+    int invalidate() {
+        delete self;
+        return 1;
+    }
+
+    int read() {
+        return 2;
+    }
+}
+
 int sub cross_leaf(int x) {
     return x + 1;
 }
@@ -601,6 +612,22 @@ class CrossSpeculativeOverride inherits CrossSpeculativeLeaf {
     }
 }
 
+int sub reassigned_receiver_guard(CrossSpeculativeLeaf receiver) {
+    int first = receiver.affine(2);
+    receiver = new CrossSpeculativeOverride();
+    return first * 1000 + receiver.affine(2);
+}
+
+bool sub deleted_receiver_guard(CrossDeletableLeaf receiver) {
+    receiver.invalidate();
+    try {
+        receiver.read();
+    } catch (hash<auto> ex) {
+        return ex.err == \"OBJECT-ALREADY-DELETED\";
+    }
+    return False;
+}
+
 int sub main() {
     cross_global = 7;
     int global_assigned = cross_global_affine(5);
@@ -666,6 +693,9 @@ int sub main() {
         cross_string_size_plus(utf8, 2), cross_string_size_plus(latin1, 2),
         composed_list_rejected, composed_string_rejected,
         exact_receiver.affine(4), overridden_receiver.affine(4));
+    CrossDeletableLeaf deletable();
+    printf(\"%d:%d\\n\", reassigned_receiver_guard(exact_receiver),
+        deleted_receiver_guard(deletable));
     return 0;
 }
 ";
@@ -824,7 +854,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120\n") {
+if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120\n13110:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }
