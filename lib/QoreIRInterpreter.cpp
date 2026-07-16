@@ -7196,7 +7196,8 @@ next_instruction:
                     }
                     qore_list_private* priv = qore_list_private::get(*l);
                     ValueHolder checked(stored, xsink);
-                    bool valid = !QoreTypeInfo::hasType(inst->element_type)
+                    bool valid = inst->typed_value_prevalidated
+                        || !QoreTypeInfo::hasType(inst->element_type)
                         || !priv->checkVal(checked, xsink);
                     if (valid) {
                         stored = checked.release();

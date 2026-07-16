@@ -9102,7 +9102,9 @@ printf(\"%d:%s:%s:%s\\n\", selected.size(), comparison.type(), comparison, condi
     testAOTTypedMapAssignedState() {
         string code = "%modern
 list<int> input = (1, 2, 3);
+list<int> empty = ();
 int value;
+printf(\"%y\\n\", (map value, empty));
 try {
     auto unassigned = (map value, input);
     printf(\"unexpected: %y\\n\", unassigned);

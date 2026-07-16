@@ -15938,6 +15938,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && QoreTypeInfo::parseReturns(facts->type_info, NT_INT) == QTI_IDENT)
                     || (exact_float_element
                         && QoreTypeInfo::parseReturns(facts->type_info, NT_FLOAT) == QTI_IDENT));
+            if (inst->typed_value_prevalidated && typed_specialization && exact_value_type
+                    && nanboxed_values.count(inst->operands[2].id)
+                    && val->getType() == i64_type) {
+                llvm::Value* val_boxed = boxValue(val, inst->operands[2].id);
+                if (exact_int_element) {
+                    emit_int_store(ensureIntTypeInline(val_boxed, inst->operands[2].id));
+                } else {
+                    emit_float_store(ensureFloatType(val_boxed, inst->operands[2].id, module));
+                }
+                return true;
+            }
             if (typed_specialization && exact_value_type
                     && nanboxed_values.count(inst->operands[2].id)
                     && val->getType() == i64_type) {

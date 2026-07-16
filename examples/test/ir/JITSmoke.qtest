@@ -5466,7 +5466,9 @@ printf(\"%d\\n\", result.size());
         # The typed-map fast path must guard those states before a direct store.
         string map_assigned_state = "%modern
 list<int> input = (1, 2, 3);
+list<int> empty = ();
 int value;
+printf(\"%y\\n\", (map value, empty));
 try {
     auto unassigned = (map value, input);
     printf(\"unexpected: %y\\n\", unassigned);
@@ -5492,7 +5494,7 @@ try {
 float_value = 1.5;
 printf(\"%y\\n\", (map float_value, input));
 ";
-        string map_assigned_expected = "RUNTIME-TYPE-ERROR\n[4, 4, 4]\nRUNTIME-TYPE-ERROR\n"
+        string map_assigned_expected = "[]\nRUNTIME-TYPE-ERROR\n[4, 4, 4]\nRUNTIME-TYPE-ERROR\n"
             + "RUNTIME-TYPE-ERROR\n[1.5, 1.5, 1.5]";
         foreach string mode in ("ast", "ir", "tiered", "jit") {
             string result = trim(runScript(map_assigned_state, mode));

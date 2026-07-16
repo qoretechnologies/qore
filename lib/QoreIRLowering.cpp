@@ -13626,6 +13626,15 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         }
     }
 
+    const VarRefNode* invariant_map_ref = qoreIrGetDirectLocalVarRef(map->getLeft());
+    LocalVar* invariant_map_local = invariant_map_ref ? invariant_map_ref->ref.id : nullptr;
+    bool invariant_typed_scalar = need_result && use_direct_index && invariant_map_local
+        && !invariant_map_local->closureUse()
+        && !QoreTypeInfo::isReference(invariant_map_local->parseGetTypeInfo())
+        && std::getenv("QORE_DISABLE_IR_INVARIANT_TYPED_MAP_FILL") == nullptr
+        && (QoreTypeInfo::parseReturns(expTypeInfo, NT_INT) == QTI_IDENT
+            || QoreTypeInfo::parseReturns(expTypeInfo, NT_FLOAT) == QTI_IDENT);
+
     // Evaluate the input list and create the iterator BEFORE creating loop blocks,
     // so that any blocks created during expression evaluation (e.g., invoke.cont
     // blocks from guarded calls in try-catch) appear before the loop header in the
@@ -13646,11 +13655,14 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // and the header condition (0 >= 0) immediately exits the loop.
         QoreIRBasicBlock* nothing_block = createBlock("map.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
+        QoreIRBasicBlock* seed_block = invariant_typed_scalar
+            ? createBlock("map.invariant.seed") : nullptr;
         QoreIRBasicBlock* header_block = createBlock("map.header");
         QoreIRBasicBlock* body_block = createBlock("map.body");
         QoreIRBasicBlock* exit_block = createBlock("map.exit");
         QoreIRBasicBlock* final_block = createBlock("map.direct.final");
-        if (!nothing_block || !preheader_block || !header_block || !body_block || !exit_block || !final_block) {
+        if (!nothing_block || !preheader_block || (invariant_typed_scalar && !seed_block)
+                || !header_block || !body_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for map";
             return QoreIRValue();
         }
@@ -13669,7 +13681,27 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (need_result) {
             result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
         }
-        {
+        QoreIRValue invariant_map_value;
+        QoreIRValue loop_start = zero;
+        if (invariant_typed_scalar) {
+            QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt,
+                list_size, zero, map->loc)->result;
+            builder.createBranchIf(is_empty, exit_block, seed_block, map->loc);
+
+            builder.setBlock(seed_block);
+            invariant_map_value = lowerExpression(map->getLeft(), error);
+            if (!invariant_map_value.isValid()) {
+                return QoreIRValue();
+            }
+            auto* seed_store = builder.createListSetValue(result_list, zero,
+                invariant_map_value, map->loc, expTypeInfo);
+            if (!exception_stack.empty()) {
+                seed_store->exception_target = exception_stack.back();
+            }
+            loop_start = builder.createConstInt(1, map->loc)->result;
+            auto* br = builder.createBranch(header_block, map->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        } else {
             auto* br = builder.createBranch(header_block, map->loc);
             setLoopCheckpointExceptionTarget(br, header_block);
         }
@@ -13709,7 +13741,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!need_result) {
             builder.createPushTempMark(map->loc);
         }
-        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+        QoreIRValue expr_result = invariant_typed_scalar
+            ? invariant_map_value : lowerExpression(map->getLeft(), error);
 
         // Restore virtual context
         virtual_implicit = saved;
@@ -13756,6 +13789,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
             // Store result directly at index position in pre-sized list
             auto* set_inst = builder.createListSetValue(result_list, index_val, expr_result,
                 map->loc, expTypeInfo);
+            set_inst->typed_value_prevalidated = invariant_typed_scalar;
             if (!exception_stack.empty()) {
                 set_inst->exception_target = exception_stack.back();
             }
@@ -13777,9 +13811,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         }
 
         // Complete PHI nodes
-        index_phi->incoming.push_back({zero, preheader_block});
+        index_phi->incoming.push_back({loop_start,
+            invariant_typed_scalar ? seed_block : preheader_block});
         index_phi->incoming.push_back({next_index, body_exit_block});
-        index_phi->operands.push_back(zero);
+        index_phi->operands.push_back(loop_start);
         index_phi->operands.push_back(next_index);
 
         // Exit block: result_list is the result (empty for size 0, filled for size > 0)
