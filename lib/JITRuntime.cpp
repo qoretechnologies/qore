@@ -6849,6 +6849,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
     return toBits(QoreValue(result));
 }
 
+//! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.
+extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args, int nargs,
+        int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
+    ValueHolder concatenated(fromBits(qore_rt_string_concat_multi(args, nargs, xsink)), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    QoreStringNodeValueHelper str(*concatenated);
+    QoreStringNode* result = has_length
+        ? str->substr(start, length, xsink)
+        : str->substr(start, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (!result) {
+        result = new QoreStringNode(str->getEncoding());
+    }
+    return toBits(QoreValue(result));
+}
+
 // Typed string equality - both operands are known to be strings at compile time
 // Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
 extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {

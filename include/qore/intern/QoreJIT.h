@@ -235,6 +235,7 @@ enum class AOTStringExpressionNodeKind : uint8_t {
     IntConstant = 4,
     IntToString = 5,
     Concat = 6,
+    Substr = 7,
 };
 
 constexpr size_t QORE_AOT_STRING_EXPRESSION_MAX_NODES = 16;

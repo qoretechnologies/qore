@@ -1,0 +1,18 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    string left = "Dvo\u0159ak-Dvo";
+    string right = "\u0159ak-Dvorak";
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += concatSlice(left, right, i & 3, 12).size();
+    }
+    printf("%d\n", checksum);
+    return 0;
+}
+
+main();

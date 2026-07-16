@@ -4046,7 +4046,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return kind == AOTStringExpressionNodeKind::StringParam
             || kind == AOTStringExpressionNodeKind::StringConstant
             || kind == AOTStringExpressionNodeKind::IntToString
-            || kind == AOTStringExpressionNodeKind::Concat;
+            || kind == AOTStringExpressionNodeKind::Concat
+            || kind == AOTStringExpressionNodeKind::Substr;
     };
     auto is_int_node = [&](uint8_t index) {
         if (index >= result.nodes.size()) {
@@ -4177,6 +4178,40 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 values.emplace(inst->result.id, parts.front());
                 break;
             }
+            case QoreIROpcode::DotEvalMethodDirect: {
+                const auto* direct = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+                if (!direct->pseudo || direct->intrinsic != QoreIRIntrinsic::StringSubstr
+                        || !direct->pseudo_base_known_assigned_string
+                        || !direct->pseudo_arg0_known_assigned_int
+                        || (inst->operands.size() != 2 && inst->operands.size() != 3)
+                        || (inst->operands.size() == 3
+                            && !direct->pseudo_arg1_known_assigned_int)
+                        || !inst->result.isValid()) {
+                    return false;
+                }
+                auto base = values.find(inst->operands[0].id);
+                auto start = values.find(inst->operands[1].id);
+                auto length = inst->operands.size() == 3
+                    ? values.find(inst->operands[2].id) : values.end();
+                if (base == values.end() || !is_string_node(base->second)
+                        || start == values.end() || !is_int_node(start->second)
+                        || (inst->operands.size() == 3
+                            && (length == values.end() || !is_int_node(length->second)))) {
+                    return false;
+                }
+                AOTStringExpressionNodeInfo node;
+                node.kind = AOTStringExpressionNodeKind::Substr;
+                node.lhs = base->second;
+                node.rhs = start->second;
+                node.third = inst->operands.size() == 3
+                    ? length->second : UINT8_MAX;
+                int index = append_node(std::move(node));
+                if (index < 0) {
+                    return false;
+                }
+                values.emplace(inst->result.id, static_cast<uint8_t>(index));
+                break;
+            }
             case QoreIROpcode::Return:
                 ret = static_cast<const QoreIRReturnInstruction*>(inst);
                 break;
@@ -4188,9 +4223,24 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
         return false;
     }
     auto return_value = values.find(ret->value.id);
-    return return_value != values.end()
-        && return_value->second == result.nodes.size() - 1
-        && result.nodes.back().kind == AOTStringExpressionNodeKind::Concat;
+    if (return_value == values.end()
+            || return_value->second != result.nodes.size() - 1) {
+        return false;
+    }
+    const AOTStringExpressionNodeInfo& final = result.nodes.back();
+    if (final.kind == AOTStringExpressionNodeKind::Concat) {
+        return std::none_of(result.nodes.begin(), result.nodes.end(),
+            [](const AOTStringExpressionNodeInfo& node) {
+                return node.kind == AOTStringExpressionNodeKind::Substr;
+            });
+    }
+    return final.kind == AOTStringExpressionNodeKind::Substr
+        && final.lhs < result.nodes.size() - 1
+        && result.nodes[final.lhs].kind == AOTStringExpressionNodeKind::Concat
+        && std::count_if(result.nodes.begin(), result.nodes.end(),
+            [](const AOTStringExpressionNodeInfo& node) {
+                return node.kind == AOTStringExpressionNodeKind::Substr;
+            }) == 1;
 }
 
 static bool qore_aot_get_collection_op(const QoreIRFunction& func,
@@ -8095,7 +8145,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             if (input.kind
                         < static_cast<uint8_t>(AOTStringExpressionNodeKind::StringParam)
                     || input.kind
-                        > static_cast<uint8_t>(AOTStringExpressionNodeKind::Concat)) {
+                        > static_cast<uint8_t>(AOTStringExpressionNodeKind::Substr)) {
                 return false;
             }
             AOTStringExpressionNodeInfo node;
@@ -8142,6 +8192,15 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                         || !node.string_constant.empty() || node_is_string[node.lhs]) {
                     return false;
                 }
+            } else if (node.kind == AOTStringExpressionNodeKind::Substr) {
+                if (i + 1 != rec.string_expression_nodes.size()
+                        || node.param != -1 || node.lhs >= i || node.rhs >= i
+                        || node.int_constant || !node.string_constant.empty()
+                        || !node_is_string[node.lhs] || node_is_string[node.rhs]
+                        || (node.third != UINT8_MAX
+                            && (node.third >= i || node_is_string[node.third]))) {
+                    return false;
+                }
             } else if (node.param != -1 || node.lhs >= i || node.rhs >= i
                     || node.int_constant || !node.string_constant.empty()
                     || !node_is_string[node.lhs] || !node_is_string[node.rhs]
@@ -8152,9 +8211,14 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             info.string_expression.nodes.push_back(std::move(node));
             node_is_string.push_back(is_string);
         }
+        const AOTStringExpressionNodeInfo& final =
+            info.string_expression.nodes.back();
         if (!node_is_string.back()
-                || info.string_expression.nodes.back().kind
-                    != AOTStringExpressionNodeKind::Concat) {
+                || (final.kind != AOTStringExpressionNodeKind::Concat
+                    && (final.kind != AOTStringExpressionNodeKind::Substr
+                        || final.lhs >= info.string_expression.nodes.size() - 1
+                        || info.string_expression.nodes[final.lhs].kind
+                            != AOTStringExpressionNodeKind::Concat))) {
             return false;
         }
     }

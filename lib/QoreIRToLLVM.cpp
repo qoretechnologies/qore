@@ -4554,9 +4554,25 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
 llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module) {
     const AOTStringExpressionInfo& expression = info.string_expression;
+    const AOTStringExpressionNodeInfo* final = expression
+        ? &expression.nodes.back() : nullptr;
     if (!expression || std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || expression.nodes.size() > QORE_AOT_STRING_EXPRESSION_MAX_NODES
-            || expression.nodes.back().kind != AOTStringExpressionNodeKind::Concat) {
+            || (final->kind != AOTStringExpressionNodeKind::Concat
+                && (final->kind != AOTStringExpressionNodeKind::Substr
+                    || final->lhs >= expression.nodes.size() - 1
+                    || expression.nodes[final->lhs].kind
+                        != AOTStringExpressionNodeKind::Concat))) {
+        return nullptr;
+    }
+    auto is_int_node = [&](uint8_t index) {
+        return index < expression.nodes.size()
+            && (expression.nodes[index].kind == AOTStringExpressionNodeKind::IntParam
+                || expression.nodes[index].kind == AOTStringExpressionNodeKind::IntConstant);
+    };
+    if (final->kind == AOTStringExpressionNodeKind::Substr
+            && (!is_int_node(final->rhs)
+                || (final->third != UINT8_MAX && !is_int_node(final->third)))) {
         return nullptr;
     }
 
@@ -4591,7 +4607,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         return append_parts(node.lhs) && append_parts(node.rhs)
             && (node.third == UINT8_MAX || append_parts(node.third));
     };
-    if (!append_parts(static_cast<uint8_t>(expression.nodes.size() - 1))
+    uint8_t concat_root = final->kind == AOTStringExpressionNodeKind::Substr
+        ? final->lhs : static_cast<uint8_t>(expression.nodes.size() - 1);
+    if (!append_parts(concat_root)
             || parts.size() < 2) {
         return nullptr;
     }
@@ -4626,6 +4644,7 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 break;
             }
             case AOTStringExpressionNodeKind::Concat:
+            case AOTStringExpressionNodeKind::Substr:
                 break;
         }
     }
@@ -4640,11 +4659,25 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
             llvm::ConstantInt::get(i32_type, i));
         builder->CreateStore(values[parts[i]], slot);
     }
-    auto concat = module.getOrInsertFunction("qore_rt_string_concat_multi",
-        llvm::FunctionType::get(i64_type,
-            {ptr_type, i32_type, ptr_type}, false));
-    llvm::Value* result = builder->CreateCall(concat,
-        {args, llvm::ConstantInt::get(i32_type, parts.size()), xsink_arg});
+    llvm::Value* result;
+    if (final->kind == AOTStringExpressionNodeKind::Substr) {
+        llvm::Value* length = final->third == UINT8_MAX
+            ? llvm::ConstantInt::get(i64_type, 0) : values[final->third];
+        auto concat_substr = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_substr",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type}, false));
+        result = builder->CreateCall(concat_substr,
+            {args, llvm::ConstantInt::get(i32_type, parts.size()),
+             values[final->rhs], length,
+             llvm::ConstantInt::get(i32_type, final->third != UINT8_MAX), xsink_arg});
+    } else {
+        auto concat = module.getOrInsertFunction("qore_rt_string_concat_multi",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, ptr_type}, false));
+        result = builder->CreateCall(concat,
+            {args, llvm::ConstantInt::get(i32_type, parts.size()), xsink_arg});
+    }
     if (!owned_values.empty()) {
         auto decref = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
