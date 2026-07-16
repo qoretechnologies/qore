@@ -669,6 +669,24 @@ std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
     return kinds;
 }
 
+BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
+    const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
+    if (!type || QoreTypeInfo::isReference(type)
+            || QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
+        return BatchCalleeParamKind::Boxed;
+    }
+    if (QoreTypeInfo::isType(type, NT_INT) && !QoreTypeInfo::getReturnEnum(type)) {
+        return BatchCalleeParamKind::NativeInt;
+    }
+    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+        return BatchCalleeParamKind::NativeFloat;
+    }
+    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+        return BatchCalleeParamKind::NativeBool;
+    }
+    return BatchCalleeParamKind::Boxed;
+}
+
 std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig) {
     unsigned num_params = sig ? sig->numParams() : 0;
     std::vector<uint8_t> rejects(num_params, 0);
@@ -1153,6 +1171,18 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             && summary->second.never_returns_nothing;
         info.return_kind = qore_ir_get_fast_entry_return_kind(
             callee.variant, info.never_returns_nothing);
+        info.capture_locals = callee.capture_locals;
+        info.capture_kinds.reserve(info.capture_locals.size());
+        for (size_t i = 0; i < info.capture_locals.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "JIT batch closure capture ABI classification")) {
+                error = "cancelled during JIT batch closure capture ABI classification";
+                return false;
+            }
+            info.capture_kinds.push_back(
+                qore_ir_get_scalar_local_kind(info.capture_locals[i]));
+        }
         if (info.approach_b_eligible) {
             info.fast_name = callee.ir_func->name + "_fast";
             const UserVariantBase* uvb = callee.variant->getUserVariantBase();
@@ -1209,7 +1239,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             info_it != batch_callee_map.end() ? &info_it->second.param_kinds : nullptr;
         auto* double_ty = llvm::Type::getDoubleTy(*ctx);
         std::vector<llvm::Type*> fast_params;
-        fast_params.reserve(callee.num_params + 1);
+        fast_params.reserve(callee.num_params + callee.capture_locals.size() + 1);
         for (unsigned i = 0; i < callee.num_params; ++i) {
             if (i && !(i % 100)
                     && qore_check_cancel(nullptr, "JIT batch fast-entry declaration parameter setup")) {
@@ -1219,6 +1249,16 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             BatchCalleeParamKind kind = param_kinds && i < param_kinds->size()
                 ? (*param_kinds)[i] : BatchCalleeParamKind::Boxed;
             fast_params.push_back(qore_jit_fast_entry_param_type(kind, i64_ty, double_ty));
+        }
+        for (size_t i = 0; i < info_it->second.capture_kinds.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "JIT batch closure capture declaration")) {
+                error = "cancelled during JIT batch closure capture declaration";
+                return false;
+            }
+            fast_params.push_back(qore_jit_fast_entry_param_type(
+                info_it->second.capture_kinds[i], i64_ty, double_ty));
         }
         fast_params.push_back(ptr_ty);  // xsink
         llvm::Type* fast_return_ty = i64_ty;
@@ -1293,6 +1333,21 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 param_kind_map[key] = i < callee_info.param_kinds.size()
                     ? callee_info.param_kinds[i] : BatchCalleeParamKind::Boxed;
                 fast_fn->getArg(i)->setName(std::string("arg") + std::to_string(i));
+            }
+            for (size_t i = 0; i < callee_info.capture_locals.size(); ++i) {
+                if (i && !(i % 100)
+                        && qore_check_cancel(nullptr,
+                            "JIT batch closure capture mapping")) {
+                    error = "cancelled during JIT batch closure capture mapping";
+                    return false;
+                }
+                const void* key = reinterpret_cast<const void*>(
+                    callee_info.capture_locals[i]);
+                unsigned arg_index = callee.num_params + static_cast<unsigned>(i);
+                param_map[key] = fast_fn->getArg(arg_index);
+                param_kind_map[key] = callee_info.capture_kinds[i];
+                fast_fn->getArg(arg_index)->setName(
+                    std::string("capture") + std::to_string(i));
             }
 
             QoreIRToLLVM fast_lowering(*ctx);

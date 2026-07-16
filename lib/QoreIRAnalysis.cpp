@@ -25,6 +25,170 @@ static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
 
 extern const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue);
 
+static bool qore_ir_is_ast_lvalue_mutation(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::ExtractAny:
+        case QoreIROpcode::ExtractList:
+        case QoreIROpcode::ExtractString:
+        case QoreIROpcode::ExtractBinary:
+        case QoreIROpcode::RemoveAny:
+        case QoreIROpcode::RemoveList:
+        case QoreIROpcode::RemoveHash:
+        case QoreIROpcode::RemoveObject:
+        case QoreIROpcode::RemoveString:
+        case QoreIROpcode::RemoveBinary:
+        case QoreIROpcode::RegexSubstAny:
+        case QoreIROpcode::RegexSubstString:
+        case QoreIROpcode::TrimAny:
+        case QoreIROpcode::TrimString:
+        case QoreIROpcode::ChompAny:
+        case QoreIROpcode::ChompString:
+        case QoreIROpcode::TransliterateAny:
+        case QoreIROpcode::TransliterateString:
+        case QoreIROpcode::ListAssignAny:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool qore_ir_get_readonly_scalar_closure_captures(
+        const QoreIRFunction& func, const LVarSet* captures,
+        std::vector<const LocalVar*>& result) {
+    result.clear();
+    if (!captures || captures->empty() || captures->size() > 4
+            || func.has_opaque_ast_local_access) {
+        return false;
+    }
+
+    std::unordered_set<const LocalVar*> capture_set;
+    capture_set.reserve(captures->size());
+    size_t capture_count = 0;
+    for (const LocalVar* local : *captures) {
+        if (capture_count++ && !(capture_count % 100)
+                && qore_check_cancel(nullptr,
+                    "IR read-only closure capture classification")) {
+            result.clear();
+            return false;
+        }
+        const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
+        bool exact_scalar = type
+            && !QoreTypeInfo::isReference(type)
+            && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)
+            && ((QoreTypeInfo::isType(type, NT_INT)
+                    && !QoreTypeInfo::getReturnEnum(type))
+                || QoreTypeInfo::isType(type, NT_FLOAT)
+                || QoreTypeInfo::isType(type, NT_BOOLEAN));
+        if (!exact_scalar) {
+            result.clear();
+            return false;
+        }
+        capture_set.insert(local);
+        result.push_back(local);
+    }
+
+    std::unordered_set<const LocalVar*> loaded;
+    size_t instruction_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (instruction_count++ && !(instruction_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "IR read-only closure capture use analysis")) {
+                result.clear();
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            QoreIROpcode effective_opcode = inst->opcode;
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                effective_opcode = static_cast<const QoreIRInvokeInstruction*>(inst)
+                    ->invoke_opcode;
+            }
+            if (qore_ir_is_ast_lvalue_mutation(effective_opcode)) {
+                result.clear();
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::CreateClosure
+                    || inst->opcode == QoreIROpcode::CreateParseRef
+                    || (inst->opcode == QoreIROpcode::Invoke
+                        && static_cast<const QoreIRInvokeInstruction*>(inst)
+                            ->invoke_opcode == QoreIROpcode::CreateParseRef)) {
+                result.clear();
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::LoadClosure
+                    || inst->opcode == QoreIROpcode::StoreClosure
+                    || inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::InstantiateLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!capture_set.count(local_inst->local)) {
+                    continue;
+                }
+                if (inst->opcode != QoreIROpcode::LoadClosure
+                        || local_inst->is_ref || local_inst->weak) {
+                    result.clear();
+                    return false;
+                }
+                loaded.insert(local_inst->local);
+                continue;
+            }
+            const LocalVar* mutated = nullptr;
+            if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                mutated = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)->target;
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                mutated = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local;
+            } else if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                const auto* path = static_cast<const QoreIRLValuePathInstruction*>(inst);
+                if (!path->path.empty()
+                        && (path->path.front().kind == LVPathStepKind::LocalVar
+                            || path->path.front().kind == LVPathStepKind::ClosureVar)) {
+                    mutated = reinterpret_cast<const LocalVar*>(path->path.front().ref_ptr);
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLValue
+                    || inst->opcode == QoreIROpcode::PreIncLValue
+                    || inst->opcode == QoreIROpcode::PreDecLValue
+                    || inst->opcode == QoreIROpcode::PostIncLValue
+                    || inst->opcode == QoreIROpcode::PostDecLValue
+                    || inst->opcode == QoreIROpcode::AddAssignLValue
+                    || inst->opcode == QoreIROpcode::SubAssignLValue
+                    || inst->opcode == QoreIROpcode::MulAssignLValue
+                    || inst->opcode == QoreIROpcode::DivAssignLValue
+                    || inst->opcode == QoreIROpcode::ModAssignLValue
+                    || inst->opcode == QoreIROpcode::AndAssignLValue
+                    || inst->opcode == QoreIROpcode::OrAssignLValue
+                    || inst->opcode == QoreIROpcode::XorAssignLValue
+                    || inst->opcode == QoreIROpcode::ShlAssignLValue
+                    || inst->opcode == QoreIROpcode::ShrAssignLValue
+                    || inst->opcode == QoreIROpcode::ShiftLValue
+                    || inst->opcode == QoreIROpcode::UnshiftLValue
+                    || inst->opcode == QoreIROpcode::SpliceLValue) {
+                const auto* lvalue = static_cast<const QoreIRLValueInstruction*>(inst);
+                const VarRefNode* base = extractLValueBaseVarRef(lvalue->lvalue);
+                mutated = base && base->getType() == VT_LOCAL ? base->ref.id : nullptr;
+            }
+            if (mutated && capture_set.count(mutated)) {
+                result.clear();
+                return false;
+            }
+        }
+    }
+    if (loaded.size() != capture_set.size()) {
+        result.clear();
+        return false;
+    }
+    return true;
+}
+
 static bool qore_ir_local_write_may_invalidate_caller_caches(
         const QoreIRFunction& func, const LocalVar* local) {
     if (!local || !func.ir_only_locals.count(reinterpret_cast<const void*>(local))) {

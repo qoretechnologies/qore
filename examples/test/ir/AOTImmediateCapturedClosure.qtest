@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub sourceCode() {
+    return "%modern
+
+string sub exercise() {
+    int assigned = 7;
+    int assigned_result = (int sub (int value) {
+        return value * assigned;
+    })(6);
+
+    int unset;
+    int unset_result = (int sub (int value) {
+        return value * unset;
+    })(6);
+
+    int removed = 9;
+    remove removed;
+    int removed_result = (int sub (int value) {
+        return value * removed;
+    })(6);
+
+    float scale = 1.5;
+    float float_result = (float sub (float value) {
+        return value * scale;
+    })(4.0);
+
+    bool enabled = True;
+    bool bool_result = (bool sub (bool value) {
+        return value && enabled;
+    })(True);
+
+    int order = 2;
+    int order_result = (int sub (int value) {
+        return value + order;
+    })(order = 5);
+
+    int big = 281474976710656;
+    int big_result = (int sub (int value) {
+        return value + big;
+    })(1);
+
+    int mutable = 4;
+    int mutable_result = (int sub (int value) {
+        return mutable += value;
+    })(3);
+
+    int removed_inside = 8;
+    int removed_inside_result = (int sub () {
+        remove removed_inside;
+        return removed_inside ?? 0;
+    })();
+
+    int nested = 2;
+    int nested_result = (int sub (int value) {
+        return (int sub () {
+            return nested;
+        })() + value;
+    })(3);
+
+    int divisor = 0;
+    int caught = 0;
+    try {
+        (int sub (int value) {
+            return value % divisor;
+        })(1);
+    } catch (hash<auto> ex) {
+        caught = ex.err == \"DIVISION-BY-ZERO\" ? 1 : 0;
+    }
+
+    return sprintf(\"%d:%d:%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+        assigned_result, unset_result, removed_result, float_result,
+        bool_result, order_result, big_result, mutable_result, mutable,
+        removed_inside_result, removed_inside, nested_result, caught);
+}
+
+printf(\"%s\\n\", exercise());
+";
+}
+
+string source_path = "/tmp/qore-aot-immediate-captured-closure-" + string(getpid()) + ".qr";
+string exe_path = "/tmp/qore-aot-immediate-captured-closure-" + string(getpid());
+string disabled_exe_path = exe_path + "-disabled";
+{
+    File source();
+    source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+    source.write(sourceCode());
+}
+
+string ast_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string jit_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=jit %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string compile_out = backquote(sprintf(
+    "QORE_AOT_EH=1 QORE_AOT_DEBUG_NATIVE_CLOSURES=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, source_path));
+string disabled_compile_out = backquote(sprintf(
+    "QORE_AOT_EH=1 QORE_DISABLE_AOT_NATIVE_CLOSURE_CALL_ABI=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe_path, source_path));
+if (!is_file(exe_path) || !is_file(disabled_exe_path)) {
+    printf("immediate captured closure AOT compile failed:\n%sDisabled:\n%s",
+        compile_out, disabled_compile_out);
+    exit(2);
+}
+
+string native_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, exe_path));
+string disabled_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe_path));
+string expected = "42:0:0:6.0:1:10:281474976710657:7:7:0:0:5:1\n";
+if (ast_out != expected || jit_out != expected || native_out != expected
+        || disabled_out != expected || !(compile_out =~ /compiled native closure/)) {
+    printf("immediate captured closure mismatch\nAST:\n%sJIT:\n%sNative:\n%sDisabled:\n%sCompile:\n%sDisabled compile:\n%s",
+        ast_out, jit_out, native_out, disabled_out, compile_out,
+        disabled_compile_out);
+    exit(2);
+}

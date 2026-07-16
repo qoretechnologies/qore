@@ -5640,7 +5640,7 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
 }
 
 // Collect direct and transitive callees from an IR function's direct calls and
-// noncapturing closure definitions.
+// eligible nonmethod closure definitions.
 // Returns a vector of BatchCallee entries for callees that have cached IR.
 static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunction& func,
         QoreProgram* root_pgm) {
@@ -5662,6 +5662,7 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                 const AbstractQoreFunctionVariant* variant = nullptr;
                 const char* callee_name = nullptr;
                 bool batch_only = false;
+                const LVarSet* closure_captures = nullptr;
 
                 if (inst->opcode == QoreIROpcode::CallDirect) {
                     const auto* direct = static_cast<const QoreIRCallDirectInstruction*>(inst.get());
@@ -5692,11 +5693,11 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     }
                     const LVarSet* captures = closure ? closure->getVList() : nullptr;
                     const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
-                    if (closure && !closure->isInMethod()
-                            && (!captures || captures->empty()) && ucf) {
+                    if (closure && !closure->isInMethod() && ucf) {
                         variant = ucf->first();
                         callee_name = ucf->getName();
                         batch_only = true;
+                        closure_captures = captures;
                     }
                 }
 
@@ -5741,6 +5742,13 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     continue;
                 }
 
+                std::vector<const LocalVar*> capture_locals;
+                if (batch_only && closure_captures && !closure_captures->empty()
+                        && !qore_ir_get_readonly_scalar_closure_captures(
+                            *callee_ir, closure_captures, capture_locals)) {
+                    continue;
+                }
+
                 // Skip self-recursion (the root function is already being compiled)
                 if (callee_ir->name == func.name) {
                     continue;
@@ -5760,7 +5768,8 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
                     variant,
                     approach_b,
                     num_params,
-                    batch_only
+                    batch_only,
+                    std::move(capture_locals)
                 });
                 if (collect_transitive && worklist.size() <= MAX_TRANSITIVE_BATCH_CALLEES) {
                     worklist.push_back(callee_ir);

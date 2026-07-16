@@ -89,6 +89,13 @@ struct QoreIRFunctionEffectSummary {
     std::vector<uint8_t> param_noescape;
 };
 
+//! Return exact scalar closure captures that can be passed by value to a
+//! nonescaping immediate call. The proof rejects writes, references, nested
+//! closures, opaque AST access, and optional scalar declarations.
+DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
+    const QoreIRFunction& func, const LVarSet* captures,
+    std::vector<const LocalVar*>& result);
+
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
 //! interprocedural fixed-point analysis and therefore return false here.

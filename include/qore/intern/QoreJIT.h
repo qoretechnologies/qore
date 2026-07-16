@@ -338,6 +338,8 @@ struct BatchCalleeInfo {
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
+    std::vector<const LocalVar*> capture_locals; //!< Read-only scalar captures passed to fast entries
+    std::vector<BatchCalleeParamKind> capture_kinds; //!< Native capture ABI kinds
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
     AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int expression
     AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
@@ -360,6 +362,9 @@ DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
 //! reconstructed independently by an AOT closure caller and its dispatcher.
 DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
         const UserSignature* sig);
+
+//! Return the native ABI kind for an exact, non-optional scalar local.
+DLLLOCAL BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local);
 
 //! Derive fast-entry parameter NOTHING rejection metadata from the signature.
 DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig);
@@ -398,6 +403,7 @@ public:
         bool approach_b_eligible = false;    //!< True if callee can use direct LLVM arg passing
         unsigned num_params = 0;             //!< Number of parameters (for fast entry signature)
         bool batch_only = false;              //!< Do not publish or promote this internal callee
+        std::vector<const LocalVar*> capture_locals; //!< Explicit read-only closure captures
     };
     bool compileFunctionBatch(const QoreIRFunction& root_func, std::string& error,
             void* root_deopt_counter,
