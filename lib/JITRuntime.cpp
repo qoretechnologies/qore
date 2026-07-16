@@ -383,6 +383,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class) },
     { "qore_rt_load_object_getter_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
+    { "qore_rt_load_object_getter_checked_aot",
+        reinterpret_cast<void*>(&qore_rt_load_object_getter_checked_aot) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -14126,7 +14128,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return toBits(value->needsEval() ? value->eval(xsink) : value.release());
+    ValueHolder result(
+        value->needsEval() ? value->eval(xsink) : value.release(), xsink);
+    if (!*xsink && result->isNothing() && target.variant
+            && !QoreTypeInfo::parseAcceptsReturns(
+                target.variant->getReturnTypeInfo(), NT_NOTHING)) {
+        qore_rt_raise_return_nothing(xsink);
+    }
+    return toBits(*xsink ? QoreValue() : result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_checked_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        const char* member_name, int32_t rejects_nothing,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_object_getter_aot(
+        ctx, slot, base_bits, member_name, xsink);
+    if (!*xsink && rejects_nothing && fromBits(result).isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+    }
+    return *xsink ? toBits(QoreValue()) : result;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx,
