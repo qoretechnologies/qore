@@ -1409,6 +1409,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    stored_closure_capture_allocas.clear();
     guarded_stored_closure_creates.clear();
     guarded_stored_closure_identity_allocas.clear();
     elided_closure_local_accesses.clear();
@@ -6980,6 +6981,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    stored_closure_capture_allocas.clear();
     guarded_stored_closure_creates.clear();
     guarded_stored_closure_identity_allocas.clear();
     elided_closure_local_accesses.clear();
@@ -7000,6 +7002,19 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         local_load_instructions;
     std::unordered_map<const LocalVar*, std::vector<const QoreIRLocalInstruction*>>
         local_store_instructions;
+    std::unordered_set<const LocalVar*> parameter_locals;
+    parameter_locals.reserve(func.param_local_vars.size());
+    size_t parameter_i = 0;
+    for (const auto& [index, local] : func.param_local_vars) {
+        if (parameter_i++ && !(parameter_i % 100)
+                && qore_check_cancel(nullptr,
+                    "LLVM closure parameter analysis")) {
+            error = "cancelled during LLVM closure parameter analysis";
+            return false;
+        }
+        (void)index;
+        parameter_locals.insert(local);
+    }
     std::unordered_set<const QoreIRInstruction*> entry_instructions;
     std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
     std::unordered_map<const LocalVar*, size_t> local_load_counts;
@@ -7310,8 +7325,55 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 uint32_t closure_id = store->operands[0].id;
                 auto definition = closure_definitions.find(closure_id);
-                if (definition == closure_definitions.end()
-                        || !get_noncapturing_closure(definition->second)) {
+                if (definition == closure_definitions.end()) {
+                    continue;
+                }
+                const QoreClosureParseNode* stored_closure =
+                    get_noncapturing_closure(definition->second);
+                if (!stored_closure && aot_mode && !guarded_top_level) {
+                    stored_closure = get_immediate_closure(definition->second);
+                    const UserClosureFunction* ucf = stored_closure
+                        ? stored_closure->getFunction() : nullptr;
+                    const AbstractQoreFunctionVariant* variant = ucf
+                        ? ucf->first() : nullptr;
+                    const BatchCalleeInfo* summary_info = nullptr;
+                    if (variant && batch_callees) {
+                        auto summary = batch_callees->find(variant);
+                        if (summary != batch_callees->end()) {
+                            summary_info = &summary->second;
+                        }
+                    }
+                    bool stable_captures = stored_closure && summary_info
+                        && !summary_info->capture_locals.empty()
+                        && summary_info->capture_locals.size()
+                            == summary_info->capture_kinds.size();
+                    if (stable_captures) {
+                        size_t capture_i = 0;
+                        for (const LocalVar* capture : summary_info->capture_locals) {
+                            if (capture_i++ && !(capture_i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM stored closure capture stability analysis")) {
+                                error = "cancelled during LLVM stored closure capture stability analysis";
+                                return false;
+                            }
+                            auto capture_stores = local_store_instructions.find(capture);
+                            if (!parameter_locals.count(capture)
+                                    || capture_stores != local_store_instructions.end()
+                                    || summary_info->capture_kinds[capture_i - 1]
+                                        == BatchCalleeParamKind::Boxed) {
+                                stable_captures = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!stable_captures) {
+                        stored_closure = nullptr;
+                    } else {
+                        stored_closure_capture_allocas.emplace(closure_id,
+                            std::vector<llvm::AllocaInst*>());
+                    }
+                }
+                if (!stored_closure) {
                     continue;
                 }
 
@@ -7411,6 +7473,54 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 llvm::ConstantInt::get(i64_type, VAL_NOTHING), identity);
             guarded_stored_closure_identity_allocas[create->result.id] = identity;
             registerPersistentCleanupAlloca(identity);
+        }
+    }
+    if (!stored_closure_capture_allocas.empty()) {
+        llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+        llvm::IRBuilder<> alloca_builder(&entry, entry.begin());
+        size_t closure_i = 0;
+        for (auto& [create_id, allocas] : stored_closure_capture_allocas) {
+            if (closure_i++ && !(closure_i % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM stored closure capture cache setup")) {
+                error = "cancelled during LLVM stored closure capture cache setup";
+                return false;
+            }
+            auto definition = closure_definitions.find(create_id);
+            const QoreClosureParseNode* closure = definition != closure_definitions.end()
+                ? definition->second->closure_node : nullptr;
+            if (!closure && definition != closure_definitions.end()) {
+                closure = dynamic_cast<const QoreClosureParseNode*>(
+                    definition->second->expr.getInternalNode());
+            }
+            const UserClosureFunction* ucf = closure ? closure->getFunction() : nullptr;
+            const AbstractQoreFunctionVariant* variant = ucf ? ucf->first() : nullptr;
+            const BatchCalleeInfo* summary_info = nullptr;
+            if (variant && batch_callees) {
+                auto summary = batch_callees->find(variant);
+                if (summary != batch_callees->end()) {
+                    summary_info = &summary->second;
+                }
+            }
+            if (!summary_info) {
+                error = "missing stored closure capture summary";
+                return false;
+            }
+            allocas.reserve(summary_info->capture_kinds.size());
+            size_t capture_i = 0;
+            for (BatchCalleeParamKind kind : summary_info->capture_kinds) {
+                if (capture_i++ && !(capture_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM stored closure capture alloca setup")) {
+                    error = "cancelled during LLVM stored closure capture alloca setup";
+                    return false;
+                }
+                llvm::Type* type = kind == BatchCalleeParamKind::NativeFloat
+                    ? double_type : kind == BatchCalleeParamKind::NativeBool
+                        ? i1_type : i64_type;
+                allocas.push_back(alloca_builder.CreateAlloca(type, nullptr,
+                    "stored_closure_capture"));
+            }
         }
     }
     // A register is a "DotEval-only base" if it appears as a base but never
@@ -16529,6 +16639,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_args.push_back(getFastEntryCallArgument(dispatch_info,
                             i, raw_args, raw_arg_ids, boxed_args, module));
                     }
+                    auto cached_captures = stored_closure_capture_allocas.find(
+                        create->result.id);
+                    bool use_cached_captures = !guarded_captures
+                        && cached_captures != stored_closure_capture_allocas.end()
+                        && immediate_closure_info
+                        && cached_captures->second.size()
+                            == immediate_closure_info->capture_locals.size();
                     if (immediate_closure_info) {
                         for (size_t capture_index = 0;
                                 capture_index < immediate_closure_info->capture_locals.size();
@@ -16542,6 +16659,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             const LocalVar* capture =
                                 immediate_closure_info->capture_locals[capture_index];
                             const void* key = reinterpret_cast<const void*>(capture);
+                            BatchCalleeParamKind kind =
+                                immediate_closure_info->capture_kinds[capture_index];
+                            if (use_cached_captures) {
+                                llvm::Type* type = kind == BatchCalleeParamKind::NativeFloat
+                                    ? double_type : kind == BatchCalleeParamKind::NativeBool
+                                        ? i1_type : i64_type;
+                                call_args.push_back(builder->CreateLoad(type,
+                                    cached_captures->second[capture_index]));
+                                continue;
+                            }
                             llvm::Function* owner = builder->GetInsertBlock()->getParent();
                             llvm::IRBuilder<> alloca_builder(
                                 &owner->getEntryBlock(), owner->getEntryBlock().begin());
@@ -16568,8 +16695,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             builder->CreateStore(boxed_capture, capture_cleanup);
                             capture_cleanups.push_back(capture_cleanup);
                             emitExceptionCheck(module, llvm_func, inst);
-                            BatchCalleeParamKind kind =
-                                immediate_closure_info->capture_kinds[capture_index];
                             if (guarded_captures) {
                                 call_args.push_back(boxed_capture);
                             } else if (kind == BatchCalleeParamKind::NativeInt) {
@@ -17657,6 +17782,98 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::CreateClosure: {
             const auto* ccinst = static_cast<const QoreIRCreateClosureInstruction*>(inst);
             if (immediate_closure_creates.count(inst->result.id)) {
+                auto cached_captures = stored_closure_capture_allocas.find(
+                    inst->result.id);
+                if (cached_captures != stored_closure_capture_allocas.end()) {
+                    const QoreClosureParseNode* closure = ccinst->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            ccinst->expr.getInternalNode());
+                    }
+                    const UserClosureFunction* ucf = closure
+                        ? closure->getFunction() : nullptr;
+                    const AbstractQoreFunctionVariant* variant = ucf
+                        ? ucf->first() : nullptr;
+                    const BatchCalleeInfo* summary_info = nullptr;
+                    if (variant && batch_callees) {
+                        auto summary = batch_callees->find(variant);
+                        if (summary != batch_callees->end()) {
+                            summary_info = &summary->second;
+                        }
+                    }
+                    if (!summary_info
+                            || summary_info->capture_locals.size()
+                                != cached_captures->second.size()) {
+                        error = "invalid stored closure capture cache";
+                        return false;
+                    }
+                    auto load_capture = module.getOrInsertFunction(
+                        "qore_rt_load_closure_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    auto load_capture_throwing = module.getOrInsertFunction(
+                        "qore_rt_load_closure_aot_throwing",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    auto decref = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type,
+                            {i64_type, ptr_type}, false));
+                    llvm::Function* owner = builder->GetInsertBlock()->getParent();
+                    llvm::IRBuilder<> alloca_builder(
+                        &owner->getEntryBlock(), owner->getEntryBlock().begin());
+                    size_t capture_i = 0;
+                    for (const LocalVar* capture : summary_info->capture_locals) {
+                        if (capture_i && !(capture_i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "LLVM stored closure capture initialization")) {
+                            error = "cancelled during LLVM stored closure capture initialization";
+                            return false;
+                        }
+                        int32_t capture_slot = const_cast<AOTSlotMap*>(aot_slots)
+                            ->getLocalSlot(reinterpret_cast<const void*>(capture));
+                        llvm::AllocaInst* capture_cleanup =
+                            alloca_builder.CreateAlloca(i64_type, nullptr,
+                                "stored_closure_capture_cleanup");
+                        alloca_builder.CreateStore(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                            capture_cleanup);
+                        registerInvokeCleanupAlloca(capture_cleanup);
+                        llvm::Value* boxed_capture = emitMaybeInvoke(
+                            load_capture, load_capture_throwing,
+                            {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, capture_slot),
+                                xsink_arg}, module, llvm_func, inst);
+                        builder->CreateStore(boxed_capture, capture_cleanup);
+                        emitExceptionCheck(module, llvm_func, inst);
+                        BatchCalleeParamKind kind =
+                            summary_info->capture_kinds[capture_i];
+                        llvm::Value* native_capture;
+                        if (kind == BatchCalleeParamKind::NativeInt) {
+                            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                                llvm::FunctionType::get(i64_type, {i64_type}, false));
+                            native_capture = builder->CreateCall(to_int,
+                                {boxed_capture});
+                        } else if (kind == BatchCalleeParamKind::NativeFloat) {
+                            auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+                                llvm::FunctionType::get(double_type, {i64_type}, false));
+                            native_capture = builder->CreateCall(to_float,
+                                {boxed_capture});
+                        } else if (kind == BatchCalleeParamKind::NativeBool) {
+                            native_capture = builder->CreateICmpEQ(boxed_capture,
+                                llvm::ConstantInt::get(i64_type, VAL_TRUE));
+                        } else {
+                            error = "unsupported stored closure capture cache kind";
+                            return false;
+                        }
+                        builder->CreateStore(native_capture,
+                            cached_captures->second[capture_i]);
+                        builder->CreateStore(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                            capture_cleanup);
+                        builder->CreateCall(decref, {boxed_capture, xsink_arg});
+                        ++capture_i;
+                    }
+                }
                 values[inst->result.id] = llvm::ConstantInt::get(i64_type,
                     VAL_NOTHING);
                 nanboxed_values.insert(inst->result.id);

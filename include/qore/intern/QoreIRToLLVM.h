@@ -458,11 +458,15 @@ private:
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
 
-    // Single-use, noncapturing closure values consumed directly by
+    // Single-use or nonescaping stored closure values consumed directly by
     // CallClosureDirect. Their creation can be fused into the call without
     // changing the identity of any closure value visible to Qore code.
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
         immediate_closure_creates;
+    // Native scalar captures cached at creation for entry-assigned stored
+    // closures whose captured parameters cannot be modified by the owner.
+    std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>
+        stored_closure_capture_allocas;
     // Top-level closure locals can be changed by called code outside the owner
     // IR. Loads mapped here use a retained closure-identity guard before the
     // native direct path and retain the ordinary dynamic fallback.
@@ -472,7 +476,7 @@ private:
     std::unordered_map<uint32_t, llvm::AllocaInst*>
         guarded_stored_closure_identity_allocas;
     // StoreLocal/LoadLocal instructions eliminated when an entry-assigned,
-    // noncapturing closure local is used only as a direct call target.
+    // nonescaping closure local is used only as a direct call target.
     std::unordered_set<const QoreIRInstruction*> elided_closure_local_accesses;
 
     // Comparison result IDs consumed exclusively by ToBool.  These can remain

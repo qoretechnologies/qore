@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub run(int iterations, int base) {
+    code<int(int)> transform = int sub(int value) {
+        return value + base;
+    };
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += transform(i % 1000);
+    }
+    return result;
+}
+
+int sub main() {
+    printf("%d\n", run(5000000, 17));
+    return 0;
+}
