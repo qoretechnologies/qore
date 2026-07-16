@@ -14503,6 +14503,8 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         // Empty check: if size == 0, return NOTHING
         builder.setBlock(empty_check_block);
         QoreIRValue zero = builder.createConstInt(0, foldl->loc)->result;
+        QoreIRValue identity_val = elem_is_int
+            ? zero : builder.createConstFloat(0.0, foldl->loc)->result;
         QoreIRValue is_empty = builder.createBinaryOp(QoreIROpcode::EqInt, list_size, zero, foldl->loc)->result;
         builder.createBranchIf(is_empty, exit_block, init_block, foldl->loc);
 
@@ -14597,10 +14599,6 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         // Exit block: PHI between identity value (empty) and accumulator
         builder.setBlock(exit_block);
 
-        QoreIRValue identity_val = elem_is_int
-            ? builder.createConstInt(0, foldl->loc)->result
-            : builder.createConstFloat(0.0, foldl->loc)->result;
-
         std::vector<QoreIRPhiIncoming> result_incoming;
         result_incoming.push_back({identity_val, empty_check_block});  // Empty list case
         result_incoming.push_back({accum_val, header_block});          // Normal case after iterations
@@ -14633,6 +14631,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
 
     // Init block: get first element as initial accumulator
     builder.setBlock(init_block);
+    QoreIRValue nothing_val = builder.createConstNothing(foldl->loc)->result;
     auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldl->loc);
     QoreIRValue first_val = first_inst->result;
 
@@ -14699,9 +14698,6 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     // The IteratorNext handles this: done_target is exit_block
     // So we get: NOTHING from init (empty list) or accum_val from header
 
-    // For empty list case, we need to return NOTHING
-    QoreIRValue nothing_val = builder.createConstNothing(foldl->loc)->result;
-
     std::vector<QoreIRPhiIncoming> result_incoming;
     result_incoming.push_back({nothing_val, init_block});  // Empty list case
     result_incoming.push_back({accum_val, header_block});  // Normal case after iterations
@@ -14755,6 +14751,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
 
     // Init block: get first element as initial accumulator
     builder.setBlock(init_block);
+    QoreIRValue nothing_val = builder.createConstNothing(foldr->loc)->result;
     auto* first_inst = builder.createIteratorNext(iter_val, exit_block, header_block, foldr->loc);
     QoreIRValue first_val = first_inst->result;
 
@@ -14813,9 +14810,6 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
 
     // Exit block: return accumulator (via phi from different sources)
     builder.setBlock(exit_block);
-
-    // For empty list case, return NOTHING
-    QoreIRValue nothing_val = builder.createConstNothing(foldr->loc)->result;
 
     std::vector<QoreIRPhiIncoming> result_incoming;
     result_incoming.push_back({nothing_val, init_block});  // Empty list case
@@ -15023,11 +15017,6 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // Continue block: increment index, loop back
         builder.setBlock(cont_block);
 
-        if (needs_implicit_push) {
-            builder.createPopImplicitArg(old_argv, ms->loc);
-            builder.createPopImplicitElement(old_element, ms->loc);
-        }
-
         QoreIRValue next_output_index;
         if (use_typed_scalar_construction) {
             std::vector<QoreIRPhiIncoming> output_incoming;
@@ -15035,6 +15024,11 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             output_incoming.push_back({selected_output_index, append_exit_block});
             next_output_index = builder.createPhi(output_incoming, ms->loc,
                 QoreIRPhiValueKind::NativeInt)->result;
+        }
+
+        if (needs_implicit_push) {
+            builder.createPopImplicitArg(old_argv, ms->loc);
+            builder.createPopImplicitElement(old_element, ms->loc);
         }
 
         QoreIRValue one = builder.createConstInt(1, ms->loc)->result;

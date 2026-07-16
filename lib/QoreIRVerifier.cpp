@@ -260,7 +260,16 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
         }
     }
     for (const auto& block : func.blocks) {
+        bool saw_non_phi = false;
         for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::Phi) {
+                if (saw_non_phi) {
+                    error = "phi instruction not grouped at beginning of block '" + block->name + "'";
+                    return false;
+                }
+            } else {
+                saw_non_phi = true;
+            }
             if (inst->opcode == QoreIROpcode::Invoke) {
                 auto* invoke_inst = dynamic_cast<const QoreIRInvokeInstruction*>(inst.get());
                 if (!invoke_inst || !invoke_inst->normal_target

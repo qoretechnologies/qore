@@ -154,13 +154,51 @@ static bool checkReadonlyCreateParseRefVerifier() {
     return true;
 }
 
+static bool checkPhiOrderVerifier() {
+    QoreIRFunction func("ir_verify_phi_order");
+    QoreIRBuilder builder(&func);
+    auto* entry = func.createBlock("entry");
+    auto* then_block = func.createBlock("then");
+    auto* else_block = func.createBlock("else");
+    auto* merge_block = func.createBlock("merge");
+    builder.setBlock(entry);
+    auto* cond = builder.createConstBool(true);
+    builder.createBranchIf(cond->result, then_block, else_block);
+    builder.setBlock(then_block);
+    auto* c1 = builder.createConstInt(1);
+    builder.createBranch(merge_block);
+    builder.setBlock(else_block);
+    auto* c2 = builder.createConstInt(2);
+    builder.createBranch(merge_block);
+    builder.setBlock(merge_block);
+    builder.createConstInt(0);
+    auto* phi = builder.createPhi({
+        {c1->result, then_block},
+        {c2->result, else_block},
+    });
+    builder.createReturn(phi->result);
+
+    std::string error;
+    if (QoreIRVerifier::verify(func, error)
+            || error.find("phi instruction not grouped") == std::string::npos) {
+        std::cerr << "PHI order verifier check failed";
+        if (!error.empty()) {
+            std::cerr << ": " << error;
+        }
+        std::cerr << "\n";
+        return false;
+    }
+    return true;
+}
+
 int main() {
     qore_init(QL_GPL);
     bool ok = checkOpcodeRegistry()
         && checkQoreValueTagReservations()
         && checkTypeProfileBuiltins()
         && checkTypeProfileClassPayload()
-        && checkReadonlyCreateParseRefVerifier();
+        && checkReadonlyCreateParseRefVerifier()
+        && checkPhiOrderVerifier();
     qore_cleanup();
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
