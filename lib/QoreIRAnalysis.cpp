@@ -1546,14 +1546,21 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
     return true;
 }
 
-static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
-        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
-    if (std::getenv("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT")) {
-        return 0;
+struct QoreIRFixedAggregateScalarizationStats {
+    size_t lists = 0;
+    size_t hashes = 0;
+};
+
+static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggregates(
+        QoreIRFunction& func, const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+    QoreIRFixedAggregateScalarizationStats stats;
+    const bool enable_lists =
+        std::getenv("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT") == nullptr;
+    const bool enable_hashes =
+        std::getenv("QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT") == nullptr;
+    if (!enable_lists && !enable_hashes) {
+        return stats;
     }
-    const bool cross_block =
-        std::getenv("QORE_DISABLE_IR_CROSS_BLOCK_FIXED_LIST_SCALAR_REPLACEMENT")
-            == nullptr;
 
     struct InstructionPosition {
         QoreIRInstruction* inst = nullptr;
@@ -1561,7 +1568,7 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         size_t offset = 0;
     };
     auto dominates = [&](const InstructionPosition& definition,
-            const InstructionPosition& use) {
+            const InstructionPosition& use, bool cross_block) {
         return definition.block == use.block
             ? definition.offset < use.offset
             : cross_block && cfg.dominates(definition.block, use.block);
@@ -1572,8 +1579,8 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         for (size_t offset = 0; offset < func.blocks[block_id]->instructions.size(); ++offset) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR fixed-list scalar replacement analysis")) {
-                return 0;
+                    "IR fixed-aggregate scalar replacement analysis")) {
+                return {};
             }
             QoreIRInstruction* inst = func.blocks[block_id]->instructions[offset].get();
             if (inst->result.isValid()) {
@@ -1615,7 +1622,7 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
 
     QoreIRScalarUses uses;
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
-        return 0;
+        return {};
     }
     std::unordered_set<const QoreIRInstruction*> eliminated;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
@@ -1623,16 +1630,35 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
 
     for (const auto& [local, accesses] : local_accesses) {
         if (qore_ir_analysis_cancelled(check_count,
-                "IR fixed-list scalar replacement candidate analysis")) {
-            return 0;
+                "IR fixed-aggregate scalar replacement candidate analysis")) {
+            return {};
         }
         if (!local || path_locals.count(local) || local->closureUse()
                 || QoreTypeInfo::isReference(local->getTypeInfo())
                 || !func.ir_only_locals.count(reinterpret_cast<const void*>(local))) {
             continue;
         }
-        const QoreTypeInfo* element_type =
-            QoreTypeInfo::getUniqueReturnComplexList(local->getTypeInfo());
+        const QoreTypeInfo* element_type = nullptr;
+        bool hash_candidate = false;
+        if (enable_lists) {
+            element_type =
+                QoreTypeInfo::getUniqueReturnComplexList(local->getTypeInfo());
+        }
+        if (!element_type && enable_hashes) {
+            element_type =
+                QoreTypeInfo::getUniqueReturnComplexHash(local->getTypeInfo());
+            hash_candidate = element_type != nullptr;
+        }
+        if (!element_type) {
+            continue;
+        }
+        const bool cross_block = hash_candidate
+            ? std::getenv(
+                "QORE_DISABLE_IR_CROSS_BLOCK_FIXED_HASH_SCALAR_REPLACEMENT")
+                == nullptr
+            : std::getenv(
+                "QORE_DISABLE_IR_CROSS_BLOCK_FIXED_LIST_SCALAR_REPLACEMENT")
+                == nullptr;
         QoreIRValueRepresentation expected_representation;
         if (element_type == bigIntTypeInfo) {
             expected_representation = QoreIRValueRepresentation::NativeInt;
@@ -1650,8 +1676,8 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         bool invalid = false;
         for (const InstructionPosition& position : accesses) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR fixed-list scalar replacement local analysis")) {
-                return 0;
+                    "IR fixed-aggregate scalar replacement local analysis")) {
+                return {};
             }
             if (position.inst->opcode == QoreIROpcode::StoreLocal) {
                 if (store_pos) {
@@ -1677,7 +1703,9 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         }
         auto make_it = definitions.find(store_pos->inst->operands[0].id);
         if (make_it == definitions.end()
-                || make_it->second.inst->opcode != QoreIROpcode::MakeList
+                || make_it->second.inst->opcode
+                    != (hash_candidate ? QoreIROpcode::MakeHashConstKeys
+                        : QoreIROpcode::MakeList)
                 || make_it->second.inst->exception_target
                 || make_it->second.block != store_pos->block
                 || make_it->second.offset >= store_pos->offset
@@ -1685,6 +1713,12 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
             continue;
         }
         QoreIRInstruction* make = make_it->second.inst;
+        const QoreIRMakeHashConstKeysInstruction* make_hash = hash_candidate
+            ? static_cast<const QoreIRMakeHashConstKeysInstruction*>(make)
+            : nullptr;
+        if (make_hash && make_hash->keys.size() != make->operands.size()) {
+            continue;
+        }
         auto make_uses = uses.find(make->result.id);
         if (make_uses == uses.end() || make_uses->second.size() != 1
                 || make_uses->second.front().inst != store_pos->inst) {
@@ -1692,8 +1726,8 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         }
         for (QoreIRValue operand : make->operands) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR fixed-list scalar operand analysis")) {
-                return 0;
+                    "IR fixed-aggregate scalar operand analysis")) {
+                return {};
             }
             const QoreIRValueFacts* facts = func.getValueFacts(operand);
             if (!facts || facts->representation != expected_representation
@@ -1709,8 +1743,18 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
 
         std::vector<const QoreIRInstruction*> reads;
         std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
+        std::unordered_map<std::string, QoreIRValue> hash_values;
+        if (make_hash) {
+            for (size_t i = 0; i < make_hash->keys.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR fixed-hash scalar key analysis")) {
+                    return {};
+                }
+                hash_values[make_hash->keys[i]] = make->operands[i];
+            }
+        }
         for (const InstructionPosition* load_pos : load_positions) {
-            if (!dominates(*store_pos, *load_pos)
+            if (!dominates(*store_pos, *load_pos, cross_block)
                     || load_pos->inst->exception_target) {
                 invalid = true;
                 break;
@@ -1722,42 +1766,77 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
             }
             for (const QoreIRScalarUse& use : load_uses->second) {
                 if (qore_ir_analysis_cancelled(check_count,
-                        "IR fixed-list scalar read analysis")) {
-                    return 0;
+                        "IR fixed-aggregate scalar read analysis")) {
+                    return {};
                 }
-                if (!use.inst
-                        || use.inst->opcode != QoreIROpcode::ListIndexDynamic
-                        || use.inst->exception_target || !use.inst->result.isValid()
-                        || use.inst->operands.size() != 2
-                        || use.inst->operands[0].id != load_pos->inst->result.id) {
+                bool matching_read = use.inst && !use.inst->exception_target
+                    && use.inst->result.isValid()
+                    && !use.inst->operands.empty()
+                    && use.inst->operands[0].id
+                        == load_pos->inst->result.id;
+                if (matching_read && hash_candidate) {
+                    matching_read = use.inst->operands.size() == 1
+                        && (use.inst->opcode == QoreIROpcode::HashKeyAccess
+                            || use.inst->opcode
+                                == QoreIROpcode::HashKeyAccessInt
+                            || use.inst->opcode
+                                == QoreIROpcode::HashKeyAccessHash
+                            || use.inst->opcode
+                                == QoreIROpcode::HashKeyAccessHashGuarded);
+                } else if (matching_read) {
+                    matching_read = use.inst->operands.size() == 2
+                        && use.inst->opcode
+                            == QoreIROpcode::ListIndexDynamic;
+                }
+                if (!matching_read) {
                     invalid = true;
                     break;
                 }
                 auto read_position = definitions.find(use.inst->result.id);
                 if (read_position == definitions.end()
-                        || !dominates(*load_pos, read_position->second)) {
+                        || !dominates(
+                            *load_pos, read_position->second, cross_block)) {
                     invalid = true;
                     break;
                 }
-                const auto* index_inst = static_cast<const QoreIRExprInstruction*>(use.inst);
-                if (!index_inst->list_selector_kinds.empty()) {
-                    invalid = true;
-                    break;
-                }
-                auto index_it = definitions.find(use.inst->operands[1].id);
-                if (index_it == definitions.end()
-                        || index_it->second.inst->opcode != QoreIROpcode::ConstInt) {
-                    invalid = true;
-                    break;
-                }
-                int64_t index = static_cast<const QoreIRConstInstruction*>(
-                    index_it->second.inst)->constant.int_value;
-                if (index < 0 || static_cast<size_t>(index) >= make->operands.size()) {
-                    invalid = true;
-                    break;
+                QoreIRValue replacement;
+                if (hash_candidate) {
+                    const auto* access =
+                        static_cast<const QoreIRHashKeyAccessInstruction*>(
+                            use.inst);
+                    auto value_it = hash_values.find(access->key_name);
+                    if (value_it == hash_values.end()) {
+                        invalid = true;
+                        break;
+                    }
+                    replacement = value_it->second;
+                } else {
+                    const auto* index_inst =
+                        static_cast<const QoreIRExprInstruction*>(use.inst);
+                    if (!index_inst->list_selector_kinds.empty()) {
+                        invalid = true;
+                        break;
+                    }
+                    auto index_it = definitions.find(use.inst->operands[1].id);
+                    if (index_it == definitions.end()
+                            || index_it->second.inst->opcode
+                                != QoreIROpcode::ConstInt) {
+                        invalid = true;
+                        break;
+                    }
+                    int64_t index = static_cast<const QoreIRConstInstruction*>(
+                        index_it->second.inst)->constant.int_value;
+                    if (index < 0
+                            || static_cast<size_t>(index)
+                                >= make->operands.size()) {
+                        invalid = true;
+                        break;
+                    }
+                    replacement =
+                        make->operands[static_cast<size_t>(index)];
                 }
                 candidate_replacements.emplace(use.inst->result.id,
-                    make->operands[static_cast<size_t>(index)]);
+                    replacement);
                 reads.push_back(use.inst);
             }
             if (invalid) {
@@ -1776,24 +1855,29 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         eliminated.insert(local_cleanup.begin(), local_cleanup.end());
         replacements.insert(candidate_replacements.begin(), candidate_replacements.end());
         ++scalarized;
+        if (hash_candidate) {
+            ++stats.hashes;
+        } else {
+            ++stats.lists;
+        }
     }
 
     if (!scalarized) {
-        return 0;
+        return stats;
     }
     for (auto& [result_id, replacement] : replacements) {
         std::unordered_set<uint32_t> seen{result_id};
         while (true) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR fixed-list scalar replacement normalization")) {
-                return 0;
+                    "IR fixed-aggregate scalar replacement normalization")) {
+                return {};
             }
             auto next = replacements.find(replacement.id);
             if (next == replacements.end()) {
                 break;
             }
             if (!seen.insert(replacement.id).second) {
-                return 0;
+                return {};
             }
             replacement = next->second;
         }
@@ -1803,7 +1887,8 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         for (auto it = instructions.begin(); it != instructions.end();) {
             // Complete the committed rewrite even if cancellation is requested.
             if (++check_count % 100 == 0) {
-                (void)qore_check_cancel(nullptr, "IR fixed-list scalar replacement");
+                (void)qore_check_cancel(
+                    nullptr, "IR fixed-aggregate scalar replacement");
             }
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
@@ -1814,7 +1899,7 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
             }
         }
     }
-    return scalarized;
+    return stats;
 }
 
 static size_t qore_ir_fold_scalar_list_queries(QoreIRFunction& func,
@@ -3303,8 +3388,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         }
         return;
     }
-    local_stats.fixed_lists_scalarized =
-        qore_ir_scalar_replace_fixed_lists(func, cfg, check_count);
+    QoreIRFixedAggregateScalarizationStats aggregate_stats =
+        qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
+    local_stats.fixed_lists_scalarized = aggregate_stats.lists;
+    local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
             if (stats) {

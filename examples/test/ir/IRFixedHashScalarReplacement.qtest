@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+int sub scalarInt(int base) {
+    hash<string, int> values = {\"left\": base, \"middle\": base + 1, \"right\": base + 2};
+    return values.middle + values.right;
+}
+
+float sub scalarFloat(float base) {
+    hash<string, float> values = {\"left\": base, \"right\": base + 1.0};
+    return values.right;
+}
+
+bool sub scalarBool(bool base) {
+    hash<string, bool> values = {\"left\": base, \"right\": False};
+    return values.left;
+}
+
+int sub dynamicKey(string key) {
+    hash<string, int> values = {\"left\": 7, \"middle\": 8, \"right\": 9};
+    return values{key};
+}
+
+int sub mutatedHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.left = 7;
+    return values.left + values.right;
+}
+
+hash<string, int> sub escapedHash() {
+    hash<string, int> values = {\"left\": 3, \"right\": 4};
+    return values;
+}
+
+bool sub missingKey() {
+    hash<string, int> values = {\"left\": 5, \"right\": 6};
+    return values.missing === NOTHING;
+}
+
+string sub boxedElement() {
+    hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
+    return values.right;
+}
+
+int sub crossBlock(int base, bool first) {
+    hash<string, int> values = {\"left\": base, \"middle\": base + 1, \"right\": base + 2};
+    if (first) {
+        return values.left + values.right;
+    }
+    return values.middle + values.right;
+}
+
+bool sub conditionalAssignment(bool assign) {
+    hash<string, int> values;
+    if (assign) {
+        values = {\"left\": 10, \"right\": 20};
+    }
+    return values.left === NOTHING;
+}
+
+bool sub removedKey() {
+    hash<string, int> values = {\"left\": 10, \"right\": 20};
+    remove values.left;
+    return values.left === NOTHING;
+}
+
+bool sub deletedKey() {
+    hash<string, int> values = {\"left\": 10, \"right\": 20};
+    delete values.left;
+    return values.left === NOTHING;
+}
+
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d\\n\",
+    scalarInt(4), scalarFloat(1.5), scalarBool(True), dynamicKey(\"right\"),
+    mutatedHash(), escapedHash().size(), missingKey(), boxedElement(),
+    crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
+    conditionalAssignment(True), removedKey(), deletedKey());
+";
+
+string script_path = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub runAot(bool disabled) {
+    string exe = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid())
+        + (disabled ? "-disabled" : "");
+    string compile_out = backquote(sprintf("%sLD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        disabled ? "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 " : "",
+        libqore_dir, qcc_bin, exe, script_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+}
+
+string expected = "11:2.5:1:9:9:2:1:b:10:11:1:0:1:1\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+string aot = runAot(False);
+string disabled_aot = runAot(True);
+if (aot != expected || disabled_aot != expected) {
+    printf("AOT mismatch\nexpected:\n%sAOT:\n%sdisabled AOT:\n%s",
+        expected, aot, disabled_aot);
+    exit(2);
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarFloat:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: scalarBool:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/) {
+    printf("missing fixed-hash scalar replacement:\n%s", stats);
+    exit(2);
+}
+if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: escapedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: missingKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: conditionalAssignment:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: removedKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/) {
+    printf("unsafe fixed-hash scalar replacement:\n%s", stats);
+    exit(2);
+}
