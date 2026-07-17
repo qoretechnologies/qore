@@ -136,6 +136,20 @@ string sub boxedTemporaryProjection() {
     return makeWords(appendMark(\"left\"), appendMark(\"right\"))[0];
 }
 
+string sub boxedMultiListProjection() {
+    string left = \"left-projection-value\";
+    string right = \"right-projection-value\";
+    list<string> words = makeWords(left, right);
+    return words[0] + \"/\" + words[1] + \"/\" + words[0];
+}
+
+string sub boxedMultiHashProjection() {
+    string left = \"hash-left-projection-value\";
+    string right = \"hash-right-projection-value\";
+    hash<string, string> words = makeWordMap(left, right);
+    return words.left + \"/\" + words.right + \"/\" + words.left;
+}
+
 int sub sharedResult() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + row.right;
@@ -197,9 +211,19 @@ int sub consumeRow(hash<string, int> row) {
     return row.middle;
 }
 
+string sub consumeWords(list<string> words) {
+    return words[1];
+}
+
 int sub sharedEscapes() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + consumeRow(row);
+}
+
+string sub boxedMixedUse() {
+    list<string> words =
+        makeWords(appendMark(\"alpha\"), appendMark(\"beta\"));
+    return words[0] + \"/\" + consumeWords(words);
 }
 
 int sub dynamicListIndex(int index) {
@@ -228,7 +252,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -240,7 +264,8 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     mixedPhiProjection(True), mixedPhiProjection(False),
     nothingPhiProjection(True), nothingPhiProjection(False),
     sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
-    optionalInput(NOTHING), optionalListInput(NOTHING));
+    optionalInput(NOTHING), optionalListInput(NOTHING),
+    boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -295,8 +320,18 @@ foreach string function in (("phiProjection", "phiSideEffectProjection")) {
         exit(2);
     }
 }
+foreach string function in (
+        ("boxedMultiListProjection", "boxedMultiHashProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing multi-use boxed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -356,7 +391,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
