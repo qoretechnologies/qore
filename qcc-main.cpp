@@ -5081,6 +5081,21 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         printf("%s%d", i ? ", " : "",
             rec.aggregate_return_value_params[i]);
     }
+    printf("], \"aggregate_return_value_kinds\": [");
+    for (size_t i = 0; i < rec.aggregate_return_value_kinds.size(); ++i) {
+        printf("%s%u", i ? ", " : "",
+            rec.aggregate_return_value_kinds[i]);
+    }
+    printf("], \"aggregate_return_value_ints\": [");
+    for (size_t i = 0; i < rec.aggregate_return_value_ints.size(); ++i) {
+        printf("%s" QLLD, i ? ", " : "",
+            static_cast<long long>(rec.aggregate_return_value_ints[i]));
+    }
+    printf("], \"aggregate_return_value_floats\": [");
+    for (size_t i = 0; i < rec.aggregate_return_value_floats.size(); ++i) {
+        printf("%s%.17g", i ? ", " : "",
+            rec.aggregate_return_value_floats[i]);
+    }
     printf("], \"aggregate_return_keys\": [");
     for (size_t i = 0; i < rec.aggregate_return_keys.size(); ++i) {
         if (i) {
@@ -5712,6 +5727,25 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
                 j < rec.aggregate_return_value_params.size(); ++j) {
             fprintf(f, "%s%d", j ? ", " : "",
                 rec.aggregate_return_value_params[j]);
+        }
+        fputs("], \"aggregate_return_value_kinds\": [", f);
+        for (size_t j = 0;
+                j < rec.aggregate_return_value_kinds.size(); ++j) {
+            fprintf(f, "%s%u", j ? ", " : "",
+                rec.aggregate_return_value_kinds[j]);
+        }
+        fputs("], \"aggregate_return_value_ints\": [", f);
+        for (size_t j = 0;
+                j < rec.aggregate_return_value_ints.size(); ++j) {
+            fprintf(f, "%s" QLLD, j ? ", " : "",
+                static_cast<long long>(
+                    rec.aggregate_return_value_ints[j]));
+        }
+        fputs("], \"aggregate_return_value_floats\": [", f);
+        for (size_t j = 0;
+                j < rec.aggregate_return_value_floats.size(); ++j) {
+            fprintf(f, "%s%.17g", j ? ", " : "",
+                rec.aggregate_return_value_floats[j]);
         }
         fputs("], \"aggregate_return_keys\": [", f);
         for (size_t j = 0; j < rec.aggregate_return_keys.size(); ++j) {

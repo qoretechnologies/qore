@@ -2062,6 +2062,8 @@ public:
         NativeFloat,
         BoxedInt,
         BoxedFloat,
+        NativeIntConstant,
+        NativeFloatConstant,
     };
 
     enum class NativeLeafKind : uint8_t {
@@ -2108,6 +2110,8 @@ public:
         AOTAggregateProjectionKind::None;
     int16_t aot_aggregate_projection_operand = -1;
     int64_t aot_aggregate_projection_size = 0;
+    int64_t aot_aggregate_projection_int = 0;
+    double aot_aggregate_projection_float = 0.0;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

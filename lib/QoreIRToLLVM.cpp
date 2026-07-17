@@ -13690,6 +13690,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = llvm::ConstantInt::get(i64_type,
                         direct_inst->aot_aggregate_projection_size);
                     call_return_kind = BatchCalleeReturnKind::NativeInt;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeIntConstant) {
+                    call_result = llvm::ConstantInt::get(i64_type,
+                        direct_inst->aot_aggregate_projection_int);
+                    call_return_kind = BatchCalleeReturnKind::NativeInt;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeFloatConstant) {
+                    call_result = llvm::ConstantFP::get(double_type,
+                        direct_inst->aot_aggregate_projection_float);
+                    call_return_kind = BatchCalleeReturnKind::NativeFloat;
                 } else {
                     int16_t operand =
                         direct_inst->aot_aggregate_projection_operand;

@@ -42,6 +42,18 @@ hash<string, int> sub makeDuplicate(int first, int second) {
     };
 }
 
+hash<string, int> sub makeTagged(int value) {
+    return {
+        \"value\": value,
+        \"scale\": 3,
+        \"bias\": 7,
+    };
+}
+
+list<float> sub makeFloatConstant(float value) {
+    return (value, 2.5);
+}
+
 int sub freshHashProjection() {
     return makeRow(4, 5, 6).middle;
 }
@@ -67,6 +79,14 @@ bool sub freshFloatProjection() {
 
 int sub duplicateKeyProjection() {
     return makeDuplicate(10, 11).same;
+}
+
+int sub constantHashProjection() {
+    return makeTagged(10).scale;
+}
+
+bool sub constantFloatProjection() {
+    return makeFloatConstant(1.25)[1] == 2.5;
 }
 
 int sub sharedResult() {
@@ -115,11 +135,11 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%d:%d:%d:%d:%y:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
-    sharedResult(), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
-    boxedListSize(),
+    constantHashProjection(), constantFloatProjection(), sharedResult(),
+    sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
     optionalInput(NOTHING), optionalListInput(NOTHING));
 ";
 
@@ -149,7 +169,8 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
 foreach string function in (("freshHashProjection", "sideEffectProjection",
         "freshListSize", "freshListProjection", "freshFloatProjection",
-        "duplicateKeyProjection", "sharedResult")) {
+        "duplicateKeyProjection", "constantHashProjection",
+        "sharedResult")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
@@ -180,6 +201,8 @@ string dump = backquote(sprintf(
 string row_line;
 string values_line;
 string floats_line;
+string tagged_line;
+string float_constant_line;
 foreach string line in (dump.split("\n")) {
     if (line.find("makeRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
@@ -190,6 +213,12 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeFloats(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         floats_line = line;
+    } else if (line.find("makeTagged(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        tagged_line = line;
+    } else if (line.find("makeFloatConstant(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        float_constant_line = line;
     }
 }
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -200,12 +229,18 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || values_line.find("\"aggregate_return_keys\": []") == -1
         || floats_line.find("\"aggregate_return_kind\": 1") == -1
         || floats_line.find("\"aggregate_return_value_params\": [0, 1]") == -1
-        || floats_line.find("\"aggregate_return_keys\": []") == -1) {
+        || floats_line.find("\"aggregate_return_keys\": []") == -1
+        || tagged_line.find("\"aggregate_return_value_params\": [0, -1, -1]") == -1
+        || tagged_line.find("\"aggregate_return_value_kinds\": [0, 1, 1]") == -1
+        || tagged_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
+        || float_constant_line.find("\"aggregate_return_value_params\": [0, -1]") == -1
+        || float_constant_line.find("\"aggregate_return_value_kinds\": [0, 2]") == -1
+        || float_constant_line.find("\"aggregate_return_value_floats\": [0, 2.5]") == -1) {
     printf("missing aggregate-return symbol metadata:\n%s", dump);
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:4:13:3:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:4:13:3:5:2:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

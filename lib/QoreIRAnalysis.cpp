@@ -4043,6 +4043,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         QoreIRValue result;
         int16_t operand = -1;
         int64_t size = 0;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
     };
     auto analyze_projection = [&](QoreIRCallDirectInstruction* call,
             QoreIRValue base, QoreIRInstruction* consumer,
@@ -4102,15 +4104,26 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             qore_ir_get_resolved_effect_callee(call, has_ref_args);
         int16_t operand = -1;
         int64_t size = 0;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
         if (!callee || has_ref_args
                 || !get_projection(callee, call, query_kind, index, key,
-                    operand, size, projection_kind)
+                    operand, size, int_constant, float_constant,
+                    projection_kind)
                 || projection_kind
                     == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None) {
             return false;
         }
+        bool constant_projection = projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::NativeIntConstant
+            || projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::NativeFloatConstant;
         if (projection_kind
-                != QoreIRCallDirectInstruction::AOTAggregateProjectionKind::Size) {
+                    != QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::Size
+                && !constant_projection) {
             if (operand < 0
                     || static_cast<size_t>(operand) >= call->operands.size()) {
                 return false;
@@ -4132,7 +4145,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
         }
         projection = {call, consumer, projection_kind, consumer->result,
-            operand, size};
+            operand, size, int_constant, float_constant};
         return true;
     };
 
@@ -4359,6 +4372,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             projection.call->aot_aggregate_projection_operand =
                 projection.operand;
             projection.call->aot_aggregate_projection_size = projection.size;
+            projection.call->aot_aggregate_projection_int =
+                projection.int_constant;
+            projection.call->aot_aggregate_projection_float =
+                projection.float_constant;
             projection.call->result = projection.result;
             QoreIRValueFacts facts;
             facts.assigned_state = QoreIRAssignedState::Assigned;
@@ -4366,16 +4383,26 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (projection.kind
                     == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
                     || projection.kind
-                        == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat) {
+                        == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeFloatConstant) {
                 facts.type_info = floatTypeInfo;
                 facts.representation = projection.kind
-                        == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloatConstant
                     ? QoreIRValueRepresentation::NativeFloat
                     : QoreIRValueRepresentation::Boxed;
             } else {
                 facts.type_info = bigIntTypeInfo;
                 facts.representation = projection.kind
                         == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeIntConstant
                         || projection.kind
                             == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::Size
                     ? QoreIRValueRepresentation::NativeInt

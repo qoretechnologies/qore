@@ -285,10 +285,20 @@ enum class AOTAggregateReturnKind : uint8_t {
     FixedHash = 2,
 };
 
-//! Fresh fixed aggregate whose values are direct native parameters.
+enum class AOTAggregateReturnValueKind : uint8_t {
+    Parameter = 0,
+    IntConstant = 1,
+    FloatConstant = 2,
+    BoolConstant = 3,
+};
+
+//! Fresh fixed aggregate whose values are native parameters or scalar constants.
 struct AOTAggregateReturnInfo {
     AOTAggregateReturnKind kind = AOTAggregateReturnKind::None;
     std::vector<int8_t> value_params;
+    std::vector<AOTAggregateReturnValueKind> value_kinds;
+    std::vector<int64_t> value_ints;
+    std::vector<double> value_floats;
     std::vector<std::string> keys;
 
     explicit operator bool() const {
