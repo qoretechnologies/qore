@@ -462,7 +462,18 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
         case QoreIROpcode::CallDirect: {
             const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
             has_ref_args = call->has_ref_args;
-            return call->variant;
+            if (call->variant) {
+                return call->variant;
+            }
+            if (call->expr.hasNode()) {
+                const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                    call->expr.getInternalNode());
+                if (expr && expr->getVariant()) {
+                    return expr->getVariant();
+                }
+            }
+            return call->func && call->func->numVariants() == 1
+                ? call->func->first() : nullptr;
         }
         case QoreIROpcode::CallStaticDirect: {
             const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
@@ -3518,4 +3529,166 @@ size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
         return 0;
     }
     return qore_ir_mark_in_place_list_pushes(func, cfg, uses, check_count, &param_noescape);
+}
+
+size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
+        const QoreIRFreshListSizeQuery& is_list_size) {
+    if (!is_list_size) {
+        return 0;
+    }
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh list-size call definition analysis")) {
+            return 0;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh list-size call definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
+
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+    struct Fold {
+        QoreIRInstruction* make = nullptr;
+        QoreIRInstruction* call = nullptr;
+        int64_t size = 0;
+    };
+    std::vector<Fold> folds;
+    for (const auto& [result_id, definition] : definitions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh list-size call candidate analysis")) {
+            return 0;
+        }
+        if (!definition || definition->opcode != QoreIROpcode::MakeList
+                || definition->exception_target
+                || definition->operands.size() > 100) {
+            continue;
+        }
+        const auto* make =
+            static_cast<const QoreIRMakeListInstruction*>(definition);
+        QoreIRValueRepresentation expected =
+            QoreIRValueRepresentation::Unknown;
+        if (make->typeInfo) {
+            const QoreTypeInfo* element_type =
+                QoreTypeInfo::getUniqueReturnComplexList(make->typeInfo);
+            if (element_type == bigIntTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeInt;
+            } else if (element_type == floatTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeFloat;
+            } else if (element_type == boolTypeInfo) {
+                expected = QoreIRValueRepresentation::NativeBool;
+            } else if (element_type && element_type != autoTypeInfo
+                    && element_type != anyTypeInfo) {
+                continue;
+            }
+        }
+        bool safe_operands = true;
+        for (QoreIRValue operand : definition->operands) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh list-size call operand analysis")) {
+                return 0;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(operand);
+            if (!facts
+                    || facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || (facts->representation
+                            != QoreIRValueRepresentation::NativeInt
+                        && facts->representation
+                            != QoreIRValueRepresentation::NativeFloat
+                        && facts->representation
+                            != QoreIRValueRepresentation::NativeBool)
+                    || (expected != QoreIRValueRepresentation::Unknown
+                        && facts->representation != expected)) {
+                safe_operands = false;
+                break;
+            }
+        }
+        if (!safe_operands) {
+            continue;
+        }
+
+        auto use = uses.find(result_id);
+        if (use == uses.end() || use->second.size() != 1
+                || !use->second.front().inst) {
+            continue;
+        }
+        QoreIRInstruction* call =
+            const_cast<QoreIRInstruction*>(use->second.front().inst);
+        if (call->opcode != QoreIROpcode::CallDirect
+                && call->opcode != QoreIROpcode::CallStaticDirect) {
+            continue;
+        }
+        if (call->exception_target || !call->result.isValid()
+                || call->operands.size() != 1
+                || call->operands[0].id != result_id) {
+            continue;
+        }
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(call, has_ref_args);
+        if (!callee || has_ref_args || !is_list_size(callee, 0)) {
+            continue;
+        }
+        folds.push_back({definition, call,
+            static_cast<int64_t>(definition->operands.size())});
+    }
+    if (folds.empty()) {
+        return 0;
+    }
+
+    std::unordered_map<QoreIRInstruction*, int64_t> replacements;
+    std::unordered_set<QoreIRInstruction*> eliminated;
+    for (const Fold& fold : folds) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh list-size call rewrite preparation")) {
+            return 0;
+        }
+        replacements.emplace(fold.call, fold.size);
+        eliminated.insert(fold.make);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto inst = instructions.begin(); inst != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR fresh list-size call folding");
+            }
+            if (eliminated.count(inst->get())) {
+                inst = instructions.erase(inst);
+                continue;
+            }
+            auto replacement = replacements.find(inst->get());
+            if (replacement == replacements.end()) {
+                ++inst;
+                continue;
+            }
+            auto constant = std::make_unique<QoreIRConstInstruction>();
+            constant->opcode = QoreIROpcode::ConstInt;
+            constant->loc = (*inst)->loc;
+            constant->result = (*inst)->result;
+            constant->constant.kind = QoreIRConstant::Kind::Int;
+            constant->constant.int_value = replacement->second;
+            QoreIRValueFacts facts;
+            facts.type_info = bigIntTypeInfo;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = QoreIRValueRepresentation::NativeInt;
+            facts.never_nothing = true;
+            func.setValueFacts(constant->result, facts);
+            *inst = std::move(constant);
+            ++inst;
+        }
+    }
+    return folds.size();
 }

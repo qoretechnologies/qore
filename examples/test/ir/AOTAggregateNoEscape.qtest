@@ -35,6 +35,14 @@ int sub forwardMutateList(list<int> value) {
     return mutateList(value);
 }
 
+int sub readListSize(list<int> value) {
+    return value.size();
+}
+
+int sub freshListSize() {
+    return readListSize((1, 2, 3, 4));
+}
+
 int sub mutateHash(hash<auto> value) {
     value.number = 9;
     return value.number;
@@ -76,12 +84,14 @@ string sub removedString() {
     return \"missing\";
 }
 
-printf(\"%s:%s:%s\\n\", aliasing(), unassignedHash(), removedString());
+printf(\"%s:%s:%s:%d\\n\", aliasing(), unassignedHash(), removedString(),
+    freshListSize());
 ";
 
 string src = "/tmp/qore-aot-aggregate-noescape-" + string(getpid()) + ".qr";
 string exe = "/tmp/qore-aot-aggregate-noescape-" + string(getpid());
 string disabled = exe + "-disabled";
+string fold_disabled = exe + "-fold-disabled";
 string qo_dir = exe + "-qo";
 string disabled_qo_dir = exe + "-qo-disabled";
 File source();
@@ -101,8 +111,21 @@ string sub compile(string out, string env) {
     return compile_out;
 }
 
-compile(exe, "");
-compile(disabled, "QORE_DISABLE_AOT_NOESCAPE_PARAMS=1");
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NOESCAPE_PARAMS=1");
+string fold_disabled_compile = compile(fold_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD=1");
+if (enabled_compile.find("fresh-list-size-calls=1") == -1) {
+    printf("missing fresh-list size call fold:\n%s", enabled_compile);
+    exit(2);
+}
+if (disabled_compile.find("fresh-list-size-calls=1") != -1
+        || fold_disabled_compile.find("fresh-list-size-calls=1") != -1) {
+    printf("fresh-list size call fold present in disabled control:\n%s",
+        disabled_compile + fold_disabled_compile);
+    exit(2);
+}
 string qo_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, qo_dir, src));
@@ -153,7 +176,7 @@ if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
     exit(2);
 }
 
-string expected = "62:1:abcdefabc:1:1:rejected:rejected\n";
+string expected = "62:1:abcdefabc:1:1:rejected:rejected:4\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
         libqore_dir, qore_bin, mode, src));
@@ -162,7 +185,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-foreach string path in ((exe, disabled)) {
+foreach string path in ((exe, disabled, fold_disabled)) {
     string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
     if (actual != expected) {
         printf("mismatch in aot %s\nexpected:\n%sactual:\n%s", path, expected, actual);
@@ -173,3 +196,4 @@ foreach string path in ((exe, disabled)) {
 unlink(src);
 unlink(exe);
 unlink(disabled);
+unlink(fold_disabled);

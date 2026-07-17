@@ -131,11 +131,24 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats = nul
 using QoreIRParamNoEscapeQuery =
     std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;
 
+//! Return true when an exact callee argument is a pure list-size consumer.
+using QoreIRFreshListSizeQuery =
+    std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;
+
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place
 //! @param param_noescape returns true for proven nonescaping callee arguments
 //! @return number of newly specialized list pushes
 size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
     const QoreIRParamNoEscapeQuery& param_noescape);
+
+//! Replace exact pure list-size calls on fresh scalar list literals with their
+//! cardinality. Element-producing instructions remain in place so side effects
+//! and exceptions retain source evaluation order.
+//! @param func function to optimize in place
+//! @param is_list_size returns true for exact pure list-size callee arguments
+//! @return number of fresh list allocations and calls eliminated
+size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
+    const QoreIRFreshListSizeQuery& is_list_size);
 
 #endif

@@ -9372,20 +9372,41 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
 
     auto refine_fresh_lists = [&](QoreIRFunction& func) {
-        if (std::getenv("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
-            return;
+        size_t folded = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
+            QoreIRFreshListSizeQuery list_size_query =
+                [&](const AbstractQoreFunctionVariant* callee, size_t arg) {
+                    auto info = aot_batch_callee_map->find(callee);
+                    return info != aot_batch_callee_map->end()
+                        && arg < info->second.param_noescape.size()
+                        && info->second.param_noescape[arg]
+                        && arg < info->second.param_may_modify.size()
+                        && !info->second.param_may_modify[arg]
+                        && info->second.collection_op.kind
+                            == AOTCollectionOpKind::ListSize
+                        && info->second.collection_op.base_param
+                            == static_cast<int8_t>(arg)
+                        && info->second.return_kind
+                            == BatchCalleeReturnKind::NativeInt;
+                };
+            folded = qore_ir_fold_fresh_list_size_calls(func, list_size_query);
         }
-        QoreIRParamNoEscapeQuery query = [&](const AbstractQoreFunctionVariant* callee,
-                size_t arg) {
-            auto info = aot_batch_callee_map->find(callee);
-            return info != aot_batch_callee_map->end()
-                && arg < info->second.param_noescape.size()
-                && info->second.param_noescape[arg];
-        };
-        size_t changed = qore_ir_optimize_fresh_list_calls(func, query);
-        if (changed && std::getenv("QORE_IR_OPT_STATS")) {
-            fprintf(stderr, "IR-OPT-AOT-EFFECTS: %s: inplace-push=%zu\n",
-                func.name.c_str(), changed);
+        size_t changed = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
+            QoreIRParamNoEscapeQuery query =
+                [&](const AbstractQoreFunctionVariant* callee, size_t arg) {
+                    auto info = aot_batch_callee_map->find(callee);
+                    return info != aot_batch_callee_map->end()
+                        && arg < info->second.param_noescape.size()
+                        && info->second.param_noescape[arg];
+                };
+            changed = qore_ir_optimize_fresh_list_calls(func, query);
+        }
+        if ((folded || changed) && std::getenv("QORE_IR_OPT_STATS")) {
+            fprintf(stderr,
+                "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
+                " inplace-push=%zu\n",
+                func.name.c_str(), folded, changed);
         }
     };
 
