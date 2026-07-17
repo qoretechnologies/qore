@@ -74,6 +74,21 @@ int sub sharedResult() {
     return row.left + row.right;
 }
 
+int sub sharedMutated() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    row.left = 10;
+    return row.left + row.right;
+}
+
+int sub consumeRow(hash<string, int> row) {
+    return row.middle;
+}
+
+int sub sharedEscapes() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + consumeRow(row);
+}
+
 int sub dynamicListIndex(int index) {
     return makeValues(4, 5, 6)[index].toInt();
 }
@@ -100,10 +115,11 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
-    sharedResult(), dynamicListIndex(1), boxedListSize(),
+    sharedResult(), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
+    boxedListSize(),
     optionalInput(NOTHING), optionalListInput(NOTHING));
 ";
 
@@ -133,7 +149,7 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
 foreach string function in (("freshHashProjection", "sideEffectProjection",
         "freshListSize", "freshListProjection", "freshFloatProjection",
-        "duplicateKeyProjection")) {
+        "duplicateKeyProjection", "sharedResult")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
@@ -143,7 +159,7 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (sharedResult|dynamicListIndex|boxedListSize|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (sharedMutated|sharedEscapes|dynamicListIndex|boxedListSize|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -189,7 +205,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:4:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:4:13:3:5:2:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

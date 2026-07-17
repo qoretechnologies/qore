@@ -180,7 +180,10 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
 size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     const QoreIRFreshHashKeyQuery& get_hash_key);
 
-//! Fuse a fresh fixed aggregate producer call with its sole native projection.
+//! Fuse a fresh fixed aggregate producer call with native projections.
+/** A sole projection is emitted through the compact AOT call form. A fresh
+    aggregate stored in an IR-only local is virtualized when every load is a
+    supported native projection in the defining block. */
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     const QoreIRAggregateProjectionQuery& get_projection);
 
