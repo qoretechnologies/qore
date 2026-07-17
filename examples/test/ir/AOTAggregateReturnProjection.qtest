@@ -57,6 +57,14 @@ hash<string, int> sub makeTagged(int value) {
     };
 }
 
+hash<string, int> sub makeComputedRow(int left, int middle, int right) {
+    return {
+        \"left\": left,
+        \"middle\": middle + 0,
+        \"right\": right,
+    };
+}
+
 list<float> sub makeFloatConstant(float value) {
     return (value, 2.5);
 }
@@ -154,6 +162,31 @@ bool sub nonDominatingAssignment(bool assign) {
     }
 }
 
+int sub phiProjection(bool left_branch) {
+    return (left_branch
+        ? makeRow(1, 2, 3)
+        : makeRow(4, 5, 6)).middle;
+}
+
+int sub phiSideEffectProjection(bool left_branch) {
+    int effects = 0;
+    int value = (left_branch
+        ? makeRow((effects = 1), (effects = 2), (effects = 3))
+        : makeRow((effects = 4), (effects = 5), (effects = 6))).middle;
+    return value * 10 + effects;
+}
+
+int sub mixedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeRow(1, 2, 3)
+        : makeComputedRow(4, 5, 6)).middle;
+}
+
+bool sub nothingPhiProjection(bool left_branch) {
+    *hash<string, int> row = left_branch ? makeRow(1, 2, 3) : NOTHING;
+    return left_branch ? row.middle == 2 : row === NOTHING;
+}
+
 int sub sharedMutated() {
     hash<string, int> row = makeRow(1, 2, 3);
     row.left = 10;
@@ -195,15 +228,19 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
     constantIntProjection(), constantBoolProjection(),
     boxedListProjection(), boxedHashProjection(), boxedTemporaryProjection(),
     sharedResult(), crossBlockProjection(True), crossBlockProjection(False),
-    nonDominatingAssignment(False), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
-    boxedListSize(), optionalInput(NOTHING), optionalListInput(NOTHING));
+    nonDominatingAssignment(False), phiProjection(True), phiProjection(False),
+    phiSideEffectProjection(True), phiSideEffectProjection(False),
+    mixedPhiProjection(True), mixedPhiProjection(False),
+    nothingPhiProjection(True), nothingPhiProjection(False),
+    sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
+    optionalInput(NOTHING), optionalListInput(NOTHING));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -249,8 +286,17 @@ if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection:.*aggregate-pro
         enabled_compile);
     exit(2);
 }
+foreach string function in (("phiProjection", "phiSideEffectProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate phi projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -310,7 +356,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:13:3:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

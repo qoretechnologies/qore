@@ -4215,6 +4215,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
     };
+    struct VirtualizedPhi {
+        QoreIRPhiInstruction* phi = nullptr;
+        std::unique_ptr<QoreIRPhiInstruction> scalar_phi;
+        std::vector<QoreIRInstruction*> eliminated;
+    };
     std::vector<Projection> projections;
     std::vector<VirtualizedCall> virtualized;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
@@ -4384,7 +4389,80 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
         }
     }
-    if (projections.empty() && virtualized.empty()) {
+    std::vector<VirtualizedPhi> virtualized_phis;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR aggregate phi projection analysis")) {
+                return 0;
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::Phi
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            auto* phi = static_cast<QoreIRPhiInstruction*>(inst_ptr.get());
+            if (phi->value_kind != QoreIRPhiValueKind::QoreValue
+                    || phi->incoming.empty()) {
+                continue;
+            }
+            auto phi_uses = uses.find(phi->result.id);
+            if (phi_uses == uses.end() || phi_uses->second.size() != 1
+                    || !phi_uses->second.front().inst) {
+                continue;
+            }
+            QoreIRInstruction* consumer = const_cast<QoreIRInstruction*>(
+                phi_uses->second.front().inst);
+            auto scalar_phi = std::make_unique<QoreIRPhiInstruction>();
+            scalar_phi->loc = consumer->loc;
+            scalar_phi->cached_start_line = consumer->cached_start_line;
+            scalar_phi->result = consumer->result;
+            scalar_phi->value_kind = QoreIRPhiValueKind::NativeInt;
+            VirtualizedPhi candidate;
+            candidate.phi = phi;
+            candidate.eliminated.push_back(consumer);
+            bool valid = true;
+            for (const QoreIRPhiIncoming& incoming : phi->incoming) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR aggregate phi incoming analysis")) {
+                    return 0;
+                }
+                auto definition = definitions.find(incoming.value.id);
+                if (!incoming.block || definition == definitions.end()
+                        || definition->second->opcode
+                            != QoreIROpcode::CallDirect) {
+                    valid = false;
+                    break;
+                }
+                auto* call = static_cast<QoreIRCallDirectInstruction*>(
+                    const_cast<QoreIRInstruction*>(definition->second));
+                auto call_uses = uses.find(call->result.id);
+                Projection projection;
+                if (call->exception_target
+                        || call_uses == uses.end()
+                        || call_uses->second.size() != 1
+                        || call_uses->second.front().inst != phi
+                        || !analyze_projection(call, phi->result, consumer,
+                            projection)
+                        || projection.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeInt) {
+                    valid = false;
+                    break;
+                }
+                QoreIRValue value = call->operands[
+                    static_cast<size_t>(projection.operand)];
+                scalar_phi->incoming.push_back({value, incoming.block});
+                scalar_phi->operands.push_back(value);
+                candidate.eliminated.push_back(call);
+            }
+            if (valid) {
+                candidate.scalar_phi = std::move(scalar_phi);
+                virtualized_phis.push_back(std::move(candidate));
+            }
+        }
+    }
+    if (projections.empty() && virtualized.empty()
+            && virtualized_phis.empty()) {
         return 0;
     }
 
@@ -4410,6 +4488,24 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         replacements.insert(candidate.replacements.begin(),
             candidate.replacements.end());
     }
+    std::unordered_map<QoreIRInstruction*,
+        std::unique_ptr<QoreIRPhiInstruction>> phi_replacements;
+    for (VirtualizedPhi& candidate : virtualized_phis) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR aggregate phi rewrite preparation")) {
+            return 0;
+        }
+        eliminated.insert(candidate.eliminated.begin(),
+            candidate.eliminated.end());
+        QoreIRValueFacts facts;
+        facts.type_info = bigIntTypeInfo;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation = QoreIRValueRepresentation::NativeInt;
+        facts.never_nothing = true;
+        func.setValueFacts(candidate.scalar_phi->result, facts);
+        phi_replacements.emplace(candidate.phi,
+            std::move(candidate.scalar_phi));
+    }
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
@@ -4417,6 +4513,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (++check_count % 100 == 0) {
                 (void)qore_check_cancel(nullptr,
                     "IR aggregate-return projection fusion");
+            }
+            auto phi_replacement = phi_replacements.find(inst->get());
+            if (phi_replacement != phi_replacements.end()) {
+                *inst = std::move(phi_replacement->second);
+                ++inst;
+                continue;
             }
             if (consumers.count(inst->get()) || eliminated.count(inst->get())) {
                 inst = instructions.erase(inst);
@@ -4497,7 +4599,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             ++inst;
         }
     }
-    return projections.size() + virtualized.size();
+    return projections.size() + virtualized.size()
+        + virtualized_phis.size();
 }
 
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
