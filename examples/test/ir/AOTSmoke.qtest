@@ -238,6 +238,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module no-narrow reference signatures",
             \testAOTModuleNoNarrowReferenceSignatures());
+        addTestCase("AOT module no-narrow shared param COW store",
+            \testAOTModuleNoNarrowParamCowStore());
         addTestCase("AOT module SSO values avoid numeric fast paths",
             \testAOTModuleSsoAvoidsNumericFastPaths());
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
@@ -6699,6 +6701,132 @@ public namespace AOTNoNarrowRefSig {
 
         assertEq("1:x:x\n", out,
             "source-stripped AOT qmod registers reference<hash<auto!>> signatures");
+    }
+
+    # Regression: the JIT/AOT COW store helpers (qore_rt_hash_key_store_cow*(),
+    # qore_rt_list_index_store_cow*()) assumed the local held the freshly-copied
+    # container after the COW assign, but LValueHelper::assign()'s hash<auto!>/
+    # list<auto!> no-narrow strip replaces a shared container with another copy,
+    # freeing the helper's pointer — a use-after-free on the next key/index store.
+    # Triggered by cast<hash<auto!>>(...) temporaries passed to *hash<auto!>
+    # params that are mutated while shared (e.g. constructor-initializer calls
+    # like QorusSystemRestHelperIo::resolveClientOpts()).
+    testAOTModuleNoNarrowParamCowStore() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_cow_store_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowCowStore {
+    version = \"1.0\";
+    desc = \"AOT no-narrow COW store regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowCowStore {
+    public class Base {
+        private {
+            hash<auto> base_opts;
+        }
+
+        constructor(hash<auto> opts) {
+            base_opts = opts;
+        }
+
+        string getUrl() {
+            return base_opts.url;
+        }
+
+        auto getOpt(string key) {
+            return base_opts{key};
+        }
+    }
+
+    public class Client inherits Base {
+        constructor(*hash<auto> opts) : Base(Client::resolveOpts(opts)) {
+        }
+
+        private static hash<auto> resolveOpts(*hash<auto!> opts) {
+            if (!opts.url) {
+                opts.url = \"http://localhost/\";
+            }
+            return opts;
+        }
+    }
+
+    public string sub construct(int timeout) {
+        Client c(cast<hash<auto!>>({\"timeout\": timeout}));
+        return sprintf(\"%s|%d\", c.getUrl(), c.getOpt(\"timeout\"));
+    }
+
+    public hash<auto> sub putShared(*hash<auto!> opts, auto val) {
+        hash<auto> keep = opts;
+        opts.s = val;
+        return {\"keep\": keep, \"opts\": opts};
+    }
+
+    public hash<auto> sub putSharedDyn(*hash<auto!> opts, string key, auto val) {
+        hash<auto> keep = opts;
+        opts{key} = val;
+        return {\"keep\": keep, \"opts\": opts};
+    }
+
+    public list<auto> sub putSharedList(*list<auto!> l, auto val) {
+        list<auto> keep = l;
+        l[0] = val;
+        return (keep, l);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowCowStore.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowCowStore.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "no-narrow COW store module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNoNarrowCowStore
+
+for (int i = 0; i < 100; ++i) {
+    AOTNoNarrowCowStore::Client c(cast<hash<auto!>>({\"timeout\": i}));
+    if (i == 7) {
+        printf(\"ctor: %s|%d\\n\", c.getUrl(), c.getOpt(\"timeout\"));
+    }
+}
+printf(\"internal: %s\\n\", AOTNoNarrowCowStore::construct(11));
+printf(\"shared: %y\\n\", AOTNoNarrowCowStore::putShared(cast<hash<auto!>>({\"n\": 1}), \"x\"));
+printf(\"dyn: %y\\n\", AOTNoNarrowCowStore::putSharedDyn(cast<hash<auto!>>({\"n\": 2}), \"d\", \"y\"));
+printf(\"list: %y\\n\", AOTNoNarrowCowStore::putSharedList(cast<list<auto!>>((1, 2)), \"z\"));
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "compiled module COW stores on shared no-narrow params match source semantics: " + aot_out);
+        assertEq("ctor: http://localhost/|7\n"
+            "internal: http://localhost/|11\n"
+            "shared: {keep: {n: 1}, opts: {n: 1, s: \"x\"}}\n"
+            "dyn: {keep: {n: 2}, opts: {n: 2, d: \"y\"}}\n"
+            "list: [[1, 2], [\"z\", 2]]\n", aot_out,
+            "COW stores mutate the callee's container without touching shared views: " + aot_out);
     }
 
     testAOTModuleScalarLocalCoercion() {
