@@ -4059,6 +4059,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
         return 0;
     }
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return 0;
+    }
 
     struct Projection {
         QoreIRCallDirectInstruction* call = nullptr;
@@ -4343,8 +4347,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     continue;
                 }
                 if (local_inst->opcode != QoreIROpcode::LoadLocal
-                        || op.block_id != block_id
-                        || op.offset <= store_offset
+                        || (op.block_id == block_id
+                            ? op.offset <= store_offset
+                            : !cfg.dominates(block_id, op.block_id))
                         || !local_inst->result.isValid()) {
                     valid = false;
                     break;

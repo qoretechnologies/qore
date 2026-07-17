@@ -133,6 +133,27 @@ int sub sharedResult() {
     return row.left + row.right;
 }
 
+int sub crossBlockProjection(bool left_branch) {
+    hash<string, int> row = makeRow(1, 2, 3);
+    list<int> values = makeValues(4, 5, 6);
+    if (left_branch) {
+        return row.left + row.right + values[0] + values[2];
+    }
+    return row.middle + row.right + values[1] + values[2];
+}
+
+bool sub nonDominatingAssignment(bool assign) {
+    hash<string, int> row;
+    if (assign) {
+        row = makeRow(1, 2, 3);
+    }
+    try {
+        return row.left == 1;
+    } catch (hash<auto> ex) {
+        return !assign;
+    }
+}
+
 int sub sharedMutated() {
     hash<string, int> row = makeRow(1, 2, 3);
     row.left = 10;
@@ -174,13 +195,14 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%y:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
     constantIntProjection(), constantBoolProjection(),
     boxedListProjection(), boxedHashProjection(), boxedTemporaryProjection(),
-    sharedResult(), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
+    sharedResult(), crossBlockProjection(True), crossBlockProjection(False),
+    nonDominatingAssignment(False), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
     boxedListSize(), optionalInput(NOTHING), optionalListInput(NOTHING));
 ";
 
@@ -222,8 +244,13 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
         exit(2);
     }
 }
+if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection:.*aggregate-projections=1/) {
+    printf("missing cross-block aggregate-return projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -283,7 +310,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:13:3:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:13:3:5:2:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
