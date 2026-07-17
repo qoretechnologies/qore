@@ -181,6 +181,12 @@ $function$
       \c public schema; they are now resolved with the connection's \c search_path, as PostgreSQL itself
       resolves them, so table objects can be used in a schema other than \c public without qualifying
       every name (\c listViews() already resolved names this way)
+    - fixed the resolution of sequence names, which were matched in any schema of the database rather
+      than in the schema the name resolves in; \c getSequence() reported a sequence that does not exist
+      on the connection's \c search_path (and then failed reading it, or raised an error when more than
+      one schema held the name), and \c listSequences() listed sequences that unqualified SQL on the
+      connection cannot reach. Aligning a schema in a database holding more than one schema with the
+      same sequence names therefore failed
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
       add, drop, truncate, and detach operations
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
@@ -1281,11 +1287,21 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private *AbstractSequence getSequenceImpl(string name) {
-        *hash<auto> row = ds.selectRow("select relname from pg_class where relkind = 'S' and relname = %v", name);
+        # the sequence must be looked up in the schema the name resolves in, exactly as the read below
+        # resolves it.  Matching on relname alone searches every schema in the database, so with the same
+        # sequence name present in another schema this reported a sequence that does not exist here and
+        # then failed reading it -- or, where the read succeeded, described the WRONG schema's sequence
+        string schema;
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+
+        *hash<auto> row = ds.selectRow("select c.relname from pg_class c "
+            "join pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", name, schema);
         if (!row)
             return;
 
-        row = ds.selectRow("select * from %s", name);
+        # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
+        row = ds.selectRow(sprintf("select * from %s.%s", schema, name));
         return new PgsqlSequence(name, row.start, row.increment, row.max == 9223372036854775807 ? NOTHING : row.max);
     }
 
@@ -1613,7 +1629,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private list<string> listSequencesImpl() {
-        return ds.select("select relname from pg_class where relkind = 'S' order by 1").relname;
+        # only the sequences reachable on the search path, like listViewsImpl() below; matching on
+        # relkind alone lists every schema's sequences, so in a database holding more than one schema
+        # this reported sequences that unqualified SQL here cannot reach
+        return ds.select("select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'S' and n.nspname = any (current_schemas(false)) order by 1").relname;
     }
 
     private list<string> listViewsImpl() {
