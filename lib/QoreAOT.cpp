@@ -10494,6 +10494,55 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     const AOTAggregateReturnInfo& aggregate =
                         found->second.aggregate_return;
                     if (kind
+                            == QoreIRAggregateProjectionQueryKind::
+                                AggregateSizeValue) {
+                        if (aggregate.kind
+                                    != AOTAggregateReturnKind::FixedList
+                                && aggregate.kind
+                                    != AOTAggregateReturnKind::FixedHash) {
+                            return false;
+                        }
+                        operand = -1;
+                        size = 0;
+                        if (aggregate.kind
+                                == AOTAggregateReturnKind::FixedHash) {
+                            std::unordered_set<std::string> keys;
+                            keys.insert(aggregate.keys.begin(),
+                                aggregate.keys.end());
+                            int_constant =
+                                static_cast<int64_t>(keys.size());
+                        } else {
+                            int_constant = static_cast<int64_t>(
+                                aggregate.value_params.size());
+                        }
+                        projection = QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntConstant;
+                        return true;
+                    }
+                    if (kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    AggregateExistsValue
+                            || kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    AggregateEmptyValue) {
+                        if ((aggregate.kind
+                                    != AOTAggregateReturnKind::FixedList
+                                && aggregate.kind
+                                    != AOTAggregateReturnKind::FixedHash)
+                                || aggregate.value_params.empty()) {
+                            return false;
+                        }
+                        operand = -1;
+                        size = 0;
+                        int_constant = kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    AggregateExistsValue
+                            ? 1 : 0;
+                        projection = QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolConstant;
+                        return true;
+                    }
+                    if (kind
                             == QoreIRAggregateProjectionQueryKind::ListSize) {
                         if (aggregate.kind
                                 != AOTAggregateReturnKind::FixedList) {

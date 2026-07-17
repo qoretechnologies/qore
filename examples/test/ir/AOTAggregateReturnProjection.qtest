@@ -266,6 +266,61 @@ int sub nonNestedComputedProjection() {
         makeComputedRow(1, 2, 3), makeRow(4, 5, 6)).row.middle;
 }
 
+int sub listFirstProjection() {
+    return makeValues(4, 5, 6).first();
+}
+
+int sub listLastProjection() {
+    return makeValues(4, 5, 6).last();
+}
+
+bool sub listEmptyProjection() {
+    return makeValues(4, 5, 6).empty();
+}
+
+bool sub listValProjection() {
+    return makeValues(4, 5, 6).val();
+}
+
+int sub listElementsProjection() {
+    return elements makeValues(4, 5, 6);
+}
+
+int sub hashElementsProjection() {
+    return elements makeRow(4, 5, 6);
+}
+
+int sub duplicateHashElementsProjection() {
+    return elements makeDuplicate(4, 5);
+}
+
+bool sub listExistsProjection() {
+    return exists makeValues(4, 5, 6);
+}
+
+bool sub hashExistsProjection() {
+    return exists makeRow(4, 5, 6);
+}
+
+int sub aggregateConsumerSideEffects() {
+    int effects = 0;
+    int count = elements makeValues(
+        (effects = 1), (effects = 2), (effects = 3));
+    return count * 10 + effects;
+}
+
+int sub nonConsumerComputedProjection() {
+    return elements makeComputedRow(1, 2, 3);
+}
+
+bool sub optionalAggregateConsumer(*int value) {
+    try {
+        return (elements makeValues(1, value, 3)) == 3;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
 int sub sharedResult() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + row.right;
@@ -368,7 +423,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -387,7 +442,13 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     nonComposedWrapperProjection(), nonComposedBindingProjection(),
     nestedNativeProjection(), nestedSideEffectProjection(),
     deepNestedProjection(), nestedBoxedProjection(), sharedNestedInput(),
-    nonNestedComputedProjection());
+    nonNestedComputedProjection(), listFirstProjection(),
+    listLastProjection(), listEmptyProjection(), listValProjection(),
+    listElementsProjection(), hashElementsProjection(),
+    duplicateHashElementsProjection(), listExistsProjection(),
+    hashExistsProjection(),
+    aggregateConsumerSideEffects(), nonConsumerComputedProjection(),
+    optionalAggregateConsumer(NOTHING));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -474,8 +535,27 @@ foreach string function in (("nestedNativeProjection",
         exit(2);
     }
 }
+foreach string function in (("listFirstProjection", "listLastProjection",
+        "listEmptyProjection", "listValProjection",
+        "listElementsProjection", "hashElementsProjection",
+        "duplicateHashElementsProjection",
+        "listExistsProjection", "hashExistsProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate consumer projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+        !~ /IR-OPT-AOT-EFFECTS: aggregateConsumerSideEffects:.*aggregate-projections=1/) {
+    printf("missing side-effecting aggregate consumer projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|nonConsumerComputedProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -554,7 +634,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <bit>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <unordered_set>
 
@@ -4093,6 +4094,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         if (consumer->opcode == QoreIROpcode::ListSize
                 && consumer->operands.size() == 1) {
             query_kind = QoreIRAggregateProjectionQueryKind::ListSize;
+        } else if ((consumer->opcode == QoreIROpcode::ElementsAny
+                        || consumer->opcode == QoreIROpcode::ElementsInt)
+                && consumer->operands.size() == 1) {
+            query_kind =
+                QoreIRAggregateProjectionQueryKind::AggregateSizeValue;
+        } else if ((consumer->opcode == QoreIROpcode::ExistsAny
+                        || consumer->opcode == QoreIROpcode::ExistsBool)
+                && consumer->operands.size() == 1) {
+            query_kind =
+                QoreIRAggregateProjectionQueryKind::AggregateExistsValue;
         } else if ((consumer->opcode == QoreIROpcode::ListGetInt
                         || consumer->opcode == QoreIROpcode::ListGetFloat
                         || consumer->opcode == QoreIROpcode::ListIndexDynamic)
@@ -4116,6 +4127,34 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 : consumer->opcode == QoreIROpcode::ListGetFloat
                     ? QoreIRAggregateProjectionQueryKind::ListIndexFloat
                     : QoreIRAggregateProjectionQueryKind::ListIndexValue;
+        } else if (consumer->opcode
+                        == QoreIROpcode::DotEvalMethodDirect
+                && consumer->operands.size() == 1) {
+            const auto* direct = static_cast<
+                const QoreIRDotEvalMethodDirectInstruction*>(consumer);
+            if (!direct->pseudo || !direct->qc
+                    || strcmp(direct->qc->getName(), "<list>")) {
+                return false;
+            }
+            if (direct->intrinsic == QoreIRIntrinsic::ListFirst) {
+                query_kind =
+                    QoreIRAggregateProjectionQueryKind::ListIndexValue;
+            } else if (direct->intrinsic
+                    == QoreIRIntrinsic::ListLast) {
+                index = -1;
+                query_kind =
+                    QoreIRAggregateProjectionQueryKind::ListIndexValue;
+            } else if (direct->intrinsic == QoreIRIntrinsic::Empty) {
+                query_kind =
+                    QoreIRAggregateProjectionQueryKind::
+                        AggregateEmptyValue;
+            } else if (direct->intrinsic == QoreIRIntrinsic::Val) {
+                query_kind =
+                    QoreIRAggregateProjectionQueryKind::
+                        AggregateExistsValue;
+            } else {
+                return false;
+            }
         } else if (consumer->opcode == QoreIROpcode::HashKeyAccessInt
                 && consumer->operands.size() == 1) {
             const auto* access =
