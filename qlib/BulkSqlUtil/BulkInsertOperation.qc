@@ -168,8 +168,10 @@ inserter.setRowCode(rowcode);
         private init(*hash opts) {
             if (opts.rowcode)
                 rowcode = opts.rowcode;
-            if (exists opts.returning)
-                returning_args = opts.returning;
+            # an unset "returning" option must yield an empty list, not NOTHING; an uninitialized
+            # softlist<auto> member is NOTHING, and "NOTHING + ret_args" in flushImpl() would produce a
+            # "returning" value of (NOTHING,) that fails SqlUtil option validation with a spurious [null]
+            returning_args = opts.returning ?? ();
             AbstractBulkOperation::init(opts);
         }
 
