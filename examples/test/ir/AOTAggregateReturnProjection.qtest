@@ -368,6 +368,23 @@ int sub singleLocalProjection() {
     return row.middle * 10 + effects;
 }
 
+int sub boxedIntLocalProjection() {
+    int effects = 0;
+    list<int> values = makeValues(
+        (effects = 1), (effects = 2), (effects = 3));
+    return values[1] * 10 + effects;
+}
+
+bool sub boxedFloatLocalProjection() {
+    list<float> values = makeFloatConstant(1.25);
+    return values[1] == 2.5;
+}
+
+bool sub boxedBoolLocalProjection() {
+    list<bool> values = makeBoolConstant(False);
+    return values[1];
+}
+
 int sub crossBlockProjection(bool left_branch) {
     hash<string, int> row = makeRow(1, 2, 3);
     list<int> values = makeValues(4, 5, 6);
@@ -483,7 +500,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%s\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -513,7 +530,9 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     boxedConstantPhiProjection(True), boxedSizePhiProjection(False),
     nestedLocalProjection(), nestedPhiProjection(True),
     nestedPhiProjection(False), hashSizeProjection(),
-    hashEmptyProjection(), hashValProjection(), hashSizeOverride());
+    hashEmptyProjection(), hashValProjection(), boxedIntLocalProjection(),
+    boxedFloatLocalProjection(), boxedBoolLocalProjection(),
+    hashSizeOverride());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -546,7 +565,8 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
         "constantFloatProjection", "constantIntProjection",
         "constantBoolProjection", "boxedListProjection",
         "boxedHashProjection", "boxedListSize", "sharedResult",
-        "singleLocalProjection")) {
+        "singleLocalProjection", "boxedIntLocalProjection",
+        "boxedFloatLocalProjection", "boxedBoolLocalProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
@@ -721,7 +741,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:callref-size\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:callref-size\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

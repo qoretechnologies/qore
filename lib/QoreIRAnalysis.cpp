@@ -4472,6 +4472,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             bool valid = true;
             size_t load_count = 0;
             std::unique_ptr<Projection> nested_projection;
+            std::unique_ptr<Projection> direct_local_projection;
             for (const LocalOperation& op : local_ops->second) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR aggregate local virtualization analysis")) {
@@ -4489,7 +4490,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         || (op.block_id == block_id
                             ? op.offset <= store_offset
                             : !cfg.dominates(block_id, op.block_id))
-                        || !local_inst->result.isValid()) {
+                        || !local_inst->result.isValid()
+                        || direct_local_projection) {
                     valid = false;
                     break;
                 }
@@ -4511,8 +4513,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         std::make_unique<Projection>(std::move(nested));
                 }
                 if (!add_virtualized_projection(candidate, projection)) {
-                    valid = false;
-                    break;
+                    if (load_count) {
+                        valid = false;
+                        break;
+                    }
+                    direct_local_projection =
+                        std::make_unique<Projection>(std::move(projection));
                 }
                 ++load_count;
                 candidate.eliminated.push_back(local_inst);
@@ -4524,6 +4530,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         candidate.eliminated.begin(),
                         candidate.eliminated.end());
                     projections.push_back(std::move(*nested_projection));
+                } else if (load_count == 1 && direct_local_projection) {
+                    direct_local_projection->eliminated.insert(
+                        direct_local_projection->eliminated.end(),
+                        candidate.eliminated.begin() + 1,
+                        candidate.eliminated.end());
+                    projections.push_back(
+                        std::move(*direct_local_projection));
                 } else {
                     virtualized.push_back(std::move(candidate));
                 }
