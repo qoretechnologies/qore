@@ -6897,6 +6897,7 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     for (const std::string& key : rec.aggregate_return_keys) {
         writer.writeStringRef(key.c_str());
     }
+    writer.writeU8(static_cast<uint8_t>(rec.boxed_return_param));
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6979,6 +6980,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.aggregate_return_value_params =
         info.aggregate_return_value_params;
     rec.aggregate_return_keys = info.aggregate_return_keys;
+    rec.boxed_return_param = info.boxed_return_param;
     rec.composed_int_source_kind = info.composed_int_source_kind;
     rec.composed_int_base_param = info.composed_int_base_param;
     rec.composed_int_value_param = info.composed_int_value_param;
@@ -8373,6 +8375,15 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         }
         rec.aggregate_return_keys.push_back(std::move(key));
     }
+    if (version < 24) {
+        return true;
+    }
+    if (ptr == end) {
+        error = "truncated SYMBOL_INDEX boxed return-parameter metadata";
+        return false;
+    }
+    rec.boxed_return_param =
+        static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
     return true;
 }
 

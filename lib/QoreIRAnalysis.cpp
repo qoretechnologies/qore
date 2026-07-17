@@ -4201,6 +4201,166 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     return projections.size();
 }
 
+size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
+        const QoreIRBoxedReturnParamQuery& get_return_param) {
+    if (!get_return_param) {
+        return 0;
+    }
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> calls;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR boxed return-parameter call analysis")) {
+                return 0;
+            }
+            if (inst_ptr && inst_ptr->result.isValid()) {
+                definitions.emplace(inst_ptr->result.id, inst_ptr.get());
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
+                    || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            auto* call =
+                static_cast<QoreIRCallDirectInstruction*>(inst_ptr.get());
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(call, has_ref_args);
+            int8_t param = -1;
+            if (!callee || has_ref_args
+                    || !get_return_param(callee, call, param)
+                    || param < 0
+                    || static_cast<size_t>(param) >= call->operands.size()) {
+                continue;
+            }
+            QoreIRValue replacement =
+                call->operands[static_cast<size_t>(param)];
+            if (!replacement.isValid()
+                    || replacement.id == call->result.id) {
+                continue;
+            }
+            replacements.emplace(call->result.id, replacement);
+            calls.emplace(call->result.id, call);
+        }
+    }
+    if (replacements.empty()) {
+        return 0;
+    }
+    std::unordered_map<uint32_t, uint8_t> normalization_state;
+    normalization_state.reserve(replacements.size());
+    for (const auto& [result_id, replacement] : replacements) {
+        (void)replacement;
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR boxed return-parameter replacement normalization")) {
+            return 0;
+        }
+        if (normalization_state[result_id] == 2) {
+            continue;
+        }
+        std::vector<uint32_t> path;
+        uint32_t current = result_id;
+        QoreIRValue normalized;
+        while (true) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR boxed return-parameter replacement normalization")) {
+                return 0;
+            }
+            uint8_t& state = normalization_state[current];
+            if (state == 2) {
+                normalized = replacements.find(current)->second;
+                break;
+            }
+            if (state == 1) {
+                return 0;
+            }
+            state = 1;
+            path.push_back(current);
+            auto current_replacement = replacements.find(current);
+            if (current_replacement == replacements.end()) {
+                return 0;
+            }
+            auto next = replacements.find(current_replacement->second.id);
+            if (next == replacements.end()) {
+                normalized = current_replacement->second;
+                break;
+            }
+            current = next->first;
+        }
+        for (auto path_it = path.rbegin(); path_it != path.rend();
+                ++path_it) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR boxed return-parameter path compression")) {
+                return 0;
+            }
+            replacements.find(*path_it)->second = normalized;
+            normalization_state[*path_it] = 2;
+        }
+    }
+    for (auto replacement = replacements.begin();
+            replacement != replacements.end();) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR boxed return-parameter argument validation")) {
+            return 0;
+        }
+        const QoreIRValueFacts* facts =
+            func.getValueFacts(replacement->second);
+        bool safe_facts = facts
+            && facts->assigned_state == QoreIRAssignedState::Assigned
+            && facts->never_nothing
+            && (facts->representation == QoreIRValueRepresentation::Boxed
+                || facts->representation
+                    == QoreIRValueRepresentation::Unknown);
+        auto definition = definitions.find(replacement->second.id);
+        bool fresh_boxed = definition != definitions.end()
+            && (definition->second->opcode == QoreIROpcode::MakeHash
+                || definition->second->opcode
+                    == QoreIROpcode::MakeHashConstKeys
+                || definition->second->opcode == QoreIROpcode::MakeList);
+        if (!safe_facts && !fresh_boxed) {
+            replacement = replacements.erase(replacement);
+            continue;
+        }
+        ++replacement;
+    }
+    if (replacements.empty()) {
+        return 0;
+    }
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    for (const auto& [result_id, replacement] : replacements) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR boxed return-parameter rewrite preparation")) {
+            return 0;
+        }
+        (void)replacement;
+        auto call = calls.find(result_id);
+        if (call == calls.end()) {
+            return 0;
+        }
+        eliminated.insert(call->second);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto inst = instructions.begin(); inst != instructions.end();) {
+            // Complete the committed rewrite even if cancellation is requested.
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR boxed return-parameter call folding");
+            }
+            if (eliminated.count(inst->get())) {
+                inst = instructions.erase(inst);
+                continue;
+            }
+            (void)qore_ir_rewrite_value_operands(
+                **inst, replacements, check_count, false);
+            ++inst;
+        }
+    }
+    return replacements.size();
+}
+
 size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         const QoreIRStringProducerQuery& is_supported) {
     if (!is_supported) {

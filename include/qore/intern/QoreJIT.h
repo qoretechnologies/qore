@@ -367,6 +367,7 @@ struct BatchCalleeInfo {
     AOTStringExpressionInfo string_expression; //!< Importable bounded typed string expression
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
     AOTAggregateReturnInfo aggregate_return; //!< Importable fresh fixed aggregate result
+    int8_t boxed_return_param = -1;       //!< Direct boxed return parameter, or -1
     AOTComposedIntInfo composed_int;       //!< Importable bounded size/length expression
     AOTContextIntInfo context_int;         //!< Importable affine captured-int expression
     AOTGlobalIntInfo global_int;           //!< Importable affine global-int expression

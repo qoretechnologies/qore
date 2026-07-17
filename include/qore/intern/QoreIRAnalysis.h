@@ -184,6 +184,14 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     const QoreIRAggregateProjectionQuery& get_projection);
 
+using QoreIRBoxedReturnParamQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
+    int8_t&)>;
+
+//! Replace an exact pure boxed passthrough call with its already-owned argument.
+size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
+    const QoreIRBoxedReturnParamQuery& get_return_param);
+
 using QoreIRStringProducerQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
     QoreIRCallDirectInstruction::AOTStringConsumerKind)>;

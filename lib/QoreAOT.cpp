@@ -1048,6 +1048,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.aggregate_return_value_params =
                 info.aggregate_return.value_params;
             entry.aggregate_return_keys = info.aggregate_return.keys;
+            entry.boxed_return_param = info.boxed_return_param;
             entry.composed_int_source_kind = static_cast<uint8_t>(info.composed_int.source_kind);
             entry.composed_int_base_param = info.composed_int.base_param;
             entry.composed_int_value_param = info.composed_int.value_param;
@@ -4524,6 +4525,67 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
     return true;
 }
 
+static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
+        const UserSignature& sig) {
+    if (std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")
+            || sig.numParams() != 1 || func.blocks.size() != 1
+            || !func.blocks.front()
+            || func.blocks.front()->instructions.size() > 4) {
+        return -1;
+    }
+    auto param = func.param_local_vars.find(0);
+    if (param == func.param_local_vars.end() || !param->second
+            || param->second->closureUse()
+            || QoreTypeInfo::isReference(param->second->getTypeInfo())
+            || qore_ir_get_scalar_local_kind(param->second)
+                != BatchCalleeParamKind::Boxed
+            || QoreTypeInfo::parseAcceptsReturns(
+                param->second->getTypeInfo(), NT_NOTHING)) {
+        return -1;
+    }
+    const QoreTypeInfo* type = param->second->getTypeInfo();
+    if (sig.getReturnTypeInfo() != type
+            || (!QoreTypeInfo::isHashType(type)
+            && !QoreTypeInfo::isListType(type)
+            && !QoreTypeInfo::isType(type, NT_STRING)
+            && !QoreTypeInfo::isType(type, NT_BINARY))) {
+        return -1;
+    }
+
+    QoreIRValue loaded;
+    const QoreIRReturnInstruction* ret = nullptr;
+    for (const auto& inst_ptr : func.blocks.front()->instructions) {
+        if (!inst_ptr || inst_ptr->exception_target || ret) {
+            return -1;
+        }
+        const QoreIRInstruction* inst = inst_ptr.get();
+        switch (inst->opcode) {
+            case QoreIROpcode::DebugBlock:
+            case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::DiscardTemps:
+                break;
+            case QoreIROpcode::LoadLocal: {
+                const auto* load =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                if (loaded.isValid() || load->local != param->second
+                        || !inst->result.isValid()) {
+                    return -1;
+                }
+                loaded = inst->result;
+                break;
+            }
+            case QoreIROpcode::Return:
+                ret = static_cast<const QoreIRReturnInstruction*>(inst);
+                break;
+            default:
+                return -1;
+        }
+    }
+    return loaded.isValid() && ret && ret->has_value
+            && ret->value.id == loaded.id
+        ? 0 : -1;
+}
+
 static bool qore_aot_get_composed_int(const QoreIRFunction& func,
         const UserSignature& sig, AOTComposedIntInfo& result) {
     if (std::getenv("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
@@ -7006,6 +7068,20 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     std::move(aggregate_return);
             }
         }
+        int8_t boxed_return_param =
+            qore_aot_get_boxed_return_param(*func, *sig);
+        if (boxed_return_param >= 0
+                && callee_it->second.return_kind
+                    == BatchCalleeReturnKind::Boxed
+                && callee_it->second.num_params == 1
+                && callee_it->second.param_kinds.size() == 1
+                && callee_it->second.param_kinds[0]
+                    == BatchCalleeParamKind::Boxed
+                && callee_it->second.param_rejects_nothing.size() == 1
+                && callee_it->second.param_rejects_nothing[0]
+                && callee_it->second.never_returns_nothing) {
+            callee_it->second.boxed_return_param = boxed_return_param;
+        }
         AOTComposedIntInfo composed_int;
         if (qore_aot_get_composed_int(*func, *sig, composed_int)
                 && callee_it->second.return_kind == BatchCalleeReturnKind::NativeInt
@@ -8099,6 +8175,22 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                         static_cast<size_t>(param)]) {
                 return false;
             }
+        }
+    }
+    if (rec.boxed_return_param < -1
+            || rec.boxed_return_param >= static_cast<int>(info.num_params)) {
+        return false;
+    }
+    info.boxed_return_param = rec.boxed_return_param;
+    if (info.boxed_return_param >= 0) {
+        size_t param = static_cast<size_t>(info.boxed_return_param);
+        if (info.return_kind != BatchCalleeReturnKind::Boxed
+                || !info.never_returns_nothing
+                || param >= info.param_kinds.size()
+                || info.param_kinds[param] != BatchCalleeParamKind::Boxed
+                || param >= info.param_rejects_nothing.size()
+                || !info.param_rejects_nothing[param]) {
+            return false;
         }
     }
     if (rec.composed_int_source_kind
@@ -9771,6 +9863,47 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_aggregate_return_projections(
                     func, projection_query);
         }
+        size_t boxed_return_calls = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
+            QoreIRBoxedReturnParamQuery boxed_return_query =
+                [&](const AbstractQoreFunctionVariant* callee,
+                        const QoreIRCallDirectInstruction* call,
+                        int8_t& param) {
+                    auto found = aot_batch_callee_map->find(callee);
+                    if (found == aot_batch_callee_map->end() || !call
+                            || !found->second.approach_b_eligible
+                            || found->second.boxed_return_param < 0
+                            || found->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                            || !found->second.never_returns_nothing
+                            || call->operands.size()
+                                != found->second.num_params
+                            || !qore_aot_fast_entry_args_need_no_binding(
+                                callee, call->expr, 0,
+                                static_cast<int>(call->operands.size()))) {
+                        return false;
+                    }
+                    param = found->second.boxed_return_param;
+                    if (param < 0
+                            || static_cast<size_t>(param)
+                                >= call->operands.size()
+                            || static_cast<size_t>(param)
+                                >= found->second.param_kinds.size()
+                            || found->second.param_kinds[
+                                static_cast<size_t>(param)]
+                                != BatchCalleeParamKind::Boxed
+                            || static_cast<size_t>(param)
+                                >= found->second.param_rejects_nothing.size()
+                            || !found->second.param_rejects_nothing[
+                                static_cast<size_t>(param)]) {
+                        return false;
+                    }
+                    return true;
+                };
+            boxed_return_calls =
+                qore_ir_fold_boxed_return_param_calls(
+                    func, boxed_return_query);
+        }
         size_t changed = 0;
         if (!std::getenv("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
             QoreIRParamNoEscapeQuery query =
@@ -9860,16 +9993,19 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_string_producer_consumers(func, query);
         }
         if ((folded_list_sizes || folded_hash_keys || aggregate_projections
+                || boxed_return_calls
                 || changed
                 || string_consumers)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
                 " fresh-hash-key-calls=%zu aggregate-projections=%zu"
+                " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu\n",
                 func.name.c_str(), folded_list_sizes, folded_hash_keys,
-                aggregate_projections, changed, string_consumers);
+                aggregate_projections, boxed_return_calls, changed,
+                string_consumers);
         }
     };
 
