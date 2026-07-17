@@ -735,7 +735,12 @@ enum class QoreIROpcode : uint16_t {
     //! Load a boolean constant in the boxed QoreValue representation.
     ConstBoolBoxed = 400,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (401, 402, ...)
+    //! Proven in-bounds borrowed boxed list read.  Emitted only when loop
+    //! analysis proves a stable exact typed list, a nonnegative bounded index,
+    //! and non-escaping uses of the result.
+    ListGetValueNoRefUnchecked = 401,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (402, 403, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -743,8 +748,9 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ConstBoolBoxed);
-static_assert(QORE_IR_MAX_OPCODE == 400, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE
+    = static_cast<uint16_t>(QoreIROpcode::ListGetValueNoRefUnchecked);
+static_assert(QORE_IR_MAX_OPCODE == 401, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

@@ -48,7 +48,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 400,
+static_assert(QORE_IR_MAX_OPCODE == 401,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -7452,7 +7452,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 owner_has_parse_reference = true;
             }
             if ((inst_ptr->opcode == QoreIROpcode::ListGetInt
-                    || inst_ptr->opcode == QoreIROpcode::ListGetFloat)
+                    || inst_ptr->opcode == QoreIROpcode::ListGetFloat
+                    || inst_ptr->opcode == QoreIROpcode::ListGetValueNoRefUnchecked)
                     && !inst_ptr->operands.empty()) {
                 direct_typed_list_read_sources.insert(inst_ptr->operands[0].id);
             } else if (inst_ptr->opcode == QoreIROpcode::TypedForeachNextInt
@@ -16664,6 +16665,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_list_get_value_noref",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {list_boxed, idx_int, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            return true;
+        }
+        case QoreIROpcode::ListGetValueNoRefUnchecked: {
+            auto* list = getVal(inst->operands[0].id, error);
+            if (!list) { return false; }
+            auto* idx = getVal(inst->operands[1].id, error);
+            if (!idx) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* idx_int = ensureIntTypeInline(idx, inst->operands[1].id);
+            llvm::Value* result;
+            if (qore_ir_use_typed_map_fusion(aot_mode,
+                    "QORE_DISABLE_AOT_DIRECT_TYPED_BOXED_LIST_READS")) {
+                auto data_helper = module.getOrInsertFunction("qore_rt_list_get_data_unchecked",
+                        llvm::FunctionType::get(ptr_type, {i64_type}, false));
+                if (auto* data_fn = llvm::dyn_cast<llvm::Function>(data_helper.getCallee())) {
+                    data_fn->addFnAttr(llvm::Attribute::NoUnwind);
+                    data_fn->addFnAttr(llvm::Attribute::WillReturn);
+                    data_fn->setMemoryEffects(llvm::MemoryEffects::readOnly());
+                }
+                auto data_it = typed_list_data_ptrs.find(inst->operands[0].id);
+                llvm::Value* data = data_it != typed_list_data_ptrs.end()
+                    ? data_it->second : builder->CreateCall(data_helper, {list_boxed});
+                llvm::Value* entry = builder->CreateInBoundsGEP(i64_type, data, idx_int);
+                result = builder->CreateLoad(i64_type, entry);
+            } else {
+                auto helper = module.getOrInsertFunction("qore_rt_list_get_value_noref",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {list_boxed, idx_int, xsink_arg});
+            }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             return true;

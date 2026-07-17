@@ -596,6 +596,7 @@ static bool qore_ir_is_read_only_list_use(const QoreIRInstruction& inst,
         case QoreIROpcode::ListGetFloat:
         case QoreIROpcode::ListGetValue:
         case QoreIROpcode::ListGetValueNoRef:
+        case QoreIROpcode::ListGetValueNoRefUnchecked:
         case QoreIROpcode::ListIndexDynamic:
             return true;
         default:
@@ -2659,7 +2660,7 @@ static bool qore_ir_may_mutate_list(QoreIROpcode opcode) {
 
 static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const std::vector<QoreIRNaturalLoop>& loops,
-        size_t& check_count) {
+        const QoreIRScalarUses& uses, size_t& direct_boxed_reads, size_t& check_count) {
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     for (const auto& block : cfg.blocks) {
         for (const auto& inst : block->instructions) {
@@ -3047,7 +3048,31 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                         || get_loaded_local(inst.operands[1]) != index_local) {
                     continue;
                 }
-                inst.opcode = specialized_opcode;
+                QoreIROpcode candidate_opcode = specialized_opcode;
+                if (representation == QoreIRValueRepresentation::Boxed
+                        && !getenv("QORE_DISABLE_IR_BOUNDED_BOXED_DIRECT_READS")) {
+                    auto use_it = uses.find(inst.result.id);
+                    bool borrowed_uses = use_it != uses.end() && !use_it->second.empty();
+                    if (borrowed_uses) {
+                        for (const QoreIRScalarUse& use : use_it->second) {
+                            if (qore_ir_analysis_cancelled(
+                                    check_count, "IR bounded boxed list use analysis")) {
+                                return changed;
+                            }
+                            if (!use.inst || !loop_blocks.count(use.block_id)
+                                    || !qore_ir_is_borrowed_list_element_consumer(
+                                        *use.inst, inst.result.id)) {
+                                borrowed_uses = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (borrowed_uses) {
+                        candidate_opcode = QoreIROpcode::ListGetValueNoRefUnchecked;
+                        ++direct_boxed_reads;
+                    }
+                }
+                inst.opcode = candidate_opcode;
                 QoreIRValueFacts result_facts;
                 result_facts.type_info = element_type;
                 result_facts.representation = representation;
@@ -3440,7 +3465,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     }
     if (!getenv("QORE_DISABLE_IR_BOUNDED_TYPED_LIST_READS")) {
         local_stats.bounded_typed_list_reads = qore_ir_specialize_bounded_typed_list_reads(
-            func, cfg, loops, check_count);
+            func, cfg, loops, uses, local_stats.bounded_boxed_direct_reads, check_count);
     }
     if (!getenv("QORE_DISABLE_IR_BORROWED_LIST_READS")) {
         local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(

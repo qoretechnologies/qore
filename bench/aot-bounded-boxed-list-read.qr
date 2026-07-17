@@ -3,8 +3,7 @@
 
 %modern
 
-int sub main() {
-    int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 2000000;
+int sub boundedBoxedListRead(int rounds) {
     list<bool> flags = (True, False, True, True, False, True, False, True);
     list<string> words = ("a", "bb", "ccc", "dddd", "eeeee", "ffffff", "ggggggg", "hhhhhhhh");
     int total = 0;
@@ -20,6 +19,8 @@ int sub main() {
             }
         }
     }
-    printf("%d\n", total);
-    return 0;
+    return total;
 }
+
+int rounds = ENV.QORE_BENCH_ROUNDS ? ENV.QORE_BENCH_ROUNDS.toInt() : 2000000;
+printf("%d\n", boundedBoxedListRead(rounds));

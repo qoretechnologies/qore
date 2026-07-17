@@ -1195,7 +1195,9 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:
         case QoreIROpcode::TypedForeachNextString:
-        case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
+        case QoreIROpcode::ListGetValue:
+        case QoreIROpcode::ListGetValueNoRefUnchecked:
+            return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:
         case QoreIROpcode::HashKeyAccessHash:
@@ -2175,7 +2177,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu inplace-push=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2186,6 +2188,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.constant_branches_folded,
             optimization_stats.borrowed_list_reads,
             optimization_stats.bounded_typed_list_reads,
+            optimization_stats.bounded_boxed_direct_reads,
             optimization_stats.in_place_list_pushes);
     }
 
