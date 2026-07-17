@@ -665,7 +665,15 @@ private:
 
     //! Emit an imported bounded typed string expression.
     llvm::Value* emitAOTStringExpression(const BatchCalleeInfo& info,
-            const std::vector<llvm::Value*>& native_args, llvm::Module& module);
+            const std::vector<llvm::Value*>& native_args, llvm::Module& module,
+            QoreIRCallDirectInstruction::AOTStringConsumerKind consumer =
+                QoreIRCallDirectInstruction::AOTStringConsumerKind::None);
+
+    //! Emit an imported string producer directly into a size or length consumer.
+    llvm::Value* emitAOTStringProducerConsumer(const BatchCalleeInfo& info,
+            const std::vector<llvm::Value*>& native_args,
+            QoreIRCallDirectInstruction::AOTStringConsumerKind consumer,
+            llvm::Module& module);
 
     // Emit an imported typed collection operation. Returns nullptr when no
     // valid summary is available for the supplied fast-entry arguments.

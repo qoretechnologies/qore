@@ -151,4 +151,14 @@ size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
 size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
     const QoreIRFreshListSizeQuery& is_list_size);
 
+using QoreIRStringProducerQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*)>;
+
+//! Fuse exact imported string producers with sole size or length consumers.
+//! @param func function to optimize in place
+//! @param is_supported returns true for calls with a compatible producer summary
+//! @return number of producer/consumer pairs fused
+size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
+    const QoreIRStringProducerQuery& is_supported);
+
 #endif

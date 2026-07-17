@@ -401,6 +401,14 @@ uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, u
 //! Convert an assigned native integer to a referenced string without boxing it first.
 uint64_t qore_rt_int_to_string(int64_t value);
 
+//! Return the byte and character length of an integer's decimal string form.
+int64_t qore_rt_int_to_string_measure(int64_t value);
+
+//! Measure a concatenation without materializing the result when all parts have
+//! the same encoding. @p characters selects character length instead of bytes.
+int64_t qore_rt_string_concat_multi_measure(uint64_t* args, int nargs,
+        int32_t characters, ExceptionSink* xsink);
+
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.
 uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,

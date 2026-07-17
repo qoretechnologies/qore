@@ -2043,6 +2043,12 @@ public:
 //! Stores function/variant/program pointers resolved at parse time
 class QoreIRCallDirectInstruction : public QoreIRInstruction {
 public:
+    enum class AOTStringConsumerKind : uint8_t {
+        None,
+        Size,
+        Length,
+    };
+
     enum class NativeLeafKind : uint8_t {
         IntBinary,
         FloatBinary,
@@ -2075,6 +2081,7 @@ public:
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
+    AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

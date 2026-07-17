@@ -9,6 +9,7 @@ int sub main() {
     string prefix = "record-";
     string suffix = "value";
     string source = "Dvorak-Dvorak-Dvorak";
+    string utf8_prefix = "Dvo\u0159\u00e1k-";
     int checksum = 0;
     if (mode == "concat") {
         for (int i = 0; i < rounds; ++i) {
@@ -17,6 +18,10 @@ int sub main() {
     } else if (mode == "concat3") {
         for (int i = 0; i < rounds; ++i) {
             checksum += concatTriple(prefix, "middle-", suffix).size();
+        }
+    } else if (mode == "concat_length") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += concatPair(utf8_prefix, suffix).length();
         }
     } else if (mode == "convert") {
         for (int i = 0; i < rounds; ++i) {

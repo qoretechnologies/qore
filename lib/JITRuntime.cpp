@@ -3835,6 +3835,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_int_to_string(int64_t value) {
     return toBits(QoreValue(new QoreStringNodeMaker(QLLD, value)));
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_int_to_string_measure(int64_t value) {
+    uint64_t magnitude;
+    int64_t digits = 1;
+    if (value < 0) {
+        magnitude = static_cast<uint64_t>(-(value + 1)) + 1;
+        ++digits;
+    } else {
+        magnitude = static_cast<uint64_t>(value);
+    }
+    while (magnitude >= 10) {
+        magnitude /= 10;
+        ++digits;
+    }
+    return digits;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue val = fromBits(val_bits);
     QoreStringNode* str;
@@ -6852,6 +6868,56 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
     }
 
     return toBits(QoreValue(result));
+}
+
+static size_t qore_short_string_utf8_length(QoreValue value);
+
+extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
+        uint64_t* args, int nargs, int32_t characters, ExceptionSink* xsink) {
+    constexpr int max_parts = 16;
+    const QoreEncoding* encoding = nullptr;
+    uint64_t measured = 0;
+    bool direct = nargs >= 0 && nargs <= max_parts;
+    if (direct) {
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue value = fromBits(args[i]);
+            const QoreEncoding* current;
+            if (value.isShortString()) {
+                current = QCS_DEFAULT;
+                measured += characters
+                    ? qore_short_string_utf8_length(value)
+                    : value.shortStringLen();
+            } else if (value.getType() == NT_STRING) {
+                const QoreStringNode* string = value.get<const QoreStringNode>();
+                current = string ? string->getEncoding() : QCS_DEFAULT;
+                if (string) {
+                    measured += characters
+                        ? string->length() : string->strlen();
+                }
+            } else {
+                direct = false;
+                break;
+            }
+            if (!encoding) {
+                encoding = current;
+            } else if (encoding != current) {
+                direct = false;
+                break;
+            }
+        }
+    }
+    if (direct) {
+        return static_cast<int64_t>(measured);
+    }
+
+    ValueHolder concatenated(
+        fromBits(qore_rt_string_concat_multi(args, nargs, xsink)), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    QoreStringNodeValueHelper string(*concatenated);
+    return static_cast<int64_t>(
+        characters ? string->length() : string->strlen());
 }
 
 //! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.

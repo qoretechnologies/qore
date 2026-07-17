@@ -56,7 +56,7 @@ string sub consumerCode() {
     string missing;
     bool missing_rejected = False;
     try {
-        concatPair(missing, \"tail\");
+        concatPair(missing, \"tail\").size();
     } catch (hash<auto> ex) {
         missing_rejected = True;
     }
@@ -64,7 +64,7 @@ string sub consumerCode() {
     remove removed;
     bool removed_rejected = False;
     try {
-        concatTriple(\"head\", removed, \"tail\");
+        concatTriple(\"head\", removed, \"tail\").length();
     } catch (hash<auto> ex) {
         removed_rejected = True;
     }
@@ -77,13 +77,13 @@ string sub consumerCode() {
     }
     bool composed_missing_rejected = False;
     try {
-        formatRecord(\"head\", missing_int, \"tail\");
+        formatRecord(\"head\", missing_int, \"tail\").size();
     } catch (hash<auto> ex) {
         composed_missing_rejected = True;
     }
     bool composed_removed_rejected = False;
     try {
-        formatRecord(removed, 1, \"tail\");
+        formatRecord(removed, 1, \"tail\").length();
     } catch (hash<auto> ex) {
         composed_removed_rejected = True;
     }
@@ -92,13 +92,13 @@ string sub consumerCode() {
     string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
     bool encoding_rejected = False;
     try {
-        concatPair(convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\");
+        concatPair(convert_encoding(\"ascii\", \"US-ASCII\"), \"\\u00df\").size();
     } catch (hash<auto> ex) {
         encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
     bool composed_encoding_rejected = False;
     try {
-        formatRecord(convert_encoding(\"ascii\", \"US-ASCII\"), 1, \"\u00df\");
+        formatRecord(convert_encoding(\"ascii\", \"US-ASCII\"), 1, \"\u00df\").length();
     } catch (hash<auto> ex) {
         composed_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
@@ -110,7 +110,7 @@ string sub consumerCode() {
     }
     *string optional_string;
     *int optional_int;
-    printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%y|%y|%d|%d|%d|%d|%d|%d|%d|%d\\n\",
+    printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%y|%y|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d\\n\",
         concatPair(\"left\", \"right\"),
         concatPair(latin1, convert_encoding(\" d\\u00e9j\\u00e0\", \"ISO-8859-1\")),
         concatTriple(\"one\", \"two\", \"three\"),
@@ -125,7 +125,13 @@ string sub consumerCode() {
         optionalConvert(optional_int),
         missing_rejected, removed_rejected, missing_int_rejected,
         composed_missing_rejected, composed_removed_rejected,
-        encoding_rejected, composed_encoding_rejected, concat_slice_encoding_rejected);
+        encoding_rejected, composed_encoding_rejected, concat_slice_encoding_rejected,
+        concatPair(\"left\", \"right\").size(),
+        concatPair(utf8, \"\").size(),
+        concatPair(utf8, \"\").length(),
+        concatTriple(\"one\", \"two\", \"three\").length(),
+        convertInt(9223372036854775807).size(),
+        convertInt(-9223372036854775807 - 1).length());
     return 0;
 }
 ";
@@ -184,11 +190,11 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"22\"/)
 }
 
 string enabled_compile = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
 string disabled_compile = backquote(sprintf(
-    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_OP_IMPORT=1"
-        + " QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT=1"
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
 string enabled_qo = enabled_dir + "/consumer.qo";
@@ -196,6 +202,11 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
+    exit(2);
+}
+if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
+    printf("string producer-consumer fusion was not applied:\n%s",
+        enabled_compile);
     exit(2);
 }
 

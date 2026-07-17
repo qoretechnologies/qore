@@ -3692,3 +3692,123 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
     }
     return folds.size();
 }
+
+size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
+        const QoreIRStringProducerQuery& is_supported) {
+    if (!is_supported) {
+        return 0;
+    }
+    size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    struct Fusion {
+        QoreIRCallDirectInstruction* producer = nullptr;
+        QoreIRInstruction* consumer = nullptr;
+        QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
+            QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+        QoreIRValue result;
+    };
+    std::vector<Fusion> fusions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR string producer-consumer analysis")) {
+                return 0;
+            }
+            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
+                    || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()) {
+                continue;
+            }
+            auto use = uses.find(inst_ptr->result.id);
+            if (use == uses.end() || use->second.size() != 1
+                    || !use->second.front().inst) {
+                continue;
+            }
+            QoreIRInstruction* consumer =
+                const_cast<QoreIRInstruction*>(use->second.front().inst);
+            if (consumer->opcode != QoreIROpcode::DotEvalMethodDirect
+                    || consumer->exception_target
+                    || !consumer->result.isValid()
+                    || consumer->operands.size() != 1
+                    || consumer->operands[0].id != inst_ptr->result.id) {
+                continue;
+            }
+            const auto* method =
+                static_cast<const QoreIRDotEvalMethodDirectInstruction*>(consumer);
+            if (!method->pseudo || method->has_ref_args || !method->qc
+                    || strcmp(method->qc->getName(), "<string>")) {
+                continue;
+            }
+            QoreIRIntrinsic intrinsic = method->intrinsic;
+            if (intrinsic == QoreIRIntrinsic::None) {
+                intrinsic = qore_ir_resolve_pseudo_intrinsic(method->method,
+                    method->qc, method->fallback_method_name);
+            }
+            QoreIRCallDirectInstruction::AOTStringConsumerKind kind;
+            if (intrinsic == QoreIRIntrinsic::Size
+                    || intrinsic == QoreIRIntrinsic::StringStrlen) {
+                kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
+            } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+                kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
+            } else {
+                continue;
+            }
+            auto* producer =
+                static_cast<QoreIRCallDirectInstruction*>(inst_ptr.get());
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(producer, has_ref_args);
+            if (!callee || has_ref_args || !is_supported(callee, producer)) {
+                continue;
+            }
+            fusions.push_back({producer, consumer, kind, consumer->result});
+        }
+    }
+    if (fusions.empty()) {
+        return 0;
+    }
+
+    std::unordered_map<QoreIRInstruction*, Fusion*> producers;
+    std::unordered_set<QoreIRInstruction*> consumers;
+    for (Fusion& fusion : fusions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR string producer-consumer rewrite preparation")) {
+            return 0;
+        }
+        producers.emplace(fusion.producer, &fusion);
+        consumers.insert(fusion.consumer);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto inst = instructions.begin(); inst != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR string producer-consumer fusion");
+            }
+            if (consumers.count(inst->get())) {
+                inst = instructions.erase(inst);
+                continue;
+            }
+            auto producer = producers.find(inst->get());
+            if (producer == producers.end()) {
+                ++inst;
+                continue;
+            }
+            Fusion& fusion = *producer->second;
+            fusion.producer->aot_string_consumer = fusion.kind;
+            fusion.producer->result = fusion.result;
+            QoreIRValueFacts facts;
+            facts.type_info = bigIntTypeInfo;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = QoreIRValueRepresentation::NativeInt;
+            facts.never_nothing = true;
+            func.setValueFacts(fusion.result, facts);
+            ++inst;
+        }
+    }
+    return fusions.size();
+}

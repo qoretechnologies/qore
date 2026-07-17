@@ -9371,7 +9371,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
-    auto refine_fresh_lists = [&](QoreIRFunction& func) {
+    auto refine_interprocedural = [&](QoreIRFunction& func) {
         size_t folded = 0;
         if (!std::getenv("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
             QoreIRFreshListSizeQuery list_size_query =
@@ -9402,11 +9402,81 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 };
             changed = qore_ir_optimize_fresh_list_calls(func, query);
         }
-        if ((folded || changed) && std::getenv("QORE_IR_OPT_STATS")) {
+        size_t string_consumers = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
+            QoreIRStringProducerQuery query =
+                [&](const AbstractQoreFunctionVariant* callee,
+                        const QoreIRCallDirectInstruction* call) {
+                    auto info = aot_batch_callee_map->find(callee);
+                    if (info == aot_batch_callee_map->end() || !call
+                            || !info->second.approach_b_eligible
+                            || info->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                            || call->operands.size() != info->second.num_params
+                            || !qore_aot_fast_entry_args_need_no_binding(callee,
+                                call->expr, 0,
+                                static_cast<int>(call->operands.size()))) {
+                        return false;
+                    }
+                    bool supported =
+                        info->second.string_op.kind == AOTStringOpKind::Concat
+                        || info->second.string_op.kind
+                            == AOTStringOpKind::Concat3
+                        || info->second.string_op.kind
+                            == AOTStringOpKind::IntToString;
+                    if (!supported && info->second.string_expression) {
+                        supported = info->second.string_expression.nodes.back().kind
+                            == AOTStringExpressionNodeKind::Concat;
+                    }
+                    if (!supported
+                            || info->second.param_kinds.size()
+                                != call->operands.size()
+                            || info->second.param_rejects_nothing.size()
+                                != call->operands.size()) {
+                        return false;
+                    }
+                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT string producer-consumer validation")) {
+                            return false;
+                        }
+                        if (!info->second.param_rejects_nothing[i]) {
+                            return false;
+                        }
+                        const QoreIRValueFacts* facts =
+                            func.getValueFacts(call->operands[i]);
+                        if (!facts
+                                || facts->assigned_state
+                                    != QoreIRAssignedState::Assigned
+                                || !facts->never_nothing) {
+                            return false;
+                        }
+                        BatchCalleeParamKind kind =
+                            info->second.param_kinds[i];
+                        if ((kind == BatchCalleeParamKind::NativeInt
+                                && facts->representation
+                                    != QoreIRValueRepresentation::NativeInt)
+                                || (kind == BatchCalleeParamKind::NativeFloat
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::NativeFloat)
+                                || (kind == BatchCalleeParamKind::NativeBool
+                                    && facts->representation
+                                        != QoreIRValueRepresentation::NativeBool)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                };
+            string_consumers =
+                qore_ir_fuse_string_producer_consumers(func, query);
+        }
+        if ((folded || changed || string_consumers)
+                && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
-                " inplace-push=%zu\n",
-                func.name.c_str(), folded, changed);
+                " inplace-push=%zu string-consumers=%zu\n",
+                func.name.c_str(), folded, changed, string_consumers);
         }
     };
 
@@ -9530,7 +9600,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
-                refine_fresh_lists(*ir_func);
+                refine_interprocedural(*ir_func);
                 // The LLVM symbol is sanitized for object/linker use; the
                 // namespace-qualified `variant_key` stays the AOT function
                 // table entry's `name` so runtime variant reconstruction via
@@ -9939,7 +10009,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
-                    refine_fresh_lists(*ir_func);
+                    refine_interprocedural(*ir_func);
                     // The LLVM symbol is sanitized for object/linker use; the
                     // logical variant key remains in `cf.name` below for
                     // runtime slot-map registration.
