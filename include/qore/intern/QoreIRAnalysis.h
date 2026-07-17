@@ -189,7 +189,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     const QoreIRAggregateProjectionQuery& get_projection);
 
 using QoreIRBoxedReturnParamQuery = std::function<bool(
-    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
+    const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;
 
 //! Replace an exact pure boxed passthrough call with its already-owned argument.

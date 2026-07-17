@@ -4488,13 +4488,18 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
             if (inst_ptr && inst_ptr->result.isValid()) {
                 definitions.emplace(inst_ptr->result.id, inst_ptr.get());
             }
-            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
-                    || inst_ptr->exception_target
-                    || !inst_ptr->result.isValid()) {
+            if (!inst_ptr || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()
+                    || (inst_ptr->opcode != QoreIROpcode::CallDirect
+                        && inst_ptr->opcode
+                            != QoreIROpcode::CallStaticDirect
+                        && (inst_ptr->opcode
+                                != QoreIROpcode::CallMethodDirect
+                            || !qore_ir_is_non_overridable_method_call(
+                                *inst_ptr)))) {
                 continue;
             }
-            auto* call =
-                static_cast<QoreIRCallDirectInstruction*>(inst_ptr.get());
+            QoreIRInstruction* call = inst_ptr.get();
             bool has_ref_args = true;
             const AbstractQoreFunctionVariant* callee =
                 qore_ir_get_resolved_effect_callee(call, has_ref_args);

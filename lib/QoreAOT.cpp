@@ -3501,6 +3501,74 @@ static bool qore_aot_fast_entry_args_need_no_binding(
     return true;
 }
 
+static bool qore_aot_fast_entry_operands_need_no_binding(
+        const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
+        const QoreIRFunction& func, const std::vector<QoreIRValue>& operands,
+        int arg_start, int nargs) {
+    if (qore_aot_fast_entry_args_need_no_binding(
+            variant, expr, arg_start, nargs)) {
+        return true;
+    }
+
+    const UserVariantBase* uvb =
+        variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig || arg_start < 0 || nargs < 0 || sig->hasVarargs()
+            || static_cast<unsigned>(nargs) != sig->numParams()
+            || static_cast<size_t>(arg_start + nargs) > operands.size()) {
+        return false;
+    }
+
+    const QoreParseListNode* parse_args = nullptr;
+    const QoreListNode* args = nullptr;
+    const type_vec_t* arg_types =
+        qore_aot_get_call_parsed_arg_types(expr, parse_args, args);
+    if (arg_types
+            || (parse_args
+                && (parse_args->hasNamedArgs()
+                    || parse_args->isVariableList()))) {
+        return false;
+    }
+    if (args) {
+        const qore_list_private* args_priv =
+            qore_list_private::get(args);
+        if (args_priv && args_priv->hasCallArgEvalMap()) {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT fast-entry operand eligibility")) {
+            return false;
+        }
+        const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+        if (!QoreTypeInfo::hasType(param_ti)
+                || param_ti == autoTypeInfo) {
+            continue;
+        }
+        const QoreIRValueFacts* facts =
+            func.getValueFacts(operands[arg_start + i]);
+        if (!facts || !facts->type_info
+                || !QoreTypeInfo::isInputIdentical(
+                    param_ti, facts->type_info)) {
+            return false;
+        }
+    }
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT fast-entry operand default-argument eligibility")) {
+            return false;
+        }
+        if (sig->hasDefaultArg(i)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
     if (!expr.hasNode()) {
         return false;
@@ -10076,10 +10144,28 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
             QoreIRBoxedReturnParamQuery boxed_return_query =
                 [&](const AbstractQoreFunctionVariant* callee,
-                        const QoreIRCallDirectInstruction* call,
+                        const QoreIRInstruction* call,
                         int8_t& param) {
+                    const QoreValue* expr = nullptr;
+                    if (call) {
+                        if (call->opcode == QoreIROpcode::CallDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallStaticDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallStaticDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallMethodDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallMethodDirectInstruction*>(
+                                    call)->expr;
+                        }
+                    }
                     auto found = aot_batch_callee_map->find(callee);
-                    if (found == aot_batch_callee_map->end() || !call
+                    if (found == aot_batch_callee_map->end() || !call || !expr
                             || !found->second.approach_b_eligible
                             || found->second.boxed_return_param < 0
                             || found->second.return_kind
@@ -10087,8 +10173,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             || !found->second.never_returns_nothing
                             || call->operands.size()
                                 != found->second.num_params
-                            || !qore_aot_fast_entry_args_need_no_binding(
-                                callee, call->expr, 0,
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                callee, *expr, func, call->operands, 0,
                                 static_cast<int>(call->operands.size()))) {
                         return false;
                     }
