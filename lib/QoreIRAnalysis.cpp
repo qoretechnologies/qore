@@ -4074,6 +4074,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         int64_t size = 0;
         int64_t int_constant = 0;
         double float_constant = 0.0;
+        std::vector<QoreIRInstruction*> eliminated;
     };
     auto analyze_projection = [&](QoreIRCallDirectInstruction* call,
             QoreIRValue base, QoreIRInstruction* consumer,
@@ -4205,8 +4206,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 return false;
             }
         }
-        projection = {call, consumer, projection_kind, consumer->result,
-            operand, size, int_constant, float_constant};
+        projection.call = call;
+        projection.consumer = consumer;
+        projection.kind = projection_kind;
+        projection.result = consumer->result;
+        projection.operand = operand;
+        projection.size = size;
+        projection.int_constant = int_constant;
+        projection.float_constant = float_constant;
         return true;
     };
 
@@ -4279,6 +4286,50 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 if (analyze_projection(call, inst_ptr->result,
                         const_cast<QoreIRInstruction*>(
                             use->second.front().inst), projection)) {
+                    for (size_t depth = 0; depth < 8
+                            && projection.kind
+                                == QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedValue;
+                            ++depth) {
+                        QoreIRValue selected = projection.call->operands[
+                            static_cast<size_t>(projection.operand)];
+                        auto definition = definitions.find(selected.id);
+                        auto selected_uses = uses.find(selected.id);
+                        auto projection_uses = uses.find(
+                            projection.result.id);
+                        if (definition == definitions.end()
+                                || definition->second->opcode
+                                    != QoreIROpcode::CallDirect
+                                || selected_uses == uses.end()
+                                || selected_uses->second.size() != 1
+                                || selected_uses->second.front().inst
+                                    != projection.call
+                                || projection_uses == uses.end()
+                                || projection_uses->second.size() != 1
+                                || !projection_uses->second.front().inst) {
+                            break;
+                        }
+                        auto* nested_call =
+                            static_cast<QoreIRCallDirectInstruction*>(
+                                const_cast<QoreIRInstruction*>(
+                                    definition->second));
+                        if (nested_call->exception_target) {
+                            break;
+                        }
+                        Projection nested;
+                        if (!analyze_projection(nested_call,
+                                projection.result,
+                                const_cast<QoreIRInstruction*>(
+                                    projection_uses->second.front().inst),
+                                nested)) {
+                            break;
+                        }
+                        nested.eliminated =
+                            std::move(projection.eliminated);
+                        nested.eliminated.push_back(projection.call);
+                        nested.eliminated.push_back(projection.consumer);
+                        projection = std::move(nested);
+                    }
                     projections.push_back(projection);
                 }
                 continue;
@@ -4483,6 +4534,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 
     std::unordered_map<QoreIRInstruction*, Projection*> calls;
     std::unordered_set<QoreIRInstruction*> consumers;
+    std::unordered_set<QoreIRInstruction*> eliminated;
     for (Projection& projection : projections) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR aggregate-return projection rewrite preparation")) {
@@ -4490,8 +4542,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         calls.emplace(projection.call, &projection);
         consumers.insert(projection.consumer);
+        eliminated.insert(projection.eliminated.begin(),
+            projection.eliminated.end());
     }
-    std::unordered_set<QoreIRInstruction*> eliminated;
     std::unordered_map<uint32_t, QoreIRValue> replacements;
     std::unordered_map<QoreIRInstruction*,
         std::unique_ptr<QoreIRInstruction>> boxed_replacements;

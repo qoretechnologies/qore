@@ -10328,6 +10328,113 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             folded_hash_keys =
                 qore_ir_fold_fresh_hash_key_calls(func, hash_key_query);
         }
+        if (!std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
+            // Exact aggregate calls produce assigned boxed values on every
+            // normal return. Propagate that fact through bounded nested call
+            // chains so an outer aggregate can project an inner aggregate.
+            for (size_t pass = 0; pass < 8; ++pass) {
+                bool changed = false;
+                size_t call_count = 0;
+                for (const auto& block : func.blocks) {
+                    for (const auto& inst_ptr : block->instructions) {
+                        if (++call_count % 100 == 0
+                                && qore_check_cancel(nullptr,
+                                    "AOT aggregate-return fact refinement")) {
+                            return;
+                        }
+                        if (!inst_ptr
+                                || inst_ptr->opcode
+                                    != QoreIROpcode::CallDirect
+                                || !inst_ptr->result.isValid()) {
+                            continue;
+                        }
+                        auto* call = static_cast<
+                            QoreIRCallDirectInstruction*>(inst_ptr.get());
+                        const AbstractQoreFunctionVariant* callee =
+                            call->variant;
+                        if (!callee && call->expr.hasNode()) {
+                            const auto* expr =
+                                dynamic_cast<const FunctionCallNode*>(
+                                    call->expr.getInternalNode());
+                            callee = expr ? expr->getVariant() : nullptr;
+                        }
+                        if (!callee && call->func
+                                && call->func->numVariants() == 1) {
+                            callee = call->func->first();
+                        }
+                        auto found = aot_batch_callee_map->find(callee);
+                        if (!callee || found == aot_batch_callee_map->end()
+                                || call->has_ref_args
+                                || !found->second.approach_b_eligible
+                                || !found->second.aggregate_return
+                                || found->second.return_kind
+                                    != BatchCalleeReturnKind::Boxed
+                                || call->operands.size()
+                                    != found->second.num_params
+                                || found->second.param_kinds.size()
+                                    != call->operands.size()
+                                || found->second.param_rejects_nothing.size()
+                                    != call->operands.size()
+                                || !qore_aot_fast_entry_args_need_no_binding(
+                                    callee, call->expr, 0,
+                                    static_cast<int>(
+                                        call->operands.size()))) {
+                            continue;
+                        }
+                        bool valid = true;
+                        for (size_t i = 0; i < call->operands.size(); ++i) {
+                            const QoreIRValueFacts* facts =
+                                func.getValueFacts(call->operands[i]);
+                            BatchCalleeParamKind kind =
+                                found->second.param_kinds[i];
+                            QoreIRValueRepresentation expected =
+                                kind == BatchCalleeParamKind::NativeInt
+                                ? QoreIRValueRepresentation::NativeInt
+                                : kind == BatchCalleeParamKind::NativeFloat
+                                    ? QoreIRValueRepresentation::NativeFloat
+                                    : kind
+                                            == BatchCalleeParamKind::NativeBool
+                                        ? QoreIRValueRepresentation::NativeBool
+                                        : QoreIRValueRepresentation::Boxed;
+                            if (!found->second.param_rejects_nothing[i]
+                                    || !facts
+                                    || facts->assigned_state
+                                        != QoreIRAssignedState::Assigned
+                                    || !facts->never_nothing
+                                    || facts->representation != expected) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (!valid) {
+                            continue;
+                        }
+                        const QoreIRValueFacts* current =
+                            func.getValueFacts(call->result);
+                        if (current
+                                && current->assigned_state
+                                    == QoreIRAssignedState::Assigned
+                                && current->never_nothing
+                                && current->representation
+                                    == QoreIRValueRepresentation::Boxed) {
+                            continue;
+                        }
+                        QoreIRValueFacts facts;
+                        facts.type_info = callee->getReturnTypeInfo();
+                        facts.assigned_state =
+                            QoreIRAssignedState::Assigned;
+                        facts.representation =
+                            QoreIRValueRepresentation::Boxed;
+                        facts.never_nothing = true;
+                        func.setValueFacts(call->result, facts);
+                        changed = true;
+                    }
+                }
+                if (!changed) {
+                    break;
+                }
+            }
+        }
         size_t aggregate_projections = 0;
         if (!std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
             QoreIRAggregateProjectionQuery projection_query =

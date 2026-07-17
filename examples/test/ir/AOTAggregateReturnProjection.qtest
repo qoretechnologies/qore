@@ -101,6 +101,31 @@ hash<string, int> sub computedWrapper(int left, int middle, int right) {
     return makeRow(left + 0, middle, right);
 }
 
+hash<string, hash<string, int>> sub wrapRow(
+        hash<string, int> row, hash<string, int> unused) {
+    return {
+        \"row\": row,
+        \"unused\": unused,
+    };
+}
+
+hash<string, hash<string, hash<string, int>>> sub wrapRows(
+        hash<string, hash<string, int>> rows,
+        hash<string, hash<string, int>> unused) {
+    return {
+        \"rows\": rows,
+        \"unused\": unused,
+    };
+}
+
+hash<string, list<string>> sub wrapWords(
+        list<string> words, list<string> unused) {
+    return {
+        \"words\": words,
+        \"unused\": unused,
+    };
+}
+
 list<string> sub makeFirstWord(string value, string ignored) {
     return (value,);
 }
@@ -206,6 +231,41 @@ string sub nonComposedBindingProjection() {
     return bindingWrapper(\"kept\", 42)[0];
 }
 
+int sub nestedNativeProjection() {
+    return wrapRow(makeRow(1, 2, 3), makeRow(4, 5, 6)).row.middle;
+}
+
+int sub nestedSideEffectProjection() {
+    int effects = 0;
+    int value = wrapRow(
+        makeRow((effects = 1), (effects = 2), (effects = 3)),
+        makeRow((effects = 4), (effects = 5), (effects = 6))).row.middle;
+    return value * 10 + effects;
+}
+
+int sub deepNestedProjection() {
+    return wrapRows(
+        wrapRow(makeRow(7, 8, 9), makeRow(10, 11, 12)),
+        wrapRow(makeRow(13, 14, 15), makeRow(16, 17, 18)))
+        .rows.row.middle;
+}
+
+string sub nestedBoxedProjection() {
+    return wrapWords(
+        makeWords(\"alpha\", \"beta\"),
+        makeWords(\"unused-left\", \"unused-right\")).words[1];
+}
+
+int sub sharedNestedInput() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return wrapRow(row, makeRow(4, 5, 6)).row.middle + row.left;
+}
+
+int sub nonNestedComputedProjection() {
+    return wrapRow(
+        makeComputedRow(1, 2, 3), makeRow(4, 5, 6)).row.middle;
+}
+
 int sub sharedResult() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + row.right;
@@ -308,7 +368,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -324,7 +384,10 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse(),
     wrapperProjection(), wrapperConstantProjection(),
     wrapperBoxedProjection(), wrapperListSize(),
-    nonComposedWrapperProjection(), nonComposedBindingProjection());
+    nonComposedWrapperProjection(), nonComposedBindingProjection(),
+    nestedNativeProjection(), nestedSideEffectProjection(),
+    deepNestedProjection(), nestedBoxedProjection(), sharedNestedInput(),
+    nonNestedComputedProjection());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -400,8 +463,19 @@ foreach string function in (("wrapperProjection",
         exit(2);
     }
 }
+foreach string function in (("nestedNativeProjection",
+        "nestedSideEffectProjection", "deepNestedProjection",
+        "nestedBoxedProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing nested aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -480,7 +554,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
