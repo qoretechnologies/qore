@@ -3381,21 +3381,24 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
             break;
         }
         bool loop_may_invalidate_loads = false;
-        for (size_t block_id : loop.blocks) {
-            for (const auto& inst : cfg.blocks[block_id]->instructions) {
-                if (qore_ir_analysis_cancelled(check_count, "IR loop invalidation analysis")) {
-                    if (stats) {
-                        *stats = local_stats;
+        if (getenv("QORE_DISABLE_IR_ONLY_LICM_ACROSS_CALLS")) {
+            for (size_t block_id : loop.blocks) {
+                for (const auto& inst : cfg.blocks[block_id]->instructions) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR loop invalidation analysis")) {
+                        if (stats) {
+                            *stats = local_stats;
+                        }
+                        return;
                     }
-                    return;
+                    if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
+                        loop_may_invalidate_loads = true;
+                        break;
+                    }
                 }
-                if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
-                    loop_may_invalidate_loads = true;
+                if (loop_may_invalidate_loads) {
                     break;
                 }
-            }
-            if (loop_may_invalidate_loads) {
-                break;
             }
         }
         std::unordered_set<uint32_t> safe_repeated_values;

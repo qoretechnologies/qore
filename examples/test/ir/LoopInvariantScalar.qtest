@@ -121,10 +121,37 @@ int sub mutatedBool(int n, bool enabled) {
     return count;
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", invariant(0), invariant(1000), mutated(1000),
+int sub opaque(int value) {
+    return value & 1;
+}
+
+int sub invariantAcrossCall(int n) {
+    int value = 37;
+    int sum = 0;
+    for (int i = 0; i < n; ++i) {
+        sum += value * 11;
+        sum += opaque(i);
+    }
+    return sum;
+}
+
+int sub closureMutatedAcrossCall(int n) {
+    int value = 3;
+    int sum = 0;
+    code mutate = sub () {
+        ++value;
+    };
+    for (int i = 0; i < n; ++i) {
+        sum += value * 7;
+        mutate();
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", invariant(0), invariant(1000), mutated(1000),
     nested(0, 100), nested(100, 100), unassigned(100), removeAndAssign(100), nestedAssignedState(20),
     invariantShift(100, 3, 2), mutatedShift(100, 3, 0), invariantBool(100, False),
-    mutatedBool(100, False));
+    mutatedBool(100, False), invariantAcrossCall(1000), closureMutatedAcrossCall(1000));
 ";
 }
 
@@ -158,7 +185,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-checkOutput("ast", "0:407000:7028000:0:450000:0:0:20:2400:1125:100:50\n", ast);
+checkOutput("ast", "0:407000:7028000:0:450000:0:0:20:2400:1125:100:50:407500:3517500\n", ast);
 
 foreach string mode in (("ir", "tiered", "jit")) {
     checkOutput(mode, ast, runMode(script_path, mode));
@@ -168,7 +195,8 @@ checkOutput("aot", ast, runAot(script_path));
 string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: invariantShift:.*hoisted=[2-9]/
-        || stats !~ /IR-OPT: invariantBool:.*hoisted=[2-9]/) {
+        || stats !~ /IR-OPT: invariantBool:.*hoisted=[2-9]/
+        || stats !~ /IR-OPT: invariantAcrossCall:.*hoisted=[2-9]/) {
     printf("missing scalar LICM selection:\n%s", stats);
     exit(2);
 }
