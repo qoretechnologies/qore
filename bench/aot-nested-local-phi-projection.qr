@@ -1,0 +1,46 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        "left": left,
+        "middle": middle,
+        "right": right,
+    };
+}
+
+hash<string, hash<string, int>> sub wrapRow(
+        hash<string, int> row, hash<string, int> unused) {
+    return {
+        "row": row,
+        "unused": unused,
+    };
+}
+
+int sub localKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<string, hash<string, int>> wrapper = wrapRow(
+            makeRow(i, i + 1, i + 2),
+            makeRow(i + 3, i + 4, i + 5));
+        checksum += wrapper.row.middle;
+    }
+    return checksum;
+}
+
+int sub phiKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += ((i % 2)
+            ? wrapRow(makeRow(i, i + 1, i + 2),
+                makeRow(i + 3, i + 4, i + 5))
+            : wrapRow(makeRow(i + 6, i + 7, i + 8),
+                makeRow(i + 9, i + 10, i + 11))).row.middle;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+printf("%d:%d\n", localKernel(rounds), phiKernel(rounds));

@@ -256,6 +256,18 @@ string sub nestedBoxedProjection() {
         makeWords(\"unused-left\", \"unused-right\")).words[1];
 }
 
+int sub nestedLocalProjection() {
+    hash<string, hash<string, int>> wrapper = wrapRow(
+        makeRow(1, 2, 3), makeRow(4, 5, 6));
+    return wrapper.row.middle;
+}
+
+int sub nestedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? wrapRow(makeRow(1, 2, 3), makeRow(4, 5, 6))
+        : wrapRow(makeRow(7, 8, 9), makeRow(10, 11, 12))).row.middle;
+}
+
 int sub sharedNestedInput() {
     hash<string, int> row = makeRow(1, 2, 3);
     return wrapRow(row, makeRow(4, 5, 6)).row.middle + row.left;
@@ -448,7 +460,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -475,7 +487,9 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     aggregateConsumerSideEffects(), nonConsumerComputedProjection(),
     optionalAggregateConsumer(NOTHING), singleLocalProjection(),
     boxedPhiProjection(True), boxedPhiProjection(False),
-    boxedConstantPhiProjection(True), boxedSizePhiProjection(False));
+    boxedConstantPhiProjection(True), boxedSizePhiProjection(False),
+    nestedLocalProjection(), nestedPhiProjection(True),
+    nestedPhiProjection(False));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -564,7 +578,8 @@ foreach string function in (("wrapperProjection",
 }
 foreach string function in (("nestedNativeProjection",
         "nestedSideEffectProjection", "deepNestedProjection",
-        "nestedBoxedProjection")) {
+        "nestedBoxedProjection", "nestedLocalProjection",
+        "nestedPhiProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
@@ -672,7 +687,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
