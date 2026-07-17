@@ -1549,6 +1549,26 @@ foreach string module_name in (registry.getProcessModules()) {
     - \c plugin-type-verify-dataframe - CMake target for the in-tree dataframe consumer.
     @endparblock
 
+    @par Module-Loading Lock Hierarchy
+    @parblock
+    Cold runtime module loads serialize on a process-global lock while applying AOT module commands
+    and running module initializers.  Because applying a module's commands can call into that
+    module (for example to import Java classes), a binary module that holds a private lock while
+    triggering a module load could invert the lock order and deadlock against a concurrent load.
+
+    Binary modules can now participate in that hierarchy explicitly:
+    - \c QoreModuleLoadLockHelper acquires the module-load lock, which must be taken <i>before</i>
+      any module-private lock that is held across a call back into module loading &mdash; whether
+      directly via \c ModuleManager::runTimeLoadModule(), or indirectly through a callback from a
+      foreign runtime such as a JVM classloader
+    - \c QoreModuleInnerLockHelper marks a module-private lock as inner to the module-load lock;
+      debug builds then assert that the order is respected rather than deadlocking in the field
+
+    The lock is recursive, so nested module loads are safe.  It is intended for cold paths only:
+    already-loaded modules keep a lock-free fast path, and module authors should avoid taking the
+    module-load lock on cache-hit paths that cannot reach module loading.
+    @endparblock
+
     @par RFC 7231 / RFC 2822 Date Parsing
     The @ref Qore::date(string) "date(string)" function and @ref Qore::TimeZone::date(string) "TimeZone::date(string)"
     method now support parsing HTTP and email date formats in addition to ISO-8601:
