@@ -1020,6 +1020,7 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             }
             entry.param_rejects_nothing = info.param_rejects_nothing;
             entry.param_noescape = info.param_noescape;
+            entry.param_may_modify = info.param_may_modify;
             entry.scalar_leaf_kind = static_cast<uint8_t>(info.scalar_leaf.kind);
             entry.scalar_leaf_opcode = info.scalar_leaf.opcode;
             entry.scalar_leaf_lhs_param = info.scalar_leaf.lhs_param;
@@ -6404,6 +6405,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         return false;
     }
     const bool disable_noescape_params = std::getenv("QORE_DISABLE_AOT_NOESCAPE_PARAMS");
+    const bool disable_param_effects =
+        std::getenv("QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY");
     for (const auto& [variant, summary] : summaries) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT batch function effect propagation")) {
@@ -6412,7 +6415,11 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         auto callee_it = batch_callees.find(variant);
         if (callee_it != batch_callees.end()) {
             callee_it->second.may_invalidate_external_caches =
-                summary.may_invalidate_external_caches;
+                summary.may_invalidate_external_caches
+                || (disable_param_effects
+                    && std::find(summary.param_may_modify.begin(),
+                        summary.param_may_modify.end(), 1)
+                        != summary.param_may_modify.end());
             callee_it->second.never_returns_nothing =
                 summary.never_returns_nothing;
             callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
@@ -6420,6 +6427,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             if (!disable_noescape_params) {
                 callee_it->second.param_noescape = summary.param_noescape;
             }
+            callee_it->second.param_may_modify =
+                summary.param_may_modify;
         }
     }
     struct ScalarIntOperand {
@@ -7710,7 +7719,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
             || rec.fast_param_kinds.size() != rec.fast_entry_num_params
             || rec.fast_param_rejects_nothing.size() != rec.fast_entry_num_params
-            || rec.fast_param_noescape.size() > rec.fast_entry_num_params) {
+            || rec.fast_param_noescape.size() > rec.fast_entry_num_params
+            || rec.fast_param_may_modify.size() > rec.fast_entry_num_params) {
         return false;
     }
     info.param_kinds.reserve(rec.fast_param_kinds.size());
@@ -7744,6 +7754,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
     info.param_noescape.resize(info.num_params, 0);
+    info.param_may_modify = rec.fast_param_may_modify;
+    info.param_may_modify.resize(info.num_params, 1);
     if (rec.scalar_leaf_kind > static_cast<uint8_t>(AOTScalarLeafKind::IntAffineSelect)
             || rec.scalar_leaf_lhs_param < -1 || rec.scalar_leaf_rhs_param < -1
             || rec.scalar_leaf_lhs_param >= static_cast<int>(info.num_params)

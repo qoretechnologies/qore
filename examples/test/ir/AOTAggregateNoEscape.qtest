@@ -26,14 +26,31 @@ int sub readString(string value, string pattern) {
         + (value.contains(pattern) ? 4 : 0);
 }
 
+int sub mutateList(list<int> value) {
+    value[0] = 9;
+    return value[0];
+}
+
+int sub forwardMutateList(list<int> value) {
+    return mutateList(value);
+}
+
+int sub mutateHash(hash<auto> value) {
+    value.number = 9;
+    return value.number;
+}
+
 string sub aliasing() {
     hash<string, int> row = (\"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4);
     hash<string, int> alias = row;
     string value = \"abcdefabc\";
     string value_alias = value;
-    int result = readHash(row) + readString(value, \"abc\");
+    list<int> numbers = (1, 2);
+    int result = readHash(row) + readString(value, \"abc\")
+        + forwardMutateList(numbers) + mutateHash(row);
     row.a = 20;
-    return sprintf(\"%d:%d:%s\", result, alias.a, value_alias);
+    return sprintf(\"%d:%d:%s:%d:%d\", result, alias.a, value_alias,
+        numbers[0], alias.a);
 }
 
 string sub unassignedHash() {
@@ -118,12 +135,25 @@ foreach string function in (("readHash", "readString")) {
         exit(2);
     }
 }
+string effect_line;
+foreach string candidate in (dump.split("\n")) {
+    if (candidate.find("forwardMutateList(") != -1
+            && candidate.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        effect_line = candidate;
+        break;
+    }
+}
+if (!effect_line
+        || effect_line.find("\"fast_param_may_modify\": [1]") == -1) {
+    printf("missing forwarded aggregate parameter-effect metadata:\n%s", dump);
+    exit(2);
+}
 if (disabled_dump.find("fast_param_noescape\": [1") != -1) {
     printf("noescape metadata present in disabled control:\n%s", disabled_dump);
     exit(2);
 }
 
-string expected = "44:1:abcdefabc:rejected:rejected\n";
+string expected = "62:1:abcdefabc:1:1:rejected:rejected\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
         libqore_dir, qore_bin, mode, src));

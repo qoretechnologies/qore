@@ -245,6 +245,89 @@ static bool qore_ir_lvalue_path_may_invalidate_caller_caches(
     }
 }
 
+static const LocalVar* qore_ir_get_written_local(
+        const QoreIRInstruction* inst) {
+    if (!inst) {
+        return nullptr;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::StoreLocal:
+        case QoreIROpcode::StoreClosure:
+        case QoreIROpcode::InstantiateLocal:
+        case QoreIROpcode::UninstantiateLocal:
+            return static_cast<const QoreIRLocalInstruction*>(inst)->local;
+        case QoreIROpcode::AddAssignLocalInt:
+            return static_cast<const QoreIRAddAssignLocalIntInstruction*>(
+                inst)->target;
+        case QoreIROpcode::IncrementLocalInt:
+            return static_cast<const QoreIRIncrementLocalIntInstruction*>(
+                inst)->local;
+        case QoreIROpcode::HashKeyStore: {
+            const auto* store =
+                static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            return store->container_lv
+                ? store->container_lv
+                : store->container && store->container->getType() == VT_LOCAL
+                    ? store->container->ref.id : nullptr;
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            const auto* store =
+                static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            return store->container_lv
+                ? store->container_lv
+                : store->container && store->container->getType() == VT_LOCAL
+                    ? store->container->ref.id : nullptr;
+        }
+        case QoreIROpcode::ListIndexStore: {
+            const auto* store =
+                static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            return store->container_lv
+                ? store->container_lv
+                : store->container && store->container->getType() == VT_LOCAL
+                    ? store->container->ref.id : nullptr;
+        }
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::SpliceLValue: {
+            const auto* lvalue =
+                static_cast<const QoreIRLValueInstruction*>(inst);
+            const VarRefNode* base = extractLValueBaseVarRef(lvalue->lvalue);
+            return base && base->getType() == VT_LOCAL ? base->ref.id : nullptr;
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary: {
+            const auto* path =
+                static_cast<const QoreIRLValuePathInstruction*>(inst);
+            return !path->path.empty()
+                    && path->path.front().kind == LVPathStepKind::LocalVar
+                ? reinterpret_cast<const LocalVar*>(path->path.front().ref_ptr)
+                : nullptr;
+        }
+        default:
+            return nullptr;
+    }
+}
+
 bool qore_ir_instruction_may_invalidate_caller_caches(
         const QoreIRFunction& func, const QoreIRInstruction* inst) {
     if (!inst) {
@@ -430,6 +513,22 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
     }
 }
 
+static size_t qore_ir_get_effect_callee_arg_offset(
+        const QoreIRInstruction* inst) {
+    if (!inst) {
+        return 0;
+    }
+    if (inst->opcode == QoreIROpcode::CallClosureDirect) {
+        return 1;
+    }
+    if (inst->opcode == QoreIROpcode::Invoke) {
+        const auto* invoke =
+            static_cast<const QoreIRInvokeInstruction*>(inst);
+        return invoke->invoke_opcode == QoreIROpcode::CallClosureDirect ? 1 : 0;
+    }
+    return 0;
+}
+
 static const AbstractQoreFunctionVariant* qore_ir_get_created_closure_variant(
         const QoreIRInstruction* inst) {
     if (!inst || inst->opcode != QoreIROpcode::CreateClosure) {
@@ -596,6 +695,7 @@ bool qore_ir_compute_function_effect_summaries(
         bool saw_return = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
         std::vector<uint8_t> param_noescape;
+        std::vector<uint8_t> param_may_modify;
         std::vector<std::vector<std::pair<const AbstractQoreFunctionVariant*, size_t>>> param_callees;
     };
 
@@ -622,6 +722,7 @@ bool qore_ir_compute_function_effect_summaries(
             }
         }
         effect.param_noescape.assign(param_count, true);
+        effect.param_may_modify.assign(param_count, false);
         effect.param_callees.resize(param_count);
         std::unordered_map<const LocalVar*, size_t> param_indexes;
         for (const auto& [index, local] : func->param_local_vars) {
@@ -711,7 +812,17 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.callees.push_back(callee);
                     }
                 } else if (qore_ir_instruction_may_invalidate_caller_caches(*func, inst)) {
-                    effect.local_may_invalidate = true;
+                    const LocalVar* written_local =
+                        qore_ir_get_written_local(inst);
+                    auto param_it = param_indexes.find(written_local);
+                    if (param_it != param_indexes.end()
+                            && written_local && !written_local->closureUse()
+                            && !QoreTypeInfo::isReference(
+                                written_local->getTypeInfo())) {
+                        effect.param_may_modify[param_it->second] = true;
+                    } else {
+                        effect.local_may_invalidate = true;
+                    }
                 }
             }
         }
@@ -725,57 +836,13 @@ bool qore_ir_compute_function_effect_summaries(
                 if (!inst) {
                     continue;
                 }
-                const LocalVar* written_local = nullptr;
-                if (inst->opcode == QoreIROpcode::StoreLocal
-                        || inst->opcode == QoreIROpcode::StoreClosure
-                        || inst->opcode == QoreIROpcode::InstantiateLocal
-                        || inst->opcode == QoreIROpcode::UninstantiateLocal) {
-                    written_local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
-                } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
-                    written_local = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst)->target;
-                } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
-                    written_local = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local;
-                } else if (inst->opcode == QoreIROpcode::StoreLValue
-                        || inst->opcode == QoreIROpcode::PreIncLValue
-                        || inst->opcode == QoreIROpcode::PreDecLValue
-                        || inst->opcode == QoreIROpcode::PostIncLValue
-                        || inst->opcode == QoreIROpcode::PostDecLValue
-                        || inst->opcode == QoreIROpcode::AddAssignLValue
-                        || inst->opcode == QoreIROpcode::SubAssignLValue
-                        || inst->opcode == QoreIROpcode::MulAssignLValue
-                        || inst->opcode == QoreIROpcode::DivAssignLValue
-                        || inst->opcode == QoreIROpcode::ModAssignLValue
-                        || inst->opcode == QoreIROpcode::AndAssignLValue
-                        || inst->opcode == QoreIROpcode::OrAssignLValue
-                        || inst->opcode == QoreIROpcode::XorAssignLValue
-                        || inst->opcode == QoreIROpcode::ShlAssignLValue
-                        || inst->opcode == QoreIROpcode::ShrAssignLValue
-                        || inst->opcode == QoreIROpcode::ShiftLValue
-                        || inst->opcode == QoreIROpcode::UnshiftLValue
-                        || inst->opcode == QoreIROpcode::PopAny
-                        || inst->opcode == QoreIROpcode::PushAny
-                        || inst->opcode == QoreIROpcode::SpliceLValue) {
-                    const auto* lvalue_inst = static_cast<const QoreIRLValueInstruction*>(inst);
-                    const VarRefNode* base = extractLValueBaseVarRef(lvalue_inst->lvalue);
-                    if (base && base->getType() == VT_LOCAL) {
-                        written_local = base->ref.id;
-                    }
-                } else if (inst->opcode == QoreIROpcode::LValuePathAssign
-                        || inst->opcode == QoreIROpcode::LValuePathCompound
-                        || inst->opcode == QoreIROpcode::LValuePathUnary
-                        || inst->opcode == QoreIROpcode::LValuePathBinaryMut
-                        || inst->opcode == QoreIROpcode::LValuePathTernary) {
-                    const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst);
-                    if (!path_inst->path.empty()
-                            && path_inst->path.front().kind == LVPathStepKind::LocalVar) {
-                        written_local = reinterpret_cast<const LocalVar*>(
-                            path_inst->path.front().ref_ptr);
-                    }
-                }
+                const LocalVar* written_local =
+                    qore_ir_get_written_local(inst);
                 if (written_local) {
                     auto param_it = param_indexes.find(written_local);
                     if (param_it != param_indexes.end()) {
                         effect.param_noescape[param_it->second] = false;
+                        effect.param_may_modify[param_it->second] = true;
                     }
                 }
                 bool callee_arg_analysis_cancelled = false;
@@ -785,13 +852,7 @@ bool qore_ir_compute_function_effect_summaries(
                         return;
                     }
                     size_t param_index = loaded_it->second;
-                    if (!effect.param_noescape[param_index]) {
-                        return;
-                    }
                     if (inst->opcode == QoreIROpcode::Return) {
-                        return;
-                    }
-                    if (qore_ir_is_read_only_aggregate_use(*inst, operand)) {
                         return;
                     }
                     bool has_ref_args = true;
@@ -808,18 +869,29 @@ bool qore_ir_compute_function_effect_summaries(
                                     ->invoke_opcode == QoreIROpcode::CallClosureDirect)) {
                         if (!callee || has_ref_args) {
                             effect.param_noescape[param_index] = false;
+                            effect.param_may_modify[param_index] = true;
                             return;
                         }
-                        for (size_t arg = 0; arg < inst->operands.size(); ++arg) {
+                        size_t arg_offset =
+                            qore_ir_get_effect_callee_arg_offset(inst);
+                        for (size_t arg = arg_offset;
+                                arg < inst->operands.size(); ++arg) {
                             if (qore_ir_analysis_cancelled(check_count,
                                     "IR function parameter callee argument analysis")) {
                                 callee_arg_analysis_cancelled = true;
                                 return;
                             }
                             if (inst->operands[arg].id == operand.id) {
-                                effect.param_callees[param_index].emplace_back(callee, arg);
+                                effect.param_callees[param_index].emplace_back(
+                                    callee, arg - arg_offset);
                             }
                         }
+                        return;
+                    }
+                    if (!effect.param_noescape[param_index]) {
+                        return;
+                    }
+                    if (qore_ir_is_read_only_aggregate_use(*inst, operand)) {
                         return;
                     }
                     effect.param_noescape[param_index] = false;
@@ -854,6 +926,7 @@ bool qore_ir_compute_function_effect_summaries(
         summaries[effect.variant].never_returns_nothing =
             effect.saw_return && effect.local_never_returns_nothing;
         summaries[effect.variant].param_noescape = effect.param_noescape;
+        summaries[effect.variant].param_may_modify = effect.param_may_modify;
         if (may_invalidate) {
             worklist.push_back(function_id);
         }
@@ -895,6 +968,35 @@ bool qore_ir_compute_function_effect_summaries(
                             || !callee_it->second.param_noescape[callee_param]) {
                         summary.param_noescape[param] = false;
                         noescape_changed = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    bool modify_changed = true;
+    while (modify_changed) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR function parameter modification propagation")) {
+            return false;
+        }
+        modify_changed = false;
+        for (const FunctionEffects& effect : effects) {
+            auto& summary = summaries[effect.variant];
+            for (size_t param = 0; param < summary.param_may_modify.size();
+                    ++param) {
+                if (summary.param_may_modify[param]) {
+                    continue;
+                }
+                for (const auto& [callee, callee_param]
+                        : effect.param_callees[param]) {
+                    auto callee_it = summaries.find(callee);
+                    if (callee_it == summaries.end()
+                            || callee_param
+                                >= callee_it->second.param_may_modify.size()
+                            || callee_it->second.param_may_modify[callee_param]) {
+                        summary.param_may_modify[param] = true;
+                        modify_changed = true;
                         break;
                     }
                 }

@@ -1,0 +1,28 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub removeParam(list<int> value, int add) {
+    remove value;
+    return add + 1;
+}
+
+int sub forwardRemoveParam(list<int> value, int add) {
+    return removeParam(value, add);
+}
+
+int sub run(int rounds) {
+    list<int> stable = (3, 4, 5);
+    list<int> observed = (7,);
+    observed[0] = 7;
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += forwardRemoveParam(stable, i & 7) + observed[0];
+    }
+    return checksum + stable.size();
+}
+
+int rounds = ENV.QORE_BENCH_ROUNDS
+    ? ENV.QORE_BENCH_ROUNDS.toInt() : 5000000;
+printf("%d\n", run(rounds));

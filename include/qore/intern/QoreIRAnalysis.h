@@ -88,6 +88,10 @@ struct QoreIRFunctionEffectSummary {
     //! True for parameters whose value is only observed during the call.
     //! A returned value is allowed because return lowering takes an owning ref.
     std::vector<uint8_t> param_noescape;
+    //! True when the callee can rebind or mutate the parameter value locally.
+    //! Pass-by-value parameter changes do not by themselves invalidate caller
+    //! lvalue caches, but callers can use this bit to preserve COW semantics.
+    std::vector<uint8_t> param_may_modify;
 };
 
 //! Return exact scalar closure captures that can be passed by value to a

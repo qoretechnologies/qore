@@ -339,6 +339,7 @@ struct BatchCalleeInfo {
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
     std::vector<uint8_t> param_noescape; //!< Boxed params that can remain borrowed for the call
+    std::vector<uint8_t> param_may_modify; //!< Params rebound or mutated inside the callee
     std::vector<const LocalVar*> capture_locals; //!< Read-only scalar captures passed to fast entries
     std::vector<BatchCalleeParamKind> capture_kinds; //!< Native capture ABI kinds
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary

@@ -6876,6 +6876,12 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeI64(node.int_constant);
         writer.writeStringRef(node.string_constant.c_str());
     }
+    writer.writeU32(
+        static_cast<uint32_t>(rec.fast_param_may_modify.size()));
+    if (!rec.fast_param_may_modify.empty()) {
+        writer.writeBytes(rec.fast_param_may_modify.data(),
+            static_cast<uint32_t>(rec.fast_param_may_modify.size()));
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6931,6 +6937,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.fast_param_kinds = info.param_kinds;
     rec.fast_param_rejects_nothing = info.param_rejects_nothing;
     rec.fast_param_noescape = info.param_noescape;
+    rec.fast_param_may_modify = info.param_may_modify;
     rec.scalar_leaf_kind = info.scalar_leaf_kind;
     rec.scalar_leaf_opcode = info.scalar_leaf_opcode;
     rec.scalar_leaf_lhs_param = info.scalar_leaf_lhs_param;
@@ -8299,6 +8306,14 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             return false;
         }
         rec.string_expression_nodes.push_back(std::move(node));
+    }
+    if (version < 22) {
+        return true;
+    }
+    if (!readSymbolIndexByteVector(ptr, end,
+            rec.fast_param_may_modify, error,
+            "fast_param_may_modify")) {
+        return false;
     }
     return true;
 }

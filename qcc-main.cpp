@@ -5047,6 +5047,7 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     print_bytes("fast_param_kinds", rec.fast_param_kinds);
     print_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
     print_bytes("fast_param_noescape", rec.fast_param_noescape);
+    print_bytes("fast_param_may_modify", rec.fast_param_may_modify);
     printf(", \"scalar_leaf_kind\": %u, \"scalar_leaf_opcode\": %u"
         ", \"scalar_leaf_lhs_param\": %d, \"scalar_leaf_rhs_param\": %d"
         ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
@@ -5662,6 +5663,7 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         write_bytes("fast_param_kinds", rec.fast_param_kinds);
         write_bytes("fast_param_rejects_nothing", rec.fast_param_rejects_nothing);
         write_bytes("fast_param_noescape", rec.fast_param_noescape);
+        write_bytes("fast_param_may_modify", rec.fast_param_may_modify);
         fprintf(f, ", \"scalar_leaf_kind\": %u, \"scalar_leaf_opcode\": %u"
             ", \"scalar_leaf_lhs_param\": %d, \"scalar_leaf_rhs_param\": %d"
             ", \"scalar_leaf_lhs_int\": " QLLD ", \"scalar_leaf_rhs_int\": " QLLD
