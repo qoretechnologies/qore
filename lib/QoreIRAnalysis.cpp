@@ -1547,15 +1547,24 @@ static bool qore_ir_rewrite_value_operands(QoreIRInstruction& inst,
 }
 
 static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
-        size_t& check_count) {
+        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
     if (std::getenv("QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT")) {
         return 0;
     }
+    const bool cross_block =
+        std::getenv("QORE_DISABLE_IR_CROSS_BLOCK_FIXED_LIST_SCALAR_REPLACEMENT")
+            == nullptr;
 
     struct InstructionPosition {
         QoreIRInstruction* inst = nullptr;
         size_t block = 0;
         size_t offset = 0;
+    };
+    auto dominates = [&](const InstructionPosition& definition,
+            const InstructionPosition& use) {
+        return definition.block == use.block
+            ? definition.offset < use.offset
+            : cross_block && cfg.dominates(definition.block, use.block);
     };
     std::unordered_map<uint32_t, InstructionPosition> definitions;
     std::unordered_map<const LocalVar*, std::vector<InstructionPosition>> local_accesses;
@@ -1701,8 +1710,7 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
         std::vector<const QoreIRInstruction*> reads;
         std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
         for (const InstructionPosition* load_pos : load_positions) {
-            if (load_pos->block != store_pos->block
-                    || load_pos->offset <= store_pos->offset
+            if (!dominates(*store_pos, *load_pos)
                     || load_pos->inst->exception_target) {
                 invalid = true;
                 break;
@@ -1717,11 +1725,17 @@ static size_t qore_ir_scalar_replace_fixed_lists(QoreIRFunction& func,
                         "IR fixed-list scalar read analysis")) {
                     return 0;
                 }
-                if (!use.inst || use.block_id != store_pos->block
+                if (!use.inst
                         || use.inst->opcode != QoreIROpcode::ListIndexDynamic
                         || use.inst->exception_target || !use.inst->result.isValid()
                         || use.inst->operands.size() != 2
                         || use.inst->operands[0].id != load_pos->inst->result.id) {
+                    invalid = true;
+                    break;
+                }
+                auto read_position = definitions.find(use.inst->result.id);
+                if (read_position == definitions.end()
+                        || !dominates(*load_pos, read_position->second)) {
                     invalid = true;
                     break;
                 }
@@ -3282,8 +3296,15 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
     size_t check_count = 0;
     local_stats.scalar_list_queries_folded =
         qore_ir_fold_scalar_list_queries(func, check_count);
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        if (stats) {
+            *stats = local_stats;
+        }
+        return;
+    }
     local_stats.fixed_lists_scalarized =
-        qore_ir_scalar_replace_fixed_lists(func, check_count);
+        qore_ir_scalar_replace_fixed_lists(func, cfg, check_count);
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
             if (stats) {
@@ -3294,13 +3315,6 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         if (block->name.rfind("foreach.typed.header.", 0) == 0) {
             ++local_stats.typed_foreach_loops;
         }
-    }
-    QoreIRControlFlowGraph cfg(func);
-    if (cfg.cancelled) {
-        if (stats) {
-            *stats = local_stats;
-        }
-        return;
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
     bool has_list_push = false;
