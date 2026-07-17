@@ -177,6 +177,10 @@ $function$
       results (base class only returns the first row)
     - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
       \c pg_temp schema alias resolve to the backend's active temporary schema
+    - fixed the resolution of unqualified table and view names, which were always assumed to be in the
+      \c public schema; they are now resolved with the connection's \c search_path, as PostgreSQL itself
+      resolves them, so table objects can be used in a schema other than \c public without qualifying
+      every name (\c listViews() already resolved names this way)
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
       add, drop, truncate, and detach operations
     - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
@@ -297,14 +301,32 @@ public class PgsqlNumberDataType inherits SqlUtil::AbstractNumericDataType {
     }
 }
 
-sub parse_schema_name(string nname, reference<string> schema, reference<string> name) {
+#! Returns the schema that resolves unqualified object names on the given connection
+/** @param ds the datasource to query
+
+    @return the first existing schema in the connection's \c search_path, or \c "public" if
+    \c search_path resolves to no existing schema
+
+    PostgreSQL resolves an unqualified object name against the connection's \c search_path, so the
+    schema for such a name is a property of the connection and cannot be assumed to be \c "public".
+
+    @since %PgsqlSqlUtilBase 1.9
+*/
+public string sub get_pgsql_default_schema(AbstractDatasource ds) {
+    # current_schema() returns NULL when search_path names no existing schema
+    *string schema = ds.selectRow("select current_schema() as \"schema\"").schema;
+    return schema ?? "public";
+}
+
+sub parse_schema_name(string nname, reference<string> schema, reference<string> name,
+        string default_schema = "public") {
     *string sstr = (nname =~ x/^(\w+)\.\w+/)[0];
     if (sstr) {
         schema = sstr;
         splice nname, 0, schema.size() + 1;
         name = nname;
     } else {
-        schema = "public";
+        schema = default_schema;
         name = nname;
     }
 }
@@ -1269,7 +1291,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     private *AbstractView getViewImpl(string name) {
         string schema;
-        parse_schema_name(name, \schema, \name);
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
 
         *hash<auto> row = ds.selectRow("select * from pg_views where schemaname = %v and viewname = %v", schema, name);
         if (!row)
@@ -2515,6 +2537,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         #! schema name for the table
         string schema;
 
+        #! @ref True if the table was created with a name carrying no schema
+        /** such a name is resolved with the connection's \c search_path, which may name any schema, so
+            it cannot be recognized later by comparing @ref schema to \c "public"
+        */
+        bool name_unqualified = False;
+
         #! contains any trigger functions supporting triggers on the table
         Functions triggerFunctions;
 
@@ -2540,9 +2568,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! Creates the object from the arguments
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
         bool explicit_schema = (nname =~ x/^(\w+)\.\w+/)[0] ? True : False;
+        name_unqualified = !explicit_schema;
 
-        # see if there is a schema in the name
-        parse_schema_name(nname, \schema, \name);
+        # see if there is a schema in the name; a name without one is resolved by the connection's
+        # search_path, which is not necessarily "public", so only query for it when it is needed
+        parse_schema_name(nname, \schema, \name,
+            explicit_schema ? "public" : get_pgsql_default_schema(nds));
 
         resolveTemporaryTableSchema(!explicit_schema);
 
@@ -3350,7 +3381,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool resolveTemporaryTableSchema(bool allow_unqualified) {
-        if (schema != "pg_temp" && !(allow_unqualified && schema == "public")) {
+        # a name with no schema can resolve to a temporary table whatever the connection's search_path
+        # reports as its default schema, so "public" alone no longer identifies such a name
+        if (schema != "pg_temp" && !(allow_unqualified && (name_unqualified || schema == "public"))) {
             return False;
         }
 
@@ -3646,10 +3679,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "order by con.constraint_name, con.rn", name, schema);
         if (qh.constraint_name) {
             hash<auto> ch;
+            # a target is reported unqualified only when this connection resolves an unqualified name to
+            # its schema, so that the name reported here can be resolved by the caller; comparing to
+            # "public" instead would report the foreign keys of a table in the connection's own
+            # search_path schema as qualified, and so as differing from an unqualified description,
+            # making every alignment of that schema drop and re-add each foreign key
+            string default_schema = get_pgsql_default_schema(ds);
             foreach hash<auto> row in (qh.contextIterator()) {
                 reference<hash<auto>> c = \ch.(row.constraint_name);
                 c.columns.(row.source_column) = columns{row.source_column};
-                c.target.table = row.schema == "public" ? row.target_table : sprintf("%s.%s", row.schema, row.target_table);
+                c.target.table = row.schema == default_schema
+                    ? row.target_table
+                    : sprintf("%s.%s", row.schema, row.target_table);
                 c.target.columns.(row.target_column) = True;
             }
 

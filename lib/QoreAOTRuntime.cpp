@@ -11032,7 +11032,7 @@ static bool aotInitTraceEnabled() {
     return enabled;
 }
 
-static QoreRecursiveThreadLock& get_aot_init_execution_lock() {
+QoreRecursiveThreadLock& qore_aot_get_init_execution_lock() {
     static QoreRecursiveThreadLock lock;
     return lock;
 }
@@ -12101,7 +12101,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     // loads reexported modules, updates per-module init state, and executes
     // generated init functions.  None of that is safe to interleave with the
     // same work for another Program using the same shared AOT module metadata.
-    AutoLocker aot_module_al(get_aot_init_execution_lock());
+    AutoLocker aot_module_al(qore_aot_get_init_execution_lock());
 
     ExceptionSink local_xsink;
     ExceptionSink& xsink = external_xsink ? *external_xsink : local_xsink;
@@ -12749,7 +12749,7 @@ static int executeInitFunctions(
     // AOT init functions can load further modules and can run generated code
     // that mutates module/static state. Keep this phase reentrant but serialized
     // across threads, matching the effective source-module initialization model.
-    AutoLocker aot_init_al(get_aot_init_execution_lock());
+    AutoLocker aot_init_al(qore_aot_get_init_execution_lock());
 
     if (aotInitTraceEnabled()) {
         fprintf(stderr, "[aot-init] execute module=%s pgm=%p shadow=%p exec_infos=%zu descriptors=%zu path=%s\n",

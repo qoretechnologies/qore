@@ -1662,6 +1662,11 @@ public const hash<auto> ExtendedExpressionImplementations = {
                     "short_desc": "Output encoding: \"hex\" (default), \"base64\", or \"binary\"",
                     "desc": "The encoding of the returned digest; `hex` (the default) and `base64` "
                         "return a string, `binary` returns the raw digest as a binary value",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "hex", "display_name": "Hexadecimal"},
+                        <AllowedValueInfo>{"value": "base64", "display_name": "Base64"},
+                        <AllowedValueInfo>{"value": "binary", "display_name": "Binary"},
+                    ),
                 },
             ),
             "return_type": AbstractDataProviderTypeMap."data",

@@ -4744,6 +4744,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @throw DIGEST-ERROR the algorithm argument is not a string literal
 
+        @par Example
+        A portable customer-data checksum can normalize \c "SHA-256" before selecting the database driver's
+        server-side digest implementation; this function returns \c "sha256".
+
         @since %SqlUtil 1.9
     */
     public string sub sqlutil_normalize_digest_algorithm(auto alg) {
@@ -4762,6 +4766,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         \c "binary"
 
         @throw DIGEST-ERROR the encoding argument is not a valid string literal encoding value
+
+        @par Example
+        A reconciliation export can request \c "base64" so binary row digests remain safe in text-based files;
+        this function validates the request and returns the normalized encoding.
 
         @since %SqlUtil 1.9
     */
