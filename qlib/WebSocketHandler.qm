@@ -146,6 +146,14 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       @ref WebSocketHandler::WebSocketHandler::setIdleTimeout() "setIdleTimeout()"): a connection with no
       inbound activity for the configured number of seconds is closed, reclaiming slots/resources held by idle
       clients; enforced for HTTP/1.1 (async poll op), HTTP/2, and HTTP/3 WebSocket transports
+    - fixed HTTP/2 and HTTP/3 WebSocket connections surviving the death of their peer forever: heartbeat PINGs
+      were sent but no answer was ever required, so a peer that vanished without a close handshake left its
+      handler thread parked for the life of the server, leaking a thread per dead client and blocking server
+      shutdown indefinitely.  A stream whose peer misses two consecutive heartbeat PINGs (any inbound frame
+      counts as the answer) is now closed.  This is the only liveness check on these transports unless an idle
+      timeout is configured: an HTTP/3 peer that dies sends no reset (QUIC runs over UDP), and the PING is
+      queued asynchronously and so never reports an error to the sender.  HTTP/1.1 was unaffected: its poll
+      operation already detects the close
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketHandler
       metadata always resolves the typed AsyncAPI validator members and methods
     - added \c asyncapi, \c validator, and \c asyncapi_channel constructor options to configure an AsyncAPI
@@ -1244,6 +1252,18 @@ public class WebSocketConnection {
     @since WebSocketHandler 2.7
 */
 class WebSocketStreamProcessor {
+    public {
+        #! Number of consecutive unanswered heartbeat PINGs that closes an H2/H3 stream
+        /** A PING obliges the peer to answer with a PONG (RFC 6455 5.5.2), and any inbound frame
+            counts as the answer, so a peer that has not sent a single frame across this many
+            consecutive heartbeat intervals is gone.  Closing it is the only way a dead H2/H3 peer
+            is detected when no idle timeout is configured: an HTTP/3 peer that dies without a
+            close handshake sends no reset (QUIC runs over UDP), and the PING itself is queued
+            asynchronously, so it never reports an error to the sender.
+        */
+        const MaxMissedHeartbeats = 2;
+    }
+
     private {
         #! The WebSocket connection for frame dispatch
         WebSocketConnection wsc;
@@ -1273,6 +1293,12 @@ class WebSocketStreamProcessor {
 
         #! Timestamp of last heartbeat PING sent in milliseconds
         int last_ping_ms = 0;
+
+        #! Consecutive heartbeat PINGs sent without any inbound frame in response
+        /** Reset by @ref noteRecvActivity(); the stream is closed once it reaches
+            @ref MaxMissedHeartbeats.  Protected by @ref heartbeat_mutex.
+        */
+        int missed_heartbeats = 0;
 
         #! Mutex protecting heartbeat timer state
         Mutex heartbeat_mutex();
@@ -1507,6 +1533,8 @@ class WebSocketStreamProcessor {
     private noteRecvActivity() {
         AutoLock al(heartbeat_mutex);
         last_recv_ms = clock_getmillis();
+        # any inbound frame answers an outstanding PING and proves the peer is alive
+        missed_heartbeats = 0;
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -1562,6 +1590,7 @@ class WebSocketStreamProcessor {
     private handleHeartbeatTimer(int generation) {
         bool send_ping = False;
         bool close_idle = False;
+        bool close_dead = False;
         data msg;
 
         {
@@ -1579,15 +1608,28 @@ class WebSocketStreamProcessor {
                 int interval_ms = heartbeat_s * 1000;
                 if ((now - last_recv_ms) >= interval_ms
                         && (!last_ping_ms || (now - last_ping_ms) >= interval_ms)) {
-                    last_ping_ms = now;
-                    msg = heartbeat_msg;
-                    send_ping = True;
+                    # the previous PING went unanswered if nothing has been received since it was
+                    # sent; a peer that misses MaxMissedHeartbeats of them in a row is gone
+                    if (last_ping_ms && last_recv_ms < last_ping_ms
+                            && ++missed_heartbeats >= MaxMissedHeartbeats) {
+                        close_dead = True;
+                    } else {
+                        last_ping_ms = now;
+                        msg = heartbeat_msg;
+                        send_ping = True;
+                    }
                 }
             }
         }
 
         # close() acquires process_mutex (not heartbeat_mutex) and signals shutdown; called with no lock held
         if (close_idle) {
+            close();
+            return;
+        }
+        if (close_dead) {
+            handler.logInfo("H2/H3 WebSocket peer did not answer %d consecutive heartbeat PINGs "
+                "(interval: %ds); closing the stream", MaxMissedHeartbeats, heartbeat_s);
             close();
             return;
         }
