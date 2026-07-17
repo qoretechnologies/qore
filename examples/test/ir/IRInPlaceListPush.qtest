@@ -181,9 +181,9 @@ string sub runAot(string suffix, string env, bool expect_effect_refinement) {
         printf("AOT compile failed:\n%s", compile_out);
         exit(2);
     }
-    bool has_effect_refinement = compile_out =~ /IR-OPT-AOT-EFFECTS: noescapeCallPush: inplace-push=1/
-        && compile_out =~ /IR-OPT-AOT-EFFECTS: NoEscapeCalls::methodPush: inplace-push=1/
-        && compile_out =~ /IR-OPT-AOT-EFFECTS: noescapeClosurePush: inplace-push=1/;
+    bool has_effect_refinement = compile_out =~ /IR-OPT-AOT-EFFECTS: noescapeCallPush:.*inplace-push=1/
+        && compile_out =~ /IR-OPT-AOT-EFFECTS: NoEscapeCalls::methodPush:.*inplace-push=1/
+        && compile_out =~ /IR-OPT-AOT-EFFECTS: noescapeClosurePush:.*inplace-push=1/;
     bool has_unsafe_refinement = compile_out =~ /IR-OPT-AOT-EFFECTS: escapingMethodPush:/
         || compile_out =~ /IR-OPT-AOT-EFFECTS: escapingClosurePush:/
         || compile_out =~ /IR-OPT-AOT-EFFECTS: referenceClosureCallPush:/;
