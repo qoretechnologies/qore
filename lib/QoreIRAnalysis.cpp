@@ -4637,6 +4637,73 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         phi_replacements.emplace(candidate.phi,
             std::move(candidate.scalar_phi));
     }
+    std::vector<QoreIRCallDirectInstruction*> discard_worklist;
+    std::unordered_set<QoreIRInstruction*> queued_discards;
+    auto enqueue_discard_inputs = [&](const QoreIRInstruction* instruction) {
+        for (QoreIRValue operand : instruction->operands) {
+            auto definition = definitions.find(operand.id);
+            if (definition == definitions.end()
+                    || definition->second->opcode != QoreIROpcode::CallDirect) {
+                continue;
+            }
+            auto* call = static_cast<QoreIRCallDirectInstruction*>(
+                const_cast<QoreIRInstruction*>(definition->second));
+            if (!eliminated.count(call) && !calls.count(call)
+                    && queued_discards.insert(call).second) {
+                discard_worklist.push_back(call);
+            }
+        }
+    };
+    for (QoreIRInstruction* instruction : eliminated) {
+        enqueue_discard_inputs(instruction);
+    }
+    while (!discard_worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR dead aggregate-return call analysis")) {
+            return 0;
+        }
+        QoreIRCallDirectInstruction* call = discard_worklist.back();
+        discard_worklist.pop_back();
+        queued_discards.erase(call);
+        if (call->exception_target || !call->result.isValid()
+                || eliminated.count(call) || calls.count(call)) {
+            continue;
+        }
+        auto call_uses = uses.find(call->result.id);
+        if (call_uses == uses.end() || call_uses->second.empty()) {
+            continue;
+        }
+        bool dead = true;
+        for (const QoreIRScalarUse& call_use : call_uses->second) {
+            if (!call_use.inst
+                    || !eliminated.count(
+                        const_cast<QoreIRInstruction*>(call_use.inst))) {
+                dead = false;
+                break;
+            }
+        }
+        if (!dead) {
+            continue;
+        }
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(call, has_ref_args);
+        int16_t operand = -1;
+        int64_t size = 0;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
+        auto projection =
+            QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
+        if (!callee || has_ref_args
+                || !get_projection(callee, call,
+                    QoreIRAggregateProjectionQueryKind::DiscardResult,
+                    0, std::string(), operand, size, int_constant,
+                    float_constant, projection)) {
+            continue;
+        }
+        eliminated.insert(call);
+        enqueue_discard_inputs(call);
+    }
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {

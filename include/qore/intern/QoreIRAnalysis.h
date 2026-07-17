@@ -143,6 +143,7 @@ using QoreIRFreshHashKeyQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, size_t, std::string&)>;
 
 enum class QoreIRAggregateProjectionQueryKind : uint8_t {
+    DiscardResult,
     ListSize,
     ListIndexInt,
     ListIndexFloat,

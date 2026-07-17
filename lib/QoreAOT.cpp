@@ -10491,6 +10491,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return false;
                         }
                     }
+                    if (kind
+                            == QoreIRAggregateProjectionQueryKind::
+                                DiscardResult) {
+                        operand = -1;
+                        size = 0;
+                        projection = QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::None;
+                        return true;
+                    }
                     const AOTAggregateReturnInfo& aggregate =
                         found->second.aggregate_return;
                     if (kind
