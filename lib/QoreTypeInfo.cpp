@@ -3427,7 +3427,13 @@ const QoreTypeInfo* QoreTypeInfo::getHardReference(const QoreTypeInfo* ti) {
         }
     }
     const QoreComplexReferenceOrNothingTypeInfo* type = dynamic_cast<const QoreComplexReferenceOrNothingTypeInfo*>(ti);
-    assert(type);
+    // ti is not itself a reference type: a container with an "auto" element (e.g. softlist<auto>,
+    // list<auto>, hash<auto>) makes parseAcceptsReturns(ti, NT_REFERENCE) true because it accepts a
+    // reference as an element, even though ti is a list/hash type.  There is no hard-reference form to
+    // substitute for such a type, so return it unchanged rather than dereferencing a null cast.
+    if (!type) {
+        return ti;
+    }
     return type->getHardReference();
 }
 
