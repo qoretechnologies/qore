@@ -11037,6 +11037,57 @@ QoreRecursiveThreadLock& qore_aot_get_init_execution_lock() {
     return lock;
 }
 
+// Depth of module-load lock acquisitions held by the current thread.  The lock is recursive, so
+// this can be > 1 when a module load re-enters module loading (e.g. an AOT module initializer
+// loading another module).  Maintained in all builds so that the debug assertion below can tell
+// "this thread already holds the module-load lock" (legal) from "this thread is acquiring it for
+// the first time while holding an inner lock" (a lock-order inversion).
+static thread_local unsigned qore_module_load_lock_depth = 0;
+
+#ifdef DEBUG
+// Depth of module-inner locks (locks that must be acquired *after* the module-load lock) held by
+// the current thread; see QoreModuleInnerLockHelper.  Only tracked in debug builds; the assertion
+// that reads it is the only consumer, so it does not exist at all in non-debug builds.
+static thread_local unsigned qore_module_inner_lock_depth = 0;
+#endif
+
+QoreModuleLoadLockHelper::QoreModuleLoadLockHelper() {
+    // check the lock order *before* blocking on the lock, so that an inversion is reported as a
+    // failed assertion rather than as a hang
+    //
+    // holding a module-inner lock while taking the module-load lock for the first time is the
+    // inversion that deadlocks against a concurrent module load which holds the module-load lock
+    // and needs the inner lock to apply a module's AOT module commands.  Re-entering module loading
+    // while already holding the module-load lock is fine: the order was established correctly on
+    // the outermost acquisition and both locks are recursive.
+    assert(!qore_module_inner_lock_depth || qore_module_load_lock_depth);
+
+    qore_aot_get_init_execution_lock().lock();
+    ++qore_module_load_lock_depth;
+}
+
+QoreModuleLoadLockHelper::~QoreModuleLoadLockHelper() {
+    assert(qore_module_load_lock_depth);
+    --qore_module_load_lock_depth;
+    qore_aot_get_init_execution_lock().unlock();
+}
+
+// NOTE: the bodies below are compiled out in non-debug builds, but the symbols are always exported
+// so that a module built with a different DEBUG setting than libqore still links; in that case the
+// tracking is simply inert
+QoreModuleInnerLockHelper::QoreModuleInnerLockHelper() {
+#ifdef DEBUG
+    ++qore_module_inner_lock_depth;
+#endif
+}
+
+QoreModuleInnerLockHelper::~QoreModuleInnerLockHelper() {
+#ifdef DEBUG
+    assert(qore_module_inner_lock_depth);
+    --qore_module_inner_lock_depth;
+#endif
+}
+
 static QoreThreadLock& get_aot_module_state_lock() {
     static QoreThreadLock lock;
     return lock;
@@ -12101,7 +12152,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     // loads reexported modules, updates per-module init state, and executes
     // generated init functions.  None of that is safe to interleave with the
     // same work for another Program using the same shared AOT module metadata.
-    AutoLocker aot_module_al(qore_aot_get_init_execution_lock());
+    QoreModuleLoadLockHelper aot_module_al;
 
     ExceptionSink local_xsink;
     ExceptionSink& xsink = external_xsink ? *external_xsink : local_xsink;
@@ -12749,7 +12800,7 @@ static int executeInitFunctions(
     // AOT init functions can load further modules and can run generated code
     // that mutates module/static state. Keep this phase reentrant but serialized
     // across threads, matching the effective source-module initialization model.
-    AutoLocker aot_init_al(qore_aot_get_init_execution_lock());
+    QoreModuleLoadLockHelper aot_init_al;
 
     if (aotInitTraceEnabled()) {
         fprintf(stderr, "[aot-init] execute module=%s pgm=%p shadow=%p exec_infos=%zu descriptors=%zu path=%s\n",

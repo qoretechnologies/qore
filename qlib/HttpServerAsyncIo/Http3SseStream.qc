@@ -128,6 +128,13 @@ public class Http3SseStream inherits AbstractSseConnection {
         @ref Qore::Socket::waitForQuicStreamDrain().
 
         @param data the pre-formatted SSE frame text
+
+        @throw SSE-CLOSED the stream is closed, or it closed while this call was
+        waiting for the QUIC send buffer to drain — the latter is how a dead peer
+        surfaces: its buffer never drains, and the QUIC idle timeout closes the
+        session (SSE is server-to-client only, so the transport close is the only
+        signal available).  The stream is marked closed before the exception is
+        thrown, so @ref isOpen() returns @ref False afterwards.
     */
     queueRawString(string data) {
         if (!isStreamOpen()) {
@@ -160,18 +167,30 @@ public class Http3SseStream inherits AbstractSseConnection {
     }
 
     private sendRawStringIntern(string data) {
-        try {
-            while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
-                if (wake_callback) {
-                    wake_callback();
-                }
-                sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
-            }
+        # submitQuicStreamData() returns 1 when the stream's send buffer is full;
+        # wake the I/O thread and wait for it to drain before retrying.
+        while (sock.submitQuicStreamData(session_id, stream_id, data, False) == 1) {
             if (wake_callback) {
                 wake_callback();
             }
-        } catch (hash<ExceptionInfo> ex) {
-            rethrow;
+            # -1 means the stream is gone (reset, or its QUIC session closed).
+            # Ignoring it re-submits into a buffer that will never drain, which is
+            # how a dead SSE peer used to park this thread forever: SSE is
+            # server-to-client only, so there are no inbound frames to time out on
+            # and the transport close is the only signal we will ever get.
+            int drain_rv = sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
+            if (drain_rv == -1) {
+                throw "SSE-CLOSED", sprintf("HTTP/3 SSE stream %d on session %d was "
+                    "closed while waiting for the send buffer to drain", stream_id,
+                    session_id);
+            }
+            # drain_rv == 1 (timed out) retries: a live peer may just be slow, and
+            # capping retries would abort a legitimately backlogged consumer.  A
+            # dead peer is bounded by the QUIC idle timeout, which closes the
+            # session and turns the next call into -1.
+        }
+        if (wake_callback) {
+            wake_callback();
         }
     }
 

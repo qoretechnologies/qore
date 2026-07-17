@@ -339,6 +339,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
             addTestCase("search_path schema resolution", \searchPathSchemaResolutionTest());
+            addTestCase("sequence schema resolution", \sequenceSchemaResolutionTest());
             addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
             addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
@@ -596,6 +597,65 @@ class PgsqlTest inherits SqlTestBase {
     /** PostgreSQL resolves an unqualified name against the connection's search_path, so an unqualified
         table name must not be assumed to be in the \c public schema.
     */
+    #! Sequences must resolve in the schema the name resolves in, not in any schema that happens to have one
+    /** A database holding one schema per tenant has the same sequence name in every schema. Matching a
+        sequence on its name alone finds another schema's, which made getSequence() report a sequence that
+        does not exist on this connection's search_path (and then fail reading it), and listSequences()
+        report sequences that unqualified SQL here cannot reach. Aligning a schema in such a database
+        failed outright once a second schema existed.
+    */
+    private sequenceSchemaResolutionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+        }
+
+        # two schemas, each with a sequence of the SAME name: the case a schema-blind lookup gets wrong
+        string mine = ("qore_pgsql_sqm_" + get_random_string()).lwr();
+        string other = ("qore_pgsql_sqo_" + get_random_string()).lwr();
+        string seq_name = ("qore_pgsql_seq_" + get_random_string()).lwr();
+        string other_only = ("qore_pgsql_seqo_" + get_random_string()).lwr();
+        ds.exec(sprintf("create schema %s", mine));
+        ds.exec(sprintf("create schema %s", other));
+        on_exit {
+            ds.exec(sprintf("drop schema if exists %s cascade", mine));
+            ds.exec(sprintf("drop schema if exists %s cascade", other));
+            ds.exec("set search_path to public");
+            ds.commit();
+        }
+        ds.exec(sprintf("create sequence %s.%s start with 1", mine, seq_name));
+        ds.exec(sprintf("create sequence %s.%s start with 1", other, seq_name));
+        # exists ONLY in the other schema: unreachable from our search_path
+        ds.exec(sprintf("create sequence %s.%s start with 1", other, other_only));
+        ds.commit();
+
+        ds.exec(sprintf("set search_path to %s", mine));
+        ds.commit();
+
+        Database db(ds);
+
+        # the sequence in our own schema resolves
+        assertTrue(exists db.getSequence(seq_name), "a sequence in the search_path schema is found");
+
+        # ... and the one that exists only in another schema must NOT: this is the regression. A
+        # name-only match found it and then read it unqualified, which cannot resolve here
+        assertNothing(db.getSequence(other_only),
+            "a sequence that exists only in another schema is not reported as existing");
+
+        # listing must be confined to the search path for the same reason
+        list<string> seqs = db.listSequences();
+        assertTrue(seqs.contains(seq_name), "listSequences() lists the search_path schema's sequence");
+        assertFalse(seqs.contains(other_only), "listSequences() does not list another schema's sequences");
+
+        # an explicit schema must still reach the other schema's sequence
+        assertTrue(exists db.getSequence(other + "." + other_only),
+            "an explicitly qualified sequence in another schema is found");
+    }
+
     private searchPathSchemaResolutionTest() {
         if (!table) {
             testSkip("no DB connection");

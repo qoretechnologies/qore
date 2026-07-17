@@ -8114,6 +8114,30 @@ static bool declareAOTSharedFastEntryFunctions(llvm::LLVMContext& ctx, llvm::Mod
     return true;
 }
 
+//! Remove shared fast-entry declarations that lowering did not reference.
+/** Hidden undefined ELF symbols must be provided at link time even when they have no relocations.
+    Per-file batch objects therefore retain only declarations used by a direct cross-file call. */
+static bool pruneUnusedAOTSharedFastEntryFunctions(llvm::Module& module,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees) {
+    size_t callee_i = 0;
+    for (const auto& entry : batch_callees) {
+        if (callee_i && !(callee_i % 100)
+                && qore_check_cancel(nullptr, "AOT shared fast-entry declaration pruning")) {
+            return false;
+        }
+        ++callee_i;
+        const BatchCalleeInfo& info = entry.second;
+        if (!info.approach_b_eligible || info.fast_name.empty()) {
+            continue;
+        }
+        llvm::Function* fn = module.getFunction(info.fast_name);
+        if (fn && fn->isDeclaration() && fn->use_empty()) {
+            fn->eraseFromParent();
+        }
+    }
+    return true;
+}
+
 static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         BatchCalleeInfo& info, bool& cancelled) {
     cancelled = false;
@@ -16509,6 +16533,13 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         }
     }
 
+    if (shared_batch_callees
+            && !pruneUnusedAOTSharedFastEntryFunctions(*module,
+                *shared_batch_callees)) {
+        error = "operation cancelled during AOT shared fast-entry declaration pruning";
+        return false;
+    }
+
     di_builder.finalize();
 
     std::string verify_error;
@@ -16641,6 +16672,10 @@ static bool resolveParseOptionFlag(const std::string& name,
         {"PO_NO_CHILD_PO_RESTRICTIONS",   PO_NO_CHILD_PO_RESTRICTIONS},
         {"PO_ALLOW_INJECTION",            PO_ALLOW_INJECTION},
         {"PO_ALLOW_DEBUGGER",             PO_ALLOW_DEBUGGER},
+        // @assert / @debug are resolved at parse time and vanish without this
+        // flag, so an AOT build has no other way to enable them: once qcc has
+        // compiled the statements out, no runtime switch can bring them back.
+        {"PO_ENABLE_DEBUG",               PO_ENABLE_DEBUG},
         {"PO_ALLOW_WEAK_REFERENCES",      PO_ALLOW_WEAK_REFERENCES},
         {"PO_REQUIRE_TYPES",              PO_REQUIRE_TYPES},
         {"PO_STRICT_ARGS",                PO_STRICT_ARGS},
@@ -18565,6 +18600,13 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 metadata_blob.size(), compiled_funcs, nullptr, nullptr, nullptr, &error)) {
             return false;
         }
+    }
+
+    if (!standalone_batch_callees.empty()
+            && !pruneUnusedAOTSharedFastEntryFunctions(*module,
+                standalone_batch_callees)) {
+        error = "operation cancelled during AOT shared fast-entry declaration pruning";
+        return false;
     }
 
     di_builder.finalize();
