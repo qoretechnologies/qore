@@ -1392,6 +1392,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
 
     // Resolve class for method context
+    QoreProgramContextHelper closure_program_context(ctx.pgm);
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
         closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
