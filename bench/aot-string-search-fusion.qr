@@ -1,0 +1,21 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+string sub joinAround(string left, string needle, string right) {
+    return left + needle + right;
+}
+
+int sub stringSearchKernel(int rounds, string left, string needle, string right) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (joinAround(left, needle, right).contains(needle)) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", stringSearchKernel(rounds, "prefix-", "needle", "-suffix"));

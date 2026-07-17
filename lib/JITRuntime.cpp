@@ -6920,6 +6920,81 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
         characters ? string->length() : string->strlen());
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
+        uint64_t* args, int nargs, uint64_t pattern_bits, int32_t operation,
+        int64_t offset, ExceptionSink* xsink) {
+    const QoreEncoding* encoding = nullptr;
+    bool same_encoding = nargs > 0;
+    for (int i = 0; i < nargs; ++i) {
+        QoreValue value = fromBits(args[i]);
+        const QoreEncoding* current;
+        if (value.isShortString()) {
+            current = QCS_DEFAULT;
+        } else if (value.getType() == NT_STRING) {
+            const QoreStringNode* string = value.get<const QoreStringNode>();
+            current = string ? string->getEncoding() : QCS_DEFAULT;
+        } else {
+            same_encoding = false;
+            break;
+        }
+        if (!encoding) {
+            encoding = current;
+        } else if (encoding != current) {
+            same_encoding = false;
+            break;
+        }
+    }
+    if (same_encoding) {
+        if (operation == 0 && args[0] == pattern_bits) {
+            return 1;
+        }
+        if (operation == 1 && args[nargs - 1] == pattern_bits) {
+            return 1;
+        }
+        if (operation == 2) {
+            for (int i = 0; i < nargs; ++i) {
+                if (args[i] == pattern_bits) {
+                    return 1;
+                }
+            }
+        }
+    }
+
+    ValueHolder concatenated(
+        fromBits(qore_rt_string_concat_multi(args, nargs, xsink)), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    QoreStringNodeValueHelper string(*concatenated);
+    QoreValue pattern_value = fromBits(pattern_bits);
+    QoreStringValueHelper pattern(
+        pattern_value, string->getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    switch (operation) {
+        case 0:
+            return string->startsWith(pattern->c_str()) ? 1 : 0;
+        case 1:
+            return string->endsWith(pattern->c_str()) ? 1 : 0;
+        case 2:
+            return string->find(pattern->c_str()) >= 0 ? 1 : 0;
+        case 3:
+            return static_cast<int64_t>(
+                string->index(**pattern, offset, xsink));
+        case 4:
+            return static_cast<int64_t>(
+                string->rindex(**pattern, offset, xsink));
+        default:
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR",
+                    "invalid concatenated string search operation %d",
+                    static_cast<int>(operation));
+            }
+            return 0;
+    }
+}
+
 //! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args, int nargs,
         int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {

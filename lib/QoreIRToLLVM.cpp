@@ -4553,16 +4553,23 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
 
 llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-        QoreIRCallDirectInstruction::AOTStringConsumerKind consumer) {
+        const QoreIRCallDirectInstruction* fused_call) {
     const AOTStringExpressionInfo& expression = info.string_expression;
     const AOTStringExpressionNodeInfo* final = expression
         ? &expression.nodes.back() : nullptr;
-    bool measure = consumer
+    QoreIRCallDirectInstruction::AOTStringConsumerKind consumer = fused_call
+        ? fused_call->aot_string_consumer
+        : QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+    bool consume = consumer
         != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+    bool measure =
+        consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
+        || consumer
+            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
     if (!expression || std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || expression.nodes.size() > QORE_AOT_STRING_EXPRESSION_MAX_NODES
-            || (measure && final->kind != AOTStringExpressionNodeKind::Concat)
-            || (!measure && final->kind != AOTStringExpressionNodeKind::Concat
+            || (consume && final->kind != AOTStringExpressionNodeKind::Concat)
+            || (!consume && final->kind != AOTStringExpressionNodeKind::Concat
                 && (final->kind != AOTStringExpressionNodeKind::Substr
                     || final->lhs >= expression.nodes.size() - 1
                     || expression.nodes[final->lhs].kind
@@ -4675,6 +4682,64 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 consumer
                     == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length),
              xsink_arg});
+    } else if (consumer
+            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr) {
+        auto concat_substr = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_substr",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type},
+                false));
+        result = builder->CreateCall(concat_substr,
+            {args, llvm::ConstantInt::get(i32_type, parts.size()),
+             llvm::ConstantInt::get(
+                i64_type, fused_call->aot_string_consumer_arg0),
+             llvm::ConstantInt::get(
+                i64_type, fused_call->aot_string_consumer_arg1),
+             llvm::ConstantInt::get(i32_type,
+                fused_call->aot_string_consumer_has_arg1), xsink_arg});
+    } else if (consume) {
+        int16_t pattern_operand =
+            fused_call->aot_string_consumer_pattern_operand;
+        if (pattern_operand < 0
+                || static_cast<size_t>(pattern_operand)
+                    >= native_args.size()) {
+            return nullptr;
+        }
+        int32_t operation =
+            consumer
+                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+                ? 0
+                : consumer
+                        == QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+                    ? 1
+                    : consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains
+                        ? 2
+                        : consumer
+                                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Find
+                            ? 3
+                            : consumer
+                                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::RFind
+                                ? 4 : -1;
+        if (operation < 0) {
+            return nullptr;
+        }
+        auto search = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_search",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i32_type, i64_type, ptr_type},
+                false));
+        result = builder->CreateCall(search,
+            {args, llvm::ConstantInt::get(i32_type, parts.size()),
+             native_args[static_cast<size_t>(pattern_operand)],
+             llvm::ConstantInt::get(i32_type, operation),
+             llvm::ConstantInt::get(
+                i64_type, fused_call->aot_string_consumer_arg0),
+             xsink_arg});
+        if (operation <= 2) {
+            result = builder->CreateICmpNE(
+                result, llvm::ConstantInt::get(i64_type, 0));
+        }
     } else if (final->kind == AOTStringExpressionNodeKind::Substr) {
         llvm::Value* length = final->third == UINT8_MAX
             ? llvm::ConstantInt::get(i64_type, 0) : values[final->third];
@@ -4706,18 +4771,25 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
 llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
         const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args,
-        QoreIRCallDirectInstruction::AOTStringConsumerKind consumer,
+        const QoreIRCallDirectInstruction& call,
         llvm::Module& module) {
+    QoreIRCallDirectInstruction::AOTStringConsumerKind consumer =
+        call.aot_string_consumer;
     if (consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::None
             || std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
         return nullptr;
     }
     if (info.string_expression) {
-        return emitAOTStringExpression(info, native_args, module, consumer);
+        return emitAOTStringExpression(info, native_args, module, &call);
     }
 
     const AOTStringOpInfo& op = info.string_op;
     if (op.kind == AOTStringOpKind::IntToString) {
+        if (consumer != QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
+                && consumer
+                    != QoreIRCallDirectInstruction::AOTStringConsumerKind::Length) {
+            return nullptr;
+        }
         if (op.base_param < 0
                 || static_cast<size_t>(op.base_param) >= native_args.size()
                 || native_args[static_cast<size_t>(op.base_param)]->getType()
@@ -4761,16 +4833,76 @@ llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
             llvm::ConstantInt::get(i32_type, i));
         builder->CreateStore(native_args[static_cast<size_t>(params[i])], slot);
     }
-    auto measure = module.getOrInsertFunction(
-        "qore_rt_string_concat_multi_measure",
+    if (consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length) {
+        auto measure = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_measure",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i32_type, ptr_type}, false));
+        return builder->CreateCall(measure,
+            {args, llvm::ConstantInt::get(i32_type, params.size()),
+             llvm::ConstantInt::get(i32_type,
+                consumer
+                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length),
+             xsink_arg});
+    }
+    if (consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr) {
+        auto substr = module.getOrInsertFunction(
+            "qore_rt_string_concat_multi_substr",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, i64_type, i32_type, ptr_type},
+                false));
+        return builder->CreateCall(substr,
+            {args, llvm::ConstantInt::get(i32_type, params.size()),
+             llvm::ConstantInt::get(i64_type, call.aot_string_consumer_arg0),
+             llvm::ConstantInt::get(i64_type, call.aot_string_consumer_arg1),
+             llvm::ConstantInt::get(
+                i32_type, call.aot_string_consumer_has_arg1), xsink_arg});
+    }
+
+    int16_t pattern_operand = call.aot_string_consumer_pattern_operand;
+    if (pattern_operand < 0
+            || static_cast<size_t>(pattern_operand) >= native_args.size()
+            || getFastEntryParamKind(
+                info, static_cast<unsigned>(pattern_operand))
+                != BatchCalleeParamKind::Boxed) {
+        return nullptr;
+    }
+    int32_t operation =
+        consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+            ? 0
+            : consumer
+                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+                ? 1
+                : consumer
+                        == QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains
+                    ? 2
+                    : consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Find
+                        ? 3
+                        : consumer
+                                == QoreIRCallDirectInstruction::AOTStringConsumerKind::RFind
+                            ? 4 : -1;
+    if (operation < 0) {
+        return nullptr;
+    }
+    auto search = module.getOrInsertFunction(
+        "qore_rt_string_concat_multi_search",
         llvm::FunctionType::get(i64_type,
-            {ptr_type, i32_type, i32_type, ptr_type}, false));
-    return builder->CreateCall(measure,
+            {ptr_type, i32_type, i64_type, i32_type, i64_type, ptr_type},
+            false));
+    llvm::Value* result = builder->CreateCall(search,
         {args, llvm::ConstantInt::get(i32_type, params.size()),
-         llvm::ConstantInt::get(i32_type,
-            consumer
-                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length),
+         native_args[static_cast<size_t>(pattern_operand)],
+         llvm::ConstantInt::get(i32_type, operation),
+         llvm::ConstantInt::get(i64_type, call.aot_string_consumer_arg0),
          xsink_arg});
+    return operation <= 2
+        ? builder->CreateICmpNE(
+            result, llvm::ConstantInt::get(i64_type, 0))
+        : result;
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTStringOp(const BatchCalleeInfo& info,
@@ -13549,13 +13681,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (fused_string_consumer && aot_approach_b_callee) {
                 call_result = emitAOTStringProducerConsumer(
                     *aot_approach_b_callee, raw_args,
-                    direct_inst->aot_string_consumer, module);
+                    *direct_inst, module);
                 if (!call_result) {
                     error = "internal error: fused AOT string producer"
                         " summary could not be emitted";
                     return false;
                 }
-                call_return_kind = BatchCalleeReturnKind::NativeInt;
+                if (direct_inst->aot_string_consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+                        || direct_inst->aot_string_consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+                        || direct_inst->aot_string_consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains) {
+                    call_return_kind = BatchCalleeReturnKind::NativeBool;
+                } else if (direct_inst->aot_string_consumer
+                        == QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr) {
+                    call_return_kind = BatchCalleeReturnKind::Boxed;
+                } else {
+                    call_return_kind = BatchCalleeReturnKind::NativeInt;
+                }
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                         "qore_rt_clear_arg_cleanups",

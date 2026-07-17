@@ -409,6 +409,12 @@ int64_t qore_rt_int_to_string_measure(int64_t value);
 int64_t qore_rt_string_concat_multi_measure(uint64_t* args, int nargs,
         int32_t characters, ExceptionSink* xsink);
 
+//! Concatenate strings and apply an encoding-aware predicate or search while
+//! retaining the intermediate string inside the helper.
+int64_t qore_rt_string_concat_multi_search(uint64_t* args, int nargs,
+        uint64_t pattern, int32_t operation, int64_t offset,
+        ExceptionSink* xsink);
+
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.
 uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,

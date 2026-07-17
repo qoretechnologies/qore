@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+our int pattern_effects = 0;
+
+string sub join3(string left, string middle, string right) {
+    return left + middle + right;
+}
+
+bool sub fusedStartsWith(string left, string middle, string right) {
+    return join3(left, middle, right).startsWith(left);
+}
+
+bool sub fusedEndsWith(string left, string middle, string right) {
+    return join3(left, middle, right).endsWith(right);
+}
+
+bool sub fusedContains(string left, string middle, string right) {
+    return join3(left, middle, right).contains(middle);
+}
+
+bool sub fusedFalseStartsWith(string left, string middle, string right) {
+    return join3(left, middle, right).startsWith(middle);
+}
+
+int sub fusedFind(string left, string middle, string right) {
+    return join3(left, middle, right).find(middle);
+}
+
+int sub fusedFindOffset(string left, string middle, string right) {
+    return join3(left, middle, right).find(middle, 2);
+}
+
+int sub fusedRFind(string left, string middle, string right) {
+    return join3(left, middle, right).rfind(middle);
+}
+
+string sub fusedSubstr(string left, string middle, string right) {
+    return join3(left, middle, right).substr(1, 3);
+}
+
+int sub fusedSize(string left, string middle, string right) {
+    return join3(left, middle, right).size();
+}
+
+int sub fusedLength(string left, string middle, string right) {
+    return join3(left, middle, right).length();
+}
+
+bool sub unrelatedPattern(string left, string middle, string right, string pattern) {
+    return join3(left, middle, right).contains(pattern);
+}
+
+int sub dynamicFindOffset(string left, string middle, string right, int offset) {
+    return join3(left, middle, right).find(middle, offset);
+}
+
+string sub dynamicSubstr(string left, string middle, string right, int start) {
+    return join3(left, middle, right).substr(start, 2);
+}
+
+string sub intString(int value) {
+    return string(value);
+}
+
+string sub intStringSubstr(int value) {
+    return intString(value).substr(0, 1);
+}
+
+string sub markPattern(string pattern) {
+    ++pattern_effects;
+    return pattern;
+}
+
+bool sub sideEffectPattern() {
+    pattern_effects = 0;
+    bool result = join3(\"a\", \"b\", \"c\").contains(markPattern(\"b\"));
+    return result && pattern_effects == 1;
+}
+
+string left = \"pré-\";
+string middle = \"clé\";
+string right = \"-fin\";
+printf(\"%y:%y:%y:%y:%d:%d:%d:%s:%d:%d:%y:%d:%s:%s:%y\\n\",
+    fusedStartsWith(left, middle, right),
+    fusedEndsWith(left, middle, right),
+    fusedContains(left, middle, right),
+    fusedFalseStartsWith(left, middle, right),
+    fusedFind(left, middle, right),
+    fusedFindOffset(left, middle, right),
+    fusedRFind(left, middle, right),
+    fusedSubstr(left, middle, right),
+    fusedSize(left, middle, right),
+    fusedLength(left, middle, right),
+    unrelatedPattern(left, middle, right, \"zzz\"),
+    dynamicFindOffset(left, middle, right, 2),
+    dynamicSubstr(left, middle, right, 1),
+    intStringSubstr(123),
+    sideEffectPattern());
+
+string latin_left = convert_encoding(left, \"ISO-8859-1\");
+string latin_middle = convert_encoding(middle, \"ISO-8859-1\");
+string latin_right = convert_encoding(right, \"ISO-8859-1\");
+printf(\"%y:%y\\n\",
+    fusedContains(latin_left, latin_middle, latin_right),
+    fusedContains(latin_left, middle, latin_right));
+
+bool conversion_error = False;
+try {
+    fusedContains(latin_left, \"€\", latin_right);
+} catch (hash<auto> ex) {
+    conversion_error = True;
+}
+printf(\"%y\\n\", conversion_error);
+";
+
+string src = "/tmp/qore-aot-string-search-fusion-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-string-search-fusion-" + string(getpid());
+string disabled = exe + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1");
+foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains",
+        "fusedFalseStartsWith", "fusedFind", "fusedFindOffset", "fusedRFind",
+        "fusedSubstr", "fusedSize", "fusedLength")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*string-consumers=1", function))) {
+        printf("missing string consumer fusion for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|dynamicFindOffset|dynamicSubstr|intStringSubstr|sideEffectPattern):.*string-consumers=[1-9]/
+        || disabled_compile =~ /string-consumers=[1-9]/) {
+    printf("unsafe or disabled string consumer fusion:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+string expected = "True:True:True:False:4:4:4:ré-:13:11:False:4:ré:1:True\n"
+    + "True:True\n"
+    + "True\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);

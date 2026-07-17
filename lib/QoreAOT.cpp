@@ -9434,7 +9434,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
             QoreIRStringProducerQuery query =
                 [&](const AbstractQoreFunctionVariant* callee,
-                        const QoreIRCallDirectInstruction* call) {
+                        const QoreIRCallDirectInstruction* call,
+                        QoreIRCallDirectInstruction::AOTStringConsumerKind
+                            consumer) {
                     auto info = aot_batch_callee_map->find(callee);
                     if (info == aot_batch_callee_map->end() || !call
                             || !info->second.approach_b_eligible
@@ -9449,12 +9451,18 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     bool supported =
                         info->second.string_op.kind == AOTStringOpKind::Concat
                         || info->second.string_op.kind
-                            == AOTStringOpKind::Concat3
-                        || info->second.string_op.kind
-                            == AOTStringOpKind::IntToString;
+                            == AOTStringOpKind::Concat3;
                     if (!supported && info->second.string_expression) {
                         supported = info->second.string_expression.nodes.back().kind
                             == AOTStringExpressionNodeKind::Concat;
+                    }
+                    if (!supported
+                            && (consumer
+                                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
+                                || consumer
+                                    == QoreIRCallDirectInstruction::AOTStringConsumerKind::Length)) {
+                        supported = info->second.string_op.kind
+                            == AOTStringOpKind::IntToString;
                     }
                     if (!supported
                             || info->second.param_kinds.size()

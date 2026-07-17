@@ -2047,6 +2047,12 @@ public:
         None,
         Size,
         Length,
+        StartsWith,
+        EndsWith,
+        Contains,
+        Find,
+        RFind,
+        Substr,
     };
 
     enum class NativeLeafKind : uint8_t {
@@ -2082,6 +2088,12 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
     AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
+    //! Producer operand reused as the pattern by a fused search consumer.
+    int16_t aot_string_consumer_pattern_operand = -1;
+    //! Constant offset/start and optional length for fused find/substr consumers.
+    int64_t aot_string_consumer_arg0 = 0;
+    int64_t aot_string_consumer_arg1 = 0;
+    bool aot_string_consumer_has_arg1 = false;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

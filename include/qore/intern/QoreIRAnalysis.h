@@ -167,7 +167,8 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     const QoreIRFreshHashKeyQuery& get_hash_key);
 
 using QoreIRStringProducerQuery = std::function<bool(
-    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*)>;
+    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
+    QoreIRCallDirectInstruction::AOTStringConsumerKind)>;
 
 //! Fuse exact imported string producers with sole size or length consumers.
 //! @param func function to optimize in place
