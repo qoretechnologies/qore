@@ -10502,6 +10502,26 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     const AOTAggregateReturnInfo& aggregate =
                         found->second.aggregate_return;
+                    if (!key.empty()
+                            && (kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateSizeValue
+                                || kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateExistsValue
+                                || kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateEmptyValue)) {
+                        if (aggregate.kind
+                                != AOTAggregateReturnKind::FixedHash) {
+                            return false;
+                        }
+                        if (std::find(aggregate.keys.begin(),
+                                aggregate.keys.end(), key)
+                                != aggregate.keys.end()) {
+                            return false;
+                        }
+                    }
                     if (kind
                             == QoreIRAggregateProjectionQueryKind::
                                 AggregateSizeValue) {

@@ -4132,18 +4132,36 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 && consumer->operands.size() == 1) {
             const auto* direct = static_cast<
                 const QoreIRDotEvalMethodDirectInstruction*>(consumer);
-            if (!direct->pseudo || !direct->qc
-                    || strcmp(direct->qc->getName(), "<list>")) {
+            if (!direct->pseudo || !direct->qc) {
                 return false;
             }
-            if (direct->intrinsic == QoreIRIntrinsic::ListFirst) {
+            bool list_pseudo =
+                !strcmp(direct->qc->getName(), "<list>");
+            bool hash_pseudo =
+                !strcmp(direct->qc->getName(), "<hash>");
+            if (!list_pseudo && !hash_pseudo) {
+                return false;
+            }
+            if (hash_pseudo) {
+                if (!direct->method || !direct->method->getName()) {
+                    return false;
+                }
+                key = direct->method->getName();
+            }
+            if (list_pseudo
+                    && direct->intrinsic == QoreIRIntrinsic::ListFirst) {
                 query_kind =
                     QoreIRAggregateProjectionQueryKind::ListIndexValue;
-            } else if (direct->intrinsic
+            } else if (list_pseudo && direct->intrinsic
                     == QoreIRIntrinsic::ListLast) {
                 index = -1;
                 query_kind =
                     QoreIRAggregateProjectionQueryKind::ListIndexValue;
+            } else if (hash_pseudo
+                    && direct->intrinsic == QoreIRIntrinsic::Size) {
+                query_kind =
+                    QoreIRAggregateProjectionQueryKind::
+                        AggregateSizeValue;
             } else if (direct->intrinsic == QoreIRIntrinsic::Empty) {
                 query_kind =
                     QoreIRAggregateProjectionQueryKind::

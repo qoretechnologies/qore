@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        "left": left,
+        "middle": middle,
+        "right": right,
+    };
+}
+
+int sub consumerKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += makeRow(i, i + 1, i + 2).size();
+        checksum += makeRow(i, i + 1, i + 2).empty() ? 0 : 1;
+        checksum += makeRow(i, i + 1, i + 2).val() ? 1 : 0;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", consumerKernel(rounds));
