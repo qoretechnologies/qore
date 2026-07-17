@@ -3797,6 +3797,204 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
     return folds.size();
 }
 
+size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
+        const QoreIRFreshHashKeyQuery& get_hash_key) {
+    if (!get_hash_key) {
+        return 0;
+    }
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh hash-key call definition analysis")) {
+            return 0;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh hash-key call definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
+
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+    struct Fold {
+        QoreIRInstruction* make = nullptr;
+        QoreIRInstruction* call = nullptr;
+        QoreIRValue replacement;
+    };
+    std::vector<Fold> folds;
+    for (const auto& [result_id, definition] : definitions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh hash-key call candidate analysis")) {
+            return 0;
+        }
+        if (!definition
+                || (definition->opcode != QoreIROpcode::MakeHashConstKeys
+                    && definition->opcode != QoreIROpcode::MakeHash)
+                || definition->exception_target
+                || definition->operands.size() > 200) {
+            continue;
+        }
+        std::vector<std::string> keys;
+        std::vector<QoreIRValue> values;
+        if (definition->opcode == QoreIROpcode::MakeHashConstKeys) {
+            const auto* make =
+                static_cast<const QoreIRMakeHashConstKeysInstruction*>(
+                    definition);
+            if (make->keys.size() != definition->operands.size()) {
+                continue;
+            }
+            keys = make->keys;
+            values = definition->operands;
+        } else {
+            if (definition->operands.size() % 2) {
+                continue;
+            }
+            bool constant_keys = true;
+            keys.reserve(definition->operands.size() / 2);
+            values.reserve(definition->operands.size() / 2);
+            for (size_t i = 0; i < definition->operands.size(); i += 2) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR fresh hash-key call literal key analysis")) {
+                    return 0;
+                }
+                auto key = definitions.find(definition->operands[i].id);
+                if (key == definitions.end()
+                        || key->second->opcode != QoreIROpcode::ConstString) {
+                    constant_keys = false;
+                    break;
+                }
+                const auto* constant =
+                    static_cast<const QoreIRConstInstruction*>(key->second);
+                if (constant->constant.kind
+                        != QoreIRConstant::Kind::String) {
+                    constant_keys = false;
+                    break;
+                }
+                keys.push_back(constant->constant.string_value);
+                values.push_back(definition->operands[i + 1]);
+            }
+            if (!constant_keys) {
+                continue;
+            }
+        }
+        bool safe_operands = true;
+        for (QoreIRValue operand : values) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh hash-key call operand analysis")) {
+                return 0;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(operand);
+            if (!facts
+                    || facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !facts->never_nothing
+                    || facts->representation
+                        != QoreIRValueRepresentation::NativeInt) {
+                safe_operands = false;
+                break;
+            }
+        }
+        if (!safe_operands) {
+            continue;
+        }
+
+        auto use = uses.find(result_id);
+        if (use == uses.end() || use->second.size() != 1
+                || !use->second.front().inst) {
+            continue;
+        }
+        QoreIRInstruction* call =
+            const_cast<QoreIRInstruction*>(use->second.front().inst);
+        if ((call->opcode != QoreIROpcode::CallDirect
+                    && call->opcode != QoreIROpcode::CallStaticDirect)
+                || call->exception_target || !call->result.isValid()
+                || call->operands.size() != 1
+                || call->operands[0].id != result_id) {
+            continue;
+        }
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(call, has_ref_args);
+        std::string key;
+        if (!callee || has_ref_args || !get_hash_key(callee, 0, key)
+                || key.empty()) {
+            continue;
+        }
+        QoreIRValue replacement;
+        for (size_t i = keys.size(); i > 0; --i) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh hash-key call key analysis")) {
+                return 0;
+            }
+            if (keys[i - 1] == key) {
+                replacement = values[i - 1];
+                break;
+            }
+        }
+        if (!replacement.isValid()) {
+            continue;
+        }
+        folds.push_back({definition, call, replacement});
+    }
+    if (folds.empty()) {
+        return 0;
+    }
+
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    for (const Fold& fold : folds) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR fresh hash-key call rewrite preparation")) {
+            return 0;
+        }
+        replacements.emplace(fold.call->result.id, fold.replacement);
+        eliminated.insert(fold.make);
+        eliminated.insert(fold.call);
+    }
+    for (auto& [result_id, replacement] : replacements) {
+        std::unordered_set<uint32_t> seen{result_id};
+        while (true) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR fresh hash-key call replacement normalization")) {
+                return 0;
+            }
+            auto next = replacements.find(replacement.id);
+            if (next == replacements.end()) {
+                break;
+            }
+            if (!seen.insert(replacement.id).second) {
+                return 0;
+            }
+            replacement = next->second;
+        }
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto inst = instructions.begin(); inst != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR fresh hash-key call folding");
+            }
+            if (eliminated.count(inst->get())) {
+                inst = instructions.erase(inst);
+                continue;
+            }
+            (void)qore_ir_rewrite_value_operands(
+                **inst, replacements, check_count, false);
+            ++inst;
+        }
+    }
+    return folds.size();
+}
+
 size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         const QoreIRStringProducerQuery& is_supported) {
     if (!is_supported) {

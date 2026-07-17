@@ -136,6 +136,11 @@ using QoreIRParamNoEscapeQuery =
 using QoreIRFreshListSizeQuery =
     std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;
 
+//! Return the constant key when an exact callee argument is a pure typed-hash
+//! key consumer.
+using QoreIRFreshHashKeyQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, size_t, std::string&)>;
+
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place
 //! @param param_noescape returns true for proven nonescaping callee arguments
@@ -151,6 +156,15 @@ size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,
 //! @return number of fresh list allocations and calls eliminated
 size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
     const QoreIRFreshListSizeQuery& is_list_size);
+
+//! Replace exact pure constant-key calls on fresh scalar hash literals with the
+//! corresponding value operand. Other element-producing instructions remain
+//! in place so side effects and exceptions retain source evaluation order.
+//! @param func function to optimize in place
+//! @param get_hash_key returns the key for exact pure typed-hash consumers
+//! @return number of fresh hash allocations and calls eliminated
+size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
+    const QoreIRFreshHashKeyQuery& get_hash_key);
 
 using QoreIRStringProducerQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*)>;

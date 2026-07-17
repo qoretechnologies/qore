@@ -9374,7 +9374,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
 
     auto refine_interprocedural = [&](QoreIRFunction& func) {
-        size_t folded = 0;
+        size_t folded_list_sizes = 0;
         if (!std::getenv("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
             QoreIRFreshListSizeQuery list_size_query =
                 [&](const AbstractQoreFunctionVariant* callee, size_t arg) {
@@ -9391,7 +9391,33 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         && info->second.return_kind
                             == BatchCalleeReturnKind::NativeInt;
                 };
-            folded = qore_ir_fold_fresh_list_size_calls(func, list_size_query);
+            folded_list_sizes =
+                qore_ir_fold_fresh_list_size_calls(func, list_size_query);
+        }
+        size_t folded_hash_keys = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_FRESH_HASH_KEY_CALL_FOLD")) {
+            QoreIRFreshHashKeyQuery hash_key_query =
+                [&](const AbstractQoreFunctionVariant* callee, size_t arg,
+                        std::string& key) {
+                    auto info = aot_batch_callee_map->find(callee);
+                    if (info == aot_batch_callee_map->end()
+                            || arg >= info->second.param_noescape.size()
+                            || !info->second.param_noescape[arg]
+                            || arg >= info->second.param_may_modify.size()
+                            || info->second.param_may_modify[arg]
+                            || info->second.collection_op.kind
+                                != AOTCollectionOpKind::HashKeyInt
+                            || info->second.collection_op.base_param
+                                != static_cast<int8_t>(arg)
+                            || info->second.return_kind
+                                != BatchCalleeReturnKind::NativeInt) {
+                        return false;
+                    }
+                    key = info->second.collection_op.key;
+                    return !key.empty();
+                };
+            folded_hash_keys =
+                qore_ir_fold_fresh_hash_key_calls(func, hash_key_query);
         }
         size_t changed = 0;
         if (!std::getenv("QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH")) {
@@ -9473,12 +9499,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             string_consumers =
                 qore_ir_fuse_string_producer_consumers(func, query);
         }
-        if ((folded || changed || string_consumers)
+        if ((folded_list_sizes || folded_hash_keys || changed
+                || string_consumers)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
-                " inplace-push=%zu string-consumers=%zu\n",
-                func.name.c_str(), folded, changed, string_consumers);
+                " fresh-hash-key-calls=%zu inplace-push=%zu"
+                " string-consumers=%zu\n",
+                func.name.c_str(), folded_list_sizes, folded_hash_keys,
+                changed, string_consumers);
         }
     };
 
