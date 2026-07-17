@@ -6882,6 +6882,21 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeBytes(rec.fast_param_may_modify.data(),
             static_cast<uint32_t>(rec.fast_param_may_modify.size()));
     }
+    writer.writeU8(rec.aggregate_return_kind);
+    assert(rec.aggregate_return_value_params.size() <= 100);
+    writer.writeU32(static_cast<uint32_t>(
+        rec.aggregate_return_value_params.size()));
+    if (!rec.aggregate_return_value_params.empty()) {
+        writer.writeBytes(rec.aggregate_return_value_params.data(),
+            static_cast<uint32_t>(
+                rec.aggregate_return_value_params.size()));
+    }
+    assert(rec.aggregate_return_keys.size() <= 100);
+    writer.writeU32(static_cast<uint32_t>(
+        rec.aggregate_return_keys.size()));
+    for (const std::string& key : rec.aggregate_return_keys) {
+        writer.writeStringRef(key.c_str());
+    }
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -6960,6 +6975,10 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.collection_op_index_param = info.collection_op_index_param;
     rec.collection_op_string_index_char = info.collection_op_string_index_char;
     rec.collection_op_key = info.collection_op_key;
+    rec.aggregate_return_kind = info.aggregate_return_kind;
+    rec.aggregate_return_value_params =
+        info.aggregate_return_value_params;
+    rec.aggregate_return_keys = info.aggregate_return_keys;
     rec.composed_int_source_kind = info.composed_int_source_kind;
     rec.composed_int_base_param = info.composed_int_base_param;
     rec.composed_int_value_param = info.composed_int_value_param;
@@ -8314,6 +8333,45 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
             rec.fast_param_may_modify, error,
             "fast_param_may_modify")) {
         return false;
+    }
+    if (version < 23) {
+        return true;
+    }
+    if (static_cast<size_t>(end - ptr) < 1 + 2 * sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX aggregate-return metadata";
+        return false;
+    }
+    rec.aggregate_return_kind = QoreAOTBinaryReader::readU8(ptr);
+    uint32_t value_count = QoreAOTBinaryReader::readU32(ptr);
+    if (value_count > 100
+            || value_count > static_cast<uint32_t>(end - ptr)) {
+        error = "invalid SYMBOL_INDEX aggregate-return value count";
+        return false;
+    }
+    rec.aggregate_return_value_params.reserve(value_count);
+    for (uint32_t i = 0; i < value_count; ++i) {
+        rec.aggregate_return_value_params.push_back(
+            static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr)));
+    }
+    if (static_cast<size_t>(end - ptr) < sizeof(uint32_t)) {
+        error = "truncated SYMBOL_INDEX aggregate-return key count";
+        return false;
+    }
+    uint32_t key_count = QoreAOTBinaryReader::readU32(ptr);
+    if (key_count > 100
+            || key_count > static_cast<uint32_t>((end - ptr)
+                / sizeof(uint32_t))) {
+        error = "invalid SYMBOL_INDEX aggregate-return key count";
+        return false;
+    }
+    rec.aggregate_return_keys.reserve(key_count);
+    for (uint32_t i = 0; i < key_count; ++i) {
+        std::string key;
+        if (!readSymbolIndexString(reader, ptr, end, key,
+                error, "aggregate_return_key")) {
+            return false;
+        }
+        rec.aggregate_return_keys.push_back(std::move(key));
     }
     return true;
 }

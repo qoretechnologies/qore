@@ -5075,6 +5075,20 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         rec.collection_op_base_param, rec.collection_op_index_param,
         rec.collection_op_string_index_char ? "true" : "false");
     json_print_string(rec.collection_op_key);
+    printf(", \"aggregate_return_kind\": %u, \"aggregate_return_value_params\": [",
+        rec.aggregate_return_kind);
+    for (size_t i = 0; i < rec.aggregate_return_value_params.size(); ++i) {
+        printf("%s%d", i ? ", " : "",
+            rec.aggregate_return_value_params[i]);
+    }
+    printf("], \"aggregate_return_keys\": [");
+    for (size_t i = 0; i < rec.aggregate_return_keys.size(); ++i) {
+        if (i) {
+            printf(", ");
+        }
+        json_print_string(rec.aggregate_return_keys[i]);
+    }
+    printf("]");
     printf(", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
         ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
         ", \"composed_int_value_scale\": " QLLD ", \"composed_int_offset\": " QLLD,
@@ -5691,6 +5705,22 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             rec.collection_op_base_param, rec.collection_op_index_param,
             rec.collection_op_string_index_char ? "true" : "false");
         json_file_string(f, rec.collection_op_key);
+        fprintf(f,
+            ", \"aggregate_return_kind\": %u, \"aggregate_return_value_params\": [",
+            rec.aggregate_return_kind);
+        for (size_t j = 0;
+                j < rec.aggregate_return_value_params.size(); ++j) {
+            fprintf(f, "%s%d", j ? ", " : "",
+                rec.aggregate_return_value_params[j]);
+        }
+        fputs("], \"aggregate_return_keys\": [", f);
+        for (size_t j = 0; j < rec.aggregate_return_keys.size(); ++j) {
+            if (j) {
+                fputs(", ", f);
+            }
+            json_file_string(f, rec.aggregate_return_keys[j]);
+        }
+        fputc(']', f);
         fprintf(f, ", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
             ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
             ", \"composed_int_value_scale\": " QLLD ", \"composed_int_offset\": " QLLD,

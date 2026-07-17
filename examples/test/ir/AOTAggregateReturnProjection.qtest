@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+%disable-warning duplicate-hash-key
+
+hash<string, int> sub makeRow(int left, int middle, int right) {
+    return {
+        \"left\": left,
+        \"middle\": middle,
+        \"right\": right,
+    };
+}
+
+list<int> sub makeValues(int left, int middle, int right) {
+    return (left, middle, right);
+}
+
+list<float> sub makeFloats(float left, float right) {
+    return (left, right);
+}
+
+list<string> sub makeWords(string left, string right) {
+    return (left, right);
+}
+
+hash<string, int> sub makeDuplicate(int first, int second) {
+    return {
+        \"same\": first,
+        \"same\": second,
+    };
+}
+
+int sub freshHashProjection() {
+    return makeRow(4, 5, 6).middle;
+}
+
+int sub sideEffectProjection() {
+    int projection_effects = 0;
+    int value = makeRow((projection_effects = 1),
+        (projection_effects = 2), (projection_effects = 3)).middle;
+    return value * 10 + projection_effects;
+}
+
+int sub freshListSize() {
+    return makeValues(7, 8, 9).size();
+}
+
+int sub freshListProjection() {
+    return makeValues(4, 5, 6)[-1];
+}
+
+bool sub freshFloatProjection() {
+    return makeFloats(1.25, 2.5)[-1] == 2.5;
+}
+
+int sub duplicateKeyProjection() {
+    return makeDuplicate(10, 11).same;
+}
+
+int sub sharedResult() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + row.right;
+}
+
+int sub dynamicListIndex(int index) {
+    return makeValues(4, 5, 6)[index].toInt();
+}
+
+int sub boxedListSize() {
+    return makeWords(\"a\", \"b\").size();
+}
+
+bool sub optionalInput(*int value) {
+    try {
+        int result = makeRow(1, value, 3).middle;
+        return result == 0;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
+bool sub optionalListInput(*int value) {
+    try {
+        int result = makeValues(1, value, 3).size();
+        return result == 0;
+    } catch (hash<auto> ex) {
+        return value === NOTHING;
+    }
+}
+
+printf(\"%d:%d:%d:%d:%y:%d:%d:%d:%d:%y:%y\\n\",
+    freshHashProjection(), sideEffectProjection(), freshListSize(),
+    freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
+    sharedResult(), dynamicListIndex(1), boxedListSize(),
+    optionalInput(NOTHING), optionalListInput(NOTHING));
+";
+
+string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
+string exe = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid());
+string disabled = exe + "-disabled";
+string qo_dir = exe + "-qo";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+mkdir(qo_dir);
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
+foreach string function in (("freshHashProjection", "sideEffectProjection",
+        "freshListSize", "freshListProjection", "freshFloatProjection",
+        "duplicateKeyProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing aggregate-return projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (sharedResult|dynamicListIndex|boxedListSize|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+        || disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("unsafe or disabled aggregate-return projection:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+string qo_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, qo_dir, src));
+string qo = qo_dir + "/" + regex_subst(basename(src), "\\.qr$", ".qo");
+if (!is_file(qo)) {
+    printf(".qo compile failed:\n%s", qo_compile);
+    exit(2);
+}
+string dump = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, qo));
+string row_line;
+string values_line;
+string floats_line;
+foreach string line in (dump.split("\n")) {
+    if (line.find("makeRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        row_line = line;
+    } else if (line.find("makeValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        values_line = line;
+    } else if (line.find("makeFloats(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        floats_line = line;
+    }
+}
+if (row_line.find("\"aggregate_return_kind\": 2") == -1
+        || row_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || row_line.find("\"aggregate_return_keys\": [\"left\", \"middle\", \"right\"]") == -1
+        || values_line.find("\"aggregate_return_kind\": 1") == -1
+        || values_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || values_line.find("\"aggregate_return_keys\": []") == -1
+        || floats_line.find("\"aggregate_return_kind\": 1") == -1
+        || floats_line.find("\"aggregate_return_value_params\": [0, 1]") == -1
+        || floats_line.find("\"aggregate_return_keys\": []") == -1) {
+    printf("missing aggregate-return symbol metadata:\n%s", dump);
+    exit(2);
+}
+
+string expected = "5:23:3:6:True:11:4:5:2:True:True\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+foreach string path in ((exe, disabled)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(exe);
+unlink(disabled);

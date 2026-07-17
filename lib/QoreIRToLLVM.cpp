@@ -13497,6 +13497,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+            bool fused_aggregate_projection =
+                direct_inst->aot_aggregate_projection
+                != QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
 
             // Check if this is an Approach B call (direct LLVM arg passing — no args_array needed)
             int arg_start = aot_mode && qore_llvm_is_aot_deferred_source_function_call(direct_inst->expr) ? 1 : 0;
@@ -13609,7 +13612,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
                 if (!is_approach_b && !aot_context_independent_fast_entry_call
-                        && !aot_fixed_hash_remap_call && !type_name_fast_path
+                        && !aot_fixed_hash_remap_call
+                        && !fused_aggregate_projection && !type_name_fast_path
                         && !single_arg_fast_builtin_helper) {
                     llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                             llvm_func->getEntryBlock().begin());
@@ -13678,6 +13682,64 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
                 call_may_modify_runtime_locals = false;
+            } else if (fused_aggregate_projection
+                    && aot_approach_b_callee) {
+                auto projection = direct_inst->aot_aggregate_projection;
+                if (projection
+                        == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::Size) {
+                    call_result = llvm::ConstantInt::get(i64_type,
+                        direct_inst->aot_aggregate_projection_size);
+                    call_return_kind = BatchCalleeReturnKind::NativeInt;
+                } else {
+                    int16_t operand =
+                        direct_inst->aot_aggregate_projection_operand;
+                    if (operand < 0
+                            || static_cast<size_t>(operand)
+                                >= raw_args.size()) {
+                        error = "internal error: fused AOT aggregate"
+                            " projection operand is out of range";
+                        return false;
+                    }
+                    call_result = raw_args[static_cast<size_t>(operand)];
+                    if (projection
+                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt) {
+                        if (call_result->getType() != i64_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " integer projection has the wrong type";
+                            return false;
+                        }
+                        call_return_kind = BatchCalleeReturnKind::NativeInt;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat) {
+                        if (call_result->getType() != double_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " float projection has the wrong type";
+                            return false;
+                        }
+                        call_return_kind = BatchCalleeReturnKind::NativeFloat;
+                    } else if (projection
+                                    == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedInt
+                            || projection
+                                    == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat) {
+                        call_result = boxValue(call_result,
+                            raw_arg_ids[static_cast<size_t>(operand)]);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else {
+                        error = "internal error: unsupported fused AOT"
+                            " aggregate projection";
+                        return false;
+                    }
+                }
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                        "qore_rt_clear_arg_cleanups",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper,
+                        {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
+                call_may_modify_runtime_locals = false;
             } else if (fused_string_consumer && aot_approach_b_callee) {
                 call_result = emitAOTStringProducerConsumer(
                     *aot_approach_b_callee, raw_args,
@@ -13740,9 +13802,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
                 call_may_modify_runtime_locals = false;
-            } else if (fused_string_consumer) {
-                error = "internal error: fused AOT string producer is not"
-                    " eligible for context-independent lowering";
+            } else if (fused_string_consumer
+                    || fused_aggregate_projection) {
+                error = fused_string_consumer
+                    ? "internal error: fused AOT string producer is not"
+                        " eligible for context-independent lowering"
+                    : "internal error: fused AOT aggregate producer is not"
+                        " eligible for context-independent lowering";
                 return false;
             } else if (aot_approach_b_callee) {
                 // AOT Approach B batch callee: direct LLVM call to the

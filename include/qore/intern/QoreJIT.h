@@ -279,6 +279,23 @@ struct AOTCollectionOpInfo {
     }
 };
 
+enum class AOTAggregateReturnKind : uint8_t {
+    None = 0,
+    FixedList = 1,
+    FixedHash = 2,
+};
+
+//! Fresh fixed aggregate whose values are direct native parameters.
+struct AOTAggregateReturnInfo {
+    AOTAggregateReturnKind kind = AOTAggregateReturnKind::None;
+    std::vector<int8_t> value_params;
+    std::vector<std::string> keys;
+
+    explicit operator bool() const {
+        return kind != AOTAggregateReturnKind::None;
+    }
+};
+
 enum class AOTComposedIntSourceKind : uint8_t {
     None = 0,
     ListSize = 1,
@@ -349,6 +366,7 @@ struct BatchCalleeInfo {
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
     AOTStringExpressionInfo string_expression; //!< Importable bounded typed string expression
     AOTCollectionOpInfo collection_op;    //!< Importable typed collection operation
+    AOTAggregateReturnInfo aggregate_return; //!< Importable fresh fixed aggregate result
     AOTComposedIntInfo composed_int;       //!< Importable bounded size/length expression
     AOTContextIntInfo context_int;         //!< Importable affine captured-int expression
     AOTGlobalIntInfo global_int;           //!< Importable affine global-int expression

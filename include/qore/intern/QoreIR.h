@@ -2055,6 +2055,15 @@ public:
         Substr,
     };
 
+    enum class AOTAggregateProjectionKind : uint8_t {
+        None,
+        Size,
+        NativeInt,
+        NativeFloat,
+        BoxedInt,
+        BoxedFloat,
+    };
+
     enum class NativeLeafKind : uint8_t {
         IntBinary,
         FloatBinary,
@@ -2094,6 +2103,11 @@ public:
     int64_t aot_string_consumer_arg0 = 0;
     int64_t aot_string_consumer_arg1 = 0;
     bool aot_string_consumer_has_arg1 = false;
+    //! Direct projection from a fresh fixed aggregate returned by this call.
+    AOTAggregateProjectionKind aot_aggregate_projection =
+        AOTAggregateProjectionKind::None;
+    int16_t aot_aggregate_projection_operand = -1;
+    int64_t aot_aggregate_projection_size = 0;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

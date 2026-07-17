@@ -286,7 +286,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 22;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 23;
 
 //! Serialized node in a bounded pure native-integer expression summary.
 struct QoreAOTIntExpressionNodeRecord {
@@ -386,6 +386,9 @@ struct QoreAOTSymbolIndexRecord {
     std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
     std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
     std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
+    uint8_t aggregate_return_kind = 0;
+    std::vector<int8_t> aggregate_return_value_params;
+    std::vector<std::string> aggregate_return_keys;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -434,6 +437,9 @@ struct QoreAOTFastEntryIndexInfo {
     std::vector<QoreAOTIntExpressionNodeRecord> int_expression_nodes;
     std::vector<QoreAOTFloatExpressionNodeRecord> float_expression_nodes;
     std::vector<QoreAOTStringExpressionNodeRecord> string_expression_nodes;
+    uint8_t aggregate_return_kind = 0;
+    std::vector<int8_t> aggregate_return_value_params;
+    std::vector<std::string> aggregate_return_keys;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

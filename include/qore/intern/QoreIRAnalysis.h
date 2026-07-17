@@ -141,6 +141,20 @@ using QoreIRFreshListSizeQuery =
 using QoreIRFreshHashKeyQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, size_t, std::string&)>;
 
+enum class QoreIRAggregateProjectionQueryKind : uint8_t {
+    ListSize,
+    ListIndexInt,
+    ListIndexFloat,
+    ListIndexValue,
+    HashKeyInt,
+};
+
+using QoreIRAggregateProjectionQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
+    QoreIRAggregateProjectionQueryKind, int64_t, const std::string&,
+    int16_t&, int64_t&,
+    QoreIRCallDirectInstruction::AOTAggregateProjectionKind&)>;
+
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place
 //! @param param_noescape returns true for proven nonescaping callee arguments
@@ -165,6 +179,10 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
 //! @return number of fresh hash allocations and calls eliminated
 size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     const QoreIRFreshHashKeyQuery& get_hash_key);
+
+//! Fuse a fresh fixed aggregate producer call with its sole native projection.
+size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
+    const QoreIRAggregateProjectionQuery& get_projection);
 
 using QoreIRStringProducerQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
