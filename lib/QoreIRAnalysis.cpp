@@ -4489,7 +4489,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 ++load_count;
                 candidate.eliminated.push_back(local_inst);
             }
-            if (valid && load_count > 1) {
+            if (valid && load_count) {
                 virtualized.push_back(std::move(candidate));
             }
         }
