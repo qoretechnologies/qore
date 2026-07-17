@@ -35,6 +35,13 @@ list<string> sub makeWords(string left, string right) {
     return (left, right);
 }
 
+hash<string, string> sub makeWordMap(string left, string right) {
+    return {
+        \"left\": left,
+        \"right\": right,
+    };
+}
+
 hash<string, int> sub makeDuplicate(int first, int second) {
     return {
         \"same\": first,
@@ -52,6 +59,14 @@ hash<string, int> sub makeTagged(int value) {
 
 list<float> sub makeFloatConstant(float value) {
     return (value, 2.5);
+}
+
+list<int> sub makeIntConstant(int value) {
+    return (value, 42);
+}
+
+list<bool> sub makeBoolConstant(bool value) {
+    return (value, True);
 }
 
 int sub freshHashProjection() {
@@ -87,6 +102,30 @@ int sub constantHashProjection() {
 
 bool sub constantFloatProjection() {
     return makeFloatConstant(1.25)[1] == 2.5;
+}
+
+int sub constantIntProjection() {
+    return makeIntConstant(1)[1];
+}
+
+bool sub constantBoolProjection() {
+    return makeBoolConstant(False)[1];
+}
+
+string sub boxedListProjection() {
+    return makeWords(\"alpha\", \"beta\")[0];
+}
+
+string sub boxedHashProjection() {
+    return makeWordMap(\"alpha\", \"beta\").right;
+}
+
+string sub appendMark(string value) {
+    return value + \"!\";
+}
+
+string sub boxedTemporaryProjection() {
+    return makeWords(appendMark(\"left\"), appendMark(\"right\"))[0];
 }
 
 int sub sharedResult() {
@@ -135,12 +174,14 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%d:%d:%d:%d:%y:%y\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%d:%d:%y:%y\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
-    constantHashProjection(), constantFloatProjection(), sharedResult(),
-    sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
-    optionalInput(NOTHING), optionalListInput(NOTHING));
+    constantHashProjection(), constantFloatProjection(),
+    constantIntProjection(), constantBoolProjection(),
+    boxedListProjection(), boxedHashProjection(), boxedTemporaryProjection(),
+    sharedResult(), sharedMutated(), sharedEscapes(), dynamicListIndex(1),
+    boxedListSize(), optionalInput(NOTHING), optionalListInput(NOTHING));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -170,7 +211,9 @@ string disabled_compile = compile(disabled,
 foreach string function in (("freshHashProjection", "sideEffectProjection",
         "freshListSize", "freshListProjection", "freshFloatProjection",
         "duplicateKeyProjection", "constantHashProjection",
-        "sharedResult")) {
+        "constantFloatProjection", "constantIntProjection",
+        "constantBoolProjection", "boxedListProjection",
+        "boxedHashProjection", "boxedListSize", "sharedResult")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
@@ -180,7 +223,7 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (sharedMutated|sharedEscapes|dynamicListIndex|boxedListSize|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (sharedMutated|sharedEscapes|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -240,7 +283,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:4:13:3:5:2:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:13:3:5:2:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

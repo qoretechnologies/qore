@@ -13702,6 +13702,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = llvm::ConstantFP::get(double_type,
                         direct_inst->aot_aggregate_projection_float);
                     call_return_kind = BatchCalleeReturnKind::NativeFloat;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntConstant) {
+                    call_result = boxInt(llvm::ConstantInt::get(i64_type,
+                        direct_inst->aot_aggregate_projection_int));
+                    call_return_kind = BatchCalleeReturnKind::Boxed;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedFloatConstant) {
+                    call_result = boxFloat(llvm::ConstantFP::get(double_type,
+                        direct_inst->aot_aggregate_projection_float));
+                    call_return_kind = BatchCalleeReturnKind::Boxed;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolConstant) {
+                    call_result = boxBool(llvm::ConstantInt::get(i1_type,
+                        direct_inst->aot_aggregate_projection_int != 0));
+                    call_return_kind = BatchCalleeReturnKind::Boxed;
                 } else {
                     int16_t operand =
                         direct_inst->aot_aggregate_projection_operand;
@@ -13730,11 +13748,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         call_return_kind = BatchCalleeReturnKind::NativeFloat;
                     } else if (projection
-                                    == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedInt
-                            || projection
-                                    == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat) {
-                        call_result = boxValue(call_result,
-                            raw_arg_ids[static_cast<size_t>(operand)]);
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedInt) {
+                        call_result = boxInt(call_result);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedFloat) {
+                        call_result = boxFloat(call_result);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedBool) {
+                        call_result = boxBool(call_result);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedValue) {
+                        llvm::Value* boxed =
+                            boxed_args[static_cast<size_t>(operand)];
+                        if (!boxed) {
+                            error = "internal error: fused AOT boxed aggregate"
+                                " projection argument is not boxed";
+                            return false;
+                        }
+                        call_result = emitHelperRef(module, boxed);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else {
                         error = "internal error: unsupported fused AOT"

@@ -147,6 +147,7 @@ enum class QoreIRAggregateProjectionQueryKind : uint8_t {
     ListIndexFloat,
     ListIndexValue,
     HashKeyInt,
+    HashKeyValue,
 };
 
 using QoreIRAggregateProjectionQuery = std::function<bool(

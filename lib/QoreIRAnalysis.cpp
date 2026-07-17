@@ -4095,6 +4095,19 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
             query_kind = QoreIRAggregateProjectionQueryKind::HashKeyInt;
             key = access->key_name;
+        } else if ((consumer->opcode == QoreIROpcode::HashKeyAccess
+                        || consumer->opcode
+                            == QoreIROpcode::HashKeyAccessHash
+                        || consumer->opcode
+                            == QoreIROpcode::HashKeyAccessHashGuarded)
+                && consumer->operands.size() == 1) {
+            const auto* access =
+                static_cast<const QoreIRHashKeyAccessInstruction*>(consumer);
+            if (access->key_name.empty()) {
+                return false;
+            }
+            query_kind = QoreIRAggregateProjectionQueryKind::HashKeyValue;
+            key = access->key_name;
         } else {
             return false;
         }
@@ -4119,7 +4132,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     AOTAggregateProjectionKind::NativeIntConstant
             || projection_kind
                 == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::NativeFloatConstant;
+                    AOTAggregateProjectionKind::NativeFloatConstant
+            || projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::BoxedIntConstant
+            || projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::BoxedFloatConstant
+            || projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::BoxedBoolConstant;
         if (projection_kind
                     != QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::Size
@@ -4131,11 +4153,21 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             const QoreIRValueFacts* facts =
                 func.getValueFacts(call->operands[operand]);
             QoreIRValueRepresentation expected = projection_kind
-                    == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt
-                    || projection_kind
-                        == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedInt
-                ? QoreIRValueRepresentation::NativeInt
-                : QoreIRValueRepresentation::NativeFloat;
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValue
+                ? QoreIRValueRepresentation::Boxed
+                : projection_kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeInt
+                        || projection_kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedInt
+                    ? QoreIRValueRepresentation::NativeInt
+                    : projection_kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedBool
+                        ? QoreIRValueRepresentation::NativeBool
+                        : QoreIRValueRepresentation::NativeFloat;
             if (!facts
                     || facts->assigned_state
                         != QoreIRAssignedState::Assigned
@@ -4381,12 +4413,27 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             facts.assigned_state = QoreIRAssignedState::Assigned;
             facts.never_nothing = true;
             if (projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValue) {
+                const QoreIRValueFacts* source_facts =
+                    func.getValueFacts(projection.call->operands[
+                        static_cast<size_t>(projection.operand)]);
+                if (source_facts) {
+                    facts = *source_facts;
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                    facts.representation = QoreIRValueRepresentation::Boxed;
+                }
+            } else if (projection.kind
                     == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
                     || projection.kind
                         == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat
                     || projection.kind
                         == QoreIRCallDirectInstruction::
-                            AOTAggregateProjectionKind::NativeFloatConstant) {
+                            AOTAggregateProjectionKind::NativeFloatConstant
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedFloatConstant) {
                 facts.type_info = floatTypeInfo;
                 facts.representation = projection.kind
                             == QoreIRCallDirectInstruction::
@@ -4396,6 +4443,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                 AOTAggregateProjectionKind::NativeFloatConstant
                     ? QoreIRValueRepresentation::NativeFloat
                     : QoreIRValueRepresentation::Boxed;
+            } else if (projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedBool
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolConstant) {
+                facts.type_info = boolTypeInfo;
+                facts.representation = QoreIRValueRepresentation::Boxed;
             } else {
                 facts.type_info = bigIntTypeInfo;
                 facts.representation = projection.kind

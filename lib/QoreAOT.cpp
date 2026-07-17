@@ -4429,6 +4429,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         if (param == func.param_local_vars.end() || !param->second
                 || param->second->closureUse()
                 || !QoreTypeInfo::hasType(param->second->getTypeInfo())
+                || QoreTypeInfo::isReference(param->second->getTypeInfo())
                 || QoreTypeInfo::parseAcceptsReturns(
                     param->second->getTypeInfo(), NT_NOTHING)) {
             return false;
@@ -4546,10 +4547,6 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
             : element_type == boolTypeInfo
                 ? BatchCalleeParamKind::NativeBool
                 : BatchCalleeParamKind::Boxed;
-    if (element_kind == BatchCalleeParamKind::Boxed) {
-        return false;
-    }
-
     result.value_params.reserve(aggregate->operands.size());
     result.value_kinds.reserve(aggregate->operands.size());
     result.value_ints.reserve(aggregate->operands.size());
@@ -4565,7 +4562,11 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 static_cast<unsigned>(source->second.param));
             if (local == func.param_local_vars.end()
                     || qore_ir_get_scalar_local_kind(local->second)
-                        != element_kind) {
+                        != element_kind
+                    || (element_kind == BatchCalleeParamKind::Boxed
+                        && (!element_type
+                            || local->second->getTypeInfo()
+                                != element_type))) {
                 return false;
             }
         } else if ((source->second.kind
@@ -7131,9 +7132,6 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     valid = param >= 0
                         && static_cast<size_t>(param)
                             < callee_it->second.param_kinds.size()
-                        && callee_it->second.param_kinds[
-                            static_cast<size_t>(param)]
-                            != BatchCalleeParamKind::Boxed
                         && static_cast<size_t>(param)
                             < callee_it->second.param_rejects_nothing.size()
                         && callee_it->second.param_rejects_nothing[
@@ -8285,8 +8283,6 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     ? param < 0
                         || static_cast<size_t>(param)
                             >= info.param_kinds.size()
-                        || info.param_kinds[static_cast<size_t>(param)]
-                            == BatchCalleeParamKind::Boxed
                         || static_cast<size_t>(param)
                             >= info.param_rejects_nothing.size()
                         || !info.param_rejects_nothing[
@@ -9881,10 +9877,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 : param_kind
                                         == BatchCalleeParamKind::NativeBool
                                     ? QoreIRValueRepresentation::NativeBool
-                                    : QoreIRValueRepresentation::Unknown;
+                                    : QoreIRValueRepresentation::Boxed;
                         if (!found->second.param_rejects_nothing[i]
-                                || expected
-                                    == QoreIRValueRepresentation::Unknown
                                 || !facts
                                 || facts->assigned_state
                                     != QoreIRAssignedState::Assigned
@@ -9911,7 +9905,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
                     size_t value_index = SIZE_MAX;
                     if (kind
-                            == QoreIRAggregateProjectionQueryKind::HashKeyInt) {
+                                == QoreIRAggregateProjectionQueryKind::HashKeyInt
+                            || kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    HashKeyValue) {
                         if (aggregate.kind
                                     != AOTAggregateReturnKind::FixedHash
                                 || key.empty()
@@ -9953,13 +9950,47 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         aggregate.value_kinds[value_index];
                     if (value_kind
                             != AOTAggregateReturnValueKind::Parameter) {
-                        if (kind
-                                == QoreIRAggregateProjectionQueryKind::
-                                    ListIndexValue) {
-                            return false;
-                        }
                         operand = -1;
                         size = 0;
+                        bool boxed_projection = kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        ListIndexValue
+                            || kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    HashKeyValue;
+                        if (boxed_projection) {
+                            if (value_kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntConstant) {
+                                int_constant =
+                                    aggregate.value_ints[value_index];
+                                projection = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedIntConstant;
+                                return true;
+                            }
+                            if (value_kind
+                                    == AOTAggregateReturnValueKind::
+                                        FloatConstant) {
+                                float_constant =
+                                    aggregate.value_floats[value_index];
+                                projection = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedFloatConstant;
+                                return true;
+                            }
+                            if (value_kind
+                                    == AOTAggregateReturnValueKind::
+                                        BoolConstant) {
+                                int_constant =
+                                    aggregate.value_ints[value_index];
+                                projection = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedBoolConstant;
+                                return true;
+                            }
+                            return false;
+                        }
                         if (value_kind
                                     == AOTAggregateReturnValueKind::IntConstant
                                 && kind
@@ -9993,26 +10024,39 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     BatchCalleeParamKind actual = found->second.param_kinds[
                         static_cast<size_t>(param)];
+                    bool boxed_projection = kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    ListIndexValue
+                        || kind
+                            == QoreIRAggregateProjectionQueryKind::HashKeyValue;
                     BatchCalleeParamKind expected = kind
                             == QoreIRAggregateProjectionQueryKind::ListIndexFloat
                         ? BatchCalleeParamKind::NativeFloat
-                        : kind
-                                == QoreIRAggregateProjectionQueryKind::ListIndexValue
+                        : boxed_projection
                             ? actual
                             : BatchCalleeParamKind::NativeInt;
-                    if (expected == BatchCalleeParamKind::Boxed
-                            || actual != expected) {
+                    if (actual != expected) {
                         return false;
                     }
                     operand = param;
                     size = 0;
-                    if (kind
-                            == QoreIRAggregateProjectionQueryKind::ListIndexValue) {
-                        projection = expected == BatchCalleeParamKind::NativeFloat
-                            ? QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedFloat
-                            : expected == BatchCalleeParamKind::NativeInt
-                                ? QoreIRCallDirectInstruction::AOTAggregateProjectionKind::BoxedInt
-                                : QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
+                    if (boxed_projection) {
+                        projection = expected == BatchCalleeParamKind::Boxed
+                            ? QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedValue
+                            : expected == BatchCalleeParamKind::NativeFloat
+                                ? QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedFloat
+                                : expected == BatchCalleeParamKind::NativeInt
+                                    ? QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::BoxedInt
+                                    : expected
+                                            == BatchCalleeParamKind::NativeBool
+                                        ? QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedBool
+                                        : QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::None;
                     } else {
                         projection = expected == BatchCalleeParamKind::NativeFloat
                             ? QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
