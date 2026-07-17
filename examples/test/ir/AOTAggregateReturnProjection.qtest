@@ -77,6 +77,38 @@ list<bool> sub makeBoolConstant(bool value) {
     return (value, True);
 }
 
+hash<string, int> sub remapRow(int left, int middle, int right) {
+    return makeRow(right, left, middle);
+}
+
+hash<string, int> sub forwardRow(int left, int middle, int right) {
+    return remapRow(middle, right, left);
+}
+
+hash<string, int> sub taggedWrapper(int value) {
+    return makeTagged(value);
+}
+
+list<string> sub wordWrapper(string left, string right) {
+    return makeWords(right, left);
+}
+
+list<int> sub valuesWrapper(int left, int middle, int right) {
+    return makeValues(right, middle, left);
+}
+
+hash<string, int> sub computedWrapper(int left, int middle, int right) {
+    return makeRow(left + 0, middle, right);
+}
+
+list<string> sub makeFirstWord(string value, string ignored) {
+    return (value,);
+}
+
+list<string> sub bindingWrapper(string value, softstring ignored) {
+    return makeFirstWord(value, ignored);
+}
+
 int sub freshHashProjection() {
     return makeRow(4, 5, 6).middle;
 }
@@ -148,6 +180,30 @@ string sub boxedMultiHashProjection() {
     string right = \"hash-right-projection-value\";
     hash<string, string> words = makeWordMap(left, right);
     return words.left + \"/\" + words.right + \"/\" + words.left;
+}
+
+int sub wrapperProjection() {
+    return forwardRow(10, 11, 12).middle;
+}
+
+int sub wrapperConstantProjection() {
+    return taggedWrapper(9).scale;
+}
+
+string sub wrapperBoxedProjection() {
+    return wordWrapper(\"left\", \"right\")[0];
+}
+
+int sub wrapperListSize() {
+    return valuesWrapper(1, 2, 3).size();
+}
+
+int sub nonComposedWrapperProjection() {
+    return computedWrapper(1, 2, 3).middle;
+}
+
+string sub nonComposedBindingProjection() {
+    return bindingWrapper(\"kept\", 42)[0];
 }
 
 int sub sharedResult() {
@@ -252,7 +308,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -265,7 +321,10 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     nothingPhiProjection(True), nothingPhiProjection(False),
     sharedMutated(), sharedEscapes(), dynamicListIndex(1), boxedListSize(),
     optionalInput(NOTHING), optionalListInput(NOTHING),
-    boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse());
+    boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse(),
+    wrapperProjection(), wrapperConstantProjection(),
+    wrapperBoxedProjection(), wrapperListSize(),
+    nonComposedWrapperProjection(), nonComposedBindingProjection());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -330,8 +389,19 @@ foreach string function in (
         exit(2);
     }
 }
+foreach string function in (("wrapperProjection",
+        "wrapperConstantProjection", "wrapperBoxedProjection",
+        "wrapperListSize")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing composed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|dynamicListIndex|optionalInput|optionalListInput):.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -354,6 +424,9 @@ string values_line;
 string floats_line;
 string tagged_line;
 string float_constant_line;
+string forward_row_line;
+string tagged_wrapper_line;
+string word_wrapper_line;
 foreach string line in (dump.split("\n")) {
     if (line.find("makeRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
@@ -370,6 +443,15 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeFloatConstant(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         float_constant_line = line;
+    } else if (line.find("forwardRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_row_line = line;
+    } else if (line.find("taggedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        tagged_wrapper_line = line;
+    } else if (line.find("wordWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        word_wrapper_line = line;
     }
 }
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -386,12 +468,19 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || tagged_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
         || float_constant_line.find("\"aggregate_return_value_params\": [0, -1]") == -1
         || float_constant_line.find("\"aggregate_return_value_kinds\": [0, 2]") == -1
-        || float_constant_line.find("\"aggregate_return_value_floats\": [0, 2.5]") == -1) {
+        || float_constant_line.find("\"aggregate_return_value_floats\": [0, 2.5]") == -1
+        || forward_row_line.find("\"aggregate_return_kind\": 2") == -1
+        || forward_row_line.find("\"aggregate_return_value_params\": [0, 1, 2]") == -1
+        || forward_row_line.find("\"aggregate_return_keys\": [\"left\", \"middle\", \"right\"]") == -1
+        || tagged_wrapper_line.find("\"aggregate_return_value_params\": [0, -1, -1]") == -1
+        || tagged_wrapper_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
+        || word_wrapper_line.find("\"aggregate_return_kind\": 1") == -1
+        || word_wrapper_line.find("\"aggregate_return_value_params\": [1, 0]") == -1) {
     printf("missing aggregate-return symbol metadata:\n%s", dump);
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

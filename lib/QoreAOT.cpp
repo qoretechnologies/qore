@@ -4670,6 +4670,403 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
     return true;
 }
 
+static bool qore_aot_collect_composed_aggregate_return_summaries(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            const QoreIRFunction*>>& functions,
+        std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees,
+        size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
+        return true;
+    }
+
+    std::unordered_map<const AbstractQoreFunctionVariant*,
+        const QoreIRFunction*> function_map;
+    function_map.reserve(functions.size());
+    for (const auto& [variant, func] : functions) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT aggregate wrapper function collection")) {
+            return false;
+        }
+        function_map.emplace(variant, func);
+    }
+
+    enum class VisitState : uint8_t {
+        Unknown,
+        Visiting,
+        Success,
+        Failed,
+    };
+    struct AggregateValue {
+        AOTAggregateReturnValueKind kind =
+            AOTAggregateReturnValueKind::Parameter;
+        int8_t param = -1;
+        int64_t int_value = 0;
+        double float_value = 0.0;
+    };
+    std::unordered_map<const AbstractQoreFunctionVariant*, VisitState> states;
+    states.reserve(functions.size());
+    bool cancelled = false;
+
+    std::function<bool(const AbstractQoreFunctionVariant*, unsigned)> derive;
+    derive = [&](const AbstractQoreFunctionVariant* variant,
+            unsigned depth) -> bool {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT aggregate wrapper dependency traversal")) {
+            cancelled = true;
+            return false;
+        }
+        auto callee = batch_callees.find(variant);
+        if (callee == batch_callees.end()) {
+            return false;
+        }
+        if (callee->second.aggregate_return) {
+            return true;
+        }
+        VisitState& state = states[variant];
+        if (state != VisitState::Unknown) {
+            if (state == VisitState::Visiting) {
+                state = VisitState::Failed;
+            }
+            return state == VisitState::Success;
+        }
+        if (depth > 8) {
+            state = VisitState::Failed;
+            return false;
+        }
+        state = VisitState::Visiting;
+        auto fail = [&]() {
+            state = VisitState::Failed;
+            return false;
+        };
+
+        auto func_it = function_map.find(variant);
+        const QoreIRFunction* func =
+            func_it == function_map.end() ? nullptr : func_it->second;
+        UserVariantBase* uvb = variant
+            ? const_cast<AbstractQoreFunctionVariant*>(
+                variant)->getUserVariantBase() : nullptr;
+        const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+        if (!func || !sig || !callee->second.approach_b_eligible
+                || callee->second.return_kind != BatchCalleeReturnKind::Boxed
+                || !callee->second.num_params
+                || callee->second.num_params > INT8_MAX
+                || sig->numParams() != callee->second.num_params
+                || callee->second.param_kinds.size()
+                    != callee->second.num_params
+                || callee->second.param_rejects_nothing.size()
+                    != callee->second.num_params
+                || func->blocks.size() != 1 || !func->blocks.front()
+                || func->blocks.front()->instructions.size()
+                    > callee->second.num_params + 16) {
+            return fail();
+        }
+
+        std::unordered_map<const LocalVar*, int8_t> params;
+        std::vector<const LocalVar*> param_locals;
+        param_locals.reserve(callee->second.num_params);
+        for (unsigned i = 0; i < callee->second.num_params; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT aggregate wrapper parameter analysis")) {
+                cancelled = true;
+                return fail();
+            }
+            auto param = func->param_local_vars.find(i);
+            if (param == func->param_local_vars.end() || !param->second
+                    || param->second->closureUse()
+                    || !QoreTypeInfo::hasType(
+                        param->second->getTypeInfo())
+                    || QoreTypeInfo::isReference(
+                        param->second->getTypeInfo())
+                    || QoreTypeInfo::parseAcceptsReturns(
+                        param->second->getTypeInfo(), NT_NOTHING)
+                    || !callee->second.param_rejects_nothing[i]
+                    || qore_ir_get_scalar_local_kind(param->second)
+                        != callee->second.param_kinds[i]) {
+                return fail();
+            }
+            params.emplace(param->second, static_cast<int8_t>(i));
+            param_locals.push_back(param->second);
+        }
+
+        std::unordered_map<uint32_t, AggregateValue> values;
+        AOTAggregateReturnInfo aggregate;
+        const QoreIRCallDirectInstruction* call = nullptr;
+        const QoreIRReturnInstruction* ret = nullptr;
+        size_t instruction_count = 0;
+        for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (++instruction_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT aggregate wrapper instruction analysis")) {
+                cancelled = true;
+                return fail();
+            }
+            if (!inst_ptr || inst_ptr->exception_target || ret) {
+                return fail();
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            switch (inst->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::LoadLocal: {
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    auto param = params.find(load->local);
+                    if (param == params.end() || !inst->result.isValid()) {
+                        return fail();
+                    }
+                    values.emplace(inst->result.id, AggregateValue{
+                        AOTAggregateReturnValueKind::Parameter,
+                        param->second});
+                    break;
+                }
+                case QoreIROpcode::ConstInt:
+                case QoreIROpcode::ConstFloat:
+                case QoreIROpcode::ConstBool: {
+                    if (!inst->result.isValid()) {
+                        return fail();
+                    }
+                    const auto* constant =
+                        static_cast<const QoreIRConstInstruction*>(inst);
+                    AggregateValue value;
+                    if (inst->opcode == QoreIROpcode::ConstInt
+                            && constant->constant.kind
+                                == QoreIRConstant::Kind::Int) {
+                        value.kind =
+                            AOTAggregateReturnValueKind::IntConstant;
+                        value.int_value = constant->constant.int_value;
+                    } else if (inst->opcode == QoreIROpcode::ConstFloat
+                            && constant->constant.kind
+                                == QoreIRConstant::Kind::Float) {
+                        value.kind =
+                            AOTAggregateReturnValueKind::FloatConstant;
+                        value.float_value =
+                            constant->constant.float_value;
+                    } else if (inst->opcode == QoreIROpcode::ConstBool
+                            && constant->constant.kind
+                                == QoreIRConstant::Kind::Bool) {
+                        value.kind =
+                            AOTAggregateReturnValueKind::BoolConstant;
+                        value.int_value =
+                            constant->constant.bool_value ? 1 : 0;
+                    } else {
+                        return fail();
+                    }
+                    values.emplace(inst->result.id, value);
+                    break;
+                }
+                case QoreIROpcode::CallDirect: {
+                    if (call || !inst->result.isValid()) {
+                        return fail();
+                    }
+                    call = static_cast<
+                        const QoreIRCallDirectInstruction*>(inst);
+                    if (call->has_ref_args || !call->variant) {
+                        return fail();
+                    }
+                    auto nested = batch_callees.find(call->variant);
+                    if (nested == batch_callees.end()
+                            || call->operands.size()
+                                != nested->second.num_params
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                call->variant, call->expr, *func,
+                                call->operands, 0,
+                                static_cast<int>(call->operands.size()))
+                            || !derive(call->variant, depth + 1)
+                            || !nested->second.aggregate_return
+                            || !nested->second.approach_b_eligible
+                            || nested->second.return_kind
+                                != BatchCalleeReturnKind::Boxed
+                            || nested->second.param_kinds.size()
+                                != call->operands.size()
+                            || nested->second.param_rejects_nothing.size()
+                                != call->operands.size()) {
+                        return fail();
+                    }
+                    std::vector<AggregateValue> args;
+                    args.reserve(call->operands.size());
+                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                        auto source = values.find(call->operands[i].id);
+                        if (source == values.end()
+                                || !nested->second
+                                    .param_rejects_nothing[i]) {
+                            return fail();
+                        }
+                        BatchCalleeParamKind expected =
+                            nested->second.param_kinds[i];
+                        if ((source->second.kind
+                                    == AOTAggregateReturnValueKind::Parameter
+                                && (source->second.param < 0
+                                    || static_cast<size_t>(
+                                        source->second.param)
+                                        >= callee->second
+                                            .param_kinds.size()
+                                    || callee->second.param_kinds[
+                                        static_cast<size_t>(
+                                            source->second.param)]
+                                        != expected))
+                                || (source->second.kind
+                                        == AOTAggregateReturnValueKind::
+                                            IntConstant
+                                    && expected
+                                        != BatchCalleeParamKind::NativeInt)
+                                || (source->second.kind
+                                        == AOTAggregateReturnValueKind::
+                                            FloatConstant
+                                    && expected
+                                        != BatchCalleeParamKind::NativeFloat)
+                                || (source->second.kind
+                                        == AOTAggregateReturnValueKind::
+                                            BoolConstant
+                                    && expected
+                                        != BatchCalleeParamKind::NativeBool)) {
+                            return fail();
+                        }
+                        args.push_back(source->second);
+                    }
+                    const AOTAggregateReturnInfo& nested_aggregate =
+                        nested->second.aggregate_return;
+                    if (nested_aggregate.value_kinds.size()
+                                != nested_aggregate.value_params.size()
+                            || nested_aggregate.value_ints.size()
+                                != nested_aggregate.value_params.size()
+                            || nested_aggregate.value_floats.size()
+                                != nested_aggregate.value_params.size()
+                            || (nested_aggregate.kind
+                                    == AOTAggregateReturnKind::FixedHash
+                                && nested_aggregate.keys.size()
+                                    != nested_aggregate
+                                        .value_params.size())
+                            || (nested_aggregate.kind
+                                    == AOTAggregateReturnKind::FixedList
+                                && !nested_aggregate.keys.empty())) {
+                        return fail();
+                    }
+                    aggregate.kind = nested_aggregate.kind;
+                    aggregate.keys = nested_aggregate.keys;
+                    aggregate.value_params.reserve(
+                        nested_aggregate.value_params.size());
+                    aggregate.value_kinds.reserve(
+                        nested_aggregate.value_params.size());
+                    aggregate.value_ints.reserve(
+                        nested_aggregate.value_params.size());
+                    aggregate.value_floats.reserve(
+                        nested_aggregate.value_params.size());
+                    for (size_t i = 0;
+                            i < nested_aggregate.value_params.size(); ++i) {
+                        AggregateValue value;
+                        if (nested_aggregate.value_kinds[i]
+                                == AOTAggregateReturnValueKind::Parameter) {
+                            int8_t param =
+                                nested_aggregate.value_params[i];
+                            if (param < 0
+                                    || static_cast<size_t>(param)
+                                        >= args.size()) {
+                                return fail();
+                            }
+                            value = args[static_cast<size_t>(param)];
+                        } else {
+                            value.kind =
+                                nested_aggregate.value_kinds[i];
+                            value.param = -1;
+                            value.int_value =
+                                nested_aggregate.value_ints[i];
+                            value.float_value =
+                                nested_aggregate.value_floats[i];
+                        }
+                        aggregate.value_params.push_back(value.param);
+                        aggregate.value_kinds.push_back(value.kind);
+                        aggregate.value_ints.push_back(value.int_value);
+                        aggregate.value_floats.push_back(
+                            value.float_value);
+                    }
+                    break;
+                }
+                case QoreIROpcode::Return:
+                    ret = static_cast<
+                        const QoreIRReturnInstruction*>(inst);
+                    break;
+                default:
+                    return fail();
+            }
+        }
+        if (!call || !ret || !ret->has_value
+                || ret->value.id != call->result.id || !aggregate) {
+            return fail();
+        }
+
+        const QoreTypeInfo* aggregate_type = sig->getReturnTypeInfo();
+        bool fixed_list =
+            aggregate.kind == AOTAggregateReturnKind::FixedList;
+        const QoreTypeInfo* element_type = fixed_list
+            ? QoreTypeInfo::getUniqueReturnComplexList(aggregate_type)
+            : QoreTypeInfo::getUniqueReturnComplexHash(aggregate_type);
+        if (!element_type
+                || (fixed_list
+                    ? !QoreTypeInfo::isListType(aggregate_type)
+                    : !QoreTypeInfo::isHashType(aggregate_type))) {
+            return fail();
+        }
+        BatchCalleeParamKind element_kind = element_type == bigIntTypeInfo
+            ? BatchCalleeParamKind::NativeInt
+            : element_type == floatTypeInfo
+                ? BatchCalleeParamKind::NativeFloat
+                : element_type == boolTypeInfo
+                    ? BatchCalleeParamKind::NativeBool
+                    : BatchCalleeParamKind::Boxed;
+        for (size_t i = 0; i < aggregate.value_params.size(); ++i) {
+            AOTAggregateReturnValueKind kind =
+                aggregate.value_kinds[i];
+            int8_t param = aggregate.value_params[i];
+            if (kind > AOTAggregateReturnValueKind::BoolConstant) {
+                return fail();
+            }
+            if (kind == AOTAggregateReturnValueKind::Parameter) {
+                if (param < 0
+                        || static_cast<size_t>(param)
+                            >= callee->second.param_kinds.size()
+                        || callee->second.param_kinds[
+                            static_cast<size_t>(param)] != element_kind
+                        || (element_kind == BatchCalleeParamKind::Boxed
+                            && param_locals[
+                                static_cast<size_t>(param)]->getTypeInfo()
+                                != element_type)) {
+                    return fail();
+                }
+            } else if ((kind
+                            == AOTAggregateReturnValueKind::IntConstant
+                        && element_kind != BatchCalleeParamKind::NativeInt)
+                    || (kind
+                            == AOTAggregateReturnValueKind::FloatConstant
+                        && element_kind
+                            != BatchCalleeParamKind::NativeFloat)
+                    || (kind
+                            == AOTAggregateReturnValueKind::BoolConstant
+                        && element_kind
+                            != BatchCalleeParamKind::NativeBool)) {
+                return fail();
+            }
+        }
+        callee->second.aggregate_return = std::move(aggregate);
+        state = VisitState::Success;
+        return true;
+    };
+
+    for (const auto& [variant, func] : functions) {
+        (void)func;
+        derive(variant, 0);
+        if (cancelled) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         const UserSignature& sig) {
     if (std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")
@@ -7304,6 +7701,11 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             continue;
         }
         callee_it->second.scalar_leaf = leaf;
+    }
+
+    if (!qore_aot_collect_composed_aggregate_return_summaries(
+            functions, batch_callees, check_count)) {
+        return false;
     }
 
     if (!std::getenv("QORE_DISABLE_AOT_AFFINE_BODY_IMPORT")) {
