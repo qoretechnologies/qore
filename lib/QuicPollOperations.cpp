@@ -1950,6 +1950,8 @@ void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
             lifecycle_peer_resets_.emplace_back(entry.first, stream_id);
         }
         if (entry.second->reportCloseIfNew()) {
+            ASYNC_IO_TRACE("SocketQuicServerPollOperation::collectSessionLifecycleEvents "
+                "session closed=%lld\n", (long long)entry.first);
             lifecycle_closed_sessions_.push_back(entry.first);
         }
     }

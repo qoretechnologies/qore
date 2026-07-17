@@ -1579,6 +1579,20 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
             idle_closed_.store(true, std::memory_order_release);
             printd(5, "QuicSession::handleExpiry(): idle timeout (session %lld)\n",
                 (long long)session_id_);
+            ASYNC_IO_TRACE("QuicSession::handleExpiry IDLE_CLOSE session=%lld streams=%zu\n",
+                (long long)session_id_, streams_.size());
+            // An idle close is a real close: it must have the same observable
+            // effects as an explicit teardown, or threads parked on this session
+            // never wake.  idle_closed_ alone only feeds getCloseReason(); the
+            // closed_-based paths (waitForStreamDrain() returning -1, stream
+            // data/drain waiters, datagram Queue sentinels) would keep reporting
+            // a live session forever.  That is what parks an SSE producer in
+            // sendRawStringIntern() against a dead peer: its 1 MB stream buffer
+            // never drains, so waitForStreamDrain() returns 1 (timed out) on
+            // every call instead of -1 (gone).  markClosed() only takes
+            // datagram_mutex_, and mtx_ (held here, recursive) is already
+            // ordered before it on the receive path, so this is safe.
+            markClosed();
             // RFC 9000 Section 10.1: idle timeout is a silent close — no
             // CONNECTION_CLOSE frame is sent.  Do NOT set pending_write_ here;
             // callers must observe isClosed() to tear the session down.

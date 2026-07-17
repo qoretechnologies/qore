@@ -1,0 +1,525 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/3 dead-peer detection tests.
+
+    A QUIC peer that dies without a close handshake (SIGKILL, crash, network
+    drop, laptop sleep) sends nothing at all — QUIC runs over UDP, so there is
+    no RST and silence is the only signal.  The QUIC idle timeout is the only
+    mechanism that can detect this, and its close must reach the owner of every
+    stream on the dead session, or that owner's handler thread parks forever
+    (one leaked thread per dead client, and HttpServer::waitStop() then blocks
+    forever on shutdown).
+
+    These tests kill a real client process with SIGKILL — nothing else
+    reproduces a peer that stops answering without a single farewell packet.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+
+%exec-class HttpServerQuicDeadPeerTest
+
+#! WebSocket connection that signals its lifecycle to the test
+class DeadPeerWsConnection inherits WebSocketConnection {
+    public {
+        Queue connected_signal;
+        Queue closed_signal;
+    }
+
+    constructor(WebSocketHandler handler, Queue connected_signal, Queue closed_signal)
+            : WebSocketConnection(handler) {
+        self.connected_signal = connected_signal;
+        self.closed_signal = closed_signal;
+    }
+
+    registered() {
+        connected_signal.push("connected");
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+
+    #! Fires when the handler thread detects the connection is gone
+    connectionClosed() {
+        closed_signal.push("closed");
+    }
+}
+
+class DeadPeerWsHandler inherits WebSocketHandler {
+    public {
+        Queue connected_signal();
+        Queue closed_signal();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new DeadPeerWsConnection(self, connected_signal, closed_signal);
+    }
+
+    logError(string fmt) {}
+    logInfo(string fmt) {}
+    logDebug(string fmt) {}
+    logWarn(string fmt) {}
+}
+
+#! SSE handler that streams until the peer's QUIC session dies
+/** Pushes far more than the 1 MB per-stream QUIC send buffer so that, against a
+    dead peer, the producer is parked in Http3SseStream::sendRawStringIntern()
+    waiting for a drain that will never come.  The QUIC idle close is the only
+    thing that can release it: SSE is server-to-client only, so there are no
+    inbound frames to time out on.
+*/
+class DeadPeerSseHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue connected_signal();
+        #! Receives the error code that ended the producer loop, or "no-error"
+        Queue producer_done();
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method != "GET" || !cx."header-info".http3) {
+            return makeResponse(404, "Not Found", {"Content-Type": MimeTypeText});
+        }
+
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+
+        *code<nothing()> wake;
+        *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+        if (ctrl) {
+            wake = sub () { ctrl.wakeSocket(s); };
+        }
+
+        Http3SseStream sse_stream(s, session_id, stream_id, wake);
+        sse_stream.sendHeaders();
+        connected_signal.push("connected");
+
+        # 64 KB per event: fills the 1 MB stream buffer quickly once the peer
+        # stops reading, then blocks in the drain wait.
+        string payload = strmul("x", 65536);
+        string err = "no-error";
+        try {
+            # Bounded so a bug cannot hang the suite forever: at 64 KB each,
+            # this is ~128 MB, far beyond the buffer, so a live peer never
+            # exhausts it before the test's assertions run.
+            for (int i = 0; i < 2000; ++i) {
+                sse_stream.queueEvent(NOTHING, payload);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        producer_done.push(err);
+
+        return cast<hash<HttpResponseInfo>>({
+            "code": 200,
+            "reply_sent": True,
+            "streaming": True,
+            "stream_type": "sse",
+        });
+    }
+}
+
+class HttpServerQuicDeadPeerTest inherits Test {
+    private {
+        *Logger mLogger;
+
+        #! QUIC idle timeout for this process, in milliseconds
+        /** Applies to every session created here (client and server alike, since
+            the child client process inherits the environment).  A dead peer is
+            therefore detected at ~idle + idle/2 (the keepalive PING restarts our
+            idle timer exactly once — RFC 9000 Section 10.1), i.e. ~15s.
+
+            Long enough that a live peer under load still answers inside the
+            window; short enough to keep the test quick.
+        */
+        const IdleTimeoutMs = 10000;
+
+        #! Upper bound for the transport to reap a dead peer (~15s expected)
+        const ReapTimeout = 60s;
+
+        #! Idle window a live peer must survive — three full idle timeouts
+        const LivePeerWait = 30s;
+
+        #! WebSocket heartbeat interval used by these tests
+        /** The WebSocketHandler's own heartbeat (WebSocketStreamProcessor's
+            MaxMissedHeartbeats rule) is a second, application-level line of
+            defence against a dead H2/H3 peer.  It is set far beyond the test's
+            lifetime here so it cannot mask the transport path under test: if
+            these tests pass, the QUIC idle close alone reaped the handler.
+        */
+        const NoHeartbeat = 3600;
+
+        # Self-signed test certificate
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+        #! Path of the qore interpreter used to spawn the victim client
+        *string qore_exe;
+
+        #! Temporary files created for child client processes
+        list<string> tmp_files();
+    }
+
+    constructor() : Test("HttpServerQuicDeadPeerTest", "1.0") {
+        # Must be set before any QUIC session is created: the value is read from
+        # the real process environment per session when transport parameters are
+        # built, and the child client process inherits it.  setenv() is required
+        # here — assigning to ENV only mutates Qore's snapshot hash and would
+        # reach neither libqore's getenv() nor the child.
+        setenv("QORE_QUIC_IDLE_TIMEOUT_MS", IdleTimeoutMs);
+
+        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+
+        addTestCase("HTTP/3 WebSocket dead peer is reaped by the QUIC idle close",
+            \testH3WsDeadPeerReaped());
+        addTestCase("HTTP/3 SSE dead peer releases the parked producer",
+            \testH3SseDeadPeerReaped());
+        addTestCase("HTTP/3 WebSocket live peer survives the idle window",
+            \testH3WsLivePeerNotReaped());
+
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("quic-dead-peer-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            mLogger.addAppender(new StdoutAppender());
+        }
+    }
+
+    globalTearDown() {
+        foreach string path in (tmp_files) {
+            try {
+                unlink(path);
+            } catch () {
+            }
+        }
+    }
+
+    #! Creates an HTTP/3-enabled server with the given handler bound to all paths
+    private hash<auto> setupServer(AbstractHttpRequestHandler handler) {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        server.waitForAsyncIo();
+
+        hash<auto> h3info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+
+        return {"server": server, "port": h3info.port};
+    }
+
+    #! Reads the pid the child recorded before connecting
+    /** The child writes its pid before it makes any request, so the file is
+        guaranteed complete by the time the server reports the connection — no
+        polling for readiness.
+    */
+    private int readClientPid(string pid_path) {
+        return File::readTextFile(pid_path).toInt();
+    }
+
+    #! Skips the calling test unless a real dead peer can be staged here
+    /** Every assertion in this file is bound to the QUIC idle timeout, which is
+        wall-clock: under valgrind's 20-50x slowdown a live peer cannot answer
+        keepalive PINGs inside a 10s idle window, so the transport would
+        (correctly) close healthy sessions and the results would be meaningless.
+    */
+    private checkDeadPeerSupported() {
+        if (!qore_exe.val()) {
+            testSkip("no qore interpreter path available to spawn a client process");
+        }
+        if (is_file("/proc/self/maps")) {
+            *string maps = ReadOnlyFile::readTextFile("/proc/self/maps");
+            if (maps =~ /valgrind|vgpreload/) {
+                testSkip("QUIC idle timeouts are wall-clock; incompatible with valgrind");
+            }
+        }
+    }
+
+    #! A dead HTTP/3 WebSocket peer must be reaped by the QUIC idle close alone
+    testH3WsDeadPeerReaped() {
+        checkDeadPeerSupported();
+
+        DeadPeerWsHandler ws_handler({"heartbeat": NoHeartbeat});
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        string pid_path = startWsClient(setup.port);
+        on_exit killClient(pid_path);
+
+        # Deterministic: the server's own registered() hook reports the connection
+        assertEq("connected", ws_handler.connected_signal.get(30s),
+            "server-side WebSocket handler started");
+
+        int pid = readClientPid(pid_path);
+        assertGt(0, pid, "client process recorded its pid");
+
+        # SIGKILL: the client vanishes without a close frame and without a QUIC
+        # CONNECTION_CLOSE — the server will never hear from it again
+        kill(pid, SIGKILL);
+        date start = now_us();
+
+        assertEq("closed", ws_handler.closed_signal.get(ReapTimeout),
+            "QUIC idle close reaped the dead peer's WebSocket handler");
+
+        # The heartbeat is pinned an hour out, so nothing but the transport could
+        # have done this; assert the timing anyway to keep that guarantee honest.
+        date elapsed = now_us() - start;
+        assertLt(seconds(NoHeartbeat), elapsed,
+            sprintf("handler was reaped by the transport in %y, not by a heartbeat",
+                elapsed));
+    }
+
+    #! A dead HTTP/3 SSE peer must release the producer parked on a full buffer
+    testH3SseDeadPeerReaped() {
+        checkDeadPeerSupported();
+
+        DeadPeerSseHandler sse_handler();
+        hash<auto> setup = setupServer(sse_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        string pid_path = startSseClient(setup.port);
+        on_exit killClient(pid_path);
+
+        assertEq("connected", sse_handler.connected_signal.get(30s),
+            "server-side SSE producer started");
+
+        int pid = readClientPid(pid_path);
+        assertGt(0, pid, "client process recorded its pid");
+
+        kill(pid, SIGKILL);
+
+        # The producer fills the 1 MB stream buffer, parks in the drain wait, and
+        # is released only when the QUIC idle close marks the session closed and
+        # waitForQuicStreamDrain() starts reporting -1 (stream gone).
+        assertEq("SSE-CLOSED", sse_handler.producer_done.get(ReapTimeout),
+            "parked SSE producer was released by the QUIC idle close");
+    }
+
+    #! A live peer must not be reaped: keepalive PINGs hold the session open
+    testH3WsLivePeerNotReaped() {
+        checkDeadPeerSupported();
+
+        DeadPeerWsHandler ws_handler({"heartbeat": NoHeartbeat});
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        string pid_path = startWsClient(setup.port);
+        on_exit killClient(pid_path);
+
+        assertEq("connected", ws_handler.connected_signal.get(30s),
+            "server-side WebSocket handler started");
+
+        # Stay idle across three idle windows without exchanging any application
+        # data.  The QUIC keepalive must hold the session open; mis-firing the
+        # idle close here would tear down a healthy connection, which is the
+        # regression risk of this fix.
+        bool timed_out = False;
+        try {
+            ws_handler.closed_signal.get(LivePeerWait);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+            timed_out = True;
+        }
+        assertTrue(timed_out, "live peer's WebSocket handler was not reaped");
+    }
+
+    #! Starts the victim WebSocket client and returns its pid file path
+    private string startWsClient(int port) {
+        string pid_path = newTmpPath("pid");
+        string script = sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires WebSocketUtil
+%%requires WebSocketClient
+
+File f();
+f.open2(%y, O_CREAT | O_WRONLY | O_TRUNC);
+f.write(sprintf(\"%%d\", getpid()));
+f.close();
+
+WebSocketClient wsc(sub (*data msg) {}, {
+    \"url\": \"wss://127.0.0.1:%d\",
+    \"http3_mode\": \"required\",
+    \"ssl_verify_cert\": False,
+});
+wsc.connect();
+sleep(600s);
+", get_module_path(), pid_path, port);
+        startClientScript(script);
+        return pid_path;
+    }
+
+    #! Starts the victim SSE client and returns its pid file path
+    private string startSseClient(int port) {
+        string pid_path = newTmpPath("pid");
+        string script = sprintf("%%modern
+%%prepend-module-path \"%s\"
+%%requires HttpClientIo
+
+File f();
+f.open2(%y, O_CREAT | O_WRONLY | O_TRUNC);
+f.write(sprintf(\"%%d\", getpid()));
+f.close();
+
+HttpClientIo::HttpClientConnectionManager mgr(
+    <HttpClientIo::HttpClientConnectionManagerOptions>{
+        \"protocol\": \"h3\",
+        \"accept_all_certs\": True,
+        \"request_timeout\": 600s,
+        \"connect_timeout\": 15s,
+    },
+);
+# Never returns: the handler streams until the peer is killed
+mgr.request(\"https://127.0.0.1:%d\", \"GET\", \"/sse\");
+sleep(600s);
+", get_module_path(), pid_path, port);
+        startClientScript(script);
+        return pid_path;
+    }
+
+    #! Writes @a script to a temp file and runs it in a child qore process
+    private startClientScript(string script) {
+        string script_path = newTmpPath("qr");
+        File f();
+        f.open2(script_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(script);
+        f.close();
+
+        # system() blocks until the child exits (i.e. until it is SIGKILLed), so
+        # it must run on its own thread
+        background sub () {
+            try {
+                system(sprintf("%s %s", qore_exe, script_path));
+            } catch () {
+            }
+        }();
+    }
+
+    private string newTmpPath(string ext) {
+        string path = sprintf("%s%squic-dead-peer-%d-%d.%s", tmp_location(), DirSep,
+            getpid(), tmp_files.size(), ext);
+        tmp_files += path;
+        return path;
+    }
+
+    #! Best-effort cleanup of a child that may already be dead
+    private killClient(string pid_path) {
+        try {
+            int pid = readClientPid(pid_path);
+            if (pid > 0) {
+                kill(pid, SIGKILL);
+            }
+        } catch () {
+        }
+    }
+
+    #! Returns the qlib directory this test loads its modules from
+    private string get_module_path() {
+        return normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+}
