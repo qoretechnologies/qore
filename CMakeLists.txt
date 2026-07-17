@@ -945,6 +945,17 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     #
     # No --with-jemalloc-prefix: libqore must export the allocator under the standard names (see the whole-archive
     # link below), so malloc/free/realloc/... have to stay unprefixed.
+    #
+    # --disable-cxx, for the same dlopen() reason: jemalloc's C++ integration defines operator new/delete, and
+    # those are the one part of the allocator that libqore can win when it is dlopen()ed instead of linked.  libc
+    # defines malloc/free and is always loaded before a dlopen()ed libqore, so musl keeps ownership of them; but
+    # no libc defines the C++ operators, so they resolve to the first object that does - the jemalloc inside
+    # libqore.  jemalloc's operators call je_malloc directly rather than going through the malloc symbol, so the
+    # process ends up allocating through jemalloc and freeing through musl, and the first free() of a
+    # new()ed pointer faults in musl's get_meta().  Without the operators, new/delete come from libstdc++, which
+    # is a plain wrapper around malloc/free and therefore always follows whichever allocator won: jemalloc when
+    # libqore is linked (the qore binary keeps the performance win intact), musl when it is dlopen()ed.  Either
+    # way the process has exactly one allocator, which is the only property that matters here.
     include(ExternalProject)
     set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
     set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
@@ -960,6 +971,7 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
         CONFIGURE_COMMAND <SOURCE_DIR>/configure
             --prefix=${QORE_JEMALLOC_PREFIX}
             --disable-initial-exec-tls
+            --disable-cxx
             --disable-shared
             --enable-static
             "CC=${CMAKE_C_COMPILER}"
@@ -967,7 +979,7 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
         INSTALL_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) install_lib_static install_include
         BUILD_BYPRODUCTS ${QORE_JEMALLOC_STATIC_LIBRARY}
     )
-    message(STATUS "Building jemalloc from source for musl target (--disable-initial-exec-tls): "
+    message(STATUS "Building jemalloc from source for musl target (--disable-initial-exec-tls --disable-cxx): "
         "${QORE_JEMALLOC_STATIC_LIBRARY}")
     # the PIC archive is the only one that can be linked into a shared library
     set(QORE_JEMALLOC_LIBRARY ${QORE_JEMALLOC_STATIC_LIBRARY})
@@ -2377,9 +2389,10 @@ string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
 
 # link jemalloc ahead of everything else and with --whole-archive, so that libqore exports the complete allocator
-# API (malloc/free/realloc/posix_memalign/operator new/... ) and not just the members that satisfy its own
-# undefined symbols; a partially-exported allocator would let some allocations reach musl's malloc while their
-# frees reach jemalloc's
+# API (malloc/free/realloc/posix_memalign/...) and not just the members that satisfy its own undefined symbols;
+# a partially-exported allocator would let some allocations reach musl's malloc while their frees reach
+# jemalloc's.  The C++ operators are deliberately not part of that set (--disable-cxx above): exporting them is
+# what splits the allocator when libqore is dlopen()ed rather than linked
 if (QORE_JEMALLOC_LIBRARY)
     add_dependencies(libqore jemalloc_ext)
     set_property(TARGET libqore APPEND_STRING PROPERTY LINK_FLAGS
