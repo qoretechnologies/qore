@@ -167,6 +167,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT .qo debugger regex extract keeps global flag",
             \testQoDebuggerRegexExtractGlobal());
+        addTestCase("AOT batch --parse-option=PO_ENABLE_DEBUG enables @assert",
+            \testQoBatchParseOptionEnableDebug());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
@@ -4149,6 +4151,89 @@ switch (s) {
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT regex switch output matches interpreter");
+    }
+
+    #! Multi-source batch compiles must accept PO_ENABLE_DEBUG and keep @assert live
+    /** @assert and @debug are resolved at parse time, so an AOT build can only enable them at compile
+        time; there is no runtime switch once qcc has compiled them out. Batch mode (two or more sources
+        with --output-dir) resolves --parse-option names through a different table than a single-source
+        compile, so a name the single-source path accepts can still be rejected here — which is exactly
+        how PO_ENABLE_DEBUG was missed. Both the compile and the resulting behavior are asserted, with a
+        no-flag control, so neither "the flag is accepted" nor "the flag does anything" can regress alone.
+    */
+    testQoBatchParseOptionEnableDebug() {
+        string tmp_dir = sprintf("/tmp/aot_enable_debug_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/EnableDebugMain.qr";
+        string src2_path = tmp_dir + "/EnableDebugOther.qr";
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub main() {
+    @assert(False, \"assert is live\");
+    printf(\"NO-FIRE\\n\");
+}
+main();
+");
+            f.close();
+        }
+        # a second source is what puts qcc in batch mode, the mode Qorus builds with
+        {
+            File f();
+            f.open2(src2_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub enable_debug_other() {
+    printf(\"other\\n\");
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -c --parse-option=PO_ENABLE_DEBUG --output-dir=%s %s %s "
+            "2>&1; echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path, src2_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch accepts --parse-option=PO_ENABLE_DEBUG: " + compile_out);
+        assertFalse(compile_out.regex("unknown --parse-option name"),
+            "PO_ENABLE_DEBUG resolves in batch mode: " + compile_out);
+
+        string app_path = tmp_dir + "/enable-debug";
+        # the batch names each .qo after the full source path, so find it rather than assume the name
+        *list<string> qos = glob(qo_dir + "/*EnableDebugMain*.qo");
+        assertEq(1, qos.size(), "batch emitted the main source's .qo: " + qo_dir);
+        string qo_path = qos[0];
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"), "qcc links the debug-enabled .qo: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, app_path));
+        assertTrue(run_out.regex("ASSERTION-ERROR"),
+            "PO_ENABLE_DEBUG keeps @assert live in the AOT binary: " + run_out);
+        assertFalse(run_out.regex("NO-FIRE"), "@assert aborted before the following statement: " + run_out);
+
+        # control: without the flag the same source must compile with @assert stripped, so the assertion
+        # above is proving the flag's effect and not merely that @assert exists
+        string plain_app = tmp_dir + "/enable-debug-off";
+        string plain_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, plain_app, src_path));
+        assertTrue(plain_out.regex("EXIT=0"), "qcc compiles the probe without the flag: " + plain_out);
+        string plain_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, plain_app));
+        assertTrue(plain_run.regex("NO-FIRE"),
+            "without PO_ENABLE_DEBUG @assert is compiled out: " + plain_run);
+        assertFalse(plain_run.regex("ASSERTION-ERROR"),
+            "without PO_ENABLE_DEBUG @assert does not fire: " + plain_run);
     }
 
     testQoDebuggerRegexExtractGlobal() {

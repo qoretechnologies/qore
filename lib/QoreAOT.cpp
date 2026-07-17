@@ -7720,6 +7720,10 @@ static bool resolveParseOptionFlag(const std::string& name,
         {"PO_NO_CHILD_PO_RESTRICTIONS",   PO_NO_CHILD_PO_RESTRICTIONS},
         {"PO_ALLOW_INJECTION",            PO_ALLOW_INJECTION},
         {"PO_ALLOW_DEBUGGER",             PO_ALLOW_DEBUGGER},
+        // @assert / @debug are resolved at parse time and vanish without this
+        // flag, so an AOT build has no other way to enable them: once qcc has
+        // compiled the statements out, no runtime switch can bring them back.
+        {"PO_ENABLE_DEBUG",               PO_ENABLE_DEBUG},
         {"PO_ALLOW_WEAK_REFERENCES",      PO_ALLOW_WEAK_REFERENCES},
         {"PO_REQUIRE_TYPES",              PO_REQUIRE_TYPES},
         {"PO_STRICT_ARGS",                PO_STRICT_ARGS},
