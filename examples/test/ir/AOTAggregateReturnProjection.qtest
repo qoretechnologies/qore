@@ -368,6 +368,24 @@ int sub phiSideEffectProjection(bool left_branch) {
     return value * 10 + effects;
 }
 
+string sub boxedPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeWords(\"left-unused\", \"left-selected\")
+        : makeWords(\"right-unused\", \"right-selected\"))[1];
+}
+
+bool sub boxedConstantPhiProjection(bool left_branch) {
+    return (left_branch
+        ? makeBoolConstant(False)
+        : makeBoolConstant(True))[1];
+}
+
+int sub boxedSizePhiProjection(bool left_branch) {
+    return elements (left_branch
+        ? makeValues(1, 2, 3)
+        : makeValues(4, 5, 6));
+}
+
 int sub mixedPhiProjection(bool left_branch) {
     return (left_branch
         ? makeRow(1, 2, 3)
@@ -430,7 +448,7 @@ bool sub optionalListInput(*int value) {
     }
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -455,7 +473,9 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     duplicateHashElementsProjection(), listExistsProjection(),
     hashExistsProjection(),
     aggregateConsumerSideEffects(), nonConsumerComputedProjection(),
-    optionalAggregateConsumer(NOTHING), singleLocalProjection());
+    optionalAggregateConsumer(NOTHING), singleLocalProjection(),
+    boxedPhiProjection(True), boxedPhiProjection(False),
+    boxedConstantPhiProjection(True), boxedSizePhiProjection(False));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -507,6 +527,16 @@ foreach string function in (("phiProjection", "phiSideEffectProjection")) {
             "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
             function))) {
         printf("missing aggregate phi projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("boxedPhiProjection",
+        "boxedConstantPhiProjection", "boxedSizePhiProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            function))) {
+        printf("missing boxed aggregate phi projection for %s:\n%s",
             function, enabled_compile);
         exit(2);
     }
@@ -642,7 +672,7 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
