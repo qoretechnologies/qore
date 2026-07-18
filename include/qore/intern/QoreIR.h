@@ -2084,6 +2084,10 @@ public:
         BoxedIntConstant,
         BoxedFloatConstant,
         BoxedBoolConstant,
+        NativeIntAddConstant,
+        NativeFloatAddConstant,
+        BoxedIntAddConstant,
+        BoxedFloatAddConstant,
     };
 
     enum class NativeLeafKind : uint8_t {

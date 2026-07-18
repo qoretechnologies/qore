@@ -4249,7 +4249,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                 AOTAggregateProjectionKind::NativeInt
                         || projection_kind
                             == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntAddConstant
+                        || projection_kind
+                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedInt
+                        || projection_kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntAddConstant
                     ? QoreIRValueRepresentation::NativeInt
                     : projection_kind
                             == QoreIRCallDirectInstruction::
@@ -5048,7 +5056,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     AOTAggregateProjectionKind::NativeFloat
                 || projection.kind
                     == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatAddConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedFloat
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatAddConstant
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeFloatConstant
@@ -5059,6 +5073,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             facts.representation = projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeFloat
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                NativeFloatAddConstant
                     || projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeFloatConstant
@@ -5077,6 +5095,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             facts.representation = projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeInt
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                NativeIntAddConstant
                     || projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeIntConstant

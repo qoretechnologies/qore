@@ -13781,6 +13781,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return false;
                     }
                     call_result = raw_args[static_cast<size_t>(operand)];
+                    bool int_add = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntAddConstant
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntAddConstant;
+                    bool float_add = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatAddConstant
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatAddConstant;
+                    if (int_add) {
+                        if (call_result->getType() != i64_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " integer expression has the wrong type";
+                            return false;
+                        }
+                        call_result = builder->CreateAdd(call_result,
+                            llvm::ConstantInt::get(i64_type,
+                                direct_inst->
+                                    aot_aggregate_projection_int));
+                    } else if (float_add) {
+                        if (call_result->getType() != double_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " float expression has the wrong type";
+                            return false;
+                        }
+                        call_result = builder->CreateFAdd(call_result,
+                            llvm::ConstantFP::get(double_type,
+                                direct_inst->
+                                    aot_aggregate_projection_float));
+                    }
                     if (projection
                             == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt) {
                         if (call_result->getType() != i64_type) {
@@ -13823,6 +13860,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             return false;
                         }
                         call_result = emitHelperRef(module, boxed);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntAddConstant) {
+                        call_return_kind =
+                            BatchCalleeReturnKind::NativeInt;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatAddConstant) {
+                        call_return_kind =
+                            BatchCalleeReturnKind::NativeFloat;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntAddConstant) {
+                        call_result = boxInt(call_result);
+                        call_return_kind = BatchCalleeReturnKind::Boxed;
+                    } else if (projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatAddConstant) {
+                        call_result = boxFloat(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else {
                         error = "internal error: unsupported fused AOT"

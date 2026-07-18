@@ -291,10 +291,13 @@ enum class AOTAggregateReturnValueKind : uint8_t {
     FloatConstant = 2,
     BoolConstant = 3,
     Unknown = 4,
+    IntParamAddConstant = 5,
+    FloatParamAddConstant = 6,
 };
 
 //! Fresh fixed aggregate whose values are native parameters, scalar constants,
-//! or unknown when only the side-effect-free aggregate shape is summarized.
+//! bounded parameter expressions, or unknown when only the side-effect-free
+//! aggregate shape is summarized.
 struct AOTAggregateReturnInfo {
     AOTAggregateReturnKind kind = AOTAggregateReturnKind::None;
     std::vector<int8_t> value_params;

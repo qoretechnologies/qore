@@ -6246,6 +6246,66 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     constant->constant.string_value);
                 break;
             }
+            case QoreIROpcode::AddInt:
+            case QoreIROpcode::AddFloat: {
+                if (!inst->result.isValid()
+                        || inst->operands.size() != 2) {
+                    return false;
+                }
+                auto lhs = values.find(inst->operands[0].id);
+                auto rhs = values.find(inst->operands[1].id);
+                if (lhs == values.end() || rhs == values.end()) {
+                    return false;
+                }
+                AggregateValue value;
+                if (inst->opcode == QoreIROpcode::AddInt) {
+                    const AggregateValue* param =
+                        lhs->second.kind
+                                == AOTAggregateReturnValueKind::Parameter
+                            ? &lhs->second
+                            : rhs->second.kind
+                                    == AOTAggregateReturnValueKind::Parameter
+                                ? &rhs->second : nullptr;
+                    const AggregateValue* constant =
+                        lhs->second.kind
+                                == AOTAggregateReturnValueKind::IntConstant
+                            ? &lhs->second
+                            : rhs->second.kind
+                                    == AOTAggregateReturnValueKind::IntConstant
+                                ? &rhs->second : nullptr;
+                    if (!param || !constant) {
+                        return false;
+                    }
+                    value.kind = AOTAggregateReturnValueKind::
+                        IntParamAddConstant;
+                    value.param = param->param;
+                    value.int_value = constant->int_value;
+                } else {
+                    const AggregateValue* param =
+                        lhs->second.kind
+                                == AOTAggregateReturnValueKind::Parameter
+                            ? &lhs->second
+                            : rhs->second.kind
+                                    == AOTAggregateReturnValueKind::Parameter
+                                ? &rhs->second : nullptr;
+                    const AggregateValue* constant =
+                        lhs->second.kind
+                                == AOTAggregateReturnValueKind::FloatConstant
+                            ? &lhs->second
+                            : rhs->second.kind
+                                    == AOTAggregateReturnValueKind::FloatConstant
+                                ? &rhs->second : nullptr;
+                    if (!param || !constant) {
+                        return false;
+                    }
+                    value.kind = AOTAggregateReturnValueKind::
+                        FloatParamAddConstant;
+                    value.param = param->param;
+                    value.float_value = constant->float_value;
+                }
+                values.emplace(inst->result.id, value);
+                break;
+            }
             case QoreIROpcode::MakeList:
             case QoreIROpcode::MakeHash:
             case QoreIROpcode::MakeHashConstKeys:
@@ -6320,8 +6380,13 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         if (source == values.end()) {
             return false;
         }
-        if (source->second.kind
-                == AOTAggregateReturnValueKind::Parameter) {
+        bool parameter_value = source->second.kind
+                == AOTAggregateReturnValueKind::Parameter
+            || source->second.kind
+                == AOTAggregateReturnValueKind::IntParamAddConstant
+            || source->second.kind
+                == AOTAggregateReturnValueKind::FloatParamAddConstant;
+        if (parameter_value) {
             auto local = func.param_local_vars.find(
                 static_cast<unsigned>(source->second.param));
             if (local == func.param_local_vars.end()
@@ -6655,8 +6720,16 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                     for (size_t i = 0;
                             i < nested_aggregate.value_params.size(); ++i) {
                         AggregateValue value;
-                        if (nested_aggregate.value_kinds[i]
-                                == AOTAggregateReturnValueKind::Parameter) {
+                        AOTAggregateReturnValueKind nested_kind =
+                            nested_aggregate.value_kinds[i];
+                        if (nested_kind
+                                    == AOTAggregateReturnValueKind::Parameter
+                                || nested_kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntParamAddConstant
+                                || nested_kind
+                                    == AOTAggregateReturnValueKind::
+                                        FloatParamAddConstant) {
                             int8_t param =
                                 nested_aggregate.value_params[i];
                             if (param < 0
@@ -6665,9 +6738,22 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                                 return fail();
                             }
                             value = args[static_cast<size_t>(param)];
+                            if (nested_kind
+                                    != AOTAggregateReturnValueKind::
+                                        Parameter) {
+                                if (value.kind
+                                        != AOTAggregateReturnValueKind::
+                                            Parameter) {
+                                    return fail();
+                                }
+                                value.kind = nested_kind;
+                                value.int_value =
+                                    nested_aggregate.value_ints[i];
+                                value.float_value =
+                                    nested_aggregate.value_floats[i];
+                            }
                         } else {
-                            value.kind =
-                                nested_aggregate.value_kinds[i];
+                            value.kind = nested_kind;
                             value.param = -1;
                             value.int_value =
                                 nested_aggregate.value_ints[i];
@@ -6718,10 +6804,18 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
             AOTAggregateReturnValueKind kind =
                 aggregate.value_kinds[i];
             int8_t param = aggregate.value_params[i];
-            if (kind > AOTAggregateReturnValueKind::BoolConstant) {
+            if (kind == AOTAggregateReturnValueKind::Unknown
+                    || kind > AOTAggregateReturnValueKind::
+                        FloatParamAddConstant) {
                 return fail();
             }
-            if (kind == AOTAggregateReturnValueKind::Parameter) {
+            bool parameter_value =
+                kind == AOTAggregateReturnValueKind::Parameter
+                || kind == AOTAggregateReturnValueKind::
+                    IntParamAddConstant
+                || kind == AOTAggregateReturnValueKind::
+                    FloatParamAddConstant;
+            if (parameter_value) {
                 if (param < 0
                         || static_cast<size_t>(param)
                             >= callee->second.param_kinds.size()
@@ -9291,18 +9385,33 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 int8_t param = aggregate_return.value_params[i];
                 AOTAggregateReturnValueKind kind =
                     aggregate_return.value_kinds[i];
-                if (kind == AOTAggregateReturnValueKind::Parameter) {
+                bool parameter_value =
+                    kind == AOTAggregateReturnValueKind::Parameter
+                    || kind == AOTAggregateReturnValueKind::
+                        IntParamAddConstant
+                    || kind == AOTAggregateReturnValueKind::
+                        FloatParamAddConstant;
+                if (parameter_value) {
                     valid = param >= 0
                         && static_cast<size_t>(param)
                             < callee_it->second.param_kinds.size()
                         && static_cast<size_t>(param)
                             < callee_it->second.param_rejects_nothing.size()
                         && callee_it->second.param_rejects_nothing[
-                            static_cast<size_t>(param)];
+                            static_cast<size_t>(param)]
+                        && (kind != AOTAggregateReturnValueKind::
+                                    IntParamAddConstant
+                            || callee_it->second.param_kinds[
+                                static_cast<size_t>(param)]
+                                == BatchCalleeParamKind::NativeInt)
+                        && (kind != AOTAggregateReturnValueKind::
+                                    FloatParamAddConstant
+                            || callee_it->second.param_kinds[
+                                static_cast<size_t>(param)]
+                                == BatchCalleeParamKind::NativeFloat);
                 } else {
                     valid = param == -1
-                        && kind
-                            <= AOTAggregateReturnValueKind::Unknown;
+                        && kind <= AOTAggregateReturnValueKind::Unknown;
                 }
             }
             bool fixed_hash = aggregate_return.kind
@@ -10444,7 +10553,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.aggregate_return_value_kinds.size());
     for (uint8_t kind : rec.aggregate_return_value_kinds) {
         if (kind > static_cast<uint8_t>(
-                AOTAggregateReturnValueKind::Unknown)) {
+                AOTAggregateReturnValueKind::FloatParamAddConstant)) {
             return false;
         }
         info.aggregate_return.value_kinds.push_back(
@@ -10478,7 +10587,13 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             int8_t param = info.aggregate_return.value_params[i];
             AOTAggregateReturnValueKind kind =
                 info.aggregate_return.value_kinds[i];
-            if (kind == AOTAggregateReturnValueKind::Parameter
+            bool parameter_value =
+                kind == AOTAggregateReturnValueKind::Parameter
+                || kind == AOTAggregateReturnValueKind::
+                    IntParamAddConstant
+                || kind == AOTAggregateReturnValueKind::
+                    FloatParamAddConstant;
+            if (parameter_value
                     ? param < 0
                         || static_cast<size_t>(param)
                             >= info.param_kinds.size()
@@ -10486,6 +10601,16 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             >= info.param_rejects_nothing.size()
                         || !info.param_rejects_nothing[
                             static_cast<size_t>(param)]
+                        || (kind == AOTAggregateReturnValueKind::
+                                    IntParamAddConstant
+                            && info.param_kinds[
+                                static_cast<size_t>(param)]
+                                != BatchCalleeParamKind::NativeInt)
+                        || (kind == AOTAggregateReturnValueKind::
+                                    FloatParamAddConstant
+                            && info.param_kinds[
+                                static_cast<size_t>(param)]
+                                != BatchCalleeParamKind::NativeFloat)
                     : param != -1) {
                 return false;
             }
@@ -12343,8 +12468,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     AOTAggregateReturnValueKind value_kind =
                         aggregate.value_kinds[value_index];
+                    bool computed_int = value_kind
+                        == AOTAggregateReturnValueKind::
+                            IntParamAddConstant;
+                    bool computed_float = value_kind
+                        == AOTAggregateReturnValueKind::
+                            FloatParamAddConstant;
                     if (value_kind
-                            != AOTAggregateReturnValueKind::Parameter) {
+                                != AOTAggregateReturnValueKind::Parameter
+                            && !computed_int && !computed_float) {
                         operand = -1;
                         size = 0;
                         bool boxed_projection = kind
@@ -12419,6 +12551,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     BatchCalleeParamKind actual = found->second.param_kinds[
                         static_cast<size_t>(param)];
+                    if ((computed_int
+                                && actual
+                                    != BatchCalleeParamKind::NativeInt)
+                            || (computed_float
+                                && actual
+                                    != BatchCalleeParamKind::NativeFloat)) {
+                        return false;
+                    }
                     bool boxed_projection = kind
                                 == QoreIRAggregateProjectionQueryKind::
                                     ListIndexValue
@@ -12435,6 +12575,36 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     }
                     operand = param;
                     size = 0;
+                    if (computed_int) {
+                        if (expected != BatchCalleeParamKind::NativeInt) {
+                            return false;
+                        }
+                        int_constant =
+                            aggregate.value_ints[value_index];
+                        projection = boxed_projection
+                            ? QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntAddConstant
+                            : QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntAddConstant;
+                        return true;
+                    }
+                    if (computed_float) {
+                        if (expected != BatchCalleeParamKind::NativeFloat) {
+                            return false;
+                        }
+                        float_constant =
+                            aggregate.value_floats[value_index];
+                        projection = boxed_projection
+                            ? QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatAddConstant
+                            : QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatAddConstant;
+                        return true;
+                    }
                     if (boxed_projection) {
                         projection = expected == BatchCalleeParamKind::Boxed
                             ? QoreIRCallDirectInstruction::
