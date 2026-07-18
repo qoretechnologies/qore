@@ -4590,7 +4590,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             VirtualizedPhi candidate;
             candidate.phi = phi;
             bool valid = true;
-            bool direct_native_int = true;
+            bool direct_native = true;
             bool have_phi_kind = false;
             QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
             QoreIRInstruction* final_consumer = nullptr;
@@ -4645,22 +4645,46 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     incoming_kind = QoreIRPhiValueKind::NativeInt;
                 } else if (projection.kind
                             == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatConstant
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedFloat
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatConstant) {
+                    incoming_kind = QoreIRPhiValueKind::NativeFloat;
+                    if (projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedFloat) {
+                        projection.kind =
+                            QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat;
+                    } else if (projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatConstant) {
+                        projection.kind =
+                            QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatConstant;
+                    }
+                } else if (projection.kind
+                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedValue
                         || projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedInt
                         || projection.kind
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedFloat
-                        || projection.kind
-                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBool
                         || projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedIntConstant
-                        || projection.kind
-                            == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedFloatConstant
                         || projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBoolConstant) {
@@ -4675,10 +4699,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 }
                 have_phi_kind = true;
                 phi_kind = incoming_kind;
-                direct_native_int = direct_native_int
-                    && projection.kind
-                        == QoreIRCallDirectInstruction::
-                            AOTAggregateProjectionKind::NativeInt;
+                direct_native = direct_native
+                    && (projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeInt
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat);
                 candidate.eliminated.push_back(projection.consumer);
                 candidate.eliminated.insert(candidate.eliminated.end(),
                     projection.eliminated.begin(),
@@ -4696,7 +4723,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 for (auto& [projection, incoming_block] :
                         incoming_projections) {
                     QoreIRValue value;
-                    if (direct_native_int) {
+                    if (direct_native) {
                         value = projection.call->operands[
                             static_cast<size_t>(projection.operand)];
                         candidate.eliminated.push_back(projection.call);
@@ -4903,6 +4930,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             facts.type_info = bigIntTypeInfo;
             facts.assigned_state = QoreIRAssignedState::Assigned;
             facts.representation = QoreIRValueRepresentation::NativeInt;
+            facts.never_nothing = true;
+            func.setValueFacts(candidate.scalar_phi->result, facts);
+        } else if (candidate.scalar_phi->value_kind
+                == QoreIRPhiValueKind::NativeFloat) {
+            QoreIRValueFacts facts;
+            facts.type_info = floatTypeInfo;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = QoreIRValueRepresentation::NativeFloat;
             facts.never_nothing = true;
             func.setValueFacts(candidate.scalar_phi->result, facts);
         }

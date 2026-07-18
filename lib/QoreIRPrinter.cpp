@@ -776,6 +776,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 if (phi) {
                     if (phi->value_kind == QoreIRPhiValueKind::NativeInt) {
                         out << "<native-int>";
+                    } else if (phi->value_kind
+                            == QoreIRPhiValueKind::NativeFloat) {
+                        out << "<native-float>";
                     }
                     out << " ";
                     for (size_t i = 0; i < phi->incoming.size(); ++i) {

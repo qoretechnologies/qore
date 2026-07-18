@@ -8248,8 +8248,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 return false;
             }
             // Match incoming values to the PHI representation. QoreValue PHIs
-            // need boxed i64 operands; native integer PHIs keep loop counters
-            // and indexes out of the QoreValue/reference domain.
+            // need boxed i64 operands; native scalar PHIs keep values out of
+            // the QoreValue/reference domain.
             // IMPORTANT: Set builder insert point to BEFORE the terminator of the predecessor block
             // so that conversion instructions are placed in the correct block, not in whatever
             // block the builder was left pointing at (which may already have a terminator)
@@ -8284,6 +8284,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         error = "PHI native-int incoming has unsupported LLVM type";
                         return false;
                     }
+                    break;
+                case QoreIRPhiValueKind::NativeFloat:
+                    val = ensureFloatType(val, inc.value.id, module);
                     break;
                 case QoreIRPhiValueKind::QoreValue:
                 default:
@@ -10615,7 +10618,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Phi nodes ===
         case QoreIROpcode::Phi: {
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
-            llvm::Type* phi_type = i64_type;
+            llvm::Type* phi_type =
+                phi->value_kind == QoreIRPhiValueKind::NativeFloat
+                    ? double_type : i64_type;
             llvm::PHINode* phi_node = builder->CreatePHI(phi_type, phi->incoming.size());
             values[inst->result.id] = phi_node;
             if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {

@@ -1031,6 +1031,7 @@ struct QoreIRPhiIncoming {
 enum class QoreIRPhiValueKind : uint8_t {
     QoreValue = 0,
     NativeInt = 1,
+    NativeFloat = 2,
 };
 
 class QoreIRPhiInstruction : public QoreIRInstruction {

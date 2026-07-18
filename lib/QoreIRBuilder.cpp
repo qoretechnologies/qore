@@ -1103,7 +1103,9 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
                 ? QoreIRAssignedState::Assigned : QoreIRAssignedState::Unknown;
             facts.representation = value_kind == QoreIRPhiValueKind::NativeInt
                 ? QoreIRValueRepresentation::NativeInt
-                : QoreIRValueRepresentation::Boxed;
+                : value_kind == QoreIRPhiValueKind::NativeFloat
+                    ? QoreIRValueRepresentation::NativeFloat
+                    : QoreIRValueRepresentation::Boxed;
             facts.never_nothing = assigned && never_nothing;
             func->setValueFacts(inst->result, facts);
         }
