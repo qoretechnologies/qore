@@ -4309,6 +4309,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
+                                    NativeIntBinary
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntMulConstant
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
                                     NativeIntSelect
                         || kind
                             == QoreIRCallDirectInstruction::
@@ -4317,6 +4325,18 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedIntAddConstant
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntBinary
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntMulConstant
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolIntCompare
                         || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
@@ -4348,7 +4368,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 || kind == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedBoolSelect;
             if (!valid || !selected) {
-                return valid;
+                bool binary = kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeIntBinary
+                    || kind == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntBinary
+                    || kind == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolIntCompare;
+                if (!valid || !binary) {
+                    return valid;
+                }
+                uint64_t packed = static_cast<uint64_t>(descriptor_int);
+                size_t rhs = static_cast<uint8_t>(packed);
+                uint8_t operation = static_cast<uint8_t>(packed >> 8);
+                if (packed > UINT16_MAX || rhs >= call->operands.size()
+                        || operation > (kind
+                                == QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedBoolIntCompare
+                            ? 5 : 2)) {
+                    return false;
+                }
+                const QoreIRValueFacts* rhs_facts =
+                    func.getValueFacts(call->operands[rhs]);
+                return rhs_facts
+                    && rhs_facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && rhs_facts->never_nothing
+                    && rhs_facts->representation
+                        == QoreIRValueRepresentation::NativeInt;
             }
             size_t condition =
                 static_cast<uint8_t>(descriptor_int);
@@ -5258,7 +5306,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                             AOTAggregateProjectionKind::BoxedBool
                 || projection.kind
                     == QoreIRCallDirectInstruction::
-                        AOTAggregateProjectionKind::BoxedBoolSelect
+                            AOTAggregateProjectionKind::BoxedBoolSelect
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolIntCompare
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedBoolConstant) {
@@ -5282,7 +5333,21 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                 NativeIntAddConstant
                     || projection.kind
                         == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeIntBinary
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                NativeIntMulConstant
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeIntSelect
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntBinary
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedIntMulConstant
                     || projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeIntConstant

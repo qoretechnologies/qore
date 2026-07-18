@@ -13814,6 +13814,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatAddConstant;
+                    bool int_binary = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeIntBinary
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedIntBinary;
+                    bool int_multiply_constant = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntMulConstant
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntMulConstant;
+                    bool int_compare = projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolIntCompare;
                     bool selected = projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
@@ -13852,7 +13869,79 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             raw_args[condition], call_result,
                             raw_args[alternate]);
                     }
-                    if (int_add) {
+                    if (int_binary || int_compare) {
+                        uint64_t packed = static_cast<uint64_t>(
+                            direct_inst->aot_aggregate_projection_int);
+                        size_t rhs = static_cast<uint8_t>(packed);
+                        uint8_t operation =
+                            static_cast<uint8_t>(packed >> 8);
+                        if (packed > UINT16_MAX || rhs >= raw_args.size()
+                                || call_result->getType() != i64_type
+                                || raw_args[rhs]->getType() != i64_type
+                                || operation > (int_compare ? 5 : 2)) {
+                            error = "internal error: fused AOT aggregate"
+                                " binary descriptor is invalid";
+                            return false;
+                        }
+                        llvm::Value* rhs_value = raw_args[rhs];
+                        if (int_compare) {
+                            switch (operation) {
+                                case 0:
+                                    call_result = builder->CreateICmpEQ(
+                                        call_result, rhs_value);
+                                    break;
+                                case 1:
+                                    call_result = builder->CreateICmpNE(
+                                        call_result, rhs_value);
+                                    break;
+                                case 2:
+                                    call_result = builder->CreateICmpSLT(
+                                        call_result, rhs_value);
+                                    break;
+                                case 3:
+                                    call_result = builder->CreateICmpSLE(
+                                        call_result, rhs_value);
+                                    break;
+                                case 4:
+                                    call_result = builder->CreateICmpSGT(
+                                        call_result, rhs_value);
+                                    break;
+                                case 5:
+                                    call_result = builder->CreateICmpSGE(
+                                        call_result, rhs_value);
+                                    break;
+                                default:
+                                    assert(false);
+                            }
+                        } else {
+                            switch (operation) {
+                                case 0:
+                                    call_result = builder->CreateAdd(
+                                        call_result, rhs_value);
+                                    break;
+                                case 1:
+                                    call_result = builder->CreateSub(
+                                        call_result, rhs_value);
+                                    break;
+                                case 2:
+                                    call_result = builder->CreateMul(
+                                        call_result, rhs_value);
+                                    break;
+                                default:
+                                    assert(false);
+                            }
+                        }
+                    } else if (int_multiply_constant) {
+                        if (call_result->getType() != i64_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " integer multiply has the wrong type";
+                            return false;
+                        }
+                        call_result = builder->CreateMul(call_result,
+                            llvm::ConstantInt::get(i64_type,
+                                direct_inst->
+                                    aot_aggregate_projection_int));
+                    } else if (int_add) {
                         if (call_result->getType() != i64_type) {
                             error = "internal error: fused AOT aggregate"
                                 " integer expression has the wrong type";
@@ -13916,7 +14005,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 AOTAggregateProjectionKind::BoxedBool
                             || projection == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
-                                    BoxedBoolSelect) {
+                                    BoxedBoolSelect
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolIntCompare) {
                         call_result = boxBool(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
@@ -13934,7 +14026,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else if (projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
-                                    NativeIntAddConstant) {
+                                    NativeIntAddConstant
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeIntBinary
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntMulConstant) {
                         call_return_kind =
                             BatchCalleeReturnKind::NativeInt;
                     } else if (projection
@@ -13946,7 +14043,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     } else if (projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
-                                    BoxedIntAddConstant) {
+                                    BoxedIntAddConstant
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedIntBinary
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntMulConstant) {
                         call_result = boxInt(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection

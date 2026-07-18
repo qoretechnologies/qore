@@ -296,6 +296,9 @@ enum class AOTAggregateReturnValueKind : uint8_t {
     IntParamSelect = 7,
     FloatParamSelect = 8,
     BoolParamSelect = 9,
+    IntParamBinary = 10,
+    IntParamMulConstant = 11,
+    BoolIntParamCompare = 12,
 };
 
 //! Fresh fixed aggregate whose values are native parameters, scalar constants,
