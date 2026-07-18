@@ -2091,6 +2091,13 @@ public:
         BoxedFloatAddConstant,
     };
 
+    struct AOTAggregateProjectionDescriptor {
+        AOTAggregateProjectionKind kind = AOTAggregateProjectionKind::None;
+        int16_t operand = -1;
+        int64_t int_constant = 0;
+        double float_constant = 0.0;
+    };
+
     enum class NativeLeafKind : uint8_t {
         IntBinary,
         FloatBinary,
@@ -2140,6 +2147,9 @@ public:
     //! A final projection-only operand supplies a proven native-int list index.
     bool aot_aggregate_projection_guarded_index = false;
     bool aot_aggregate_projection_negative_offsets = false;
+    //! Heterogeneous native-scalar elements selected by a guarded list index.
+    std::vector<AOTAggregateProjectionDescriptor>
+        aot_aggregate_projection_guarded_descriptors;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

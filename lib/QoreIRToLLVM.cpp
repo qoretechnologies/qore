@@ -13944,9 +13944,120 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* in_range = builder->CreateAnd(
                         builder->CreateICmpSGE(normalized, zero),
                         builder->CreateICmpSLT(normalized, size));
-                    call_result = builder->CreateSelect(in_range,
-                        call_result,
-                        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                    const auto& descriptors = direct_inst->
+                        aot_aggregate_projection_guarded_descriptors;
+                    if (descriptors.empty()) {
+                        call_result = builder->CreateSelect(in_range,
+                            call_result,
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                    } else {
+                        if (descriptors.size()
+                                != static_cast<size_t>(
+                                    direct_inst->
+                                        aot_aggregate_projection_size)) {
+                            error = "internal error: guarded AOT aggregate"
+                                " descriptor count does not match list size";
+                            return false;
+                        }
+                        auto emit_descriptor = [&](const QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionDescriptor& descriptor)
+                                -> llvm::Value* {
+                            using Kind = QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind;
+                            switch (descriptor.kind) {
+                                case Kind::BoxedIntConstant:
+                                    return boxInt(llvm::ConstantInt::get(
+                                        i64_type,
+                                        descriptor.int_constant));
+                                case Kind::BoxedFloatConstant:
+                                    return boxFloat(llvm::ConstantFP::get(
+                                        double_type,
+                                        descriptor.float_constant));
+                                case Kind::BoxedBoolConstant:
+                                    return boxBool(llvm::ConstantInt::get(
+                                        i1_type,
+                                        descriptor.int_constant != 0));
+                                default:
+                                    break;
+                            }
+                            if (descriptor.operand < 0
+                                    || static_cast<size_t>(
+                                        descriptor.operand)
+                                        >= raw_args.size()) {
+                                error = "internal error: guarded AOT"
+                                    " aggregate descriptor operand is"
+                                    " out of range";
+                                return nullptr;
+                            }
+                            llvm::Value* value = raw_args[
+                                static_cast<size_t>(descriptor.operand)];
+                            switch (descriptor.kind) {
+                                case Kind::BoxedIntAddConstant:
+                                    if (value->getType() != i64_type) {
+                                        error = "internal error: guarded AOT"
+                                            " integer descriptor has the"
+                                            " wrong type";
+                                        return nullptr;
+                                    }
+                                    value = builder->CreateAdd(value,
+                                        llvm::ConstantInt::get(i64_type,
+                                            descriptor.int_constant));
+                                    [[fallthrough]];
+                                case Kind::BoxedInt:
+                                    if (value->getType() != i64_type) {
+                                        error = "internal error: guarded AOT"
+                                            " integer descriptor has the"
+                                            " wrong type";
+                                        return nullptr;
+                                    }
+                                    return boxInt(value);
+                                case Kind::BoxedFloatAddConstant:
+                                    if (value->getType() != double_type) {
+                                        error = "internal error: guarded AOT"
+                                            " float descriptor has the"
+                                            " wrong type";
+                                        return nullptr;
+                                    }
+                                    value = builder->CreateFAdd(value,
+                                        llvm::ConstantFP::get(double_type,
+                                            descriptor.float_constant));
+                                    [[fallthrough]];
+                                case Kind::BoxedFloat:
+                                    if (value->getType() != double_type) {
+                                        error = "internal error: guarded AOT"
+                                            " float descriptor has the"
+                                            " wrong type";
+                                        return nullptr;
+                                    }
+                                    return boxFloat(value);
+                                case Kind::BoxedBool:
+                                    if (value->getType() != i1_type) {
+                                        error = "internal error: guarded AOT"
+                                            " bool descriptor has the"
+                                            " wrong type";
+                                        return nullptr;
+                                    }
+                                    return boxBool(value);
+                                default:
+                                    error = "internal error: unsupported"
+                                        " guarded AOT aggregate descriptor";
+                                    return nullptr;
+                            }
+                        };
+                        call_result = llvm::ConstantInt::get(
+                            i64_type, VAL_NOTHING);
+                        for (size_t i = 0; i < descriptors.size(); ++i) {
+                            llvm::Value* candidate =
+                                emit_descriptor(descriptors[i]);
+                            if (!candidate) {
+                                return false;
+                            }
+                            call_result = builder->CreateSelect(
+                                builder->CreateICmpEQ(normalized,
+                                    llvm::ConstantInt::get(i64_type, i)),
+                                candidate, call_result);
+                        }
+                    }
                 }
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(

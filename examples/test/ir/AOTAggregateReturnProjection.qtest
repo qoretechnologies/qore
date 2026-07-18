@@ -47,6 +47,10 @@ list<bool> sub repeatBool(bool value) {
     return (value, value, value);
 }
 
+list<auto> sub makeMixedValues(int value, float ratio, bool enabled) {
+    return (value, ratio, enabled);
+}
+
 list<int> sub repeatConstant() {
     return (17, 17);
 }
@@ -656,6 +660,10 @@ string sub dynamicSignedZeroListIndex(int index) {
     return sprintf(\"%.1f\", signedZeroValues()[index]);
 }
 
+string sub dynamicMixedListIndex(int index) {
+    return sprintf(\"%y\", makeMixedValues(11, 2.5, True)[index]);
+}
+
 *bool sub guardedBoolListIndex(bool value, int index) {
     return repeatBool(value)[index];
 }
@@ -761,6 +769,8 @@ printf(\"%d:%d:%y:%y:%d\\n\", computedIntProjection(5),
     computedBoxedIntProjection(6), computedIntOverflowProjection(),
     computedFloatProjection(), twoParamComputedProjection());
 printf(\"%d\\n\", emptyZeroArgProjections());
+printf(\"%s:%s:%s\\n\", dynamicMixedListIndex(0),
+    dynamicMixedListIndex(1), dynamicMixedListIndex(2));
 printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedListIndex(9, 0) == 9,
     guardedListIndex(9, -1) == 9,
@@ -864,7 +874,8 @@ foreach string function in (("nonNestedComputedProjection",
 foreach string function in (("guardedListIndex",
         "guardedComputedListIndex", "guardedFloatListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
-        "guardedSideEffectOrder", "missingHashProjection")) {
+        "guardedSideEffectOrder", "dynamicListIndex",
+        "dynamicSignedZeroListIndex", "missingHashProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -957,7 +968,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicListIndex|dynamicSignedZeroListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|optionalInput|optionalListInput|hashSizeOverride|conditionalElementProjection|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|twoParamComputedProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|optionalInput|optionalListInput|hashSizeOverride|conditionalElementProjection|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|twoParamComputedProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1100,7 +1111,7 @@ if (computed_row_line.find(
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5\n120\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5\n120\n11:2.5:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

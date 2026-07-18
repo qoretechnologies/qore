@@ -4083,6 +4083,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         double float_constant = 0.0;
         QoreIRValue guarded_index;
         bool negative_offsets = false;
+        std::vector<QoreIRCallDirectInstruction::
+            AOTAggregateProjectionDescriptor> guarded_descriptors;
         std::vector<QoreIRInstruction*> eliminated;
     };
     auto analyze_projection = [&](QoreIRCallDirectInstruction* call,
@@ -4255,73 +4257,114 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         int64_t size = 0;
         int64_t int_constant = 0;
         double float_constant = 0.0;
+        std::vector<QoreIRCallDirectInstruction::
+            AOTAggregateProjectionDescriptor> guarded_descriptors;
         if (!callee || has_ref_args
                 || !get_projection(callee, call, query_kind, index, key,
                     operand, size, int_constant, float_constant,
-                    projection_kind)
+                    projection_kind, guarded_descriptors)
                 || projection_kind
                     == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None) {
             return false;
         }
-        bool constant_projection = projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::NativeIntConstant
-            || projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::NativeFloatConstant
-            || projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedIntConstant
-            || projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedFloatConstant
-            || projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedBoolConstant
-            || projection_kind
-                == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedNothingConstant;
-        if (projection_kind
-                    != QoreIRCallDirectInstruction::
-                        AOTAggregateProjectionKind::Size
-                && !constant_projection) {
-            if (operand < 0
-                    || static_cast<size_t>(operand) >= call->operands.size()) {
+        auto validate_descriptor = [&](QoreIRCallDirectInstruction::
+                AOTAggregateProjectionKind kind, int16_t value_operand) {
+            bool descriptor_constant = kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedNothingConstant
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::Size;
+            if (descriptor_constant) {
+                return true;
+            }
+            if (value_operand < 0
+                    || static_cast<size_t>(value_operand)
+                        >= call->operands.size()) {
                 return false;
             }
             const QoreIRValueFacts* facts =
-                func.getValueFacts(call->operands[operand]);
-            QoreIRValueRepresentation expected = projection_kind
+                func.getValueFacts(call->operands[value_operand]);
+            QoreIRValueRepresentation expected = kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedValue
                 ? QoreIRValueRepresentation::Boxed
-                : projection_kind
+                : kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::NativeInt
-                        || projection_kind
+                        || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     NativeIntAddConstant
-                        || projection_kind
+                        || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedInt
-                        || projection_kind
+                        || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedIntAddConstant
                     ? QoreIRValueRepresentation::NativeInt
-                    : projection_kind
+                    : kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBool
                         ? QoreIRValueRepresentation::NativeBool
                         : QoreIRValueRepresentation::NativeFloat;
-            if (!facts
-                    || facts->assigned_state
-                        != QoreIRAssignedState::Assigned
-                    || !facts->never_nothing
-                    || facts->representation != expected) {
+            return facts
+                    && facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && facts->never_nothing
+                    && facts->representation == expected;
+        };
+        if (!validate_descriptor(projection_kind, operand)) {
+            return false;
+        }
+        for (const auto& descriptor : guarded_descriptors) {
+            if (!validate_descriptor(descriptor.kind,
+                    descriptor.operand)) {
                 return false;
             }
+            if (descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedInt
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedFloat
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBool
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntConstant
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedFloatConstant
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedBoolConstant
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedIntAddConstant
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedFloatAddConstant) {
+                return false;
+            }
+        }
+        if (!guarded_descriptors.empty()
+                && (!guarded_index.isValid()
+                    || size != static_cast<int64_t>(
+                        guarded_descriptors.size()))) {
+            return false;
         }
         projection.call = call;
         projection.consumer = consumer;
@@ -4333,6 +4376,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         projection.float_constant = float_constant;
         projection.guarded_index = guarded_index;
         projection.negative_offsets = negative_offsets;
+        projection.guarded_descriptors = std::move(guarded_descriptors);
         return true;
     };
 
@@ -5072,11 +5116,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         double float_constant = 0.0;
         auto projection =
             QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
+        std::vector<QoreIRCallDirectInstruction::
+            AOTAggregateProjectionDescriptor> guarded_descriptors;
         if (!callee || has_ref_args
                 || !get_projection(callee, call,
                     QoreIRAggregateProjectionQueryKind::DiscardResult,
                     0, std::string(), operand, size, int_constant,
-                    float_constant, projection)) {
+                    float_constant, projection, guarded_descriptors)) {
             continue;
         }
         eliminated.insert(call);
@@ -5092,6 +5138,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             projection.int_constant;
         projection.call->aot_aggregate_projection_float =
             projection.float_constant;
+        projection.call->aot_aggregate_projection_guarded_descriptors =
+            projection.guarded_descriptors;
         if (projection.guarded_index.isValid()) {
             projection.call->aot_aggregate_projection_guarded_index = true;
             projection.call->aot_aggregate_projection_negative_offsets =

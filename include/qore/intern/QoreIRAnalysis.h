@@ -165,7 +165,9 @@ using QoreIRAggregateProjectionQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
     QoreIRAggregateProjectionQueryKind, int64_t, const std::string&,
     int16_t&, int64_t&, int64_t&, double&,
-    QoreIRCallDirectInstruction::AOTAggregateProjectionKind&)>;
+    QoreIRCallDirectInstruction::AOTAggregateProjectionKind&,
+    std::vector<QoreIRCallDirectInstruction::
+        AOTAggregateProjectionDescriptor>&)>;
 
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place

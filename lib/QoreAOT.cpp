@@ -12272,7 +12272,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         int16_t& operand, int64_t& size,
                         int64_t& int_constant, double& float_constant,
                         QoreIRCallDirectInstruction::AOTAggregateProjectionKind&
-                            projection) {
+                            projection,
+                        std::vector<QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionDescriptor>&
+                                guarded_descriptors) {
                     bool dynamic_index = kind
                         == QoreIRAggregateProjectionQueryKind::
                             ListIndexDynamicValue;
@@ -12431,6 +12434,190 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         return true;
                     }
 
+                    using ProjectionDescriptor = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionDescriptor;
+                    auto resolve_value = [&](size_t value_index,
+                            bool boxed_projection,
+                            ProjectionDescriptor& descriptor) {
+                        if (value_index >= aggregate.value_params.size()
+                                || aggregate.value_kinds.size()
+                                    != aggregate.value_params.size()
+                                || aggregate.value_ints.size()
+                                    != aggregate.value_params.size()
+                                || aggregate.value_floats.size()
+                                    != aggregate.value_params.size()) {
+                            return false;
+                        }
+                        AOTAggregateReturnValueKind value_kind =
+                            aggregate.value_kinds[value_index];
+                        bool computed_int = value_kind
+                            == AOTAggregateReturnValueKind::
+                                IntParamAddConstant;
+                        bool computed_float = value_kind
+                            == AOTAggregateReturnValueKind::
+                                FloatParamAddConstant;
+                        if (value_kind
+                                    != AOTAggregateReturnValueKind::Parameter
+                                && !computed_int && !computed_float) {
+                            if (boxed_projection) {
+                                if (value_kind
+                                        == AOTAggregateReturnValueKind::
+                                            IntConstant) {
+                                    descriptor.int_constant =
+                                        aggregate.value_ints[value_index];
+                                    descriptor.kind =
+                                        QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedIntConstant;
+                                    return true;
+                                }
+                                if (value_kind
+                                        == AOTAggregateReturnValueKind::
+                                            FloatConstant) {
+                                    descriptor.float_constant =
+                                        aggregate.value_floats[value_index];
+                                    descriptor.kind =
+                                        QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedFloatConstant;
+                                    return true;
+                                }
+                                if (value_kind
+                                        == AOTAggregateReturnValueKind::
+                                            BoolConstant) {
+                                    descriptor.int_constant =
+                                        aggregate.value_ints[value_index];
+                                    descriptor.kind =
+                                        QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedBoolConstant;
+                                    return true;
+                                }
+                                return false;
+                            }
+                            if (value_kind
+                                        == AOTAggregateReturnValueKind::
+                                            IntConstant
+                                    && kind
+                                        != QoreIRAggregateProjectionQueryKind::
+                                            ListIndexFloat) {
+                                descriptor.int_constant =
+                                    aggregate.value_ints[value_index];
+                                descriptor.kind =
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            NativeIntConstant;
+                                return true;
+                            }
+                            if (value_kind
+                                        == AOTAggregateReturnValueKind::
+                                            FloatConstant
+                                    && kind
+                                        == QoreIRAggregateProjectionQueryKind::
+                                            ListIndexFloat) {
+                                descriptor.float_constant =
+                                    aggregate.value_floats[value_index];
+                                descriptor.kind =
+                                    QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            NativeFloatConstant;
+                                return true;
+                            }
+                            return false;
+                        }
+
+                        int8_t param = aggregate.value_params[value_index];
+                        if (param < 0
+                                || static_cast<size_t>(param)
+                                    >= found->second.param_kinds.size()) {
+                            return false;
+                        }
+                        BatchCalleeParamKind actual =
+                            found->second.param_kinds[
+                                static_cast<size_t>(param)];
+                        if ((computed_int
+                                    && actual
+                                        != BatchCalleeParamKind::NativeInt)
+                                || (computed_float
+                                    && actual
+                                        != BatchCalleeParamKind::
+                                            NativeFloat)) {
+                            return false;
+                        }
+                        BatchCalleeParamKind expected = kind
+                                == QoreIRAggregateProjectionQueryKind::
+                                    ListIndexFloat
+                            ? BatchCalleeParamKind::NativeFloat
+                            : boxed_projection
+                                ? actual
+                                : BatchCalleeParamKind::NativeInt;
+                        if (actual != expected
+                                || (dynamic_index
+                                    && actual
+                                        == BatchCalleeParamKind::Boxed)) {
+                            return false;
+                        }
+                        descriptor.operand = param;
+                        if (computed_int) {
+                            descriptor.int_constant =
+                                aggregate.value_ints[value_index];
+                            descriptor.kind = boxed_projection
+                                ? QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedIntAddConstant
+                                : QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        NativeIntAddConstant;
+                            return true;
+                        }
+                        if (computed_float) {
+                            descriptor.float_constant =
+                                aggregate.value_floats[value_index];
+                            descriptor.kind = boxed_projection
+                                ? QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedFloatAddConstant
+                                : QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        NativeFloatAddConstant;
+                            return true;
+                        }
+                        if (boxed_projection) {
+                            descriptor.kind =
+                                expected == BatchCalleeParamKind::Boxed
+                                ? QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedValue
+                                : expected
+                                        == BatchCalleeParamKind::NativeFloat
+                                    ? QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::BoxedFloat
+                                    : expected
+                                            == BatchCalleeParamKind::NativeInt
+                                        ? QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedInt
+                                        : expected
+                                                == BatchCalleeParamKind::
+                                                    NativeBool
+                                            ? QoreIRCallDirectInstruction::
+                                                AOTAggregateProjectionKind::
+                                                    BoxedBool
+                                            : QoreIRCallDirectInstruction::
+                                                AOTAggregateProjectionKind::
+                                                    None;
+                        } else {
+                            descriptor.kind =
+                                expected == BatchCalleeParamKind::NativeFloat
+                                ? QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::NativeFloat
+                                : QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::NativeInt;
+                        }
+                        return descriptor.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::None;
+                    };
+
                     size_t value_index = SIZE_MAX;
                     if (kind
                                 == QoreIRAggregateProjectionQueryKind::HashKeyInt
@@ -12475,6 +12662,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         != aggregate.value_params.size()) {
                                 return false;
                             }
+                            bool homogeneous = true;
                             for (size_t i = 1;
                                     i < aggregate.value_params.size(); ++i) {
                                 if (aggregate.value_params[i]
@@ -12487,10 +12675,32 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                             &aggregate.value_floats[i],
                                             &aggregate.value_floats[0],
                                             sizeof(double))) {
-                                    return false;
+                                    homogeneous = false;
+                                    break;
                                 }
                             }
                             size = count;
+                            if (!homogeneous) {
+                                guarded_descriptors.reserve(
+                                    aggregate.value_params.size());
+                                for (size_t i = 0;
+                                        i < aggregate.value_params.size();
+                                        ++i) {
+                                    ProjectionDescriptor descriptor;
+                                    if (!resolve_value(i, true, descriptor)) {
+                                        guarded_descriptors.clear();
+                                        return false;
+                                    }
+                                    guarded_descriptors.push_back(descriptor);
+                                }
+                                const ProjectionDescriptor& first =
+                                    guarded_descriptors.front();
+                                operand = first.operand;
+                                int_constant = first.int_constant;
+                                float_constant = first.float_constant;
+                                projection = first.kind;
+                                return true;
+                            }
                             value_index = 0;
                         } else {
                             if (index < 0) {
@@ -12502,191 +12712,26 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             value_index = static_cast<size_t>(index);
                         }
                     }
-                    if (value_index >= aggregate.value_params.size()
-                            || aggregate.value_kinds.size()
-                                != aggregate.value_params.size()
-                            || aggregate.value_ints.size()
-                                != aggregate.value_params.size()
-                            || aggregate.value_floats.size()
-                                != aggregate.value_params.size()) {
-                        return false;
-                    }
-                    AOTAggregateReturnValueKind value_kind =
-                        aggregate.value_kinds[value_index];
-                    bool computed_int = value_kind
-                        == AOTAggregateReturnValueKind::
-                            IntParamAddConstant;
-                    bool computed_float = value_kind
-                        == AOTAggregateReturnValueKind::
-                            FloatParamAddConstant;
-                    if (value_kind
-                                != AOTAggregateReturnValueKind::Parameter
-                            && !computed_int && !computed_float) {
-                        operand = -1;
-                        if (!dynamic_index) {
-                            size = 0;
-                        }
-                        bool boxed_projection = kind
-                                    == QoreIRAggregateProjectionQueryKind::
-                                        ListIndexValue
-                            || dynamic_index
-                            || kind
-                                == QoreIRAggregateProjectionQueryKind::
-                                    HashKeyValue;
-                        if (boxed_projection) {
-                            if (value_kind
-                                    == AOTAggregateReturnValueKind::
-                                        IntConstant) {
-                                int_constant =
-                                    aggregate.value_ints[value_index];
-                                projection = QoreIRCallDirectInstruction::
-                                    AOTAggregateProjectionKind::
-                                        BoxedIntConstant;
-                                return true;
-                            }
-                            if (value_kind
-                                    == AOTAggregateReturnValueKind::
-                                        FloatConstant) {
-                                float_constant =
-                                    aggregate.value_floats[value_index];
-                                projection = QoreIRCallDirectInstruction::
-                                    AOTAggregateProjectionKind::
-                                        BoxedFloatConstant;
-                                return true;
-                            }
-                            if (value_kind
-                                    == AOTAggregateReturnValueKind::
-                                        BoolConstant) {
-                                int_constant =
-                                    aggregate.value_ints[value_index];
-                                projection = QoreIRCallDirectInstruction::
-                                    AOTAggregateProjectionKind::
-                                        BoxedBoolConstant;
-                                return true;
-                            }
-                            return false;
-                        }
-                        if (value_kind
-                                    == AOTAggregateReturnValueKind::IntConstant
-                                && kind
-                                    != QoreIRAggregateProjectionQueryKind::
-                                        ListIndexFloat) {
-                            int_constant =
-                                aggregate.value_ints[value_index];
-                            projection = QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::NativeIntConstant;
-                            return true;
-                        }
-                        if (value_kind
-                                    == AOTAggregateReturnValueKind::FloatConstant
-                                && kind
-                                    == QoreIRAggregateProjectionQueryKind::
-                                        ListIndexFloat) {
-                            float_constant =
-                                aggregate.value_floats[value_index];
-                            projection = QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::NativeFloatConstant;
-                            return true;
-                        }
-                        return false;
-                    }
-
-                    int8_t param = aggregate.value_params[value_index];
-                    if (param < 0
-                            || static_cast<size_t>(param)
-                                >= found->second.param_kinds.size()) {
-                        return false;
-                    }
-                    BatchCalleeParamKind actual = found->second.param_kinds[
-                        static_cast<size_t>(param)];
-                    if ((computed_int
-                                && actual
-                                    != BatchCalleeParamKind::NativeInt)
-                            || (computed_float
-                                && actual
-                                    != BatchCalleeParamKind::NativeFloat)) {
-                        return false;
-                    }
                     bool boxed_projection = kind
                                 == QoreIRAggregateProjectionQueryKind::
                                     ListIndexValue
                         || dynamic_index
                         || kind
                             == QoreIRAggregateProjectionQueryKind::HashKeyValue;
-                    BatchCalleeParamKind expected = kind
-                            == QoreIRAggregateProjectionQueryKind::ListIndexFloat
-                        ? BatchCalleeParamKind::NativeFloat
-                        : boxed_projection
-                            ? actual
-                            : BatchCalleeParamKind::NativeInt;
-                    if (actual != expected) {
+                    ProjectionDescriptor descriptor;
+                    if (!resolve_value(value_index, boxed_projection,
+                            descriptor)) {
                         return false;
                     }
-                    if (dynamic_index
-                            && actual == BatchCalleeParamKind::Boxed) {
-                        return false;
-                    }
-                    operand = param;
+                    operand = descriptor.operand;
                     if (!dynamic_index) {
                         size = 0;
                     }
-                    if (computed_int) {
-                        if (expected != BatchCalleeParamKind::NativeInt) {
-                            return false;
-                        }
-                        int_constant =
-                            aggregate.value_ints[value_index];
-                        projection = boxed_projection
-                            ? QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::
-                                    BoxedIntAddConstant
-                            : QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::
-                                    NativeIntAddConstant;
-                        return true;
-                    }
-                    if (computed_float) {
-                        if (expected != BatchCalleeParamKind::NativeFloat) {
-                            return false;
-                        }
-                        float_constant =
-                            aggregate.value_floats[value_index];
-                        projection = boxed_projection
-                            ? QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::
-                                    BoxedFloatAddConstant
-                            : QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::
-                                    NativeFloatAddConstant;
-                        return true;
-                    }
-                    if (boxed_projection) {
-                        projection = expected == BatchCalleeParamKind::Boxed
-                            ? QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedValue
-                            : expected == BatchCalleeParamKind::NativeFloat
-                                ? QoreIRCallDirectInstruction::
-                                    AOTAggregateProjectionKind::BoxedFloat
-                                : expected == BatchCalleeParamKind::NativeInt
-                                    ? QoreIRCallDirectInstruction::
-                                        AOTAggregateProjectionKind::BoxedInt
-                                    : expected
-                                            == BatchCalleeParamKind::NativeBool
-                                        ? QoreIRCallDirectInstruction::
-                                            AOTAggregateProjectionKind::
-                                                BoxedBool
-                                        : QoreIRCallDirectInstruction::
-                                            AOTAggregateProjectionKind::None;
-                    } else {
-                        projection = expected == BatchCalleeParamKind::NativeFloat
-                            ? QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
-                            : QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt;
-                    }
-                    if (projection
-                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None) {
-                        return false;
-                    }
-                    return true;
+                    int_constant = descriptor.int_constant;
+                    float_constant = descriptor.float_constant;
+                    projection = descriptor.kind;
+                    return projection != QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::None;
                 };
             aggregate_projections =
                 qore_ir_fuse_aggregate_return_projections(
