@@ -1117,6 +1117,14 @@ public:
                 return false;
             }
         }
+        // hash<auto!>/list<auto!> (no-narrow) parameters take their runtime
+        // container-type strip in setupCall(); fast-call entries pass raw
+        // caller values directly and would skip it
+        for (unsigned i = 0; i < signature.numParams(); ++i) {
+            if (QoreTypeInfo::isNoNarrowContainer(signature.getParamTypeInfo(i))) {
+                return false;
+            }
+        }
         return true;
     }
 };

@@ -160,8 +160,68 @@ void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
 }
 
 static bool is_no_narrow_container_type(const QoreTypeInfo* ti) {
-    return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
-        || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
+    return QoreTypeInfo::isNoNarrowContainer(ti);
+}
+
+void QoreTypeInfo::applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
+        ExceptionSink* xsink, LValueHelper* lvhelper) {
+    // For hash<auto!>/list<auto!> (NoNarrow): always set to autoHashTypeInfo/autoListTypeInfo.
+    // The point of auto! is to disable type narrowing at the variable level, so the top-level
+    // hashdecl on the source value must also be discarded; otherwise the runtime would continue
+    // to enforce hashdecl strictness (rejecting unknown keys / different value types) on a value
+    // that the user declared as flexible. Nested hashdecl values are preserved because we only
+    // strip the outer container's type info, not its members.
+    if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        // hash<auto!> / *hash<auto!> - always strip to autoHashTypeInfo
+        if (n.getType() == NT_HASH) {
+            QoreHashNode* h = n.get<QoreHashNode>();
+            qore_hash_private* hp = qore_hash_private::get(*h);
+            if (hp->getHashDecl() || hp->complexTypeInfo != autoHashTypeInfo) {
+                if (!h->is_unique()) {
+                    QoreHashNode* copy = h->copy();
+                    qore_hash_private* cp = qore_hash_private::get(*copy);
+                    if (cp->getHashDecl()) {
+                        cp->setHashDecl(nullptr);
+                    }
+                    cp->complexTypeInfo = autoHashTypeInfo;
+                    n = copy;
+                    if (lvhelper) {
+                        // lvalue locks may be held — defer the deref
+                        lvhelper->saveTemp(h);
+                    } else {
+                        h->deref(xsink);
+                    }
+                } else {
+                    if (hp->getHashDecl()) {
+                        hp->setHashDecl(nullptr);
+                    }
+                    hp->complexTypeInfo = autoHashTypeInfo;
+                }
+            }
+        }
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        // list<auto!> / *list<auto!> - always strip to autoListTypeInfo
+        if (n.getType() == NT_LIST) {
+            QoreListNode* l = n.get<QoreListNode>();
+            qore_list_private* lp = qore_list_private::get(*l);
+            if (lp->complexTypeInfo == autoListTypeInfo) {
+                // Already no-narrow; no copy is needed just to preserve the
+                // same container type.
+            } else if (!l->is_unique()) {
+                QoreListNode* copy = l->copy();
+                qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+                n = copy;
+                if (lvhelper) {
+                    // lvalue locks may be held — defer the deref
+                    lvhelper->saveTemp(l);
+                } else {
+                    l->deref(xsink);
+                }
+            } else {
+                lp->complexTypeInfo = autoListTypeInfo;
+            }
+        }
+    }
 }
 
 int qore_gvar_ref_u::write(ExceptionSink* xsink) const {
@@ -1649,53 +1709,8 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
     }
 
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables
-    // For hash<auto!>/list<auto!> (NoNarrow): always set to autoHashTypeInfo/autoListTypeInfo
-    // The point of auto! is to disable type narrowing at the variable level, so the top-level
-    // hashdecl on the source value must also be discarded; otherwise the runtime would continue
-    // to enforce hashdecl strictness (rejecting unknown keys / different value types) on a value
-    // that the user declared as flexible. Nested hashdecl values are preserved because we only
-    // strip the outer container's type info, not its members.
-    if (typeInfo == autoNoNarrowHashTypeInfo || typeInfo == autoNoNarrowHashOrNothingTypeInfo) {
-        // hash<auto!> / *hash<auto!> - always strip to autoHashTypeInfo
-        if (n.getType() == NT_HASH) {
-            QoreHashNode* h = n.get<QoreHashNode>();
-            qore_hash_private* hp = qore_hash_private::get(*h);
-            if (hp->getHashDecl() || hp->complexTypeInfo != autoHashTypeInfo) {
-                if (!h->is_unique()) {
-                    QoreHashNode* copy = h->copy();
-                    qore_hash_private* cp = qore_hash_private::get(*copy);
-                    if (cp->getHashDecl()) {
-                        cp->setHashDecl(nullptr);
-                    }
-                    cp->complexTypeInfo = autoHashTypeInfo;
-                    n = copy;
-                    saveTemp(h);
-                } else {
-                    if (hp->getHashDecl()) {
-                        hp->setHashDecl(nullptr);
-                    }
-                    hp->complexTypeInfo = autoHashTypeInfo;
-                }
-            }
-        }
-    } else if (typeInfo == autoNoNarrowListTypeInfo || typeInfo == autoNoNarrowListOrNothingTypeInfo) {
-        // list<auto!> / *list<auto!> - always strip to autoListTypeInfo
-        if (n.getType() == NT_LIST) {
-            QoreListNode* l = n.get<QoreListNode>();
-            qore_list_private* lp = qore_list_private::get(*l);
-            if (lp->complexTypeInfo == autoListTypeInfo) {
-                // Already no-narrow; no copy is needed just to preserve the
-                // same container type.
-            } else if (!l->is_unique()) {
-                QoreListNode* copy = l->copy();
-                qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
-                n = copy;
-                saveTemp(l);
-            } else {
-                lp->complexTypeInfo = autoListTypeInfo;
-            }
-        }
-    }
+    // (shared with parameter binding — see QoreTypeInfo::applyNoNarrowCoercion())
+    QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
     // process weak assignment
     if (weak_assignment) {

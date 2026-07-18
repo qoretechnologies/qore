@@ -4944,15 +4944,21 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                     return -1;
                 }
             }
-
-            // Normalize no-narrow container params like LValueHelper::assign()
-            // does for assignments: hash<auto!>/list<auto!> params must hold
-            // plain auto containers so heterogeneous writes work in place and
-            // the argument's own hashdecl/complex type stops being enforced
-            signature.lv[i]->applyNoNarrowContainerType(val, xsink);
-            if (*xsink) {
-                val.discard(xsink);
-                return -1;
+            // hash<auto!>/list<auto!> (no-narrow) parameters: strip a narrowed
+            // complex type or top-level hashdecl from the incoming container
+            // (copy-if-shared) so heterogeneous key/element stores inside the
+            // function work as the declared type promises.  This matches
+            // LValueHelper::assign()'s coercion for direct assignments; every
+            // engine (AST/IR/JIT/AOT) binds parameters here, so the value a
+            // function observes in an auto! parameter is engine-independent
+            // (previously the AST engine raised RUNTIME-TYPE-ERROR on stores
+            // into narrowed containers that the IR pipeline accepted).
+            if (val.getType() == NT_HASH || val.getType() == NT_LIST) {
+                QoreTypeInfo::applyNoNarrowCoercion(paramTypeInfo, val, xsink);
+                if (*xsink) {
+                    val.discard(xsink);
+                    return -1;
+                }
             }
 
             signature.lv[i]->instantiate(val, paramTypeInfo);
@@ -5508,7 +5514,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
         if (signature.lv[i]->closureUse()
                 || QoreTypeInfo::isReference(signature.lv[i]->getTypeInfo())
                 // no-narrow container params must bind through the TLS paths so
-                // applyNoNarrowContainerType() gives them assignment semantics;
+                // setupCall() gives them assignment semantics;
                 // direct params would pass the caller's tagged container through
                 || signature.lv[i]->isNoNarrowContainer()) {
             all_params_direct_safe = false;
