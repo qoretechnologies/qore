@@ -77,6 +77,39 @@ list<bool> sub makeBoolConstant(bool value) {
     return (value, True);
 }
 
+list<int> sub makeConditionalValues(bool reverse, int left, int right) {
+    if (reverse) {
+        return (right, left, 7);
+    }
+    return (left, right, 9);
+}
+
+list<int> sub makeVariableShape(bool long_value, int value) {
+    if (long_value) {
+        return (value, value + 1, value + 2);
+    }
+    return (value, value + 1);
+}
+
+int conditional_shape_effects = 0;
+
+list<int> sub makeConditionalSideEffect(bool reverse, int value) {
+    ++conditional_shape_effects;
+    if (reverse) {
+        return (value + 1, value);
+    }
+    return (value, value + 1);
+}
+
+list<int> sub makePotentiallyLooping(bool loop, bool alternate) {
+    while (loop) {
+    }
+    if (alternate) {
+        return (1, 2);
+    }
+    return (3, 4);
+}
+
 list<int> sub makeEmptyValues() {
     return ();
 }
@@ -424,6 +457,28 @@ int sub boxedSizeMultiLocalProjection() {
     return values.size() + values[0] + values[2];
 }
 
+int sub conditionalShapeProjection(bool reverse) {
+    return makeConditionalValues(reverse, 4, 5).size();
+}
+
+int sub conditionalElementProjection(bool reverse) {
+    return makeConditionalValues(reverse, 4, 5)[0];
+}
+
+int sub variableShapeProjection(bool long_value) {
+    return makeVariableShape(long_value, 4).size();
+}
+
+int sub conditionalSideEffectProjection(bool reverse) {
+    conditional_shape_effects = 0;
+    int size = makeConditionalSideEffect(reverse, 4).size();
+    return size * 10 + conditional_shape_effects;
+}
+
+int sub potentiallyLoopingProjection(bool alternate) {
+    return makePotentiallyLooping(False, alternate).size();
+}
+
 int sub crossBlockProjection(bool left_branch) {
     hash<string, int> row = makeRow(1, 2, 3);
     list<int> values = makeValues(4, 5, 6);
@@ -558,7 +613,7 @@ int sub emptyZeroArgProjections() {
     return checksum;
 }
 
-printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%y:%y:%s\\n\",
+printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%y:%y:%d:%d:%d:%d:%d:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
     constantHashProjection(), constantFloatProjection(),
@@ -593,6 +648,10 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     boxedIntMultiLocalProjection(), boxedFloatMultiLocalProjection(),
     boxedBoolMultiLocalProjection(), boxedSizeMultiLocalProjection(),
     nativeFloatPhiProjection(True), nativeFloatPhiProjection(False),
+    conditionalShapeProjection(True),
+    conditionalElementProjection(True), variableShapeProjection(False),
+    conditionalSideEffectProjection(True),
+    potentiallyLoopingProjection(True),
     hashSizeOverride());
 printf(\"%d\\n\", emptyZeroArgProjections());
 ";
@@ -660,6 +719,12 @@ foreach string function in (("phiProjection", "phiSideEffectProjection")) {
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: nativeFloatPhiProjection[^:]*:.*aggregate-projections=1/) {
     printf("missing native-float aggregate phi projection:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: conditionalShapeProjection[^:]*:.*aggregate-projections=1/) {
+    printf("missing conditional aggregate shape projection:\n%s",
         enabled_compile);
     exit(2);
 }
@@ -747,7 +812,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|nonConsumerComputedProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput|hashSizeOverride)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|nonConsumerComputedProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput|hashSizeOverride|conditionalElementProjection|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -777,6 +842,7 @@ string empty_values_line;
 string empty_row_line;
 string constant_values_line;
 string constant_row_line;
+string conditional_values_line;
 foreach string line in (dump.split("\n")) {
     if (line.find("makeRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
@@ -814,6 +880,9 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeConstantRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         constant_row_line = line;
+    } else if (line.find("makeConditionalValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_values_line = line;
     }
 }
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -848,8 +917,15 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
     printf("missing aggregate-return symbol metadata:\n%s", dump);
     exit(2);
 }
+if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
+        || conditional_values_line.find(
+            "\"aggregate_return_value_kinds\": [4, 4, 4]") == -1) {
+    printf("missing serialized conditional aggregate shape metadata:\n%s",
+        conditional_values_line);
+    exit(2);
+}
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:callref-size\n120\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n120\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

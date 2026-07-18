@@ -5901,11 +5901,242 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
     }
 }
 
+static bool qore_aot_get_conditional_aggregate_shape(
+        const QoreIRFunction& func, const UserSignature& sig,
+        AOTAggregateReturnInfo& result) {
+    if (func.blocks.size() < 2 || func.blocks.size() > 32
+            || sig.numParams() > INT8_MAX) {
+        return false;
+    }
+
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled || cfg.blocks.size() != func.blocks.size()) {
+        return false;
+    }
+    std::vector<size_t> indegree(cfg.blocks.size(), 0);
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (!cfg.reachable[block_id]) {
+            return false;
+        }
+        for (size_t successor : cfg.successors[block_id]) {
+            if (successor >= cfg.blocks.size()) {
+                return false;
+            }
+            ++indegree[successor];
+        }
+    }
+    std::vector<size_t> worklist;
+    worklist.reserve(cfg.blocks.size());
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (!indegree[block_id]) {
+            worklist.push_back(block_id);
+        }
+    }
+    size_t acyclic_blocks = 0;
+    while (!worklist.empty()) {
+        size_t block_id = worklist.back();
+        worklist.pop_back();
+        ++acyclic_blocks;
+        for (size_t successor : cfg.successors[block_id]) {
+            if (!--indegree[successor]) {
+                worklist.push_back(successor);
+            }
+        }
+    }
+    if (acyclic_blocks != cfg.blocks.size()) {
+        return false;
+    }
+
+    std::unordered_set<const LocalVar*> params;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT conditional aggregate parameter analysis")) {
+            return false;
+        }
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second
+                || param->second->closureUse()
+                || !QoreTypeInfo::hasType(param->second->getTypeInfo())
+                || QoreTypeInfo::isReference(param->second->getTypeInfo())
+                || QoreTypeInfo::parseAcceptsReturns(
+                    param->second->getTypeInfo(), NT_NOTHING)) {
+            return false;
+        }
+        params.insert(param->second);
+    }
+
+    struct Shape {
+        AOTAggregateReturnKind kind = AOTAggregateReturnKind::None;
+        size_t size = 0;
+        std::vector<std::string> keys;
+    };
+    std::unordered_map<uint32_t, Shape> shapes;
+    std::unordered_map<uint32_t, std::string> string_constants;
+    Shape common;
+    bool have_common = false;
+    size_t instruction_count = 0;
+    size_t return_count = 0;
+    for (const auto& block : func.blocks) {
+        if (!block || block->instructions.empty()) {
+            return false;
+        }
+        bool terminated = false;
+        for (size_t offset = 0; offset < block->instructions.size();
+                ++offset) {
+            if (++instruction_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT conditional aggregate instruction analysis")) {
+                return false;
+            }
+            const auto& inst_ptr = block->instructions[offset];
+            if (!inst_ptr || inst_ptr->exception_target || terminated) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            switch (inst->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::LoadLocal: {
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!inst->result.isValid()
+                            || !params.count(load->local)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::ConstInt:
+                case QoreIROpcode::ConstFloat:
+                case QoreIROpcode::ConstBool:
+                    if (!inst->result.isValid()) {
+                        return false;
+                    }
+                    break;
+                case QoreIROpcode::ConstString: {
+                    if (!inst->result.isValid()) {
+                        return false;
+                    }
+                    const auto* constant =
+                        static_cast<const QoreIRConstInstruction*>(inst);
+                    if (constant->constant.kind
+                            != QoreIRConstant::Kind::String) {
+                        return false;
+                    }
+                    string_constants.emplace(inst->result.id,
+                        constant->constant.string_value);
+                    break;
+                }
+                case QoreIROpcode::MakeList: {
+                    if (!inst->result.isValid()
+                            || inst->operands.size() > 100) {
+                        return false;
+                    }
+                    Shape shape;
+                    shape.kind = AOTAggregateReturnKind::FixedList;
+                    shape.size = inst->operands.size();
+                    shapes.emplace(inst->result.id, std::move(shape));
+                    break;
+                }
+                case QoreIROpcode::MakeHash: {
+                    if (!inst->result.isValid()
+                            || inst->operands.size() > 200
+                            || inst->operands.size() % 2) {
+                        return false;
+                    }
+                    Shape shape;
+                    shape.kind = AOTAggregateReturnKind::FixedHash;
+                    shape.size = inst->operands.size() / 2;
+                    shape.keys.reserve(shape.size);
+                    for (size_t i = 0; i < inst->operands.size(); i += 2) {
+                        auto key =
+                            string_constants.find(inst->operands[i].id);
+                        if (key == string_constants.end()) {
+                            return false;
+                        }
+                        shape.keys.push_back(key->second);
+                    }
+                    shapes.emplace(inst->result.id, std::move(shape));
+                    break;
+                }
+                case QoreIROpcode::MakeHashConstKeys: {
+                    if (!inst->result.isValid()
+                            || inst->operands.size() > 100) {
+                        return false;
+                    }
+                    const auto* hash = static_cast<
+                        const QoreIRMakeHashConstKeysInstruction*>(inst);
+                    if (hash->keys.size() != inst->operands.size()) {
+                        return false;
+                    }
+                    Shape shape;
+                    shape.kind = AOTAggregateReturnKind::FixedHash;
+                    shape.size = inst->operands.size();
+                    shape.keys = hash->keys;
+                    shapes.emplace(inst->result.id, std::move(shape));
+                    break;
+                }
+                case QoreIROpcode::Br:
+                case QoreIROpcode::BrIf:
+                    terminated = true;
+                    break;
+                case QoreIROpcode::Return: {
+                    const auto* ret =
+                        static_cast<const QoreIRReturnInstruction*>(inst);
+                    auto shape = ret->has_value
+                        ? shapes.find(ret->value.id) : shapes.end();
+                    if (shape == shapes.end()) {
+                        return false;
+                    }
+                    if (!have_common) {
+                        common = shape->second;
+                        have_common = true;
+                    } else if (common.kind != shape->second.kind
+                            || common.size != shape->second.size
+                            || common.keys != shape->second.keys) {
+                        return false;
+                    }
+                    ++return_count;
+                    terminated = true;
+                    break;
+                }
+                default:
+                    return false;
+            }
+            if (terminated && offset + 1 != block->instructions.size()) {
+                return false;
+            }
+        }
+        if (!terminated) {
+            return false;
+        }
+    }
+    if (!have_common || return_count < 2) {
+        return false;
+    }
+    result.kind = common.kind;
+    result.keys = std::move(common.keys);
+    result.value_params.assign(common.size, -1);
+    result.value_kinds.assign(common.size,
+        AOTAggregateReturnValueKind::Unknown);
+    result.value_ints.assign(common.size, 0);
+    result.value_floats.assign(common.size, 0.0);
+    return true;
+}
+
 static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         const UserSignature& sig, AOTAggregateReturnInfo& result) {
     if (std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")
-            || sig.numParams() > INT8_MAX
-            || func.blocks.size() != 1 || !func.blocks.front()
+            || sig.numParams() > INT8_MAX) {
+        return false;
+    }
+    if (func.blocks.size() != 1) {
+        return qore_aot_get_conditional_aggregate_shape(
+            func, sig, result);
+    }
+    if (!func.blocks.front()
             || func.blocks.front()->instructions.size()
                 > sig.numParams() + 104) {
         return false;
@@ -9071,7 +9302,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 } else {
                     valid = param == -1
                         && kind
-                            <= AOTAggregateReturnValueKind::BoolConstant;
+                            <= AOTAggregateReturnValueKind::Unknown;
                 }
             }
             bool fixed_hash = aggregate_return.kind
@@ -10213,7 +10444,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.aggregate_return_value_kinds.size());
     for (uint8_t kind : rec.aggregate_return_value_kinds) {
         if (kind > static_cast<uint8_t>(
-                AOTAggregateReturnValueKind::BoolConstant)) {
+                AOTAggregateReturnValueKind::Unknown)) {
             return false;
         }
         info.aggregate_return.value_kinds.push_back(
