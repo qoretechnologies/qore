@@ -60,6 +60,7 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("auto! in class members", \autoNoNarrowClassMemberTest());
         addTestCase("auto! in global variables", \autoNoNarrowGlobalVarTest());
         addTestCase("softlist<auto!> syntax", \softlistAutoNoNarrowTest());
+        addTestCase("auto! parameter boundary stripping", \autoNoNarrowParamBoundaryTest());
         addTestCase("hash<auto!> runtime type stripping", \hashAutoNoNarrowRuntimeTest());
         addTestCase("list<auto!> runtime type stripping", \listAutoNoNarrowRuntimeTest());
         addTestCase("hash<auto!> from reference", \hashAutoNoNarrowFromRefTest());
@@ -1516,6 +1517,79 @@ sub test() {
     }
 
     # Runtime tests for hash<auto!> - ensures type stripping works at runtime
+    #! a narrowed container passed to an auto! parameter is stripped at the
+    #! parameter boundary in every engine (regression: the AST engine raised
+    #! RUNTIME-TYPE-ERROR on heterogeneous stores into containers that had
+    #! narrowed before reaching the auto! parameter, while the IR pipeline's
+    #! COW store path accepted them — the strip now happens uniformly in
+    #! UserVariantBase::setupCall())
+    private static hash<auto> narrowedHashParamHelper(*hash<auto!> opts) {
+        if (!opts.url) {
+            # heterogeneous key store: string into a formerly hash<string, int> value
+            opts.url = "http://localhost:8001";
+        }
+        return opts;
+    }
+
+    private static hash<auto> narrowedListParamHelper(*list<auto!> vals) {
+        if (vals[0] != "x") {
+            # heterogeneous element store: string into a formerly list<int> value
+            vals[1] = "converted";
+        }
+        return {"vals": vals};
+    }
+
+    autoNoNarrowParamBoundaryTest() {
+        # the all-int literals narrow to hash<string, int> / list<int>; a second
+        # live reference forces the COW path in the store
+        hash<auto> src = {"timeout": 30000};
+        hash<auto> res = TypeNarrowingTest::narrowedHashParamHelper(src);
+        assertEq(30000, res.timeout);
+        assertEq("http://localhost:8001", res.url);
+        assertEq("hash<auto>", res.fullType(),
+            "narrowed hash must be stripped at the auto! parameter boundary");
+        # the caller's original hash is unchanged
+        assertEq({"timeout": 30000}, src);
+
+        list<auto> lsrc = (10, 20, 30);
+        hash<auto> lres = TypeNarrowingTest::narrowedListParamHelper(lsrc);
+        assertEq((10, "converted", 30), lres.vals);
+        assertEq("list<auto>", lres.vals.fullType(),
+            "narrowed list must be stripped at the auto! parameter boundary");
+        assertEq((10, 20, 30), lsrc);
+
+        # unique containers (rvalue args) take the same strip: no COW happens
+        # and the direct key store must also succeed
+        hash<auto> ures = TypeNarrowingTest::narrowedHashParamHelper({"timeout": 1});
+        assertEq("hash<auto>", ures.fullType());
+        assertEq("http://localhost:8001", ures.url);
+
+        # the AST engine must behave identically (a non-%modern child program
+        # executes with the AST engine)
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("
+hash<auto> sub resolve(*hash<auto!> opts) {
+    if (!opts.url) {
+        opts.url = 'http://localhost:8001';
+    }
+    return opts;
+}
+
+hash<auto> sub run_test() {
+    hash<auto> src = {'timeout': 30000};
+    hash<auto> res = resolve(src);
+    return {'res': res, 'src': src, 'type': res.fullType()};
+}
+", "ast_narrowed_param");
+            hash<auto> r = p.callFunction("run_test");
+            assertEq("http://localhost:8001", r.res.url,
+                "AST engine must accept the heterogeneous store through the auto! parameter");
+            assertEq("hash<auto>", r.type);
+            assertEq({"timeout": 30000}, r.src);
+        }
+    }
+
     hashAutoNoNarrowRuntimeTest() {
         # Test that hash<auto!> variable can hold different types at runtime
         hash<auto!> h = {"name": 1};

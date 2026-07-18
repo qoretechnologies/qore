@@ -4834,7 +4834,7 @@ class HashDerived inherits Base {
     constructor(*hash<auto> opts) : Base(HashDerived::resolveOpts(opts)) {
     }
 
-    private static hash<auto> resolveOpts(*hash<auto!> opts) {
+    static hash<auto> resolveOpts(*hash<auto!> opts) {
         if (!opts.url) {
             # COW key store of a string into a hash narrowed to hash<string, int>
             opts.url = \"http://localhost:8001\";
@@ -4861,6 +4861,12 @@ HashDerived hd({\"timeout\": 30000});
 printf(\"hash cfg: %y\\n\", hd.getCfg());
 ListDerived ld((10, 20, 30));
 printf(\"list cfg: %y\\n\", ld.getCfg());
+
+# unique container (rvalue argument): no COW copy is made, so the store
+# exercises the direct setKeyValue path — the parameter-boundary strip
+# must make it succeed identically
+hash<auto> ur = HashDerived::resolveOpts({\"timeout\": 1});
+printf(\"unique cfg: %y (%s)\\n\", ur, ur.fullType());
 printf(\"OK\\n\");
 ";
         hash<auto> result = compileCheckAndRun(code);

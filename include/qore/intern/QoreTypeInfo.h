@@ -543,6 +543,24 @@ public:
         }
     }
 
+    //! Returns true for the hash<auto!>/list<auto!> (no-narrow) marker types
+    DLLLOCAL static bool isNoNarrowContainer(const QoreTypeInfo* ti) {
+        return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+            || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
+    }
+
+    //! Applies the auto! (no-narrow) container coercion to a value entering an
+    //! auto!-typed slot: strips a narrowed complex type or top-level hashdecl
+    //! from the outer hash/list (copy-if-shared) so later heterogeneous
+    //! key/element stores remain valid.  No-op for other type infos and value
+    //! types.  When lvhelper is given, the replaced original is released via
+    //! saveTemp() (lvalue locks may be held); otherwise it is dereferenced
+    //! directly.  Implemented in Variable.cpp; shared by LValueHelper::assign()
+    //! and parameter binding (UserVariantBase::setupCall()) so the value a
+    //! function observes in an auto! parameter is engine-independent.
+    DLLLOCAL static void applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
+            ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
+
     //! Re-applies declared hash/list/hashdecl container metadata to a value.
     DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             ExceptionSink* xsink);
