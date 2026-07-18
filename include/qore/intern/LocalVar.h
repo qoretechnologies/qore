@@ -46,6 +46,9 @@
 #include <atomic>
 #include <memory>
 
+// defined in lib/QoreTypeInfo.cpp; declared in "qore/intern/QoreTypeInfo.h"
+DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {
 protected:
@@ -914,6 +917,25 @@ public:
         LValueHelper::assign() can properly strip the type at runtime.
     */
     DLLLOCAL const QoreTypeInfo* getTypeInfoForLValue() const;
+
+    //! Returns true if this variable's lvalue type is a no-narrow container type (hash<auto!>/list<auto!>)
+    DLLLOCAL bool isNoNarrowContainer() const {
+        const QoreTypeInfo* ti = getTypeInfoForLValue();
+        return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+            || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
+    }
+
+    //! Normalizes a value being bound to a no-narrow container variable
+    /** Applies the same strip as LValueHelper::assign(): hash<auto!>/list<auto!>
+        variables must hold plain auto containers so heterogeneous writes work in
+        place and the value's own hashdecl/complex type stops being enforced.
+        Param binding must call this so params match assignment semantics.
+    */
+    DLLLOCAL void applyNoNarrowContainerType(QoreValue& val, ExceptionSink* xsink) const {
+        if (isNoNarrowContainer()) {
+            q_apply_no_narrow_container_type(getTypeInfoForLValue(), val, xsink);
+        }
+    }
 
     //! Sets the narrowed type for the variable (called during assignment parsing)
     /** Only sets if this is an auto-typed variable and the new type is more specific

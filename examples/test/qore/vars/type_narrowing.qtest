@@ -69,6 +69,8 @@ public class TypeNarrowingTest inherits QUnit::Test {
         addTestCase("hash<auto> runtime type stripping", \hashAutoRuntimeTest());
         addTestCase("list<auto> runtime type stripping", \listAutoRuntimeTest());
         addTestCase("hashdecl type preservation", \hashdeclPreservationTest());
+        addTestCase("no-narrow param binding strips container types",
+            \autoNoNarrowParamBindingStripTest());
         addTestCase("hash<auto!> strips hashdecl source", \hashAutoNoNarrowHashdeclStripTest());
         addTestCase("hash<auto!> class member strips hashdecl", \hashAutoNoNarrowClassMemberHashdeclTest());
 
@@ -1707,6 +1709,73 @@ list<auto> sub getHashDeclInListAuto() {
     # Assigning a hashdecl-typed hash to a hash<auto!> local must strip the source hashdecl;
     # otherwise the runtime keeps enforcing hashdecl strictness and rejects unknown keys,
     # defeating the purpose of auto!.
+    # Params declared hash<auto!>/list<auto!> must be normalized at binding just like
+    # assignments: the bound container is stripped to a plain auto container (copying
+    # when shared) so heterogeneous writes work and the argument's own hashdecl/complex
+    # type stops being enforced.  The probes run in a loop inside the parsed program so
+    # every runtime call path (AST setup, fast call, interpreter inline) must agree.
+    autoNoNarrowParamBindingStripTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%modern
+hashdecl SI {
+    int size;
+}
+
+string sub probeH(*hash<auto!> h) {
+    return h.fullType();
+}
+
+string sub probeL(*list<auto!> l) {
+    return l.fullType();
+}
+
+string sub runProbes() {
+    hash<SI> t = <SI>{'size': 1};
+    list<int> li = (1, 2);
+    hash<string, bool> results = {};
+    for (int i = 0; i < 32; ++i) {
+        string r = probeH(t) + '|' + probeH(cast<hash<auto!>>({'n': i})) + '|' + probeH({'n': i})
+            + '|' + probeL(li) + '|' + probeL(cast<list<auto!>>((i,))) + '|' + probeL((i,));
+        results{r} = True;
+    }
+    return (keys results).size() == 1 ? (keys results)[0] : sprintf('DIVERGENT: %y', keys results);
+}
+
+hash<auto> sub mutateShared(*hash<auto!> h) {
+    h.extra = 'x';
+    return h;
+}
+
+list<auto> sub mutateSharedList(*list<auto!> l) {
+    l[0] = 'x';
+    return l;
+}
+
+hash<auto> sub runMutation() {
+    hash<SI> t = <SI>{'size': 1};
+    hash<auto> mutated = mutateShared(t);
+    list<int> li = (1, 2);
+    list<auto> lm = mutateSharedList(li);
+    return {'caller_hash': t, 'caller_hash_type': t.fullType(), 'mutated': mutated,
+        'caller_list': li, 'mutated_list': lm};
+}
+        ", "auto_bang_param_strip");
+
+        assertEq("hash<auto>|hash<auto>|hash<auto>|list<auto>|list<auto>|list<auto>",
+            p.callFunction("runProbes"),
+            "no-narrow params must hold plain auto containers on every call path");
+
+        hash<auto> r = p.callFunction("runMutation");
+        assertEq({"size": 1}, r.caller_hash, "caller's hashdecl value must be unchanged");
+        assertEq("hash<SI>", r.caller_hash_type, "caller's hashdecl type must be unchanged");
+        assertEq({"size": 1, "extra": "x"}, r.mutated,
+            "unknown key must be writable on a hashdecl-sourced no-narrow param");
+        assertEq((1, 2), r.caller_list, "caller's typed list must be unchanged");
+        assertEq(("x", 2), r.mutated_list,
+            "heterogeneous store must work on a typed-list-sourced no-narrow param");
+    }
+
     hashAutoNoNarrowHashdeclStripTest() {
         Program p(PO_NEW_STYLE);
         p.parse("

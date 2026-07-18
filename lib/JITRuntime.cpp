@@ -1381,61 +1381,6 @@ extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t
     qore_rt_assign_local_impl(var, value, xsink, true, true);
 }
 
-static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
-        ExceptionSink* xsink) {
-    // Keep StoreLocal coercion aligned with LValueHelper::assign(): hash<auto!>
-    // and list<auto!> accept narrowed containers but must store them as auto
-    // containers so later heterogeneous key/element writes remain valid.
-    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
-        if (val.getType() == NT_HASH) {
-            map_get_plain_hash(val, xsink);
-        } else if (val.getType() == NT_LIST) {
-            map_get_plain_list(val, xsink);
-        }
-    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
-        if (val.getType() != NT_HASH) {
-            return;
-        }
-        QoreHashNode* h = val.get<QoreHashNode>();
-        qore_hash_private* hp = qore_hash_private::get(*h);
-        if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
-            return;
-        }
-        if (!h->is_unique()) {
-            QoreHashNode* copy = h->copy();
-            qore_hash_private* cp = qore_hash_private::get(*copy);
-            if (cp->getHashDecl()) {
-                cp->setHashDecl(nullptr);
-            }
-            cp->complexTypeInfo = autoHashTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            if (hp->getHashDecl()) {
-                hp->setHashDecl(nullptr);
-            }
-            hp->complexTypeInfo = autoHashTypeInfo;
-        }
-    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
-        if (val.getType() != NT_LIST) {
-            return;
-        }
-        QoreListNode* l = val.get<QoreListNode>();
-        qore_list_private* lp = qore_list_private::get(*l);
-        if (lp->complexTypeInfo == autoListTypeInfo) {
-            return;
-        }
-        if (!l->is_unique()) {
-            QoreListNode* copy = l->copy();
-            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            lp->complexTypeInfo = autoListTypeInfo;
-        }
-    }
-}
-
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     ti = qore_substitute_type_params_if_needed(ti);
@@ -1467,7 +1412,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", val, xsink);
     if (!xsink || !*xsink) {
-        qore_rt_apply_no_narrow_container_type(ti, val, xsink);
+        // Keep StoreLocal coercion aligned with LValueHelper::assign(): no-narrow
+        // lvalues store plain auto containers
+        q_apply_no_narrow_container_type(ti, val, xsink);
     }
     uint64_t result = toBits(val);
     if (cleanup_ptr) {
@@ -5420,7 +5367,10 @@ static bool closureDirectArgsNeedNoBinding(const UserVariantBase* uvb,
         QoreValue value = fromBits(args[i]);
         if (value.isNothing() || value.needsEval()
                 || !QoreTypeInfo::isInputIdentical(sig->getParamTypeInfo(i),
-                    value.getTypeInfo())) {
+                    value.getTypeInfo())
+                // no-narrow container params must bind through the TLS paths so
+                // applyNoNarrowContainerType() gives them assignment semantics
+                || sig->lv[i]->isNoNarrowContainer()) {
             return false;
         }
     }
@@ -8201,6 +8151,17 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 }
             }
 
+            // Normalize no-narrow container params like LValueHelper::assign()
+            // does for assignments (matches UserVariantBase::setupCall())
+            sig->lv[i]->applyNoNarrowContainerType(val, xsink);
+            if (*xsink) {
+                val.discard(xsink);
+                for (int j = (int)i - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
+            }
+
             sig->lv[i]->instantiate(val);
         } else if (i < defaultArgList.size() && defaultArgList[i]) {
             // Evaluate default argument expression
@@ -8227,6 +8188,17 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                     }
                     return -1;
                 }
+            }
+
+            // Normalize no-narrow container params like LValueHelper::assign()
+            // does for assignments (matches UserVariantBase::setupCall())
+            sig->lv[i]->applyNoNarrowContainerType(val, xsink);
+            if (*xsink) {
+                val.discard(xsink);
+                for (int j = (int)i - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
             }
 
             sig->lv[i]->instantiate(val);

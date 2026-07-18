@@ -4945,6 +4945,16 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 }
             }
 
+            // Normalize no-narrow container params like LValueHelper::assign()
+            // does for assignments: hash<auto!>/list<auto!> params must hold
+            // plain auto containers so heterogeneous writes work in place and
+            // the argument's own hashdecl/complex type stops being enforced
+            signature.lv[i]->applyNoNarrowContainerType(val, xsink);
+            if (*xsink) {
+                val.discard(xsink);
+                return -1;
+            }
+
             signature.lv[i]->instantiate(val, paramTypeInfo);
             continue;
         }
@@ -5496,7 +5506,11 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             all_params_ir_only = false;
         }
         if (signature.lv[i]->closureUse()
-                || QoreTypeInfo::isReference(signature.lv[i]->getTypeInfo())) {
+                || QoreTypeInfo::isReference(signature.lv[i]->getTypeInfo())
+                // no-narrow container params must bind through the TLS paths so
+                // applyNoNarrowContainerType() gives them assignment semantics;
+                // direct params would pass the caller's tagged container through
+                || signature.lv[i]->isNoNarrowContainer()) {
             all_params_direct_safe = false;
         }
     }

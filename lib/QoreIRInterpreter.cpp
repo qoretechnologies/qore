@@ -1394,57 +1394,6 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
     helper.assign(value);
 }
 
-static void applyNoNarrowContainerType(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink) {
-    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
-        if (val.getType() == NT_HASH) {
-            map_get_plain_hash(val, xsink);
-        } else if (val.getType() == NT_LIST) {
-            map_get_plain_list(val, xsink);
-        }
-    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
-        if (val.getType() != NT_HASH) {
-            return;
-        }
-        QoreHashNode* h = val.get<QoreHashNode>();
-        qore_hash_private* hp = qore_hash_private::get(*h);
-        if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
-            return;
-        }
-        if (!h->is_unique()) {
-            QoreHashNode* copy = h->copy();
-            qore_hash_private* cp = qore_hash_private::get(*copy);
-            if (cp->getHashDecl()) {
-                cp->setHashDecl(nullptr);
-            }
-            cp->complexTypeInfo = autoHashTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            if (hp->getHashDecl()) {
-                hp->setHashDecl(nullptr);
-            }
-            hp->complexTypeInfo = autoHashTypeInfo;
-        }
-    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
-        if (val.getType() != NT_LIST) {
-            return;
-        }
-        QoreListNode* l = val.get<QoreListNode>();
-        qore_list_private* lp = qore_list_private::get(*l);
-        if (lp->complexTypeInfo == autoListTypeInfo) {
-            return;
-        }
-        if (!l->is_unique()) {
-            QoreListNode* copy = l->copy();
-            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
-            AbstractQoreNode* old = val.assign(copy);
-            discard(old, xsink);
-        } else {
-            lp->complexTypeInfo = autoListTypeInfo;
-        }
-    }
-}
-
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
@@ -1454,7 +1403,7 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
         stored.discard(xsink);
         return QoreValue();
     }
-    applyNoNarrowContainerType(ti, stored, xsink);
+    q_apply_no_narrow_container_type(ti, stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
         return QoreValue();
@@ -2088,6 +2037,17 @@ static int instantiateInterpreterFastCallParams(const UserSignature* sig, unsign
                 }
                 return -1;
             }
+        }
+
+        // Normalize no-narrow container params like LValueHelper::assign()
+        // does for assignments (matches UserVariantBase::setupCall())
+        sig->lv[i]->applyNoNarrowContainerType(val, xsink);
+        if (xsink && *xsink) {
+            val.discard(xsink);
+            for (int j = static_cast<int>(i) - 1; j >= 0; --j) {
+                sig->lv[j]->uninstantiate(xsink);
+            }
+            return -1;
         }
 
         sig->lv[i]->instantiate(val);

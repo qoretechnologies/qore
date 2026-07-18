@@ -2357,6 +2357,9 @@ protected:
 DLLLOCAL void map_get_plain_hash(QoreValue&, ExceptionSink*);
 DLLLOCAL void map_get_plain_hash_lvalue(QoreValue&, ExceptionSink*, LValueHelper*);
 
+//! strips no-narrow (hash<auto!>/list<auto!>) container tags like LValueHelper::assign(); copies shared containers
+DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+
 class QoreHashTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreHashTypeInfo() : QoreTypeInfo("hash", q_accept_vec_t {

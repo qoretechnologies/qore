@@ -5109,6 +5109,64 @@ void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
     n.assign(copy_strip_complex_types(*l));
 }
 
+// Normalize a container stored under a no-narrow lvalue type: hash<auto!> and
+// list<auto!> accept narrowed containers but must store them as plain auto
+// containers so later heterogeneous key/element writes remain valid and the
+// value's own hashdecl/complex type stops being enforced.  Retags in place
+// when the container is unique, copies when it is shared.  Same semantics as
+// the strip in LValueHelper::assign(), which keeps its own inline version
+// because it runs under the lvalue lock and must defer derefs via saveTemp().
+void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink) {
+    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+        if (val.getType() == NT_HASH) {
+            map_get_plain_hash(val, xsink);
+        } else if (val.getType() == NT_LIST) {
+            map_get_plain_list(val, xsink);
+        }
+    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        if (val.getType() != NT_HASH) {
+            return;
+        }
+        QoreHashNode* h = val.get<QoreHashNode>();
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        if (!hp->getHashDecl() && hp->complexTypeInfo == autoHashTypeInfo) {
+            return;
+        }
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            qore_hash_private* cp = qore_hash_private::get(*copy);
+            if (cp->getHashDecl()) {
+                cp->setHashDecl(nullptr);
+            }
+            cp->complexTypeInfo = autoHashTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            if (hp->getHashDecl()) {
+                hp->setHashDecl(nullptr);
+            }
+            hp->complexTypeInfo = autoHashTypeInfo;
+        }
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        if (val.getType() != NT_LIST) {
+            return;
+        }
+        QoreListNode* l = val.get<QoreListNode>();
+        qore_list_private* lp = qore_list_private::get(*l);
+        if (lp->complexTypeInfo == autoListTypeInfo) {
+            return;
+        }
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            lp->complexTypeInfo = autoListTypeInfo;
+        }
+    }
+}
+
 const QoreTypeInfo* QoreTypeInfo::getHashPairType(const QoreTypeInfo* valueType) {
     // For auto/auto!/any value types, return autoHashTypeInfo as the element type
     if (!valueType || is_auto_vti(valueType) || valueType == anyTypeInfo || !hasType(valueType)
