@@ -2278,12 +2278,55 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             return requiresRefresh();
         }
 
+        #! Returns True if an async polling ping may attempt an OAuth2 token refresh after a 401
+        /** Unlike the synchronous \c canRetryAuth() predicate, this one is specific to the
+            asynchronous polling refresh mechanism, which implements OAuth2 refresh only (it does not
+            support custom-token authentication).  It returns @ref True only when the
+            connection has a usable OAuth2 configuration that
+            @ref startOAuth2PollRefreshToken() can actually turn into a token request:
+
+            - a real OAuth2 grant type (not \c "none");
+            - automatic refresh enabled (\c oauth2_auto_refresh);
+            - a token endpoint URL (\c oauth2_token_url or \c oauth2_alt_token_url); and
+            - the minimum inter-refresh interval has elapsed.
+
+            This prevents a non-OAuth (e.g. API-key) connection that receives an HTTP 401
+            ping response from incorrectly entering the OAuth2 refresh path — the
+            divergence that previously produced a \c RUNTIME-TYPE-ERROR when the (absent)
+            token URL was assigned to a non-nullable string.
+
+            @return @ref True only if @ref startOAuth2PollRefreshToken() has enough
+            configuration to build and send a token refresh request
+
+            @since %RestClientIo 1.0
+        */
+        bool canPingOAuth2Refresh() {
+            AutoReadLock al(config_lock);
+            # the async polling refresh path implements OAuth2 only, not custom-token auth
+            if (!oauth2_grant_type.val() || oauth2_grant_type == "none") {
+                return False;
+            }
+            # automatic refresh must be enabled for a 401-triggered refresh
+            if (!oauth2_auto_refresh) {
+                return False;
+            }
+            # a token endpoint URL is required to build the refresh request
+            if (!oauth2_alt_token_url.val() && !oauth2_token_url.val()) {
+                return False;
+            }
+            # rate-limit refreshes so repeated 401s cannot drive a tight refresh loop
+            return (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
+        }
+
         #! Starts an async OAuth2 token refresh poll operation
         /** Returns an AbstractPollOperation that drives an HTTP POST to the token endpoint
             using socket-level polling (no background threads, no blocking I/O on the I/O thread).
             When the poll operation completes, call updateOAuth2Token() with the parsed response.
 
             @return an AbstractPollOperation for the token refresh HTTP request
+
+            @throw OAUTH2-ERROR if no OAuth2 token endpoint URL (\c oauth2_token_url or
+            \c oauth2_alt_token_url) is configured for the connection
 
             @since %RestClientIo 1.0
         */
@@ -2296,7 +2339,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             bool has_alt_token_url;
             {
                 AutoReadLock al(config_lock);
-                token_url_str = oauth2_alt_token_url ?? oauth2_token_url;
+                # a token endpoint URL is mandatory; without it there is nothing to POST
+                # to.  Guard the nullable-to-string assignment so a mis-routed refresh
+                # (e.g. a non-OAuth connection that reached here) raises a clear OAuth2
+                # configuration error instead of an opaque RUNTIME-TYPE-ERROR.
+                *string token_url = oauth2_alt_token_url ?? oauth2_token_url;
+                if (!token_url.val()) {
+                    throw "OAUTH2-ERROR", "cannot perform an OAuth2 token refresh: no token "
+                        "endpoint URL is configured (\"oauth2_token_url\" or "
+                        "\"oauth2_alt_token_url\"); this connection is not configured for "
+                        "OAuth2 authentication";
+                }
+                token_url_str = token_url;
                 has_alt_token_url = oauth2_alt_token_url.val();
                 use_basic_auth = oauth2_token_use_basic_auth;
                 auth_secret_only = oauth2_token_auth_secret_only;
@@ -5308,9 +5362,14 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     continue;
                 }
 
-                # 401: attempt OAuth2 token refresh + retry once
+                # 401: attempt OAuth2 token refresh + retry once, but only when the
+                # connection actually has a usable OAuth2 refresh configuration.
+                # canPingOAuth2Refresh() prevents a non-OAuth (e.g. API-key) connection
+                # from entering the OAuth2 refresh path merely because oauth2_auto_refresh
+                # defaults to True — the 401 is surfaced as a normal ping error instead.
                 if (status_code == 401 && !auth_retried
-                        && (ping_opts.oauth2_auto_refresh ?? True)) {
+                        && (ping_opts.oauth2_auto_refresh ?? True)
+                        && rcio.canPingOAuth2Refresh()) {
                     auth_retried = True;
                     doStartOAuth2Refresh();
                     continue;
