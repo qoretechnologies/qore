@@ -401,6 +401,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Unified manager basic functionality
         addTestCase("unified manager stats", \testUnifiedManagerStats());
+        addTestCase("unified manager connection info", \testUnifiedManagerConnectionInfo());
 
         # Negative tests
         addTestCase("invalid URL handling", \testInvalidUrl());
@@ -790,6 +791,37 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stats = mgr.getStats();
         assertEq(0, stats.total_connections, "after cleanup total_connections");
         assertEq(0, stats.total_usable_connections, "after cleanup total_usable_connections");
+    }
+
+    testUnifiedManagerConnectionInfo() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        # no connections yet: empty info, and an invalid URL argument throws
+        assertEq(0, mgr.getConnectionInfo().size(), "initial connection info empty");
+        assertEq(0, mgr.getConnectionInfo(mSslUrl).size(), "initial filtered info empty");
+        assertThrows("HTTPCLIENT-URL-ERROR", sub () { mgr.getConnectionInfo(""); });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "connection-info GET status");
+
+        # after the request the negotiated h2 connection is reported
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = mgr.getConnectionInfo();
+        assertEq(True, info.size() >= 1, "connection info populated");
+        assertEq("h2", info[0].protocol, "negotiated protocol is h2");
+        assertEq(True, info[0].ssl, "connection is TLS");
+        assertEq("127.0.0.1", info[0].host, "connection host");
+
+        # filtered to the target URL matches; an unrelated host is empty
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> finfo = mgr.getConnectionInfo(mSslUrl);
+        assertEq(True, finfo.size() >= 1, "filtered connection info populated");
+        assertEq("h2", finfo[0].protocol, "filtered negotiated protocol is h2");
+        assertEq(0, mgr.getConnectionInfo("https://127.0.0.1:2").size(), "unrelated host empty");
     }
 
     # ---- Negative Tests ----

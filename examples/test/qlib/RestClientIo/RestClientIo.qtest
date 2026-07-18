@@ -484,6 +484,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("error without passthru", \testErrorWithoutPassthru());
         addTestCase("missing url error", \testMissingUrlError());
         addTestCase("stats", \testStats());
+        addTestCase("negotiated http version h2", \testNegotiatedHttpVersion());
+        addTestCase("negotiated http version h1", \testNegotiatedHttpVersionH1());
+        addTestCase("connection info via manager", \testConnectionInfoManager());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
         addTestCase("restGetAsync", \testRestGetAsync());
@@ -967,6 +970,78 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<auto> stats = rest.getStats();
         assertEq(True, exists stats.total_connections);
         assertEq(True, exists stats.protocol);
+    }
+
+    testNegotiatedHttpVersion() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # before the first request there is no connection, so no negotiated protocol
+        assertEq(0, rest.getConnectionInfo().size());
+        assertEq(NOTHING, rest.getNegotiatedHttpVersion());
+        # getHttpVersion() reports the configured mode even without a connection
+        assertEq("2.0", rest.getHttpVersion());
+%ifndef NoJson
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # after the request the negotiated protocol (h2 via ALPN) is visible
+        assertEq("2.0", rest.getNegotiatedHttpVersion());
+
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = rest.getConnectionInfo();
+        assertEq(True, info.size() >= 1);
+        assertEq("h2", info[0].protocol);
+        assertEq("127.0.0.1", info[0].host);
+        assertEq(port, info[0].port);
+        assertEq(True, info[0].ssl);
+%endif
+    }
+
+    testNegotiatedHttpVersionH1() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # plain HTTP/1.1: negotiated version is "1.1"
+        assertEq("1.1", rest.getNegotiatedHttpVersion());
+
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = rest.getConnectionInfo();
+        assertEq(True, info.size() >= 1);
+        assertEq("h1", info[0].protocol);
+        assertEq(h1_port, info[0].port);
+%endif
+    }
+
+    testConnectionInfoManager() {
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # an invalid URL argument throws
+        assertThrows("HTTPCLIENT-URL-ERROR", sub () { mgr.getConnectionInfo(""); });
+
+        # a host that has never been contacted yields an empty list
+        assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
+%ifndef NoJson
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # unfiltered: at least the h1 connection just used is present
+        assertEq(True, mgr.getConnectionInfo().size() >= 1);
+
+        # filtered to the target URL: the h1 connection
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = mgr.getConnectionInfo(rest.getUrl());
+        assertEq(True, info.size() >= 1);
+        assertEq("h1", info[0].protocol);
+        assertEq(h1_port, info[0].port);
+
+        # filtered to an unrelated host: still empty
+        assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
+%endif
     }
 
     testSharedManager() {
