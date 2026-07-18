@@ -31,7 +31,7 @@
 %requires Util
 
 module QoreOnnxExport {
-    version = "1.1.0";
+    version = "1.0.0";
     desc = "user module providing ONNX model export for trained ML models";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -100,14 +100,6 @@ list<auto> predictions = onnx_model.predict(test_X);
     @endcode
 
     @section qoreonnxexportrelnotes QoreOnnxExport Module Release Notes
-
-    @subsection qoreonnxexport_1_1 QoreOnnxExport Module Version 1.1
-    - Added ONNX export for DecisionTree, RandomForest, and GradientBoostedTrees
-    - DecisionTree and RandomForest use TreeEnsembleClassifier (classification)
-      or TreeEnsembleRegressor (regression)
-    - GBT regression uses TreeEnsembleRegressor with learning rate baked into leaves
-    - GBT binary classification uses TreeEnsembleRegressor with Sigmoid post-processing
-    - GBT multiclass classification uses TreeEnsembleRegressor with Softmax post-processing
 
     @subsection qoreonnxexport_1_0 QoreOnnxExport Module Version 1.0
     - Initial release with ONNX export for 8 ML algorithms

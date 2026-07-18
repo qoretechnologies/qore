@@ -28,7 +28,7 @@
 %requires reflection
 
 module QoreRagTypes {
-    version = "1.1.0";
+    version = "1.0.0";
     desc = "user module providing the provider-neutral hashdecls and abstract "
         "provider classes shared by QoreRagUtils and RAG provider modules";
     author = "Qore Technologies, s.r.o.";
@@ -774,7 +774,7 @@ public class AbstractReranker {
 
         @return a @ref RerankOutcome with the ranked results and token usage
 
-        @since %QoreRagTypes 1.1
+        @since %QoreRagTypes 1.0
     */
     hash<RerankOutcome> rerankEx(string query, list<string> documents,
             int top_k, *hash<auto> opts) {

@@ -147,36 +147,6 @@ resp = rc.restGet("/api/data");
 
     @section restclientio_relnotes Release Notes
 
-    @subsection restclientio_v1_2 Version 1.2
-    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs,
-      SSE reader/stream/observable APIs, and polling pings
-    - Added \c getLogger() to expose the client's logger
-    - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
-      error handling
-    - Added \c setContentEncoding() for setting both send and accept encoding
-    - Added \c getValidator() / \c setValidator() for runtime schema validator access
-    - Added \c setConnectionPath() / \c getConnectionPath() / \c clearConnectionPath() for
-      connection path management (\c default_path constructor option)
-    - Added \c setUserPassword() / \c clearUserPassword() for HTTP Basic authentication
-      (\c username / \c password constructor options without OAuth2)
-    - Added \c doSignedRequest() / \c doSignedRequestAsync() for request signing support
-    - Added proxy support via \c proxy constructor option (passed through to
-      HttpClientConnectionManager)
-    - Constructor now accepts \c validator option for custom REST schema validators
-    - Constructor now accepts \c allow_any_response, \c content_encoding, \c default_path options
-    - added \c RestClientIoPingPollOperation class for async REST connection pings via startPollConnect()
-
-    @subsection restclientio_v1_1 Version 1.1
-    - OAuth2 support: \c client_credentials and \c password grant types
-    - Automatic token acquisition on first request via \c checkLogin()
-    - Proactive token refresh for stale tokens plus 401 retry for edge cases
-    - Concurrent refresh serialization — only one thread refreshes at a time
-    - Public API: \c setOAuth2Options(), \c getOAuth2Options(), \c getNewToken()
-    - Token URL can be absolute (different server) or relative (same server)
-    - Support for \c oauth2_token_use_basic_auth and \c oauth2_token_auth_secret_only
-    - Support for OAuth2 client assertion token-endpoint authentication
-    - \c bin/rest updated with OAuth2 CLI options
-
     @subsection restclientio_v1_0 Version 1.0
     - Initial release of RestClientIo module
     - Implements @ref RestClient::AbstractRestClient "AbstractRestClient" interface
@@ -273,7 +243,7 @@ hash<RestResponseInfo> resp = f.get(30s);
 
             @return True if the cancellation was initiated, False if already complete
 
-            @since %RestClientIo 1.3
+            @since %RestClientIo 1.0
         */
         bool cancel() {
             if (raw_future.isDone()) {
@@ -1288,7 +1258,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @param timeout_ms new per-request timeout; 0 clears the override
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         nothing setTimeout(timeout timeout_ms = 0) {
             AutoWriteLock al(config_lock);
@@ -1300,7 +1270,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @c mgr.request() directly (e.g. \c DataStreamClientIo)
             should pass this value to honor @ref setTimeout().
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         private *timeout getRequestTimeoutOverride() {
             AutoReadLock al(config_lock);
@@ -1311,7 +1281,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** Returns the per-instance override if set, otherwise the connection
             manager's default.
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         int getTimeout() {
             AutoReadLock al(config_lock);
@@ -1327,7 +1297,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @param timeout_ms new connection timeout; 0 (the default) is a no-op
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         nothing setConnectTimeout(timeout timeout_ms = 0) {
             if (timeout_ms > 0) {
@@ -1336,7 +1306,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         #! Returns the connection timeout in milliseconds
-        /** @since RestClientIo 1.1 */
+        /** @since RestClientIo 1.0 */
         int getConnectTimeout() {
             return mgr.getConnectTimeout();
         }
@@ -1349,7 +1319,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             Happy Eyeballs / Alt-Svc; this method reports the configured mode, not
             the last-negotiated protocol.
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         string getHttpVersion() {
             switch (mgr.getProtocolMode()) {
@@ -1358,6 +1328,83 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 case "h3": return "3.0";
                 default: return "auto";
             }
+        }
+
+        #! Returns per-connection info for this client's target host, including the negotiated protocol
+        /** Returns one @ref HttpClientIo::HttpClientConnectionInfo hash for each
+            connection to this client's target host that is currently pooled in the
+            underlying connection manager, each carrying the <i>negotiated</i>
+            @c protocol (\c "h1", \c "h2", or \c "h3") — the protocol actually
+            selected on the wire, in contrast to @ref getHttpVersion(), which
+            reports the configured mode.
+
+            @return a list of @ref HttpClientIo::HttpClientConnectionInfo hashes;
+            empty if no connection to the target host is currently pooled (for
+            example before the first request)
+
+            @see @ref getNegotiatedHttpVersion() for just the negotiated version string,
+            @ref getHttpVersion() for the configured mode, and
+            @ref HttpClientIo::HttpClientConnectionManager::getConnectionInfo()
+
+            @since RestClientIo 1.0
+        */
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> getConnectionInfo() {
+            return mgr.getConnectionInfo(url);
+        }
+
+        #! Returns the HTTP protocol version negotiated for this client's target host
+        /** Returns the HTTP version actually negotiated on the wire for the
+            connection serving this client's target host — one of \c "1.1",
+            \c "2.0", or \c "3.0" — or @ref nothing if no connection has been
+            established yet (for example before the first request).
+
+            This differs from @ref getHttpVersion(), which reports the
+            <i>configured</i> mode and returns \c "auto" when the protocol is
+            selected per connection via ALPN / Happy Eyeballs / Alt-Svc.
+
+            When more than one connection to the target host is pooled (for
+            example after an Alt-Svc upgrade leaves both an older and a newer
+            connection alive), a connection in the
+            @ref HttpClientIo::HttpClientConnectionState::Ready state is preferred;
+            use @ref getConnectionInfo() for the full per-connection picture.
+
+            @return the negotiated HTTP version string (\c "1.1", \c "2.0", or
+            \c "3.0"), or @ref nothing if no connection is currently established
+
+            @par Example
+            @code{.py}
+rest.restGet("/api/status");
+*string ver = rest.getNegotiatedHttpVersion();
+printf("server negotiated HTTP/%s\n", ver ?? "unknown");
+            @endcode
+
+            @see @ref getConnectionInfo(), @ref getHttpVersion()
+
+            @since RestClientIo 1.0
+        */
+        *string getNegotiatedHttpVersion() {
+            *hash<HttpClientIo::HttpClientConnectionInfo> best;
+            foreach hash<HttpClientIo::HttpClientConnectionInfo> info in (getConnectionInfo()) {
+                if (info.state == HttpClientIo::HttpClientConnectionState::Closed) {
+                    continue;
+                }
+                if (!exists best) {
+                    best = info;
+                }
+                if (info.state == HttpClientIo::HttpClientConnectionState::Ready) {
+                    best = info;
+                    break;
+                }
+            }
+            if (!exists best) {
+                return NOTHING;
+            }
+            switch (best.protocol) {
+                case "h1": return "1.1";
+                case "h2": return "2.0";
+                case "h3": return "3.0";
+            }
+            return NOTHING;
         }
 
         #! Sets whether any response content type is allowed
@@ -1504,7 +1551,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             before a valid SSE stream is opened; the exception argument contains
             the response status, headers, and any collected response body
 
-            @since %RestClientIo 1.5
+            @since %RestClientIo 1.0
 
             @see restSseStream()
         */
@@ -1585,7 +1632,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             before a valid SSE stream is opened
             @throw SSE-STREAM-ERROR if the stream reported an error
 
-            @since %RestClientIo 1.5
+            @since %RestClientIo 1.0
 
             @see restSseReader()
         */
@@ -1620,7 +1667,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             HTTP response hash and supports
             @ref HttpClientIo::HttpCancellableFuture::cancel() "cancel()"
 
-            @since %RestClientIo 1.3
+            @since %RestClientIo 1.0
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
@@ -2103,7 +2150,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return hash with "future" (Future), "stream_id" (int), and "stream"
                 (HttpClientStreamHandle)
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
@@ -2126,7 +2173,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return hash with "future" (Future) and "stream_id" (int)
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
@@ -2199,7 +2246,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Returns True if the current OAuth2 token needs to be refreshed
         /** @return True if the token exists, has a refresh token, and is within the expiry window
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         bool tokenRequiresRefresh() {
             return requiresRefresh();
@@ -2212,7 +2259,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return an AbstractPollOperation for the token refresh HTTP request
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         hash<auto> startOAuth2PollRefreshToken() {
             # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
@@ -2290,7 +2337,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @param h the parsed OAuth2 token response hash
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         updateOAuth2Token(hash<auto> h) {
             gotOAuth2LoginInfo(h);
@@ -2309,7 +2356,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return an EventNotifier to poll for connection readiness, or NOTHING if
             the connection is already ready
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         *EventNotifier startConnectionAsync() {
             return mgr.ensureConnectionAsync(url);
@@ -3912,7 +3959,7 @@ obs.registerObserver(sub (string event_type, auto data) {
 obs.observersReady();
             @endcode
 
-            @since %RestClientIo 2.3
+            @since %RestClientIo 1.0
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
@@ -4840,7 +4887,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     OAuth2 token refresh is attempted once before the first request (if the token is
     in the expiry window) and once after a 401 response (if not already retried).
 
-    @since %RestClientIo 1.2
+    @since %RestClientIo 1.0
 */
 public namespace RestClientIo {
 

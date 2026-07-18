@@ -2683,6 +2683,1317 @@ static bool outlineInitExpression(QoreIRFunction* outer,
     return true;
 }
 
+// ---- Automatic function-body outlining (pathological functions) ----
+//
+// LLVM backend cost (SelectionDAG / regalloc / O3 function passes) scales
+// super-linearly with function size; one giant Qore function dominates AOT
+// module compile time and peak memory even when tagged OptimizeNone, because
+// instruction selection and register allocation still process the whole
+// function.  This pass splits safe single-entry/single-exit block ranges of
+// a pathological function into compiler-private helper functions with the
+// standard AOT ABI `i64 (ptr ctx, ptr xsink)` immediately before LLVM
+// lowering (reusing the CallAOTHelper instruction from the Phase 1.5
+// init-expression outliner above).
+//
+// Helpers execute with the coordinator's runtime frame: `self`, `argv`,
+// params and non-IR-only locals live on the Qore thread-local variable
+// stack (reached through the shared ctx slot map), so no live-in/live-out
+// marshalling is needed.  Locals crossing an outline boundary are demoted
+// from the IR-only alloca optimization so both sides use the existing TLS
+// write-through + reload-after-call coherence machinery; the CallAOTHelper
+// lowering marks all reloadable coordinator locals stale after the call.
+//
+// The transform is exactly reversible: after LLVM lowering of coordinator
+// and helpers, undo() restores the original QoreIRFunction (same
+// instruction objects, same order), which is then used for debug-IR
+// serialization and handler extraction as if outlining never happened (the
+// IR interpreter cannot execute CallAOTHelper, so serialized IR must stay
+// pristine).  Region discovery is conservative: regions are contiguous
+// block-layout ranges whose only external CFG edges are the single
+// fallthrough entry and exit, with no SSA values live across the
+// boundaries, no return, fully-contained scope/temp-mark pairing, and no
+// closure-use or weak-assigned locals crossing the boundary.
+//
+// See design/aot-function-outlining.md.
+
+struct AOTFnOutlineTunables {
+    bool enabled;
+    size_t min_fn_insts;        //!< trigger: function total IR instruction count
+    size_t min_fn_blocks;       //!< trigger: function IR block count
+    size_t target_region_insts; //!< greedy target instruction count per helper
+};
+
+static const AOTFnOutlineTunables& aotFnOutlineTunables() {
+    static const AOTFnOutlineTunables tunables = []() {
+        AOTFnOutlineTunables t;
+        // Opt-out gate: set QORE_AOT_OUTLINE_FN=0 to disable the pass.
+        const char* s = getenv("QORE_AOT_OUTLINE_FN");
+        t.enabled = !s || !*s || strcmp(s, "0") != 0;
+        auto env_size = [](const char* name, size_t dflt) -> size_t {
+            const char* v = getenv(name);
+            if (!v || !*v) {
+                return dflt;
+            }
+            long long n = atoll(v);
+            return n > 0 ? static_cast<size_t>(n) : dflt;
+        };
+        // Defaults chosen so ordinary functions are never touched: only
+        // pathological bodies (thousands of IR instructions) trigger.
+        t.min_fn_insts = env_size("QORE_AOT_OUTLINE_FN_MIN_INSTS", 4000);
+        t.min_fn_blocks = env_size("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
+        t.target_region_insts = env_size("QORE_AOT_OUTLINE_FN_TARGET_INSTS", 1500);
+        return t;
+    }();
+    return tunables;
+}
+
+// Defined in QoreIRInterpreter.cpp — extracts the base VarRefNode from an
+// lvalue expression tree (used for RefForeachInit local discovery).
+extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
+
+static const LocalVar* aotOutlineLocalFromVarRef(const VarRefNode* var) {
+    if (!var) {
+        return nullptr;
+    }
+    qore_var_t vtype = var->getType();
+    return (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
+        ? reinterpret_cast<const LocalVar*>(var->ref.id) : nullptr;
+}
+
+//! One direct local-variable reference discovered in an IR instruction.
+struct AOTOutlineLocalRef {
+    const LocalVar* local = nullptr;
+    bool lifecycle = false;   //!< InstantiateLocal / UninstantiateLocal
+    bool weak_store = false;  //!< StoreLocal with weak (:=) semantics
+    bool unknown = false;     //!< unidentifiable local reference — poisons outlining
+};
+
+//! Enumerate every direct LocalVar reference of an instruction.
+//! Locals reached only through delegated AST expression subtrees are
+//! intentionally not reported: such locals are AST-visible (never IR-only)
+//! and are accessed through the TLS stack on both sides of an outline
+//! boundary, so they need no boundary classification.
+template <typename F>
+static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
+    switch (inst->opcode) {
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::StoreLocal:
+        case QoreIROpcode::InstantiateLocal:
+        case QoreIROpcode::UninstantiateLocal:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::StoreClosure: {
+            const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            AOTOutlineLocalRef ref;
+            ref.local = linst->local;
+            ref.lifecycle = inst->opcode == QoreIROpcode::InstantiateLocal
+                || inst->opcode == QoreIROpcode::UninstantiateLocal;
+            ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->weak;
+            ref.unknown = !linst->local;
+            cb(ref);
+            break;
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            for (const LocalVar* lv : {fused->target, fused->source}) {
+                AOTOutlineLocalRef ref;
+                ref.local = lv;
+                ref.unknown = !lv;
+                cb(ref);
+            }
+            break;
+        }
+        case QoreIROpcode::IncrementLocalInt: {
+            const auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            AOTOutlineLocalRef ref;
+            ref.local = fused->local;
+            ref.unknown = !fused->local;
+            cb(ref);
+            break;
+        }
+        case QoreIROpcode::BranchIfLtLocalInt: {
+            const auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+            for (const LocalVar* lv : {fused->lhs, fused->rhs}) {
+                AOTOutlineLocalRef ref;
+                ref.local = lv;
+                ref.unknown = !lv;
+                cb(ref);
+            }
+            break;
+        }
+        case QoreIROpcode::HashKeyStore: {
+            const auto* hks = static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            AOTOutlineLocalRef ref;
+            ref.local = hks->container_lv ? hks->container_lv
+                : aotOutlineLocalFromVarRef(hks->container);
+            ref.unknown = !ref.local;
+            cb(ref);
+            break;
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            const auto* hks = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            AOTOutlineLocalRef ref;
+            ref.local = hks->container_lv ? hks->container_lv
+                : aotOutlineLocalFromVarRef(hks->container);
+            ref.unknown = !ref.local;
+            cb(ref);
+            break;
+        }
+        case QoreIROpcode::ListIndexStore: {
+            const auto* lis = static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            AOTOutlineLocalRef ref;
+            ref.local = lis->container_lv ? lis->container_lv
+                : aotOutlineLocalFromVarRef(lis->container);
+            ref.unknown = !ref.local;
+            cb(ref);
+            break;
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary: {
+            const auto* lvp = static_cast<const QoreIRLValuePathInstruction*>(inst);
+            if (!lvp->path.empty()) {
+                const LVPathStep& root = lvp->path.front();
+                if (root.kind == LVPathStepKind::LocalVar
+                        || root.kind == LVPathStepKind::ClosureVar) {
+                    AOTOutlineLocalRef ref;
+                    ref.local = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+                    ref.weak_store = inst->opcode == QoreIROpcode::LValuePathAssign
+                        && lvp->weak;
+                    ref.unknown = !ref.local;
+                    cb(ref);
+                }
+            }
+            break;
+        }
+        case QoreIROpcode::RefForeachInit: {
+            const auto* rfi = static_cast<const QoreIRRefForeachInitInstruction*>(inst);
+            const LocalVar* lv = aotOutlineLocalFromVarRef(
+                extractLValueBaseVarRef(rfi->expr));
+            if (lv) {
+                AOTOutlineLocalRef ref;
+                ref.local = lv;
+                cb(ref);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+//! Enumerate every mutable basic-block target slot of an instruction.
+//! Mirrors QoreIRVerifier's collectBranchTargets(): dedicated fields for
+//! branch/switch/phi/invoke/throw classes plus the base-class
+//! exception_target used by all other opcodes.
+template <typename F>
+static void aotOutlineForEachBlockTarget(QoreIRInstruction* inst, F&& cb) {
+    if (auto* br = dynamic_cast<QoreIRBranchInstruction*>(inst)) {
+        cb(br->target);
+        return;
+    }
+    if (auto* brif = dynamic_cast<QoreIRBranchIfInstruction*>(inst)) {
+        cb(brif->true_target);
+        cb(brif->false_target);
+        return;
+    }
+    if (auto* invoke = dynamic_cast<QoreIRInvokeInstruction*>(inst)) {
+        cb(invoke->normal_target);
+        cb(invoke->exception_target);
+        return;
+    }
+    if (auto* sw_int = dynamic_cast<QoreIRSwitchIntInstruction*>(inst)) {
+        cb(sw_int->default_target);
+        for (auto& c : sw_int->cases) {
+            cb(c.target);
+        }
+        return;
+    }
+    if (auto* sw_str = dynamic_cast<QoreIRSwitchStringInstruction*>(inst)) {
+        cb(sw_str->default_target);
+        for (auto& c : sw_str->cases) {
+            cb(c.target);
+        }
+        return;
+    }
+    if (auto* phi = dynamic_cast<QoreIRPhiInstruction*>(inst)) {
+        for (auto& incoming : phi->incoming) {
+            cb(incoming.block);
+        }
+        return;
+    }
+    if (auto* thr = dynamic_cast<QoreIRThrowInstruction*>(inst)) {
+        // QoreIRThrowInstruction shadows the base-class exception_target
+        cb(thr->exception_target);
+        return;
+    }
+    if (auto* inv_md = dynamic_cast<QoreIRInvokeMethodDirectInstruction*>(inst)) {
+        cb(inv_md->normal_target);
+        cb(inv_md->exception_target);
+        return;
+    }
+    if (auto* inv_de = dynamic_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+        cb(inv_de->normal_target);
+        cb(inv_de->exception_target);
+        return;
+    }
+    // All other opcodes: base-class exception_target (try-scope edges)
+    cb(inst->exception_target);
+}
+
+//! Enumerate every SSA value USE of an instruction: the shared operands
+//! vector plus the dedicated value fields that are not mirrored into
+//! operands (same enumeration as the interpreter's buildValueUseCounts()).
+template <typename F>
+static void aotOutlineForEachValueUse(const QoreIRInstruction* inst, F&& cb) {
+    for (const QoreIRValue& op : inst->operands) {
+        cb(op);
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::BrIf:
+            cb(static_cast<const QoreIRBranchIfInstruction*>(inst)->condition);
+            break;
+        case QoreIROpcode::SwitchInt:
+            cb(static_cast<const QoreIRSwitchIntInstruction*>(inst)->switch_val);
+            break;
+        case QoreIROpcode::SwitchString:
+            cb(static_cast<const QoreIRSwitchStringInstruction*>(inst)->switch_val);
+            break;
+        case QoreIROpcode::Phi: {
+            const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
+            for (const QoreIRPhiIncoming& incoming : phi->incoming) {
+                cb(incoming.value);
+            }
+            break;
+        }
+        case QoreIROpcode::Return: {
+            const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
+            if (ret->has_value) {
+                cb(ret->value);
+            }
+            break;
+        }
+        case QoreIROpcode::IteratorCreate:
+        case QoreIROpcode::IteratorCreateIterate:
+            // IteratorCreateReverse carries its iterable in operands (above)
+            cb(static_cast<const QoreIRIteratorCreateInstruction*>(inst)->iterable);
+            break;
+        case QoreIROpcode::IteratorNext:
+            cb(static_cast<const QoreIRIteratorNextInstruction*>(inst)->iterator);
+            break;
+        default:
+            break;
+    }
+}
+
+//! One selected outline region: a contiguous range of block-layout indices.
+struct AOTFnOutlineRegion {
+    size_t first = 0;       //!< first block index of the region
+    size_t last = 0;        //!< last block index (inclusive)
+    size_t inst_count = 0;  //!< total instruction count of the region
+    //! Locals referenced in the region that are also referenced outside it
+    //! (plus params/selfid/argvid referenced only inside — someone outside
+    //! owns their lifecycle either way).
+    std::vector<const LocalVar*> shared_locals;
+    //! Body locals whose every reference is inside the region.
+    std::vector<const LocalVar*> contained_locals;
+};
+
+//! Whole-function analysis state for outline-region discovery.
+class AOTFnOutlineAnalysis {
+public:
+    //! Analyze the function and select outline regions.  Returns false when
+    //! the function does not qualify or no safe regions were found.
+    bool analyze(const QoreIRFunction& fn, std::vector<AOTFnOutlineRegion>& regions,
+            bool emit_debug = true) {
+        const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
+        const bool dbg = emit_debug && getenv("QORE_AOT_DEBUG") != nullptr;
+        size_t n = fn.blocks.size();
+        if (n < 3) {
+            return false;
+        }
+        size_t total_insts = 0;
+        for (const auto& b : fn.blocks) {
+            total_insts += b->instructions.size();
+        }
+        if (total_insts < tun.min_fn_insts && n < tun.min_fn_blocks) {
+            return false;
+        }
+        if (dbg) {
+            fprintf(stderr, "AOT-OUTLINE-FN: analyzing '%s' (blocks=%zu insts=%zu)\n",
+                fn.getDisplayName().c_str(), n, total_insts);
+        }
+
+        // Index blocks by layout position.
+        block_idx.clear();
+        block_idx.reserve(n);
+        for (size_t i = 0; i < n; ++i) {
+            block_idx[fn.blocks[i].get()] = i;
+        }
+
+        // Collect facts in one pass: CFG edges, per-value def/use spans,
+        // per-local reference info, per-scope-id / temp-mark-id locations.
+        bool poisoned = false;
+        std::vector<std::pair<size_t, size_t>> edges;
+        for (size_t i = 0; i < n && !poisoned; ++i) {
+            const QoreIRBasicBlock* b = fn.blocks[i].get();
+            for (const auto& inst_ptr : b->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                aotOutlineForEachBlockTarget(inst,
+                        [&](QoreIRBasicBlock*& target) {
+                    if (!target) {
+                        return;
+                    }
+                    auto it = block_idx.find(target);
+                    if (it == block_idx.end()) {
+                        poisoned = true;  // target outside function — bail
+                        return;
+                    }
+                    edges.emplace_back(i, it->second);
+                });
+                if (inst->result.isValid()) {
+                    auto& d = value_info[inst->result.id];
+                    d.def_idx = i;
+                }
+                aotOutlineForEachValueUse(inst, [&](const QoreIRValue& v) {
+                    if (!v.isValid()) {
+                        return;
+                    }
+                    auto& d = value_info[v.id];
+                    d.min_use = std::min(d.min_use, i);
+                    d.max_use = std::max(d.max_use, i);
+                });
+                aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
+                    if (ref.unknown || !ref.local) {
+                        poisoned = true;
+                        return;
+                    }
+                    auto& info = local_info[ref.local];
+                    info.min_ref = std::min(info.min_ref, i);
+                    info.max_ref = std::max(info.max_ref, i);
+                    info.weak_store |= ref.weak_store;
+                    if (ref.lifecycle) {
+                        info.lifecycle_blocks.push_back(i);
+                    }
+                });
+                switch (inst->opcode) {
+                    case QoreIROpcode::CreateClosure:
+                        // Real closure captures make crossing closure-use
+                        // locals unsafe to outline (recursive activations
+                        // interact with the CVV stack in ways the helper
+                        // boundary cannot preserve) — see validateRegion().
+                        has_closure_create = true;
+                        break;
+                    case QoreIROpcode::ScopeEnter:
+                        scope_enter_idx[static_cast<const QoreIRScopeEnterInstruction*>(
+                            inst)->scope_id] = i;
+                        break;
+                    case QoreIROpcode::ScopeExit:
+                        scope_exit_ids.emplace_back(
+                            static_cast<const QoreIRScopeExitInstruction*>(inst)->scope_id, i);
+                        break;
+                    case QoreIROpcode::PushTempMark:
+                        if (inst->temp_scope_id) {
+                            temp_mark_idx[inst->temp_scope_id] = i;
+                        }
+                        break;
+                    case QoreIROpcode::DiscardTemps:
+                        if (inst->temp_scope_id) {
+                            temp_discard_ids.emplace_back(inst->temp_scope_id, i);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        if (poisoned) {
+            if (dbg) {
+                fprintf(stderr, "AOT-OUTLINE-FN: '%s' skipped: unanalyzable reference\n",
+                    fn.getDisplayName().c_str());
+            }
+            return false;
+        }
+
+        // Per-block adjacency and instruction counts.
+        std::vector<std::vector<size_t>> in_edges(n);
+        std::vector<std::vector<size_t>> out_edges(n);
+        for (const auto& [from, to] : edges) {
+            out_edges[from].push_back(to);
+            in_edges[to].push_back(from);
+        }
+        std::vector<size_t> block_insts(n);
+        for (size_t i = 0; i < n; ++i) {
+            block_insts[i] = fn.blocks[i]->instructions.size();
+        }
+        std::unordered_set<const void*> body_local_set;
+        for (const LocalVar* lv : fn.all_body_locals) {
+            body_local_set.insert(reinterpret_cast<const void*>(lv));
+        }
+
+        // Greedy single-entry/single-exit interval sweep.  A candidate
+        // region is a contiguous layout interval [a..q] such that:
+        //   - no edge from outside the interval lands on an interior block
+        //     (any number of entry edges to `a` are fine — the transform
+        //     retargets them all to the synthesized call block);
+        //   - every edge leaving the interval targets exactly F = q+1 (an
+        //     `if` group's skip edge then counts as a normal exit, which is
+        //     what makes big guarded top-level statement groups —
+        //     `if (version < X) { ... }` — outlinable);
+        //   - back edges into the interval only come from blocks that are
+        //     themselves part of it by the time it closes (loops must be
+        //     fully contained: `max_required` tracks that deadline).
+        // Edges that bypass the interval entirely (both endpoints outside)
+        // never touch it and are ignored.
+        size_t work_budget = 64 * n + 4096;  // defensive cap for odd CFGs
+        size_t a = 1;
+        while (a + 1 < n && work_budget) {
+            std::map<size_t, size_t> pending;  // exit target → edge count
+            size_t max_required = a;
+            size_t insts_acc = 0;
+            size_t validate_attempts = 0;
+            bool committed = false;
+            bool dead = false;
+            for (size_t q = a; q + 1 < n && work_budget; ++q) {
+                --work_budget;
+                // block q joins the interval
+                pending.erase(q);  // former exit edges to q are now internal
+                if (q > a) {
+                    for (size_t i : in_edges[q]) {
+                        if (i < a) {
+                            dead = true;  // external edge lands mid-interval
+                            break;
+                        }
+                        if (i > q) {
+                            // landing from a later block: only valid once
+                            // that block is part of the interval too
+                            max_required = std::max(max_required, i);
+                        }
+                    }
+                    if (dead) {
+                        break;
+                    }
+                }
+                for (size_t j : out_edges[q]) {
+                    if (j < a) {
+                        dead = true;  // backward exit before the interval
+                        break;
+                    }
+                    if (j > q) {
+                        pending[j]++;
+                    }
+                    // j == a (loop back to the entry) and internal edges
+                    // need no bookkeeping
+                }
+                if (dead) {
+                    break;
+                }
+                insts_acc += block_insts[q];
+                if (insts_acc < tun.target_region_insts) {
+                    continue;
+                }
+                // closable iff all exits converge on F = q+1 and every
+                // back-edge source is inside
+                if (q < max_required || pending.empty()
+                        || pending.size() != 1 || pending.begin()->first != q + 1) {
+                    continue;
+                }
+                AOTFnOutlineRegion region;
+                region.first = a;
+                region.last = q;
+                region.inst_count = insts_acc;
+                if (validateRegion(fn, region, body_local_set, dbg)) {
+                    regions.push_back(std::move(region));
+                    committed = true;
+                    a = q + 1;
+                    break;
+                }
+                if (dbg) {
+                    fprintf(stderr,
+                        "AOT-OUTLINE-FN: '%s' rejected region blocks [%zu..%zu] (%zu insts)\n",
+                        fn.getDisplayName().c_str(), a, q, insts_acc);
+                }
+                if (++validate_attempts >= 4) {
+                    break;
+                }
+            }
+            if (!committed) {
+                ++a;
+            }
+        }
+        if (dbg && regions.empty()) {
+            // Report the widest-span edges — usually the structural blocker
+            // (e.g. a method-wide loop back edge).
+            std::vector<std::pair<size_t, const std::pair<size_t, size_t>*>> spans;
+            spans.reserve(edges.size());
+            for (const auto& e : edges) {
+                size_t span = e.first < e.second ? e.second - e.first
+                    : e.first - e.second;
+                if (span > 1) {
+                    spans.emplace_back(span, &e);
+                }
+            }
+            std::sort(spans.begin(), spans.end(),
+                [](const auto& x, const auto& y) { return x.first > y.first; });
+            for (size_t i = 0; i < spans.size() && i < 8; ++i) {
+                const auto& e = *spans[i].second;
+                fprintf(stderr, "AOT-OUTLINE-FN:   blocking edge span=%zu: "
+                    "[%zu]'%s' -> [%zu]'%s'\n", spans[i].first,
+                    e.first, fn.blocks[e.first]->name.c_str(),
+                    e.second, fn.blocks[e.second]->name.c_str());
+            }
+        }
+        return !regions.empty();
+    }
+
+private:
+    struct ValueInfo {
+        size_t def_idx = SIZE_MAX;
+        size_t min_use = SIZE_MAX;
+        size_t max_use = 0;  // valid only when min_use != SIZE_MAX
+    };
+    struct LocalInfo {
+        size_t min_ref = SIZE_MAX;
+        size_t max_ref = 0;
+        bool weak_store = false;
+        std::vector<size_t> lifecycle_blocks;
+    };
+
+    std::unordered_map<const QoreIRBasicBlock*, size_t> block_idx;
+    std::unordered_map<uint32_t, ValueInfo> value_info;
+    std::unordered_map<const LocalVar*, LocalInfo> local_info;
+    std::unordered_map<uint32_t, size_t> scope_enter_idx;
+    std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
+    std::unordered_map<uint32_t, size_t> temp_mark_idx;
+    std::vector<std::pair<uint32_t, size_t>> temp_discard_ids;
+    bool has_closure_create = false;
+
+    bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
+            const std::unordered_set<const void*>& body_local_set, bool dbg) {
+        const size_t first = region.first;
+        const size_t last = region.last;
+        auto in_region = [&](size_t i) { return i >= first && i <= last; };
+        auto fail = [&](const char* why) {
+            if (dbg) {
+                fprintf(stderr, "AOT-OUTLINE-FN:   region [%zu..%zu]: %s\n",
+                    first, last, why);
+            }
+            return false;
+        };
+        // The entry block can never be outlined (parameter/prologue home).
+        if (first == 0 || last + 1 >= fn.blocks.size()) {
+            return fail("boundary blocks reserved");
+        }
+        // No phi nodes in the region's first block (its predecessor is
+        // rewritten to the synthesized call block) or in the exit target
+        // (its predecessor moves into the helper).  Neither boundary block
+        // may be an exception-path target either: the region entry must be
+        // reached by a normal call and the exit by a normal branch —
+        // entering a landingpad through the helper-call return path would
+        // consume exception state in the wrong place.
+        for (const QoreIRBasicBlock* b : {fn.blocks[first].get(),
+                fn.blocks[last + 1].get()}) {
+            for (const auto& inst_ptr : b->instructions) {
+                if (!inst_ptr) {
+                    continue;
+                }
+                if (inst_ptr->opcode == QoreIROpcode::Phi) {
+                    return fail("phi at region boundary");
+                }
+                if (inst_ptr->opcode == QoreIROpcode::LandingPad
+                        || inst_ptr->opcode == QoreIROpcode::CatchException) {
+                    return fail("exception-path block at region boundary");
+                }
+            }
+        }
+        std::unordered_set<const LocalVar*> region_locals;
+        size_t temp_push_count = 0;
+        size_t temp_discard_count = 0;
+        for (size_t i = first; i <= last; ++i) {
+            const QoreIRBasicBlock* b = fn.blocks[i].get();
+            for (const auto& inst_ptr : b->instructions) {
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::Return:
+                    case QoreIROpcode::ReturnNothing:
+                        return fail("return inside region");
+                    case QoreIROpcode::PushTempMark:
+                        ++temp_push_count;
+                        break;
+                    case QoreIROpcode::DiscardTemps:
+                        ++temp_discard_count;
+                        break;
+                    default:
+                        break;
+                }
+                // Exception-kind edges must stay inside the region.  The
+                // exit-convergence rule already rejects exception edges to
+                // targets other than F, but an exception edge to F itself
+                // (e.g. an enclosing scope's cleanup block placed right
+                // after the region) would be rewritten into a plain helper
+                // return, skipping the in-function handler path — reject.
+                {
+                    QoreIRBasicBlock* ex_target = inst->exception_target;
+                    if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+                        ex_target = thr->exception_target;
+                    } else if (auto* inv = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+                        ex_target = inv->exception_target;
+                    } else if (auto* inv_md =
+                            dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+                        ex_target = inv_md->exception_target;
+                    } else if (auto* inv_de =
+                            dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+                        ex_target = inv_de->exception_target;
+                    }
+                    if (ex_target) {
+                        auto bit = block_idx.find(ex_target);
+                        if (bit == block_idx.end() || !in_region(bit->second)) {
+                            return fail("exception edge leaves region");
+                        }
+                    }
+                }
+                // SSA liveness: every value used here must be defined inside
+                // the region; every value defined here must be used only
+                // inside.  (Values defined and used entirely outside are
+                // live-through in the coordinator and unaffected.)
+                bool live_violation = false;
+                aotOutlineForEachValueUse(inst, [&](const QoreIRValue& v) {
+                    if (!v.isValid() || live_violation) {
+                        return;
+                    }
+                    auto it = value_info.find(v.id);
+                    if (it == value_info.end() || it->second.def_idx == SIZE_MAX
+                            || !in_region(it->second.def_idx)) {
+                        live_violation = true;
+                    }
+                });
+                if (live_violation) {
+                    return fail("SSA live-in at region boundary");
+                }
+                if (inst->result.isValid()) {
+                    auto it = value_info.find(inst->result.id);
+                    if (it != value_info.end() && it->second.min_use != SIZE_MAX
+                            && (!in_region(it->second.min_use)
+                                || !in_region(it->second.max_use))) {
+                        return fail("SSA live-out at region boundary");
+                    }
+                }
+                aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
+                    if (ref.local) {
+                        region_locals.insert(ref.local);
+                    }
+                });
+            }
+        }
+        // Temp-mark pairing: every paired DiscardTemps in the region must
+        // discard a mark pushed in the region and vice versa; unpaired
+        // (id 0) marks must balance by count.
+        for (const auto& [id, i] : temp_discard_ids) {
+            bool discard_in = in_region(i);
+            auto it = temp_mark_idx.find(id);
+            bool mark_in = it != temp_mark_idx.end() && in_region(it->second);
+            if (discard_in != mark_in) {
+                return fail("temp mark crosses region boundary");
+            }
+        }
+        if (temp_push_count != temp_discard_count) {
+            size_t paired_pushes = 0;
+            size_t paired_discards = 0;
+            for (const auto& [id, i] : temp_mark_idx) {
+                if (in_region(i)) {
+                    ++paired_pushes;
+                }
+            }
+            for (const auto& [id, i] : temp_discard_ids) {
+                if (in_region(i)) {
+                    ++paired_discards;
+                }
+            }
+            if (temp_push_count - paired_pushes != temp_discard_count - paired_discards) {
+                return fail("unpaired temp marks unbalanced in region");
+            }
+        }
+        // Scope pairing: a ScopeExit in the region must match a ScopeEnter in
+        // the region and vice versa (the lowering pairs them through
+        // function-local state that cannot cross the helper boundary).
+        for (const auto& [id, i] : scope_exit_ids) {
+            auto it = scope_enter_idx.find(id);
+            bool enter_in = it != scope_enter_idx.end() && in_region(it->second);
+            if (in_region(i) != enter_in) {
+                return fail("scope enter/exit crosses region boundary");
+            }
+        }
+        // Classify referenced locals.
+        for (const LocalVar* lv : region_locals) {
+            auto it = local_info.find(lv);
+            if (it == local_info.end()) {
+                return fail("local reference without info");
+            }
+            const LocalInfo& info = it->second;
+            bool outside_refs = info.min_ref < first || info.max_ref > last;
+            bool is_body = body_local_set.count(reinterpret_cast<const void*>(lv)) > 0;
+            auto fail_local = [&](const char* why) {
+                if (dbg) {
+                    fprintf(stderr,
+                        "AOT-OUTLINE-FN:   region [%zu..%zu]: %s ('%s' refs [%zu..%zu]"
+                        " body=%d)\n",
+                        first, last, why, lv->getName(), info.min_ref, info.max_ref,
+                        static_cast<int>(is_body));
+                }
+                return false;
+            };
+            if (outside_refs || !is_body) {
+                // Shared with the coordinator (or lifecycle-owned outside).
+                // Reference-promoted closure-use locals are allowed when the
+                // function creates no closures: every access goes through
+                // the thread-global CVV stack, so the helper resolves the
+                // coordinator's CVV and stays coherent by construction (it
+                // never pushes its own — crossing locals are not helper
+                // body locals, so emitLocalInstantiation skips them).  With
+                // real closure captures in the function the CVV interplay
+                // (especially under recursion) is not preserved across the
+                // helper boundary — reject.
+                if (has_closure_create && lv->closureUse()) {
+                    return fail_local("captured local crosses region boundary");
+                }
+                if (info.weak_store) {
+                    return fail_local("weak-assigned local crosses region boundary");
+                }
+                for (size_t lb : info.lifecycle_blocks) {
+                    if (in_region(lb)) {
+                        // A scope that starts before the region and ends
+                        // inside it is safe: AOT lifecycle ops for
+                        // non-closure locals only clear the runtime value,
+                        // which the helper does exactly where inline code
+                        // would (the common shape is a `for` init emitted at
+                        // the tail of the preceding statement's block).  A
+                        // local still referenced after the region must keep
+                        // its lifecycle in the coordinator, though.
+                        if (info.max_ref > last) {
+                            return fail_local(
+                                "shared local lifecycle op inside region");
+                        }
+                    }
+                }
+                region.shared_locals.push_back(lv);
+            } else {
+                region.contained_locals.push_back(lv);
+            }
+        }
+        return true;
+    }
+};
+
+//! Performs the outline transform on a function and exactly reverses it.
+class AOTFunctionOutliner {
+public:
+    std::vector<AOTOutlinedHelper> helpers;
+
+    ~AOTFunctionOutliner() {
+        // Safety net: never leave a function outlined (serialized debug IR
+        // must not contain CallAOTHelper).
+        undo();
+    }
+
+    bool active() const {
+        return fn != nullptr;
+    }
+
+    //! Analyze and transform; returns true when the function was outlined.
+    bool run(QoreIRFunction* func, bool emit_debug = true) {
+        const bool dbg = emit_debug && getenv("QORE_AOT_DEBUG") != nullptr;
+        const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
+        if (!tun.enabled) {
+            return false;
+        }
+        {
+            // Cheap pre-filter so ordinary functions never pay for the
+            // block-split pass below.
+            size_t total_insts = 0;
+            for (const auto& b : func->blocks) {
+                total_insts += b->instructions.size();
+            }
+            if (total_insts < tun.min_fn_insts
+                    && func->blocks.size() < tun.min_fn_blocks) {
+                return false;
+            }
+        }
+        fn = func;
+
+        // Split large blocks at statement-end markers first: region cuts can
+        // only sit on block boundaries, and sequences of `if` statements
+        // without `else` leave the merge point, the following statements and
+        // the next branch in one block — without splits such code (the
+        // dominant shape in real pathological functions) has no usable cut
+        // points at all.
+        splitLargeBlocks();
+
+        std::vector<AOTFnOutlineRegion> regions;
+        {
+            AOTFnOutlineAnalysis analysis;
+            if (!analysis.analyze(*func, regions, emit_debug)) {
+                undo();
+                return false;
+            }
+        }
+
+        // Transform each region.  Later regions' indices stay valid by
+        // resolving each region's blocks by pointer before any mutation.
+        std::vector<RegionBlocks> region_blocks;
+        region_blocks.reserve(regions.size());
+        for (const AOTFnOutlineRegion& r : regions) {
+            region_blocks.push_back({fn->blocks[r.first].get(),
+                fn->blocks[r.last].get(), fn->blocks[r.last + 1].get()});
+        }
+        for (size_t k = 0; k < regions.size(); ++k) {
+            transformRegion(regions[k], region_blocks[k], k);
+        }
+
+        // Verify the transformed pieces before lowering; any inconsistency
+        // falls back to un-outlined compilation.
+        {
+            std::string verify_error;
+            bool ok = QoreIRVerifier::verify(*fn, verify_error);
+            if (ok) {
+                for (auto& h : helpers) {
+                    if (!QoreIRVerifier::verify(*h.ir_func, verify_error)) {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if (!ok) {
+                if (dbg) {
+                    fprintf(stderr,
+                        "AOT-OUTLINE-FN: '%s' post-transform verify failed (%s); "
+                        "reverting\n", fn->getDisplayName().c_str(), verify_error.c_str());
+                }
+                undo();
+                helpers.clear();
+                return false;
+            }
+        }
+        if (dbg) {
+            fprintf(stderr,
+                "AOT-OUTLINE-FN: '%s' outlined %zu regions (coordinator now %zu blocks)\n",
+                fn->getDisplayName().c_str(), regions.size(), fn->blocks.size());
+        }
+        return true;
+    }
+
+    //! Exactly reverse the transform: the coordinator gets back the original
+    //! block list, block layout and branch targets; helper shells and
+    //! synthesized blocks are destroyed.  Idempotent.
+    void undo() {
+        if (!fn) {
+            return;
+        }
+        // Reverse order so block positions restore cleanly.
+        for (size_t k = undo_records.size(); k-- > 0;) {
+            UndoRecord& rec = undo_records[k];
+            QoreIRFunction* helper = helpers[rec.helper_idx].ir_func.get();
+            QoreIRBasicBlock* first_block = helper->blocks.front().get();
+            // Restore coordinator predecessor edges: call block -> first block.
+            for (auto& b : fn->blocks) {
+                for (auto& inst_ptr : b->instructions) {
+                    if (inst_ptr) {
+                        aotOutlineForEachBlockTarget(inst_ptr.get(),
+                                [&](QoreIRBasicBlock*& target) {
+                            if (target == rec.call_block) {
+                                target = first_block;
+                            }
+                        });
+                    }
+                }
+            }
+            // Restore helper-internal exit edges: ret block -> exit block.
+            for (auto& b : helper->blocks) {
+                for (auto& inst_ptr : b->instructions) {
+                    if (inst_ptr) {
+                        aotOutlineForEachBlockTarget(inst_ptr.get(),
+                                [&](QoreIRBasicBlock*& target) {
+                            if (target == rec.ret_block) {
+                                target = rec.exit_block;
+                            }
+                        });
+                    }
+                }
+            }
+            // Drop the synthesized return block (always last in the helper).
+            assert(helper->blocks.back().get() == rec.ret_block);
+            helper->blocks.pop_back();
+            // Find the call block's position and splice the region back.
+            auto pos = std::find_if(fn->blocks.begin(), fn->blocks.end(),
+                    [&](const std::unique_ptr<QoreIRBasicBlock>& b) {
+                return b.get() == rec.call_block;
+            });
+            assert(pos != fn->blocks.end());
+            size_t insert_at = static_cast<size_t>(pos - fn->blocks.begin());
+            fn->blocks.erase(pos);  // destroys the call block
+            fn->blocks.insert(fn->blocks.begin() + insert_at,
+                std::make_move_iterator(helper->blocks.begin()),
+                std::make_move_iterator(helper->blocks.end()));
+            helper->blocks.clear();
+        }
+        undo_records.clear();
+        undoSplits();
+        fn = nullptr;
+    }
+
+private:
+    struct RegionBlocks {
+        QoreIRBasicBlock* first;
+        QoreIRBasicBlock* last;
+        QoreIRBasicBlock* exit;
+    };
+
+    struct SplitRecord {
+        QoreIRBasicBlock* head = nullptr;  //!< original block (keeps the front)
+        QoreIRBasicBlock* tail = nullptr;  //!< synthesized continuation block
+    };
+
+    struct UndoRecord {
+        size_t helper_idx = 0;
+        QoreIRBasicBlock* call_block = nullptr;  //!< synthesized coordinator block
+        QoreIRBasicBlock* ret_block = nullptr;   //!< synthesized helper return block
+        QoreIRBasicBlock* exit_block = nullptr;  //!< original region exit target
+    };
+
+    QoreIRFunction* fn = nullptr;
+    std::vector<UndoRecord> undo_records;
+    std::vector<SplitRecord> split_records;
+    size_t split_counter = 0;
+
+    //! True when an instruction ends a statement/cleanup cluster — the only
+    //! positions where a block may be split (keeps statement units whole).
+    static bool isStatementEndMarker(const QoreIRInstruction* inst) {
+        switch (inst->opcode) {
+            case QoreIROpcode::DiscardTemps:
+            case QoreIROpcode::CheckException:
+            case QoreIROpcode::UninstantiateLocal:
+            case QoreIROpcode::ScopeExit:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    //! Split large blocks at statement-end markers so region cut points can
+    //! sit at statement granularity.  The split only inserts an explicit
+    //! fallthrough Br (IR lowering is layout-independent) and is exactly
+    //! reversed by undoSplits().
+    void splitLargeBlocks() {
+        // Fine granularity is deliberate: in `if`-without-`else` chains every
+        // inter-block boundary is crossed by the branch skip edge, so usable
+        // cut points come almost exclusively from these splits (region size
+        // economics are governed by min/target_region_insts, not chunk size).
+        // Splitting directly after a leading statement-end cluster matters
+        // most: an `if`-merge block typically holds [discard.temps,
+        // next-condition eval, brif], and the only foreign-edge-free
+        // boundary between two big guarded statement groups is right after
+        // that leading discard.temps.
+        constexpr size_t SPLIT_MIN_BLOCK_INSTS = 4;  //!< only split blocks >= this
+        for (size_t bi = 0; bi < fn->blocks.size(); ++bi) {
+            QoreIRBasicBlock* b = fn->blocks[bi].get();
+            if (b->instructions.size() < SPLIT_MIN_BLOCK_INSTS) {
+                continue;
+            }
+            // Find the first split position: after a statement-end marker
+            // cluster.  Any further splitting of the tail happens when the
+            // loop reaches the newly-inserted block.
+            size_t n = b->instructions.size();
+            size_t pos = 0;
+            for (size_t k = 1; k + 1 < n; ++k) {
+                if (!b->instructions[k - 1]
+                        || !isStatementEndMarker(b->instructions[k - 1].get())) {
+                    continue;
+                }
+                if (b->instructions[k]
+                        && isStatementEndMarker(b->instructions[k].get())) {
+                    continue;  // stay behind the whole cleanup cluster
+                }
+                pos = k;
+                break;
+            }
+            if (!pos) {
+                continue;
+            }
+            auto tail = std::make_unique<QoreIRBasicBlock>(
+                b->name + ".osplit" + std::to_string(split_counter++));
+            QoreIRBasicBlock* tail_ptr = tail.get();
+            tail->enclosing_loop_exit = b->enclosing_loop_exit;
+            tail->instructions.assign(
+                std::make_move_iterator(b->instructions.begin() + pos),
+                std::make_move_iterator(b->instructions.end()));
+            b->instructions.erase(b->instructions.begin() + pos,
+                b->instructions.end());
+            auto br = std::make_unique<QoreIRBranchInstruction>();
+            br->target = tail_ptr;
+            b->instructions.push_back(std::move(br));
+            fn->blocks.insert(fn->blocks.begin() + bi + 1, std::move(tail));
+            // The head's original out-edges now originate from the tail: any
+            // phi naming the head as an incoming predecessor must be updated
+            // (and is unambiguously restored on unsplit, since the tail
+            // disappears again).
+            for (auto& pb : fn->blocks) {
+                for (auto& inst_ptr : pb->instructions) {
+                    if (inst_ptr && inst_ptr->opcode == QoreIROpcode::Phi) {
+                        auto* phi = static_cast<QoreIRPhiInstruction*>(inst_ptr.get());
+                        for (auto& incoming : phi->incoming) {
+                            if (incoming.block == b) {
+                                incoming.block = tail_ptr;
+                            }
+                        }
+                    }
+                }
+            }
+            SplitRecord rec;
+            rec.head = b;
+            rec.tail = tail_ptr;
+            split_records.push_back(rec);
+            // the tail is revisited by the loop for further splitting
+        }
+    }
+
+    //! Reverse splitLargeBlocks(): merge each tail back into its head and
+    //! drop the synthesized Br + block.  Must run after regions are undone.
+    void undoSplits() {
+        for (size_t k = split_records.size(); k-- > 0;) {
+            SplitRecord& rec = split_records[k];
+            assert(!rec.head->instructions.empty());
+            assert(rec.head->instructions.back()->opcode == QoreIROpcode::Br);
+            assert(static_cast<QoreIRBranchInstruction*>(
+                rec.head->instructions.back().get())->target == rec.tail);
+            rec.head->instructions.pop_back();  // synthesized Br
+            rec.head->instructions.insert(rec.head->instructions.end(),
+                std::make_move_iterator(rec.tail->instructions.begin()),
+                std::make_move_iterator(rec.tail->instructions.end()));
+            rec.tail->instructions.clear();
+            // Restore phi incoming-predecessor pointers rewritten by the
+            // split (the tail block is about to disappear).
+            for (auto& pb : fn->blocks) {
+                for (auto& inst_ptr : pb->instructions) {
+                    if (inst_ptr && inst_ptr->opcode == QoreIROpcode::Phi) {
+                        auto* phi = static_cast<QoreIRPhiInstruction*>(inst_ptr.get());
+                        for (auto& incoming : phi->incoming) {
+                            if (incoming.block == rec.tail) {
+                                incoming.block = rec.head;
+                            }
+                        }
+                    }
+                }
+            }
+            auto pos = std::find_if(fn->blocks.begin(), fn->blocks.end(),
+                    [&](const std::unique_ptr<QoreIRBasicBlock>& b) {
+                return b.get() == rec.tail;
+            });
+            assert(pos != fn->blocks.end());
+            fn->blocks.erase(pos);  // destroys the tail block
+        }
+        split_records.clear();
+    }
+
+    void transformRegion(const AOTFnOutlineRegion& region, const RegionBlocks& rb,
+            size_t region_no) {
+        // Locate the region's current layout range by pointer.
+        auto first_it = std::find_if(fn->blocks.begin(), fn->blocks.end(),
+                [&](const std::unique_ptr<QoreIRBasicBlock>& b) {
+            return b.get() == rb.first;
+        });
+        assert(first_it != fn->blocks.end());
+        size_t first_idx = static_cast<size_t>(first_it - fn->blocks.begin());
+        size_t last_idx = first_idx;
+        while (fn->blocks[last_idx].get() != rb.last) {
+            ++last_idx;
+            assert(last_idx < fn->blocks.size());
+        }
+
+        std::string helper_name = fn->name + "_outline_" + std::to_string(region_no);
+        AOTOutlinedHelper h;
+        h.ir_func = std::make_unique<QoreIRFunction>(helper_name);
+        QoreIRFunction* helper = h.ir_func.get();
+
+        // Move the region's blocks into the helper.
+        helper->blocks.assign(
+            std::make_move_iterator(fn->blocks.begin() + first_idx),
+            std::make_move_iterator(fn->blocks.begin() + last_idx + 1));
+        fn->blocks.erase(fn->blocks.begin() + first_idx,
+            fn->blocks.begin() + last_idx + 1);
+
+        // Synthesize the helper's return block and retarget exit edges to it.
+        QoreIRBasicBlock* ret_block = helper->createBlock("outline.ret");
+        {
+            auto ret_inst = std::make_unique<QoreIRReturnInstruction>();
+            // opcode stays ReturnNothing; has_value stays false
+            ret_block->instructions.push_back(std::move(ret_inst));
+        }
+        for (auto& b : helper->blocks) {
+            if (b.get() == ret_block) {
+                continue;
+            }
+            for (auto& inst_ptr : b->instructions) {
+                if (inst_ptr) {
+                    aotOutlineForEachBlockTarget(inst_ptr.get(),
+                            [&](QoreIRBasicBlock*& target) {
+                        if (target == rb.exit) {
+                            target = ret_block;
+                        }
+                    });
+                }
+            }
+        }
+
+        // Synthesize the coordinator's call block: CallAOTHelper + Br(exit).
+        auto call_block_owned = std::make_unique<QoreIRBasicBlock>(
+            "outline.call." + std::to_string(region_no));
+        QoreIRBasicBlock* call_block = call_block_owned.get();
+        {
+            auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(helper_name);
+            call->result = fn->createValue();
+            if (call->result.id > fn->max_value_id) {
+                fn->max_value_id = call->result.id;
+            }
+            // Attribute the call to the region's first source location so
+            // stack traces through the coordinator stay useful.
+            if (!helper->blocks.empty()) {
+                for (const auto& inst_ptr : helper->blocks.front()->instructions) {
+                    if (inst_ptr && inst_ptr->loc) {
+                        call->loc = inst_ptr->loc;
+                        call->cached_start_line = inst_ptr->cached_start_line;
+                        break;
+                    }
+                }
+            }
+            auto br = std::make_unique<QoreIRBranchInstruction>();
+            br->target = rb.exit;
+            call_block->instructions.push_back(std::move(call));
+            call_block->instructions.push_back(std::move(br));
+        }
+        fn->blocks.insert(fn->blocks.begin() + first_idx,
+            std::move(call_block_owned));
+
+        // Retarget coordinator predecessor edges into the region to the call
+        // block (the region-discovery cut guarantees a single entry edge).
+        for (auto& b : fn->blocks) {
+            for (auto& inst_ptr : b->instructions) {
+                if (inst_ptr) {
+                    aotOutlineForEachBlockTarget(inst_ptr.get(),
+                            [&](QoreIRBasicBlock*& target) {
+                        if (target == rb.first) {
+                            target = call_block;
+                        }
+                    });
+                }
+            }
+        }
+
+        // Helper metadata: the helper executes with the coordinator's runtime
+        // frame.  Locals shared with the coordinator behave like
+        // pre-instantiated signature locals (entry-load from the TLS stack,
+        // write-through on store); locals wholly inside the region keep the
+        // original body-local treatment.
+        helper->local_var_slots = fn->local_var_slots;
+        helper->max_local_slot_id = fn->max_local_slot_id;
+        helper->max_value_id = fn->max_value_id;
+        helper->return_type_info = nullptr;  // helpers return NOTHING
+        helper->specialization_receiver_type_info = fn->specialization_receiver_type_info;
+        helper->specialization_type_param_instantiation =
+            fn->specialization_type_param_instantiation;
+        for (const LocalVar* lv : region.contained_locals) {
+            const void* key = reinterpret_cast<const void*>(lv);
+            helper->all_body_locals.push_back(const_cast<LocalVar*>(lv));
+            helper->pre_instantiated_locals.insert(key);
+            if (fn->ir_only_locals.count(key)) {
+                helper->ir_only_locals.insert(key);
+            }
+        }
+        for (const LocalVar* lv : region.shared_locals) {
+            const void* key = reinterpret_cast<const void*>(lv);
+            helper->pre_instantiated_locals.insert(key);
+            // Demote shared locals from the coordinator's IR-only alloca
+            // optimization: stores must publish to the TLS stack and loads
+            // must reload after the helper call.
+            fn->ir_only_locals.erase(key);
+        }
+        helper->total_local_count = region.contained_locals.size()
+            + region.shared_locals.size();
+
+        UndoRecord rec;
+        rec.helper_idx = helpers.size();
+        rec.call_block = call_block;
+        rec.ret_block = ret_block;
+        rec.exit_block = rb.exit;
+        undo_records.push_back(rec);
+        helpers.push_back(std::move(h));
+    }
+};
+
+//! Lower every outlined function-body helper into the module before the
+//! coordinator (so the coordinator's CallAOTHelper call sites bind to
+//! defined functions), applying NoInline so LLVM cannot merge the helpers
+//! back into one giant function.  Appends the helpers' source-location
+//! tables to `aot_locs` so runtime stack traces inside outlined regions
+//! stay attributed.  On failure, erases any helper functions already
+//! emitted and returns false — the caller falls back to un-outlined
+//! lowering.
+static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
+        llvm::LLVMContext& ctx, llvm::Module& module, const AOTSlotMap& slots,
+        llvm::DIBuilder* di_builder, llvm::DICompileUnit* di_cu,
+        std::vector<AOTCompiledFuncWithSlots::AOTLocEntry>& aot_locs,
+        std::string& error) {
+    const bool dbg = getenv("QORE_AOT_DEBUG") != nullptr;
+    for (auto& h : helpers) {
+        QoreIRFunction* helper = h.ir_func.get();
+        if (getenv("QORE_AOT_DUMP_IR")) {
+            fprintf(stderr, "=== IR for %s ===\n", helper->name.c_str());
+            QoreIRPrinter::print(*helper, std::cerr);
+            fprintf(stderr, "=================\n");
+        }
+        QoreIRToLLVM lowerer(ctx);
+        lowerer.setAOTMode(&slots);
+        lowerer.setSharedDebugInfo(di_builder, di_cu);
+        lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+        lowerer.setDeferredExceptionChecking(false);
+        // Helper location indices address the coordinator's merged
+        // ctx->locs table starting after all previously-emitted entries.
+        lowerer.setAOTLocTableBase(static_cast<int32_t>(aot_locs.size()));
+        if (!lowerer.lowerFunction(*helper, module, error)) {
+            if (dbg) {
+                fprintf(stderr, "AOT-OUTLINE-FN: helper '%s' lowering failed: %s\n",
+                    helper->name.c_str(), error.c_str());
+            }
+            // Erase helpers already emitted; the caller will lower the
+            // restored original function instead.
+            for (auto& h2 : helpers) {
+                if (llvm::Function* f = module.getFunction(h2.ir_func->name)) {
+                    f->eraseFromParent();
+                }
+            }
+            return false;
+        }
+        if (llvm::Function* f = module.getFunction(helper->name)) {
+            // Keep the outline boundary through the backend: re-inlining the
+            // helpers would recreate the pathological function.
+            f->addFnAttr(llvm::Attribute::NoInline);
+        }
+        for (const auto& loc : lowerer.getAOTLocTable()) {
+            AOTCompiledFuncWithSlots::AOTLocEntry entry;
+            entry.start_line = static_cast<int16_t>(loc.start_line);
+            entry.end_line = static_cast<int16_t>(loc.end_line);
+            entry.file = loc.file;
+            aot_locs.push_back(std::move(entry));
+        }
+    }
+    return true;
+}
+
 static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
         QoreProgram* pgm, QoreIRFunction*& ir_func, std::string& error) {
     if (!init_expr.hasNode() || !init_expr.getInternalNode()->needs_eval()) {
@@ -8100,7 +9411,10 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             }
 
             ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
-            if (isAOTFastEntryEligible(ir_func, uvb)) {
+            AOTFunctionOutliner outline_probe;
+            bool will_outline = outline_probe.run(ir_func, false);
+            outline_probe.undo();
+            if (!will_outline && isAOTFastEntryEligible(ir_func, uvb)) {
                 const UserSignature* sig = uvb->getUserSignature();
                 unsigned num_params = sig->numParams();
                 std::vector<BatchCalleeParamKind> param_kinds =
@@ -8248,12 +9562,16 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                 }
 
                 ir_func->name = aotLLVMSymbolName(compile_module, variant_key);
+                AOTFunctionOutliner outline_probe;
+                bool will_outline = outline_probe.run(ir_func, false);
+                outline_probe.undo();
                 static const bool speculative_object_fast_entry =
                     std::getenv("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY") == nullptr;
                 bool implicit_self = isAOTImplicitSelfFastEntryEligible(
                     ir_func, uvb, qc, meth, variant, speculative_object_fast_entry);
-                if ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
-                        || implicit_self) {
+                if (!will_outline
+                        && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
+                        || implicit_self)) {
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
                     std::vector<BatchCalleeParamKind> param_kinds =
@@ -11038,7 +12356,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
 
             if (rc == 0 && ir_func) {
-                refine_interprocedural(*ir_func);
                 // The LLVM symbol is sanitized for object/linker use; the
                 // namespace-qualified `variant_key` stays the AOT function
                 // table entry's `name` so runtime variant reconstruction via
@@ -11052,14 +12369,38 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     continue;
                 }
 
+                // Probe outlining before feature-branch interprocedural
+                // refinements introduce cross-region SSA live-ins. When a
+                // pathological body can be outlined, preserve its original
+                // local-slot form for the real outlining pass below.
+                AOTFunctionOutliner outline_probe;
+                bool will_outline = outline_probe.run(ir_func, false);
+                outline_probe.undo();
+                if (!will_outline) {
+                    refine_interprocedural(*ir_func);
+                }
+
                 // Build slot map for AOT pointer indirection
                 // (computeIROnlyLocals already called inside tryLowerFunction)
+                // NOTE: the slot map is built from the un-outlined function so
+                // slot id assignment is identical in metadata-only compiles
+                // (function-body outlining only moves instructions).
                 AOTSlotMap slots;
                 buildAOTSlotMap(*ir_func, slots);
 
-                // Check for AOT Approach B fast-entry eligibility.  The
-                // batch map is populated only after the fast entry lowers
-                // successfully, so callers always have a valid fallback.
+                // Automatic function-body outlining for pathological
+                // functions (see design/aot-function-outlining.md).  The
+                // transform is reversed after LLVM lowering so metadata and
+                // debug-IR serialization see the original function.
+                AOTFunctionOutliner fn_outliner;
+                if (!metadata_only) {
+                    fn_outliner.run(ir_func);
+                }
+
+                // Check for AOT Approach B fast-entry eligibility. Fast entries
+                // pass params as LLVM arguments rather than TLS-stack slots,
+                // which outlined helpers cannot see, so all fast-entry forms
+                // are disabled while outlining is active.
                 std::string fast_entry_name;
                 std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                 std::vector<uint8_t> fast_entry_param_rejects_nothing;
@@ -11069,7 +12410,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                         && analyzed->second.approach_b_eligible;
                 }
-                bool fast_entry_eligible = !metadata_only && analyzed_fast_entry_eligible
+                bool fast_entry_eligible = !metadata_only && !fn_outliner.active()
+                    && analyzed_fast_entry_eligible
                     && isAOTFastEntryEligible(ir_func, uvb);
                 bool self_rec_eligible = fast_entry_eligible && hasAOTSelfRecursiveCall(ir_func);
                 if (fast_entry_eligible) {
@@ -11208,14 +12550,71 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fprintf(stderr, "AOT: lowering function '%s' (blocks=%zu, insts=%zu)\n",
                             variant_key.c_str(), ir_func->blocks.size(), total_ir_insts);
                     }
-                    if (total_ir_insts > 5000) {
+                    if (total_ir_insts > 5000 && !fn_outliner.active()) {
                         fprintf(stderr, "warning: function '%s' has %zu IR instructions; "
                             "LLVM compilation may take a long time; consider breaking this "
                             "function into smaller functions\n",
                             variant_key.c_str(), total_ir_insts);
                     }
 
+                    // Lower outlined helpers first so the coordinator's
+                    // CallAOTHelper call sites bind to defined functions; on
+                    // helper failure fall back to un-outlined lowering.
+                    bool used_retry_lowering = false;
+                    if (fn_outliner.active()) {
+                        std::string helper_error;
+                        if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                                module, slots, &di_builder, di_cu, aot_locs_local,
+                                helper_error)) {
+                            fn_outliner.undo();
+                            aot_locs_local.clear();
+                        }
+                    }
+                    if (fn_outliner.active()) {
+                        // Coordinator location indices follow the helpers' in
+                        // the merged ctx->locs table.
+                        lowerer.setAOTLocTableBase(
+                            static_cast<int32_t>(aot_locs_local.size()));
+                    }
+
                     std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                    if (!std_entry_ok && fn_outliner.active()) {
+                        // Outlined coordinator lowering failed — restore the
+                        // original function and retry without outlining.
+                        if (getenv("QORE_AOT_DEBUG")) {
+                            fprintf(stderr, "AOT-OUTLINE-FN: coordinator '%s' lowering "
+                                "failed (%s); retrying un-outlined\n",
+                                variant_key.c_str(), llvm_error.c_str());
+                        }
+                        for (auto& h : fn_outliner.helpers) {
+                            if (llvm::Function* f = module.getFunction(h.ir_func->name)) {
+                                f->eraseFromParent();
+                            }
+                        }
+                        fn_outliner.undo();
+                        aot_locs_local.clear();
+                        QoreIRToLLVM retry_lowerer(ctx);
+                        retry_lowerer.setAOTMode(&slots);
+                        retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                        retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                        retry_lowerer.setDeferredExceptionChecking(false);
+                        if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                            retry_lowerer.setBatchCallees(aot_batch_callee_map);
+                        }
+                        std_entry_ok = retry_lowerer.lowerFunction(*ir_func, module,
+                            llvm_error);
+                        used_retry_lowering = true;
+                        if (std_entry_ok) {
+                            for (const auto& loc : retry_lowerer.getAOTLocTable()) {
+                                AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                                entry.start_line = static_cast<int16_t>(loc.start_line);
+                                entry.end_line = static_cast<int16_t>(loc.end_line);
+                                entry.file = loc.file;
+                                aot_locs_local.push_back(std::move(entry));
+                            }
+                        }
+                    }
 
                     // Compile fast entry for AOT Approach B.
                     if (std_entry_ok && fast_entry_eligible) {
@@ -11296,7 +12695,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     // Transfer owned location data from LLVM codegen directly.
                     // The lowerer's AOTLocEntry already owns string copies — no raw
                     // pointer dereference needed here (safe against corrupt inst->loc).
-                    if (std_entry_ok) {
+                    // (The un-outlined retry path above already appended its own
+                    // table — `lowerer`'s table belongs to the failed attempt.)
+                    if (std_entry_ok && !used_retry_lowering) {
                         for (const auto& loc : lowerer.getAOTLocTable()) {
                             AOTCompiledFuncWithSlots::AOTLocEntry entry;
                             entry.start_line = static_cast<int16_t>(loc.start_line);
@@ -11306,6 +12707,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                     }
                 }
+
+                // Restore the original function before metadata extraction and
+                // debug-IR serialization — serialized IR must never contain
+                // CallAOTHelper (the IR interpreter cannot execute it).
+                fn_outliner.undo();
 
                 if (std_entry_ok) {
                     AOTCompiledFunc cf;
@@ -11447,7 +12853,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
 
                 if (rc == 0 && ir_func) {
-                    refine_interprocedural(*ir_func);
                     // The LLVM symbol is sanitized for object/linker use; the
                     // logical variant key remains in `cf.name` below for
                     // runtime slot-map registration.
@@ -11460,17 +12865,37 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         continue;
                     }
 
+                    // Keep outlineable pathological methods in their original
+                    // local-slot form; several feature refinements otherwise
+                    // create SSA live-ins across safe lexical regions.
+                    AOTFunctionOutliner outline_probe;
+                    bool will_outline = outline_probe.run(ir_func, false);
+                    outline_probe.undo();
+                    if (!will_outline) {
+                        refine_interprocedural(*ir_func);
+                    }
+
                     // Build slot map for AOT pointer indirection
                     // (computeIROnlyLocals already called inside tryLowerFunction)
+                    // NOTE: built from the un-outlined method so slot id
+                    // assignment matches metadata-only compiles.
                     AOTSlotMap slots;
                     buildAOTSlotMap(*ir_func, slots);
+
+                    // Automatic function-body outlining for pathological
+                    // methods (see design/aot-function-outlining.md); the
+                    // transform is reversed after LLVM lowering.
+                    AOTFunctionOutliner fn_outliner;
+                    if (!metadata_only) {
+                        fn_outliner.run(ir_func);
+                    }
 
                     std::string fast_entry_name;
                     std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                     std::vector<uint8_t> fast_entry_param_rejects_nothing;
                     static const bool speculative_object_fast_entry =
                         std::getenv("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY") == nullptr;
-                    bool implicit_self_fast_entry = !metadata_only
+                    bool implicit_self_fast_entry = !metadata_only && !fn_outliner.active()
                         && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth,
                             variant, speculative_object_fast_entry);
                     bool analyzed_fast_entry_eligible = true;
@@ -11479,7 +12904,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                             && analyzed->second.approach_b_eligible;
                     }
-                    bool fast_entry_eligible = !metadata_only
+                    bool fast_entry_eligible = !metadata_only && !fn_outliner.active()
                         && analyzed_fast_entry_eligible
                         && isAOTFastMethodCallEligible(variant)
                         && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
@@ -11586,14 +13011,67 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             QoreIRPrinter::print(*ir_func, std::cerr);
                             fprintf(stderr, "=================\n");
                         }
-                        if (total_ir_insts > 5000) {
+                        if (total_ir_insts > 5000 && !fn_outliner.active()) {
                             fprintf(stderr, "warning: method '%s' has %zu IR instructions; "
                                 "LLVM compilation may take a long time; consider breaking this "
                                 "method into smaller methods\n",
                                 variant_key.c_str(), total_ir_insts);
                         }
 
+                        // Lower outlined helpers first (see the function path
+                        // above); on any failure fall back to un-outlined
+                        // lowering of the restored original method.
+                        bool used_retry_lowering = false;
+                        if (fn_outliner.active()) {
+                            std::string helper_error;
+                            if (!aotLowerOutlinedFnHelpers(fn_outliner.helpers, ctx,
+                                    module, slots, &di_builder, di_cu, aot_locs_local,
+                                    helper_error)) {
+                                fn_outliner.undo();
+                                aot_locs_local.clear();
+                            }
+                        }
+                        if (fn_outliner.active()) {
+                            lowerer.setAOTLocTableBase(
+                                static_cast<int32_t>(aot_locs_local.size()));
+                        }
+
                         method_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+
+                        if (!method_ok && fn_outliner.active()) {
+                            if (getenv("QORE_AOT_DEBUG")) {
+                                fprintf(stderr, "AOT-OUTLINE-FN: coordinator '%s' lowering "
+                                    "failed (%s); retrying un-outlined\n",
+                                    variant_key.c_str(), llvm_error.c_str());
+                            }
+                            for (auto& h : fn_outliner.helpers) {
+                                if (llvm::Function* f = module.getFunction(h.ir_func->name)) {
+                                    f->eraseFromParent();
+                                }
+                            }
+                            fn_outliner.undo();
+                            aot_locs_local.clear();
+                            QoreIRToLLVM retry_lowerer(ctx);
+                            retry_lowerer.setAOTMode(&slots);
+                            retry_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                            retry_lowerer.setEmitDebugInfo(aotEmitDebugInfo());
+                            retry_lowerer.setDeferredExceptionChecking(false);
+                            if (aot_batch_callee_map && !aot_batch_callee_map->empty()) {
+                                retry_lowerer.setBatchCallees(aot_batch_callee_map);
+                            }
+                            method_ok = retry_lowerer.lowerFunction(*ir_func, module,
+                                llvm_error);
+                            used_retry_lowering = true;
+                            if (method_ok) {
+                                for (const auto& loc : retry_lowerer.getAOTLocTable()) {
+                                    AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                                    entry.start_line = static_cast<int16_t>(loc.start_line);
+                                    entry.end_line = static_cast<int16_t>(loc.end_line);
+                                    entry.file = loc.file;
+                                    aot_locs_local.push_back(std::move(entry));
+                                }
+                            }
+                        }
 
                         if (method_ok && fast_entry_eligible) {
                             const UserSignature* sig = uvb->getUserSignature();
@@ -11665,7 +13143,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                         }
 
-                        if (method_ok) {
+                        if (method_ok && !used_retry_lowering) {
                             for (const auto& loc : lowerer.getAOTLocTable()) {
                                 AOTCompiledFuncWithSlots::AOTLocEntry entry;
                                 entry.start_line = static_cast<int16_t>(loc.start_line);
@@ -11675,6 +13153,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             }
                         }
                     }
+
+                    // Restore the original method before metadata extraction
+                    // and debug-IR serialization (serialized IR must never
+                    // contain CallAOTHelper).
+                    fn_outliner.undo();
 
                     if (method_ok) {
                         AOTCompiledFunc cf;

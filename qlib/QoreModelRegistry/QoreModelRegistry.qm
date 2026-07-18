@@ -40,7 +40,7 @@
 %endtry
 
 module QoreModelRegistry {
-    version = "2.6.0";
+    version = "1.0.0";
     desc = "user module providing an ML model registry with pluggable storage backends for versioning, tagging, and deployment management";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -349,99 +349,6 @@ reg.loadExecutable("torch-source", vid);
     @endcode
 
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
-
-    @subsection qoremodelregistry_2_5 QoreModelRegistry Module Version 2.5
-    - Model manifests now expose the complete ONNX deployment contract at the
-      version level: \c task, \c opset, \c producer,
-      \c minimum_onnxruntime_version, \c inputs, \c outputs,
-      \c dynamic_axes, \c external_data, \c preprocess, \c postprocess,
-      \c providers, \c diagnostics, \c optimized_artifacts,
-      \c quantized_artifacts, \c validation, \c benchmarks, and
-      \c golden_vectors
-    - ONNX execution plans now keep runtime, entry artifact, tokenizer
-      companion metadata, input/output tensor schemas, dynamic axes,
-      output-shape maps, preprocessing, postprocessing, and the nested
-      \c tensor_contract together for deployment automation
-    - Added registry action methods for packaged ONNX versions:
-      \c inspectOnnxVersion(), \c validateOnnxVersion(),
-      \c benchmarkOnnxVersion(), \c compareOnnxVersions(), and
-      \c compareOnnxVersionArtifacts()
-    - ModelRegistry DataProvider records now expose ONNX provider diagnostics,
-      validation status, tensor contracts, deployment metadata, benchmark
-      metadata, golden vectors, actionable diagnostics, and
-      optimized/quantized artifact lists
-    - ModelExecutableAdapter ONNX execution methods accept selected output names
-      so registry-backed multi-output ONNX packages can avoid materializing
-      unused labels, probabilities, logits, or embeddings
-    - ModelExecutableAdapter now reports compatible Qore tensor storage dtypes
-      for ONNX \c float16, \c bfloat16, unsigned integer, and string inputs and
-      accepts those storage dtypes in \c runFeatureTensor() / \c runTensors()
-    - ModelExecutableAdapter tensor execution reuses \c ML::OnnxIoBinding for
-      stable ONNX input/output signatures and reports binding diagnostics in
-      provider diagnostics
-
-    @subsection qoremodelregistry_2_4 QoreModelRegistry Module Version 2.4
-    - ONNX model packages now expose task-aware execution-plan metadata through
-      \c task, \c execution.task, and \c execution.plan; supported task names
-      include \c raw, \c classification, \c regression, \c embedding,
-      \c reranker, \c token-classification, \c sequence-classification,
-      \c encoder-decoder, and \c causal-lm
-    - Added @ref QoreModelRegistry::ModelRegistry::registerOptimizedOnnxArtifact()
-      to create optimized ONNX/ORT artifacts with @ref qoreonnxtoolsintro "QoreOnnxTools"
-      and store lineage metadata on the source model version
-    - Added @ref QoreModelRegistry::ModelRegistry::registerQuantizedOnnxArtifact()
-      to create quantized ONNX artifacts with source version/artifact lineage and
-      ONNX Runtime dependency diagnostics; static calibration fingerprints are
-      promoted into lineage metadata, and successful validated quantization
-      records original-vs-quantized output and latency comparison metadata
-    - Added \c optimized_artifacts and \c quantized_artifacts manifest lists plus
-      @ref QoreModelRegistry::ModelRegistry::loadOnnxArtifactExecutable() and
-      @ref QoreModelRegistry::ModelRegistry::loadOnnxArtifactAdapter() for named
-      optimized/quantized ONNX deployment artifacts with provider compatibility
-      checks
-
-    @subsection qoremodelregistry_2_3 QoreModelRegistry Module Version 2.3
-    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureMatrixTensors()
-      for registry-backed ONNX inference that returns @ref Qore::ML::Tensor "ML::Tensor"
-      outputs
-    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runFeatureTensor() and
-      @ref QoreModelRegistry::ModelExecutableAdapter::getOnnxInputTensorDtype() so
-      registry-backed ONNX callers can pass correctly typed dense tensors without
-      materializing row matrices first
-    - Added @ref QoreModelRegistry::ModelExecutableAdapter::runTensors() for
-      registry-backed ONNX models with one or more explicitly named input tensors
-    - Added provider diagnostics through
-      @ref QoreModelRegistry::ModelExecutableAdapter::getProviderDiagnostics()
-    - Added \c loadTokenizerPackageConfig() to load \c tokenizer.json together
-      with optional \c tokenizer_config.json, \c special_tokens_map.json, and
-      \c generation_config.json companion artifacts
-    - ONNX package execution preserves session configuration in execution metadata
-      and materializes adjacent external-data artifacts for ONNX Runtime session setup
-
-    @subsection qoremodelregistry_2_2 QoreModelRegistry Module Version 2.2
-    - Added safe model package registration with @ref QoreModelRegistry::ModelRegistry::registerPackage()
-    - Added named artifact APIs: \c registerNamedArtifact(), \c loadNamedArtifact(),
-      \c listArtifacts(), and \c getVersionManifest()
-    - Added JSON/tokenizer artifact helpers for AI pipelines:
-      \c loadJsonArtifact() and \c loadTokenizerConfig()
-    - Added execution metadata and \c loadExecutable() / \c loadExecutableByTag()
-      for native Qore ML and ONNX packages
-    - Added @ref QoreModelRegistry::ModelArtifactInspector for HuggingFace,
-      ONNX, SafeTensors, and PyTorch package inspection without executing
-      unsafe artifacts
-    - Added DataProvider create/navigation support for model package
-      registration and per-version named artifact providers
-    - Filesystem and database backends preserve package manifests and named
-      artifact metadata; REST backends can expose equivalent artifact endpoints
-
-    @subsection qoremodelregistry_2_0 QoreModelRegistry Module Version 2.0
-    - Pluggable storage backends via @ref AbstractModelRegistryBackend
-    - @ref FilesystemBackend extracted from original monolithic ModelRegistry
-    - @ref ArtifactRef abstraction for future object store support
-    - @ref ModelVersionInfo hashdecl for structured version metadata
-    - \c deleteTenantStorage() for user/tenant cleanup
-    - \c getBackend() to access the underlying storage backend
-    - Constructor accepts \c backend option for pre-constructed backends
 
     @subsection qoremodelregistry_1_0 QoreModelRegistry Module Version 1.0
     - Initial release with filesystem-backed registry

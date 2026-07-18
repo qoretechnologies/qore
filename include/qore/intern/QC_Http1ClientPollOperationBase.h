@@ -73,10 +73,16 @@ public:
     };
 
     //! Request sub-states within READING
+    /** For a streaming-send (chunked request body) request the request send
+        side runs concurrently with these response-receive states — see
+        @ref SendState — so that the response can be read and delivered while
+        the chunked request body is still open (full-duplex). @c req_state
+        therefore tracks only the response (receive) direction once the request
+        headers have been sent.
+    */
     enum class ReqState {
         IDLE,
         SENDING,
-        SEND_STREAMING_BODY,  //!< waiting for / sending chunked TE body data from app thread
         RECV_HEADER,
         RECV_BODY_LENGTH,
         RECV_CHUNK_SIZE,
@@ -84,6 +90,21 @@ public:
         RECV_CHUNK_CRLF,
         RECV_BODY_CLOSE,
         PROTOCOL_SWITCHED   //!< raw bidirectional data after 101
+    };
+
+    //! Request-send sub-states for full-duplex chunked streaming
+    /** Tracks the chunked request-body send direction, which runs
+        concurrently with the response-receive @ref ReqState machine on the
+        same socket (send and receive use independent non-blocking
+        directions).  Only active for streaming-send requests; INACTIVE
+        otherwise (half-duplex / non-streaming requests send the whole request
+        before reading the response).
+    */
+    enum class SendState {
+        INACTIVE,   //!< not a full-duplex streaming-send request
+        IDLE,       //!< full-duplex active, no send in flight, awaiting queued data
+        SENDING,    //!< a request-body chunk (or the final terminator) is being sent
+        DONE        //!< the end sentinel was processed; the request body is fully sent
     };
 
     //! Creates the poll operation with an initial TCP connect operation
@@ -265,7 +286,19 @@ protected:
 
 private:
     //! Current inner poll operation (ref'd)
+    /** In full-duplex streaming this is the response-receive operation; the
+        concurrent request-body send operation is @ref send_op.
+    */
     SocketPollOperationBase* current_op;
+
+    //! Concurrent request-body send operation for full-duplex streaming (ref'd or nullptr)
+    /** Non-null only while a chunked request-body chunk (or the final
+        terminator) is being sent concurrently with reading the response.
+        Uses the socket's independent send direction (NB_SEND) so it can run
+        alongside @ref current_op's receive (NB_RECV) on the I/O thread.
+        @since %Qore 3.0
+    */
+    SocketPollOperationBase* send_op = nullptr;
 
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
@@ -300,6 +333,16 @@ private:
     // --- Request sub-state (I/O thread only, no lock needed) ---
 
     ReqState req_state = ReqState::IDLE;
+
+    //! Request-body send sub-state for full-duplex streaming (I/O thread only)
+    SendState send_state = SendState::INACTIVE;
+
+    //! True when @ref send_op is sending the final "0\r\n" terminator
+    /** Set when the end-of-body sentinel is dequeued and the final chunk send
+        op is created; when that send completes, @ref send_state transitions to
+        @ref SendState::DONE.  I/O thread only.
+    */
+    bool send_final_pending = false;
 
     //! Response status code
     int response_status_code = 0;
@@ -419,6 +462,8 @@ private:
     DLLLOCAL QoreHashNode* handleProxyConnectSend(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleProxyConnectRecv(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* dispatchReqState(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleFullDuplex(ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);
@@ -427,7 +472,6 @@ private:
     // Request sub-state handlers
     DLLLOCAL QoreHashNode* handleIdle(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleSending(ExceptionSink* xsink);
-    DLLLOCAL QoreHashNode* handleStreamingSendBody(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvHeader(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyLength(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkSize(ExceptionSink* xsink);
@@ -456,6 +500,25 @@ private:
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+
+    //! Drives the concurrent chunked request-body send side (full-duplex).
+    /** Sends as many queued request-body chunks as the socket will accept
+        without blocking, creating/polling @ref send_op as needed.  Runs on the
+        I/O thread alongside the response-receive machine.
+
+        @param xsink exception sink
+        @return the socket poll events the send side still wants
+            (0 = nothing pending / idle / done, @ref SOCK_POLLOUT = a partial
+            send needs the socket to become writable), or -1 on error (the
+            error has already been surfaced via setError() or \a xsink)
+    */
+    DLLLOCAL int driveSendSide(ExceptionSink* xsink);
+
+    //! Releases the concurrent request-body send operation
+    DLLLOCAL void releaseSendOp(ExceptionSink* xsink);
+
+    //! Tears down full-duplex send state (send op, queue, trailers, sub-state)
+    DLLLOCAL void resetSendState(ExceptionSink* xsink);
 
     //! Convert binary body to string based on Content-Type charset
     DLLLOCAL QoreValue convertBodyEncoding(ExceptionSink* xsink);

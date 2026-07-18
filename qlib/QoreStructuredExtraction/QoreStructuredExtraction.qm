@@ -32,7 +32,7 @@
 %endtry
 
 module QoreStructuredExtraction {
-    version = "1.1.0";
+    version = "1.0.0";
     desc = "user module providing LLM-based structured information extraction "
         "with schema enforcement and built-in templates for NER, invoices, "
         "contacts, and sentiment analysis";
@@ -113,13 +113,6 @@ ExtractionPipeline pipeline(llm, ExtractionSchema::NerSchema,
     @endcode
 
     @section qorestructuredextractionrelnotes QoreStructuredExtraction Module Release Notes
-
-    @subsection qorestructuredextraction_1_1 QoreStructuredExtraction Module Version 1.1
-    - chat requests now force the extraction tool call by default through an
-      OpenAI-compatible \c tool_choice, arming provider-side
-      malformed-function-call recovery (opt out with the
-      \c force_tool_choice pipeline option); empty LLM responses now report
-      the provider stop reason in the validation error
 
     @subsection qorestructuredextraction_1_0 QoreStructuredExtraction Module Version 1.0
     - Initial release with @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline"

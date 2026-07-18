@@ -41,7 +41,7 @@
 %endtry
 
 module QoreRagUtils {
-    version = "1.1.0";
+    version = "1.0.0";
     desc = "user module providing a composable RAG abstraction layer";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -144,29 +144,6 @@ foreach hash<RetrievalHit> hit in (hits) {
     @endcode
 
     @section QoreRagUtilsRelnotes Release Notes
-
-    @subsection QoreRagUtilsv1_1_0 QoreRagUtils v1.1.0
-    - added @ref QoreRagUtils::SGLangReranker "SGLangReranker", a reranker
-      backend (\c backend \c "sglang") that re-ranks via an SGLang reranker
-      server's \c /v1/rerank endpoint — GPU-served cross-encoder scoring with
-      no model loaded in-process; registered in @ref RagProviderRegistry
-
-    @subsection QoreRagUtilsv1_0_1 QoreRagUtils v1.0.1
-    - added optional @ref RagPipelineOptions hooks to
-      @ref QoreRagUtils::RagPipeline "RagPipeline" so external retrievers
-      can absorb the abstraction without feature regression:
-      - @ref RagPipelineOptions::query_transformer "query_transformer" for
-        HyDE-style query expansion
-      - @ref RagPipelineOptions::embedding_cache "embedding_cache" for
-        per-pipeline query-vector caching, with a bundled
-        @ref QoreRagUtils::LruEmbeddingCache "LruEmbeddingCache" default
-      - @ref RagPipelineOptions::pre_rerank_top_k "pre_rerank_top_k" for
-        explicit over-retrieval before reranking
-      - a fallback vector-store chain overload (Qdrant → pgvector, etc.)
-    - documented the existing payload-filter passthrough on
-      @ref QoreRagUtils::RagPipeline::retrieve() "retrieve()"
-    - every new feature is strictly additive — pre-existing callers keep
-      working unchanged
 
     @subsection QoreRagUtilsv1_0 QoreRagUtils v1.0
     - the initial version of the %QoreRagUtils module

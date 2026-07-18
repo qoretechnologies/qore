@@ -99,12 +99,13 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             Use this for protocols like DataStream that send a chunked
             request body.  When \c True, @a body should be empty.
 
-            HTTP/1.1 chunked transfer is sequential on the wire — the
-            request body must be fully sent before the response body
-            starts arriving.  At the application layer, callers may
-            interleave @ref sendData() and @ref readData() freely; the
-            poll op buffers as needed.  For true wire-level concurrent
-            bidirectional streaming, use HTTP/2 or HTTP/3.
+            HTTP/1.1 chunked streaming is full-duplex: the response header
+            and body are read and delivered concurrently with the still-open
+            chunked request body, so a server can reply while the request
+            body is still being sent.  Callers may interleave @ref sendData()
+            and @ref readData() freely — including reading a mid-request reply
+            before @ref writesDone() (the read-your-writes pattern used by
+            protocols like DataStream / RemoteSqlSession).
         @param body request body (only used when \c body_streaming = \c False)
         @param notifier optional EventNotifier signaled when raw response
             items are available to @ref readData()

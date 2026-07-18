@@ -34,7 +34,7 @@
 %endtry
 
 module QoreGuardrails {
-    version = "1.2.0";
+    version = "1.0.0";
     desc = "user module providing input and output guardrails for AI-powered "
         "chat endpoints including PII detection, prompt injection detection, "
         "topic restriction, and output format enforcement";
@@ -98,48 +98,6 @@ if (!result.passed) {
     @endcode
 
     @section qoreguardrailsrelnotes QoreGuardrails Module Release Notes
-
-    @subsection qoreguardrails_1_2 QoreGuardrails Module Version 1.2
-    - Added @ref QoreGuardrails::TaskPolicyRule "TaskPolicyRule", a
-      language-independent input guardrail that uses
-      @ref QoreLlmUtils::LlmRequestClassifier "LlmRequestClassifier" to
-      enforce application-defined domain and task policies.
-    - Added @ref QoreGuardrails::GroundingRule "GroundingRule", an output
-      guardrail that verifies answer grounding and optional source citation
-      coverage with @ref QoreLlmUtils::GroundedAnswerVerifier
-      "GroundedAnswerVerifier".
-
-    @subsection qoreguardrails_1_1 QoreGuardrails Module Version 1.1
-    - Added a self-describing rule-type registry: every rule class now exposes
-      a \c public \c static \c getConfigSchema() method returning a
-      \c hash<string, hash<DataProviderOptionInfo>> that describes its
-      configuration parameters (display names, descriptions, defaults,
-      allowed values, required flags) so UI tools can render a typed editor
-      form without hard-coding each rule type.
-      @ref QoreGuardrails::GuardrailEngine::getRuleTypeRegistry() "GuardrailEngine::getRuleTypeRegistry()"
-      aggregates every rule type's schema into a single keyed map.
-    - New public hashdecl @ref QoreGuardrails::RuleTypeInfo "RuleTypeInfo"
-      carries the registry entry shape — type name, display name,
-      description, default direction, and config schema.
-    - New @ref QoreGuardrails::ActionIntentRule "ActionIntentRule" rule type
-      wraps @ref QoreLlmUtils::ActionIntentClassifier as an operator-editable
-      guardrail; classifies each user turn as \c read-only,
-      \c action-requested, or \c confirmation-required and fails when the
-      classified label is in the configured \c block_intents set (defaults
-      to just \c confirmation-required so ambiguous phrasings surface
-      explicitly while clear commands and clear questions pass through).
-      Registered as rule type \c "action_intent" in
-      @ref QoreGuardrails::GuardrailEngine "GuardrailEngine".
-    - @ref QoreLlmUtils is now a hard dependency of the module; the
-      previous \c %try-module / \c NoLlmUtils conditional-compilation
-      fallback has been removed since QoreLlmUtils ships with the Qore
-      distribution.  Every LLM-capable rule
-      (@ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector",
-      @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule",
-      @ref QoreGuardrails::ToxicityDetector "ToxicityDetector",
-      @ref QoreGuardrails::HallucinationDetector "HallucinationDetector",
-      and @ref QoreGuardrails::ActionIntentRule "ActionIntentRule") uses
-      QoreLlmUtils unconditionally.
 
     @subsection qoreguardrails_1_0 QoreGuardrails Module Version 1.0
     - Initial release with @ref QoreGuardrails::GuardrailEngine "GuardrailEngine",

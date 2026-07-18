@@ -1106,6 +1106,85 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         };
     }
 
+    #! Returns per-connection info for currently-pooled connections, including the negotiated protocol
+    /** Unlike @ref getStats(), which reports aggregate pool counters and the
+        <i>configured</i> protocol mode (@ref HttpClientConnectionManagerOptions::protocol),
+        this method returns one @ref HttpClientConnectionInfo hash for each
+        currently-pooled connection, each carrying the <i>negotiated</i> @c protocol
+        (\c "h1", \c "h2", or \c "h3") for that specific connection along with its
+        host, port, state, active-stream count, and TLS flag.
+
+        @param url if provided, only connections to this URL's \c host:port are
+        returned; the scheme defaults to \c "https" and the port to the scheme
+        default (443/80) when absent, matching connection routing.  If omitted,
+        connections to every pooled host are returned.
+
+        @return a list of @ref HttpClientConnectionInfo hashes; empty if no
+        matching connection is currently pooled (for example before the first
+        request, or for a host that has never been contacted)
+
+        @throw HTTPCLIENT-URL-ERROR the \a url argument is not a valid URL or is missing a host
+
+        @note A connection still in the @ref HttpClientConnectionState::Connecting
+        state reports the protocol it is negotiating; the value is authoritative
+        once the connection reaches @ref HttpClientConnectionState::Ready.
+
+        @par Example
+        @code{.py}
+# report the negotiated protocol of every live pooled connection
+foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
+    printf("%s:%d -> %s (%d active streams)\n", info.host, info.port,
+        info.protocol, info.active_streams);
+}
+        @endcode
+
+        @see @ref getStats() for aggregate pool statistics
+    */
+    list<hash<HttpClientConnectionInfo>> getConnectionInfo(*string url) {
+        *string filter_key;
+        if (exists url) {
+            hash<UrlInfo> url_info;
+            try {
+                url_info = parse_url(url);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+            }
+            if (!url_info.host) {
+                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+            }
+            if (!url_info.protocol) {
+                url_info.protocol = "https";
+            }
+            if (!url_info.port) {
+                url_info.port = url_info.protocol == "https" ? 443 : 80;
+            }
+            filter_key = sprintf("%s:%d", url_info.host, url_info.port);
+        }
+
+        # Snapshot the matching connections under the pool lock, then build the
+        # info list after releasing it: HttpClientConnection::getConnectionInfo()
+        # takes the connection's own lock, so we must not hold pool_lock across
+        # that call (avoids any pool_lock -> connection-lock nesting).
+        list<HttpClientConnection> conns = ();
+        {
+            # Pin @c pool_lock across this block: see @ref pool_lock_pin.
+            RWLock pool_lock_pin = pool_lock;
+            AutoReadLock al(pool_lock);
+            foreach string key in (keys pool) {
+                if (exists filter_key && key != filter_key) {
+                    continue;
+                }
+                conns += pool{key};
+            }
+        }
+
+        list<hash<HttpClientConnectionInfo>> rv = ();
+        foreach HttpClientConnection conn in (conns) {
+            rv += conn.getConnectionInfo();
+        }
+        return rv;
+    }
+
     #! Closes all connections
     closeAll() {
         {

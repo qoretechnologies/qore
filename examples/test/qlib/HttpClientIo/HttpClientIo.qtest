@@ -205,6 +205,126 @@ class NotificationTrackingHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Raw-socket HTTP/1.1 server that echoes each chunked request-body chunk back
+#! as a response chunk *immediately* — before the request body ends.
+/** This is genuine full-duplex chunked transfer: the server sends the response
+    status line + headers as soon as the request headers arrive, then for every
+    request-body chunk it receives it writes a response-body chunk back right
+    away.  A half-duplex client (which only starts reading the response after
+    it has half-closed the request body) can never observe the reply and will
+    hang — this server is the acceptance gate for restored HTTP/1.1 full-duplex
+    streaming.
+*/
+class FullDuplexEchoRawServer {
+    public {
+        #! Marker written as the final response chunk before the 0-terminator
+        const FinalMarker = "SERVER-DONE";
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        *string server_error;
+    }
+
+    constructor() {
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    string getUrl() {
+        return sprintf("http://localhost:%d", port);
+    }
+
+    start() {
+        background acceptAndServe();
+    }
+
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    *string getServerError() {
+        return server_error;
+    }
+
+    #! Reads a single CRLF-terminated line (returned without the trailing CRLF)
+    private string readLine(Socket client, timeout to = 15s) {
+        string str = "";
+        while (True) {
+            int c = client.recvu1(to);
+            if (c == 10) {  # LF
+                break;
+            }
+            if (c != 13) {  # skip CR
+                str += chr(c);
+            }
+        }
+        return str;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+            client.close();
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    private serveClient(Socket client) {
+        # Read the request header block (request line + headers) up to the
+        # blank line.  We deliberately do NOT read the request body first.
+        while (True) {
+            string line = readLine(client);
+            if (line == "") {
+                break;
+            }
+        }
+
+        # Send response status + headers immediately (chunked, still open).
+        client.send("HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n");
+
+        # Echo each request-body chunk back as a response chunk as soon as it
+        # arrives — full-duplex, before the client half-closes the request.
+        while (True) {
+            string size_line = readLine(client);
+            trim size_line;
+            int chunk_size = size_line.toInt(16);
+            if (chunk_size == 0) {
+                # Terminal chunk: consume the trailing CRLF line, then send a
+                # final marker chunk and close the response body.
+                readLine(client);  # empty line after "0"
+                sendChunk(client, FinalMarker);
+                client.send("0\r\n\r\n");
+                break;
+            }
+            binary chunk = client.recvBinary(chunk_size, 15s);
+            client.recvBinary(2, 15s);  # trailing CRLF after chunk data
+            # Echo it straight back as a response chunk (mid-request reply).
+            sendChunk(client, chunk);
+        }
+    }
+
+    private sendChunk(Socket client, data payload) {
+        binary b = payload instanceof binary ? payload : binary(payload);
+        client.send(sprintf("%x\r\n", b.size()));
+        client.send(b);
+        client.send("\r\n");
+    }
+}
+
 class HttpClientIoTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -281,6 +401,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # Unified manager basic functionality
         addTestCase("unified manager stats", \testUnifiedManagerStats());
+        addTestCase("unified manager connection info", \testUnifiedManagerConnectionInfo());
 
         # Negative tests
         addTestCase("invalid URL handling", \testInvalidUrl());
@@ -395,6 +516,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testH1BidiSendDataWithoutBodyStreaming());
         addTestCase("H1 bidi streaming body+body_streaming rejected",
             \testH1BidiStreamingBodyConflictRejected());
+        # Full-duplex chunked streaming: read a reply while the request body is still open
+        addTestCase("H1 full-duplex streaming read-your-writes",
+            \testH1FullDuplexStreaming());
 
         # HTTP/3 streaming tests
         addTestCase("H3 streaming basic", \testH3StreamingBasic());
@@ -667,6 +791,37 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stats = mgr.getStats();
         assertEq(0, stats.total_connections, "after cleanup total_connections");
         assertEq(0, stats.total_usable_connections, "after cleanup total_usable_connections");
+    }
+
+    testUnifiedManagerConnectionInfo() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "logger": mLogger,
+        });
+
+        # no connections yet: empty info, and an invalid URL argument throws
+        assertEq(0, mgr.getConnectionInfo().size(), "initial connection info empty");
+        assertEq(0, mgr.getConnectionInfo(mSslUrl).size(), "initial filtered info empty");
+        assertThrows("HTTPCLIENT-URL-ERROR", sub () { mgr.getConnectionInfo(""); });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "connection-info GET status");
+
+        # after the request the negotiated h2 connection is reported
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = mgr.getConnectionInfo();
+        assertEq(True, info.size() >= 1, "connection info populated");
+        assertEq("h2", info[0].protocol, "negotiated protocol is h2");
+        assertEq(True, info[0].ssl, "connection is TLS");
+        assertEq("127.0.0.1", info[0].host, "connection host");
+
+        # filtered to the target URL matches; an unrelated host is empty
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> finfo = mgr.getConnectionInfo(mSslUrl);
+        assertEq(True, finfo.size() >= 1, "filtered connection info populated");
+        assertEq("h2", finfo[0].protocol, "filtered negotiated protocol is h2");
+        assertEq(0, mgr.getConnectionInfo("https://127.0.0.1:2").size(), "unrelated host empty");
     }
 
     # ---- Negative Tests ----
@@ -2619,6 +2774,109 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             sprintf("server saw wrong body size: %y", body_text));
         assertEq(True, body_text =~ /body=alpha-beta--gamma!$/,
             sprintf("echoed payload mismatch: %y", body_text));
+    }
+
+    #! Verifies HTTP/1.1 full-duplex chunked streaming (read-your-writes).
+    /** Regression test for the Qore 3 HttpClientIo rewrite, which made the
+        HTTP/1.1 client poll op half-duplex: it would not read the response
+        until the chunked request body was fully sent (writesDone), deadlocking
+        any protocol that needs a mid-request reply (Qorus DataStream /
+        RemoteSqlSession).
+
+        Drives a genuine full-duplex server (@ref FullDuplexEchoRawServer) that
+        echoes each request-body chunk back as a response chunk immediately.
+        The client sends a chunk, then — WITHOUT calling writesDone() — reads
+        the echoed reply.  Before the fix this hangs (readData times out);
+        after the fix the reply arrives while the request body is still open.
+
+        @since %Qore 3.0
+    */
+    testH1FullDuplexStreaming() {
+        FullDuplexEchoRawServer server();
+        server.start();
+        on_exit server.wait();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(server.getUrl());
+        HttpClientIo::Http1ClientStreamHandle h1stream =
+            cast<HttpClientIo::Http1ClientStreamHandle>(stream);
+
+        # Start chunked-body streaming; the request body stays open (no writesDone yet)
+        h1stream.startStreaming("POST", "/fullduplex",
+            {"content-type": "application/x-fullduplex"}, True);  # body_streaming=True
+
+        # Send two request chunks, reading the mid-request reply after each one
+        # WITHOUT half-closing the request body.  This is the full-duplex proof.
+        list<binary> sent = (binary("first-command-frame"), binary("second-command-frame"));
+        foreach binary chunk in (sent) {
+            h1stream.sendData(chunk);
+            *binary reply = readBodyUntil(h1stream, chunk, 10s);
+            assertEq(chunk, reply,
+                sprintf("must receive the echoed reply for %y while the request "
+                    "body is still open (full-duplex)", chunk.toString()));
+        }
+
+        # Now half-close the request body; the server sends its final marker + end_stream
+        h1stream.sendData(binary(), True);
+
+        *binary marker = readBodyUntil(h1stream, binary(FullDuplexEchoRawServer::FinalMarker), 10s);
+        assertEq(FullDuplexEchoRawServer::FinalMarker, marker.toString(),
+            "must receive the server's final marker chunk after writesDone");
+
+        # Drain to end_stream
+        bool got_end_stream = False;
+        date deadline = now_us() + 10s;
+        while (now_us() < deadline) {
+            auto rdata = h1stream.readData(1s);
+            if (!exists rdata) {
+                continue;
+            }
+            if (rdata.typeCode() == NT_HASH && rdata.end_stream) {
+                got_end_stream = True;
+                break;
+            }
+        }
+        assertTrue(got_end_stream, "must receive end_stream after the response completes");
+
+        assertNothing(server.getServerError());
+    }
+
+    #! Reads streaming body frames until the accumulated body equals @a needle,
+    #! then returns the matching bytes; returns NOTHING on timeout.
+    private *binary readBodyUntil(HttpClientIo::Http1ClientStreamHandle h1stream,
+            binary needle, timeout total) {
+        binary acc = binary();
+        date deadline = now_us() + total;
+        while (now_us() < deadline) {
+            auto rdata = h1stream.readData(500ms);
+            if (!exists rdata) {
+                continue;
+            }
+            switch (rdata.typeCode()) {
+                case NT_BINARY:
+                    acc += rdata;
+                    break;
+                case NT_STRING:
+                    acc += binary(rdata);
+                    break;
+                case NT_HASH:
+                    if (rdata.error) {
+                        throw "FULL-DUPLEX-ERROR", sprintf("unexpected error frame: %y", rdata);
+                    }
+                    # headers-only / end_stream frames carry no body — ignore
+                    break;
+            }
+            if (acc == needle) {
+                return acc;
+            }
+        }
+        return NOTHING;
     }
 
     #! Calling sendData() on a stream that wasn't started with body_streaming=True
