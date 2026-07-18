@@ -293,6 +293,31 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Serializes access to @ref pinned_conn
         Mutex pin_lock();
+
+        #! Counts user threads currently executing inside a public entry point.
+        /** @anchor in_flight_drain
+            Teardown-coordination barrier.  The @ref pool_lock_pin idiom defers
+            destruction of the @c pool_lock @b RWLock while a concurrent caller
+            holds it, but it does @b not protect the plain @c Mutex members
+            (@ref create_mutex, @ref async_race_lock, @ref pin_lock): a
+            @c delete on this manager from another thread destroys those
+            mutexes as soon as the destructor returns, and if an in-flight
+            caller is still inside @ref getPinnedConnection() /
+            @ref getConnection() (e.g. re-entering the retry path after
+            @ref closeAll() cancelled its request) it is holding one of them,
+            producing @c "LOCK-ERROR: TID N deleted Mutex object while TID M
+            was holding the lock".
+
+            Every public entry point that may run concurrently with the
+            destructor increments this counter on entry and decrements it on
+            exit (via @c on_exit).  @ref closeAll() cancels all in-flight
+            requests (so blocked callers wake and unwind terminally — the
+            shutdown gate in @ref getConnection() throws the non-retryable
+            @c HTTPCLIENT-SHUTDOWN) and then waits here for the count to reach
+            zero before the object's mutex members are destroyed, so no caller
+            is inside the manager when teardown completes.
+        */
+        Counter in_flight();
     }
 
     #! Creates a new connection manager with the given options
@@ -455,6 +480,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     HttpClientConnection leaseConnection(string url, *bool non_blocking) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         maybeCleanupIdle();
         drainPendingAltSvc();
 
@@ -564,6 +592,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     HttpClientStreamHandle acquireStream(string url, *bool non_blocking) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Opportunistically evict idle connections on request entry so the pool
         # doesn't grow unboundedly under churn.  Throttled to at most once per
         # cleanup-interval window; see maybeCleanupIdle().
@@ -668,6 +699,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, bool body_streaming = False, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         int retries = 0;
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
@@ -745,6 +779,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -845,6 +882,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -947,6 +987,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *data body, *timeout timeout_ms) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         int redirect_count = 0;
 
         while (True) {
@@ -1189,6 +1232,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     hash<auto> getStats() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         AutoReadLock al(pool_lock);
 
         int total_connections = 0;
@@ -1266,6 +1312,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         @see @ref getStats() for aggregate pool statistics
     */
     list<hash<HttpClientConnectionInfo>> getConnectionInfo(*string url) {
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         *string filter_key;
         if (exists url) {
             hash<UrlInfo> url_info;
@@ -1356,6 +1405,31 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         # unrelated long-running callbacks on the shared controller.
         controller.flushCallbacksByOwner(owner: owner_id);
 
+        # Drain in-flight user-thread callers before this object's Mutex members
+        # are destroyed.  The @ref pool_lock_pin idiom protects only the
+        # @c pool_lock RWLock; the plain Mutex members (@ref create_mutex,
+        # @ref async_race_lock, @ref pin_lock) have no such lifetime guard, so a
+        # caller still inside a public entry point when @c delete finishes would
+        # be holding one of them, producing "LOCK-ERROR: TID N deleted Mutex
+        # object while TID M was holding the lock".  cancelByOwner() above
+        # rejected any blocked request Future, so callers parked in
+        # stream.request() have woken and are unwinding out of the manager; a
+        # retry hits the shutdown gate in getConnection() and exits terminally
+        # (HTTPCLIENT-SHUTDOWN is not retryable — see isConnectionError()).  This
+        # barrier waits for them all to leave before teardown continues.  See
+        # @ref in_flight_drain.
+        #
+        # The timeout is only a safety ceiling: the drain is guaranteed to
+        # complete because every blocked caller was cancelled and every retry
+        # fails fast under shutdown.  If it ever fires it means a caller did not
+        # observe the cancellation — logged rather than hung on.
+        int drain_timeout_ms = opts.connect_timeout + 5000;
+        if (in_flight.waitForZero(drain_timeout_ms)) {
+            log(LoggerLevel::WARN, "closeAll: timed out after %d ms waiting for %d "
+                "in-flight caller(s) to drain; proceeding with teardown",
+                drain_timeout_ms, in_flight.getCount());
+        }
+
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
         {
@@ -1432,6 +1506,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     int migrateAll() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         list<hash<auto>> to_migrate = ();
         {
             AutoReadLock al(pool_lock);
@@ -2180,6 +2257,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     *EventNotifier acquireConnectionAsync(string url, reference<*HttpClientConnection> conn_out) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         maybeCleanupIdle();
         drainPendingAltSvc();
 
@@ -2273,6 +2353,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     abandonAsyncHEForUrl(string url) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         hash<UrlInfo> url_info;
         try {
             url_info = parse_url(url);
