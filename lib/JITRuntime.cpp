@@ -487,6 +487,26 @@ extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32
     }
 }
 
+// --- Outlined function-body return token ---
+// (see design/aot-function-outlining.md)  An outlined helper signals "the
+// original function returns now" immediately before returning its value; the
+// coordinator consumes the flag right after the CallAOTHelper call and
+// re-executes the return through its own epilogue.  The set happens directly
+// before the helper's ret and the consume directly after the call returns —
+// no user code (destructors, handlers, nested calls) can run in between, so a
+// single thread-local flag is nesting-safe.
+static thread_local bool tl_outline_return_signal = false;
+
+extern "C" DLLEXPORT void qore_rt_outline_signal_return() {
+    tl_outline_return_signal = true;
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_outline_take_return() {
+    bool v = tl_outline_return_signal;
+    tl_outline_return_signal = false;
+    return v ? 1 : 0;
+}
+
 // --- Exported check_stack wrapper for LLVM-generated code ---
 extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK

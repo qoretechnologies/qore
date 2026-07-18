@@ -279,6 +279,20 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             never touches @c async_race_lock).
         */
         Mutex async_race_lock();
+
+        #! Persistent-session connection pin (session-scoped): the leased connection, or NOTHING
+        /** While set (via @ref pinConnection()), @ref getConnection() returns this connection for
+            every request/stream to the SAME host:port, bypassing the pool scan — so a
+            connection-scoped persistent transaction (HTTP/1.1) stays on the one leased socket
+            instead of scattering across pooled connections.  It is set for the lifetime of the
+            session (not per request), so it works regardless of which thread issues a request —
+            the async/multi-threaded request paths do not all run @ref getConnection() on the
+            caller's thread.  This manager is per remote connection, so the pin only affects that
+            connection's own traffic. */
+        *HttpClientConnection pinned_conn;
+
+        #! Serializes access to @ref pinned_conn
+        Mutex pin_lock();
     }
 
     #! Creates a new connection manager with the given options
@@ -419,6 +433,110 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     *CookieJar getCookieJar() {
         return cookie_jar;
+    }
+
+    #! Leases an exclusive connection for a persistent (connection-scoped) session
+    /** The returned connection is marked leased: the pool reuse scan skips it so no other
+        request borrows it, and requests belonging to the session reach it via the session
+        pin (@ref pinConnection()).  This is required for the connection-scoped persistent
+        transaction protocol on HTTP/1.1, where the server binds a session to one physical
+        connection and reads subsequent requests off that same socket.
+
+        The caller MUST eventually call @ref releaseConnection() to return the connection to the
+        pool (clean) or close it (errored).
+
+        @param url the target URL (only scheme, host, and port are used)
+        @param non_blocking retained plumbing only (see @ref acquireStream())
+
+        @return the leased connection
+
+        @since HttpClientIo 1.0
+    */
+    HttpClientConnection leaseConnection(string url, *bool non_blocking) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        maybeCleanupIdle();
+        drainPendingAltSvc();
+
+        hash<UrlInfo> url_info;
+        try {
+            url_info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+        }
+        if (!url_info.host) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+        }
+        if (!url_info.protocol) {
+            url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+
+        bool from_pool = False;
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
+        # Exclude the connection from the pool reuse rotation for the session's lifetime.  The
+        # stream reservation held by getConnection() blocks concurrent reuse until leased is set
+        # (an HTTP/1.1 connection has exactly one stream slot), so there is no reuse window.
+        conn.setLeased(True);
+        conn.releaseStreamReservation();
+        log(LoggerLevel::DEBUG, "leased %s connection %d to %s:%d for a persistent session",
+            conn.getProtocol(), conn.getConnectionId(), url_info.host, url_info.port);
+        return conn;
+    }
+
+    #! Releases a connection previously obtained from @ref leaseConnection()
+    /** @param conn the leased connection
+        @param discard if @ref True the connection is closed and evicted from the pool (use on
+        error — a failed persistent op can leave the socket in an indeterminate state, and closing
+        is the deterministic signal for the server to roll back and tear down the transaction); if
+        @ref False (the default) the connection is returned to the pool for reuse
+
+        @since HttpClientIo 1.0
+    */
+    releaseConnection(HttpClientConnection conn, *bool discard) {
+        if (discard) {
+            log(LoggerLevel::DEBUG, "discarding leased %s connection %d",
+                conn.getProtocol(), conn.getConnectionId());
+            *string key = conn.getPoolKey();
+            if (key) {
+                evictConnections(key, (conn,));
+            } else {
+                try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+        } else {
+            conn.setLeased(False);
+            log(LoggerLevel::DEBUG, "released leased %s connection %d back to the pool",
+                conn.getProtocol(), conn.getConnectionId());
+        }
+    }
+
+    #! Pins a leased connection for the lifetime of a persistent session
+    /** While pinned, @ref getConnection() returns this connection for every request/stream to the
+        same host:port, so the requests ride the leased socket instead of pooled ones.  Set once
+        when the session opens and cleared with @ref unpinConnection() when it closes; it is
+        session-scoped (not per request) so it works no matter which thread issues a request.  This
+        manager is per remote connection, so the pin only affects that connection's own traffic.
+
+        @since HttpClientIo 1.0
+    */
+    pinConnection(HttpClientConnection conn) {
+        AutoLock al(pin_lock);
+        pinned_conn = conn;
+    }
+
+    #! Clears the persistent-session connection pin
+    /** @since HttpClientIo 1.0 */
+    unpinConnection() {
+        AutoLock al(pin_lock);
+        remove pinned_conn;
+    }
+
+    #! Returns the pinned persistent-session connection, or @ref nothing
+    private *HttpClientConnection getPinnedConnection() {
+        AutoLock al(pin_lock);
+        return pinned_conn;
     }
 
     #! Acquires a stream handle for the given URL
@@ -987,6 +1105,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
+                # A pinned persistent-session request must never retry on a fresh or evicted
+                # connection — that would break the connection-scoped transaction affinity and
+                # start a second transaction on another socket.  Surface the error so the caller
+                # discards the leased connection (which makes the server roll back and tear down).
+                if (getPinnedConnection()) {
+                    rethrow;
+                }
                 # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
                 # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
                 # benefit of acquireAndStartStreaming / submitRequestAsync where
@@ -1422,6 +1547,22 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
             *bool non_blocking) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
+        # Persistent-session pin: if a leased connection is pinned for this manager's remote, use it
+        # for every request/stream to that host:port (bypassing the pool scan) so a connection-scoped
+        # transaction stays on the one leased socket; see pinConnection() / leaseConnection().
+        *HttpClientConnection pinned = getPinnedConnection();
+        if (pinned && pinned.getPoolKey() == key) {
+            if (!pinned.tryReserveStream()) {
+                throw "HTTPCLIENT-CAPACITY-ERROR",
+                    sprintf("no free stream slot on the pinned persistent connection %d to %s",
+                        pinned.getConnectionId(), key);
+            }
+            from_pool = True;
+            log(LoggerLevel::DEBUG, "using pinned persistent %s connection %d for %s",
+                pinned.getProtocol(), pinned.getConnectionId(), key);
+            return pinned;
+        }
+
         while (True) {
             # Try to find an existing connection with capacity.
             # Dead connections discovered here are collected and evicted
@@ -1448,7 +1589,9 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                                 push dead_conns, conn;
                                 continue;
                             }
-                            if (!live_conn && conn.tryReserveStream()) {
+                            # skip connections exclusively leased for a persistent session:
+                            # only their owning thread (via the pin above) may use them
+                            if (!live_conn && !conn.isLeased() && conn.tryReserveStream()) {
                                 live_conn = conn;
                             }
                         }

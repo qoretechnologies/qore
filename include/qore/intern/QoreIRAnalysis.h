@@ -128,7 +128,11 @@ DLLLOCAL std::unordered_set<const void*> qore_ir_get_native_unsafe_locals(
 //! Run conservative, semantics-preserving optimizations on a lowered function.
 //! @param func function to optimize in place
 //! @param stats optional output statistics
-void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats = nullptr);
+//! @param enable_licm enables loop-invariant code motion; pathological AOT
+//! functions selected for outlining disable it so values are not hoisted
+//! across prospective helper boundaries
+void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats = nullptr,
+    bool enable_licm = true);
 
 using QoreIRParamNoEscapeQuery =
     std::function<bool(const AbstractQoreFunctionVariant*, size_t)>;

@@ -2058,6 +2058,8 @@ static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWi
     @param error output: error message on failure
     @return 0 = success, -1 = lowering failed
 */
+static bool aotFunctionBodyMayBeOutlined(const QoreIRFunction& func);
+
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
         QoreIRFunction*& ir_func, std::string& error,
         const QoreFunction* source_qf = nullptr) {
@@ -2166,7 +2168,11 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     }
 
     QoreIROptimizationStats optimization_stats;
-    qore_ir_optimize(*ir_func, &optimization_stats);
+    // LICM can hoist an SSA definition across a prospective outline
+    // boundary. Preserve lexical region independence for pathological AOT
+    // bodies; all other IR optimizations remain enabled.
+    bool preserve_outline_regions = aotFunctionBodyMayBeOutlined(*ir_func);
+    qore_ir_optimize(*ir_func, &optimization_stats, !preserve_outline_regions);
     if (!QoreIRVerifier::verify(*ir_func, error)) {
         if (getenv("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: optimized IR verification failed for '%s': %s\n",
@@ -2747,6 +2753,19 @@ static const AOTFnOutlineTunables& aotFnOutlineTunables() {
     return tunables;
 }
 
+static bool aotFunctionBodyMayBeOutlined(const QoreIRFunction& func) {
+    const AOTFnOutlineTunables& tun = aotFnOutlineTunables();
+    if (!tun.enabled) {
+        return false;
+    }
+    size_t total_insts = 0;
+    for (const auto& block : func.blocks) {
+        total_insts += block->instructions.size();
+    }
+    return total_insts >= tun.min_fn_insts
+        || func.blocks.size() >= tun.min_fn_blocks;
+}
+
 // Defined in QoreIRInterpreter.cpp — extracts the base VarRefNode from an
 // lvalue expression tree (used for RefForeachInit local discovery).
 extern const VarRefNode* extractLValueBaseVarRef(const QoreValue&);
@@ -2898,6 +2917,22 @@ static void aotOutlineForEachBlockTarget(QoreIRInstruction* inst, F&& cb) {
         cb(brif->false_target);
         return;
     }
+    if (auto* fused = dynamic_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst)) {
+        cb(fused->true_target);
+        cb(fused->false_target);
+        return;
+    }
+    if (auto* iter_next = dynamic_cast<QoreIRIteratorNextInstruction*>(inst)) {
+        cb(iter_next->done_target);
+        cb(iter_next->continue_target);
+        return;
+    }
+    if (auto* guard = dynamic_cast<QoreIRGuardInstruction*>(inst)) {
+        cb(guard->deopt_target);
+        // guards also carry the base-class exception_target
+        cb(guard->QoreIRInstruction::exception_target);
+        return;
+    }
     if (auto* invoke = dynamic_cast<QoreIRInvokeInstruction*>(inst)) {
         cb(invoke->normal_target);
         cb(invoke->exception_target);
@@ -2936,6 +2971,11 @@ static void aotOutlineForEachBlockTarget(QoreIRInstruction* inst, F&& cb) {
     if (auto* inv_de = dynamic_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
         cb(inv_de->normal_target);
         cb(inv_de->exception_target);
+        return;
+    }
+    if (auto* cah = dynamic_cast<QoreIRCallAOTHelperInstruction*>(inst)) {
+        // transient outline return-token target (synthesized call blocks)
+        cb(cah->return_target);
         return;
     }
     // All other opcodes: base-class exception_target (try-scope edges)
@@ -3076,9 +3116,6 @@ public:
                     info.min_ref = std::min(info.min_ref, i);
                     info.max_ref = std::max(info.max_ref, i);
                     info.weak_store |= ref.weak_store;
-                    if (ref.lifecycle) {
-                        info.lifecycle_blocks.push_back(i);
-                    }
                 });
                 switch (inst->opcode) {
                     case QoreIROpcode::CreateClosure:
@@ -3200,6 +3237,15 @@ public:
                 // back-edge source is inside
                 if (q < max_required || pending.empty()
                         || pending.size() != 1 || pending.begin()->first != q + 1) {
+                    // Growth cap: an interval that will not close until far
+                    // beyond the target (e.g. a whole giant loop swallowed
+                    // from before its header) makes one enormous helper —
+                    // no better than the original function.  Abandon this
+                    // start; later starts inside the construct partition its
+                    // body into target-sized regions instead.
+                    if (insts_acc >= tun.target_region_insts * 4) {
+                        break;
+                    }
                     continue;
                 }
                 AOTFnOutlineRegion region;
@@ -3260,7 +3306,6 @@ private:
         size_t min_ref = SIZE_MAX;
         size_t max_ref = 0;
         bool weak_store = false;
-        std::vector<size_t> lifecycle_blocks;
     };
 
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_idx;
@@ -3321,9 +3366,10 @@ private:
                     continue;
                 }
                 switch (inst->opcode) {
-                    case QoreIROpcode::Return:
-                    case QoreIROpcode::ReturnNothing:
-                        return fail("return inside region");
+                    // Return/ReturnNothing inside the region are supported
+                    // via the outline return token (the helper signals, the
+                    // coordinator re-executes the return) — see
+                    // transformRegion().
                     case QoreIROpcode::PushTempMark:
                         ++temp_push_count;
                         break;
@@ -3466,22 +3512,25 @@ private:
                 if (info.weak_store) {
                     return fail_local("weak-assigned local crosses region boundary");
                 }
-                for (size_t lb : info.lifecycle_blocks) {
-                    if (in_region(lb)) {
-                        // A scope that starts before the region and ends
-                        // inside it is safe: AOT lifecycle ops for
-                        // non-closure locals only clear the runtime value,
-                        // which the helper does exactly where inline code
-                        // would (the common shape is a `for` init emitted at
-                        // the tail of the preceding statement's block).  A
-                        // local still referenced after the region must keep
-                        // its lifecycle in the coordinator, though.
-                        if (info.max_ref > last) {
-                            return fail_local(
-                                "shared local lifecycle op inside region");
-                        }
-                    }
-                }
+                // Fused int ops (increment.local.int, add.assign.local.int,
+                // br.if.lt.local.int) on shared locals are safe: their loads
+                // run ensureLocalCacheFresh() and their stores write through
+                // to the TLS stack for non-IR-only locals, and coordinators
+                // of outlined functions create the local reload epoch
+                // eagerly (see lowerFunction()) so the stale checks exist
+                // even in blocks lowered before the first helper call.
+                // In-region lifecycle ops for shared locals are safe: AOT
+                // lifecycle ops for non-closure locals only clear the
+                // runtime value, which the helper does exactly where inline
+                // code would.  The two shapes that occur are a scope that
+                // starts before the region and ends inside it (a `for` init
+                // emitted at the tail of the preceding statement's block)
+                // and early-`return` cleanup clears (the return-token path
+                // re-executes the return through the coordinator's epilogue,
+                // which skips pre-instantiated locals).  A cleared local
+                // referenced after the region can only be a conditional
+                // (return-path) clear — a true scope end is never followed
+                // by references to the same LocalVar.
                 region.shared_locals.push_back(lv);
             } else {
                 region.contained_locals.push_back(lv);
@@ -3629,6 +3678,19 @@ public:
             // Drop the synthesized return block (always last in the helper).
             assert(helper->blocks.back().get() == rec.ret_block);
             helper->blocks.pop_back();
+            // Clear the outline return-token marks on in-region returns and
+            // drop the synthesized coordinator return block.
+            for (QoreIRReturnInstruction* r : rec.signaled_returns) {
+                r->outline_signal = false;
+            }
+            if (rec.return_block) {
+                auto rpos = std::find_if(fn->blocks.begin(), fn->blocks.end(),
+                        [&](const std::unique_ptr<QoreIRBasicBlock>& b) {
+                    return b.get() == rec.return_block;
+                });
+                assert(rpos != fn->blocks.end());
+                fn->blocks.erase(rpos);  // destroys the return block
+            }
             // Find the call block's position and splice the region back.
             auto pos = std::find_if(fn->blocks.begin(), fn->blocks.end(),
                     [&](const std::unique_ptr<QoreIRBasicBlock>& b) {
@@ -3664,6 +3726,10 @@ private:
         QoreIRBasicBlock* call_block = nullptr;  //!< synthesized coordinator block
         QoreIRBasicBlock* ret_block = nullptr;   //!< synthesized helper return block
         QoreIRBasicBlock* exit_block = nullptr;  //!< original region exit target
+        //! synthesized coordinator return block (in-region `return` token)
+        QoreIRBasicBlock* return_block = nullptr;
+        //! region returns marked outline_signal (cleared on undo)
+        std::vector<QoreIRReturnInstruction*> signaled_returns;
     };
 
     QoreIRFunction* fn = nullptr;
@@ -3850,15 +3916,50 @@ private:
             }
         }
 
+        // Mark in-region returns for the outline return token: the helper
+        // signals immediately before returning the value; the coordinator
+        // consumes the flag after the call and re-executes the return
+        // through its own epilogue (type coercion + cleanup).
+        std::vector<QoreIRReturnInstruction*> signaled_returns;
+        for (auto& b : helper->blocks) {
+            if (b.get() == ret_block) {
+                continue;  // the synthesized fallthrough return never signals
+            }
+            for (auto& inst_ptr : b->instructions) {
+                if (inst_ptr && (inst_ptr->opcode == QoreIROpcode::Return
+                        || inst_ptr->opcode == QoreIROpcode::ReturnNothing)) {
+                    auto* r = static_cast<QoreIRReturnInstruction*>(inst_ptr.get());
+                    r->outline_signal = true;
+                    signaled_returns.push_back(r);
+                }
+            }
+        }
+
         // Synthesize the coordinator's call block: CallAOTHelper + Br(exit).
         auto call_block_owned = std::make_unique<QoreIRBasicBlock>(
             "outline.call." + std::to_string(region_no));
         QoreIRBasicBlock* call_block = call_block_owned.get();
+        QoreIRBasicBlock* return_block = nullptr;
+        std::unique_ptr<QoreIRBasicBlock> return_block_owned;
         {
             auto call = std::make_unique<QoreIRCallAOTHelperInstruction>(helper_name);
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
+            }
+            if (!signaled_returns.empty()) {
+                // Synthesized coordinator return block: returns the helper's
+                // result (the value carried by the in-region return; NOTHING
+                // for valueless returns) through the coordinator's epilogue.
+                return_block_owned = std::make_unique<QoreIRBasicBlock>(
+                    "outline.return." + std::to_string(region_no));
+                return_block = return_block_owned.get();
+                auto ret = std::make_unique<QoreIRReturnInstruction>();
+                ret->opcode = QoreIROpcode::Return;
+                ret->has_value = true;
+                ret->value = call->result;
+                return_block->instructions.push_back(std::move(ret));
+                call->return_target = return_block;
             }
             // Attribute the call to the region's first source location so
             // stack traces through the coordinator stay useful.
@@ -3878,6 +3979,14 @@ private:
         }
         fn->blocks.insert(fn->blocks.begin() + first_idx,
             std::move(call_block_owned));
+        if (return_block_owned) {
+            // Directly after the call block: the Return references the
+            // CallAOTHelper result, so it must lower after it (layout
+            // order), and it must sit BEFORE the exit target so an adjacent
+            // later region's contiguous block range cannot swallow it.
+            fn->blocks.insert(fn->blocks.begin() + first_idx + 1,
+                std::move(return_block_owned));
+        }
 
         // Retarget coordinator predecessor edges into the region to the call
         // block (the region-discovery cut guarantees a single entry edge).
@@ -3930,6 +4039,8 @@ private:
         rec.call_block = call_block;
         rec.ret_block = ret_block;
         rec.exit_block = rb.exit;
+        rec.return_block = return_block;
+        rec.signaled_returns = std::move(signaled_returns);
         undo_records.push_back(rec);
         helpers.push_back(std::move(h));
     }

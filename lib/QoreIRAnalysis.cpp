@@ -3396,7 +3396,8 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
     return changed;
 }
 
-void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
+void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
+        bool enable_licm) {
     QoreIROptimizationStats local_stats;
     if (getenv("QORE_DISABLE_IR_OPT")) {
         if (stats) {
@@ -3476,7 +3477,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats) {
         local_stats.in_place_list_pushes = qore_ir_mark_in_place_list_pushes(
             func, cfg, uses, check_count, nullptr);
     }
-    if (getenv("QORE_DISABLE_IR_LICM")) {
+    if (!enable_licm || getenv("QORE_DISABLE_IR_LICM")) {
         loops.clear();
     }
     local_stats.loops_analyzed = loops.size();
