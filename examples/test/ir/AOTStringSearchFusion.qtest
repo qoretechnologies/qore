@@ -153,14 +153,14 @@ foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains"
         "fusedFalseStartsWith", "fusedFind", "fusedFindOffset", "fusedRFind",
         "fusedSubstr", "fusedSize", "fusedLength")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*string-consumers=1", function))) {
+            "IR-OPT-AOT-EFFECTS: %s[^\\n]*:.*string-consumers=1", function))) {
         printf("missing string consumer fusion for %s:\n%s",
             function, enabled_compile);
         exit(2);
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|dynamicFindOffset|dynamicSubstr|intStringSubstr|sideEffectPattern):.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|dynamicFindOffset|dynamicSubstr|intStringSubstr|sideEffectPattern)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string consumer fusion:\n%s",
         enabled_compile + disabled_compile);

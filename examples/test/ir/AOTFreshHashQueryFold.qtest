@@ -107,13 +107,13 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_FRESH_HASH_KEY_CALL_FOLD=1");
 string noescape_disabled_compile = compile(noescape_disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NOESCAPE_PARAMS=1");
-if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: freshQuery:.*fresh-hash-key-calls=1/
+if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: freshQuery[^\n]*:.*fresh-hash-key-calls=1/
         || enabled_compile
-            !~ /IR-OPT-AOT-EFFECTS: sideEffectFields:.*fresh-hash-key-calls=1/) {
+            !~ /IR-OPT-AOT-EFFECTS: sideEffectFields[^\n]*:.*fresh-hash-key-calls=1/) {
     printf("missing fresh-hash query fold:\n%s", enabled_compile);
     exit(2);
 }
-if (enabled_compile =~ /IR-OPT-AOT-EFFECTS: (missingKey|unassignedElement|dynamicKey|mutatedCallee|sharedAggregate):.*fresh-hash-key-calls=[1-9]/
+if (enabled_compile =~ /IR-OPT-AOT-EFFECTS: (missingKey|unassignedElement|dynamicKey|mutatedCallee|sharedAggregate)[^\n]*:.*fresh-hash-key-calls=[1-9]/
         || disabled_compile =~ /fresh-hash-key-calls=[1-9]/
         || noescape_disabled_compile =~ /fresh-hash-key-calls=[1-9]/) {
     printf("unsafe or disabled fresh-hash query fold:\n%s",

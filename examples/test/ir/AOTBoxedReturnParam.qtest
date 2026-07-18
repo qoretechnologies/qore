@@ -202,7 +202,7 @@ string disabled_compile = backquote(sprintf(
 foreach string function in (("localCalls", "temporaryCall", "chainedCall",
         "aliasing", "sideEffectArgument", "staticCall", "selfCall")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: [^\\n]*%s:.*boxed-return-calls=[1-9]",
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*boxed-return-calls=[1-9]",
             function))) {
         printf("missing boxed return-parameter fold for %s:\n%s",
             function, enabled_compile);
@@ -210,7 +210,7 @@ foreach string function in (("localCalls", "temporaryCall", "chainedCall",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (unassignedRejected|removedRejected|main):.*boxed-return-calls=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (unassignedRejected|removedRejected|main)[^\n]*:.*boxed-return-calls=[1-9]/
         || disabled_compile =~ /boxed-return-calls=[1-9]/) {
     printf("unsafe or disabled boxed return-parameter fold:\n%s",
         enabled_compile + disabled_compile);
