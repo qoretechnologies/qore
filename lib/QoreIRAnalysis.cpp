@@ -4268,7 +4268,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             return false;
         }
         auto validate_descriptor = [&](QoreIRCallDirectInstruction::
-                AOTAggregateProjectionKind kind, int16_t value_operand) {
+                AOTAggregateProjectionKind kind, int16_t value_operand,
+                int64_t descriptor_int) {
             bool descriptor_constant = kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeIntConstant
@@ -4307,29 +4308,79 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                     NativeIntAddConstant
                         || kind
                             == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntSelect
+                        || kind
+                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedInt
                         || kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedIntAddConstant
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntSelect
                     ? QoreIRValueRepresentation::NativeInt
                     : kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBool
+                        || kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolSelect
                         ? QoreIRValueRepresentation::NativeBool
                         : QoreIRValueRepresentation::NativeFloat;
-            return facts
+            bool valid = facts
                     && facts->assigned_state
                         == QoreIRAssignedState::Assigned
                     && facts->never_nothing
                     && facts->representation == expected;
+            bool selected = kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatSelect
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolSelect;
+            if (!valid || !selected) {
+                return valid;
+            }
+            size_t condition =
+                static_cast<uint8_t>(descriptor_int);
+            size_t alternate =
+                static_cast<uint8_t>(descriptor_int >> 8);
+            if (condition >= call->operands.size()
+                    || alternate >= call->operands.size()) {
+                return false;
+            }
+            const QoreIRValueFacts* condition_facts =
+                func.getValueFacts(call->operands[condition]);
+            const QoreIRValueFacts* alternate_facts =
+                func.getValueFacts(call->operands[alternate]);
+            return condition_facts
+                    && condition_facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && condition_facts->never_nothing
+                    && condition_facts->representation
+                        == QoreIRValueRepresentation::NativeBool
+                    && alternate_facts
+                    && alternate_facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && alternate_facts->never_nothing
+                    && alternate_facts->representation == expected;
         };
-        if (!validate_descriptor(projection_kind, operand)) {
+        if (!validate_descriptor(
+                projection_kind, operand, int_constant)) {
             return false;
         }
         for (const auto& descriptor : guarded_descriptors) {
             if (!validate_descriptor(descriptor.kind,
-                    descriptor.operand)) {
+                    descriptor.operand, descriptor.int_constant)) {
                 return false;
             }
             if (descriptor.kind
@@ -5169,10 +5220,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         AOTAggregateProjectionKind::NativeFloatAddConstant
                 || projection.kind
                     == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatSelect
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedFloat
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedFloatAddConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatSelect
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeFloatConstant
@@ -5189,12 +5246,19 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                 NativeFloatAddConstant
                     || projection.kind
                         == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                NativeFloatSelect
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeFloatConstant
                 ? QoreIRValueRepresentation::NativeFloat
                 : QoreIRValueRepresentation::Boxed;
         } else if (projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::BoxedBool
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolSelect
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedBoolConstant) {
@@ -5216,6 +5280,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::
                                 NativeIntAddConstant
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::NativeIntSelect
                     || projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::NativeIntConstant

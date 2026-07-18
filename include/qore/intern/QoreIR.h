@@ -2089,6 +2089,11 @@ public:
         NativeFloatAddConstant,
         BoxedIntAddConstant,
         BoxedFloatAddConstant,
+        NativeIntSelect,
+        NativeFloatSelect,
+        BoxedIntSelect,
+        BoxedFloatSelect,
+        BoxedBoolSelect,
     };
 
     struct AOTAggregateProjectionDescriptor {

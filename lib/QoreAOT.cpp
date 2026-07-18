@@ -5947,7 +5947,8 @@ static bool qore_aot_get_conditional_aggregate_shape(
         return false;
     }
 
-    std::unordered_set<const LocalVar*> params;
+    std::unordered_map<const LocalVar*, int8_t> params;
+    std::vector<const LocalVar*> param_locals(sig.numParams(), nullptr);
     for (unsigned i = 0; i < sig.numParams(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -5963,18 +5964,28 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     param->second->getTypeInfo(), NT_NOTHING)) {
             return false;
         }
-        params.insert(param->second);
+        params.emplace(param->second, static_cast<int8_t>(i));
+        param_locals[i] = param->second;
     }
 
     struct Shape {
         AOTAggregateReturnKind kind = AOTAggregateReturnKind::None;
         size_t size = 0;
         std::vector<std::string> keys;
+        std::vector<int8_t> value_params;
     };
     std::unordered_map<uint32_t, Shape> shapes;
+    std::unordered_map<uint32_t, int8_t> param_values;
     std::unordered_map<uint32_t, std::string> string_constants;
     Shape common;
     bool have_common = false;
+    const QoreIRBasicBlock* true_target = nullptr;
+    const QoreIRBasicBlock* false_target = nullptr;
+    int8_t condition_param = -1;
+    Shape true_shape;
+    Shape false_shape;
+    bool have_true_shape = false;
+    bool have_false_shape = false;
     size_t instruction_count = 0;
     size_t return_count = 0;
     for (const auto& block : func.blocks) {
@@ -6002,10 +6013,12 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 case QoreIROpcode::LoadLocal: {
                     const auto* load =
                         static_cast<const QoreIRLocalInstruction*>(inst);
+                    auto param = params.find(load->local);
                     if (!inst->result.isValid()
-                            || !params.count(load->local)) {
+                            || param == params.end()) {
                         return false;
                     }
+                    param_values.emplace(inst->result.id, param->second);
                     break;
                 }
                 case QoreIROpcode::ConstInt:
@@ -6037,6 +6050,13 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     Shape shape;
                     shape.kind = AOTAggregateReturnKind::FixedList;
                     shape.size = inst->operands.size();
+                    shape.value_params.reserve(shape.size);
+                    for (QoreIRValue value : inst->operands) {
+                        auto param = param_values.find(value.id);
+                        shape.value_params.push_back(
+                            param == param_values.end() ? -1
+                                : param->second);
+                    }
                     shapes.emplace(inst->result.id, std::move(shape));
                     break;
                 }
@@ -6050,6 +6070,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     shape.kind = AOTAggregateReturnKind::FixedHash;
                     shape.size = inst->operands.size() / 2;
                     shape.keys.reserve(shape.size);
+                    shape.value_params.reserve(shape.size);
                     for (size_t i = 0; i < inst->operands.size(); i += 2) {
                         auto key =
                             string_constants.find(inst->operands[i].id);
@@ -6057,6 +6078,11 @@ static bool qore_aot_get_conditional_aggregate_shape(
                             return false;
                         }
                         shape.keys.push_back(key->second);
+                        auto param =
+                            param_values.find(inst->operands[i + 1].id);
+                        shape.value_params.push_back(
+                            param == param_values.end() ? -1
+                                : param->second);
                     }
                     shapes.emplace(inst->result.id, std::move(shape));
                     break;
@@ -6075,13 +6101,49 @@ static bool qore_aot_get_conditional_aggregate_shape(
                     shape.kind = AOTAggregateReturnKind::FixedHash;
                     shape.size = inst->operands.size();
                     shape.keys = hash->keys;
+                    shape.value_params.reserve(shape.size);
+                    for (QoreIRValue value : inst->operands) {
+                        auto param = param_values.find(value.id);
+                        shape.value_params.push_back(
+                            param == param_values.end() ? -1
+                                : param->second);
+                    }
                     shapes.emplace(inst->result.id, std::move(shape));
                     break;
                 }
                 case QoreIROpcode::Br:
-                case QoreIROpcode::BrIf:
                     terminated = true;
                     break;
+                case QoreIROpcode::BrIf: {
+                    const auto* branch =
+                        static_cast<const QoreIRBranchIfInstruction*>(inst);
+                    auto condition =
+                        param_values.find(branch->condition.id);
+                    if (true_target || false_target
+                            || condition == param_values.end()
+                            || condition->second < 0
+                            || static_cast<size_t>(condition->second)
+                                >= param_locals.size()
+                            || !QoreTypeInfo::isType(
+                                param_locals[static_cast<size_t>(
+                                    condition->second)]->getTypeInfo(),
+                                NT_BOOLEAN)
+                            || !branch->true_target
+                            || !branch->false_target
+                            || branch->true_target
+                                == branch->false_target) {
+                        condition_param = -1;
+                        true_target = nullptr;
+                        false_target = nullptr;
+                        terminated = true;
+                        break;
+                    }
+                    condition_param = condition->second;
+                    true_target = branch->true_target;
+                    false_target = branch->false_target;
+                    terminated = true;
+                    break;
+                }
                 case QoreIROpcode::Return: {
                     const auto* ret =
                         static_cast<const QoreIRReturnInstruction*>(inst);
@@ -6097,6 +6159,13 @@ static bool qore_aot_get_conditional_aggregate_shape(
                             || common.size != shape->second.size
                             || common.keys != shape->second.keys) {
                         return false;
+                    }
+                    if (block.get() == true_target) {
+                        true_shape = shape->second;
+                        have_true_shape = true;
+                    } else if (block.get() == false_target) {
+                        false_shape = shape->second;
+                        have_false_shape = true;
                     }
                     ++return_count;
                     terminated = true;
@@ -6123,6 +6192,48 @@ static bool qore_aot_get_conditional_aggregate_shape(
         AOTAggregateReturnValueKind::Unknown);
     result.value_ints.assign(common.size, 0);
     result.value_floats.assign(common.size, 0.0);
+    if (condition_param < 0 || !have_true_shape || !have_false_shape
+            || true_shape.value_params.size() != common.size
+            || false_shape.value_params.size() != common.size) {
+        return true;
+    }
+    for (size_t i = 0; i < common.size; ++i) {
+        int8_t true_param = true_shape.value_params[i];
+        int8_t false_param = false_shape.value_params[i];
+        if (true_param < 0 || false_param < 0
+                || static_cast<size_t>(true_param) >= param_locals.size()
+                || static_cast<size_t>(false_param) >= param_locals.size()) {
+            continue;
+        }
+        BatchCalleeParamKind true_kind =
+            qore_ir_get_scalar_local_kind(
+                param_locals[static_cast<size_t>(true_param)]);
+        BatchCalleeParamKind false_kind =
+            qore_ir_get_scalar_local_kind(
+                param_locals[static_cast<size_t>(false_param)]);
+        if (true_kind != false_kind
+                || (true_kind != BatchCalleeParamKind::NativeInt
+                    && true_kind != BatchCalleeParamKind::NativeFloat
+                    && true_kind != BatchCalleeParamKind::NativeBool)) {
+            continue;
+        }
+        result.value_params[i] = true_param;
+        if (true_param == false_param) {
+            result.value_kinds[i] =
+                AOTAggregateReturnValueKind::Parameter;
+            continue;
+        }
+        result.value_ints[i] =
+            static_cast<uint8_t>(condition_param)
+            | (static_cast<int64_t>(
+                static_cast<uint8_t>(false_param)) << 8);
+        result.value_kinds[i] =
+            true_kind == BatchCalleeParamKind::NativeInt
+            ? AOTAggregateReturnValueKind::IntParamSelect
+            : true_kind == BatchCalleeParamKind::NativeFloat
+                ? AOTAggregateReturnValueKind::FloatParamSelect
+                : AOTAggregateReturnValueKind::BoolParamSelect;
+    }
     return true;
 }
 
@@ -9390,7 +9501,13 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     || kind == AOTAggregateReturnValueKind::
                         IntParamAddConstant
                     || kind == AOTAggregateReturnValueKind::
-                        FloatParamAddConstant;
+                        FloatParamAddConstant
+                    || kind == AOTAggregateReturnValueKind::
+                        IntParamSelect
+                    || kind == AOTAggregateReturnValueKind::
+                        FloatParamSelect
+                    || kind == AOTAggregateReturnValueKind::
+                        BoolParamSelect;
                 if (parameter_value) {
                     valid = param >= 0
                         && static_cast<size_t>(param)
@@ -9409,6 +9526,48 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                             || callee_it->second.param_kinds[
                                 static_cast<size_t>(param)]
                                 == BatchCalleeParamKind::NativeFloat);
+                    bool select_value =
+                        kind == AOTAggregateReturnValueKind::
+                            IntParamSelect
+                        || kind == AOTAggregateReturnValueKind::
+                            FloatParamSelect
+                        || kind == AOTAggregateReturnValueKind::
+                            BoolParamSelect;
+                    if (valid && select_value) {
+                        int64_t packed =
+                            aggregate_return.value_ints[i];
+                        size_t condition =
+                            static_cast<uint8_t>(packed);
+                        size_t alternate =
+                            static_cast<uint8_t>(packed >> 8);
+                        BatchCalleeParamKind expected =
+                            kind == AOTAggregateReturnValueKind::
+                                    IntParamSelect
+                            ? BatchCalleeParamKind::NativeInt
+                            : kind == AOTAggregateReturnValueKind::
+                                    FloatParamSelect
+                                ? BatchCalleeParamKind::NativeFloat
+                                : BatchCalleeParamKind::NativeBool;
+                        valid = condition
+                                    < callee_it->second.param_kinds.size()
+                            && alternate
+                                < callee_it->second.param_kinds.size()
+                            && condition < callee_it->second
+                                .param_rejects_nothing.size()
+                            && alternate < callee_it->second
+                                .param_rejects_nothing.size()
+                            && callee_it->second.param_rejects_nothing[
+                                condition]
+                            && callee_it->second.param_rejects_nothing[
+                                alternate]
+                            && callee_it->second.param_kinds[
+                                condition]
+                                == BatchCalleeParamKind::NativeBool
+                            && callee_it->second.param_kinds[
+                                alternate] == expected
+                            && callee_it->second.param_kinds[
+                                static_cast<size_t>(param)] == expected;
+                    }
                 } else {
                     valid = param == -1
                         && kind <= AOTAggregateReturnValueKind::Unknown;
@@ -10553,7 +10712,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.aggregate_return_value_kinds.size());
     for (uint8_t kind : rec.aggregate_return_value_kinds) {
         if (kind > static_cast<uint8_t>(
-                AOTAggregateReturnValueKind::FloatParamAddConstant)) {
+                AOTAggregateReturnValueKind::BoolParamSelect)) {
             return false;
         }
         info.aggregate_return.value_kinds.push_back(
@@ -10592,9 +10751,15 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 || kind == AOTAggregateReturnValueKind::
                     IntParamAddConstant
                 || kind == AOTAggregateReturnValueKind::
-                    FloatParamAddConstant;
-            if (parameter_value
-                    ? param < 0
+                    FloatParamAddConstant
+                || kind == AOTAggregateReturnValueKind::
+                    IntParamSelect
+                || kind == AOTAggregateReturnValueKind::
+                    FloatParamSelect
+                || kind == AOTAggregateReturnValueKind::
+                    BoolParamSelect;
+            bool invalid = parameter_value
+                ? param < 0
                         || static_cast<size_t>(param)
                             >= info.param_kinds.size()
                         || static_cast<size_t>(param)
@@ -10611,7 +10776,36 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             && info.param_kinds[
                                 static_cast<size_t>(param)]
                                 != BatchCalleeParamKind::NativeFloat)
-                    : param != -1) {
+                : param != -1;
+            bool select_value =
+                kind == AOTAggregateReturnValueKind::IntParamSelect
+                || kind == AOTAggregateReturnValueKind::FloatParamSelect
+                || kind == AOTAggregateReturnValueKind::BoolParamSelect;
+            if (!invalid && select_value) {
+                int64_t packed = info.aggregate_return.value_ints[i];
+                size_t condition = static_cast<uint8_t>(packed);
+                size_t alternate =
+                    static_cast<uint8_t>(packed >> 8);
+                BatchCalleeParamKind expected =
+                    kind == AOTAggregateReturnValueKind::IntParamSelect
+                    ? BatchCalleeParamKind::NativeInt
+                    : kind == AOTAggregateReturnValueKind::
+                            FloatParamSelect
+                        ? BatchCalleeParamKind::NativeFloat
+                        : BatchCalleeParamKind::NativeBool;
+                invalid = condition >= info.param_kinds.size()
+                    || alternate >= info.param_kinds.size()
+                    || condition >= info.param_rejects_nothing.size()
+                    || alternate >= info.param_rejects_nothing.size()
+                    || !info.param_rejects_nothing[condition]
+                    || !info.param_rejects_nothing[alternate]
+                    || info.param_kinds[condition]
+                        != BatchCalleeParamKind::NativeBool
+                    || info.param_kinds[alternate] != expected
+                    || info.param_kinds[static_cast<size_t>(param)]
+                        != expected;
+            }
+            if (invalid) {
                 return false;
             }
         }
@@ -12456,9 +12650,21 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         bool computed_float = value_kind
                             == AOTAggregateReturnValueKind::
                                 FloatParamAddConstant;
+                        bool selected_int = value_kind
+                            == AOTAggregateReturnValueKind::
+                                IntParamSelect;
+                        bool selected_float = value_kind
+                            == AOTAggregateReturnValueKind::
+                                FloatParamSelect;
+                        bool selected_bool = value_kind
+                            == AOTAggregateReturnValueKind::
+                                BoolParamSelect;
+                        bool selected = selected_int || selected_float
+                            || selected_bool;
                         if (value_kind
                                     != AOTAggregateReturnValueKind::Parameter
-                                && !computed_int && !computed_float) {
+                                && !computed_int && !computed_float
+                                && !selected) {
                             if (boxed_projection) {
                                 if (value_kind
                                         == AOTAggregateReturnValueKind::
@@ -12558,6 +12764,60 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return false;
                         }
                         descriptor.operand = param;
+                        if (selected) {
+                            if (dynamic_index) {
+                                return false;
+                            }
+                            int64_t packed =
+                                aggregate.value_ints[value_index];
+                            size_t condition =
+                                static_cast<uint8_t>(packed);
+                            size_t alternate =
+                                static_cast<uint8_t>(packed >> 8);
+                            BatchCalleeParamKind selected_kind =
+                                selected_int
+                                ? BatchCalleeParamKind::NativeInt
+                                : selected_float
+                                    ? BatchCalleeParamKind::NativeFloat
+                                    : BatchCalleeParamKind::NativeBool;
+                            if (actual != selected_kind
+                                    || condition >= found->second
+                                        .param_kinds.size()
+                                    || alternate >= found->second
+                                        .param_kinds.size()
+                                    || found->second.param_kinds[condition]
+                                        != BatchCalleeParamKind::NativeBool
+                                    || found->second.param_kinds[alternate]
+                                        != selected_kind) {
+                                return false;
+                            }
+                            descriptor.int_constant = packed;
+                            descriptor.kind = selected_int
+                                ? boxed_projection
+                                    ? QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedIntSelect
+                                    : QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            NativeIntSelect
+                                : selected_float
+                                    ? boxed_projection
+                                        ? QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedFloatSelect
+                                        : QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                NativeFloatSelect
+                                    : boxed_projection
+                                        ? QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedBoolSelect
+                                        : QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::None;
+                            return descriptor.kind
+                                != QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::None;
+                        }
                         if (computed_int) {
                             descriptor.int_constant =
                                 aggregate.value_ints[value_index];

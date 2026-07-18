@@ -13814,6 +13814,44 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatAddConstant;
+                    bool selected = projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatSelect
+                        || projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolSelect;
+                    if (selected) {
+                        size_t condition = static_cast<uint8_t>(
+                            direct_inst->aot_aggregate_projection_int);
+                        size_t alternate = static_cast<uint8_t>(
+                            direct_inst->aot_aggregate_projection_int >> 8);
+                        if (condition >= raw_args.size()
+                                || alternate >= raw_args.size()
+                                || raw_args[condition]->getType() != i1_type
+                                || raw_args[alternate]->getType()
+                                    != call_result->getType()) {
+                            error = "internal error: fused AOT aggregate"
+                                " select descriptor has invalid operands";
+                            return false;
+                        }
+                        call_result = builder->CreateSelect(
+                            raw_args[condition], call_result,
+                            raw_args[alternate]);
+                    }
                     if (int_add) {
                         if (call_result->getType() != i64_type) {
                             error = "internal error: fused AOT aggregate"
@@ -13836,7 +13874,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     aot_aggregate_projection_float));
                     }
                     if (projection
-                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt) {
+                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeIntSelect) {
                         if (call_result->getType() != i64_type) {
                             error = "internal error: fused AOT aggregate"
                                 " integer projection has the wrong type";
@@ -13844,7 +13885,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         call_return_kind = BatchCalleeReturnKind::NativeInt;
                     } else if (projection
-                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat) {
+                            == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeFloat
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatSelect) {
                         if (call_result->getType() != double_type) {
                             error = "internal error: fused AOT aggregate"
                                 " float projection has the wrong type";
@@ -13853,17 +13897,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_return_kind = BatchCalleeReturnKind::NativeFloat;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedInt) {
+                                AOTAggregateProjectionKind::BoxedInt
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedIntSelect) {
                         call_result = boxInt(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedFloat) {
+                                AOTAggregateProjectionKind::BoxedFloat
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatSelect) {
                         call_result = boxFloat(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedBool) {
+                                AOTAggregateProjectionKind::BoxedBool
+                            || projection == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedBoolSelect) {
                         call_result = boxBool(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
