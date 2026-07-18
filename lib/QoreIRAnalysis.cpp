@@ -4558,6 +4558,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         AOTAggregateProjectionKind::BoxedBoolConstant
                 || projection.kind
                     == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedNothingConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::Size) {
             candidate.materialized_projections.push_back(projection);
             return true;
@@ -5128,6 +5131,31 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         for (const Projection& projection :
                 candidate.materialized_projections) {
             MaterializedProjection materialized;
+            if (projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedNothingConstant) {
+                auto replacement =
+                    std::make_unique<QoreIRConstInstruction>();
+                replacement->opcode = QoreIROpcode::ConstNothing;
+                replacement->loc = projection.consumer->loc;
+                replacement->cached_start_line =
+                    projection.consumer->cached_start_line;
+                replacement->temp_scope_id =
+                    projection.consumer->temp_scope_id;
+                replacement->result = projection.consumer->result;
+                replacement->constant.kind =
+                    QoreIRConstant::Kind::Nothing;
+                QoreIRValueFacts facts;
+                facts.type_info = nothingTypeInfo;
+                facts.assigned_state = QoreIRAssignedState::Unassigned;
+                facts.representation = QoreIRValueRepresentation::Boxed;
+                facts.never_nothing = false;
+                func.setValueFacts(replacement->result, facts);
+                materialized.replacement = std::move(replacement);
+                materialized_replacements.emplace(
+                    projection.consumer, std::move(materialized));
+                continue;
+            }
             QoreIRValue source;
             bool boxed = projection.kind
                     == QoreIRCallDirectInstruction::
