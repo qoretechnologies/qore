@@ -4276,15 +4276,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     };
 
     struct VirtualizedCall {
-        struct BoxedProjection {
-            QoreIRInstruction* consumer = nullptr;
-            QoreIRValue source;
-        };
-
         QoreIRCallDirectInstruction* call = nullptr;
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
-        std::vector<BoxedProjection> boxed_projections;
+        std::vector<Projection> materialized_projections;
     };
     struct VirtualizedPhi {
         QoreIRPhiInstruction* phi = nullptr;
@@ -4310,11 +4305,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         if (projection.kind
                 == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedValue) {
-            candidate.boxed_projections.push_back({
-                projection.consumer,
-                projection.call->operands[projection.operand],
-            });
+                    AOTAggregateProjectionKind::BoxedValue
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedInt
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloat
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBool
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::Size) {
+            candidate.materialized_projections.push_back(projection);
             return true;
         }
         return false;
@@ -4713,8 +4732,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             projection.eliminated.end());
     }
     std::unordered_map<uint32_t, QoreIRValue> replacements;
-    std::unordered_map<QoreIRInstruction*,
-        std::unique_ptr<QoreIRInstruction>> boxed_replacements;
+    struct MaterializedProjection {
+        std::unique_ptr<QoreIRInstruction> source;
+        std::unique_ptr<QoreIRInstruction> replacement;
+    };
+    std::unordered_map<QoreIRInstruction*, MaterializedProjection>
+        materialized_replacements;
     std::unordered_set<uint32_t> rewrite_sources;
     for (VirtualizedCall& candidate : virtualized) {
         if (qore_ir_analysis_cancelled(check_count,
@@ -4725,28 +4748,143 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             candidate.eliminated.end());
         replacements.insert(candidate.replacements.begin(),
             candidate.replacements.end());
-        for (const VirtualizedCall::BoxedProjection& projection :
-                candidate.boxed_projections) {
-            rewrite_sources.insert(projection.source.id);
-            auto replacement =
-                std::make_unique<QoreIRInstruction>(QoreIROpcode::RefSelf);
-            replacement->loc = projection.consumer->loc;
-            replacement->cached_start_line =
-                projection.consumer->cached_start_line;
-            replacement->temp_scope_id =
-                projection.consumer->temp_scope_id;
-            replacement->result = projection.consumer->result;
-            replacement->operands.push_back(projection.source);
-            boxed_replacements.emplace(
-                projection.consumer, std::move(replacement));
-            if (const QoreIRValueFacts* source_facts =
-                    func.getValueFacts(projection.source)) {
-                QoreIRValueFacts facts = *source_facts;
+        for (const auto& replacement : candidate.replacements) {
+            rewrite_sources.insert(replacement.second.id);
+        }
+        for (const Projection& projection :
+                candidate.materialized_projections) {
+            MaterializedProjection materialized;
+            QoreIRValue source;
+            bool boxed = projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValue
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedInt
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloat
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBool
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolConstant;
+            bool constant = projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedBoolConstant
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::Size;
+            if (!constant) {
+                source = projection.call->operands[
+                    static_cast<size_t>(projection.operand)];
+                rewrite_sources.insert(source.id);
+            } else {
+                auto source_constant =
+                    std::make_unique<QoreIRConstInstruction>();
+                source_constant->loc = projection.consumer->loc;
+                source_constant->cached_start_line =
+                    projection.consumer->cached_start_line;
+                source_constant->temp_scope_id =
+                    projection.consumer->temp_scope_id;
+                source_constant->result = boxed
+                    ? func.createValue() : projection.consumer->result;
+                QoreIRValueFacts facts;
+                facts.assigned_state = QoreIRAssignedState::Assigned;
+                facts.never_nothing = true;
+                if (projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    NativeFloatConstant
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedFloatConstant) {
+                    source_constant->opcode = QoreIROpcode::ConstFloat;
+                    source_constant->constant.kind =
+                        QoreIRConstant::Kind::Float;
+                    source_constant->constant.float_value =
+                        projection.float_constant;
+                    facts.type_info = floatTypeInfo;
+                    facts.representation =
+                        QoreIRValueRepresentation::NativeFloat;
+                } else if (projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedBoolConstant) {
+                    source_constant->opcode = QoreIROpcode::ConstBool;
+                    source_constant->constant.kind =
+                        QoreIRConstant::Kind::Bool;
+                    source_constant->constant.bool_value =
+                        projection.int_constant != 0;
+                    facts.type_info = boolTypeInfo;
+                    facts.representation =
+                        QoreIRValueRepresentation::NativeBool;
+                } else {
+                    source_constant->opcode = QoreIROpcode::ConstInt;
+                    source_constant->constant.kind =
+                        QoreIRConstant::Kind::Int;
+                    source_constant->constant.int_value =
+                        projection.kind
+                                == QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::Size
+                            ? projection.size : projection.int_constant;
+                    facts.type_info = bigIntTypeInfo;
+                    facts.representation =
+                        QoreIRValueRepresentation::NativeInt;
+                }
+                func.setValueFacts(source_constant->result, facts);
+                source = source_constant->result;
+                if (boxed) {
+                    materialized.source = std::move(source_constant);
+                } else {
+                    materialized.replacement =
+                        std::move(source_constant);
+                }
+            }
+            if (boxed) {
+                auto replacement =
+                    std::make_unique<QoreIRInstruction>(
+                        QoreIROpcode::RefSelf);
+                replacement->loc = projection.consumer->loc;
+                replacement->cached_start_line =
+                    projection.consumer->cached_start_line;
+                replacement->temp_scope_id =
+                    projection.consumer->temp_scope_id;
+                replacement->result = projection.consumer->result;
+                replacement->operands.push_back(source);
+                materialized.replacement = std::move(replacement);
+                QoreIRValueFacts facts;
+                if (const QoreIRValueFacts* source_facts =
+                        func.getValueFacts(source)) {
+                    facts = *source_facts;
+                }
                 facts.assigned_state = QoreIRAssignedState::Assigned;
                 facts.representation = QoreIRValueRepresentation::Boxed;
                 facts.never_nothing = true;
                 func.setValueFacts(projection.consumer->result, facts);
             }
+            materialized_replacements.emplace(
+                projection.consumer, std::move(materialized));
         }
     }
     std::unordered_map<QoreIRInstruction*,
@@ -4923,9 +5061,18 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 (void)qore_check_cancel(nullptr,
                     "IR aggregate-return projection fusion");
             }
-            auto boxed_replacement = boxed_replacements.find(inst->get());
-            if (boxed_replacement != boxed_replacements.end()) {
-                *inst = std::move(boxed_replacement->second);
+            auto materialized =
+                materialized_replacements.find(inst->get());
+            if (materialized != materialized_replacements.end()) {
+                if (materialized->second.source) {
+                    size_t offset = static_cast<size_t>(
+                        std::distance(instructions.begin(), inst));
+                    instructions.insert(inst,
+                        std::move(materialized->second.source));
+                    inst = instructions.begin()
+                        + static_cast<std::ptrdiff_t>(offset + 1);
+                }
+                *inst = std::move(materialized->second.replacement);
                 (void)qore_ir_rewrite_value_operands(
                     **inst, replacements, check_count, false);
                 ++inst;

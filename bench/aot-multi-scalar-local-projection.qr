@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub makeInts(int left, int right) {
+    return (left, right, 7);
+}
+
+list<float> sub makeFloats(float left, float right) {
+    return (left, right, 2.5);
+}
+
+list<bool> sub makeBools(bool left, bool right) {
+    return (left, right, True);
+}
+
+int sub projectionKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> ints = makeInts(i, i + 1);
+        list<float> floats = makeFloats(i + 0.25, i + 0.5);
+        list<bool> bools = makeBools((i % 2) == 0, (i % 3) == 0);
+        checksum += ints[0] + ints[1] + ints[2];
+        checksum += int(floats[0] + floats[1] + floats[2]);
+        checksum += bools[0] + bools[1] + bools[2];
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", projectionKernel(rounds));
