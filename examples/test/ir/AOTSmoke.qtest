@@ -194,6 +194,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT object member store private access checks",
             \testObjectMemberStorePrivateAccessChecks());
         addTestCase("AOT hash operations", \testHashOps());
+        addTestCase("AOT narrowed container COW store", \testNarrowedContainerCowStore());
         addTestCase("AOT list operations", \testListOps());
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
@@ -4810,6 +4811,66 @@ printf(\"first key: %s\\n\", key_list[0]);
         assertTrue(result.all_precompiled, "hash ops: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "hash operations output matches interpreter");
+    }
+
+    testNarrowedContainerCowStore() {
+        # Regression test: a COW key/index store into a container whose runtime
+        # value type has narrowed (hash<string, int> / list<int>) but that is
+        # held through an auto! (no-narrow) parameter.  The COW helpers must
+        # transfer the fresh copy's reference into the local-variable
+        # assignment so LValueHelper::assign's auto!-strip retypes the unique
+        # node in place; the previous refSelf-then-assign pattern made the
+        # coercion store a stripped copy while the helper deref'd and then
+        # mutated the original copy (use-after-free SIGSEGV in
+        # QoreHashNode::setKeyValue).
+        string code = "%modern
+class Base {
+    private { hash<auto> m_cfg; }
+    constructor(hash<auto> cfg) { m_cfg = cfg; }
+    hash<auto> getCfg() { return m_cfg; }
+}
+
+class HashDerived inherits Base {
+    constructor(*hash<auto> opts) : Base(HashDerived::resolveOpts(opts)) {
+    }
+
+    private static hash<auto> resolveOpts(*hash<auto!> opts) {
+        if (!opts.url) {
+            # COW key store of a string into a hash narrowed to hash<string, int>
+            opts.url = \"http://localhost:8001\";
+        }
+        return opts;
+    }
+}
+
+class ListDerived inherits Base {
+    constructor(*list<auto> vals) : Base(ListDerived::resolveVals(vals)) {
+    }
+
+    private static hash<auto> resolveVals(*list<auto!> vals) {
+        if (vals[0] != \"x\") {
+            # COW index store of a string into a list narrowed to list<int>
+            vals[1] = \"converted\";
+        }
+        return {\"vals\": vals};
+    }
+}
+
+# all-int literals narrow to hash<string, int> / list<int>
+HashDerived hd({\"timeout\": 30000});
+printf(\"hash cfg: %y\\n\", hd.getCfg());
+ListDerived ld((10, 20, 30));
+printf(\"list cfg: %y\\n\", ld.getCfg());
+printf(\"OK\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "narrowed container COW store: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "narrowed container COW store output matches interpreter");
+        assertTrue(result.run_out.regex("OK"),
+            "narrowed container COW store must complete: " + result.run_out);
     }
 
     testListOps() {

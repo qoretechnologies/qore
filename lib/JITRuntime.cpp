@@ -4042,6 +4042,56 @@ static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key
 
 // JIT path: write hash{key} = value with copy-on-write support.
 // var: container LocalVar* (used to update the local when COW triggers).
+// Assign a container to a local variable with ownership TRANSFER of the
+// caller's reference (no refSelf before LValueHelper::assign).  This is
+// required by the container-COW store helpers below: passing a fresh copy()
+// at refcount 1 lets the typed-lvalue coercion in LValueHelper::assign take
+// the "unique" in-place branch (e.g. hash<auto!>/list<auto!> stripping a
+// narrowed value type retypes the node instead of replacing it with a
+// stripped copy), so the variable ends up holding the SAME node the caller
+// continues to mutate.  With the previous refSelf-then-assign pattern the
+// copy was non-unique at assign time, the coercion stored a converted copy,
+// and the caller's subsequent deref freed the node it was about to mutate
+// (SIGSEGV in QoreHashNode::setKeyValue).  Mirrors the IR interpreter's
+// assignLocalVarValueTransfer() in its HashKeyStore COW path.
+// The passed reference is always consumed (stored or discarded).
+static void qore_rt_assign_local_transfer(LocalVar* var, QoreValue val,
+        ExceptionSink* xsink) {
+    if (!var || (xsink && *xsink)) {
+        val.discard(xsink);
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        val.discard(xsink);
+        return;
+    }
+    helper.assign(val, "<lvalue>", true);
+}
+
+// AOT variant: the container local is identified by its ctx slot.
+static void qore_rt_assign_local_transfer_aot(QoreAOTContext* ctx,
+        uint32_t local_slot, QoreValue val, ExceptionSink* xsink) {
+    LocalVar* var = ctx && local_slot < static_cast<uint32_t>(ctx->num_locals)
+        ? ctx->locals[local_slot] : nullptr;
+    qore_rt_assign_local_transfer(var, val, xsink);
+}
+
+// Re-read the container node the variable holds after a COW transfer-assign.
+// LValueHelper::assign normally keeps the transferred unique node in place,
+// but some lvalue coercions can still replace it — mutating a re-read node is
+// always safe, mutating the pre-assign pointer is not.  The load reference is
+// dropped before returning (the variable keeps its own reference and the
+// frame is single-threaded), preserving setKeyValue()'s unique-reference
+// invariant for the following mutation.
+template <typename T, qore_type_t NT>
+static T* qore_rt_reload_cow_container(uint64_t stored_bits, ExceptionSink* xsink) {
+    QoreValue stored = fromBits(stored_bits);
+    T* node = stored.getType() == NT ? stored.get<T>() : nullptr;
+    stored.discard(xsink);
+    return (xsink && *xsink) ? nullptr : node;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         LocalVar* var, uint64_t hash_bits, const char* key,
         uint64_t value_bits, ExceptionSink* xsink) {
@@ -4053,15 +4103,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
-            QoreHashNode* new_h = h->copy();
-            qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
+            // Transfer the copy's reference so the typed-lvalue coercion keeps
+            // the unique node in place (see qore_rt_assign_local_transfer)
+            qore_rt_assign_local_transfer(var, QoreValue(h->copy()), xsink);
             if (*xsink) {
-                new_h->deref(nullptr);
                 return toBits(QoreValue());
             }
-            // Release copy()'s original ref; variable holds sole ref
-            new_h->deref(nullptr);
-            h = new_h;
+            h = qore_rt_reload_cow_container<QoreHashNode, NT_HASH>(
+                qore_rt_load_local(var, xsink), xsink);
+            if (!h) {
+                return toBits(QoreValue());
+            }
         }
         h->setKeyValue(key, val.refSelf(), xsink);
     } else if (hv.isNothing()) {
@@ -4099,15 +4151,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
-            QoreHashNode* new_h = h->copy();
-            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
+            // Transfer the copy's reference so the typed-lvalue coercion keeps
+            // the unique node in place (see qore_rt_assign_local_transfer)
+            qore_rt_assign_local_transfer_aot(ctx, local_slot,
+                QoreValue(h->copy()), xsink);
             if (*xsink) {
-                new_h->deref(nullptr);
                 return toBits(QoreValue());
             }
-            // Release copy()'s original ref; variable holds sole ref
-            new_h->deref(nullptr);
-            h = new_h;
+            h = qore_rt_reload_cow_container<QoreHashNode, NT_HASH>(
+                qore_rt_load_local_aot(ctx, local_slot, xsink), xsink);
+            if (!h) {
+                return toBits(QoreValue());
+            }
         }
         h->setKeyValue(key, val.refSelf(), xsink);
     } else if (hv.isNothing()) {
@@ -4169,15 +4224,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         // Any ref beyond the lvalue's own runtime slot is real sharing and must
         // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
         if (l->reference_count() > 1) {
-            QoreListNode* new_l = l->copy();
-            qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
+            // Transfer the copy's reference so the typed-lvalue coercion keeps
+            // the unique node in place (see qore_rt_assign_local_transfer)
+            qore_rt_assign_local_transfer(var, QoreValue(l->copy()), xsink);
             if (*xsink) {
-                new_l->deref(nullptr);
                 return toBits(QoreValue());
             }
-            // Release copy()'s original ref; variable holds sole ref (refcount==1)
-            new_l->deref(nullptr);
-            l = new_l;
+            l = qore_rt_reload_cow_container<QoreListNode, NT_LIST>(
+                qore_rt_load_local(var, xsink), xsink);
+            if (!l) {
+                return toBits(QoreValue());
+            }
         }
 
         if (index < 0) {
@@ -4258,15 +4315,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         // Any ref beyond the lvalue's own runtime slot is real sharing and must
         // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
         if (l->reference_count() > 1) {
-            QoreListNode* new_l = l->copy();
-            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
+            // Transfer the copy's reference so the typed-lvalue coercion keeps
+            // the unique node in place (see qore_rt_assign_local_transfer)
+            qore_rt_assign_local_transfer_aot(ctx, local_slot,
+                QoreValue(l->copy()), xsink);
             if (*xsink) {
-                new_l->deref(nullptr);
                 return toBits(QoreValue());
             }
-            // Release copy()'s original ref; variable holds sole ref (refcount==1)
-            new_l->deref(nullptr);
-            l = new_l;
+            l = qore_rt_reload_cow_container<QoreListNode, NT_LIST>(
+                qore_rt_load_local_aot(ctx, local_slot, xsink), xsink);
+            if (!l) {
+                return toBits(QoreValue());
+            }
         }
         if (index < 0) {
             if (negative_offsets) {
