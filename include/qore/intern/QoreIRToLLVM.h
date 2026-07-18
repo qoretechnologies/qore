@@ -155,6 +155,17 @@ public:
         return aot_loc_table;
     }
 
+    //! Offset added to every AOT location index emitted by this lowerer.
+    //! Outlined function-body helpers execute with the coordinator's
+    //! runtime ctx, whose ctx->locs table is the concatenation of the
+    //! helpers' and the coordinator's location tables; each lowerer gets
+    //! the running total of previously-emitted entries as its base so the
+    //! emitted indices address the merged table (see
+    //! aotLowerOutlinedFnHelpers() in QoreAOT.cpp).
+    void setAOTLocTableBase(int32_t base) {
+        aot_loc_base = base;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -582,6 +593,10 @@ private:
     //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).
     //! The pointer is used only as a dedup key during the single LLVM codegen pass.
     std::unordered_map<const QoreProgramLocation*, int32_t> aot_loc_slots;
+
+    //! Base offset for emitted AOT location indices (outlined helpers index
+    //! the coordinator's merged ctx->locs table) — see setAOTLocTableBase()
+    int32_t aot_loc_base = 0;
     //! AOT location table: owns location data captured during LLVM codegen.
     std::vector<AOTLocEntry> aot_loc_table;
 

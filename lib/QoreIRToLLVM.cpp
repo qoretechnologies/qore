@@ -3123,7 +3123,10 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         if (it != aot_loc_slots.end()) {
             loc_index = it->second;
         } else {
-            loc_index = static_cast<int32_t>(aot_loc_table.size());
+            // aot_loc_base offsets outlined-helper indices into the
+            // coordinator's merged ctx->locs table (helpers share the
+            // coordinator's runtime ctx — see aotLowerOutlinedFnHelpers()).
+            loc_index = aot_loc_base + static_cast<int32_t>(aot_loc_table.size());
             aot_loc_slots[inst->loc] = loc_index;
             // Copy location data by value immediately — the table owns the data,
             // eliminating any dependency on inst->loc pointer lifetime.
@@ -15793,10 +15796,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
             llvm::Value* result = builder->CreateCall(helper,
                     {aot_ctx_arg, xsink_arg});
-            emitExceptionCheck(module, llvm_func, inst);
+            // Outlined function-body helpers execute with this function's
+            // runtime frame and can assign shared (non-IR-only) locals
+            // through the TLS stack — mark all reloadable local allocas
+            // stale (no-op for init-expression helpers, which reference no
+            // locals).
+            reloadAllLocalsFromRuntime(module, llvm_func);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
 
