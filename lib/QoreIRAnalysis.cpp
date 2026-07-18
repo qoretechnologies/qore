@@ -4837,11 +4837,54 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             candidate.eliminated.push_back(call);
             candidate.eliminated.push_back(store);
             bool valid = true;
-            size_t load_count = 0;
+            size_t projection_count = 0;
             std::unique_ptr<Projection> nested_projection;
             std::unique_ptr<Projection> direct_local_projection;
             std::unique_ptr<Projection> guarded_local_projection;
             bool saw_virtualized_projection = false;
+            auto process_local_projection = [&](Projection projection) {
+                Projection nested = projection;
+                if (descend_nested_projection(nested)) {
+                    nested_projection =
+                        std::make_unique<Projection>(std::move(nested));
+                }
+                if (projection.guarded_index.isValid()) {
+                    if (saw_virtualized_projection
+                            || direct_local_projection) {
+                        return false;
+                    }
+                    if (!guarded_local_projection) {
+                        guarded_local_projection =
+                            std::make_unique<Projection>(
+                                std::move(projection));
+                    } else if (!same_guarded_projection(
+                            *guarded_local_projection, projection)) {
+                        return false;
+                    } else {
+                        guarded_local_projection->eliminated.push_back(
+                            projection.consumer);
+                        guarded_local_projection->replacements.emplace_back(
+                            projection.result.id,
+                            guarded_local_projection->result);
+                    }
+                } else {
+                    if (guarded_local_projection
+                            || direct_local_projection
+                            || !add_virtualized_projection(
+                                candidate, projection)) {
+                        if (projection_count) {
+                            return false;
+                        }
+                        direct_local_projection =
+                            std::make_unique<Projection>(
+                                std::move(projection));
+                    } else {
+                        saw_virtualized_projection = true;
+                    }
+                }
+                ++projection_count;
+                return true;
+            };
             for (const LocalOperation& op : local_ops->second) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR aggregate local virtualization analysis")) {
@@ -4864,63 +4907,35 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     break;
                 }
                 auto load_use = uses.find(local_inst->result.id);
-                Projection projection;
-                if (load_use == uses.end()
-                        || load_use->second.size() != 1
-                        || !load_use->second.front().inst
-                        || !analyze_projection(call, local_inst->result,
-                            const_cast<QoreIRInstruction*>(
-                                load_use->second.front().inst),
-                            projection)) {
-                    valid = false;
+                if (load_use == uses.end() || load_use->second.empty()) {
+                    candidate.eliminated.push_back(local_inst);
+                    continue;
+                }
+                for (const QoreIRScalarUse& scalar_use :
+                        load_use->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR shared aggregate local use analysis")) {
+                        return 0;
+                    }
+                    Projection projection;
+                    if (!scalar_use.inst
+                            || !analyze_projection(
+                                call, local_inst->result,
+                                const_cast<QoreIRInstruction*>(
+                                    scalar_use.inst),
+                                projection)
+                            || !process_local_projection(
+                                std::move(projection))) {
+                        valid = false;
+                        break;
+                    }
+                }
+                if (!valid) {
                     break;
                 }
-                Projection nested = projection;
-                if (descend_nested_projection(nested)) {
-                    nested_projection =
-                        std::make_unique<Projection>(std::move(nested));
-                }
-                if (projection.guarded_index.isValid()) {
-                    if (saw_virtualized_projection
-                            || direct_local_projection) {
-                        valid = false;
-                        break;
-                    }
-                    if (!guarded_local_projection) {
-                        guarded_local_projection =
-                            std::make_unique<Projection>(
-                                std::move(projection));
-                    } else if (!same_guarded_projection(
-                            *guarded_local_projection, projection)) {
-                        valid = false;
-                        break;
-                    } else {
-                        guarded_local_projection->eliminated.push_back(
-                            projection.consumer);
-                        guarded_local_projection->replacements.emplace_back(
-                            projection.result.id,
-                            guarded_local_projection->result);
-                    }
-                } else {
-                    if (guarded_local_projection
-                            || direct_local_projection
-                            || !add_virtualized_projection(
-                                candidate, projection)) {
-                        if (load_count) {
-                            valid = false;
-                            break;
-                        }
-                        direct_local_projection =
-                            std::make_unique<Projection>(
-                                std::move(projection));
-                    } else {
-                        saw_virtualized_projection = true;
-                    }
-                }
-                ++load_count;
                 candidate.eliminated.push_back(local_inst);
             }
-            if (valid && load_count) {
+            if (valid && projection_count) {
                 if (guarded_local_projection) {
                     guarded_local_projection->eliminated.insert(
                         guarded_local_projection->eliminated.end(),
@@ -4928,13 +4943,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         candidate.eliminated.end());
                     projections.push_back(
                         std::move(*guarded_local_projection));
-                } else if (load_count == 1 && nested_projection) {
+                } else if (projection_count == 1 && nested_projection) {
                     nested_projection->eliminated.insert(
                         nested_projection->eliminated.end(),
                         candidate.eliminated.begin(),
                         candidate.eliminated.end());
                     projections.push_back(std::move(*nested_projection));
-                } else if (load_count == 1 && direct_local_projection) {
+                } else if (projection_count == 1
+                        && direct_local_projection) {
                     direct_local_projection->eliminated.insert(
                         direct_local_projection->eliminated.end(),
                         candidate.eliminated.begin() + 1,
