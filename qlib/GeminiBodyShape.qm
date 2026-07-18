@@ -43,7 +43,7 @@ auto sub parse_json(string val) {
 %endif
 
 module GeminiBodyShape {
-    version = "1.0.1";
+    version = "1.0.0";
     desc = "Shared Gemini generateContent wire format: request/response shapers "
         "plus the common AbstractGeminiModelProvider base — shared between the "
         "native GeminiRestClient provider and the Vertex AI Gemini-on-Vertex "
@@ -98,14 +98,6 @@ module GeminiBodyShape {
     - @ref bareModelName() — strip \c "models/" prefix
 
     @section geminibodyshaperelnotes Release Notes
-
-    @subsection geminibodyshape_v1_0_1 GeminiBodyShape v1.0.1
-    - fixed tool calling against Gemini 3.x: the reasoning signature returned
-      alongside each \c functionCall part is now parsed into
-      @ref QoreLlmUtils::ChatToolCall::thought_signature and echoed back verbatim
-      when the call is replayed.  Without it the API rejects the follow-up request
-      with HTTP 400 ("Function call is missing a thought_signature in functionCall
-      parts"), which made every multi-turn tool conversation fail
 
     @subsection geminibodyshape_v1_0 GeminiBodyShape v1.0
     - initial release: extracted from \c GeminiRestClient.qm so Vertex AI and any

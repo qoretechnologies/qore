@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module BigCommerceRestClient {
-    version = "1.1";
+    version = "1.0";
     desc = "User module for calling BigCommerce REST API services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -97,14 +97,6 @@ printf("Product count: %d\n", result.body.data.product_count);
     @endcode
 
     @section bigcommercerestclientrelnotes Release Notes
-
-    @subsection bigcommercerestclientv1_1 BigCommerceRestClient v1.1
-    - added OAuth2 authentication support (dual mode: OAuth2 or manual X-Auth-Token)
-    - added @ref BigCommerceRestClient::BigCommerceRestClient::gotOAuth2LoginInfo()
-      "BigCommerceRestClient::gotOAuth2LoginInfo()" override for X-Auth-Token header support
-    - added @ref BigCommerceRestClient::BigCommerceRestConnection::processOAuth2TokenResponseImpl()
-      "BigCommerceRestConnection::processOAuth2TokenResponseImpl()" to extract store_hash from
-      OAuth2 response context
 
     @subsection bigcommercerestclientv1_0 BigCommerceRestClient v1.0
     - the initial version of the %BigCommerceRestClient module
@@ -544,7 +536,7 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns an async-I/O-capable connection object
-    /** @since BigCommerceRestClient 1.2
+    /** @since BigCommerceRestClient 1.0
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         return new BigCommerceRestClientIo(getConnectionOptions(rtopts));

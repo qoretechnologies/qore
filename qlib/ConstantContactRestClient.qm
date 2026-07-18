@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module ConstantContactRestClient {
-    version = "1.1";
+    version = "1.0";
     desc = "User module for calling Constant Contact REST API services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -87,9 +87,6 @@ printf("Organization: %s\n", result.body.organization_name);
     @endcode
 
     @section constantcontactrestclientrelnotes Release Notes
-
-    @subsection constantcontactrestclientv1_1 ConstantContactRestClient v1.1
-    - added \c ConstantContactRestClientBase and \c ConstantContactRestClientIo classes for async I/O support
 
     @subsection constantcontactrestclientv1_0 ConstantContactRestClient v1.0
     - the initial version of the %ConstantContactRestClient module
