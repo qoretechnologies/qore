@@ -582,6 +582,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll oauth2 no deleted-object race", \testPingPollOAuth2NoDeletedRace());
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
         addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
+        addTestCase("ping poll non-oauth 401 no refresh", \testPingPollNonOAuth401NoRefresh());
+        addTestCase("ping poll 401 auto-refresh disabled", \testPingPoll401AutoRefreshDisabled());
+        addTestCase("ping poll incomplete oauth2 refresh", \testPingPollIncompleteOAuth2Refresh());
+        addTestCase("ping poll 401 refresh bounded", \testPingPoll401RefreshBounded());
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
         addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
@@ -3280,6 +3284,159 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(exists ex, "non-2xx ping without retry should throw");
         assertEq("REST-PING-ERROR", ex.err);
         assertFalse(op.goalReached());
+%endif
+    }
+
+    #! Regression: a non-OAuth (API-key/static-token) connection that receives HTTP 401
+    #! on a polling ping must NOT enter the OAuth2 refresh path and must NOT raise a
+    #! RUNTIME-TYPE-ERROR; it must surface a normal REST-PING-ERROR.
+    /** Reproduces the live Deepgram monitoring failure: the connection supplies a static
+        Authorization header (no OAuth2 grant type, no token URL), so a 401 ping response
+        previously routed into startOAuth2PollRefreshToken(), where the absent token URL
+        was assigned to a non-nullable string, producing a RUNTIME-TYPE-ERROR ~once/min.
+    */
+    testPingPollNonOAuth401NoRefresh() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        # Static bearer token, rejected by the /auth401 handler; NO OAuth2 grant type,
+        # NO token URL.  oauth2_auto_refresh is left at its default (True) to prove the
+        # default no longer forces an OAuth2 refresh attempt.
+        string static_token = sprintf("deepgram-static-%d", clock_getmicros());
+        auth401_handler.addRejectToken(static_token);
+        on_exit auth401_handler.removeRejectToken(static_token);
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-nonoauth-401", "ping-nonoauth-401", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": static_token,
+            "token_type": "Bearer",
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "a non-OAuth 401 ping must throw");
+        assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
+        assertEq("REST-PING-ERROR", ex.err, "a non-OAuth 401 must surface a ping error");
+        assertFalse(op.goalReached());
+        # no OAuth2 token refresh must have been attempted
+        assertEq(0, token_handler.getRequestCount(), "no OAuth2 refresh must be attempted");
+%endif
+    }
+
+    #! Regression: a fully-configured OAuth2 connection with oauth2_auto_refresh=False
+    #! must NOT attempt a token refresh after a 401 ping response.
+    testPingPoll401AutoRefreshDisabled() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        string initial_token = sprintf("no-refresh-initial-%d", clock_getmicros());
+        auth401_handler.addRejectToken(initial_token);
+        on_exit auth401_handler.removeRejectToken(initial_token);
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-401-norefresh", "ping-401-norefresh", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": initial_token,
+            "token_type": "Bearer",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_refresh_token": "some-refresh-token",
+            "oauth2_auto_refresh": False,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "401 with auto-refresh disabled must throw");
+        assertEq("REST-PING-ERROR", ex.err);
+        assertFalse(op.goalReached());
+        assertEq(0, token_handler.getRequestCount(),
+            "auto-refresh disabled: no refresh must be attempted");
+%endif
+    }
+
+    #! Regression: startOAuth2PollRefreshToken() must raise a clear OAUTH2-ERROR (not a
+    #! RUNTIME-TYPE-ERROR) when it is reached without a configured token endpoint URL.
+    /** A connection seeded with a token, refresh token, and near expiry (so the ping
+        operation constructor's proactive-refresh path fires) but WITHOUT a token URL
+        exercises the defensive guard in startOAuth2PollRefreshToken().
+    */
+    testPingPollIncompleteOAuth2Refresh() {
+%ifndef NoJson
+        # token + refresh token + expiry-in-window makes tokenRequiresRefresh() True, so
+        # the ping operation constructor enters the proactive OAuth2 refresh path; the
+        # missing token URL must produce a clear configuration error, not a type error.
+        date near_expiry = now_us() + 5s;
+        RestConnection rc = createPingConnection("ping-incomplete-oauth2", {
+            "token": "incomplete-token",
+            "token_type": "Bearer",
+            "oauth2_refresh_token": "incomplete-refresh-token",
+            "oauth2_token_expiry": near_expiry,
+        });
+
+        # startPollConnect() constructs the poll operation, which triggers the proactive
+        # refresh in its constructor — the error may surface there or while driving.
+        *hash<ExceptionInfo> ex;
+        try {
+            AbstractPollOperation op = rc.startPollConnect();
+            ex = drivePingOp(op);
+        } catch (hash<ExceptionInfo> caught) {
+            ex = caught;
+        }
+        assertTrue(exists ex, "an incomplete OAuth2 refresh must throw");
+        assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
+        assertEq("OAUTH2-ERROR", ex.err, "incomplete OAuth2 config must raise a config error");
+%endif
+    }
+
+    #! Regression: repeated HTTP 401 responses on an OAuth2 ping must remain bounded —
+    #! at most one refresh + retry per poll operation, never a refresh loop.
+    testPingPoll401RefreshBounded() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        # The refreshed token is ALSO rejected, so the retry after refresh still gets 401.
+        string initial_token = sprintf("bounded-initial-%d", clock_getmicros());
+        string refreshed_token = sprintf("bounded-refreshed-%d", clock_getmicros());
+        token_handler.setReturnToken(refreshed_token);
+        token_handler.setReturnRefreshToken("bounded-refresh-token");
+        auth401_handler.addRejectToken(initial_token);
+        auth401_handler.addRejectToken(refreshed_token);
+        on_exit {
+            auth401_handler.removeRejectToken(initial_token);
+            auth401_handler.removeRejectToken(refreshed_token);
+        }
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-401-bounded", "ping-401-bounded", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": initial_token,
+            "token_type": "Bearer",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_refresh_token": "bounded-refresh-token",
+            "oauth2_auto_refresh": True,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "persistent 401 must terminate with an error");
+        assertEq("REST-PING-ERROR", ex.err, "a bounded 401 retry must end with a ping error");
+        assertFalse(op.goalReached());
+        # exactly one refresh was attempted — the retry did not spin into a refresh loop
+        assertEq(1, token_handler.getRequestCount(), "exactly one refresh must be attempted");
 %endif
     }
 
