@@ -13557,7 +13557,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (arg_start > total_operands) {
                 arg_start = total_operands;
             }
-            int nargs = total_operands - arg_start;
+            int projection_extra_operands =
+                fused_aggregate_projection
+                    && direct_inst->aot_aggregate_projection_guarded_index
+                ? 1 : 0;
+            int nargs = total_operands - arg_start
+                - projection_extra_operands;
+            if (nargs < 0) {
+                error = "internal error: fused AOT aggregate projection"
+                    " has an invalid guarded-index operand";
+                return false;
+            }
             const BatchCalleeInfo* aot_approach_b_callee = nullptr;
             llvm::Function* aot_approach_b_fn = nullptr;
             const AbstractQoreFunctionVariant* aot_direct_variant =
@@ -13770,6 +13780,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = boxBool(llvm::ConstantInt::get(i1_type,
                         direct_inst->aot_aggregate_projection_int != 0));
                     call_return_kind = BatchCalleeReturnKind::Boxed;
+                } else if (projection
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedNothingConstant) {
+                    call_result = llvm::ConstantInt::get(
+                        i64_type, VAL_NOTHING);
+                    call_return_kind = BatchCalleeReturnKind::Boxed;
                 } else {
                     int16_t operand =
                         direct_inst->aot_aggregate_projection_operand;
@@ -13890,6 +13907,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             " aggregate projection";
                         return false;
                     }
+                }
+                if (direct_inst->aot_aggregate_projection_guarded_index) {
+                    if (call_return_kind
+                            != BatchCalleeReturnKind::Boxed
+                            || projection_extra_operands != 1
+                            || inst->operands.empty()) {
+                        error = "internal error: guarded AOT aggregate"
+                            " projection does not produce a boxed value";
+                        return false;
+                    }
+                    QoreIRValue index_value = inst->operands.back();
+                    llvm::Value* index =
+                        getVal(index_value.id, error);
+                    if (!index) {
+                        return false;
+                    }
+                    if (index->getType() != i64_type
+                            || nanboxed_values.count(index_value.id)) {
+                        error = "internal error: guarded AOT aggregate"
+                            " projection index is not a native integer";
+                        return false;
+                    }
+                    llvm::Value* normalized = index;
+                    llvm::Value* zero =
+                        llvm::ConstantInt::get(i64_type, 0);
+                    llvm::Value* size = llvm::ConstantInt::get(
+                        i64_type,
+                        direct_inst->aot_aggregate_projection_size);
+                    if (direct_inst->
+                            aot_aggregate_projection_negative_offsets) {
+                        normalized = builder->CreateSelect(
+                            builder->CreateICmpSLT(index, zero),
+                            builder->CreateAdd(index, size), index);
+                    }
+                    llvm::Value* in_range = builder->CreateAnd(
+                        builder->CreateICmpSGE(normalized, zero),
+                        builder->CreateICmpSLT(normalized, size));
+                    call_result = builder->CreateSelect(in_range,
+                        call_result,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
                 }
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(

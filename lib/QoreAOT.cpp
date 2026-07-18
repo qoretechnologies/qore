@@ -12273,6 +12273,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         int64_t& int_constant, double& float_constant,
                         QoreIRCallDirectInstruction::AOTAggregateProjectionKind&
                             projection) {
+                    bool dynamic_index = kind
+                        == QoreIRAggregateProjectionQueryKind::
+                            ListIndexDynamicValue;
                     auto found = aot_batch_callee_map->find(callee);
                     if (found == aot_batch_callee_map->end() || !call
                             || !found->second.approach_b_eligible
@@ -12300,6 +12303,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             func.getValueFacts(call->operands[i]);
                         BatchCalleeParamKind param_kind =
                             found->second.param_kinds[i];
+                        if (dynamic_index
+                                && param_kind
+                                    == BatchCalleeParamKind::Boxed) {
+                            return false;
+                        }
                         QoreIRValueRepresentation expected =
                             param_kind == BatchCalleeParamKind::NativeInt
                             ? QoreIRValueRepresentation::NativeInt
@@ -12442,6 +12450,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 break;
                             }
                         }
+                        if (value_index == SIZE_MAX) {
+                            operand = -1;
+                            size = 0;
+                            projection = QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedNothingConstant;
+                            return true;
+                        }
                     } else {
                         if (aggregate.kind
                                 != AOTAggregateReturnKind::FixedList) {
@@ -12449,13 +12465,42 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         }
                         int64_t count = static_cast<int64_t>(
                             aggregate.value_params.size());
-                        if (index < 0) {
-                            index += count;
+                        if (dynamic_index) {
+                            if (!count
+                                    || aggregate.value_kinds.size()
+                                        != aggregate.value_params.size()
+                                    || aggregate.value_ints.size()
+                                        != aggregate.value_params.size()
+                                    || aggregate.value_floats.size()
+                                        != aggregate.value_params.size()) {
+                                return false;
+                            }
+                            for (size_t i = 1;
+                                    i < aggregate.value_params.size(); ++i) {
+                                if (aggregate.value_params[i]
+                                            != aggregate.value_params[0]
+                                        || aggregate.value_kinds[i]
+                                            != aggregate.value_kinds[0]
+                                        || aggregate.value_ints[i]
+                                            != aggregate.value_ints[0]
+                                        || std::memcmp(
+                                            &aggregate.value_floats[i],
+                                            &aggregate.value_floats[0],
+                                            sizeof(double))) {
+                                    return false;
+                                }
+                            }
+                            size = count;
+                            value_index = 0;
+                        } else {
+                            if (index < 0) {
+                                index += count;
+                            }
+                            if (index < 0 || index >= count) {
+                                return false;
+                            }
+                            value_index = static_cast<size_t>(index);
                         }
-                        if (index < 0 || index >= count) {
-                            return false;
-                        }
-                        value_index = static_cast<size_t>(index);
                     }
                     if (value_index >= aggregate.value_params.size()
                             || aggregate.value_kinds.size()
@@ -12478,10 +12523,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 != AOTAggregateReturnValueKind::Parameter
                             && !computed_int && !computed_float) {
                         operand = -1;
-                        size = 0;
+                        if (!dynamic_index) {
+                            size = 0;
+                        }
                         bool boxed_projection = kind
                                     == QoreIRAggregateProjectionQueryKind::
                                         ListIndexValue
+                            || dynamic_index
                             || kind
                                 == QoreIRAggregateProjectionQueryKind::
                                     HashKeyValue;
@@ -12562,6 +12610,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     bool boxed_projection = kind
                                 == QoreIRAggregateProjectionQueryKind::
                                     ListIndexValue
+                        || dynamic_index
                         || kind
                             == QoreIRAggregateProjectionQueryKind::HashKeyValue;
                     BatchCalleeParamKind expected = kind
@@ -12573,8 +12622,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (actual != expected) {
                         return false;
                     }
+                    if (dynamic_index
+                            && actual == BatchCalleeParamKind::Boxed) {
+                        return false;
+                    }
                     operand = param;
-                    size = 0;
+                    if (!dynamic_index) {
+                        size = 0;
+                    }
                     if (computed_int) {
                         if (expected != BatchCalleeParamKind::NativeInt) {
                             return false;

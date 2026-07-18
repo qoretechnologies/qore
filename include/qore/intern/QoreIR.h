@@ -2084,6 +2084,7 @@ public:
         BoxedIntConstant,
         BoxedFloatConstant,
         BoxedBoolConstant,
+        BoxedNothingConstant,
         NativeIntAddConstant,
         NativeFloatAddConstant,
         BoxedIntAddConstant,
@@ -2136,6 +2137,9 @@ public:
     int64_t aot_aggregate_projection_size = 0;
     int64_t aot_aggregate_projection_int = 0;
     double aot_aggregate_projection_float = 0.0;
+    //! A final projection-only operand supplies a proven native-int list index.
+    bool aot_aggregate_projection_guarded_index = false;
+    bool aot_aggregate_projection_negative_offsets = false;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

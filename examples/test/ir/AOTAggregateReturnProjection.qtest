@@ -27,6 +27,34 @@ list<int> sub makeValues(int left, int middle, int right) {
     return (left, middle, right);
 }
 
+list<int> sub repeatValue(int value) {
+    return (value, value, value);
+}
+
+list<int> sub repeatComputedValue(int value) {
+    return (value + 7, value + 7, value + 7);
+}
+
+list<float> sub repeatFloat(float value) {
+    return (value, value);
+}
+
+list<float> sub signedZeroValues() {
+    return (-0.0, 0.0);
+}
+
+list<bool> sub repeatBool(bool value) {
+    return (value, value, value);
+}
+
+list<int> sub repeatConstant() {
+    return (17, 17);
+}
+
+list<int> sub repeatWithUnusedBoxed(int value, string unused) {
+    return (value, value);
+}
+
 list<float> sub makeFloats(float left, float right) {
     return (left, right);
 }
@@ -612,6 +640,49 @@ int sub dynamicListIndex(int index) {
     return makeValues(4, 5, 6)[index].toInt();
 }
 
+*int sub guardedListIndex(int value, int index) {
+    return repeatValue(value)[index];
+}
+
+*int sub guardedComputedListIndex(int value, int index) {
+    return repeatComputedValue(value)[index];
+}
+
+*float sub guardedFloatListIndex(float value, int index) {
+    return repeatFloat(value)[index];
+}
+
+string sub dynamicSignedZeroListIndex(int index) {
+    return sprintf(\"%.1f\", signedZeroValues()[index]);
+}
+
+*bool sub guardedBoolListIndex(bool value, int index) {
+    return repeatBool(value)[index];
+}
+
+*int sub guardedConstantListIndex(int index) {
+    return repeatConstant()[index];
+}
+
+bool sub guardedSideEffectOrder() {
+    int effects = 0;
+    *int selected = repeatValue((effects = 1))[(effects = 2) - 1];
+    return selected == 1 && effects == 2;
+}
+
+*int sub optionalGuardedListIndex(int value, *int index) {
+    return repeatValue(value)[index];
+}
+
+*int sub guardedUnusedBoxedListIndex(
+        int value, string unused, int index) {
+    return repeatWithUnusedBoxed(value, unused)[index];
+}
+
+bool sub missingHashProjection(int value) {
+    return makeRow(value, value + 1, value + 2).missing === NOTHING;
+}
+
 int sub boxedListSize() {
     return makeWords(\"a\", \"b\").size();
 }
@@ -690,6 +761,21 @@ printf(\"%d:%d:%y:%y:%d\\n\", computedIntProjection(5),
     computedBoxedIntProjection(6), computedIntOverflowProjection(),
     computedFloatProjection(), twoParamComputedProjection());
 printf(\"%d\\n\", emptyZeroArgProjections());
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedListIndex(9, 0) == 9,
+    guardedListIndex(9, -1) == 9,
+    guardedListIndex(9, 3) === NOTHING,
+    guardedListIndex(9, -4) === NOTHING,
+    guardedListIndex(9, -9223372036854775807 - 1) === NOTHING,
+    guardedComputedListIndex(5, 1) == 12,
+    guardedFloatListIndex(2.5, -1) == 2.5,
+    guardedBoolListIndex(True, 2) == True,
+    guardedConstantListIndex(1) == 17,
+    guardedSideEffectOrder(),
+    optionalGuardedListIndex(8, NOTHING) == 8,
+    guardedUnusedBoxedListIndex(8, \"unused\", 1) == 8,
+    dynamicSignedZeroListIndex(1) == \"0.0\",
+    missingHashProjection(4));
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -771,6 +857,18 @@ foreach string function in (("nonNestedComputedProjection",
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing computed aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+foreach string function in (("guardedListIndex",
+        "guardedComputedListIndex", "guardedFloatListIndex",
+        "guardedBoolListIndex", "guardedConstantListIndex",
+        "guardedSideEffectOrder", "missingHashProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing guarded aggregate projection for %s:\n%s",
             function, enabled_compile);
         exit(2);
     }
@@ -859,7 +957,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput|hashSizeOverride|conditionalElementProjection|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|twoParamComputedProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicListIndex|dynamicSignedZeroListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|optionalInput|optionalListInput|hashSizeOverride|conditionalElementProjection|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|twoParamComputedProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1003,6 +1101,7 @@ if (computed_row_line.find(
 }
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5\n120\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

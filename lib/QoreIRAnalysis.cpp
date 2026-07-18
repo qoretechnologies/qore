@@ -12,6 +12,7 @@
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreJITIncludes.h>
+#include <qore/intern/QoreSquareBracketsOperatorNode.h>
 
 #include <algorithm>
 #include <bit>
@@ -4034,6 +4035,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         QoreIRLocalInstruction* instruction = nullptr;
     };
     std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    std::unordered_map<const QoreIRInstruction*,
+        std::pair<size_t, size_t>> instruction_positions;
     std::unordered_map<LocalVar*, std::vector<LocalOperation>> local_operations;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         const auto& block = func.blocks[block_id];
@@ -4043,6 +4046,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 return 0;
             }
             const auto& inst = block->instructions[offset];
+            instruction_positions.emplace(inst.get(),
+                std::make_pair(block_id, offset));
             if (inst->result.isValid()) {
                 definitions.emplace(inst->result.id, inst.get());
             }
@@ -4076,6 +4081,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         int64_t size = 0;
         int64_t int_constant = 0;
         double float_constant = 0.0;
+        QoreIRValue guarded_index;
+        bool negative_offsets = false;
         std::vector<QoreIRInstruction*> eliminated;
     };
     auto analyze_projection = [&](QoreIRCallDirectInstruction* call,
@@ -4092,6 +4099,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
         int64_t index = 0;
         std::string key;
+        QoreIRValue guarded_index;
+        bool negative_offsets = false;
         if (consumer->opcode == QoreIROpcode::ListSize
                 && consumer->operands.size() == 1) {
             query_kind = QoreIRAggregateProjectionQueryKind::ListSize;
@@ -4111,23 +4120,49 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 && consumer->operands.size() == 2) {
             auto index_definition = definitions.find(
                 consumer->operands[1].id);
-            if (index_definition == definitions.end()
-                    || index_definition->second->opcode
-                        != QoreIROpcode::ConstInt) {
-                return false;
+            if (index_definition != definitions.end()
+                    && index_definition->second->opcode
+                        == QoreIROpcode::ConstInt) {
+                const auto* constant =
+                    static_cast<const QoreIRConstInstruction*>(
+                        index_definition->second);
+                if (constant->constant.kind
+                        != QoreIRConstant::Kind::Int) {
+                    return false;
+                }
+                index = constant->constant.int_value;
+                query_kind = consumer->opcode == QoreIROpcode::ListGetInt
+                    ? QoreIRAggregateProjectionQueryKind::ListIndexInt
+                    : consumer->opcode == QoreIROpcode::ListGetFloat
+                        ? QoreIRAggregateProjectionQueryKind::ListIndexFloat
+                        : QoreIRAggregateProjectionQueryKind::ListIndexValue;
+            } else {
+                if (consumer->opcode != QoreIROpcode::ListIndexDynamic) {
+                    return false;
+                }
+                const auto* dynamic = static_cast<
+                    const QoreIRExprInstruction*>(consumer);
+                const QoreIRValueFacts* index_facts =
+                    func.getValueFacts(consumer->operands[1]);
+                if (!dynamic->list_selector_kinds.empty() || !index_facts
+                        || index_facts->assigned_state
+                            != QoreIRAssignedState::Assigned
+                        || !index_facts->never_nothing
+                        || index_facts->representation
+                            != QoreIRValueRepresentation::NativeInt) {
+                    return false;
+                }
+                guarded_index = consumer->operands[1];
+                if (dynamic->expr.hasNode()) {
+                    const auto* square = dynamic_cast<
+                        const QoreSquareBracketsOperatorNode*>(
+                            dynamic->expr.getInternalNode());
+                    negative_offsets =
+                        square && square->hasNegativeOffsets();
+                }
+                query_kind = QoreIRAggregateProjectionQueryKind::
+                    ListIndexDynamicValue;
             }
-            const auto* constant =
-                static_cast<const QoreIRConstInstruction*>(
-                    index_definition->second);
-            if (constant->constant.kind != QoreIRConstant::Kind::Int) {
-                return false;
-            }
-            index = constant->constant.int_value;
-            query_kind = consumer->opcode == QoreIROpcode::ListGetInt
-                ? QoreIRAggregateProjectionQueryKind::ListIndexInt
-                : consumer->opcode == QoreIROpcode::ListGetFloat
-                    ? QoreIRAggregateProjectionQueryKind::ListIndexFloat
-                    : QoreIRAggregateProjectionQueryKind::ListIndexValue;
         } else if (consumer->opcode
                         == QoreIROpcode::DotEvalMethodDirect
                 && consumer->operands.size() == 1) {
@@ -4199,6 +4234,19 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         } else {
             return false;
         }
+        if (guarded_index.isValid()) {
+            auto call_position = instruction_positions.find(call);
+            auto consumer_position =
+                instruction_positions.find(consumer);
+            if (call_position == instruction_positions.end()
+                    || consumer_position == instruction_positions.end()
+                    || call_position->second.first
+                        != consumer_position->second.first
+                    || call_position->second.second
+                        >= consumer_position->second.second) {
+                return false;
+            }
+        }
 
         bool has_ref_args = true;
         const AbstractQoreFunctionVariant* callee =
@@ -4229,7 +4277,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     AOTAggregateProjectionKind::BoxedFloatConstant
             || projection_kind
                 == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedBoolConstant;
+                    AOTAggregateProjectionKind::BoxedBoolConstant
+            || projection_kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::BoxedNothingConstant;
         if (projection_kind
                     != QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::Size
@@ -4280,6 +4331,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         projection.size = size;
         projection.int_constant = int_constant;
         projection.float_constant = float_constant;
+        projection.guarded_index = guarded_index;
+        projection.negative_offsets = negative_offsets;
         return true;
     };
 
@@ -4299,6 +4352,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     std::vector<VirtualizedCall> virtualized;
     auto add_virtualized_projection = [](VirtualizedCall& candidate,
             const Projection& projection) {
+        if (projection.guarded_index.isValid()) {
+            return false;
+        }
         if (projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeInt
@@ -5036,6 +5092,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             projection.int_constant;
         projection.call->aot_aggregate_projection_float =
             projection.float_constant;
+        if (projection.guarded_index.isValid()) {
+            projection.call->aot_aggregate_projection_guarded_index = true;
+            projection.call->aot_aggregate_projection_negative_offsets =
+                projection.negative_offsets;
+            projection.call->operands.push_back(projection.guarded_index);
+        }
         QoreIRValueFacts facts;
         facts.assigned_state = QoreIRAssignedState::Assigned;
         facts.never_nothing = true;
@@ -5090,6 +5152,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         AOTAggregateProjectionKind::BoxedBoolConstant) {
             facts.type_info = boolTypeInfo;
             facts.representation = QoreIRValueRepresentation::Boxed;
+        } else if (projection.kind
+                == QoreIRCallDirectInstruction::
+                    AOTAggregateProjectionKind::BoxedNothingConstant) {
+            facts.type_info = nothingTypeInfo;
+            facts.assigned_state = QoreIRAssignedState::Unassigned;
+            facts.representation = QoreIRValueRepresentation::Boxed;
+            facts.never_nothing = false;
         } else {
             facts.type_info = bigIntTypeInfo;
             facts.representation = projection.kind
@@ -5108,8 +5177,27 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 ? QoreIRValueRepresentation::NativeInt
                 : QoreIRValueRepresentation::Boxed;
         }
+        if (projection.guarded_index.isValid()) {
+            facts.assigned_state = QoreIRAssignedState::MaybeAssigned;
+            facts.representation = QoreIRValueRepresentation::Boxed;
+            facts.never_nothing = false;
+        }
         func.setValueFacts(result, facts);
     };
+    std::unordered_map<QoreIRInstruction*, Projection*> guarded_calls;
+    std::unordered_map<QoreIRInstruction*, Projection*> guarded_consumers;
+    for (Projection& projection : projections) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR guarded aggregate projection rewrite preparation")) {
+            return 0;
+        }
+        if (projection.guarded_index.isValid()) {
+            guarded_calls.emplace(projection.call, &projection);
+            guarded_consumers.emplace(projection.consumer, &projection);
+        }
+    }
+    std::unordered_map<QoreIRInstruction*,
+        std::unique_ptr<QoreIRInstruction>> moved_guarded_calls;
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;
         for (auto inst = instructions.begin(); inst != instructions.end();) {
@@ -5138,6 +5226,31 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             auto phi_replacement = phi_replacements.find(inst->get());
             if (phi_replacement != phi_replacements.end()) {
                 *inst = std::move(phi_replacement->second);
+                ++inst;
+                continue;
+            }
+            auto guarded_call = guarded_calls.find(inst->get());
+            if (guarded_call != guarded_calls.end()) {
+                (void)qore_ir_rewrite_value_operands(
+                    **inst, replacements, check_count, false);
+                moved_guarded_calls.emplace(
+                    guarded_call->second->consumer, std::move(*inst));
+                inst = instructions.erase(inst);
+                continue;
+            }
+            auto guarded_consumer = guarded_consumers.find(inst->get());
+            if (guarded_consumer != guarded_consumers.end()) {
+                auto moved =
+                    moved_guarded_calls.find(inst->get());
+                if (moved == moved_guarded_calls.end()) {
+                    ++inst;
+                    continue;
+                }
+                Projection& projection = *guarded_consumer->second;
+                *inst = std::move(moved->second);
+                moved_guarded_calls.erase(moved);
+                projection.call->result = projection.result;
+                apply_call_projection(projection, projection.result);
                 ++inst;
                 continue;
             }

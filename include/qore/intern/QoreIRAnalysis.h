@@ -152,6 +152,7 @@ enum class QoreIRAggregateProjectionQueryKind : uint8_t {
     ListIndexInt,
     ListIndexFloat,
     ListIndexValue,
+    ListIndexDynamicValue,
     HashKeyInt,
     HashKeyValue,
     AggregateSizeValue,
