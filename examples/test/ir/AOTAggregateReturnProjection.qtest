@@ -780,6 +780,44 @@ bool sub repeatedMissingLocalProjection(int value) {
         && second === NOTHING && third === NOTHING;
 }
 
+*int sub dynamicHashKeyProjection(int value, string key) {
+    return makeRow(value, value + 1, value + 2){key};
+}
+
+*int sub repeatedDynamicHashKeyProjection(int value, string key) {
+    hash<string, int> row = makeRow(value, value + 1, value + 2);
+    *int first = row{key};
+    *int second = row{key};
+    return first === second ? first : NOTHING;
+}
+
+*int sub dynamicDuplicateHashKeyProjection(
+        int first, int second, string key) {
+    return makeDuplicate(first, second){key};
+}
+
+bool sub dynamicHashDifferentKeys(string left_key, string right_key) {
+    hash<string, int> row = makeRow(4, 5, 6);
+    return row{left_key} == 4 && row{right_key} == 6;
+}
+
+bool sub optionalDynamicHashKey(int value, *string key) {
+    return makeRow(value, value + 1, value + 2){key} === NOTHING;
+}
+
+string sub setProjectionKey(reference<int> effects) {
+    effects = 2;
+    return \"middle\";
+}
+
+bool sub dynamicHashSideEffectOrder() {
+    int effects = 0;
+    *int selected = makeRow((effects = 1), 5, 6){
+        setProjectionKey(\\effects)
+    };
+    return selected == 5 && effects == 2;
+}
+
 int sub boxedListSize() {
     return makeWords(\"a\", \"b\").size();
 }
@@ -890,6 +928,15 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedPhiProjection(True, 1) == 2,
     guardedPhiProjection(False, 1) == 5,
     repeatedMissingLocalProjection(4));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    dynamicHashKeyProjection(4, \"middle\") == 5,
+    dynamicHashKeyProjection(4, \"left\") == 4,
+    dynamicHashKeyProjection(4, \"missing\") === NOTHING,
+    repeatedDynamicHashKeyProjection(4, \"right\") == 6,
+    dynamicDuplicateHashKeyProjection(4, 9, \"same\") == 9,
+    dynamicHashDifferentKeys(\"left\", \"right\"),
+    optionalDynamicHashKey(4, NOTHING),
+    dynamicHashSideEffectOrder());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -998,7 +1045,8 @@ foreach string function in (("guardedListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
         "guardedSideEffectOrder", "guardedMultiLocalProjection",
         "repeatedMissingLocalProjection", "dynamicListIndex",
-        "dynamicSignedZeroListIndex", "missingHashProjection")) {
+        "dynamicSignedZeroListIndex", "missingHashProjection",
+        "dynamicHashKeyProjection", "dynamicDuplicateHashKeyProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1091,7 +1139,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|repeatedDynamicHashKeyProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1259,6 +1307,7 @@ if (computed_row_line.find(
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True\n120\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

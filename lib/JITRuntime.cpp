@@ -264,6 +264,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
+    { "qore_rt_string_equals_cstr",
+        reinterpret_cast<void*>(&qore_rt_string_equals_cstr) },
     { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
@@ -7036,6 +7038,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t ri
     QoreStringNodeValueHelper rs(rv);
     bool result = ls->equalSoft(**rs, xsink);
     return toBits(QoreValue(result));
+}
+
+extern "C" DLLEXPORT int32_t qore_rt_string_equals_cstr(
+        uint64_t value, const char* key) {
+    QoreValue qvalue = fromBits(value);
+    if (qvalue.getType() != NT_STRING) {
+        return false;
+    }
+    QoreStringNodeValueHelper str(qvalue);
+    return str && str->equal(key) ? 1 : 0;
 }
 
 // Typed string inequality - both operands are known to be strings at compile time

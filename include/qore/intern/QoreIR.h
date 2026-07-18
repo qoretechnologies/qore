@@ -2156,10 +2156,14 @@ public:
     double aot_aggregate_projection_float = 0.0;
     //! A final projection-only operand supplies a proven native-int list index.
     bool aot_aggregate_projection_guarded_index = false;
+    //! The projection-only operand is an assigned boxed string hash key.
+    bool aot_aggregate_projection_guarded_hash_key = false;
     bool aot_aggregate_projection_negative_offsets = false;
     //! Heterogeneous native-scalar elements selected by a guarded list index.
     std::vector<AOTAggregateProjectionDescriptor>
         aot_aggregate_projection_guarded_descriptors;
+    //! Fixed hash keys corresponding to guarded projection descriptors.
+    std::vector<std::string> aot_aggregate_projection_guarded_keys;
     //!< operands[0..n-1] are the function arguments
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)

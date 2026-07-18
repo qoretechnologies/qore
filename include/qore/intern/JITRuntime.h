@@ -425,6 +425,9 @@ int64_t qore_rt_string_concat_multi_search(uint64_t* args, int nargs,
         uint64_t pattern, int32_t operation, int64_t offset,
         ExceptionSink* xsink);
 
+//! Return true when an assigned boxed string equals a constant hash key.
+int32_t qore_rt_string_equals_cstr(uint64_t value, const char* key);
+
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.
 uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,

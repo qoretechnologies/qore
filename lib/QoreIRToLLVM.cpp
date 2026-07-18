@@ -14078,23 +14078,71 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!index) {
                         return false;
                     }
-                    if (index->getType() != i64_type
-                            || nanboxed_values.count(index_value.id)) {
-                        error = "internal error: guarded AOT aggregate"
-                            " projection index is not a native integer";
-                        return false;
-                    }
-                    llvm::Value* normalized = index;
                     llvm::Value* zero =
                         llvm::ConstantInt::get(i64_type, 0);
                     llvm::Value* size = llvm::ConstantInt::get(
                         i64_type,
                         direct_inst->aot_aggregate_projection_size);
+                    llvm::Value* normalized = nullptr;
                     if (direct_inst->
-                            aot_aggregate_projection_negative_offsets) {
-                        normalized = builder->CreateSelect(
-                            builder->CreateICmpSLT(index, zero),
-                            builder->CreateAdd(index, size), index);
+                            aot_aggregate_projection_guarded_hash_key) {
+                        const auto& keys = direct_inst->
+                            aot_aggregate_projection_guarded_keys;
+                        const auto& descriptors = direct_inst->
+                            aot_aggregate_projection_guarded_descriptors;
+                        if (index->getType() != i64_type
+                                || !nanboxed_values.count(index_value.id)
+                                || keys.size() != descriptors.size()
+                                || keys.size() != static_cast<size_t>(
+                                    direct_inst->
+                                        aot_aggregate_projection_size)) {
+                            error = "internal error: guarded AOT aggregate"
+                                " hash-key projection is invalid";
+                            return false;
+                        }
+                        normalized = llvm::ConstantInt::get(
+                            i64_type, static_cast<uint64_t>(-1));
+                        auto match_helper = module.getOrInsertFunction(
+                            "qore_rt_string_equals_cstr",
+                            llvm::FunctionType::get(
+                                i32_type, {i64_type, ptr_type}, false));
+                        llvm::Value* boxed_key =
+                            boxValue(index, index_value.id);
+                        for (size_t i = 0; i < keys.size(); ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT dynamic hash projection"
+                                        " key lowering")) {
+                                error = "cancelled during AOT dynamic hash"
+                                    " projection key lowering";
+                                return false;
+                            }
+                            llvm::Value* key = builder->CreateGlobalString(
+                                keys[i], "aggregate_projection_key");
+                            llvm::Value* match = builder->CreateCall(
+                                match_helper, {boxed_key, key});
+                            llvm::Value* matches = builder->CreateICmpNE(
+                                match,
+                                llvm::ConstantInt::get(i32_type, 0));
+                            normalized = builder->CreateSelect(
+                                matches,
+                                llvm::ConstantInt::get(i64_type, i),
+                                normalized);
+                        }
+                    } else {
+                        if (index->getType() != i64_type
+                                || nanboxed_values.count(index_value.id)) {
+                            error = "internal error: guarded AOT aggregate"
+                                " projection index is not a native integer";
+                            return false;
+                        }
+                        normalized = index;
+                        if (direct_inst->
+                                aot_aggregate_projection_negative_offsets) {
+                            normalized = builder->CreateSelect(
+                                builder->CreateICmpSLT(index, zero),
+                                builder->CreateAdd(index, size), index);
+                        }
                     }
                     llvm::Value* in_range = builder->CreateAnd(
                         builder->CreateICmpSGE(normalized, zero),
@@ -14132,6 +14180,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     return boxBool(llvm::ConstantInt::get(
                                         i1_type,
                                         descriptor.int_constant != 0));
+                                case Kind::BoxedNothingConstant:
+                                    return llvm::ConstantInt::get(
+                                        i64_type, VAL_NOTHING);
                                 default:
                                     break;
                             }

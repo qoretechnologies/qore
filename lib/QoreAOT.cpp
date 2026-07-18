@@ -12647,10 +12647,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             projection,
                         std::vector<QoreIRCallDirectInstruction::
                             AOTAggregateProjectionDescriptor>&
-                                guarded_descriptors) {
+                                guarded_descriptors,
+                        std::vector<std::string>& guarded_keys) {
                     bool dynamic_index = kind
                         == QoreIRAggregateProjectionQueryKind::
                             ListIndexDynamicValue;
+                    bool dynamic_hash_key = kind
+                        == QoreIRAggregateProjectionQueryKind::
+                            HashKeyDynamicValue;
                     auto found = aot_batch_callee_map->find(callee);
                     if (found == aot_batch_callee_map->end() || !call
                             || !found->second.approach_b_eligible
@@ -13115,6 +13119,57 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     };
 
                     size_t value_index = SIZE_MAX;
+                    if (dynamic_hash_key) {
+                        if (aggregate.kind
+                                    != AOTAggregateReturnKind::FixedHash
+                                || aggregate.keys.size()
+                                    != aggregate.value_params.size()
+                                || aggregate.value_kinds.size()
+                                    != aggregate.value_params.size()
+                                || aggregate.value_ints.size()
+                                    != aggregate.value_params.size()
+                                || aggregate.value_floats.size()
+                                    != aggregate.value_params.size()) {
+                            return false;
+                        }
+                        size = static_cast<int64_t>(
+                            aggregate.value_params.size());
+                        guarded_keys = aggregate.keys;
+                        if (!size) {
+                            operand = -1;
+                            projection = QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedNothingConstant;
+                            return true;
+                        }
+                        guarded_descriptors.reserve(
+                            aggregate.value_params.size());
+                        for (size_t i = 0;
+                                i < aggregate.value_params.size(); ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT dynamic hash projection"
+                                        " descriptor analysis")) {
+                                guarded_descriptors.clear();
+                                guarded_keys.clear();
+                                return false;
+                            }
+                            ProjectionDescriptor descriptor;
+                            if (!resolve_value(i, true, descriptor)) {
+                                guarded_descriptors.clear();
+                                guarded_keys.clear();
+                                return false;
+                            }
+                            guarded_descriptors.push_back(descriptor);
+                        }
+                        const ProjectionDescriptor& first =
+                            guarded_descriptors.front();
+                        operand = first.operand;
+                        int_constant = first.int_constant;
+                        float_constant = first.float_constant;
+                        projection = first.kind;
+                        return true;
+                    }
                     if (kind
                                 == QoreIRAggregateProjectionQueryKind::HashKeyInt
                             || kind

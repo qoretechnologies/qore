@@ -155,6 +155,7 @@ enum class QoreIRAggregateProjectionQueryKind : uint8_t {
     ListIndexDynamicValue,
     HashKeyInt,
     HashKeyValue,
+    HashKeyDynamicValue,
     AggregateSizeValue,
     AggregateExistsValue,
     AggregateValValue,
@@ -167,7 +168,7 @@ using QoreIRAggregateProjectionQuery = std::function<bool(
     int16_t&, int64_t&, int64_t&, double&,
     QoreIRCallDirectInstruction::AOTAggregateProjectionKind&,
     std::vector<QoreIRCallDirectInstruction::
-        AOTAggregateProjectionDescriptor>&)>;
+        AOTAggregateProjectionDescriptor>&, std::vector<std::string>&)>;
 
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place

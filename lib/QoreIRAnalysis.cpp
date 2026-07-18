@@ -4100,9 +4100,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         int64_t int_constant = 0;
         double float_constant = 0.0;
         QoreIRValue guarded_index;
+        bool guarded_hash_key = false;
         bool negative_offsets = false;
         std::vector<QoreIRCallDirectInstruction::
             AOTAggregateProjectionDescriptor> guarded_descriptors;
+        std::vector<std::string> guarded_keys;
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
     };
@@ -4121,6 +4123,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         int64_t index = 0;
         std::string key;
         QoreIRValue guarded_index;
+        bool guarded_hash_key = false;
         bool negative_offsets = false;
         if (consumer->opcode == QoreIROpcode::ListSize
                 && consumer->operands.size() == 1) {
@@ -4252,6 +4255,24 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             }
             query_kind = QoreIRAggregateProjectionQueryKind::HashKeyValue;
             key = access->key_name;
+        } else if (consumer->opcode == QoreIROpcode::HashDerefDynamic
+                && consumer->operands.size() == 2) {
+            const QoreIRValueFacts* key_facts =
+                func.getValueFacts(consumer->operands[1]);
+            if (!key_facts
+                    || key_facts->assigned_state
+                        != QoreIRAssignedState::Assigned
+                    || !key_facts->never_nothing
+                    || key_facts->representation
+                        != QoreIRValueRepresentation::Boxed
+                    || QoreTypeInfo::parseReturns(
+                        key_facts->type_info, NT_STRING) != QTI_IDENT) {
+                return false;
+            }
+            guarded_index = consumer->operands[1];
+            guarded_hash_key = true;
+            query_kind = QoreIRAggregateProjectionQueryKind::
+                HashKeyDynamicValue;
         } else {
             return false;
         }
@@ -4278,10 +4299,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         double float_constant = 0.0;
         std::vector<QoreIRCallDirectInstruction::
             AOTAggregateProjectionDescriptor> guarded_descriptors;
+        std::vector<std::string> guarded_keys;
         if (!callee || has_ref_args
                 || !get_projection(callee, call, query_kind, index, key,
                     operand, size, int_constant, float_constant,
-                    projection_kind, guarded_descriptors)
+                    projection_kind, guarded_descriptors, guarded_keys)
                 || projection_kind
                     == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None) {
             return false;
@@ -4470,6 +4492,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                             AOTAggregateProjectionKind::BoxedBoolConstant
                     && descriptor.kind
                         != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedNothingConstant
+                    && descriptor.kind
+                        != QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::BoxedIntAddConstant
                     && descriptor.kind
                         != QoreIRCallDirectInstruction::
@@ -4484,6 +4510,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         guarded_descriptors.size()))) {
             return false;
         }
+        if (guarded_hash_key
+                && (guarded_keys.size() != guarded_descriptors.size()
+                    || size != static_cast<int64_t>(
+                        guarded_keys.size()))) {
+            return false;
+        }
         projection.call = call;
         projection.consumer = consumer;
         projection.kind = projection_kind;
@@ -4493,8 +4525,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         projection.int_constant = int_constant;
         projection.float_constant = float_constant;
         projection.guarded_index = guarded_index;
+        projection.guarded_hash_key = guarded_hash_key;
         projection.negative_offsets = negative_offsets;
         projection.guarded_descriptors = std::move(guarded_descriptors);
+        projection.guarded_keys = std::move(guarded_keys);
         return true;
     };
 
@@ -4598,9 +4632,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 || lhs.int_constant != rhs.int_constant
                 || std::memcmp(&lhs.float_constant, &rhs.float_constant,
                     sizeof(lhs.float_constant))
+                || lhs.guarded_hash_key != rhs.guarded_hash_key
                 || lhs.negative_offsets != rhs.negative_offsets
                 || lhs.guarded_descriptors.size()
-                    != rhs.guarded_descriptors.size()) {
+                    != rhs.guarded_descriptors.size()
+                || lhs.guarded_keys != rhs.guarded_keys) {
             return false;
         }
         for (size_t i = 0; i < lhs.guarded_descriptors.size(); ++i) {
@@ -5385,11 +5421,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             QoreIRCallDirectInstruction::AOTAggregateProjectionKind::None;
         std::vector<QoreIRCallDirectInstruction::
             AOTAggregateProjectionDescriptor> guarded_descriptors;
+        std::vector<std::string> guarded_keys;
         if (!callee || has_ref_args
                 || !get_projection(callee, call,
                     QoreIRAggregateProjectionQueryKind::DiscardResult,
                     0, std::string(), operand, size, int_constant,
-                    float_constant, projection, guarded_descriptors)) {
+                    float_constant, projection, guarded_descriptors,
+                    guarded_keys)) {
             continue;
         }
         eliminated.insert(call);
@@ -5407,8 +5445,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             projection.float_constant;
         projection.call->aot_aggregate_projection_guarded_descriptors =
             projection.guarded_descriptors;
+        projection.call->aot_aggregate_projection_guarded_keys =
+            projection.guarded_keys;
         if (projection.guarded_index.isValid()) {
             projection.call->aot_aggregate_projection_guarded_index = true;
+            projection.call->aot_aggregate_projection_guarded_hash_key =
+                projection.guarded_hash_key;
             projection.call->aot_aggregate_projection_negative_offsets =
                 projection.negative_offsets;
             projection.call->operands.push_back(projection.guarded_index);
