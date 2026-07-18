@@ -27,6 +27,14 @@ list<int> sub makeValues(int left, int middle, int right) {
     return (left, middle, right);
 }
 
+int guarded_reference_index = 0;
+
+list<int> sub makeValuesAndSetGuard(
+        int left, int middle, int right) {
+    guarded_reference_index = 1;
+    return (left, middle, right);
+}
+
 list<int> sub repeatValue(int value) {
     return (value, value, value);
 }
@@ -752,6 +760,41 @@ bool sub guardedDifferentIndexProjection(int left, int right) {
     return first === second ? first : NOTHING;
 }
 
+*int sub guardedDirectPhiProjection(bool left_branch, int index) {
+    return (left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6))[index];
+}
+
+*int sub guardedMutableDirectPhiProjection(
+        bool left_branch, int index) {
+    ++index;
+    return (left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6))[index];
+}
+
+bool sub guardedDirectPhiSideEffectOrder(bool left_branch) {
+    int effects = 0;
+    *int selected = (left_branch
+        ? makeValues((effects = 1), 2, 3)
+        : makeValues((effects = 1), 5, 6))[(effects = 2) - 1];
+    return selected == (left_branch ? 2 : 5) && effects == 2;
+}
+
+*int sub guardedReferenceDirectPhiProjection(
+        bool left_branch, reference<int> index) {
+    return (left_branch
+        ? makeValuesAndSetGuard(1, 2, 3)
+        : makeValuesAndSetGuard(4, 5, 6))[index];
+}
+
+bool sub guardedReferenceDirectPhiOrder(bool left_branch) {
+    guarded_reference_index = 0;
+    *int selected = guardedReferenceDirectPhiProjection(
+        left_branch, \\guarded_reference_index);
+    return selected == (left_branch ? 2 : 5)
+        && guarded_reference_index == 1;
+}
+
 bool sub guardedSideEffectOrder() {
     int effects = 0;
     *int selected = repeatValue((effects = 1))[(effects = 2) - 1];
@@ -928,6 +971,19 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedPhiProjection(True, 1) == 2,
     guardedPhiProjection(False, 1) == 5,
     repeatedMissingLocalProjection(4));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedDirectPhiProjection(True, 1) == 2,
+    guardedDirectPhiProjection(False, 1) == 5,
+    guardedDirectPhiProjection(True, -1) == 3,
+    guardedDirectPhiProjection(False, -1) == 6,
+    guardedDirectPhiProjection(True, 3) === NOTHING,
+    guardedDirectPhiProjection(False, -4) === NOTHING,
+    guardedMutableDirectPhiProjection(True, 0) == 2,
+    guardedMutableDirectPhiProjection(False, 0) == 5,
+    guardedDirectPhiSideEffectOrder(True)
+        && guardedDirectPhiSideEffectOrder(False),
+    guardedReferenceDirectPhiOrder(True)
+        && guardedReferenceDirectPhiOrder(False));
 printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     dynamicHashKeyProjection(4, \"middle\") == 5,
     dynamicHashKeyProjection(4, \"left\") == 4,
@@ -1044,6 +1100,7 @@ foreach string function in (("guardedListIndex",
         "guardedComputedListIndex", "guardedFloatListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
         "guardedSideEffectOrder", "guardedMultiLocalProjection",
+        "guardedDirectPhiProjection",
         "repeatedMissingLocalProjection", "dynamicListIndex",
         "dynamicSignedZeroListIndex", "missingHashProjection",
         "dynamicHashKeyProjection", "repeatedDynamicHashKeyProjection",
@@ -1140,7 +1197,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1309,6 +1366,7 @@ if (computed_row_line.find(
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True\n120\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

@@ -4101,6 +4101,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         double float_constant = 0.0;
         QoreIRValue guarded_index;
         bool guarded_hash_key = false;
+        bool clone_guarded_index = false;
         bool negative_offsets = false;
         std::vector<QoreIRCallDirectInstruction::
             AOTAggregateProjectionDescriptor> guarded_descriptors;
@@ -4110,7 +4111,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     };
     auto analyze_projection = [&](QoreIRCallDirectInstruction* call,
             QoreIRValue base, QoreIRInstruction* consumer,
-            Projection& projection) {
+            Projection& projection,
+            bool allow_cross_block_parameter_guard = false) {
         if (!call || !consumer || consumer->exception_target
                 || !consumer->result.isValid() || consumer->operands.empty()
                 || consumer->operands[0].id != base.id) {
@@ -4124,6 +4126,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::string key;
         QoreIRValue guarded_index;
         bool guarded_hash_key = false;
+        bool clone_guarded_index = false;
         bool negative_offsets = false;
         if (consumer->opcode == QoreIROpcode::ListSize
                 && consumer->operands.size() == 1) {
@@ -4281,12 +4284,33 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             auto consumer_position =
                 instruction_positions.find(consumer);
             if (call_position == instruction_positions.end()
-                    || consumer_position == instruction_positions.end()
-                    || call_position->second.first
-                        != consumer_position->second.first
-                    || call_position->second.second
-                        >= consumer_position->second.second) {
+                    || consumer_position == instruction_positions.end()) {
                 return false;
+            }
+            bool same_block = call_position->second.first
+                    == consumer_position->second.first
+                && call_position->second.second
+                    < consumer_position->second.second;
+            if (!same_block) {
+                auto selector_definition =
+                    definitions.find(guarded_index.id);
+                const QoreIRLocalInstruction* selector_load =
+                    selector_definition != definitions.end()
+                        && selector_definition->second->opcode
+                            == QoreIROpcode::LoadLocal
+                    ? static_cast<const QoreIRLocalInstruction*>(
+                        selector_definition->second)
+                    : nullptr;
+                if (!allow_cross_block_parameter_guard
+                        || guarded_hash_key
+                        || !selector_load
+                        || selector_load->is_ref
+                        || selector_load->is_closure
+                        || !immutable_parameters.count(
+                            selector_load->local)) {
+                    return false;
+                }
+                clone_guarded_index = true;
             }
         }
 
@@ -4526,6 +4550,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         projection.float_constant = float_constant;
         projection.guarded_index = guarded_index;
         projection.guarded_hash_key = guarded_hash_key;
+        projection.clone_guarded_index = clone_guarded_index;
         projection.negative_offsets = negative_offsets;
         projection.guarded_descriptors = std::move(guarded_descriptors);
         projection.guarded_keys = std::move(guarded_keys);
@@ -5018,7 +5043,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         || call_uses->second.size() != 1
                         || call_uses->second.front().inst != phi
                         || !analyze_projection(call, phi->result, consumer,
-                            projection)) {
+                            projection, true)) {
                     valid = false;
                     break;
                 }
@@ -5344,6 +5369,13 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     std::unordered_map<QoreIRInstruction*,
         std::unique_ptr<QoreIRPhiInstruction>> phi_replacements;
     std::unordered_map<QoreIRInstruction*, Projection*> projected_phi_calls;
+    struct GuardedPhiIndexCloneRequest {
+        Projection* projection = nullptr;
+        const QoreIRLocalInstruction* source = nullptr;
+        QoreIRValueFacts facts;
+    };
+    std::vector<GuardedPhiIndexCloneRequest> guarded_phi_index_requests;
+    std::unordered_set<QoreIRInstruction*> guarded_phi_index_calls;
     for (VirtualizedPhi& candidate : virtualized_phis) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR aggregate phi rewrite preparation")) {
@@ -5370,9 +5402,53 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         for (Projection& projection : candidate.projected_calls) {
             projected_phi_calls.emplace(projection.call, &projection);
+            if (!projection.clone_guarded_index) {
+                continue;
+            }
+            auto definition = definitions.find(
+                projection.guarded_index.id);
+            const QoreIRValueFacts* facts =
+                func.getValueFacts(projection.guarded_index);
+            if (definition == definitions.end()
+                    || definition->second->opcode
+                        != QoreIROpcode::LoadLocal
+                    || !facts
+                    || !guarded_phi_index_calls.insert(
+                        projection.call).second) {
+                return 0;
+            }
+            guarded_phi_index_requests.push_back({
+                &projection,
+                static_cast<const QoreIRLocalInstruction*>(
+                    definition->second),
+                *facts,
+            });
         }
         phi_replacements.emplace(candidate.phi,
             std::move(candidate.scalar_phi));
+    }
+    std::unordered_map<QoreIRInstruction*,
+        std::unique_ptr<QoreIRInstruction>> guarded_phi_index_clones;
+    for (const GuardedPhiIndexCloneRequest& request :
+            guarded_phi_index_requests) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR guarded phi index clone preparation")) {
+            return 0;
+        }
+        auto clone = std::make_unique<QoreIRLocalInstruction>(
+            QoreIROpcode::LoadLocal, request.source->local,
+            request.source->auto_ref);
+        clone->loc = request.source->loc;
+        clone->cached_start_line = request.source->cached_start_line;
+        clone->temp_scope_id = request.source->temp_scope_id;
+        clone->is_closure = request.source->is_closure;
+        clone->is_ref = request.source->is_ref;
+        clone->slot_id = request.source->slot_id;
+        clone->result = func.createValue();
+        func.setValueFacts(clone->result, request.facts);
+        request.projection->guarded_index = clone->result;
+        guarded_phi_index_clones.emplace(
+            request.projection->call, std::move(clone));
     }
     std::vector<QoreIRCallDirectInstruction*> discard_worklist;
     std::unordered_set<QoreIRInstruction*> queued_discards;
@@ -5663,6 +5739,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (consumers.count(inst->get()) || eliminated.count(inst->get())) {
                 inst = instructions.erase(inst);
                 continue;
+            }
+            auto guarded_phi_index =
+                guarded_phi_index_clones.find(inst->get());
+            if (guarded_phi_index != guarded_phi_index_clones.end()) {
+                size_t offset = static_cast<size_t>(
+                    std::distance(instructions.begin(), inst));
+                instructions.insert(inst,
+                    std::move(guarded_phi_index->second));
+                inst = instructions.begin()
+                    + static_cast<std::ptrdiff_t>(offset + 1);
             }
             (void)qore_ir_rewrite_value_operands(
                 **inst, replacements, check_count, false);
