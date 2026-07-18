@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+list<int> sub emptyValues() {
+    return ();
+}
+
+hash<string, int> sub emptyRow() {
+    return {};
+}
+
+list<int> sub constantValues() {
+    return (3, 5, 7);
+}
+
+hash<string, int> sub constantRow() {
+    return {
+        "left": 11,
+        "right": 13,
+    };
+}
+
+int sub consumerKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += emptyValues().size();
+        checksum += emptyValues().empty() ? 1 : 0;
+        checksum += emptyValues().val() ? 0 : 1;
+        checksum += elements emptyRow();
+        checksum += exists emptyRow() ? 0 : 1;
+        checksum += constantValues()[1];
+        checksum += constantRow().right;
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 2000000;
+printf("%d\n", consumerKernel(rounds));

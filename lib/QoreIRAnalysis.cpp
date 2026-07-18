@@ -4170,7 +4170,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             } else if (direct->intrinsic == QoreIRIntrinsic::Val) {
                 query_kind =
                     QoreIRAggregateProjectionQueryKind::
-                        AggregateExistsValue;
+                        AggregateValValue;
             } else {
                 return false;
             }

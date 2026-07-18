@@ -5904,7 +5904,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
 static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         const UserSignature& sig, AOTAggregateReturnInfo& result) {
     if (std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")
-            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
             || func.blocks.front()->instructions.size()
                 > sig.numParams() + 104) {
@@ -5938,6 +5938,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         double float_value = 0.0;
     };
     std::unordered_map<uint32_t, AggregateValue> values;
+    std::unordered_map<uint32_t, std::string> string_constants;
     const QoreIRInstruction* aggregate = nullptr;
     const QoreIRReturnInstruction* ret = nullptr;
     size_t instruction_count = 0;
@@ -6000,11 +6001,28 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 values.emplace(inst->result.id, value);
                 break;
             }
+            case QoreIROpcode::ConstString: {
+                if (!inst->result.isValid()) {
+                    return false;
+                }
+                const auto* constant =
+                    static_cast<const QoreIRConstInstruction*>(inst);
+                if (constant->constant.kind
+                        != QoreIRConstant::Kind::String) {
+                    return false;
+                }
+                string_constants.emplace(inst->result.id,
+                    constant->constant.string_value);
+                break;
+            }
             case QoreIROpcode::MakeList:
+            case QoreIROpcode::MakeHash:
             case QoreIROpcode::MakeHashConstKeys:
                 if (aggregate || !inst->result.isValid()
-                        || inst->operands.empty()
-                        || inst->operands.size() > 100) {
+                        || (inst->opcode == QoreIROpcode::MakeHash
+                            ? inst->operands.size() > 200
+                                || inst->operands.size() % 2
+                            : inst->operands.size() > 100)) {
                     return false;
                 }
                 aggregate = inst;
@@ -6021,11 +6039,18 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         return false;
     }
 
-    const QoreTypeInfo* aggregate_type =
-        aggregate->opcode == QoreIROpcode::MakeList
-        ? static_cast<const QoreIRMakeListInstruction*>(aggregate)->typeInfo
-        : static_cast<const QoreIRMakeHashConstKeysInstruction*>(
-            aggregate)->typeInfo;
+    const QoreTypeInfo* aggregate_type;
+    if (aggregate->opcode == QoreIROpcode::MakeList) {
+        aggregate_type =
+            static_cast<const QoreIRMakeListInstruction*>(aggregate)->typeInfo;
+    } else if (aggregate->opcode == QoreIROpcode::MakeHashConstKeys) {
+        aggregate_type =
+            static_cast<const QoreIRMakeHashConstKeysInstruction*>(
+                aggregate)->typeInfo;
+    } else {
+        aggregate_type =
+            static_cast<const QoreIRMakeHashInstruction*>(aggregate)->typeInfo;
+    }
     if (!aggregate_type) {
         aggregate_type = sig.getReturnTypeInfo();
     }
@@ -6040,11 +6065,26 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
             : element_type == boolTypeInfo
                 ? BatchCalleeParamKind::NativeBool
                 : BatchCalleeParamKind::Boxed;
-    result.value_params.reserve(aggregate->operands.size());
-    result.value_kinds.reserve(aggregate->operands.size());
-    result.value_ints.reserve(aggregate->operands.size());
-    result.value_floats.reserve(aggregate->operands.size());
-    for (QoreIRValue value : aggregate->operands) {
+    std::vector<QoreIRValue> aggregate_values;
+    if (aggregate->opcode == QoreIROpcode::MakeHash) {
+        aggregate_values.reserve(aggregate->operands.size() / 2);
+        result.keys.reserve(aggregate->operands.size() / 2);
+        for (size_t i = 0; i < aggregate->operands.size(); i += 2) {
+            auto key = string_constants.find(aggregate->operands[i].id);
+            if (key == string_constants.end()) {
+                return false;
+            }
+            result.keys.push_back(key->second);
+            aggregate_values.push_back(aggregate->operands[i + 1]);
+        }
+    } else {
+        aggregate_values = aggregate->operands;
+    }
+    result.value_params.reserve(aggregate_values.size());
+    result.value_kinds.reserve(aggregate_values.size());
+    result.value_ints.reserve(aggregate_values.size());
+    result.value_floats.reserve(aggregate_values.size());
+    for (QoreIRValue value : aggregate_values) {
         auto source = values.find(value.id);
         if (source == values.end()) {
             return false;
@@ -6082,13 +6122,15 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         result.kind = AOTAggregateReturnKind::FixedList;
         return true;
     }
-    const auto* hash =
-        static_cast<const QoreIRMakeHashConstKeysInstruction*>(aggregate);
-    if (hash->keys.size() != result.value_params.size()) {
-        return false;
+    if (aggregate->opcode == QoreIROpcode::MakeHashConstKeys) {
+        const auto* hash =
+            static_cast<const QoreIRMakeHashConstKeysInstruction*>(aggregate);
+        if (hash->keys.size() != result.value_params.size()) {
+            return false;
+        }
+        result.keys = hash->keys;
     }
     result.kind = AOTAggregateReturnKind::FixedHash;
-    result.keys = hash->keys;
     return true;
 }
 
@@ -11940,6 +11982,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         AggregateExistsValue
                                 || kind
                                     == QoreIRAggregateProjectionQueryKind::
+                                        AggregateValValue
+                                || kind
+                                    == QoreIRAggregateProjectionQueryKind::
                                         AggregateEmptyValue)) {
                         if (aggregate.kind
                                 != AOTAggregateReturnKind::FixedHash) {
@@ -11982,20 +12027,28 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     AggregateExistsValue
                             || kind
                                 == QoreIRAggregateProjectionQueryKind::
+                                    AggregateValValue
+                            || kind
+                                == QoreIRAggregateProjectionQueryKind::
                                     AggregateEmptyValue) {
                         if ((aggregate.kind
                                     != AOTAggregateReturnKind::FixedList
                                 && aggregate.kind
-                                    != AOTAggregateReturnKind::FixedHash)
-                                || aggregate.value_params.empty()) {
+                                    != AOTAggregateReturnKind::FixedHash)) {
                             return false;
                         }
                         operand = -1;
                         size = 0;
+                        bool nonempty =
+                            !aggregate.value_params.empty();
                         int_constant = kind
                                 == QoreIRAggregateProjectionQueryKind::
                                     AggregateExistsValue
-                            ? 1 : 0;
+                            ? 1
+                            : kind
+                                    == QoreIRAggregateProjectionQueryKind::
+                                        AggregateValValue
+                                ? nonempty : !nonempty;
                         projection = QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::BoxedBoolConstant;
                         return true;

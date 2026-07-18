@@ -77,6 +77,25 @@ list<bool> sub makeBoolConstant(bool value) {
     return (value, True);
 }
 
+list<int> sub makeEmptyValues() {
+    return ();
+}
+
+hash<string, int> sub makeEmptyRow() {
+    return {};
+}
+
+list<int> sub makeConstantValues() {
+    return (3, 5, 7);
+}
+
+hash<string, int> sub makeConstantRow() {
+    return {
+        \"left\": 11,
+        \"right\": 13,
+    };
+}
+
 hash<string, int> sub remapRow(int left, int middle, int right) {
     return makeRow(right, left, middle);
 }
@@ -500,6 +519,18 @@ bool sub optionalListInput(*int value) {
     }
 }
 
+int sub emptyZeroArgProjections() {
+    int checksum = 0;
+    checksum += makeEmptyValues().size();
+    checksum += makeEmptyValues().empty() ? 1 : 100;
+    checksum += makeEmptyValues().val() ? 100 : 1;
+    checksum += elements makeEmptyRow();
+    checksum += exists makeEmptyRow() ? 100 : 1;
+    checksum += makeConstantValues()[1];
+    checksum += makeConstantRow().right;
+    return checksum;
+}
+
 printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y:%y:%d:%d:%d:%d:%y:%y:%s:%s:%s:%d:%d:%s:%d:%d:%s:%d:%d:%d:%s:%d:%d:%d:%d:%y:%y:%d:%d:%d:%y:%y:%d:%d:%y:%d:%s:%s:%y:%d:%d:%d:%d:%d:%y:%y:%d:%y:%y:%s\\n\",
     freshHashProjection(), sideEffectProjection(), freshListSize(),
     freshListProjection(), freshFloatProjection(), duplicateKeyProjection(),
@@ -533,6 +564,7 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     hashEmptyProjection(), hashValProjection(), boxedIntLocalProjection(),
     boxedFloatLocalProjection(), boxedBoolLocalProjection(),
     hashSizeOverride());
+printf(\"%d\\n\", emptyZeroArgProjections());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -568,21 +600,27 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
         "singleLocalProjection", "boxedIntLocalProjection",
         "boxedFloatLocalProjection", "boxedBoolLocalProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing aggregate-return projection for %s:\n%s",
             function, enabled_compile);
         exit(2);
     }
 }
-if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection:.*aggregate-projections=1/) {
+if (enabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: emptyZeroArgProjections[^:]*:.*aggregate-projections=7/) {
+    printf("missing empty or zero-argument aggregate projections:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /IR-OPT-AOT-EFFECTS: crossBlockProjection[^:]*:.*aggregate-projections=1/) {
     printf("missing cross-block aggregate-return projections:\n%s",
         enabled_compile);
     exit(2);
 }
 foreach string function in (("phiProjection", "phiSideEffectProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing aggregate phi projection for %s:\n%s",
             function, enabled_compile);
@@ -592,7 +630,7 @@ foreach string function in (("phiProjection", "phiSideEffectProjection")) {
 foreach string function in (("boxedPhiProjection",
         "boxedConstantPhiProjection", "boxedSizePhiProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing boxed aggregate phi projection for %s:\n%s",
             function, enabled_compile);
@@ -602,7 +640,7 @@ foreach string function in (("boxedPhiProjection",
 foreach string function in (
         ("boxedMultiListProjection", "boxedMultiHashProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing multi-use boxed aggregate projection for %s:\n%s",
             function, enabled_compile);
@@ -613,7 +651,7 @@ foreach string function in (("wrapperProjection",
         "wrapperConstantProjection", "wrapperBoxedProjection",
         "wrapperListSize")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing composed aggregate projection for %s:\n%s",
             function, enabled_compile);
@@ -625,7 +663,7 @@ foreach string function in (("nestedNativeProjection",
         "nestedBoxedProjection", "nestedLocalProjection",
         "nestedPhiProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing nested aggregate projection for %s:\n%s",
             function, enabled_compile);
@@ -638,7 +676,7 @@ foreach string function in (("listFirstProjection", "listLastProjection",
         "duplicateHashElementsProjection",
         "listExistsProjection", "hashExistsProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing aggregate consumer projection for %s:\n%s",
             function, enabled_compile);
@@ -648,7 +686,7 @@ foreach string function in (("listFirstProjection", "listLastProjection",
 foreach string function in (("hashSizeProjection", "hashEmptyProjection",
         "hashValProjection")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s:.*aggregate-projections=1",
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
         printf("missing hash pseudo consumer projection for %s:\n%s",
             function, enabled_compile);
@@ -656,13 +694,13 @@ foreach string function in (("hashSizeProjection", "hashEmptyProjection",
     }
 }
 if (enabled_compile
-        !~ /IR-OPT-AOT-EFFECTS: aggregateConsumerSideEffects:.*aggregate-projections=1/) {
+        !~ /IR-OPT-AOT-EFFECTS: aggregateConsumerSideEffects[^:]*:.*aggregate-projections=1/) {
     printf("missing side-effecting aggregate consumer projection:\n%s",
         enabled_compile);
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|nonConsumerComputedProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput|hashSizeOverride):.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|nonNestedComputedProjection|nonConsumerComputedProjection|optionalAggregateConsumer|dynamicListIndex|optionalInput|optionalListInput|hashSizeOverride)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -688,6 +726,10 @@ string float_constant_line;
 string forward_row_line;
 string tagged_wrapper_line;
 string word_wrapper_line;
+string empty_values_line;
+string empty_row_line;
+string constant_values_line;
+string constant_row_line;
 foreach string line in (dump.split("\n")) {
     if (line.find("makeRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
@@ -713,6 +755,18 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("wordWrapper(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         word_wrapper_line = line;
+    } else if (line.find("makeEmptyValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        empty_values_line = line;
+    } else if (line.find("makeEmptyRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        empty_row_line = line;
+    } else if (line.find("makeConstantValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        constant_values_line = line;
+    } else if (line.find("makeConstantRow(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        constant_row_line = line;
     }
 }
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -736,12 +790,19 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || tagged_wrapper_line.find("\"aggregate_return_value_params\": [0, -1, -1]") == -1
         || tagged_wrapper_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
         || word_wrapper_line.find("\"aggregate_return_kind\": 1") == -1
-        || word_wrapper_line.find("\"aggregate_return_value_params\": [1, 0]") == -1) {
+        || word_wrapper_line.find("\"aggregate_return_value_params\": [1, 0]") == -1
+        || empty_values_line.find("\"aggregate_return_kind\": 1") == -1
+        || empty_values_line.find("\"aggregate_return_value_params\": []") == -1
+        || empty_row_line.find("\"aggregate_return_kind\": 2") == -1
+        || empty_row_line.find("\"aggregate_return_keys\": []") == -1
+        || constant_values_line.find("\"aggregate_return_value_ints\": [3, 5, 7]") == -1
+        || constant_row_line.find("\"aggregate_return_value_ints\": [11, 13]") == -1
+        || constant_row_line.find("\"aggregate_return_keys\": [\"left\", \"right\"]") == -1) {
     printf("missing aggregate-return symbol metadata:\n%s", dump);
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:callref-size\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:callref-size\n120\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

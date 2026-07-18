@@ -156,6 +156,7 @@ enum class QoreIRAggregateProjectionQueryKind : uint8_t {
     HashKeyValue,
     AggregateSizeValue,
     AggregateExistsValue,
+    AggregateValValue,
     AggregateEmptyValue,
 };
 
