@@ -2352,20 +2352,32 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.4
     */
     private stopAsyncIo() {
+        # stopAsyncIo() can run concurrently: handleAsyncShutdown() calls it
+        # from a delivery-task thread (deliberately without the lock — see the
+        # lock-ordering notes there), while disconnectUnlocked() calls it with
+        # the lock held.  Take each resource member atomically (object member
+        # removal is atomic) so exactly one caller acts on each resource;
+        # check-then-use on the members raced with the other caller's `remove`
+        # (observed as PSEUDO-METHOD-DOES-NOT-EXIST <nothing>::clearCallbacks()
+        # in the GraphQLHandler subscription robustness test).
+        *object op = remove poll_op;
+
         # Clear the delivery callback BEFORE cancelling — cancelByOwner dispatches
         # onComplete asynchronously to a worker, which would reference a destroyed
         # closure if we don't clear it first
-        if (poll_op) {
-            poll_op.clearCallbacks();
-            # Capture the close cause before releasing poll_op so closingConnection()
-            # can surface it to observers on EVENT_WS_CLOSED.
+        if (op) {
+            op.clearCallbacks();
+            # Capture the close cause before releasing the poll op so
+            # closingConnection() can surface it to observers on EVENT_WS_CLOSED.
             try {
-                string cause = call_object_method(poll_op, "getCloseCause");
+                string cause = call_object_method(op, "getCloseCause");
                 if (cause.val()) {
                     async_close_cause = cause;
                 }
             } catch () {}
         }
+        # async_owner is not cleared here, so both concurrent callers may cancel;
+        # cancelByOwner() is idempotent
         if (async_owner) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =
@@ -2375,17 +2387,16 @@ ws.setEventQueue();
                 logDebug("async I/O cancel error: %s: %s", ex.err, ex.desc);
             }
         }
-        remove poll_op;
 
         # Clean up HttpClientIo resources — shut down the connection manager
         # so its pooled connections are removed from the async I/O controller's
         # cache, preventing cache leaks across test runs
-        if (hcio_mgr) {
+        *HttpClientIo::HttpClientConnectionManager mgr = remove hcio_mgr;
+        if (mgr) {
             try {
-                hcio_mgr.closeAll();
+                mgr.closeAll();
             } catch () {
             }
-            remove hcio_mgr;
         }
         remove hcio_stream;
     }
