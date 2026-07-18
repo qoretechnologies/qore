@@ -722,6 +722,36 @@ string sub dynamicMixedListIndex(int index) {
     return repeatConstant()[index];
 }
 
+*int sub guardedMultiLocalProjection(int index) {
+    list<int> values = makeValues(4, 5, 6);
+    *int first = values[index];
+    *int second = values[index];
+    *int third = values[index];
+    return first === second && second === third ? first : NOTHING;
+}
+
+bool sub guardedMutableLocalProjection() {
+    list<int> values = makeValues(4, 5, 6);
+    int index = 0;
+    *int first = values[index];
+    ++index;
+    *int second = values[index];
+    return first == 4 && second == 5;
+}
+
+bool sub guardedDifferentIndexProjection(int left, int right) {
+    list<int> values = makeValues(4, 5, 6);
+    return values[left] == 4 && values[right] == 6;
+}
+
+*int sub guardedPhiProjection(bool left_branch, int index) {
+    list<int> values = left_branch
+        ? makeValues(1, 2, 3) : makeValues(4, 5, 6);
+    *int first = values[index];
+    *int second = values[index];
+    return first === second ? first : NOTHING;
+}
+
 bool sub guardedSideEffectOrder() {
     int effects = 0;
     *int selected = repeatValue((effects = 1))[(effects = 2) - 1];
@@ -842,6 +872,14 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedUnusedBoxedListIndex(8, \"unused\", 1) == 8,
     dynamicSignedZeroListIndex(1) == \"0.0\",
     missingHashProjection(4));
+printf(\"%y:%y:%y:%y:%y:%y:%y\\n\",
+    guardedMultiLocalProjection(1) == 5,
+    guardedMultiLocalProjection(-1) == 6,
+    guardedMultiLocalProjection(3) === NOTHING,
+    guardedMutableLocalProjection(),
+    guardedDifferentIndexProjection(0, 2),
+    guardedPhiProjection(True, 1) == 2,
+    guardedPhiProjection(False, 1) == 5);
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -948,7 +986,8 @@ if (enabled_compile
 foreach string function in (("guardedListIndex",
         "guardedComputedListIndex", "guardedFloatListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
-        "guardedSideEffectOrder", "dynamicListIndex",
+        "guardedSideEffectOrder", "guardedMultiLocalProjection",
+        "dynamicListIndex",
         "dynamicSignedZeroListIndex", "missingHashProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
@@ -1042,7 +1081,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1210,6 +1249,7 @@ if (computed_row_line.find(
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True\n120\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
