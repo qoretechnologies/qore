@@ -1183,6 +1183,32 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return mgr;
         }
 
+        #! Starts a persistent (connection-scoped) session that pins one connection
+        /** Leases an exclusive connection from the pool and returns a
+            @ref RestClientIo::RestPersistentSession handle.  Requests run inside
+            @ref RestPersistentSession::pinned() ride that one leased connection, so a
+            connection-scoped persistent transaction (HTTP/1.1) stays on a single socket instead
+            of scattering across pooled connections — required because the server binds the
+            transaction to one physical connection and reads subsequent requests off that socket.
+
+            The handle must be closed with @ref RestPersistentSession::close() (or
+            @ref RestPersistentSession::abort()); its destructor closes it defensively.  The
+            leased connection is excluded from the pool reuse rotation, so other traffic on this
+            client keeps using separate pooled connections concurrently.
+
+            @param non_blocking retained plumbing only (see @ref HttpClientConnectionManager::acquireStream())
+
+            @return a persistent-session handle bound to one leased connection
+
+            @note the connection-scoped persistent protocol is HTTP/1.1 only; on HTTP/2 / HTTP/3
+            use a single bidirectional stream instead
+
+            @since RestClientIo 1.0
+        */
+        RestPersistentSession startPersistentSession(*bool non_blocking) {
+            return new RestPersistentSession(mgr, mgr.leaseConnection(getUrl(), non_blocking));
+        }
+
         #! Returns a copy of the constructor options this instance was built with
         /** The returned hash is suitable for passing to the @ref RestClientIo
             constructor to build a sibling instance — for example with a different
@@ -5600,6 +5626,116 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         }
         connection_ready_conn = NOTHING;
         oauth2_connection_ready_conn = NOTHING;
+    }
+}
+
+#! A persistent (connection-scoped) session bound to one leased connection
+/** Holds an exclusive lease on one connection from a @ref RestClientIo connection manager and runs a
+    sequence of requests over it, so a connection-scoped persistent transaction stays on a single
+    socket.  This is required on HTTP/1.1, where the server binds a transaction to one physical
+    connection (its dedicated-handler "queued persistent" loop reads that same socket for every
+    subsequent request); scattering requests across pooled connections orphans the server's handler
+    and can silently start a second transaction.
+
+    The leased connection is pinned on the connection manager for the whole lifetime of the session,
+    so every request to the leased host:port — on the owning client or any client sharing the same
+    connection manager, on any thread — rides the leased socket.  Requests are issued by the caller
+    through @ref pinned() (which also tracks errors).  The lease is released with @ref close()
+    (connection returned to the pool) or @ref abort() (connection closed); the destructor closes it
+    defensively.  An error inside @ref pinned() taints the session so it discards the connection on
+    close — a failed persistent op can leave the socket in an indeterminate state, and closing is the
+    deterministic signal for the server to roll back and tear down.
+
+    Create one with @ref RestClientIo::startPersistentSession().
+
+    @since RestClientIo 1.0
+*/
+public class RestPersistentSession {
+    private {
+        #! the connection manager owning the leased connection
+        HttpClientIo::HttpClientConnectionManager mgr;
+        #! the leased connection carrying the session
+        HttpClientIo::HttpClientConnection conn;
+        #! the session is open (not yet closed)
+        bool open = True;
+        #! an error tainted the session (or it was aborted) — discard the connection on close
+        bool errored = False;
+    }
+
+    #! creates the session; use @ref RestClientIo::startPersistentSession() rather than constructing directly
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, HttpClientIo::HttpClientConnection conn) {
+        self.mgr = mgr;
+        self.conn = conn;
+        # pin the leased connection for the whole session so every request to its host:port rides it,
+        # regardless of which thread issues the request (the async request paths do not all run the
+        # pool scan on the caller's thread)
+        mgr.pinConnection(conn);
+    }
+
+    #! defensively closes the session (as an error) if it was not closed explicitly
+    destructor() {
+        if (open) {
+            errored = True;
+            closeIntern();
+        }
+    }
+
+    #! runs the closure, tracking any error so the connection is discarded on close
+    /** The leased connection is pinned for the whole session (see the constructor), so every
+        request the closure makes on the owning client (or any client sharing the connection
+        manager) to the leased host:port rides the leased connection.  An exception from the closure
+        taints the session so the connection is discarded (closed) rather than returned to the pool
+        on @ref close().
+
+        @param op the closure to run
+        @return the closure's return value
+
+        @throw PERSISTENT-SESSION-CLOSED the session has already been closed
+    */
+    auto pinned(code<auto()> op) {
+        if (!open) {
+            throw "PERSISTENT-SESSION-CLOSED", "the persistent session has already been closed";
+        }
+        try {
+            return op();
+        } catch (hash<ExceptionInfo> ex) {
+            errored = True;
+            rethrow;
+        }
+    }
+
+    #! closes the session, returning the connection to the pool (or closing it if the session was tainted)
+    close() {
+        closeIntern();
+    }
+
+    #! aborts the session, closing (not reusing) the leased connection
+    /** Use when the connection must not be reused (e.g. after a transaction error): the server sees
+        the socket close and rolls back / tears down the transaction. */
+    abort() {
+        errored = True;
+        closeIntern();
+    }
+
+    #! returns @ref True while the session is open
+    bool isOpen() {
+        return open;
+    }
+
+    #! returns @ref True if the session has been tainted by an error (will discard the connection on close)
+    bool hasError() {
+        return errored;
+    }
+
+    #! internal idempotent close
+    private closeIntern() {
+        if (!open) {
+            return;
+        }
+        open = False;
+        # clear the pin before releasing so no further request routes to the connection
+        mgr.unpinConnection();
+        mgr.releaseConnection(conn, errored);
     }
 }
 

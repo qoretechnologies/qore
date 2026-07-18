@@ -487,6 +487,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("negotiated http version h2", \testNegotiatedHttpVersion());
         addTestCase("negotiated http version h1", \testNegotiatedHttpVersionH1());
         addTestCase("connection info via manager", \testConnectionInfoManager());
+        addTestCase("persistent session pins one connection", \testPersistentSession());
+        addTestCase("persistent session abort/error discards connection", \testPersistentSessionAbort());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
         addTestCase("restGetAsync", \testRestGetAsync());
@@ -1041,6 +1043,102 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # filtered to an unrelated host: still empty
         assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
+%endif
+    }
+
+    #! A persistent (connection-scoped) session pins one leased connection for all its requests
+    /** Verifies the HTTP/1.1 connection-scoped transaction primitive: every request issued inside
+        @ref RestClientIo::RestPersistentSession::pinned() rides the single leased connection, the
+        closure return value passes through, a clean @ref RestPersistentSession::close() returns the
+        connection to the pool for reuse, and using the session after close is rejected. */
+    testPersistentSession() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        string url = rest.getUrl();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # prime the pool with one idle connection so the lease reuses it (deterministic id)
+        assertEq(200, rest.restGet("/api/test").status_code);
+        int first_id = mgr.getConnectionInfo(url)[0].connection_id;
+
+        # opening a session leases + pins that connection
+        RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+        assertTrue(ps.isOpen());
+        assertFalse(ps.hasError());
+
+        # every request inside pinned() rides the one leased connection
+        auto r1 = ps.pinned(auto sub () { return rest.restGet("/api/one"); });
+        assertEq(200, r1.status_code);
+        # closure return value passes through
+        assertEq("GET", r1.body.method);
+        assertRegex("api/one", r1.body.path);
+        int c1 = mgr.getConnectionInfo(url)[0].connection_id;
+
+        auto r2 = ps.pinned(auto sub () { return rest.restPut("/api/two", {"k": 1}); });
+        assertEq(200, r2.status_code);
+        # exactly one connection exists for the host for the whole session
+        assertEq(1, mgr.getConnectionInfo(url).size());
+        int c2 = mgr.getConnectionInfo(url)[0].connection_id;
+        assertEq(first_id, c1);   # the lease reused the primed connection
+        assertEq(c1, c2);         # both session requests used the same connection
+
+        # a clean close returns the connection to the pool: the next request reuses it
+        ps.close();
+        assertFalse(ps.isOpen());
+        assertEq(200, rest.restGet("/api/after").status_code);
+        assertEq(first_id, mgr.getConnectionInfo(url)[0].connection_id);
+
+        # the session cannot be used after close, and close is idempotent
+        assertThrows("PERSISTENT-SESSION-CLOSED", sub () { ps.pinned(sub () {}); });
+        ps.close();
+        assertFalse(ps.isOpen());
+%endif
+    }
+
+    #! An aborted or error-tainted persistent session discards (closes) its leased connection
+    /** Closing a connection is the deterministic signal for the server to roll back and tear down a
+        connection-scoped transaction, so a session tainted by an exception inside
+        @ref RestClientIo::RestPersistentSession::pinned() — or explicitly aborted via
+        @ref RestPersistentSession::abort() — must NOT return its connection to the pool: the next
+        request must open a fresh connection (new id). */
+    testPersistentSessionAbort() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        string url = rest.getUrl();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        assertEq(200, rest.restGet("/api/test").status_code);
+        int first_id = mgr.getConnectionInfo(url)[0].connection_id;
+
+        # an exception inside pinned() taints the session; on close the connection is discarded
+        {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            assertThrows("MY-ERROR", sub () {
+                ps.pinned(sub () { throw "MY-ERROR", "boom"; });
+            });
+            assertTrue(ps.hasError());
+            ps.close();
+        }
+        # the tainted connection was evicted; the next request opens a fresh connection
+        assertEq(200, rest.restGet("/api/again").status_code);
+        int after_error_id = mgr.getConnectionInfo(url)[0].connection_id;
+        assertNeq(first_id, after_error_id);
+
+        # explicit abort() also discards the connection even with no error in pinned()
+        {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            auto r = ps.pinned(auto sub () { return rest.restGet("/api/x"); });
+            assertEq(200, r.status_code);
+            ps.abort();
+            assertTrue(ps.hasError());
+            assertFalse(ps.isOpen());
+        }
+        assertEq(200, rest.restGet("/api/z").status_code);
+        assertNeq(after_error_id, mgr.getConnectionInfo(url)[0].connection_id);
 %endif
     }
 
