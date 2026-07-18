@@ -71,6 +71,16 @@ extern "C" {
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
 
+// --- Outlined function-body return token (design/aot-function-outlining.md) ---
+
+//! Signal that the outlined helper is executing an in-region `return`;
+//! called immediately before the helper's ret
+void qore_rt_outline_signal_return();
+
+//! Consume the return token right after a CallAOTHelper call; returns
+//! 1 when the coordinator must re-execute the return with the helper's value
+int64_t qore_rt_outline_take_return();
+
 // --- Arithmetic helpers (for .any ops that need dynamic dispatch) ---
 
 //! Add two QoreValues with dynamic type dispatch

@@ -172,6 +172,29 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
                 if (inv_de->exception_target) {
                     targets.insert(inv_de->exception_target);
                 }
+            } else if (auto* cah = dynamic_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())) {
+                // transient outline return-token target (AOT outliner only)
+                if (cah->return_target) {
+                    targets.insert(cah->return_target);
+                }
+            } else if (auto* fused = dynamic_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get())) {
+                if (fused->true_target) {
+                    targets.insert(fused->true_target);
+                }
+                if (fused->false_target) {
+                    targets.insert(fused->false_target);
+                }
+            } else if (auto* iter_next = dynamic_cast<const QoreIRIteratorNextInstruction*>(inst.get())) {
+                if (iter_next->done_target) {
+                    targets.insert(iter_next->done_target);
+                }
+                if (iter_next->continue_target) {
+                    targets.insert(iter_next->continue_target);
+                }
+            } else if (auto* guard = dynamic_cast<const QoreIRGuardInstruction*>(inst.get())) {
+                if (guard->deopt_target) {
+                    targets.insert(guard->deopt_target);
+                }
             }
             // Also check base class exception_target for other opcodes
             if (inst->exception_target) {

@@ -38,6 +38,7 @@ class AOTFunctionOutliningTest inherits QUnit::Test {
         addTestCase("object lifetime across regions", \testObjectLifetime());
         addTestCase("outlining disabled equivalence", \testDisabledEquivalence());
         addTestCase("no safe partition fallback", \testNoSafePartition());
+        addTestCase("loop bodies with early returns", \testLoopEarlyReturns());
         addTestCase("deterministic helper naming", \testDeterministicNaming());
         set_return_value(main());
     }
@@ -371,39 +372,82 @@ printf('dtors:%%s\n', dtor_log);
     }
 
     testNoSafePartition() {
-        # a whole-body loop with a return inside: any candidate region
-        # either splits the loop (back edge escapes) or contains the
-        # return — no safe partition exists, so the function must compile
-        # un-outlined and behave identically.  (A fully-contained loop
-        # WITHOUT a return is a legitimate single-entry/single-exit region
-        # and does get outlined.)
-        string body = "";
-        for (int g = 0; g < 12; ++g) {
-            body += sprintf("
-        if (total %% %d == 0) {
-            total += %d;
-        }
-        if (total > 90000 + %d) {
-            return 'early:' + total.toString();
-        }
-", g + 2, g, g * 13);
+        # a single giant switch: every case block is entered directly from
+        # the switch dispatch, so no contiguous range has a single entry
+        # point — no safe partition exists and the function must compile
+        # un-outlined and behave identically
+        string cases = "";
+        for (int g = 0; g < 60; ++g) {
+            cases += sprintf("
+        case %d:
+            return sprintf('case%d:%%d', n * %d);
+", g, g, g + 2);
         }
         string src = sprintf("
 string sub work(int n) {
-    int total = n;
-    while (total < 100000) {
-        total = total * 2 + 1;
+    switch (n %% 60) {
 %s
     }
-    return total.toString();
+    return 'default';
 }
 
 printf('%%s\n', work(3));
-printf('%%s\n', work(77));
-", body);
+printf('%%s\n', work(59));
+printf('%%s\n', work(120));
+", cases);
         hash<auto> h = compileRunAndInterpret(src);
         assertFalse(outlined(h.compile_out),
-            "loop with embedded returns must not outline: " + h.compile_out.substr(0, 400));
+            "giant switch must not outline: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testLoopEarlyReturns() {
+        # loop bodies with early `return` statements outline through the
+        # return token: the helper signals the return and the coordinator
+        # re-executes it through its own epilogue; fused int counters
+        # (++turn / count += / while condition) stay coherent through the
+        # TLS stack
+        string body = "";
+        for (int g = 0; g < 20; ++g) {
+            body += sprintf("
+        if (helper(state, %d) > %d) {
+            state{'k%d'} = sprintf('g%%d:%%d', %d, state.size());
+            count += helper(state, %d);
+        } else if (helper(state, %d) < 0) {
+            log += 'neg%d,';
+            if (count > %d) {
+                return {'early': %d, 'log': log, 'count': count};
+            }
+        } else {
+            state{'m%d'} = log.size();
+        }
+", g, g * 3, g, g, g + 1, g + 2, g, g * 100 + 500, g, g);
+        }
+        string src = sprintf("
+int sub helper(hash<auto> h, int n) {
+    return h.size() + n %% 7;
+}
+
+hash<auto> sub work(int turns) {
+    hash<auto!> state = {'count': 0};
+    string log = '';
+    int count = 0;
+    int turn = 0;
+    while (turn < turns) {
+        ++turn;
+%s
+    }
+    return {'log': log.size(), 'count': count, 'turns': turn};
+}
+
+hash<auto> r1 = work(2);
+printf('%%d %%d %%d\n', r1.log ?? -1, r1.count, r1.turns ?? -1);
+hash<auto> r2 = work(40);
+printf('%%d %%d %%y\n', r2.count, r2.early ?? -1, r2.turns);
+", body);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertTrue(outlined(h.compile_out),
+            "loop with early returns must outline: " + h.compile_out.substr(0, 400));
         assertEq(h.interp_out, h.run_out);
     }
 

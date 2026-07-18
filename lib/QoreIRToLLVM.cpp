@@ -4657,6 +4657,33 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
                 llvm::FunctionType::get(i64_type, {}, false));
         obe_saved_count = builder->CreateCall(obe_count_fn, {});
+
+        // Outlined-function coordinators: helpers mutate shared locals
+        // through the TLS stack, so every cached-local read needs its
+        // stale check from the very first lowered block.  The reload
+        // epoch is otherwise created lazily by the first call-site
+        // lowering — but block layout order does not follow control flow
+        // (a loop condition lowers before the helper-call block that
+        // bumps the epoch), which would silently skip the check.  Create
+        // it eagerly when the function calls outlined helpers.
+        if (aot_mode) {
+            bool has_helper_calls = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr
+                            && inst_ptr->opcode == QoreIROpcode::CallAOTHelper) {
+                        has_helper_calls = true;
+                        break;
+                    }
+                }
+                if (has_helper_calls) {
+                    break;
+                }
+            }
+            if (has_helper_calls) {
+                getOrCreateLocalReloadEpoch(llvm_func);
+            }
+        }
     }
 
     // Initialize runtime location tracking: cache TLS pointers for per-line updates.
@@ -7857,6 +7884,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitPendingSsaCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
+            // Outlined-helper return token: set immediately before the ret so
+            // no user code (destructors/handlers above) can run between the
+            // signal and the coordinator's consume after the call returns.
+            if (aot_mode && ret->outline_signal) {
+                auto signal_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_signal_return",
+                    llvm::FunctionType::get(void_type, {}, false));
+                builder->CreateCall(signal_fn, {});
+            }
             if (boxed_ret) {
                 builder->CreateRet(boxed_ret);
             } else {
@@ -7890,6 +7926,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
+            // Outlined-helper return token — see the Return case above
+            if (aot_mode && static_cast<const QoreIRReturnInstruction*>(
+                    inst)->outline_signal) {
+                auto signal_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_signal_return",
+                    llvm::FunctionType::get(void_type, {}, false));
+                builder->CreateCall(signal_fn, {});
+            }
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;
         }
@@ -15806,6 +15850,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
             emitExceptionCheck(module, llvm_func, inst);
+            // In-region `return` token: when the helper signalled a return,
+            // branch to the synthesized coordinator block that returns the
+            // helper's result value through this function's own epilogue.
+            if (cah->return_target) {
+                auto take_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_take_return",
+                    llvm::FunctionType::get(i64_type, {}, false));
+                llvm::Value* take = builder->CreateCall(take_fn, {});
+                llvm::Value* do_ret = builder->CreateICmpNE(take,
+                    llvm::ConstantInt::get(i64_type, 0));
+                llvm::BasicBlock* ret_bb = block_map[cah->return_target];
+                llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx,
+                    "outline.cont", llvm_func);
+                builder->CreateCondBr(do_ret, ret_bb, cont);
+                builder->SetInsertPoint(cont);
+            }
             return true;
         }
 

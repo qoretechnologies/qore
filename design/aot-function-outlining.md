@@ -90,10 +90,13 @@ This generalizes the existing Phase 1.5 init-expression outliner
      `if` group's skip edge counts as a normal exit, which is what makes
      big guarded top-level statement groups (`if (version < X) {...}`)
      and fully-contained loops outlinable; back edges are allowed once
-     their source joins the interval;
-   - no `Return` inside; no exception-kind edge (instruction
-     `exception_target`) leaving the interval — even to `F` (rewriting
-     it into a helper return would skip an in-function handler path);
+     their source joins the interval; a growth cap (4x the target size)
+     abandons intervals that will not close before becoming one
+     enormous helper (e.g. a whole giant loop swallowed from before its
+     header) so later starts partition the construct's body instead;
+   - no exception-kind edge (instruction `exception_target`) leaving
+     the interval — even to `F` (rewriting it into a helper return
+     would skip an in-function handler path);
    - neither the first block nor `F` contains phis or
      landingpad/catch-entry instructions;
    - no SSA value crosses the interval boundary in either direction
@@ -134,6 +137,34 @@ This generalizes the existing Phase 1.5 init-expression outliner
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a
    pathological function does not benefit from the fast entry anyway.
+9. **In-region `return` token.** Giant loop bodies (the
+   `driveDesignAgentLoop` shape) are full of early `return` statements;
+   regions may contain them.  Each return moved into a helper is marked
+   with a transient `outline_signal` flag: its lowering calls
+   `qore_rt_outline_signal_return()` (a thread-local flag) immediately
+   before the ret — nothing can run between the signal and the
+   coordinator's consume, so the flag is nesting-safe.  The
+   coordinator's `CallAOTHelper` carries a transient `return_target`
+   pointing at a synthesized block that re-executes
+   `Return <call result>` through the coordinator's own epilogue (the
+   helper's return value is the in-region return's value; NOTHING for
+   valueless returns).  The lowering consumes the flag with
+   `qore_rt_outline_take_return()` after the call's exception check and
+   branches accordingly.  Early-return cleanup clears
+   (`uninstantiate.local`) of shared locals inside regions are safe:
+   AOT lifecycle ops only clear the runtime value, and the
+   coordinator's re-executed return skips pre-instantiated locals.
+10. **Fused int-op coherence.** Fused local ops
+   (`increment.local.int`, `add.assign.local.int`,
+   `br.if.lt.local.int`) on shared locals stay coherent through the
+   TLS stack: their loads run `ensureLocalCacheFresh()` and their
+   stores write through for non-IR-only locals.  Coordinators of
+   outlined functions create the local reload epoch **eagerly** in
+   `lowerFunction()` — block layout order does not follow control flow,
+   so a loop condition lowers before the helper-call block that bumps
+   the epoch and its stale check would otherwise be silently skipped
+   (this manifested as an infinite loop: the fused `while` condition
+   never observed the helper's `++turn`).
 
 ## Correctness invariants
 
@@ -149,8 +180,13 @@ This generalizes the existing Phase 1.5 init-expression outliner
 
 ## Non-goals (v1)
 
-- Regions with non-local control transfer (`return`, `break`/`continue`
-  crossing the boundary) — rejected by discovery.
+- Regions with `break`/`continue` crossing the boundary — rejected by
+  discovery (the exit-convergence rule); a control-token generalization
+  of the return token could support them later.
+- Giant single `switch` statements (every case is entered from the
+  dispatch block — no single-entry interval exists).  These need either
+  a two-level switch split or data-driven source (`sourceText`-style
+  tables); the `OptimizeNone` big-function guard remains the fallback.
 - Live SSA values across region boundaries (an explicit result/control
   token can be added later if profitable).
 - Regions inside `try` blocks or scopes whose handler/cleanup edges
@@ -173,6 +209,24 @@ blocks).  Full module compile with `qcc -m -O3`, same machine and tree:
 
 The manual seven-way source split of the same method (the performance
 oracle) measured ~19.7 s / ~3.3 GiB / 12.6 MB.
+
+### Giant-loop shape (return token; synthetic `driveDesignAgentLoop` analog)
+
+A synthetic agent-loop function (one `while` over 700 guarded statement
+groups with early returns and fused int counters; 11,206 IR blocks /
+63,733 instructions — modeled on the Qorus
+`QorusQonsoleCore::_static_driveDesignAgentLoop` build pathology):
+
+| configuration                      | compile wall | peak RSS  |
+|------------------------------------|--------------|-----------|
+| no mitigation                      | > 10 min (killed) | —    |
+| `QORE_AOT_BIG_FN_THRESHOLD=200` (OptimizeNone) | 7:14 | 7.2 GiB |
+| outlining (41 regions, full -O3)   | **0:28**     | **0.35 GiB** |
+
+Runtime output is identical to the interpreter in all configurations.
+Note the OptimizeNone guard alone does NOT fix the pathology — LLVM
+instruction selection and register allocation remain super-linear on
+the one giant function regardless of the optimization level.
 
 ## Verification
 
