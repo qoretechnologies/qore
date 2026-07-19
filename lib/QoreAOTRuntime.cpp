@@ -8515,7 +8515,8 @@ static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
     QoreProgram* shadow_pgm,
-    const char* mod_path);
+    const char* mod_path,
+    bool write_shadow);
 static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
@@ -8899,7 +8900,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label, nullptr, nullptr);
+                            init_descriptors, label, nullptr, nullptr,
+                            /*write_shadow=*/true);
                     }
                 }
             }
@@ -9000,7 +9002,8 @@ static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
     const char* mod_name,
     QoreProgram* shadow_pgm,
-    const char* mod_path);
+    const char* mod_path,
+    bool write_shadow);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -9016,6 +9019,14 @@ struct AotModuleState {
     std::unordered_set<QoreProgram*> init_done_pgms;
     //! Module path/label used for get_module_context_path() during deferred module init
     std::string path;
+    //! Whether the shared shadow (module-own) Program's constant/static-var values have already been
+    //! initialized.  The shadow Program is shared by ALL imports of this AOT module, so its
+    //! ConstantEntries / static vars must be populated exactly once (by the first import that runs the
+    //! init functions); subsequent imports write only their own target Program.  Guarded by
+    //! get_aot_module_state_lock().  Makes the previously idempotent-but-non-atomic
+    //! "!hasValue()" shadow-write guard explicit and race-free once the module-load lock no longer
+    //! serializes init.
+    bool shadow_init_done = false;
 };
 
 //! Map from module name to per-module state
@@ -9707,7 +9718,8 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label, nullptr, nullptr);
+                            init_descriptors, label, nullptr, nullptr,
+                            /*write_shadow=*/true);
                     }
                 }
             }
@@ -10206,6 +10218,9 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         QoreProgram* init_ctx_pgm = nullptr;
         std::vector<uint8_t> init_metadata;
         std::vector<AOTInitFuncDescriptor> init_descriptors;
+        // whether this import is the one that populates the shared shadow (module-own) Program; set
+        // exactly once per module under the state lock (see AotModuleState::shadow_init_done)
+        bool write_shadow = false;
 
         {
             AutoLocker aot_state_al(get_aot_module_state_lock());
@@ -10226,6 +10241,11 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
                 init_metadata = it->second.metadata;
                 init_descriptors = it->second.init_descriptors;
+                // claim the one-time shadow initialization for this module
+                if (!it->second.shadow_init_done) {
+                    it->second.shadow_init_done = true;
+                    write_shadow = true;
+                }
             }
         }
 
@@ -10309,7 +10329,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                     executeInitFunctions(tpgm, init_func_contexts,
                         init_descriptors, mod_name,
                         init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
-                        mod_path);
+                        mod_path, write_shadow);
                 }
             } else {
                 raise_ns_init_error(std::string("AOT ns_init '")
@@ -10769,7 +10789,8 @@ static void executeInitFunctions(
         const std::vector<AOTInitFuncDescriptor>& descriptors,
         const char* mod_name,
         QoreProgram* shadow_pgm,
-        const char* mod_path) {
+        const char* mod_path,
+        bool write_shadow) {
     if (exec_infos.empty() || descriptors.empty()) {
         return;
     }
@@ -11040,7 +11061,7 @@ static void executeInitFunctions(
                 if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                if (shadow_ce && shadow_ce != target_ce
+                if (write_shadow && shadow_ce && shadow_ce != target_ce
                         && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
@@ -11107,7 +11128,7 @@ static void executeInitFunctions(
                 if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
                     target_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
-                if (shadow_ce && shadow_ce != target_ce
+                if (write_shadow && shadow_ce && shadow_ce != target_ce
                         && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
                     shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
                 }
@@ -11176,7 +11197,7 @@ static void executeInitFunctions(
                 // AOT module.  Initialize it once, but do not reset live
                 // module static state when the same module is imported into a
                 // transient dependency program.
-                if (shadow_vi && shadow_vi != target_vi && !shadow_has_concrete_value) {
+                if (write_shadow && shadow_vi && shadow_vi != target_vi && !shadow_has_concrete_value) {
                     shadow_vi->val.removeValue(true).discard(&xsink);
                     shadow_vi->assignInit(result.refSelf());
                     shadow_vi->eval_init = true;
@@ -11933,7 +11954,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                             init_descriptors,
                             label ? label : "<script>",
                             /*shadow_pgm=*/nullptr,
-                            /*mod_path=*/nullptr);
+                            /*mod_path=*/nullptr,
+                            /*write_shadow=*/true);
                     }
                 }
             } else {
@@ -12210,7 +12232,8 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 executeInitFunctions(tpgm, batch_init_contexts,
                     batch_init_descriptors, "<script-batch>",
                     /*shadow_pgm=*/nullptr,
-                    /*mod_path=*/nullptr);
+                    /*mod_path=*/nullptr,
+                    /*write_shadow=*/true);
                 if (time_on) {
                     us_init += now_us() - t1;
                 }
