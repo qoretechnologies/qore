@@ -23,6 +23,10 @@ final class ExactProjection {
         return (left, middle, right);
     }
 
+    static list<string> makeStrings(string left, string middle, string right) {
+        return (left, middle, right);
+    }
+
     static int staticProjection() {
         return makeStatic(4, 5, 6)[1];
     }
@@ -75,6 +79,12 @@ final class ExactProjection {
             : makeInstance(60, 61, 62))[1];
     }
 
+    static string boxedPhiProjection(bool first) {
+        return (first
+            ? makeStrings(\"left\", \"middle\", \"right\")
+            : makeStrings(\"other-left\", \"other-middle\", \"other-right\"))[2];
+    }
+
     static int reassignedProjection(bool replace) {
         list<int> values = makeStatic(70, 71, 72);
         if (replace) {
@@ -103,13 +113,14 @@ class OverridableProjection {
 
 ExactProjection exact();
 OverridableProjection overridable();
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\",
     ExactProjection::staticProjection(),
     exact.instanceProjection(), ExactProjection::staticMultiProjection(),
     exact.instanceMultiProjection(), ExactProjection::staticCfgProjection(True),
     exact.instanceCfgProjection(False), ExactProjection::staticPhiProjection(False),
     exact.instancePhiProjection(True), ExactProjection::reassignedProjection(True),
-    ExactProjection::sideEffectProjection(), overridable.projection());
+    ExactProjection::sideEffectProjection(), overridable.projection(),
+    ExactProjection::boxedPhiProjection(True));
 ";
 
 string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
@@ -121,7 +132,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "5:8:15:24:33:42:41:51:81:23:11\n";
+string expected = "5:8:15:24:33:42:41:51:81:23:11:right\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -145,6 +156,7 @@ string disabled_compile = backquote(sprintf(
 foreach string function in (("staticProjection", "instanceProjection",
         "staticMultiProjection", "instanceMultiProjection",
         "staticCfgProjection", "instanceCfgProjection",
+        "staticPhiProjection", "instancePhiProjection",
         "sideEffectProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
@@ -155,7 +167,7 @@ foreach string function in (("staticProjection", "instanceProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|staticPhiProjection|instancePhiProjection)[^\n]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|boxedPhiProjection)[^\n]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled method aggregate projection:\n%s",
         enabled_compile + disabled_compile);

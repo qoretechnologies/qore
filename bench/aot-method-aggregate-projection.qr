@@ -74,6 +74,26 @@ final class ProjectionFactory {
         return checksum;
     }
 
+    static int staticPhiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += (i & 1
+                ? makeStatic(i, i + 1, i + 2)
+                : makeStatic(i + 3, i + 4, i + 5))[1];
+        }
+        return checksum;
+    }
+
+    int instancePhiKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += (i & 1
+                ? makeInstance(i, i + 1, i + 2)
+                : makeInstance(i + 3, i + 4, i + 5))[1];
+        }
+        return checksum;
+    }
+
 }
 
 int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
@@ -81,6 +101,10 @@ string mode = ARGV.size() > 1 ? ARGV[1] : "static";
 ProjectionFactory factory();
 int result = mode == "instance"
     ? factory.instanceKernel(rounds)
+    : mode == "phi-static"
+        ? ProjectionFactory::staticPhiKernel(rounds)
+        : mode == "phi-instance"
+            ? factory.instancePhiKernel(rounds)
     : mode == "cfg-static"
         ? ProjectionFactory::staticCfgKernel(rounds)
         : mode == "cfg-instance"

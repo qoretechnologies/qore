@@ -5662,14 +5662,22 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     return 0;
                 }
                 auto definition = definitions.find(incoming.value.id);
-                if (!incoming.block || definition == definitions.end()
-                        || definition->second->opcode
-                            != QoreIROpcode::CallDirect) {
+                if (!incoming.block || definition == definitions.end()) {
                     valid = false;
                     break;
                 }
-                auto* call = static_cast<QoreIRCallDirectInstruction*>(
-                    const_cast<QoreIRInstruction*>(definition->second));
+                QoreIRInstruction* call =
+                    const_cast<QoreIRInstruction*>(definition->second);
+                bool direct_call = call->opcode == QoreIROpcode::CallDirect;
+                bool static_call =
+                    call->opcode == QoreIROpcode::CallStaticDirect;
+                bool exact_method_call =
+                    call->opcode == QoreIROpcode::CallMethodDirect
+                    && qore_ir_is_non_overridable_method_call(*call);
+                if (!direct_call && !static_call && !exact_method_call) {
+                    valid = false;
+                    break;
+                }
                 auto call_uses = uses.find(call->result.id);
                 Projection projection;
                 if (call->exception_target
@@ -5681,7 +5689,27 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     valid = false;
                     break;
                 }
-                (void)descend_nested_projection(projection);
+                if (direct_call) {
+                    (void)descend_nested_projection(projection);
+                } else if (projection.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeInt
+                        && projection.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat
+                        && projection.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedInt
+                        && projection.kind
+                            != QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedFloat) {
+                    // Static and exact-method calls have no projected-call
+                    // lowering yet. Native argument projections are safe
+                    // because the call can be eliminated and the incoming
+                    // operand can feed the scalar PHI directly.
+                    valid = false;
+                    break;
+                }
                 if ((final_consumer
                             && final_consumer != projection.consumer)
                         || (final_result.isValid()
@@ -5691,6 +5719,17 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 }
                 final_consumer = projection.consumer;
                 final_result = projection.result;
+                if (projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedInt) {
+                    projection.kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeInt;
+                } else if (projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedFloat) {
+                    projection.kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloat;
+                }
                 QoreIRPhiValueKind incoming_kind;
                 if (projection.kind
                         == QoreIRCallDirectInstruction::
@@ -5719,12 +5758,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     incoming_kind = QoreIRPhiValueKind::NativeFloat;
                     if (projection.kind
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedFloat) {
-                        projection.kind =
-                            QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::NativeFloat;
-                    } else if (projection.kind
-                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatConstant) {
                         projection.kind =
@@ -5735,9 +5768,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 } else if (projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedValue
-                        || projection.kind
-                            == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedInt
                         || projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBool
