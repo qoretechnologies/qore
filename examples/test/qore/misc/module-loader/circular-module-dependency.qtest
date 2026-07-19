@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Validates the cross-thread module-dependency cycle detector.
+#
+# Once the process-global module-load lock M was retired (it serialized all module init and, held
+# across a nested cross-thread load wait, reformed a process-wide deadlock), a genuine cross-thread
+# circular dependency can no longer be masked by that lock.  It is instead detected explicitly:
+# before a thread parks waiting on a feature that another thread is initializing, the loader walks the
+# waiter->owner graph (checkModuleLoadCycle) and, if it returns to this thread, raises
+# CIRCULAR-MODULE-DEPENDENCY instead of deadlocking.
+#
+# Two threads concurrently load a mutually-dependent module pair (CrossCycleA requires CrossCycleB at
+# init time and vice versa) into separate Programs.  Whether the cross-thread cycle actually forms is
+# timing-dependent: if one thread loads both modules serially before the other reserves its feature,
+# there is no cycle (a valid non-cyclic resolution, "OK").  Each attempt globally caches the modules
+# (as loaded or failed), so an attempt is only meaningful in a fresh process; the test therefore runs
+# the single-attempt driver in fresh subprocesses, retrying until a cycle is observed.
+#
+# It asserts:
+#   - the detector fires (at least one attempt yields CYCLE -> CIRCULAR-MODULE-DEPENDENCY), and
+#   - no attempt ever HANGs (deadlock) or fails with any OTHER error or a crash.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class CircularModuleDependencyTest
+
+class CircularModuleDependencyTest inherits QUnit::Test {
+    private {
+        # each attempt forms the cycle ~19/20 of the time; retrying makes a missed cycle
+        # astronomically unlikely (0.05^MaxAttempts) without any dependence on timing
+        const MaxAttempts = 12;
+    }
+
+    constructor() : Test("Circular module dependency test", "1.0") {
+        addTestCase("cross-thread cycle detection", \crossThreadCycleTest());
+        set_return_value(main());
+    }
+
+    crossThreadCycleTest() {
+        # absolutize the fixture dir: under the test harness get_script_dir() can be relative, and the
+        # driver subprocess must find the fixture modules regardless of its working directory
+        string dir = get_script_dir();
+        if (dir !~ /^\//) {
+            dir = getcwd() + "/" + dir;
+        }
+        # run the driver against the local (in-development) qore/libqore under test, with the fixture
+        # modules (absolute) prepended to the inherited module path
+        string qore_bin = ENV.QORE_BINARY ?? "qore";
+        string modpath = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
+
+        bool saw_cycle = False;
+        int attempts = 0;
+        for (int i = 0; i < MaxAttempts && !saw_cycle; ++i) {
+            ++attempts;
+            # do not cd: keep the harness working directory so any relative entries inherited in
+            # QORE_MODULE_DIR stay valid; reference the driver and fixtures by absolute path
+            string cmd = sprintf("QORE_MODULE_DIR=%y %s --enable-debug %y 2>&1",
+                modpath, qore_bin, dir + "/cross-cycle-attempt.qr");
+            string out = trim(backquote(cmd));
+            on_error printf("attempt %d output: %y\n", i, out);
+            # the driver must never hang or fail with an unexpected error/crash
+            assertFalse(out == "HANG", "attempt did not deadlock");
+            assertFalse(out =~ /^OTHER:/, "attempt did not fail with an unexpected error");
+            assertTrue(out == "CYCLE" || out == "OK",
+                sprintf("attempt produced a valid outcome (got %y)", out));
+            if (out == "CYCLE") {
+                saw_cycle = True;
+            }
+        }
+        assertTrue(saw_cycle,
+            sprintf("cross-thread CIRCULAR-MODULE-DEPENDENCY detected within %d attempts", attempts));
+    }
+}

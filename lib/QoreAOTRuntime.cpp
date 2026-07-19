@@ -9144,24 +9144,32 @@ static thread_local unsigned qore_module_inner_lock_depth = 0;
 #endif
 
 QoreModuleLoadLockHelper::QoreModuleLoadLockHelper() {
-    // check the lock order *before* blocking on the lock, so that an inversion is reported as a
-    // failed assertion rather than as a hang
+    // The process-global module-load lock M has been RETIRED: it no longer takes a lock.
     //
-    // holding a module-inner lock while taking the module-load lock for the first time is the
-    // inversion that deadlocks against a concurrent module load which holds the module-load lock
-    // and needs the inner lock to apply a module's AOT module commands.  Re-entering module loading
-    // while already holding the module-load lock is fine: the order was established correctly on
-    // the outermost acquisition and both locks are recursive.
+    // M conflated two roles and was held across the whole module load, including the cross-thread
+    // dependency wait, which reformed a process-wide deadlock (a thread holding M blocked on a
+    // cross-thread module load whose counterparty needed M).  Its roles are now covered without a
+    // global lock:
+    //   - "serialize init" is per-feature single-writer load state (ModuleManager's
+    //     ModuleLoadEntry/waiter loop) + the AOT shared shadow-Program init barrier
+    //     (AotModuleState::shadow_init_state) + per-Program / per-module state; and
+    //   - "lock ordering vs. the target parse lock" is covered by the cross-thread cycle detector
+    //     (module_wait_for) — AOT init takes no cross-Program parse-ownership lock, so no parse-lock
+    //     ABBA can form.
+    //
+    // The depth counter and the assertion below are retained as a debug regression net: they detect
+    // a module-inner lock (e.g. module-jni's class-map lock, marked via QoreModuleInnerLockHelper)
+    // being held across the start of a module load — the inversion that retiring M would otherwise
+    // let deadlock silently.  A held inner lock is legal only when this thread is already inside a
+    // module load (load_depth > 0), i.e. the inner lock was taken *during* init, not across it.
     assert(!qore_module_inner_lock_depth || qore_module_load_lock_depth);
 
-    qore_aot_get_init_execution_lock().lock();
     ++qore_module_load_lock_depth;
 }
 
 QoreModuleLoadLockHelper::~QoreModuleLoadLockHelper() {
     assert(qore_module_load_lock_depth);
     --qore_module_load_lock_depth;
-    qore_aot_get_init_execution_lock().unlock();
 }
 
 // NOTE: the bodies below are compiled out in non-debug builds, but the symbols are always exported
@@ -9197,6 +9205,23 @@ static QoreThreadLock& get_aot_module_state_lock() {
 static QoreCondition& get_aot_shadow_init_cond() {
     static QoreCondition cond;
     return cond;
+}
+
+// Serializes building AOT init-function contexts into the shared shadow (module-own) Program.  Each
+// import of an already-loaded AOT module into a new target Program calls
+// registerAOTFunctionsFromSlotMaps() against the module's shared shadow Program, which APPENDS the
+// init functions' local variables to the shadow's local-variable arena (createLocalVar()).  The
+// shadow-init barrier (shadow_init_state) only serializes the one-time shadow *constant* writes, not
+// this per-import context build, so once the process-global module-load lock M is retired two
+// importers of the same module would append to the shadow's deque concurrently and corrupt it.
+//
+// Context building performs no nested module load, so holding this lock across it cannot re-form the
+// module-load deadlock.  The lock is recursive to tolerate same-thread re-entry, and it need not be
+// held across the subsequent executeInitFunctions(): the deque is append-only with stable element
+// pointers, so contexts built under this lock remain valid while another importer appends more.
+static QoreRecursiveThreadLock& get_aot_shadow_build_lock() {
+    static QoreRecursiveThreadLock lock;
+    return lock;
 }
 
 //! Extract dependency module names from source \%requires directives
@@ -10360,9 +10385,17 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 std::vector<std::string> registration_errors;
                 auto debug_metadata = makeAOTDebugMetadata(init_reader,
                     init_metadata.data(), static_cast<int>(init_metadata.size()));
-                registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
-                    init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
-                    &registration_errors, debug_metadata);
+                {
+                    // Serialize the shared-shadow context build across concurrent importers of this
+                    // module: registerAOTFunctionsFromSlotMaps() appends the init functions' locals
+                    // to init_ctx_pgm (the module's shared shadow Program).  See
+                    // get_aot_shadow_build_lock().  No nested module load happens here, so holding
+                    // this lock cannot deadlock.
+                    AutoLocker shadow_build_al(get_aot_shadow_build_lock());
+                    registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
+                        init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
+                        &registration_errors, debug_metadata);
+                }
 
                 if (aotInitTraceEnabled()) {
                     fprintf(stderr, "[aot-init] ns_init module=%s registered=%d contexts=%zu remaining=%zu\n",
