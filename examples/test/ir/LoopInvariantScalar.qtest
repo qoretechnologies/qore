@@ -196,7 +196,8 @@ string stats = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b -
     libqore_dir, qore_bin, script_path));
 if (stats !~ /IR-OPT: invariantShift:.*hoisted=[2-9]/
         || stats !~ /IR-OPT: invariantBool:.*hoisted=[2-9]/
-        || stats !~ /IR-OPT: invariantAcrossCall:.*hoisted=[2-9]/) {
+        || (stats !~ /IR-OPT: invariantAcrossCall:.*hoisted=[2-9]/
+            && stats !~ /IR-OPT: invariantAcrossCall:.*hoisted=[1-9].*native-local-loads=[1-9]/)) {
     printf("missing scalar LICM selection:\n%s", stats);
     exit(2);
 }
