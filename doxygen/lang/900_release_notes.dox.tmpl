@@ -1179,6 +1179,10 @@ cargo install tree-sitter-cli@0.26.5
     - new functions:
       - @ref Qore::call_async() "call_async()": spawns a background thread to execute a callable and returns a
         @ref Qore::Thread::Future "Future" for the result
+      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable while holding the
+        global module-load lock, so that %Qore code (for example a module performing lazy initialization that can
+        load further modules) can establish a consistent lock order with its own locks and avoid the ABBA deadlock
+        described in @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
@@ -1577,6 +1581,12 @@ foreach string module_name in (registry.getProcessModules()) {
     The lock is recursive, so nested module loads are safe.  It is intended for cold paths only:
     already-loaded modules keep a lock-free fast path, and module authors should avoid taking the
     module-load lock on cache-hit paths that cannot reach module loading.
+
+    %Qore-language modules can participate in the same hierarchy with the new
+    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" function, which runs a callable while
+    holding the module-load lock; a module that performs lazy initialization under its own lock (and whose
+    initialization can load further modules) should acquire the module-load lock first via this function so the
+    global order remains "module-load lock &rarr; module-private lock".
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing

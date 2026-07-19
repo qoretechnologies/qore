@@ -2762,6 +2762,61 @@ load_module("mysql");
 nothing load_module() [flags=RUNTIME_NOOP;dom=MODULES] {
 }
 
+//! Calls the given @ref call_reference "call reference" or @ref closure "closure" while holding the global module-load lock, and returns the result
+/** This function makes libqore's outermost module-loading lock available to %Qore code so that a
+    module can establish a consistent lock hierarchy with its own private locks.
+
+    The module-load lock is the outermost lock in the module-loading hierarchy: cold runtime module
+    loads (@ref load_module() and friends) acquire it before doing anything else, and hold it while
+    running module initializers.  A module that holds a private lock across code that can reach
+    module loading — directly via @ref load_module(), or indirectly (e.g. lazy provider/schema
+    loading, or a callback from a foreign runtime) — must acquire the module-load lock <b>before</b>
+    that private lock, otherwise it can deadlock against a concurrent cold module load whose
+    initializer calls back into the module and needs the private lock.  This function lets such a
+    module wrap the entry point that acquires its private lock so the module-load lock is always
+    taken first.
+
+    The lock is recursive, so re-acquiring it on a nested module load in the same thread (including
+    from within \a callable) is safe and cheap.  It is intended for cold paths only: because it is
+    process-global, callers should not take it on hot cache-hit paths that cannot reach module
+    loading.
+
+    @param callable The @ref call_reference "call reference" or @ref closure "closure" to call while
+    holding the module-load lock
+    @param ... Any optional arguments to the @ref call_reference "call reference" or @ref closure
+    "closure"
+
+    @return the value returned by \a callable
+
+    @par Example:
+    @code{.py}
+# ensure the module-load lock is held before our own initialization lock, so lazy module loads
+# performed during initialization cannot invert the lock order
+return call_with_module_load_lock(\initIntern(), app);
+    @endcode
+
+    @note The @ref call_reference "call reference" or @ref closure "closure" called could also throw
+    other exceptions
+
+    @see
+    - load_module()
+    - call_function()
+
+    @since %Qore 3.0
+*/
+auto call_with_module_load_lock(code callable, ...) [dom=MODULES] {
+    ReferenceHolder<QoreListNode> vargs(xsink);
+    // if there are arguments to pass, create argument list by copying the current list after the
+    // callable
+    if (num_args(args) > 1) {
+        vargs = args->copyListFrom(1);
+    }
+    // acquire the outermost module-loading lock (recursive) for the duration of the call; released
+    // on scope exit, including if the call raises a Qore exception through xsink
+    QoreModuleLoadLockHelper mll;
+    return callable->execValue(*vargs, xsink);
+}
+
 //! Loads in a %Qore user module at run-time with using the given @ref Qore::Program "Program" object as the container for the user module code
 /** This function allows a user module to be loaded with a custom API already present in the user module's @ref Qore::Program "Program" container
 
