@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class ProjectionFactory {
+    static list<int> makeStatic(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    list<int> makeInstance(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    static int staticKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += makeStatic(i, i + 1, i + 2)[1];
+        }
+        return checksum;
+    }
+
+    int instanceKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            checksum += makeInstance(i, i + 1, i + 2)[1];
+        }
+        return checksum;
+    }
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
+string mode = ARGV.size() > 1 ? ARGV[1] : "static";
+ProjectionFactory factory();
+printf("%d\n", mode == "instance"
+    ? factory.instanceKernel(rounds)
+    : ProjectionFactory::staticKernel(rounds));

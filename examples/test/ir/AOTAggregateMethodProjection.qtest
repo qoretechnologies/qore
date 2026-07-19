@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+final class ExactProjection {
+    static list<int> makeStatic(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    list<int> makeInstance(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    static int staticProjection() {
+        return makeStatic(4, 5, 6)[1];
+    }
+
+    int instanceProjection() {
+        return makeInstance(7, 8, 9)[1];
+    }
+
+    static int sideEffectProjection() {
+        int effects = 0;
+        int value = makeStatic((effects = 1), (effects = 2),
+            (effects = 3))[1];
+        return value * 10 + effects;
+    }
+}
+
+class OverridableProjection {
+    list<int> makeValues(int left, int middle, int right) {
+        return (left, middle, right);
+    }
+
+    int projection() {
+        return makeValues(10, 11, 12)[1];
+    }
+}
+
+ExactProjection exact();
+OverridableProjection overridable();
+printf(\"%d:%d:%d:%d\\n\", ExactProjection::staticProjection(),
+    exact.instanceProjection(), ExactProjection::sideEffectProjection(),
+    overridable.projection());
+";
+
+string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected = "5:8:23:11\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, src));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, src));
+foreach string function in (("staticProjection", "instanceProjection",
+        "sideEffectProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing method aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*OverridableProjection::projection[^\n]*:.*aggregate-projections=[1-9]/
+        || disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("unsafe or disabled method aggregate projection:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled, disabled)) {
+    if (!is_file(path)) {
+        printf("AOT compile failed for %s:\n%s%s",
+            path, enabled_compile, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

@@ -12638,7 +12638,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (!std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
             QoreIRAggregateProjectionQuery projection_query =
                 [&](const AbstractQoreFunctionVariant* callee,
-                        const QoreIRCallDirectInstruction* call,
+                        const QoreIRInstruction* call,
                         QoreIRAggregateProjectionQueryKind kind,
                         int64_t index, const std::string& key,
                         int16_t& operand, int64_t& size,
@@ -12649,6 +12649,24 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             AOTAggregateProjectionDescriptor>&
                                 guarded_descriptors,
                         std::vector<std::string>& guarded_keys) {
+                    const QoreValue* expr = nullptr;
+                    if (call) {
+                        if (call->opcode == QoreIROpcode::CallDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallStaticDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallStaticDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallMethodDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallMethodDirectInstruction*>(
+                                    call)->expr;
+                        }
+                    }
                     bool dynamic_index = kind
                         == QoreIRAggregateProjectionQueryKind::
                             ListIndexDynamicValue;
@@ -12656,13 +12674,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         == QoreIRAggregateProjectionQueryKind::
                             HashKeyDynamicValue;
                     auto found = aot_batch_callee_map->find(callee);
-                    if (found == aot_batch_callee_map->end() || !call
+                    if (found == aot_batch_callee_map->end() || !call || !expr
                             || !found->second.approach_b_eligible
                             || !found->second.aggregate_return
                             || call->operands.size()
                                 != found->second.num_params
-                            || !qore_aot_fast_entry_args_need_no_binding(
-                                callee, call->expr, 0,
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                callee, *expr, func, call->operands, 0,
                                 static_cast<int>(call->operands.size()))) {
                         return false;
                     }
