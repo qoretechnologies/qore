@@ -48,6 +48,16 @@ bool sub runBool(*bool invert) {
     return combine(True, invert);
 }
 
+int sub runAssigned(int iterations) {
+    *int factor = 3;
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        factor = (i & 1) ? 4 : 5;
+        result += scale(i % 10, factor);
+    }
+    return result;
+}
+
 bool sub nothingFails() {
     *int factor = NOTHING;
     try {
@@ -56,6 +66,31 @@ bool sub nothingFails() {
         return True;
     }
     return False;
+}
+
+bool sub removedFails() {
+    *int factor = 4;
+    remove factor;
+    try {
+        scale(2, factor);
+    } catch (hash<auto> ex) {
+        return True;
+    }
+    return False;
+}
+
+*int sub removedValue() {
+    *int factor = 4;
+    remove factor;
+    return factor;
+}
+
+*int sub maybeRemoved(bool remove_value) {
+    *int factor = 5;
+    if (remove_value) {
+        remove factor;
+    }
+    return factor;
 }
 
 int sub overloaded(int value) {
@@ -71,8 +106,10 @@ auto sub callOverloaded(auto value) {
 }
 
 int sub main() {
-    printf(\"%d:%.1f:%d:%d:%d:%s\\n\", runInt(100, 4), runFloat(1.5),
-        runBool(True), runBool(False), nothingFails(), callOverloaded(3));
+    printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%s\\n\", runInt(100, 4), runFloat(1.5),
+        runBool(True), runBool(False), runAssigned(100), nothingFails(),
+        removedFails(), removedValue() === NOTHING,
+        maybeRemoved(True) === NOTHING, callOverloaded(3));
     return 0;
 }
 ";
@@ -90,7 +127,7 @@ string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
 string ast = backquote(sprintf("%s %s --exec-mode=ast %s 2>&1",
     env, qore_bin, runner_path));
 string enabled_compile = backquote(sprintf(
-    "%s %s -O3 -c --output-dir=%s %s 2>&1",
+    "%s QORE_AOT_DEBUG=1 %s -O3 -c --output-dir=%s %s 2>&1",
     env, qcc_bin, enabled_dir, source_path));
 string disabled_compile = backquote(sprintf(
     "%s QORE_DISABLE_AOT_OPTIONAL_SCALAR_FAST_ENTRY=1"
@@ -101,6 +138,10 @@ string disabled_qo = disabled_dir + "/optional-scalar.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
+    exit(2);
+}
+if (!(enabled_compile =~ /eliding fast-entry argument NOTHING guard/)) {
+    printf("assigned-state argument guard was not elided:\n%s", enabled_compile);
     exit(2);
 }
 

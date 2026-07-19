@@ -4101,6 +4101,224 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
     return {eliminated_loads.size(), eliminated_stores.size()};
 }
 
+static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
+        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_LOCAL_VALUE_FACTS")
+            || func.blocks.empty() || func.has_opaque_ast_local_access) {
+        return 0;
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR local value fact exception-flow analysis")) {
+                return 0;
+            }
+            if (inst->exception_target) {
+                return 0;
+            }
+        }
+    }
+
+    std::unordered_set<const LocalVar*> universe;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR local value fact candidate analysis")) {
+                return 0;
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local =
+                    static_cast<const QoreIRLocalInstruction*>(inst.get())
+                        ->local;
+                const QoreTypeInfo* type =
+                    local ? local->getTypeInfo() : nullptr;
+                const QoreTypeInfo* value_type =
+                    type ? qore_get_value_type(type) : nullptr;
+                bool native_scalar = value_type
+                    && ((QoreTypeInfo::isType(value_type, NT_INT)
+                            && !QoreTypeInfo::getReturnEnum(value_type))
+                        || QoreTypeInfo::isType(value_type, NT_FLOAT)
+                        || QoreTypeInfo::isType(value_type, NT_BOOLEAN));
+                if (local && !local->closureUse()
+                        && !QoreTypeInfo::isReference(type)
+                        && native_scalar) {
+                    universe.insert(local);
+                }
+            }
+        }
+    }
+    if (universe.empty()) {
+        return 0;
+    }
+
+    auto transfer_instruction = [&](const QoreIRInstruction* inst,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR local value fact transfer")) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::StoreLocal) {
+            const auto* store =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!store->local || !universe.count(store->local)
+                    || store->operands.size() != 1 || store->weak
+                    || store->is_ref || store->is_closure) {
+                if (store->local) {
+                    known.erase(store->local);
+                }
+                return true;
+            }
+            const QoreIRValueFacts* facts =
+                func.getValueFacts(store->operands[0]);
+            if (facts
+                    && facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && facts->never_nothing) {
+                known.insert(store->local);
+            } else {
+                known.erase(store->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+            const auto* local =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (local->local) {
+                known.erase(local->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::LoadLocal) {
+            return true;
+        }
+
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+        bool direct_call = inst->opcode == QoreIROpcode::CallDirect
+            || inst->opcode == QoreIROpcode::CallStaticDirect
+            || inst->opcode == QoreIROpcode::CallMethodDirect
+            || inst->opcode == QoreIROpcode::InvokeMethodDirect
+            || inst->opcode == QoreIROpcode::CallClosureDirect;
+        if (direct_call && (!callee || has_ref_args)) {
+            known.clear();
+            return true;
+        }
+        if (!direct_call
+                && qore_ir_instruction_may_invalidate_caller_caches(
+                    func, inst)) {
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                known.erase(written);
+            } else {
+                known.clear();
+            }
+        }
+        return true;
+    };
+    auto transfer = [&](size_t block_id,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!transfer_instruction(inst.get(), known)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::vector<std::unordered_set<const LocalVar*>> in(func.blocks.size());
+    std::vector<std::unordered_set<const LocalVar*>> out(
+        func.blocks.size(), universe);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR local value fact fixed-point analysis")) {
+                return 0;
+            }
+            std::unordered_set<const LocalVar*> next;
+            if (block_id && !cfg.predecessors[block_id].empty()) {
+                next = out[cfg.predecessors[block_id].front()];
+                for (size_t pred_index = 1;
+                        pred_index < cfg.predecessors[block_id].size();
+                        ++pred_index) {
+                    if (!(pred_index % 100)
+                            && qore_ir_analysis_cancelled(check_count,
+                                "IR local value fact predecessor intersection")) {
+                        return 0;
+                    }
+                    const auto& predecessor =
+                        out[cfg.predecessors[block_id][pred_index]];
+                    size_t local_count = 0;
+                    for (auto it = next.begin(); it != next.end();) {
+                        if (++local_count % 100 == 0
+                                && qore_ir_analysis_cancelled(check_count,
+                                    "IR local value fact set intersection")) {
+                            return 0;
+                        }
+                        if (!predecessor.count(*it)) {
+                            it = next.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
+                }
+            }
+            in[block_id] = next;
+            if (!transfer(block_id, next)) {
+                return 0;
+            }
+            if (out[block_id] != next) {
+                out[block_id] = std::move(next);
+                changed = true;
+            }
+        }
+    }
+
+    size_t refined = 0;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        std::unordered_set<const LocalVar*> known = in[block_id];
+        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR local value fact annotation")) {
+                return refined;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                const auto* load =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                if (load->local && known.count(load->local)
+                        && inst->result.isValid()) {
+                    QoreIRValueFacts facts;
+                    if (const QoreIRValueFacts* current =
+                            func.getValueFacts(inst->result)) {
+                        facts = *current;
+                    }
+                    if (facts.assigned_state
+                                != QoreIRAssignedState::Assigned
+                            || !facts.never_nothing) {
+                        facts.assigned_state =
+                            QoreIRAssignedState::Assigned;
+                        facts.never_nothing = true;
+                        if (!facts.type_info) {
+                            facts.type_info = load->local->getTypeInfo();
+                        }
+                        func.setValueFacts(inst->result, facts);
+                        ++refined;
+                    }
+                }
+            }
+            if (!transfer_instruction(inst, known)) {
+                return refined;
+            }
+        }
+    }
+    return refined;
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm) {
     QoreIROptimizationStats local_stats;
@@ -4124,6 +4342,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
     local_stats.fixed_lists_scalarized = aggregate_stats.lists;
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
+    local_stats.local_value_facts_refined =
+        qore_ir_refine_local_value_facts(func, cfg, check_count);
     QoreIRNativeLocalPromotionStats native_local_stats =
         qore_ir_promote_native_local_loads(func, cfg, check_count);
     local_stats.native_local_loads_promoted = native_local_stats.loads;

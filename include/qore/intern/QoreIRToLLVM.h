@@ -717,6 +717,7 @@ private:
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,
             unsigned index) const;
+    bool fastEntryArgumentKnownNotNothing(uint32_t value_id) const;
     BatchCalleeParamKind getFastEntryArgKind(const void* key) const;
     llvm::Value* getFastEntryCallArgument(const BatchCalleeInfo& info,
             unsigned index, const std::vector<llvm::Value*>& raw_args,

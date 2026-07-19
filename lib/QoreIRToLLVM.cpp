@@ -4011,11 +4011,33 @@ bool QoreIRToLLVM::fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& in
         }
         if (fastEntryParamRejectsNothing(info, i)
                 && nanboxed_values.count(raw_arg_ids[i])
-                && !known_not_nothing_values.count(raw_arg_ids[i])) {
+                && !fastEntryArgumentKnownNotNothing(raw_arg_ids[i])) {
             return true;
         }
     }
     return false;
+}
+
+bool QoreIRToLLVM::fastEntryArgumentKnownNotNothing(uint32_t value_id) const {
+    if (known_not_nothing_values.count(value_id)) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_ARGUMENT_FACT_GUARD_ELISION")
+            || !current_ir_func) {
+        return false;
+    }
+    const QoreIRValueFacts* facts =
+        current_ir_func->getValueFacts(QoreIRValue(value_id));
+    bool known = facts
+        && facts->assigned_state == QoreIRAssignedState::Assigned
+        && facts->never_nothing;
+    if (known && aot_mode && std::getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr,
+            "AOT: eliding fast-entry argument NOTHING guard for SSA value %u"
+            " in '%s'\n",
+            value_id, current_ir_func->getDisplayName().c_str());
+    }
+    return known;
 }
 
 bool QoreIRToLLVM::selfRecursiveFastEntryArgsNeedNothingGuard(
@@ -5613,7 +5635,7 @@ llvm::Value* QoreIRToLLVM::emitAotBatchFastEntryOrFallback(
         if (fastEntryParamRejectsNothing(callee_info, i)) {
             if (i < raw_arg_ids.size()
                     && (!nanboxed_values.count(raw_arg_ids[i])
-                        || known_not_nothing_values.count(raw_arg_ids[i]))) {
+                        || fastEntryArgumentKnownNotNothing(raw_arg_ids[i]))) {
                 continue;
             }
             llvm::Value* not_nothing = builder->CreateICmpNE(
@@ -13683,7 +13705,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         || (fastEntryParamRejectsNothing(*aot_approach_b_callee,
                                 static_cast<unsigned>(i))
                             && nanboxed_values.count(raw_arg_ids[i])
-                            && !known_not_nothing_values.count(raw_arg_ids[i]));
+                            && !fastEntryArgumentKnownNotNothing(
+                                raw_arg_ids[i]));
                     boxed_args.push_back(needs_boxed
                         ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
                 }
