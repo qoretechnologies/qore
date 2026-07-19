@@ -4125,7 +4125,10 @@ bool QoreIRToLLVM::selfRecursiveFastEntryArgsNeedNothingGuard(
 
 llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-        llvm::Function* fallback_fn) {
+        llvm::Function* fallback_fn, bool* proven_nothrow) {
+    if (proven_nothrow) {
+        *proven_nothrow = false;
+    }
     if (!info.int_expression
             || std::getenv("QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT")
             || info.int_expression.nodes.size() > QORE_AOT_INT_EXPRESSION_MAX_NODES) {
@@ -4134,6 +4137,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
     bool native_string_helpers = !std::getenv("QORE_DISABLE_AOT_NATIVE_STRING_HELPERS");
     std::vector<unsigned> optional_source_params;
     bool have_hash_key_source = false;
+    bool expression_may_throw = false;
     auto add_optional_source = [&](int param) -> bool {
         if (param < 0 || static_cast<size_t>(param) >= native_args.size()) {
             return false;
@@ -4153,6 +4157,10 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
             || node.kind == AOTIntExpressionNodeKind::HashKeyInt;
         bool string_operation = node.kind >= AOTIntExpressionNodeKind::StringStartsWith
             && node.kind <= AOTIntExpressionNodeKind::StringRFind;
+        expression_may_throw = expression_may_throw || string_operation
+            || node.kind == AOTIntExpressionNodeKind::Div
+            || node.kind == AOTIntExpressionNodeKind::Mod
+            || node.kind == AOTIntExpressionNodeKind::HashKeyInt;
         if (source && !add_optional_source(node.param)) {
             return nullptr;
         }
@@ -4429,6 +4437,9 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
     }
     llvm::Value* result = values.back();
     if (!needs_fallback) {
+        if (proven_nothrow && !expression_may_throw) {
+            *proven_nothrow = true;
+        }
         return result;
     }
 
@@ -4446,7 +4457,11 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
-        const std::vector<llvm::Value*>& native_args) {
+        const std::vector<llvm::Value*>& native_args,
+        bool* proven_nothrow) {
+    if (proven_nothrow) {
+        *proven_nothrow = false;
+    }
     if (!info.float_expression
             || std::getenv("QORE_DISABLE_AOT_FLOAT_EXPRESSION_IMPORT")
             || info.float_expression.nodes.size()
@@ -4456,6 +4471,7 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
     llvm::Module& module = *builder->GetInsertBlock()->getModule();
     std::vector<llvm::Value*> values;
     values.reserve(info.float_expression.nodes.size());
+    bool expression_may_throw = false;
     for (const auto& node : info.float_expression.nodes) {
         llvm::Value* value = nullptr;
         if (node.kind == AOTFloatExpressionNodeKind::Param) {
@@ -4495,6 +4511,7 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
                     value = builder->CreateFMul(lhs, rhs);
                     break;
                 case AOTFloatExpressionNodeKind::Div: {
+                    expression_may_throw = true;
                     auto helper = module.getOrInsertFunction("qore_rt_div_float",
                         llvm::FunctionType::get(double_type,
                             {double_type, double_type, ptr_type}, false));
@@ -4506,6 +4523,9 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
             }
         }
         values.push_back(value);
+    }
+    if (proven_nothrow && !expression_may_throw) {
+        *proven_nothrow = true;
     }
     return values.back();
 }
@@ -5525,7 +5545,11 @@ llvm::Value* QoreIRToLLVM::emitAOTGlobalInt(const BatchCalleeInfo& info,
 
 llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
-        llvm::Module& module, llvm::Function* fallback_fn) {
+        llvm::Module& module, llvm::Function* fallback_fn,
+        bool* proven_nothrow) {
+    if (proven_nothrow) {
+        *proven_nothrow = false;
+    }
     llvm::Value* result = emitAOTContextInt(info, native_args, callee_ctx,
         module, fallback_fn);
     if (!result) {
@@ -5536,13 +5560,31 @@ llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
         result = emitAOTComposedInt(info, native_args, module);
     }
     if (!result) {
-        result = emitAOTIntExpression(info, native_args, module, fallback_fn);
+        bool summary_nothrow = false;
+        result = emitAOTIntExpression(info, native_args, module, fallback_fn,
+            &summary_nothrow);
+        if (result && proven_nothrow && summary_nothrow
+                && !std::getenv(
+                    "QORE_DISABLE_AOT_SUMMARY_EXCEPTION_ELISION")) {
+            *proven_nothrow = true;
+        }
     }
     if (!result) {
-        result = emitAOTFloatExpression(info, native_args);
+        bool summary_nothrow = false;
+        result = emitAOTFloatExpression(info, native_args, &summary_nothrow);
+        if (result && proven_nothrow && summary_nothrow
+                && !std::getenv(
+                    "QORE_DISABLE_AOT_SUMMARY_EXCEPTION_ELISION")) {
+            *proven_nothrow = true;
+        }
     }
     if (!result) {
         result = emitAOTScalarLeaf(info, native_args);
+        if (result && proven_nothrow
+                && !std::getenv(
+                    "QORE_DISABLE_AOT_SUMMARY_EXCEPTION_ELISION")) {
+            *proven_nothrow = true;
+        }
     }
     if (!result) {
         result = emitAOTStringExpression(info, native_args, module);
@@ -11523,6 +11565,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::Invoke: {
             const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
             llvm::Value* result;
+            bool result_proven_nothrow = false;
             BatchCalleeReturnKind invoke_return_kind = BatchCalleeReturnKind::Boxed;
 
             // Dispatch based on invoke_opcode and operand availability to avoid
@@ -12133,13 +12176,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         call_args.push_back(aot_ctx_arg);
                         call_args.push_back(xsink_arg);
+                        bool summary_nothrow = false;
                         result = emitAOTImportedSummary(
                             *aot_approach_b_callee, call_args, aot_ctx_arg,
-                            module, aot_invoke_context_independent_fn);
+                            module, aot_invoke_context_independent_fn,
+                            &summary_nothrow);
                         if (!result) {
                             result = builder->CreateCall(
                                 aot_invoke_context_independent_fn, call_args);
                         }
+                        result_proven_nothrow =
+                            summary_nothrow && !has_arg_cleanups;
                         invoke_return_kind = aot_approach_b_callee->return_kind;
                         if (has_arg_cleanups) {
                             auto clear_helper = module.getOrInsertFunction(
@@ -12329,13 +12376,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         call_args.push_back(aot_ctx_arg);
                         call_args.push_back(xsink_arg);
+                        bool summary_nothrow = false;
                         result = emitAOTImportedSummary(
                             *aot_static_batch_callee, call_args, aot_ctx_arg,
-                            module, aot_invoke_context_independent_fn);
+                            module, aot_invoke_context_independent_fn,
+                            &summary_nothrow);
                         if (!result) {
                             result = builder->CreateCall(
                                 aot_invoke_context_independent_fn, call_args);
                         }
+                        result_proven_nothrow =
+                            summary_nothrow && !has_arg_cleanups;
                         invoke_return_kind = aot_static_batch_callee->return_kind;
                         if (has_arg_cleanups) {
                             auto clear_helper = module.getOrInsertFunction(
@@ -13524,13 +13575,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 trackResultForCleanup(result, inst->result.id, llvm_func);
             }
 
-            // Check for exception and branch accordingly
-            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
-                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
-            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
-            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
-                    llvm::ConstantInt::get(i64_type, 0));
-
             // Find normal and exception target blocks
             auto normal_it = block_map.find(inv->normal_target);
             auto except_it = block_map.find(inv->exception_target);
@@ -13542,6 +13586,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke exception target block not found";
                 return false;
             }
+            if (result_proven_nothrow) {
+                if (std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: eliding exception edge for imported pure"
+                        " summary in '%s'\n",
+                        current_ir_func ? current_ir_func->name.c_str()
+                                        : "<unknown>");
+                }
+                builder->CreateBr(normal_it->second);
+                return true;
+            }
+
+            // Check for exception and branch accordingly
+            auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
+            llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
+                    llvm::ConstantInt::get(i64_type, 0));
             builder->CreateCondBr(has_exception, except_it->second, normal_it->second);
             return true;
         }
@@ -13952,6 +14014,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
             BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;
             bool call_may_modify_runtime_locals = true;
+            bool call_may_throw = true;
             const BatchCalleeInfo* call_effect_info = nullptr;
             if (type_name_fast_path) {
                 auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
@@ -14575,12 +14638,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
+                bool summary_nothrow = false;
                 call_result = emitAOTImportedSummary(*aot_approach_b_callee,
-                    call_args, aot_ctx_arg, module, aot_approach_b_fn);
+                    call_args, aot_ctx_arg, module, aot_approach_b_fn,
+                    &summary_nothrow);
                 if (!call_result) {
                     call_result = builder->CreateCall(
                         aot_approach_b_fn, call_args);
                 }
+                call_may_throw = !(summary_nothrow && !has_arg_cleanups);
                 call_return_kind = aot_approach_b_callee->return_kind;
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
@@ -14872,7 +14938,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && aot_approach_b_callee->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
-            emitExceptionCheck(module, llvm_func, inst);
+            if (call_may_throw) {
+                emitExceptionCheck(module, llvm_func, inst);
+            } else if (std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: eliding exception check for imported pure"
+                    " summary in '%s'\n",
+                    current_ir_func ? current_ir_func->name.c_str()
+                                    : "<unknown>");
+            }
             return true;
         }
 
@@ -15462,6 +15536,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
+            bool call_may_throw = true;
             const BatchCalleeInfo* call_effect_info = nullptr;
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
@@ -15502,11 +15577,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 call_args.push_back(aot_ctx_arg);
                 call_args.push_back(xsink_arg);
+                bool summary_nothrow = false;
                 call_result = emitAOTImportedSummary(*aot_static_batch_callee,
-                    call_args, aot_ctx_arg, module, aot_static_batch_fn);
+                    call_args, aot_ctx_arg, module, aot_static_batch_fn,
+                    &summary_nothrow);
                 if (!call_result) {
                     call_result = builder->CreateCall(aot_static_batch_fn, call_args);
                 }
+                call_may_throw = !(summary_nothrow && !has_arg_cleanups);
                 if (std::getenv(
                         "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
                     call_may_modify_runtime_locals = true;
@@ -15638,7 +15716,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            emitExceptionCheck(module, llvm_func, inst);
+            if (call_may_throw) {
+                emitExceptionCheck(module, llvm_func, inst);
+            } else if (std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: eliding exception check for imported pure"
+                    " summary in '%s'\n",
+                    current_ir_func ? current_ir_func->name.c_str()
+                                    : "<unknown>");
+            }
             return true;
         }
 

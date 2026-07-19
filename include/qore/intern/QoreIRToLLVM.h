@@ -674,11 +674,12 @@ private:
     // Emit a bounded pure native-integer expression summary.
     llvm::Value* emitAOTIntExpression(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-            llvm::Function* fallback_fn);
+            llvm::Function* fallback_fn, bool* proven_nothrow = nullptr);
 
     // Emit a bounded pure native-float expression summary without fast-math flags.
     llvm::Value* emitAOTFloatExpression(const BatchCalleeInfo& info,
-            const std::vector<llvm::Value*>& native_args);
+            const std::vector<llvm::Value*>& native_args,
+            bool* proven_nothrow = nullptr);
 
     // Emit an imported encoding-aware string operation. Returns nullptr when
     // no valid summary is available for the supplied fast-entry arguments.
@@ -718,7 +719,8 @@ private:
     // Emit any importable callee summary through one shared dispatch path.
     llvm::Value* emitAOTImportedSummary(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Value* callee_ctx,
-            llvm::Module& module, llvm::Function* fallback_fn);
+            llvm::Module& module, llvm::Function* fallback_fn,
+            bool* proven_nothrow = nullptr);
 
     llvm::Value* emitAOTFixedHashRemap(const BatchCalleeInfo& info,
             llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
