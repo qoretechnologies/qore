@@ -1,0 +1,20 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+*string sub boxedHashKey(hash<string, string> value) {
+    return value.answer;
+}
+
+int sub boxedHashKernel(int rounds) {
+    hash<string, string> value = {"answer": "abcdefgh"};
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += boxedHashKey(value).size();
+    }
+    return checksum;
+}
+
+int rounds = ARGV.size() ? ARGV[0].toInt() : 5000000;
+printf("%d\n", boxedHashKernel(rounds));

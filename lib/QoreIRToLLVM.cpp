@@ -5209,6 +5209,26 @@ llvm::Value* QoreIRToLLVM::emitAOTCollectionOp(const BatchCalleeInfo& info,
                 {base, key, llvm::ConstantInt::get(i64_type, hash.hash64),
                  llvm::ConstantInt::get(i32_type, hash.hash32)});
         }
+        case AOTCollectionOpKind::HashKeyBoxed: {
+            if (info.return_kind != BatchCalleeReturnKind::Boxed
+                    || op.key.empty()) {
+                return nullptr;
+            }
+            llvm::Value* key = builder->CreateGlobalString(op.key,
+                "collection_hash_key");
+            QoreIRPrecomputedStringHash hash =
+                qore_ir_precompute_string_hash(op.key);
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_hash_key_access_hash_prehashed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, i64_type, i32_type, ptr_type},
+                    false));
+            return builder->CreateCall(helper,
+                {base, key,
+                 llvm::ConstantInt::get(i64_type, hash.hash64),
+                 llvm::ConstantInt::get(i32_type, hash.hash32),
+                 xsink_arg});
+        }
         default:
             return nullptr;
     }

@@ -6112,6 +6112,8 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
             case QoreIROpcode::ListSize:
             case QoreIROpcode::ListIndexDynamic:
             case QoreIROpcode::HashKeyAccessInt:
+            case QoreIROpcode::HashKeyAccessHash:
+            case QoreIROpcode::HashKeyAccessHashGuarded:
                 if (operation || !inst->result.isValid()) {
                     return false;
                 }
@@ -6201,6 +6203,23 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
             }
             result.key = access->key_name;
             result.kind = AOTCollectionOpKind::HashKeyInt;
+            return true;
+        }
+        case QoreIROpcode::HashKeyAccessHash:
+        case QoreIROpcode::HashKeyAccessHashGuarded: {
+            if (operation->operands.size() != 1
+                    || !QoreTypeInfo::isHashType(base->getTypeInfo())
+                    || !rejects_nothing(base)) {
+                return false;
+            }
+            const auto* access =
+                static_cast<const QoreIRHashKeyAccessInstruction*>(
+                    operation);
+            if (access->key_name.empty()) {
+                return false;
+            }
+            result.key = access->key_name;
+            result.kind = AOTCollectionOpKind::HashKeyBoxed;
             return true;
         }
         default:
@@ -11561,7 +11580,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             return false;
         }
     }
-    if (rec.collection_op_kind > static_cast<uint8_t>(AOTCollectionOpKind::HashKeyInt)
+    if (rec.collection_op_kind
+                > static_cast<uint8_t>(
+                    AOTCollectionOpKind::HashKeyBoxed)
             || rec.collection_op_base_param < -1 || rec.collection_op_index_param < -1
             || rec.collection_op_base_param >= static_cast<int>(info.num_params)
             || rec.collection_op_index_param >= static_cast<int>(info.num_params)) {
@@ -11581,7 +11602,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         }
     } else {
         bool list_index = info.collection_op.kind == AOTCollectionOpKind::ListIndex;
-        bool hash_key = info.collection_op.kind == AOTCollectionOpKind::HashKeyInt;
+        bool hash_key =
+            info.collection_op.kind == AOTCollectionOpKind::HashKeyInt
+            || info.collection_op.kind
+                == AOTCollectionOpKind::HashKeyBoxed;
         auto rejects_nothing = [&](int8_t param) {
             return param < 0 || (static_cast<size_t>(param)
                 < info.param_rejects_nothing.size()

@@ -265,6 +265,7 @@ enum class AOTCollectionOpKind : uint8_t {
     ListSize = 1,
     ListIndex = 2,
     HashKeyInt = 3,
+    HashKeyBoxed = 4,
 };
 
 struct AOTCollectionOpInfo {
