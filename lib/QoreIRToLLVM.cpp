@@ -7239,6 +7239,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Create LLVM basic blocks for all IR blocks
     block_map.clear();
     final_block_map.clear();
+    edge_block_map.clear();
     block_map.reserve(func.blocks.size());
     final_block_map.reserve(func.blocks.size());
     for (const auto& block : func.blocks) {
@@ -8254,9 +8255,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // PHI fixup pass: add incoming values now that all blocks are lowered
-    for (auto& [phi_node, phi_inst] : pending_phis) {
+    for (auto& [phi_node, phi_inst, phi_ir_block] : pending_phis) {
+        llvm::BasicBlock* phi_bb = phi_node->getParent();
         if (getenv("QORE_LLVM_DEBUG")) {
-            llvm::BasicBlock* phi_bb = phi_node->getParent();
             fprintf(stderr, "PHI-FIXUP-START: PHI in block=%s predecessors=[",
                     phi_bb->getName().str().c_str());
             bool first = true;
@@ -8272,10 +8273,20 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!val) {
                 return false;
             }
-            // Use final_block_map to get the actual LLVM predecessor block.
-            // When lowering creates intermediate blocks (e.g., cmp_merge for comparisons),
-            // the IR block maps to a different final LLVM block than the initial one.
-            llvm::BasicBlock* bb = final_block_map[inc.block];
+            // Resolve the actual LLVM predecessor block for this incoming edge.
+            // When a block's terminator emits its outgoing branches from different
+            // LLVM blocks (e.g. TypedForeachNext*), edge_block_map records the true
+            // origin per (predecessor, successor) IR edge; otherwise final_block_map
+            // gives the last LLVM block of the IR predecessor (covering intermediate
+            // blocks like cmp_merge created during its lowering).
+            llvm::BasicBlock* bb = nullptr;
+            auto edge_it = edge_block_map.find({inc.block, phi_ir_block});
+            if (edge_it != edge_block_map.end()) {
+                bb = edge_it->second;
+            }
+            if (!bb) {
+                bb = final_block_map[inc.block];
+            }
             if (!bb) {
                 // Fall back to block_map if final_block_map doesn't have an entry
                 // (shouldn't happen, but be defensive)
@@ -8283,6 +8294,25 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             if (!bb) {
                 error = "PHI incoming block not found";
+                return false;
+            }
+            // Verify the resolved block against the final lowered CFG: it must be a
+            // real predecessor of the PHI's block, or LLVM verification would fail
+            // later with far less context.
+            bool is_predecessor = false;
+            for (auto it = llvm::pred_begin(phi_bb), et = llvm::pred_end(phi_bb);
+                    it != et; ++it) {
+                if (*it == bb) {
+                    is_predecessor = true;
+                    break;
+                }
+            }
+            if (!is_predecessor) {
+                error = "PHI in block '" + phi_bb->getName().str()
+                    + "' has incoming edge from IR block '"
+                    + (inc.block ? inc.block->name : std::string("<null>"))
+                    + "' resolved to LLVM block '" + bb->getName().str()
+                    + "', which is not a predecessor";
                 return false;
             }
             // Match incoming values to the PHI representation. QoreValue PHIs
@@ -10667,7 +10697,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             // Store for fixup pass after all blocks are lowered (incoming values
             // may not be lowered yet due to forward edges).
-            pending_phis.push_back({phi_node, phi});
+            pending_phis.push_back({phi_node, phi, current_lowering_block_});
             return true;
         }
 
@@ -22754,6 +22784,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             llvm::BasicBlock* load_block = llvm::BasicBlock::Create(
                 ctx, "typed_foreach.load", llvm_func);
+            // The done edge leaves the current (bounds-check) block while the
+            // continue edge leaves the value block created below, so record both
+            // edge origins for PHI wiring — final_block_map can only describe one.
+            edge_block_map[{current_lowering_block_, next_inst->done_target}] =
+                builder->GetInsertBlock();
             builder->CreateCondBr(at_end, done_it->second, load_block);
             builder->SetInsertPoint(load_block);
 
@@ -22801,6 +22836,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.erase(inst->result.id);
             }
             values[inst->result.id] = result;
+            edge_block_map[{current_lowering_block_, next_inst->continue_target}] =
+                builder->GetInsertBlock();
             builder->CreateBr(body_it->second);
             return true;
         }

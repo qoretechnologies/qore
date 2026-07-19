@@ -99,11 +99,39 @@ string sub deletedValue(bool delete_it) {
     return value === NOTHING ? \"nothing\" : string(value);
 }
 
-printf(\"%d:%.2f:%d:%d:%d:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
+# regression: an exact native int local promoted to SSA must stay valid across a
+# specialized typed foreach with a conditional body (loop-exit PHI wiring; the
+# done edge of TypedForeachNext* leaves a different LLVM block than the
+# continue edge)
+string sub typedForeachInt(hash<string, int> counts) {
+    int max_fields = 12;
+    list<string> shapes = ();
+    foreach string name in ((\"int\", \"string\", \"other\")) {
+        if (counts{name}) {
+            shapes += name;
+        }
+    }
+    return sprintf(\"%d:%s\", max_fields, shapes.join(\",\"));
+}
+
+# same regression shape for exact native float locals, including one local
+# conditionally reassigned inside the typed loop body
+string sub typedForeachFloat() {
+    float scale = 1.5;
+    float total = 0.0;
+    foreach float v in ((1.25, 2.5, 0.5)) {
+        if (v > 1.0) {
+            total = total + v;
+        }
+    }
+    return sprintf(\"%.2f:%.2f\", scale, total);
+}
+
+printf(\"%d:%.2f:%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
     branchFloat(20), straightInt(20), storeResult(), storeSideEffect(),
     maybeAssigned(False), maybeAssigned(True),
     removedValue(True), removedValue(False), deletedValue(True),
-    deletedValue(False));
+    deletedValue(False), typedForeachInt({\"int\": 1}), typedForeachFloat());
 ";
 
 string root = "/tmp/qore-ir-native-local-ssa-" + string(getpid());
@@ -115,7 +143,7 @@ source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "220:225.00:590:14:1:nothing:7:nothing:11:nothing:15\n";
+string expected = "220:225.00:590:14:1:nothing:7:nothing:11:nothing:15:12:int:1.50:3.75\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -153,6 +181,23 @@ foreach string function in (("maybeAssigned", "removedValue", "deletedValue")) {
         exit(2);
     }
 }
+# the typed-foreach regression functions must exercise BOTH native local SSA
+# promotion and typed-foreach specialization; require nonzero counters so the
+# test cannot pass by silently avoiding either optimization
+foreach string function in (("typedForeachInt", "typedForeachFloat")) {
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
+        printf("missing native local SSA promotion across typed foreach "
+            + "for %s:\n%s", function, stats);
+        exit(2);
+    }
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*typed-foreach=[1-9]", function))) {
+        printf("missing typed foreach specialization for %s:\n%s",
+            function, stats);
+        exit(2);
+    }
+}
 
 string loads_only_stats = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION=1"
@@ -167,17 +212,23 @@ if (loads_only_stats
     exit(2);
 }
 
+string enabled_aot_o0 = root + "-enabled-o0";
 string enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, enabled_aot, source_path));
+# -O0 must pass too: the typed-foreach loop-exit PHI regression was independent
+# of the LLVM optimization level
+string enabled_compile_o0 = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O0 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_aot_o0, source_path));
 string disabled_compile = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_LOCAL_SSA=1 LD_LIBRARY_PATH=%s"
         + " %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_aot, source_path));
-foreach string executable in ((enabled_aot, disabled_aot)) {
+foreach string executable in ((enabled_aot, enabled_aot_o0, disabled_aot)) {
     if (!is_file(executable)) {
-        printf("AOT compile failed for %s:\n%s%s", executable,
-            enabled_compile, disabled_compile);
+        printf("AOT compile failed for %s:\n%s%s%s", executable,
+            enabled_compile, enabled_compile_o0, disabled_compile);
         exit(2);
     }
     string actual = backquote(sprintf(

@@ -33,8 +33,10 @@
 #define _QORE_QOREIRTOLLVM_H
 
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 #include "qore/intern/QoreIR.h"
@@ -264,6 +266,15 @@ private:
     // ends up in a different block than the initial one. This map tracks where
     // each IR block's instructions end up, for correct PHI predecessor resolution.
     std::unordered_map<const QoreIRBasicBlock*, llvm::BasicBlock*> final_block_map;
+
+    // Per-edge block mapping: (IR predecessor block, IR successor block) → the LLVM
+    // block that outgoing edge actually originates from.  Required when lowering a
+    // block's terminator emits its outgoing branches from DIFFERENT LLVM blocks —
+    // e.g. TypedForeachNext*, where the done edge leaves the bounds-check block
+    // while the continue edge leaves the value-extraction block — so a single
+    // final_block_map entry cannot describe both edges for PHI wiring.
+    std::map<std::pair<const QoreIRBasicBlock*, const QoreIRBasicBlock*>,
+        llvm::BasicBlock*> edge_block_map;
 
     // Value mapping: QoreIR value IDs → LLVM values
     std::unordered_map<uint32_t, llvm::Value*> values;
@@ -730,8 +741,14 @@ private:
     bool selfRecursiveFastEntryArgsNeedNothingGuard(
             const std::vector<uint32_t>& raw_arg_ids) const;
 
-    // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
-    std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
+    // Deferred PHI nodes to fixup after all blocks are lowered; ir_block is the IR
+    // block containing the PHI so incoming edges can be resolved via edge_block_map
+    struct PendingPhi {
+        llvm::PHINode* node;
+        const QoreIRPhiInstruction* inst;
+        const QoreIRBasicBlock* ir_block;
+    };
+    std::vector<PendingPhi> pending_phis;
 
     // Pointer to current IR function being lowered (for reading type profiles)
     const QoreIRFunction* current_ir_func = nullptr;
