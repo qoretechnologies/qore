@@ -23153,6 +23153,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Container access with pre-evaluated operands ===
         case QoreIROpcode::HashDerefDynamic:
         case QoreIROpcode::ListIndexDynamic: {
+            if (inst->opcode == QoreIROpcode::ListIndexDynamic
+                    && !std::getenv(
+                        "QORE_DISABLE_IR_NATIVE_LIST_INDEX_ACCESS")
+                    && tryEmitListIndexAccess(
+                        inst, module, llvm_func)) {
+                llvm::Value* result = values[inst->result.id];
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(
+                    result, inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             if (inst->operands.size() >= 2) {
                 auto* lhs = getVal(inst->operands[0].id, error);
                 if (!lhs) { return false; }
@@ -23675,7 +23687,9 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
 bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::Module& module,
         llvm::Function* llvm_func) {
     const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-    if (!expr_inst->expr.hasNode()) {
+    if (!expr_inst->expr.hasNode()
+            || !expr_inst->list_selector_kinds.empty()
+            || inst->operands.size() != 2) {
         return false;
     }
 
@@ -23712,10 +23726,15 @@ bool QoreIRToLLVM::tryEmitListIndexAccess(const QoreIRInstruction* inst, llvm::M
         return false;  // Can't determine index type
     }
 
-    auto helper = module.getOrInsertFunction("qore_rt_list_index_access_compat",
-            llvm::FunctionType::get(i64_type, {i64_type, i64_type, i32_type, ptr_type}, false));
-    values[inst->result.id] = builder->CreateCall(helper, {list_boxed, idx_int,
-        llvm::ConstantInt::get(i32_type, sq_brackets->hasStringIndexChar() ? 1 : 0), xsink_arg});
+    auto helper = module.getOrInsertFunction(
+        "qore_rt_list_index_access_compat",
+        llvm::FunctionType::get(i64_type,
+            {i64_type, i64_type, i32_type, ptr_type}, false));
+    values[inst->result.id] = builder->CreateCall(
+        helper, {list_boxed, idx_int,
+         llvm::ConstantInt::get(i32_type,
+             sq_brackets->hasStringIndexChar() ? 1 : 0),
+         xsink_arg});
     return true;
 }
 
