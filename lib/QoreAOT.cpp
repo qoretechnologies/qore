@@ -7445,6 +7445,403 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         ? returned_param : -1;
 }
 
+static int8_t qore_aot_get_composed_boxed_return_param(
+        const QoreIRFunction& func, const UserSignature& sig,
+        const BatchCalleeInfo& outer_info,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    if (std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")
+            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || func.blocks.empty() || func.blocks.size() > 16
+            || outer_info.may_invalidate_external_caches) {
+        return -1;
+    }
+    size_t instruction_count = 0;
+    for (const auto& block : func.blocks) {
+        if (!block || (instruction_count += block->instructions.size()) > 96) {
+            return -1;
+        }
+    }
+
+    // Removing a wrapper must not suppress a loop, even when its body only
+    // forwards a parameter through otherwise side-effect-free calls.
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled || cfg.blocks.size() != func.blocks.size()) {
+        return -1;
+    }
+    std::vector<size_t> indegree(cfg.blocks.size(), 0);
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (!cfg.reachable[block_id]) {
+            return -1;
+        }
+        for (size_t successor : cfg.successors[block_id]) {
+            if (successor >= cfg.blocks.size()) {
+                return -1;
+            }
+            ++indegree[successor];
+        }
+    }
+    std::vector<size_t> worklist;
+    for (size_t block_id = 0; block_id < indegree.size(); ++block_id) {
+        if (!indegree[block_id]) {
+            worklist.push_back(block_id);
+        }
+    }
+    size_t visited = 0;
+    while (!worklist.empty()) {
+        size_t block_id = worklist.back();
+        worklist.pop_back();
+        ++visited;
+        for (size_t successor : cfg.successors[block_id]) {
+            if (!--indegree[successor]) {
+                worklist.push_back(successor);
+            }
+        }
+    }
+    if (visited != cfg.blocks.size()) {
+        return -1;
+    }
+
+    std::unordered_map<const LocalVar*, int8_t> param_locals;
+    std::unordered_map<const LocalVar*, int8_t> local_sources;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second) {
+            return -1;
+        }
+        int8_t source = static_cast<int8_t>(i);
+        param_locals.emplace(param->second, source);
+        local_sources.emplace(param->second, source);
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (inst_ptr && inst_ptr->opcode == QoreIROpcode::StoreLocal
+                    && param_locals.count(static_cast<const QoreIRLocalInstruction*>(
+                        inst_ptr.get())->local)) {
+                return -1;
+            }
+        }
+    }
+
+    auto get_call = [](const QoreIRInstruction* inst,
+            const AbstractQoreFunctionVariant*& variant,
+            const QoreValue*& expr, bool& has_ref_args) {
+        variant = nullptr;
+        expr = nullptr;
+        has_ref_args = true;
+        if (!inst) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::CallDirect) {
+            const auto* call =
+                static_cast<const QoreIRCallDirectInstruction*>(inst);
+            variant = call->variant;
+            expr = &call->expr;
+            has_ref_args = call->has_ref_args;
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+            const auto* call =
+                static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            variant = call->variant;
+            expr = &call->expr;
+            has_ref_args = call->has_ref_args;
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::CallMethodDirect) {
+            const auto* call =
+                static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            if (!qore_aot_is_non_overridable_method_call(*call)) {
+                return false;
+            }
+            variant = call->variant;
+            expr = &call->expr;
+            has_ref_args = call->has_ref_args;
+            return true;
+        }
+        return false;
+    };
+    auto set_source = [](std::unordered_map<uint32_t, int8_t>& sources,
+            QoreIRValue value, int8_t source, bool& changed) {
+        if (!value.isValid() || source < 0) {
+            return false;
+        }
+        auto [found, inserted] = sources.emplace(value.id, source);
+        if (!inserted && found->second != source) {
+            return false;
+        }
+        changed = changed || inserted;
+        return true;
+    };
+
+    std::unordered_map<uint32_t, int8_t> value_sources;
+    std::unordered_map<uint32_t, size_t> value_uses;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (!inst_ptr) {
+                continue;
+            }
+            qore_ir_visit_value_operands(
+                *inst_ptr, [&value_uses](QoreIRValue operand) {
+                    if (operand.isValid()) {
+                        ++value_uses[operand.id];
+                    }
+                });
+        }
+    }
+    bool saw_nested_call = false;
+    for (size_t pass = 0; pass <= instruction_count; ++pass) {
+        bool changed = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->exception_target) {
+                    return -1;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::DebugBlock:
+                    case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::DiscardTemps:
+                    case QoreIROpcode::Br:
+                    case QoreIROpcode::BrIf:
+                    case QoreIROpcode::Return:
+                        break;
+                    case QoreIROpcode::LoadLocal: {
+                        const auto* load =
+                            static_cast<const QoreIRLocalInstruction*>(inst);
+                        auto source = local_sources.find(load->local);
+                        if (source != local_sources.end()
+                                && !set_source(value_sources, inst->result,
+                                    source->second, changed)) {
+                            return -1;
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::StoreLocal: {
+                        const auto* store =
+                            static_cast<const QoreIRLocalInstruction*>(inst);
+                        if (!store->local || inst->operands.size() != 1) {
+                            return -1;
+                        }
+                        auto source =
+                            value_sources.find(inst->operands.front().id);
+                        if (source == value_sources.end()) {
+                            break;
+                        }
+                        auto [found, inserted] =
+                            local_sources.emplace(store->local, source->second);
+                        if (!inserted && found->second != source->second) {
+                            return -1;
+                        }
+                        changed = changed || inserted;
+                        break;
+                    }
+                    case QoreIROpcode::RefSelf:
+                        if (inst->operands.size() != 1) {
+                            return -1;
+                        }
+                        if (auto source =
+                                value_sources.find(
+                                    inst->operands.front().id);
+                                source != value_sources.end()
+                                && !set_source(
+                                    value_sources, inst->result,
+                                    source->second, changed)) {
+                            return -1;
+                        }
+                        break;
+                    case QoreIROpcode::UninstantiateLocal: {
+                        const auto* cleanup =
+                            static_cast<const QoreIRLocalInstruction*>(
+                                inst);
+                        if (!cleanup->local
+                                || param_locals.count(cleanup->local)
+                                || !local_sources.count(cleanup->local)) {
+                            return -1;
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::Phi: {
+                        const auto* phi =
+                            static_cast<const QoreIRPhiInstruction*>(inst);
+                        int8_t source = -1;
+                        for (const QoreIRPhiIncoming& incoming : phi->incoming) {
+                            auto found = value_sources.find(incoming.value.id);
+                            if (found == value_sources.end()
+                                    || (source >= 0
+                                        && source != found->second)) {
+                                source = -1;
+                                break;
+                            }
+                            source = found->second;
+                        }
+                        if (source >= 0
+                                && !set_source(value_sources, inst->result,
+                                    source, changed)) {
+                            return -1;
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::CallDirect:
+                    case QoreIROpcode::CallStaticDirect:
+                    case QoreIROpcode::CallMethodDirect: {
+                        const AbstractQoreFunctionVariant* variant = nullptr;
+                        const QoreValue* expr = nullptr;
+                        bool has_ref_args = true;
+                        if (!get_call(inst, variant, expr, has_ref_args)
+                                || has_ref_args || !variant || !expr) {
+                            return -1;
+                        }
+                        auto nested = batch_callees.find(variant);
+                        if (nested == batch_callees.end()
+                                || !nested->second.approach_b_eligible
+                                || nested->second.may_invalidate_external_caches
+                                || nested->second.return_kind
+                                    != BatchCalleeReturnKind::Boxed
+                                || !nested->second.never_returns_nothing
+                                || nested->second.boxed_return_param < 0
+                                || inst->operands.size()
+                                    != nested->second.num_params
+                                || nested->second.param_kinds.size()
+                                    != inst->operands.size()
+                                || nested->second.param_rejects_nothing.size()
+                                    != inst->operands.size()
+                                || nested->second.param_may_modify.size()
+                                    != inst->operands.size()
+                                || std::find(nested->second.param_may_modify.begin(),
+                                    nested->second.param_may_modify.end(), 1)
+                                    != nested->second.param_may_modify.end()
+                                || !qore_aot_fast_entry_operands_need_no_binding(
+                                    variant, *expr, func, inst->operands, 0,
+                                    static_cast<int>(inst->operands.size()))) {
+                            return -1;
+                        }
+                        for (size_t i = 0; i < inst->operands.size(); ++i) {
+                            if (!nested->second.param_rejects_nothing[i]) {
+                                continue;
+                            }
+                            auto source =
+                                value_sources.find(inst->operands[i].id);
+                            bool outer_rejects = source != value_sources.end()
+                                && static_cast<size_t>(source->second)
+                                    < outer_info.param_rejects_nothing.size()
+                                && outer_info.param_rejects_nothing[
+                                    static_cast<size_t>(source->second)];
+                            const QoreIRValueFacts* facts =
+                                func.getValueFacts(inst->operands[i]);
+                            if (!outer_rejects
+                                    && (!facts
+                                        || facts->assigned_state
+                                            != QoreIRAssignedState::Assigned
+                                        || !facts->never_nothing)) {
+                                return -1;
+                            }
+                        }
+                        size_t selected = static_cast<size_t>(
+                            nested->second.boxed_return_param);
+                        if (selected >= inst->operands.size()
+                                || nested->second.param_kinds[selected]
+                                    != BatchCalleeParamKind::Boxed
+                                || !nested->second.param_rejects_nothing[
+                                    selected]) {
+                            return -1;
+                        }
+                        auto source =
+                            value_sources.find(inst->operands[selected].id);
+                        if (source != value_sources.end()
+                                && !set_source(value_sources, inst->result,
+                                    source->second, changed)) {
+                            return -1;
+                        }
+                        saw_nested_call = true;
+                        break;
+                    }
+                    default:
+                        return -1;
+                }
+            }
+        }
+        if (!changed) {
+            break;
+        }
+    }
+
+    int8_t returned_param = -1;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::Phi
+                    || inst->opcode == QoreIROpcode::RefSelf
+                    || inst->opcode == QoreIROpcode::CallDirect
+                    || inst->opcode == QoreIROpcode::CallStaticDirect
+                    || inst->opcode == QoreIROpcode::CallMethodDirect) {
+                if (!inst->result.isValid()
+                        || (!value_sources.count(inst->result.id)
+                            && value_uses[inst->result.id])) {
+                    return -1;
+                }
+            } else if (inst->opcode == QoreIROpcode::StoreLocal) {
+                if (inst->operands.size() != 1
+                        || !value_sources.count(inst->operands.front().id)) {
+                    return -1;
+                }
+            } else if (inst->opcode
+                    == QoreIROpcode::UninstantiateLocal) {
+                const auto* cleanup =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                if (!cleanup->local
+                        || param_locals.count(cleanup->local)
+                        || !local_sources.count(cleanup->local)) {
+                    return -1;
+                }
+            } else if (inst->opcode == QoreIROpcode::Return) {
+                const auto* ret =
+                    static_cast<const QoreIRReturnInstruction*>(inst);
+                auto source = ret->has_value
+                    ? value_sources.find(ret->value.id)
+                    : value_sources.end();
+                if (source == value_sources.end()
+                        || (returned_param >= 0
+                            && returned_param != source->second)) {
+                    return -1;
+                }
+                returned_param = source->second;
+            }
+        }
+    }
+    if (!saw_nested_call || returned_param < 0
+            || static_cast<size_t>(returned_param)
+                >= outer_info.param_kinds.size()
+            || outer_info.param_kinds[static_cast<size_t>(returned_param)]
+                != BatchCalleeParamKind::Boxed
+            || static_cast<size_t>(returned_param)
+                >= outer_info.param_rejects_nothing.size()
+            || !outer_info.param_rejects_nothing[
+                static_cast<size_t>(returned_param)]
+            || static_cast<size_t>(returned_param)
+                >= outer_info.param_noescape.size()
+            || !outer_info.param_noescape[static_cast<size_t>(returned_param)]
+            || static_cast<size_t>(returned_param)
+                >= outer_info.param_may_modify.size()
+            || outer_info.param_may_modify[static_cast<size_t>(returned_param)]
+            || outer_info.return_kind != BatchCalleeReturnKind::Boxed) {
+        return -1;
+    }
+    const LocalVar* returned_local =
+        func.param_local_vars.find(
+            static_cast<unsigned>(returned_param))->second;
+    const QoreTypeInfo* type = returned_local->getTypeInfo();
+    return !returned_local->closureUse()
+            && !QoreTypeInfo::isReference(type)
+            && sig.getReturnTypeInfo() == type
+            && (QoreTypeInfo::isHashType(type)
+                || QoreTypeInfo::isListType(type)
+                || QoreTypeInfo::isType(type, NT_STRING)
+                || QoreTypeInfo::isType(type, NT_BINARY))
+        ? returned_param : -1;
+}
+
 static bool qore_aot_get_composed_int(const QoreIRFunction& func,
         const UserSignature& sig, AOTComposedIntInfo& result) {
     if (std::getenv("QORE_DISABLE_AOT_COMPOSED_INT_IMPORT")
@@ -10104,6 +10501,41 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             continue;
         }
         callee_it->second.scalar_leaf = leaf;
+    }
+
+    if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_COMPOSITION")) {
+        for (size_t pass = 0; pass < 8; ++pass) {
+            bool changed = false;
+            for (const auto& [variant, func] : functions) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT boxed return-parameter composition fixed-point")) {
+                    return false;
+                }
+                auto callee = batch_callees.find(variant);
+                UserVariantBase* uvb = variant
+                    ? const_cast<AbstractQoreFunctionVariant*>(variant)
+                        ->getUserVariantBase()
+                    : nullptr;
+                const UserSignature* sig =
+                    uvb ? uvb->getUserSignature() : nullptr;
+                if (callee == batch_callees.end() || !sig
+                        || callee->second.boxed_return_param >= 0) {
+                    continue;
+                }
+                int8_t param = qore_aot_get_composed_boxed_return_param(
+                    *func, *sig, callee->second, batch_callees);
+                if (param < 0) {
+                    continue;
+                }
+                callee->second.boxed_return_param = param;
+                callee->second.never_returns_nothing = true;
+                changed = true;
+            }
+            if (!changed) {
+                break;
+            }
+        }
     }
 
     if (!std::getenv("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
