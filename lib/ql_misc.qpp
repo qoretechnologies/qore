@@ -2762,27 +2762,20 @@ load_module("mysql");
 nothing load_module() [flags=RUNTIME_NOOP;dom=MODULES] {
 }
 
-//! Calls the given @ref call_reference "call reference" or @ref closure "closure" while holding the global module-load lock, and returns the result
-/** This function makes libqore's outermost module-loading lock available to %Qore code so that a
-    module can establish a consistent lock hierarchy with its own private locks.
+//! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result
+/** This function historically wrapped the call in libqore's process-global module-load lock so that
+    a module could order that lock before its own private locks.  That global lock has been
+    <b>retired</b> (holding it across a nested module load reformed a process-wide deadlock), so this
+    function now simply calls \a callable directly and returns its result.  It is retained for
+    backwards compatibility.
 
-    The module-load lock is the outermost lock in the module-loading hierarchy: cold runtime module
-    loads (@ref load_module() and friends) acquire it before doing anything else, and hold it while
-    running module initializers.  A module that holds a private lock across code that can reach
-    module loading — directly via @ref load_module(), or indirectly (e.g. lazy provider/schema
-    loading, or a callback from a foreign runtime) — must acquire the module-load lock <b>before</b>
-    that private lock, otherwise it can deadlock against a concurrent cold module load whose
-    initializer calls back into the module and needs the private lock.  This function lets such a
-    module wrap the entry point that acquires its private lock so the module-load lock is always
-    taken first.
+    A module that previously used this to avoid a lock-order inversion should instead ensure its own
+    private locks are <b>never held across a module load</b> (directly via @ref load_module(), or
+    indirectly via lazy provider/schema loading or a callback from a foreign runtime).  libqore now
+    detects genuine cross-thread module dependency cycles and raises a
+    \c CIRCULAR-MODULE-DEPENDENCY exception instead of relying on a global serialization lock.
 
-    The lock is recursive, so re-acquiring it on a nested module load in the same thread (including
-    from within \a callable) is safe and cheap.  It is intended for cold paths only: because it is
-    process-global, callers should not take it on hot cache-hit paths that cannot reach module
-    loading.
-
-    @param callable The @ref call_reference "call reference" or @ref closure "closure" to call while
-    holding the module-load lock
+    @param callable The @ref call_reference "call reference" or @ref closure "closure" to call
     @param ... Any optional arguments to the @ref call_reference "call reference" or @ref closure
     "closure"
 
@@ -2790,8 +2783,6 @@ nothing load_module() [flags=RUNTIME_NOOP;dom=MODULES] {
 
     @par Example:
     @code{.py}
-# ensure the module-load lock is held before our own initialization lock, so lazy module loads
-# performed during initialization cannot invert the lock order
 return call_with_module_load_lock(\initIntern(), app);
     @endcode
 
@@ -2811,9 +2802,8 @@ auto call_with_module_load_lock(code callable, ...) [dom=MODULES] {
     if (num_args(args) > 1) {
         vargs = args->copyListFrom(1);
     }
-    // acquire the outermost module-loading lock (recursive) for the duration of the call; released
-    // on scope exit, including if the call raises a Qore exception through xsink
-    QoreModuleLoadLockHelper mll;
+    // the process-global module-load lock has been retired (see QoreModuleLoadLockHelper); this is
+    // now a direct pass-through call retained for backwards compatibility
     return callable->execValue(*vargs, xsink);
 }
 

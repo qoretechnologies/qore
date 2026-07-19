@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+%new-style
+%require-types
+%strict-args
+
+# One attempt: two threads concurrently load a mutually-dependent module pair into separate Programs.
+# Prints exactly one outcome token: CYCLE, OK, HANG, or OTHER:<err>.  Used by
+# circular-module-dependency.qtest, which retries fresh subprocesses until a CYCLE is observed (the
+# cross-thread interleaving that forms the cycle is timing-dependent) while asserting HANG/OTHER never
+# occur.
+#
+# When the cycle forms, exactly one thread detects it (CIRCULAR-MODULE-DEPENDENCY) and fails its
+# module; the other thread, parked waiting on that now-failed feature, observes the *propagated*
+# failure ("failed to load in another thread" / "failed on a prior attempt").  That propagated
+# failure is the expected companion of a detected cycle, so CYCLE takes priority over it.
+int cycles = 0; int ok = 0; string other = "";
+Mutex mtx();
+Counter start(1);
+Counter done(2);
+code w = sub (string mod) {
+    on_exit done.dec();
+    start.waitForZero();
+    try {
+        Program p(PO_NEW_STYLE);
+        p.loadModule(mod);
+        mtx.lock(); on_exit mtx.unlock(); ++ok;
+    } catch (hash<ExceptionInfo> ex) {
+        mtx.lock(); on_exit mtx.unlock();
+        if (ex.err == "CIRCULAR-MODULE-DEPENDENCY") {
+            ++cycles;
+        } else if (other == "") {
+            other = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+};
+background w("CrossCycleA");
+background w("CrossCycleB");
+start.dec();
+int rc = done.waitForZero(30s);
+if (rc) { printf("HANG\n"); exit(0); }
+if (cycles) { printf("CYCLE\n"); exit(0); }      # detector fired (propagated companion failure is expected)
+if (ok == 2) { printf("OK\n"); exit(0); }        # no cycle formed; both loaded serially
+printf("OTHER:%s\n", other != "" ? other : "unexpected outcome");

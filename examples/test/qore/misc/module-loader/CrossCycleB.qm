@@ -1,0 +1,10 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+%new-style
+module CrossCycleB {
+    version = "1.0";
+    desc = "cross-thread circular dependency test module B";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () { load_module("CrossCycleA"); };
+}
+public namespace CrossCycleBNs { public const BVal = 1; }

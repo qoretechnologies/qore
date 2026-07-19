@@ -1,0 +1,12 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+%new-style
+module CrossCycleA {
+    version = "1.0";
+    desc = "cross-thread circular dependency test module A";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    # runtime-load the mutually dependent module during init (after this feature is reserved), so two
+    # threads loading CrossCycleA and CrossCycleB concurrently form a genuine cross-thread cycle
+    init = sub () { load_module("CrossCycleB"); };
+}
+public namespace CrossCycleANs { public const AVal = 1; }
