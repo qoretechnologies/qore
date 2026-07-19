@@ -2921,14 +2921,29 @@ ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature, ExceptionSink& xsi
         : xsink(xsink), unlocked(false) {
     // Only a lingering terminal (LOADED/FAILED) entry, kept alive for waiters to observe, may still be
     // present for this feature; an in-progress reservation on another thread must never reach here
-    // (the waiter loop in loadModuleIntern guarantees the feature is absent before we get here).
+    // (the waiter loop in loadModuleIntern guarantees the feature is absent before we get here).  Such
+    // an entry is always this thread's own leftover from an earlier phase of the same load (e.g. the
+    // parse-phase reservation handing off to this init-phase reservation for the same feature).
+    //
+    // Re-open that same entry in place rather than erasing and re-inserting it.  A cross-thread waiter
+    // may be parked on it with its wait recorded in the entry's waiters count; erasing would silently
+    // discard that count, and a fresh entry that (as here) reuses this thread's TID as owner_tid would
+    // then fail the waiter's assert(waiters) on wake-up — it re-finds an owner-matching entry whose
+    // waiters count has been reset to 0.  Preserving waiters keeps the parse->init handoff a single
+    // continuous single-writer reservation as far as waiter accounting is concerned.
     QoreModuleManager::module_load_map_t::iterator ex = QMM.module_load_map.find(feature);
     if (ex != QMM.module_load_map.end()) {
         assert(ex->second.state != QoreModuleManager::MLS_INITIALIZING);
-        QMM.module_load_map.erase(ex);
+        // reset the entry to a fresh reservation owned by this thread, preserving its waiters count
+        ex->second.owner_tid = q_gettid();
+        ex->second.state = QoreModuleManager::MLS_INITIALIZING;
+        ex->second.err.clear();
+        ex->second.desc.clear();
+        i = ex;
+    } else {
+        i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(
+            feature, QoreModuleManager::ModuleLoadEntry(q_gettid()))).first;
     }
-    i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(
-        feature, QoreModuleManager::ModuleLoadEntry(q_gettid()))).first;
 
     // increment nested load depth counter
     ++module_load_depth;
