@@ -4769,6 +4769,116 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                             virtualized.push_back(std::move(candidate));
                         }
                     }
+                    continue;
+                }
+                if (use->second.size() != 1
+                        || !use->second.front().inst
+                        || use->second.front().inst->opcode
+                            != QoreIROpcode::StoreLocal
+                        || use->second.front().block_id != block_id) {
+                    continue;
+                }
+                auto* store = static_cast<QoreIRLocalInstruction*>(
+                    const_cast<QoreIRInstruction*>(
+                        use->second.front().inst));
+                LocalVar* local = store->local;
+                bool has_ref_args = true;
+                const AbstractQoreFunctionVariant* callee =
+                    qore_ir_get_resolved_effect_callee(
+                        inst_ptr.get(), has_ref_args);
+                if (!local || store->weak || !store->initial_assignment
+                        || store->operands.size() != 1
+                        || store->operands.front().id
+                            != inst_ptr->result.id
+                        || !callee || has_ref_args
+                        || callee->getReturnTypeInfo()
+                            != local->getTypeInfo()
+                        || local->closureUse()
+                        || QoreTypeInfo::isReference(
+                            local->getTypeInfo())
+                        || !func.ir_only_locals.count(
+                            reinterpret_cast<const void*>(local))) {
+                    continue;
+                }
+                auto local_ops = local_operations.find(local);
+                if (local_ops == local_operations.end()) {
+                    continue;
+                }
+                size_t store_offset = block->instructions.size();
+                for (const LocalOperation& op : local_ops->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR exact-method aggregate definition analysis")) {
+                        return 0;
+                    }
+                    if (op.instruction == store) {
+                        store_offset = op.offset;
+                        break;
+                    }
+                }
+                if (store_offset == block->instructions.size()
+                        || store_offset <= inst_offset) {
+                    continue;
+                }
+                VirtualizedCall candidate;
+                candidate.call = inst_ptr.get();
+                candidate.eliminated.push_back(inst_ptr.get());
+                candidate.eliminated.push_back(store);
+                bool valid = true;
+                size_t projection_count = 0;
+                for (const LocalOperation& op : local_ops->second) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR exact-method aggregate local analysis")) {
+                        return 0;
+                    }
+                    QoreIRInstruction* local_inst = op.instruction;
+                    if (local_inst == store
+                            || local_inst->opcode
+                                == QoreIROpcode::InstantiateLocal
+                            || local_inst->opcode
+                                == QoreIROpcode::UninstantiateLocal) {
+                        continue;
+                    }
+                    if (local_inst->opcode
+                                != QoreIROpcode::LoadLocal
+                            || op.block_id != block_id
+                            || op.offset <= store_offset
+                            || !local_inst->result.isValid()) {
+                        valid = false;
+                        break;
+                    }
+                    auto load_use = uses.find(local_inst->result.id);
+                    if (load_use == uses.end()
+                            || load_use->second.empty()) {
+                        candidate.eliminated.push_back(local_inst);
+                        continue;
+                    }
+                    for (const QoreIRScalarUse& scalar_use :
+                            load_use->second) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR exact-method aggregate use analysis")) {
+                            return 0;
+                        }
+                        Projection projection;
+                        if (!scalar_use.inst
+                                || !analyze_projection(inst_ptr.get(),
+                                    local_inst->result,
+                                    const_cast<QoreIRInstruction*>(
+                                        scalar_use.inst),
+                                    projection)
+                                || !add_virtualized_projection(
+                                    candidate, projection)) {
+                            valid = false;
+                            break;
+                        }
+                        ++projection_count;
+                    }
+                    if (!valid) {
+                        break;
+                    }
+                    candidate.eliminated.push_back(local_inst);
+                }
+                if (valid && projection_count) {
+                    virtualized.push_back(std::move(candidate));
                 }
                 continue;
             }
