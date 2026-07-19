@@ -6626,6 +6626,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     std::unordered_map<const QoreIRInstruction*, InstructionPosition> positions;
     std::unordered_map<LocalVar*, std::vector<InstructionPosition>>
         local_operations;
+    std::unordered_set<const LocalVar*> written_locals;
     for (size_t block = 0; block < func.blocks.size(); ++block) {
         for (size_t offset = 0;
                 offset < func.blocks[block]->instructions.size(); ++offset) {
@@ -6649,8 +6650,23 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     static_cast<QoreIRLocalInstruction*>(inst)->local]
                         .push_back(position);
             }
+            if (inst->opcode == QoreIROpcode::StoreLocal) {
+                written_locals.insert(
+                    static_cast<QoreIRLocalInstruction*>(inst)->local);
+            }
         }
     }
+    auto get_string_producer = [](QoreIRInstruction* inst)
+            -> QoreIRStringConsumerCallInstruction* {
+        if (!inst || inst->exception_target || !inst->result.isValid()
+                || (inst->opcode != QoreIROpcode::CallDirect
+                    && inst->opcode != QoreIROpcode::CallStaticDirect
+                    && (inst->opcode != QoreIROpcode::CallMethodDirect
+                        || !qore_ir_is_non_overridable_method_call(*inst)))) {
+            return nullptr;
+        }
+        return static_cast<QoreIRStringConsumerCallInstruction*>(inst);
+    };
     std::unique_ptr<QoreIRControlFlowGraph> cfg;
     auto side_effect_free_interval = [&](const QoreIRInstruction* producer,
             const QoreIRInstruction* consumer) {
@@ -6694,8 +6710,9 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         result = constant->constant.int_value;
         return true;
     };
-    auto get_pattern_operand = [&](const QoreIRCallDirectInstruction* producer,
-            QoreIRValue pattern) -> int16_t {
+    auto get_pattern_operand = [&](
+            const QoreIRStringConsumerCallInstruction* producer,
+            QoreIRValue pattern, bool cross_block) -> int16_t {
         auto pattern_definition = definitions.find(pattern.id);
         for (size_t i = 0; i < producer->operands.size(); ++i) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -6725,7 +6742,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                             == static_cast<const QoreIRLocalInstruction*>(
                                 operand_inst)->local
                         && !local->closureUse()
-                        && !QoreTypeInfo::isReference(local->getTypeInfo())) {
+                        && !QoreTypeInfo::isReference(local->getTypeInfo())
+                        && (!cross_block || !written_locals.count(local))) {
                     return static_cast<int16_t>(i);
                 }
             }
@@ -6742,7 +6760,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     };
 
     struct Fusion {
-        QoreIRCallDirectInstruction* producer = nullptr;
+        QoreIRStringConsumerCallInstruction* producer = nullptr;
         QoreIRInstruction* consumer = nullptr;
         QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
             QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
@@ -6751,141 +6769,19 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         int64_t arg0 = 0;
         int64_t arg1 = 0;
         bool has_arg1 = false;
+        bool preserve_producer_result = false;
         std::vector<QoreIRInstruction*> eliminated;
+        std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
     };
-    std::vector<Fusion> fusions;
-    for (const auto& block : func.blocks) {
-        for (const auto& inst_ptr : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR string producer-consumer analysis")) {
-                return 0;
-            }
-            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
-                    || inst_ptr->exception_target
-                    || !inst_ptr->result.isValid()) {
-                continue;
-            }
-            auto use = uses.find(inst_ptr->result.id);
-            if (use == uses.end() || use->second.size() != 1
-                    || !use->second.front().inst) {
-                continue;
-            }
-            QoreIRInstruction* consumer =
-                const_cast<QoreIRInstruction*>(use->second.front().inst);
-            if (consumer->opcode != QoreIROpcode::DotEvalMethodDirect
-                    || consumer->exception_target
-                    || !consumer->result.isValid()
-                    || consumer->operands.empty()
-                    || consumer->operands[0].id != inst_ptr->result.id) {
-                continue;
-            }
-            const auto* method =
-                static_cast<const QoreIRDotEvalMethodDirectInstruction*>(consumer);
-            if (!method->pseudo || method->has_ref_args || !method->qc
-                    || strcmp(method->qc->getName(), "<string>")) {
-                continue;
-            }
-            QoreIRIntrinsic intrinsic = method->intrinsic;
-            if (intrinsic == QoreIRIntrinsic::None) {
-                intrinsic = qore_ir_resolve_pseudo_intrinsic(method->method,
-                    method->qc, method->fallback_method_name);
-            }
-            QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
-                QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
-            int16_t pattern_operand = -1;
-            int64_t arg0 = 0;
-            int64_t arg1 = 0;
-            bool has_arg1 = false;
-            if (intrinsic == QoreIRIntrinsic::Size
-                    || intrinsic == QoreIRIntrinsic::StringStrlen) {
-                kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
-            } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
-            }
-            auto* producer =
-                static_cast<QoreIRCallDirectInstruction*>(inst_ptr.get());
-            if (kind == QoreIRCallDirectInstruction::AOTStringConsumerKind::None) {
-                if (!side_effect_free_interval(producer, consumer)) {
-                    continue;
-                }
-                if (intrinsic == QoreIRIntrinsic::StringStartsWith
-                        || intrinsic == QoreIRIntrinsic::StringEndsWith
-                        || intrinsic == QoreIRIntrinsic::StringContains) {
-                    if (consumer->operands.size() != 2
-                            || !method->pseudo_arg0_known_assigned_string) {
-                        continue;
-                    }
-                    pattern_operand =
-                        get_pattern_operand(producer, consumer->operands[1]);
-                    if (pattern_operand < 0) {
-                        continue;
-                    }
-                    kind = intrinsic == QoreIRIntrinsic::StringStartsWith
-                        ? QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
-                        : intrinsic == QoreIRIntrinsic::StringEndsWith
-                            ? QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
-                            : QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains;
-                } else if (intrinsic == QoreIRIntrinsic::StringFind
-                        || intrinsic == QoreIRIntrinsic::StringRFind) {
-                    if ((consumer->operands.size() != 2
-                                && consumer->operands.size() != 3)
-                            || !method->pseudo_arg0_known_assigned_string
-                            || (consumer->operands.size() == 3
-                                && (!method->pseudo_arg1_known_assigned_int
-                                    || !get_const_int(
-                                        consumer->operands[2], arg0)))) {
-                        continue;
-                    }
-                    pattern_operand =
-                        get_pattern_operand(producer, consumer->operands[1]);
-                    if (pattern_operand < 0) {
-                        continue;
-                    }
-                    if (consumer->operands.size() == 2) {
-                        arg0 = intrinsic == QoreIRIntrinsic::StringFind
-                            ? 0 : -1;
-                    }
-                    kind = intrinsic == QoreIRIntrinsic::StringFind
-                        ? QoreIRCallDirectInstruction::AOTStringConsumerKind::Find
-                        : QoreIRCallDirectInstruction::AOTStringConsumerKind::RFind;
-                } else if (intrinsic == QoreIRIntrinsic::StringSubstr) {
-                    if ((consumer->operands.size() != 2
-                                && consumer->operands.size() != 3)
-                            || !method->pseudo_arg0_known_assigned_int
-                            || !get_const_int(consumer->operands[1], arg0)
-                            || (consumer->operands.size() == 3
-                                && (!method->pseudo_arg1_known_assigned_int
-                                    || !get_const_int(
-                                        consumer->operands[2], arg1)))) {
-                        continue;
-                    }
-                    has_arg1 = consumer->operands.size() == 3;
-                    kind =
-                        QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr;
-                } else {
-                    continue;
-                }
-            }
-            bool has_ref_args = true;
-            const AbstractQoreFunctionVariant* callee =
-                qore_ir_get_resolved_effect_callee(producer, has_ref_args);
-            if (!callee || has_ref_args
-                    || !is_supported(callee, producer, kind)) {
-                continue;
-            }
-            fusions.push_back({producer, consumer, kind, consumer->result,
-                pattern_operand, arg0, arg1, has_arg1, {consumer}});
-        }
-    }
-    auto get_size_consumer = [&](QoreIRValue base,
-            QoreIRInstruction* consumer,
-            QoreIRCallDirectInstruction::AOTStringConsumerKind& kind) {
-        if (!consumer
+    auto analyze_consumer = [&](QoreIRStringConsumerCallInstruction* producer,
+            QoreIRValue base, QoreIRInstruction* consumer, bool cross_block,
+            Fusion& fusion) {
+        if (!producer || !consumer
                 || consumer->opcode != QoreIROpcode::DotEvalMethodDirect
                 || consumer->exception_target
                 || !consumer->result.isValid()
-                || consumer->operands.size() != 1
-                || consumer->operands.front().id != base.id) {
+                || consumer->operands.empty()
+                || consumer->operands[0].id != base.id) {
             return false;
         }
         const auto* method =
@@ -6899,31 +6795,147 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             intrinsic = qore_ir_resolve_pseudo_intrinsic(method->method,
                 method->qc, method->fallback_method_name);
         }
+        auto kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+        int16_t pattern_operand = -1;
+        int64_t arg0 = 0;
+        int64_t arg1 = 0;
+        bool has_arg1 = false;
         if (intrinsic == QoreIRIntrinsic::Size
                 || intrinsic == QoreIRIntrinsic::StringStrlen) {
+            if (consumer->operands.size() != 1) {
+                return false;
+            }
+            kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
+        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
+            if (consumer->operands.size() != 1) {
+                return false;
+            }
+            kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
+        } else if (intrinsic == QoreIRIntrinsic::StringStartsWith
+                || intrinsic == QoreIRIntrinsic::StringEndsWith
+                || intrinsic == QoreIRIntrinsic::StringContains) {
+            if (consumer->operands.size() != 2
+                    || !method->pseudo_arg0_known_assigned_string) {
+                return false;
+            }
+            pattern_operand = get_pattern_operand(
+                producer, consumer->operands[1], cross_block);
+            if (pattern_operand < 0) {
+                return false;
+            }
+            kind = intrinsic == QoreIRIntrinsic::StringStartsWith
+                ? QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+                : intrinsic == QoreIRIntrinsic::StringEndsWith
+                    ? QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+                    : QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains;
+        } else if (intrinsic == QoreIRIntrinsic::StringFind
+                || intrinsic == QoreIRIntrinsic::StringRFind) {
+            if ((consumer->operands.size() != 2
+                        && consumer->operands.size() != 3)
+                    || !method->pseudo_arg0_known_assigned_string
+                    || (consumer->operands.size() == 3
+                        && (!method->pseudo_arg1_known_assigned_int
+                            || !get_const_int(
+                                consumer->operands[2], arg0)))) {
+                return false;
+            }
+            pattern_operand = get_pattern_operand(
+                producer, consumer->operands[1], cross_block);
+            if (pattern_operand < 0) {
+                return false;
+            }
+            if (consumer->operands.size() == 2) {
+                arg0 = intrinsic == QoreIRIntrinsic::StringFind ? 0 : -1;
+            }
+            kind = intrinsic == QoreIRIntrinsic::StringFind
+                ? QoreIRCallDirectInstruction::AOTStringConsumerKind::Find
+                : QoreIRCallDirectInstruction::AOTStringConsumerKind::RFind;
+        } else if (intrinsic == QoreIRIntrinsic::StringSubstr) {
+            if ((consumer->operands.size() != 2
+                        && consumer->operands.size() != 3)
+                    || !method->pseudo_arg0_known_assigned_int
+                    || !get_const_int(consumer->operands[1], arg0)
+                    || (consumer->operands.size() == 3
+                        && (!method->pseudo_arg1_known_assigned_int
+                            || !get_const_int(
+                                consumer->operands[2], arg1)))) {
+                return false;
+            }
+            has_arg1 = consumer->operands.size() == 3;
             kind =
-                QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
-            return true;
+                QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr;
+        } else {
+            return false;
         }
-        if (intrinsic == QoreIRIntrinsic::StringLength) {
-            kind =
-                QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
-            return true;
+        if (!cross_block && kind
+                    != QoreIRCallDirectInstruction::AOTStringConsumerKind::Size
+                && kind
+                    != QoreIRCallDirectInstruction::AOTStringConsumerKind::Length
+                && !side_effect_free_interval(producer, consumer)) {
+            return false;
         }
-        return false;
+        fusion.producer = producer;
+        fusion.consumer = consumer;
+        fusion.kind = kind;
+        fusion.result = consumer->result;
+        fusion.pattern_operand = pattern_operand;
+        fusion.arg0 = arg0;
+        fusion.arg1 = arg1;
+        fusion.has_arg1 = has_arg1;
+        return true;
     };
+    std::vector<Fusion> fusions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR string producer-consumer analysis")) {
+                return 0;
+            }
+            QoreIRStringConsumerCallInstruction* producer =
+                get_string_producer(inst_ptr.get());
+            if (!producer) {
+                continue;
+            }
+            auto use = uses.find(producer->result.id);
+            if (use == uses.end() || use->second.size() != 1
+                    || !use->second.front().inst) {
+                continue;
+            }
+            QoreIRInstruction* consumer =
+                const_cast<QoreIRInstruction*>(use->second.front().inst);
+            if (consumer->opcode != QoreIROpcode::DotEvalMethodDirect
+                    || consumer->exception_target
+                    || !consumer->result.isValid()
+                    || consumer->operands.empty()
+                    || consumer->operands[0].id != producer->result.id) {
+                continue;
+            }
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(producer, has_ref_args);
+            Fusion fusion;
+            if (!callee || has_ref_args
+                    || !analyze_consumer(producer, producer->result, consumer,
+                        false, fusion)
+                    || !is_supported(callee, producer, fusion.kind)) {
+                continue;
+            }
+            fusion.eliminated.push_back(consumer);
+            fusions.push_back(std::move(fusion));
+        }
+    }
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR string producer local analysis")) {
                 return 0;
             }
-            if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CallDirect
-                    || inst_ptr->exception_target
-                    || !inst_ptr->result.isValid()) {
+            QoreIRStringConsumerCallInstruction* producer =
+                get_string_producer(inst_ptr.get());
+            if (!producer) {
                 continue;
             }
-            auto producer_use = uses.find(inst_ptr->result.id);
+            auto producer_use = uses.find(producer->result.id);
             if (producer_use == uses.end()
                     || producer_use->second.size() != 1
                     || !producer_use->second.front().inst
@@ -6931,8 +6943,6 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                         != QoreIROpcode::StoreLocal) {
                 continue;
             }
-            auto* producer =
-                static_cast<QoreIRCallDirectInstruction*>(inst_ptr.get());
             auto* store = static_cast<QoreIRLocalInstruction*>(
                 const_cast<QoreIRInstruction*>(
                     producer_use->second.front().inst));
@@ -7000,23 +7010,38 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     candidate.eliminated.push_back(local_inst);
                     continue;
                 }
-                QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
-                    QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+                Fusion consumer_fusion;
                 if (candidate.consumer || load_uses->second.size() != 1
                         || !load_uses->second.front().inst
-                        || !get_size_consumer(local_inst->result,
+                        || !analyze_consumer(producer, local_inst->result,
                             const_cast<QoreIRInstruction*>(
-                                load_uses->second.front().inst), kind)
-                        || !is_supported(callee, producer, kind)) {
+                                load_uses->second.front().inst), true,
+                            consumer_fusion)
+                        || !is_supported(
+                            callee, producer, consumer_fusion.kind)) {
                     valid = false;
                     break;
                 }
-                candidate.consumer = const_cast<QoreIRInstruction*>(
-                    load_uses->second.front().inst);
-                candidate.kind = kind;
-                candidate.result = candidate.consumer->result;
-                candidate.eliminated.push_back(local_inst);
-                candidate.eliminated.push_back(candidate.consumer);
+                candidate.consumer = consumer_fusion.consumer;
+                candidate.kind = consumer_fusion.kind;
+                candidate.result = consumer_fusion.result;
+                candidate.pattern_operand =
+                    consumer_fusion.pattern_operand;
+                candidate.arg0 = consumer_fusion.arg0;
+                candidate.arg1 = consumer_fusion.arg1;
+                candidate.has_arg1 = consumer_fusion.has_arg1;
+                if (candidate.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::Substr) {
+                    candidate.preserve_producer_result = true;
+                    candidate.eliminated.clear();
+                    candidate.eliminated.push_back(candidate.consumer);
+                    candidate.replacements.emplace_back(
+                        candidate.result.id, local_inst->result);
+                } else {
+                    candidate.eliminated.push_back(local_inst);
+                    candidate.eliminated.push_back(candidate.consumer);
+                }
             }
             if (valid && candidate.consumer) {
                 fusions.push_back(std::move(candidate));
@@ -7030,7 +7055,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
             QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
         std::unique_ptr<QoreIRPhiInstruction> replacement;
-        std::vector<QoreIRCallDirectInstruction*> producers;
+        std::vector<Fusion> producers;
     };
     std::vector<PhiFusion> phi_fusions;
     for (const auto& block : func.blocks) {
@@ -7049,27 +7074,20 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 continue;
             }
             auto phi_uses = uses.find(phi->result.id);
-            QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
-                QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
             if (phi_uses == uses.end() || phi_uses->second.size() != 1
-                    || !phi_uses->second.front().inst
-                    || !get_size_consumer(phi->result,
-                        const_cast<QoreIRInstruction*>(
-                            phi_uses->second.front().inst), kind)) {
+                    || !phi_uses->second.front().inst) {
                 continue;
             }
             PhiFusion candidate;
             candidate.phi = phi;
             candidate.consumer = const_cast<QoreIRInstruction*>(
                 phi_uses->second.front().inst);
-            candidate.kind = kind;
             auto replacement = std::make_unique<QoreIRPhiInstruction>();
             replacement->loc = candidate.consumer->loc;
             replacement->cached_start_line =
                 candidate.consumer->cached_start_line;
             replacement->temp_scope_id = candidate.consumer->temp_scope_id;
             replacement->result = candidate.consumer->result;
-            replacement->value_kind = QoreIRPhiValueKind::NativeInt;
             bool valid = true;
             std::unordered_set<QoreIRInstruction*> seen_producers;
             for (const QoreIRPhiIncoming& incoming : phi->incoming) {
@@ -7078,15 +7096,16 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     return 0;
                 }
                 auto definition = definitions.find(incoming.value.id);
-                if (!incoming.block || definition == definitions.end()
-                        || definition->second.inst->opcode
-                            != QoreIROpcode::CallDirect) {
+                if (!incoming.block || definition == definitions.end()) {
                     valid = false;
                     break;
                 }
-                auto* producer =
-                    static_cast<QoreIRCallDirectInstruction*>(
-                        definition->second.inst);
+                QoreIRStringConsumerCallInstruction* producer =
+                    get_string_producer(definition->second.inst);
+                if (!producer) {
+                    valid = false;
+                    break;
+                }
                 auto producer_uses = uses.find(producer->result.id);
                 bool has_ref_args = true;
                 const AbstractQoreFunctionVariant* callee =
@@ -7096,15 +7115,39 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                         || producer_uses == uses.end()
                         || producer_uses->second.size() != 1
                         || producer_uses->second.front().inst != phi
-                        || !seen_producers.insert(producer).second
-                        || !is_supported(callee, producer, kind)) {
+                        || !seen_producers.insert(producer).second) {
                     valid = false;
                     break;
                 }
-                candidate.producers.push_back(producer);
+                Fusion producer_fusion;
+                if (!analyze_consumer(producer, phi->result,
+                        candidate.consumer, true, producer_fusion)
+                        || (candidate.kind
+                                != QoreIRCallDirectInstruction::
+                                    AOTStringConsumerKind::None
+                            && candidate.kind != producer_fusion.kind)
+                        || !is_supported(
+                            callee, producer, producer_fusion.kind)) {
+                    valid = false;
+                    break;
+                }
+                candidate.kind = producer_fusion.kind;
+                producer_fusion.result = producer->result;
+                producer_fusion.preserve_producer_result = true;
+                candidate.producers.push_back(std::move(producer_fusion));
                 replacement->incoming.push_back(
                     {producer->result, incoming.block});
                 replacement->operands.push_back(producer->result);
+            }
+            if (candidate.kind
+                    != QoreIRCallDirectInstruction::
+                        AOTStringConsumerKind::Size
+                    && candidate.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::Length) {
+                valid = false;
+            } else {
+                replacement->value_kind = QoreIRPhiValueKind::NativeInt;
             }
             if (valid) {
                 candidate.replacement = std::move(replacement);
@@ -7117,11 +7160,11 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     }
 
     std::unordered_map<QoreIRInstruction*, Fusion*> producers;
-    std::unordered_map<QoreIRInstruction*,
-        QoreIRCallDirectInstruction::AOTStringConsumerKind> phi_producers;
+    std::unordered_map<QoreIRInstruction*, Fusion*> phi_producers;
     std::unordered_map<QoreIRInstruction*,
         std::unique_ptr<QoreIRPhiInstruction>> phi_replacements;
     std::unordered_set<QoreIRInstruction*> eliminated;
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
     for (Fusion& fusion : fusions) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR string producer-consumer rewrite preparation")) {
@@ -7130,18 +7173,20 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         producers.emplace(fusion.producer, &fusion);
         eliminated.insert(
             fusion.eliminated.begin(), fusion.eliminated.end());
+        replacements.insert(
+            fusion.replacements.begin(), fusion.replacements.end());
     }
     for (PhiFusion& fusion : phi_fusions) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR string producer phi rewrite preparation")) {
             return 0;
         }
-        for (QoreIRCallDirectInstruction* producer : fusion.producers) {
+        for (Fusion& producer : fusion.producers) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR string producer phi call rewrite preparation")) {
                 return 0;
             }
-            phi_producers.emplace(producer, fusion.kind);
+            phi_producers.emplace(producer.producer, &producer);
         }
         eliminated.insert(fusion.consumer);
         QoreIRValueFacts facts;
@@ -7187,6 +7232,8 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 inst = instructions.erase(inst);
                 continue;
             }
+            (void)qore_ir_rewrite_value_operands(
+                **inst, replacements, check_count, false);
             auto phi_replacement = phi_replacements.find(inst->get());
             if (phi_replacement != phi_replacements.end()) {
                 *inst = std::move(phi_replacement->second);
@@ -7203,17 +7250,24 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
                 fusion.producer->aot_string_consumer_has_arg1 =
                     fusion.has_arg1;
-                fusion.producer->result = fusion.result;
-                set_result_facts(fusion.result, fusion.kind);
+                if (!fusion.preserve_producer_result) {
+                    fusion.producer->result = fusion.result;
+                }
+                set_result_facts(fusion.producer->result, fusion.kind);
                 ++inst;
                 continue;
             }
             auto phi_producer = phi_producers.find(inst->get());
             if (phi_producer != phi_producers.end()) {
-                auto* call =
-                    static_cast<QoreIRCallDirectInstruction*>(inst->get());
-                call->aot_string_consumer = phi_producer->second;
-                set_result_facts(call->result, phi_producer->second);
+                Fusion& fusion = *phi_producer->second;
+                fusion.producer->aot_string_consumer = fusion.kind;
+                fusion.producer->aot_string_consumer_pattern_operand =
+                    fusion.pattern_operand;
+                fusion.producer->aot_string_consumer_arg0 = fusion.arg0;
+                fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
+                fusion.producer->aot_string_consumer_has_arg1 =
+                    fusion.has_arg1;
+                set_result_facts(fusion.producer->result, fusion.kind);
             }
             ++inst;
         }

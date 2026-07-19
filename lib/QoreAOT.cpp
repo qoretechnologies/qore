@@ -13381,17 +13381,37 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (!std::getenv("QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION")) {
             QoreIRStringProducerQuery query =
                 [&](const AbstractQoreFunctionVariant* callee,
-                        const QoreIRCallDirectInstruction* call,
+                        const QoreIRStringConsumerCallInstruction* call,
                         QoreIRCallDirectInstruction::AOTStringConsumerKind
                             consumer) {
+                    const QoreValue* expr = nullptr;
+                    if (call) {
+                        if (call->opcode == QoreIROpcode::CallDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallStaticDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallStaticDirectInstruction*>(
+                                    call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallMethodDirect) {
+                            expr = &static_cast<
+                                const QoreIRCallMethodDirectInstruction*>(
+                                    call)->expr;
+                        }
+                    }
                     auto info = aot_batch_callee_map->find(callee);
-                    if (info == aot_batch_callee_map->end() || !call
+                    if (info == aot_batch_callee_map->end() || !call || !expr
                             || !info->second.approach_b_eligible
                             || info->second.return_kind
                                 != BatchCalleeReturnKind::Boxed
+                            || (call->opcode == QoreIROpcode::CallMethodDirect
+                                && !info->second.implicit_self_method)
                             || call->operands.size() != info->second.num_params
-                            || !qore_aot_fast_entry_args_need_no_binding(callee,
-                                call->expr, 0,
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                callee, *expr, func, call->operands, 0,
                                 static_cast<int>(call->operands.size()))) {
                         return false;
                     }

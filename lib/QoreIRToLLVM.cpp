@@ -4553,7 +4553,7 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
 
 llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-        const QoreIRCallDirectInstruction* fused_call) {
+        const QoreIRStringConsumerCallInstruction* fused_call) {
     const AOTStringExpressionInfo& expression = info.string_expression;
     const AOTStringExpressionNodeInfo* final = expression
         ? &expression.nodes.back() : nullptr;
@@ -4768,10 +4768,26 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
     return result;
 }
 
+static BatchCalleeReturnKind qore_ir_aot_string_consumer_return_kind(
+        QoreIRCallDirectInstruction::AOTStringConsumerKind consumer) {
+    if (consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::StartsWith
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::EndsWith
+            || consumer
+                == QoreIRCallDirectInstruction::AOTStringConsumerKind::Contains) {
+        return BatchCalleeReturnKind::NativeBool;
+    }
+    return consumer
+            == QoreIRCallDirectInstruction::AOTStringConsumerKind::Substr
+        ? BatchCalleeReturnKind::Boxed
+        : BatchCalleeReturnKind::NativeInt;
+}
+
 llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
         const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args,
-        const QoreIRCallDirectInstruction& call,
+        const QoreIRStringConsumerCallInstruction& call,
         llvm::Module& module) {
     QoreIRCallDirectInstruction::AOTStringConsumerKind consumer =
         call.aot_string_consumer;
@@ -14629,7 +14645,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Build args array from operands
             llvm::Value* args_array;
             if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
                 return false;
@@ -14667,7 +14682,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
-            if (aot_mode && direct_inst->expr) {
+            bool fused_string_consumer = direct_inst->aot_string_consumer
+                != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+            BatchCalleeReturnKind call_return_kind = aot_self_batch_callee
+                ? aot_self_batch_callee->return_kind
+                : BatchCalleeReturnKind::Boxed;
+            if (fused_string_consumer && aot_self_batch_callee) {
+                call_result = emitAOTStringProducerConsumer(
+                    *aot_self_batch_callee, raw_args, *direct_inst, module);
+                if (!call_result) {
+                    error = "internal error: fused AOT exact-method string"
+                        " producer summary could not be emitted";
+                    return false;
+                }
+                call_return_kind = qore_ir_aot_string_consumer_return_kind(
+                    direct_inst->aot_string_consumer);
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                        "qore_rt_clear_arg_cleanups",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper,
+                        {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
+                call_may_modify_runtime_locals = false;
+            } else if (aot_mode && direct_inst->expr) {
                 // AOT mode: use expression slot to look up the class and method at runtime
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
@@ -14798,8 +14838,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            if (!aot_self_batch_callee
-                    || aot_self_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+            if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
@@ -15132,7 +15171,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
-            if (aot_context_independent_fast_entry_call) {
+            bool fused_string_consumer = direct_inst->aot_string_consumer
+                != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
+            BatchCalleeReturnKind call_return_kind = aot_static_batch_callee
+                ? aot_static_batch_callee->return_kind
+                : BatchCalleeReturnKind::Boxed;
+            if (fused_string_consumer && aot_static_batch_callee) {
+                call_result = emitAOTStringProducerConsumer(
+                    *aot_static_batch_callee, raw_args, *direct_inst, module);
+                if (!call_result) {
+                    error = "internal error: fused AOT static-method string"
+                        " producer summary could not be emitted";
+                    return false;
+                }
+                call_return_kind = qore_ir_aot_string_consumer_return_kind(
+                    direct_inst->aot_string_consumer);
+                call_may_modify_runtime_locals = false;
+                if (has_arg_cleanups) {
+                    auto clear_helper = module.getOrInsertFunction(
+                        "qore_rt_clear_arg_cleanups",
+                        llvm::FunctionType::get(void_type,
+                            {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(clear_helper,
+                        {arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
+            } else if (aot_context_independent_fast_entry_call) {
                 std::vector<llvm::Value*> call_args;
                 for (unsigned i = 0; i < aot_static_batch_callee->num_params; ++i) {
                     if (i && !(i % 100)
@@ -15244,8 +15308,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            if (!aot_static_batch_callee
-                    || aot_static_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+            if (call_return_kind == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }

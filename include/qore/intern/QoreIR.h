@@ -2054,9 +2054,8 @@ public:
     std::string name;
 };
 
-//! Direct function call instruction - bypasses AST round-trip for resolved function calls
-//! Stores function/variant/program pointers resolved at parse time
-class QoreIRCallDirectInstruction : public QoreIRInstruction {
+//! Common metadata for exact calls whose string result is consumed in AOT lowering.
+class QoreIRStringConsumerCallInstruction : public QoreIRInstruction {
 public:
     enum class AOTStringConsumerKind : uint8_t {
         None,
@@ -2069,6 +2068,26 @@ public:
         RFind,
         Substr,
     };
+
+    explicit QoreIRStringConsumerCallInstruction(QoreIROpcode opcode)
+            : QoreIRInstruction(opcode) {
+    }
+
+    AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
+    //! Producer operand reused as the pattern by a fused search consumer.
+    int16_t aot_string_consumer_pattern_operand = -1;
+    //! Constant offset/start and optional length for fused find/substr consumers.
+    int64_t aot_string_consumer_arg0 = 0;
+    int64_t aot_string_consumer_arg1 = 0;
+    bool aot_string_consumer_has_arg1 = false;
+};
+
+//! Direct function call instruction - bypasses AST round-trip for resolved function calls
+//! Stores function/variant/program pointers resolved at parse time
+class QoreIRCallDirectInstruction : public QoreIRStringConsumerCallInstruction {
+public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
 
     enum class AOTAggregateProjectionKind : uint8_t {
         None,
@@ -2124,7 +2143,7 @@ public:
 
     QoreIRCallDirectInstruction(const QoreFunction* n_func, const AbstractQoreFunctionVariant* n_variant,
             QoreProgram* n_pgm, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CallDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallDirect),
               func(n_func), variant(n_variant), pgm(n_pgm), expr(n_expr) {
         expr.ref();
     }
@@ -2140,13 +2159,6 @@ public:
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
-    AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
-    //! Producer operand reused as the pattern by a fused search consumer.
-    int16_t aot_string_consumer_pattern_operand = -1;
-    //! Constant offset/start and optional length for fused find/substr consumers.
-    int64_t aot_string_consumer_arg0 = 0;
-    int64_t aot_string_consumer_arg1 = 0;
-    bool aot_string_consumer_has_arg1 = false;
     //! Direct projection from a fresh fixed aggregate returned by this call.
     AOTAggregateProjectionKind aot_aggregate_projection =
         AOTAggregateProjectionKind::None;
@@ -2189,11 +2201,14 @@ public:
 
 //! Direct method call instruction - bypasses virtual dispatch for final classes/methods
 //! The method pointer is resolved at compile time and stored directly in the instruction
-class QoreIRCallMethodDirectInstruction : public QoreIRInstruction {
+class QoreIRCallMethodDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
+
     QoreIRCallMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant = nullptr, const QoreValue& n_expr = QoreValue())
-            : QoreIRInstruction(QoreIROpcode::CallMethodDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallMethodDirect),
               method(n_method),
               qc(n_qc),
               variant(n_variant),
@@ -2262,11 +2277,14 @@ public:
 
 //! Direct static method call instruction - pre-evaluates arguments to bypass AST round-trip.
 //! Uses the Invoke + invoke_opcode pattern for try/catch (like CallDirect).
-class QoreIRCallStaticDirectInstruction : public QoreIRInstruction {
+class QoreIRCallStaticDirectInstruction : public QoreIRStringConsumerCallInstruction {
 public:
+    using AOTStringConsumerKind =
+        QoreIRStringConsumerCallInstruction::AOTStringConsumerKind;
+
     QoreIRCallStaticDirectInstruction(const QoreMethod* n_method,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::CallStaticDirect),
+            : QoreIRStringConsumerCallInstruction(QoreIROpcode::CallStaticDirect),
               method(n_method), variant(n_variant), expr(n_expr) {
         expr.ref();
     }

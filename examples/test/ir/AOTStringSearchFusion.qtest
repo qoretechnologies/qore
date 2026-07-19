@@ -80,6 +80,72 @@ string sub intStringSubstr(int value) {
     return intString(value).substr(0, 1);
 }
 
+bool sub localStartsWith(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return left.size() ? value.startsWith(left) : False;
+}
+
+bool sub localEndsWith(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return right.size() ? value.endsWith(right) : False;
+}
+
+bool sub localContains(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return middle.size() ? value.contains(middle) : False;
+}
+
+int sub localFind(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return middle.size() ? value.find(middle, 2) : -1;
+}
+
+int sub localRFind(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return middle.size() ? value.rfind(middle) : -1;
+}
+
+string sub localSubstr(string left, string middle, string right) {
+    string value = join3(left, middle, right);
+    return left.size() ? value.substr(1, 3) : \"\";
+}
+
+int sub phiFind(bool first, string left, string middle, string right) {
+    return (first ? join3(left, middle, right)
+        : join3(right, middle, left)).find(middle);
+}
+
+string sub phiSubstr(bool first, string left, string middle, string right) {
+    return (first ? join3(left, middle, right)
+        : join3(right, middle, left)).substr(1, 3);
+}
+
+final class ExactStringFactory {
+    static string joinStatic(string left, string middle, string right) {
+        return left + middle + right;
+    }
+
+    string joinInstance(string left, string middle, string right) {
+        return left + middle + right;
+    }
+
+    static bool staticContains(string left, string middle, string right) {
+        return joinStatic(left, middle, right).contains(middle);
+    }
+
+    int instanceFind(string left, string middle, string right) {
+        return joinInstance(left, middle, right).find(middle);
+    }
+
+    static string staticSubstr(string left, string middle, string right) {
+        return joinStatic(left, middle, right).substr(1, 3);
+    }
+
+    int instanceLength(string left, string middle, string right) {
+        return joinInstance(left, middle, right).length();
+    }
+}
+
 string sub markPattern(string pattern) {
     ++pattern_effects;
     return pattern;
@@ -125,6 +191,21 @@ try {
     conversion_error = True;
 }
 printf(\"%y\\n\", conversion_error);
+
+ExactStringFactory factory();
+printf(\"%y:%y:%y:%d:%d:%s:%d:%s:%y:%d:%s:%d\\n\",
+    localStartsWith(left, middle, right),
+    localEndsWith(left, middle, right),
+    localContains(left, middle, right),
+    localFind(left, middle, right),
+    localRFind(left, middle, right),
+    localSubstr(left, middle, right),
+    phiFind(True, left, middle, right),
+    phiSubstr(False, left, middle, right),
+    ExactStringFactory::staticContains(left, middle, right),
+    factory.instanceFind(left, middle, right),
+    ExactStringFactory::staticSubstr(left, middle, right),
+    factory.instanceLength(left, middle, right));
 ";
 
 string src = "/tmp/qore-aot-string-search-fusion-" + string(getpid()) + ".qr";
@@ -151,16 +232,20 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1");
 foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains",
         "fusedFalseStartsWith", "fusedFind", "fusedFindOffset", "fusedRFind",
-        "fusedSubstr", "fusedSize", "fusedLength")) {
+        "fusedSubstr", "fusedSize", "fusedLength",
+        "localStartsWith", "localEndsWith", "localContains", "localFind",
+        "localRFind", "localSubstr",
+        "staticContains", "instanceFind", "staticSubstr", "instanceLength")) {
     if (!enabled_compile.regex(sprintf(
-            "IR-OPT-AOT-EFFECTS: %s[^\\n]*:.*string-consumers=1", function))) {
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*string-consumers=1",
+            function))) {
         printf("missing string consumer fusion for %s:\n%s",
             function, enabled_compile);
         exit(2);
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|dynamicFindOffset|dynamicSubstr|intStringSubstr|sideEffectPattern)[^\n]*:.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (unrelatedPattern|dynamicFindOffset|dynamicSubstr|intStringSubstr|sideEffectPattern|phiFind|phiSubstr)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string consumer fusion:\n%s",
         enabled_compile + disabled_compile);
@@ -169,7 +254,8 @@ if (enabled_compile
 
 string expected = "True:True:True:False:4:4:4:ré-:13:11:False:4:ré:1:True\n"
     + "True:True\n"
-    + "True\n";
+    + "True\n"
+    + "True:True:True:4:4:ré-:4:fin:True:4:ré-:11\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

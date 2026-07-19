@@ -212,13 +212,13 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     const QoreIRBoxedReturnParamQuery& get_return_param);
 
 using QoreIRStringProducerQuery = std::function<bool(
-    const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
+    const AbstractQoreFunctionVariant*,
+    const QoreIRStringConsumerCallInstruction*,
     QoreIRCallDirectInstruction::AOTStringConsumerKind)>;
 
 //! Fuse exact string producers with sole supported consumers.
-/** Supports direct consumers, single-assignment non-escaping string locals
-    consumed by size or length, and size/length consumers of PHIs whose incoming
-    values are all compatible producers. */
+/** Supports direct consumers, single-assignment non-escaping string locals,
+    and compatible producer PHIs. */
 //! @param func function to optimize in place
 //! @param is_supported returns true for calls with a compatible producer summary
 //! @return number of producer/consumer pairs fused

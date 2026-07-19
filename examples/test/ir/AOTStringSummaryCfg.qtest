@@ -127,7 +127,8 @@ string disabled_compile = backquote(sprintf(
         + " QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled, src));
-foreach string function in (("localSize", "localLength", "phiSize", "phiLength")) {
+foreach string function in (("localSize", "localLength", "phiSize", "phiLength",
+        "searchedLocal")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^\\n]*:.*string-consumers=1",
             function))) {
@@ -137,7 +138,7 @@ foreach string function in (("localSize", "localLength", "phiSize", "phiLength")
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (repeatedLocal|reassignedLocal|removedLocal|optionalLocal|searchedLocal|mixedPhi)[^\n]*:.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (repeatedLocal|reassignedLocal|removedLocal|optionalLocal|mixedPhi)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string CFG fusion:\n%s",
         enabled_compile + disabled_compile);
