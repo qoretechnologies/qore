@@ -13622,9 +13622,99 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     return projection != QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::None;
                 };
+            QoreIRAggregateConsumerQuery consumer_query =
+                [&](const AbstractQoreFunctionVariant* callee,
+                        const QoreIRInstruction* call, size_t& base_operand,
+                        QoreIRAggregateProjectionQueryKind& kind,
+                        int64_t& index, std::string& key) {
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_AGGREGATE_CONSUMER_COMPOSITION")
+                            || !callee || !call
+                            || call->opcode != QoreIROpcode::CallDirect) {
+                        return false;
+                    }
+                    const auto* direct =
+                        static_cast<const QoreIRCallDirectInstruction*>(call);
+                    auto found = aot_batch_callee_map->find(callee);
+                    if (found == aot_batch_callee_map->end()
+                            || !found->second.approach_b_eligible
+                            || found->second.return_kind
+                                != BatchCalleeReturnKind::NativeInt
+                            || !found->second.never_returns_nothing
+                            || call->operands.size()
+                                != found->second.num_params
+                            || found->second.param_kinds.size()
+                                != call->operands.size()
+                            || found->second.param_rejects_nothing.size()
+                                != call->operands.size()
+                            || found->second.collection_op.base_param < 0
+                            || static_cast<size_t>(
+                                found->second.collection_op.base_param)
+                                >= call->operands.size()
+                            || !qore_aot_fast_entry_operands_need_no_binding(
+                                callee, direct->expr, func, call->operands, 0,
+                                static_cast<int>(call->operands.size()))) {
+                        return false;
+                    }
+                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT aggregate consumer validation")) {
+                            return false;
+                        }
+                        const QoreIRValueFacts* facts =
+                            func.getValueFacts(call->operands[i]);
+                        BatchCalleeParamKind param_kind =
+                            found->second.param_kinds[i];
+                        QoreIRValueRepresentation expected =
+                            param_kind == BatchCalleeParamKind::NativeInt
+                            ? QoreIRValueRepresentation::NativeInt
+                            : param_kind == BatchCalleeParamKind::NativeFloat
+                                ? QoreIRValueRepresentation::NativeFloat
+                                : param_kind
+                                        == BatchCalleeParamKind::NativeBool
+                                    ? QoreIRValueRepresentation::NativeBool
+                                    : QoreIRValueRepresentation::Boxed;
+                        if (!facts || facts->representation != expected
+                                || (found->second.param_rejects_nothing[i]
+                                    && (facts->assigned_state
+                                            != QoreIRAssignedState::Assigned
+                                        || !facts->never_nothing))) {
+                            return false;
+                        }
+                    }
+                    base_operand = static_cast<size_t>(
+                        found->second.collection_op.base_param);
+                    if (base_operand
+                                >= found->second.param_noescape.size()
+                            || !found->second.param_noescape[base_operand]
+                            || base_operand
+                                >= found->second.param_may_modify.size()
+                            || found->second.param_may_modify[base_operand]) {
+                        return false;
+                    }
+                    index = 0;
+                    key.clear();
+                    if (found->second.collection_op.kind
+                            == AOTCollectionOpKind::HashKeyInt) {
+                        if (found->second.collection_op.key.empty()) {
+                            return false;
+                        }
+                        key = found->second.collection_op.key;
+                        kind =
+                            QoreIRAggregateProjectionQueryKind::HashKeyInt;
+                        return true;
+                    }
+                    if (found->second.collection_op.kind
+                            == AOTCollectionOpKind::ListSize) {
+                        kind = QoreIRAggregateProjectionQueryKind::ListSize;
+                        return true;
+                    }
+                    return false;
+                };
             aggregate_projections =
                 qore_ir_fuse_aggregate_return_projections(
-                    func, projection_query);
+                    func, projection_query, consumer_query);
         }
         size_t boxed_return_calls = 0;
         if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {

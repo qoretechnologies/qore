@@ -173,6 +173,11 @@ using QoreIRAggregateProjectionQuery = std::function<bool(
     std::vector<QoreIRCallDirectInstruction::
         AOTAggregateProjectionDescriptor>&, std::vector<std::string>&)>;
 
+//! Resolve an exact aggregate consumer call to a supported projection query.
+using QoreIRAggregateConsumerQuery = std::function<bool(
+    const AbstractQoreFunctionVariant*, const QoreIRInstruction*, size_t&,
+    QoreIRAggregateProjectionQueryKind&, int64_t&, std::string&)>;
+
 //! Refine fresh-list mutation after interprocedural AOT effects are available.
 //! @param func function to optimize in place
 //! @param param_noescape returns true for proven nonescaping callee arguments
@@ -201,9 +206,14 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
 //! Fuse a fresh fixed aggregate producer call with native projections.
 /** A sole projection is emitted through the compact AOT call form. A fresh
     aggregate stored in an IR-only local is virtualized when every load is a
-    supported native projection dominated by the definition. */
+    supported native projection dominated by the definition.
+    @param func function to optimize in place
+    @param get_projection resolves exact aggregate producers
+    @param get_consumer optionally resolves exact calls consuming an aggregate
+    @return number of aggregate producer/consumer groups optimized */
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
-    const QoreIRAggregateProjectionQuery& get_projection);
+    const QoreIRAggregateProjectionQuery& get_projection,
+    const QoreIRAggregateConsumerQuery& get_consumer = {});
 
 using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,

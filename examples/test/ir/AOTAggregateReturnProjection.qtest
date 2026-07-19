@@ -683,6 +683,20 @@ int sub consumeRow(hash<string, int> row) {
     return row.middle;
 }
 
+int sub consumeListSize(list<int> values) {
+    return values.size();
+}
+
+int sub consumeMutatingRow(hash<string, int> row) {
+    row.middle = 10;
+    return row.middle;
+}
+
+int sub consumeRowWithRequiredUnused(
+        hash<string, int> row, int required_unused) {
+    return row.middle;
+}
+
 string sub consumeWords(list<string> words) {
     return words[1];
 }
@@ -690,6 +704,27 @@ string sub consumeWords(list<string> words) {
 int sub sharedEscapes() {
     hash<string, int> row = makeRow(1, 2, 3);
     return row.left + consumeRow(row);
+}
+
+int sub sharedListSizeConsumer() {
+    list<int> values = makeValues(1, 2, 3);
+    return values[0] + consumeListSize(values);
+}
+
+int sub sharedMutatingConsumer() {
+    hash<string, int> row = makeRow(1, 2, 3);
+    return row.left + consumeMutatingRow(row) + row.middle;
+}
+
+bool sub requiredUnsetConsumer() {
+    int required_unused;
+    try {
+        consumeRowWithRequiredUnused(
+            makeRow(1, 2, 3), required_unused);
+    } catch (hash<auto> ex) {
+        return True;
+    }
+    return False;
 }
 
 string sub boxedMixedUse() {
@@ -1005,6 +1040,8 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     dynamicHashDifferentKeys(\"left\", \"right\"),
     optionalDynamicHashKey(4, NOTHING),
     dynamicHashSideEffectOrder());
+printf(\"%d:%d:%y\\n\", sharedListSizeConsumer(),
+    sharedMutatingConsumer(), requiredUnsetConsumer());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -1210,10 +1247,25 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|sharedEscapes|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
+    exit(2);
+}
+foreach string function in (("sharedEscapes", "sharedListSizeConsumer")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing composed aggregate consumer projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+        =~ /IR-OPT-AOT-EFFECTS: (sharedMutatingConsumer|requiredUnsetConsumer)[^:]*:.*aggregate-projections=[1-9]/) {
+    printf("unsafe aggregate consumer projection:\n%s",
+        enabled_compile);
     exit(2);
 }
 
@@ -1381,6 +1433,7 @@ expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:Tr
 expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
+expected += "4:13:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

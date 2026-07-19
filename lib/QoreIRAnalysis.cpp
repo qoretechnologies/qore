@@ -4952,7 +4952,8 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
 }
 
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
-        const QoreIRAggregateProjectionQuery& get_projection) {
+        const QoreIRAggregateProjectionQuery& get_projection,
+        const QoreIRAggregateConsumerQuery& get_consumer) {
     if (!get_projection) {
         return 0;
     }
@@ -5043,7 +5044,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             bool allow_cross_block_parameter_guard = false) {
         if (!call || !consumer || consumer->exception_target
                 || !consumer->result.isValid() || consumer->operands.empty()
-                || consumer->operands[0].id != base.id) {
+                || !base.isValid()) {
             return false;
         }
         bool direct_call = call->opcode == QoreIROpcode::CallDirect;
@@ -5064,6 +5065,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         bool guarded_hash_key = false;
         bool clone_guarded_index = false;
         bool negative_offsets = false;
+        size_t base_operand = 0;
         if (consumer->opcode == QoreIROpcode::ListSize
                 && consumer->operands.size() == 1) {
             query_kind = QoreIRAggregateProjectionQueryKind::ListSize;
@@ -5212,7 +5214,22 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             guarded_hash_key = true;
             query_kind = QoreIRAggregateProjectionQueryKind::
                 HashKeyDynamicValue;
+        } else if (get_consumer
+                && consumer->opcode == QoreIROpcode::CallDirect) {
+            bool consumer_has_ref_args = true;
+            const AbstractQoreFunctionVariant* consumer_callee =
+                qore_ir_get_resolved_effect_callee(
+                    consumer, consumer_has_ref_args);
+            if (!consumer_callee || consumer_has_ref_args
+                    || !get_consumer(consumer_callee, consumer,
+                        base_operand, query_kind, index, key)) {
+                return false;
+            }
         } else {
+            return false;
+        }
+        if (base_operand >= consumer->operands.size()
+                || consumer->operands[base_operand].id != base.id) {
             return false;
         }
         if (guarded_index.isValid()) {
