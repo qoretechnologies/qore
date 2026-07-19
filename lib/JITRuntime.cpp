@@ -7760,7 +7760,8 @@ extern "C" DLLEXPORT uint64_t qore_fast_hash_exists(uint64_t hash_bits, uint64_t
 static uint64_t qore_rt_call_function_direct_impl(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
         uint64_t* args, uint64_t** arg_cleanups, int nargs,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) {
     // A direct call must always carry a resolved function: a variant belongs to a function,
     // so a null func reaching here means the func pointer was lost upstream (a codegen/lowering
     // bug).  assert() catches it in debug builds; the runtime guard turns it into a clean error
@@ -7805,9 +7806,19 @@ static uint64_t qore_rt_call_function_direct_impl(const QoreFunction* func,
     }
 
     // Call the function directly — skips dynamic_cast chain and AST node copy
-    QoreValue result = func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc, xsink);
+    QoreValue result = func->evalFunctionTmpArgs(variant, *arg_list, call_pgm, rc,
+        xsink, explicit_type_param_instantiation);
 
     return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct_with_inst(
+        const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        QoreProgram* pgm, uint64_t* args, int nargs,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        ExceptionSink* xsink) {
+    return qore_rt_call_function_direct_impl(func, variant, pgm, args, nullptr,
+        nargs, xsink, explicit_type_param_instantiation);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_function_direct(const QoreFunction* func,
@@ -12180,6 +12191,24 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
 
     // Use pre-resolved call target (populated during buildAOTContext) to avoid per-call dynamic_cast
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    struct TypeParamContextHelper {
+        const QoreTypeParamInstantiation* old = nullptr;
+        bool restore = false;
+
+        explicit TypeParamContextHelper(
+                const QoreTypeParamInstantiation* inst) {
+            if (inst && !inst->empty()) {
+                old = runtime_set_type_param_instantiation(inst);
+                restore = true;
+            }
+        }
+
+        ~TypeParamContextHelper() {
+            if (restore) {
+                runtime_set_type_param_instantiation(old);
+            }
+        }
+    } type_param_context(target.explicit_type_param_instantiation);
 
     // Fast path: pre-resolved user variant — inline the call_fast logic to avoid double
     // check_stack and extra function call overhead (critical for tight recursive calls)
@@ -12312,11 +12341,12 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
             if (arg_cleanups) {
                 return qore_rt_call_function_direct_impl(target.func,
                         target.variant, target.pgm, args, arg_cleanups, nargs,
-                        xsink);
+                        xsink, target.explicit_type_param_instantiation);
             }
             if (!qore_rt_user_fast_call_eligible(target.variant)) {
-                return qore_rt_call_function_direct(target.func, target.variant,
-                        target.pgm, args, nargs, xsink);
+                return qore_rt_call_function_direct_impl(target.func,
+                        target.variant, target.pgm, args, nullptr, nargs, xsink,
+                        target.explicit_type_param_instantiation);
             }
             return qore_rt_call_fast(target.func, target.variant, target.pgm, args, nargs, xsink);
         }

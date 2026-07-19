@@ -320,7 +320,9 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
 
 static bool qore_ir_fast_entry_args_need_no_binding(
         const AbstractQoreFunctionVariant* variant,
-        const QoreValue& expr, int arg_start, int nargs) {
+        const QoreValue& expr, int arg_start, int nargs,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation =
+            nullptr) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || arg_start < 0 || nargs < 0) {
         return false;
@@ -362,6 +364,10 @@ static bool qore_ir_fast_entry_args_need_no_binding(
                 return false;
             }
             const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+            if (explicit_type_param_instantiation) {
+                param_ti = qore_substitute_type_params_if_needed(param_ti,
+                    nullptr, explicit_type_param_instantiation);
+            }
             if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
                 continue;
             }
@@ -11764,6 +11770,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const StaticMethodCallNode* aot_invoke_static_call = nullptr;
                 const BatchCalleeInfo* aot_invoke_context_independent_callee = nullptr;
                 llvm::Function* aot_invoke_context_independent_fn = nullptr;
+                const QoreTypeParamInstantiation* invoke_explicit_inst =
+                    inv->explicit_type_param_inst;
+                if (!invoke_explicit_inst
+                        && inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        inv->expr.getInternalNode());
+                    invoke_explicit_inst = call
+                        ? call->getExplicitTypeParamInstantiation() : nullptr;
+                }
                 if (aot_mode && batch_callees && !inv->has_ref_args) {
                     const AbstractQoreNode* expr_node = inv->expr.getInternalNode();
                     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -11781,14 +11796,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                     }
                     auto it = variant ? batch_callees->find(variant) : batch_callees->end();
+                    bool explicit_function_call =
+                        inv->invoke_opcode == QoreIROpcode::CallDirect
+                        && invoke_explicit_inst;
                     if (it != batch_callees->end()
+                            && (!explicit_function_call
+                                || it->second.context_independent_fast_entry)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
                             && nargs <= static_cast<int>(it->second.num_params)
                             && (method_call ? isFastMethodCallEligible(variant)
                                             : isFastFunctionCallEligible(variant))
                             && qore_ir_fast_entry_args_need_no_binding(
-                                variant, inv->expr, arg_start, nargs)) {
+                                variant, inv->expr, arg_start, nargs,
+                                explicit_function_call
+                                    ? invoke_explicit_inst : nullptr)) {
                         llvm::Function* fast_fn = module.getFunction(it->second.fast_name);
                         if (fast_fn) {
                             aot_invoke_context_independent_callee = &it->second;
@@ -11886,7 +11908,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
 
                     // Check if callee is in the batch module
-                    if (batch_callees && call->getVariant()
+                    if (!invoke_explicit_inst && batch_callees
+                            && call->getVariant()
                             && batch_callees->count(call->getVariant())) {
                         const auto& callee_info = batch_callees->at(call->getVariant());
                         if (callee_info.approach_b_eligible
@@ -11952,21 +11975,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(call->getProgram())), ptr_type);
 
-                        // Use fast call if eligible
-                        const char* call_name = "qore_rt_call_function_direct";
-                        if (call->getVariant()) {
+                        // Explicit generic calls require their call-local type
+                        // instantiation; the untyped fast helper cannot infer it.
+                        const char* call_name = invoke_explicit_inst
+                            ? "qore_rt_call_function_direct_with_inst"
+                            : "qore_rt_call_function_direct";
+                        if (!invoke_explicit_inst && call->getVariant()) {
                             const UserVariantBase* uvb = call->getVariant()->getUserVariantBase();
                             if (uvb && uvb->isStaticallyFastCallEligible()) {
                                 call_name = "qore_rt_call_fast";
                             }
                         }
 
-                        auto helper = module.getOrInsertFunction(call_name,
+                        if (invoke_explicit_inst) {
+                            llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                                llvm::ConstantInt::get(i64_type,
+                                    reinterpret_cast<uint64_t>(invoke_explicit_inst)),
+                                ptr_type);
+                            auto helper = module.getOrInsertFunction(call_name,
                                 llvm::FunctionType::get(i64_type,
-                                    {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                    false));
-                        result = builder->CreateCall(helper, {func_ptr, variant_ptr, pgm_ptr,
-                                args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                                    {ptr_type, ptr_type, ptr_type, ptr_type,
+                                     i32_type, ptr_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                {func_ptr, variant_ptr, pgm_ptr, args_array,
+                                 llvm::ConstantInt::get(i32_type, nargs),
+                                 inst_ptr, xsink_arg});
+                        } else {
+                            auto helper = module.getOrInsertFunction(call_name,
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, ptr_type,
+                                     i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper,
+                                {func_ptr, variant_ptr, pgm_ptr, args_array,
+                                 llvm::ConstantInt::get(i32_type, nargs),
+                                 xsink_arg});
+                        }
                     }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallDirect) {
                     // AOT CallDirect: check for self-recursive fast entry first.
@@ -11985,15 +12028,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         : dynamic_cast<const FunctionCallNode*>(inv->expr.getInternalNode());
                     const BatchCalleeInfo* aot_approach_b_callee = nullptr;
                     llvm::Function* aot_approach_b_fn = nullptr;
-                    if (batch_callees && aot_call && aot_call->getVariant()
+                    if (batch_callees && aot_call
+                            && aot_call->getVariant()
                             && !inv->has_ref_args) {
                         auto it = batch_callees->find(aot_call->getVariant());
                         if (it != batch_callees->end()
+                                && (!invoke_explicit_inst
+                                    || it->second.context_independent_fast_entry)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastFunctionCallEligible(aot_call->getVariant())
                                 && qore_ir_fast_entry_args_need_no_binding(
-                                    aot_call->getVariant(), inv->expr, arg_start, nargs)) {
+                                    aot_call->getVariant(), inv->expr, arg_start,
+                                    nargs, invoke_explicit_inst)) {
                             aot_approach_b_fn = module.getFunction(it->second.fast_name);
                             if (aot_approach_b_fn) {
                                 aot_approach_b_callee = &it->second;
@@ -13650,6 +13697,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === CallDirect (resolved function call, skips AST round-trip) ===
         case QoreIROpcode::CallDirect: {
             const auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            const QoreTypeParamInstantiation* explicit_inst =
+                direct_inst->explicit_type_param_inst;
+            if (!explicit_inst) {
+                const auto* call = dynamic_cast<const FunctionCallNode*>(
+                    direct_inst->expr.getInternalNode());
+                explicit_inst = call
+                    ? call->getExplicitTypeParamInstantiation() : nullptr;
+            }
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
             bool fused_aggregate_projection =
@@ -13694,20 +13749,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(aot_direct_variant);
                 if (it != batch_callees->end()
+                        && (!explicit_inst
+                            || it->second.context_independent_fast_entry)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastFunctionCallEligible(aot_direct_variant)
                         && (qore_ir_fast_entry_args_need_no_binding(
-                                aot_direct_variant, direct_inst->expr, arg_start, nargs)
-                            || qore_ir_fast_entry_args_allow_optional_scalar_guard(
-                                aot_direct_variant, direct_inst->expr, arg_start, nargs))) {
+                                aot_direct_variant, direct_inst->expr, arg_start,
+                                nargs, explicit_inst)
+                            || (!explicit_inst
+                                && qore_ir_fast_entry_args_allow_optional_scalar_guard(
+                                    aot_direct_variant, direct_inst->expr,
+                                    arg_start, nargs)))) {
                     aot_approach_b_fn = module.getFunction(it->second.fast_name);
                     if (aot_approach_b_fn) {
                         aot_approach_b_callee = &it->second;
                     }
                 }
             }
-            bool is_approach_b = !aot_mode && batch_callees && direct_inst->variant
+            bool is_approach_b = !aot_mode && !explicit_inst
+                    && batch_callees && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)
                     && batch_callees->at(direct_inst->variant).approach_b_eligible
                     && qore_ir_fast_entry_args_need_no_binding(
@@ -14573,7 +14634,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 module, llvm_func, inst);
                     }
                 }
-            } else if (batch_callees && direct_inst->variant
+            } else if (!explicit_inst && batch_callees
+                    && direct_inst->variant
                     && batch_callees->count(direct_inst->variant)) {
                 const auto& callee_info = batch_callees->at(direct_inst->variant);
                 if (is_approach_b) {
@@ -14671,20 +14733,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // synchronized). qore_rt_call_fast has the same signature as
                 // qore_rt_call_function_direct and falls back internally if the
                 // callee is not yet JIT-compiled.
-                const char* call_name = "qore_rt_call_function_direct";
-                if (direct_inst->variant) {
+                const char* call_name = explicit_inst
+                    ? "qore_rt_call_function_direct_with_inst"
+                    : "qore_rt_call_function_direct";
+                if (!explicit_inst && direct_inst->variant) {
                     const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
                     if (uvb && uvb->isStaticallyFastCallEligible()) {
                         call_name = "qore_rt_call_fast";
                     }
                 }
 
-                auto helper = module.getOrInsertFunction(call_name,
+                if (explicit_inst) {
+                    llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(explicit_inst)),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction(call_name,
                         llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                            false));
-                call_result = builder->CreateCall(helper, {func_ptr, variant_ptr, pgm_ptr,
-                        args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                             ptr_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {func_ptr, variant_ptr, pgm_ptr, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), inst_ptr,
+                         xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction(call_name,
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                             ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {func_ptr, variant_ptr, pgm_ptr, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             }
 
             // Qore's scoping allows callees to access the caller's locals

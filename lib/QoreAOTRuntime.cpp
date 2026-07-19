@@ -1112,7 +1112,7 @@ static QoreValue makeDeferredObjectSlotCall(QoreProgram* pgm, const char* class_
     @return NaN-boxed bits, or 0 if unresolvable
 */
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
-        QoreProgram* pgm) {
+        QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
     if (!pgm) {
         return 0;
     }
@@ -1135,11 +1135,64 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // program instead of the qmod shadow program used for deserialization.
             FunctionCallNode* fcn = new FunctionCallNode(
                 &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
-            if (ref2 && strncmp(ref2, "sig:", 4) == 0) {
+            std::string encoded_ref = ref2 ? ref2 : "";
+            static constexpr const char* type_arg_marker = "\ntypeargs:";
+            size_t type_arg_pos = encoded_ref.find(type_arg_marker);
+            std::string variant_ref = type_arg_pos == std::string::npos
+                ? encoded_ref : encoded_ref.substr(0, type_arg_pos);
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            if (variant_ref.compare(0, 4, "sig:") == 0) {
                 if (const AbstractQoreFunctionVariant* v =
-                        fe->getFunction()->findVariantBySignatureText(ref2 + 4)) {
+                        fe->getFunction()->findVariantBySignatureText(
+                            variant_ref.c_str() + 4)) {
                     fcn->setVariant(v);
+                    variant = v;
                 }
+            }
+            if (type_arg_pos != std::string::npos) {
+                size_t count_start = type_arg_pos + strlen(type_arg_marker);
+                size_t count_end = encoded_ref.find('\n', count_start);
+                std::string count_text = encoded_ref.substr(count_start,
+                    count_end == std::string::npos
+                        ? std::string::npos : count_end - count_start);
+                char* count_tail = nullptr;
+                unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
+                const UserVariantBase* uvb = variant
+                    ? variant->getUserVariantBase() : nullptr;
+                const UserSignature* callee_signature = uvb
+                    ? uvb->getUserSignature() : nullptr;
+                if (!count_tail || *count_tail || !callee_signature
+                        || count != callee_signature->getTypeParameterCount()) {
+                    delete fcn;
+                    return 0;
+                }
+                QoreTypeParamInstantiation inst;
+                inst.owner = callee_signature;
+                QoreAOTTypeResolver type_resolver(pgm);
+                size_t path_start = count_end;
+                for (unsigned long i = 0; i < count; ++i) {
+                    if (path_start == std::string::npos) {
+                        delete fcn;
+                        return 0;
+                    }
+                    ++path_start;
+                    size_t path_end = encoded_ref.find('\n', path_start);
+                    std::string path = encoded_ref.substr(path_start,
+                        path_end == std::string::npos
+                            ? std::string::npos : path_end - path_start);
+                    std::string type_error;
+                    const QoreTypeInfo* type_arg = containing_signature
+                        ? type_resolver.resolveForSignature(path.c_str(),
+                            type_error, containing_signature)
+                        : type_resolver.resolve(path.c_str(), type_error);
+                    if (!type_arg || !type_error.empty()) {
+                        delete fcn;
+                        return 0;
+                    }
+                    inst.type_args.push_back(type_arg);
+                    path_start = path_end;
+                }
+                fcn->setExplicitTypeParamInstantiation(std::move(inst));
             }
             return toBitsNB(QoreValue(fcn));
         }
@@ -5905,7 +5958,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
         }
 
-        uint64_t bits = resolveExprSlot(kind, ref1, ref2, pgm);
+        uint64_t bits = resolveExprSlot(kind, ref1, ref2, pgm,
+            uvb ? uvb->getUserSignature() : nullptr);
         if (bits) {
             ctx->exprs[i] = bits;
         } else if (kind != AOTExprKind::GENERIC_EVAL) {
@@ -5983,6 +6037,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (fcn && fcn->getFunction()) {
             ctx->call_targets[i].func = fcn->getFunction();
             ctx->call_targets[i].pgm = fcn->getProgram();
+            ctx->call_targets[i].explicit_type_param_instantiation =
+                fcn->getExplicitTypeParamInstantiation();
             // Only use variant if it was resolved at parse time (requires args for overload
             // resolution). Do NOT fall back to first() — for overloaded builtins like int(),
             // picking the wrong variant causes CodeEvaluationHelper to discard args during

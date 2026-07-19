@@ -13327,9 +13327,19 @@ lvalue_path_unary_done:
                     int nargs = static_cast<int>(direct_inst->operands.size());
                     bool type_name_fast_path = nargs == 1
                         && qore_ir_interpreter_is_type_name_builtin_call(direct_inst->expr);
+                    const QoreTypeParamInstantiation* explicit_inst =
+                        direct_inst->explicit_type_param_inst;
+                    if (!explicit_inst) {
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                            direct_inst->expr.getInternalNode());
+                        explicit_inst = call
+                            ? call->getExplicitTypeParamInstantiation()
+                            : nullptr;
+                    }
                     bool has_last_use_args = direct_inst->func && hasLastUseCallArgSlots(values,
                         direct_inst->operands, 0, value_use_counts);
                     bool prefer_inline_ir = has_last_use_args
+                        && !explicit_inst
                         && ensureInterpreterInlineIRFunctionState(direct_inst, pgm, nargs) > 0;
                     if (has_last_use_args && !prefer_inline_ir && !type_name_fast_path) {
                         ReferenceHolder<QoreListNode> arg_list(
@@ -13348,7 +13358,8 @@ lvalue_path_unary_done:
                             call_pgm = getProgram();
                         }
                         QoreValue res = direct_inst->func->evalFunctionTmpArgs(
-                            direct_inst->variant, *arg_list, call_pgm, rc, xsink);
+                            direct_inst->variant, *arg_list, call_pgm, rc, xsink,
+                            explicit_inst);
                         if (xsink && *xsink) {
                             return returnAfterUnhandledException();
                         }
@@ -13376,7 +13387,21 @@ lvalue_path_unary_done:
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
                     bool used_inline_ir = false;
-                    if (type_name_fast_path) {
+                    if (explicit_inst) {
+                        ReferenceHolder<QoreListNode> arg_list(
+                            buildArgList(values, direct_inst->operands, 0,
+                                xsink), xsink);
+                        RuntimeConfig& rc = rc_get_current_ref();
+                        QoreProgram* call_pgm = direct_inst->pgm
+                            ? direct_inst->pgm : rc.getProgram();
+                        if (!call_pgm) {
+                            call_pgm = getProgram();
+                        }
+                        res = direct_inst->func->evalFunctionTmpArgs(
+                            direct_inst->variant, *arg_list, call_pgm, rc,
+                            xsink, explicit_inst);
+                        used_inline_ir = true;
+                    } else if (type_name_fast_path) {
                         res = fromBits(qore_rt_pseudo_type(nanboxed_args[0]));
                         inline_may_invalidate_external_caches = false;
                         used_inline_ir = true;

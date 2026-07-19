@@ -2157,6 +2157,7 @@ public:
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant (may be null)
     QoreProgram* pgm = nullptr;             //!< The program context
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
     bool is_self_recursive = false;         //!< True if this is a self-recursive call (same function name)
     //! Direct projection from a fresh fixed aggregate returned by this call.
@@ -2611,6 +2612,7 @@ public:
     //! runtime-created closures the node's resolved-function pointer can be cleared between
     //! lowering and codegen, which would otherwise bake a null func into the direct call.
     const QoreFunction* func = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
 };
 
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)

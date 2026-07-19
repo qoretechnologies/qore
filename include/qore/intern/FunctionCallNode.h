@@ -166,6 +166,11 @@ public:
         type_param_instantiation = std::move(type_param_inst);
     }
 
+    DLLLOCAL void setExplicitTypeParamInstantiation(QoreTypeParamInstantiation&& type_param_inst) {
+        has_explicit_type_args = true;
+        explicit_runtime_type_param_instantiation = std::move(type_param_inst);
+    }
+
     //! Resolves parse_args into evaluated args for AOT-deserialized nodes
     /** AOT EXPR_TREE deserialization creates nodes with parse_args that may contain
         unevaluated AST sub-expressions (e.g., StaticMethodCallNode). This method

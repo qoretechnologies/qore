@@ -117,6 +117,7 @@ struct QoreAOTCallTarget {
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
     const QoreTypeInfo* object_type_info = nullptr; //!< instantiated object type for constructor calls
     const QoreTypeInfo* receiver_type_info = nullptr; //!< parameterized receiver type for generic static calls
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution

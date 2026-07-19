@@ -87,8 +87,10 @@ public string sub verify() {
             ex.desc =~ /takes[(]string a, int b[)]/ ? \"candidate\" : \"missing-candidate\");
     }
     GenericCalls calls();
-    rv += sprintf(\"%d:%s:%d:%d:%s\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
-        bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"));
+    auto explicit_identity = identity<float>(41);
+    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
+        bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"), explicit_identity,
+        explicit_identity.typeCode());
     return rv;
 }
 }
@@ -98,7 +100,7 @@ public string sub verify() {
     private string expectedOutput() {
         return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
             "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
-            "41:echo:11:42:chosen\n";
+            "41:echo:11:42:chosen:41:2\n";
     }
 
     private string runModule(string module_dir, string script_path) {

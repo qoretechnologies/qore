@@ -12179,7 +12179,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
-    if (call->hasExplicitTypeArgs()) {
+    if (call->hasExplicitTypeArgs()
+            && std::getenv("QORE_DISABLE_IR_DIRECT_GENERIC_FUNCTION_CALLS")) {
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
     }
 
@@ -12204,11 +12205,16 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             inst->func = func;
             inst->has_ref_args = qore_ir_direct_variant_has_reference_params(
                     call->getVariant());
+            inst->explicit_type_param_inst =
+                call->getExplicitTypeParamInstantiation();
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createCallDirect(func, call->getVariant(),
-                call->getProgram(), expr, operands, call->loc)->result;
+        auto* inst = builder.createCallDirect(func, call->getVariant(),
+                call->getProgram(), expr, operands, call->loc);
+        inst->explicit_type_param_inst =
+            call->getExplicitTypeParamInstantiation();
+        return inst->result;
     }
 
     return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);

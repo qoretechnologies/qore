@@ -1147,6 +1147,12 @@ uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
 uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct function call with explicit generic type arguments.
+uint64_t qore_rt_call_function_direct_with_inst(const QoreFunction* func,
+    const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, uint64_t* args,
+    int nargs, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
+
 //! Fast function call — bypasses QoreListNode construction, CodeEvaluationHelper,
 //! and the entire dispatch chain. Directly instantiates parameters from NaN-boxed args,
 //! instantiates body locals, and calls the cached JIT/AOT function.

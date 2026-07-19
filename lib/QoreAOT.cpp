@@ -25689,6 +25689,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                             ctx->call_targets[slot].variant = call->getVariant();
                             ctx->call_targets[slot].pgm = call->getProgram();
                             ctx->call_targets[slot].uvb = call->getVariant()->getUserVariantBase();
+                            ctx->call_targets[slot].explicit_type_param_instantiation =
+                                call->getExplicitTypeParamInstantiation();
                         }
                         // Pre-resolve static method or self method call target
                         if (!call) {
@@ -27343,6 +27345,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2 += sig->getSignatureText();
             }
             id.reloc_qore_path = getVariantKey(id.ref1.c_str(), v);
+        }
+        if (const QoreTypeParamInstantiation* inst =
+                call->getExplicitTypeParamInstantiation()) {
+            id.ref2 += "\ntypeargs:";
+            id.ref2 += std::to_string(inst->type_args.size());
+            for (const QoreTypeInfo* type_arg : inst->type_args) {
+                id.ref2 += "\n";
+                id.ref2 += qore_get_aot_serializable_type_path(type_arg);
+            }
         }
         return id;
     }
