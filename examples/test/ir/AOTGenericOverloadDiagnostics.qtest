@@ -64,6 +64,27 @@ public class GenericChooser<T> {
     }
 }
 
+public hashdecl GenericResult<T> {
+    T value;
+}
+
+public class GenericBox<T> {
+    T echo(T value) {
+        return value;
+    }
+
+    hash<GenericResult<T>> result(T value) {
+        hash<GenericResult<T>> rv((\"value\": value));
+        return rv;
+    }
+}
+
+public class DerivedGenericBox inherits GenericBox<int> {
+    int echo(int value) {
+        return value + 100;
+    }
+}
+
 public string sub verify() {
     Program p(PO_NEW_STYLE);
     p.parse(\"T sub takes<T>(T a, int b) { return a; }\", \"aot-generic-overload\");
@@ -89,9 +110,14 @@ public string sub verify() {
     GenericCalls calls();
     auto explicit_identity = identity<float>(41);
     auto explicit_static = GenericChooser<int>::choose<float>(1, 42);
-    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d:%d:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
+    GenericBox<int> generic_box();
+    GenericBox<string> string_box();
+    GenericBox<int> derived_box = new DerivedGenericBox();
+    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d:%d:%d:%d:%d:%s:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
         bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"), explicit_identity,
-        explicit_identity.typeCode(), explicit_static, explicit_static.typeCode());
+        explicit_identity.typeCode(), explicit_static, explicit_static.typeCode(),
+        generic_box.echo(43), generic_box.result(44).value, string_box.result(\"value\").value,
+        derived_box.echo(44));
     return rv;
 }
 }
@@ -101,7 +127,7 @@ public string sub verify() {
     private string expectedOutput() {
         return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
             "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
-            "41:echo:11:42:chosen:41:2:42:2\n";
+            "41:echo:11:42:chosen:41:2:42:2:43:44:value:144\n";
     }
 
     private string runModule(string module_dir, string script_path) {

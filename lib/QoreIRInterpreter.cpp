@@ -3674,6 +3674,10 @@ static bool tryExecuteInterpreterInlineIRMethod(DirectMethodInst* inst, QoreObje
     if (!self || !caller_pgm) {
         return false;
     }
+    const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(self);
+    if (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
+        return false;
+    }
     int8_t inline_state = ensureInterpreterResolvedInlineIRCallState(
         inst, inst->method, inst->variant, caller_pgm, nargs, true);
     if (inline_state <= 0) {
@@ -3722,6 +3726,10 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
             "cannot call '%s()' on an object that has already been deleted", method_name);
         result = QoreValue();
         return true;
+    }
+    const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(self);
+    if (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
+        return false;
     }
 
     int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);

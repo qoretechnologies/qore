@@ -924,6 +924,17 @@ public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
             RetTypeInfo* rv, bool synced);
     DLLLOCAL virtual ~UserVariantBase();
+    /** Returns cached IR specialized for the concrete generic call context, creating it when needed.
+        @param name call name used to label newly lowered IR
+        @param receiver_type_info concrete parameterized receiver type
+        @param type_param_instantiation optional concrete method or function type arguments
+        @return the cached specialized IR, or nullptr when specialization is unavailable
+    */
+    DLLLOCAL const QoreIRFunction* getOrCreateSpecializedIRForFastCall(const char* name,
+            const QoreTypeInfo* receiver_type_info,
+            const QoreTypeParamInstantiation* type_param_instantiation = nullptr) const {
+        return getOrCreateSpecializedIR(name, receiver_type_info, type_param_instantiation, false);
+    }
     DLLLOCAL UserSignature* getUserSignature() const {
         return const_cast<UserSignature*>(&signature);
     }

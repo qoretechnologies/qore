@@ -13770,6 +13770,14 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         return true;
     }
     const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
+    const bool use_specialized_ir = !uvb->hasCachedAOT() && receiver_type_info
+        && QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+    const QoreIRFunction* ir = use_specialized_ir
+        ? uvb->getOrCreateSpecializedIRForFastCall(method->getName(), receiver_type_info)
+        : uvb->getCachedIR();
+    if (use_specialized_ir && !ir) {
+        return false;
+    }
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -13792,9 +13800,9 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     ObjectSubstitutionHelper osh(o, qore_class_private::get(*method->getClass()));
 
     // Check if callee IR supports direct param passing (bypass TLS entirely)
-    const QoreIRFunction* ir = uvb->getCachedIR();
     bool use_direct_params = ir && ir->isDirectParamsRuntimeSafe()
-        && !uvb->hasCachedFunction() && nargs >= (int)num_params;
+        && (!uvb->hasCachedFunction() || use_specialized_ir)
+        && nargs >= static_cast<int>(num_params);
 
     LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocal(ir);
     bool selfid_instantiated = selfid;
@@ -13804,7 +13812,8 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
 
     if (!use_direct_params) {
         // Standard path: push params to TLS
-        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
+        if (instantiateFastCallParams(sig, num_params, nargs, args, xsink,
+                receiver_type_info) < 0) {
             if (selfid_instantiated) {
                 selfid->uninstantiateSelf();
             }
@@ -13860,7 +13869,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                 }
                 return toBits(ir_return_value);
             }, val, xsink, caller_pgm, receiver_type_info, exec_pgm);
-        } else if (uvb->hasCachedFunction()) {
+        } else if (uvb->hasCachedFunction() && !use_specialized_ir) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
@@ -13947,8 +13956,10 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
         }
         // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list while still honoring the
         // parse-selected overload variant when one is available.
+        const QoreTypeInfo* receiver_type_info =
+            qore_get_object_receiver_type_info(o);
         return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), o, arg_list, nullptr,
-            variant, nullptr, explicit_type_param_instantiation));
+            variant, receiver_type_info, explicit_type_param_instantiation));
     }
     // Class mismatch — name-based lookup (virtual dispatch to the runtime class)
     // Pass the runtime class context so that private method access checks succeed

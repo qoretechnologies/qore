@@ -10779,8 +10779,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             const AbstractQoreFunctionVariant* variant = m->getVariant();
             const QoreFunction* method_func = method
                 ? qore_method_private::get(*method)->getFunction() : nullptr;
+            bool generic_class_target = qc && method
+                && (qc->hasTypeParameters()
+                    || method->getClass()->hasTypeParameters());
             if (!m->isPseudo() && (!method || !qc || !variant || !method_func
-                    || qc->hasTypeParameters() || method->getClass()->hasTypeParameters()
+                    || (generic_class_target
+                        && std::getenv(
+                            "QORE_DISABLE_IR_GENERIC_OBJECT_METHOD_TARGET"))
                     || method_func->numVariants() != 1
                     || overloadedDirectCallNeedsRuntimeDispatch(method_func, variant,
                         m->getParseArgs(), m->getArgs()))) {
