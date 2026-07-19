@@ -12333,7 +12333,8 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), lowered_args, error)) {
         return QoreIRValue();
     }
-    if (call->hasExplicitTypeArgs()) {
+    if ((call->hasExplicitTypeArgs() || call->getReceiverTypeInfo())
+            && std::getenv("QORE_DISABLE_IR_DIRECT_GENERIC_STATIC_CALLS")) {
         return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error);
     }
 
@@ -12342,7 +12343,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     // selection was inconclusive (due to missing type information), and runtime dispatch is required.
     const AbstractQoreFunctionVariant* variant = call->getVariant();
     const QoreMethod* method = call->getMethod();
-    if (method && variant && !call->getReceiverTypeInfo()
+    if (method && variant
             && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(), variant,
                 call->getParseArgs(), call->getArgs())) {
         QoreIRValue result;
@@ -12357,6 +12358,9 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             auto* invoke_inst = builder.createInvoke(expr, lowered_args, normal_block, handler, call->loc);
             invoke_inst->invoke_opcode = QoreIROpcode::CallStaticDirect;
             invoke_inst->has_ref_args = qore_ir_direct_variant_has_reference_params(variant);
+            invoke_inst->receiver_type_info = call->getReceiverTypeInfo();
+            invoke_inst->explicit_type_param_inst =
+                call->getExplicitTypeParamInstantiation();
             // Phase 3: Try to cache the callee IR for inlining
             auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
             if (call_static_inst) {
@@ -12367,6 +12371,9 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
         } else {
             auto* call_static_inst = builder.createCallStaticDirect(call->getMethod(), variant, expr,
                 lowered_args, call->loc);
+            call_static_inst->receiver_type_info = call->getReceiverTypeInfo();
+            call_static_inst->explicit_type_param_inst =
+                call->getExplicitTypeParamInstantiation();
             // Phase 3: Try to cache the callee IR for inlining
             tryCacheCalleeIRForInlining(variant, call_static_inst);
             result = call_static_inst->result;

@@ -2791,12 +2791,58 @@ QoreAOTStaticMethodRef::QoreAOTStaticMethodRef(const char* encoded) : method_nam
         return;
     }
 
-    const char* first_sep = strchr(encoded, '\n');
+    encoded_storage = encoded;
+    std::string type_arg_marker("\n");
+    type_arg_marker += QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER;
+    type_arg_marker += "\n";
+    size_t type_arg_pos = encoded_storage.find(type_arg_marker);
+    if (type_arg_pos != std::string::npos) {
+        explicit_type_args_present = true;
+        size_t count_start = type_arg_pos + type_arg_marker.size();
+        size_t count_end = encoded_storage.find('\n', count_start);
+        std::string count_text = encoded_storage.substr(count_start,
+            count_end == std::string::npos
+                ? std::string::npos : count_end - count_start);
+        char* count_tail = nullptr;
+        unsigned long count = strtoul(count_text.c_str(), &count_tail, 10);
+        if (!count_tail || count_tail == count_text.c_str() || *count_tail
+                || count > 255 || (count && count_end == std::string::npos)) {
+            explicit_type_args_valid = false;
+        } else {
+            explicit_type_arg_paths.reserve(count);
+            size_t path_start = count_end;
+            for (unsigned long i = 0; i < count; ++i) {
+                ++path_start;
+                size_t path_end = encoded_storage.find('\n', path_start);
+                std::string path = encoded_storage.substr(path_start,
+                    path_end == std::string::npos
+                        ? std::string::npos : path_end - path_start);
+                if (path.empty()) {
+                    explicit_type_args_valid = false;
+                    break;
+                }
+                explicit_type_arg_paths.push_back(std::move(path));
+                path_start = path_end;
+                if (path_start == std::string::npos && i + 1 < count) {
+                    explicit_type_args_valid = false;
+                    break;
+                }
+            }
+            if (explicit_type_arg_paths.size() != count) {
+                explicit_type_args_valid = false;
+            }
+        }
+        encoded_storage.resize(type_arg_pos);
+    }
+
+    const char* encoded_ref = encoded_storage.c_str();
+    method_name = encoded_ref;
+    const char* first_sep = strchr(encoded_ref, '\n');
     if (!first_sep) {
         return;
     }
 
-    method_name_storage.assign(encoded, first_sep - encoded);
+    method_name_storage.assign(encoded_ref, first_sep - encoded_ref);
     method_name = method_name_storage.c_str();
 
     const char* payload = first_sep + 1;
@@ -2834,7 +2880,8 @@ static std::string qore_aot_encode_call_arg_type_signature(const type_vec_t& arg
 }
 
 std::string qore_aot_encode_static_method_ref(const char* method_name,
-        const AbstractQoreFunctionVariant* variant, const type_vec_t* arg_types) {
+        const AbstractQoreFunctionVariant* variant, const type_vec_t* arg_types,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
     std::string rv(method_name ? method_name : "");
     if (variant) {
         if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(variant)->getSignature()) {
@@ -2846,14 +2893,23 @@ std::string qore_aot_encode_static_method_ref(const char* method_name,
             rv += "\n";
             rv += sig->getSignatureText();
         }
-        return rv;
-    }
-
-    if (arg_types && !arg_types->empty()) {
+    } else if (arg_types && !arg_types->empty()) {
         rv += "\n";
         rv += QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER;
         rv += "\n";
         rv += qore_aot_encode_call_arg_type_signature(*arg_types);
+    }
+    if (explicit_type_param_instantiation) {
+        rv += "\n";
+        rv += QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER;
+        rv += "\n";
+        rv += std::to_string(
+            explicit_type_param_instantiation->type_args.size());
+        for (const QoreTypeInfo* type_arg
+                : explicit_type_param_instantiation->type_args) {
+            rv += "\n";
+            rv += qore_get_aot_serializable_type_path(type_arg);
+        }
     }
     return rv;
 }

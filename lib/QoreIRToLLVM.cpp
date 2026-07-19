@@ -322,7 +322,7 @@ static bool qore_ir_fast_entry_args_need_no_binding(
         const AbstractQoreFunctionVariant* variant,
         const QoreValue& expr, int arg_start, int nargs,
         const QoreTypeParamInstantiation* explicit_type_param_instantiation =
-            nullptr) {
+            nullptr, const QoreTypeInfo* receiver_type_info = nullptr) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!uvb || arg_start < 0 || nargs < 0) {
         return false;
@@ -364,9 +364,9 @@ static bool qore_ir_fast_entry_args_need_no_binding(
                 return false;
             }
             const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
-            if (explicit_type_param_instantiation) {
+            if (explicit_type_param_instantiation || receiver_type_info) {
                 param_ti = qore_substitute_type_params_if_needed(param_ti,
-                    nullptr, explicit_type_param_instantiation);
+                    receiver_type_info, explicit_type_param_instantiation);
             }
             if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
                 continue;
@@ -11772,12 +11772,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Function* aot_invoke_context_independent_fn = nullptr;
                 const QoreTypeParamInstantiation* invoke_explicit_inst =
                     inv->explicit_type_param_inst;
-                if (!invoke_explicit_inst
-                        && inv->invoke_opcode == QoreIROpcode::CallDirect) {
-                    const auto* call = dynamic_cast<const FunctionCallNode*>(
+                const QoreTypeInfo* invoke_receiver_type_info =
+                    inv->receiver_type_info;
+                if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
+                    if (!invoke_explicit_inst) {
+                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                            inv->expr.getInternalNode());
+                        invoke_explicit_inst = call
+                            ? call->getExplicitTypeParamInstantiation() : nullptr;
+                    }
+                } else if (inv->invoke_opcode
+                        == QoreIROpcode::CallStaticDirect) {
+                    const auto* call = dynamic_cast<const StaticMethodCallNode*>(
                         inv->expr.getInternalNode());
-                    invoke_explicit_inst = call
-                        ? call->getExplicitTypeParamInstantiation() : nullptr;
+                    if (call) {
+                        if (!invoke_explicit_inst) {
+                            invoke_explicit_inst =
+                                call->getExplicitTypeParamInstantiation();
+                        }
+                        if (!invoke_receiver_type_info) {
+                            invoke_receiver_type_info =
+                                call->getReceiverTypeInfo();
+                        }
+                    }
                 }
                 if (aot_mode && batch_callees && !inv->has_ref_args) {
                     const AbstractQoreNode* expr_node = inv->expr.getInternalNode();
@@ -11796,11 +11813,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                     }
                     auto it = variant ? batch_callees->find(variant) : batch_callees->end();
-                    bool explicit_function_call =
-                        inv->invoke_opcode == QoreIROpcode::CallDirect
-                        && invoke_explicit_inst;
+                    bool concrete_generic_call = invoke_explicit_inst
+                        || invoke_receiver_type_info;
                     if (it != batch_callees->end()
-                            && (!explicit_function_call
+                            && (!concrete_generic_call
                                 || it->second.context_independent_fast_entry)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
@@ -11809,8 +11825,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                             : isFastFunctionCallEligible(variant))
                             && qore_ir_fast_entry_args_need_no_binding(
                                 variant, inv->expr, arg_start, nargs,
-                                explicit_function_call
-                                    ? invoke_explicit_inst : nullptr)) {
+                                invoke_explicit_inst,
+                                invoke_receiver_type_info)) {
                         llvm::Function* fast_fn = module.getFunction(it->second.fast_name);
                         if (fast_fn) {
                             aot_invoke_context_independent_callee = &it->second;
@@ -12198,12 +12214,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* variant_ptr = builder->CreateIntToPtr(
                             llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(static_call->getVariant())), ptr_type);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_call_static_method_direct",
+                    if (invoke_receiver_type_info || invoke_explicit_inst) {
+                        llvm::Value* receiver_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(
+                                    invoke_receiver_type_info)), ptr_type);
+                        llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                            llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(
+                                    invoke_explicit_inst)), ptr_type);
+                        auto helper = module.getOrInsertFunction(
+                            "qore_rt_call_static_method_direct_with_inst",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                                {ptr_type, ptr_type, ptr_type, i32_type,
+                                 ptr_type, ptr_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                            {method_ptr, variant_ptr, args_array,
+                             llvm::ConstantInt::get(i32_type, nargs),
+                             receiver_ptr, inst_ptr, xsink_arg});
+                    } else {
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_call_static_method_direct",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                            {method_ptr, variant_ptr, args_array,
+                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    }
                 } else if (aot_mode && inv->invoke_opcode == QoreIROpcode::CallStaticDirect) {
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
                     const StaticMethodCallNode* static_call = aot_invoke_static_call
@@ -12215,11 +12252,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             && !inv->has_ref_args) {
                         auto it = batch_callees->find(static_call->getVariant());
                         if (it != batch_callees->end()
+                                && ((!invoke_explicit_inst
+                                        && !invoke_receiver_type_info)
+                                    || it->second.context_independent_fast_entry)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
                                 && isFastMethodCallEligible(static_call->getVariant())
                                 && qore_ir_fast_entry_args_need_no_binding(
-                                    static_call->getVariant(), inv->expr, 0, nargs)) {
+                                    static_call->getVariant(), inv->expr, 0,
+                                    nargs, invoke_explicit_inst,
+                                    invoke_receiver_type_info)) {
                             aot_static_batch_fn = module.getFunction(it->second.fast_name);
                             if (aot_static_batch_fn) {
                                 aot_static_batch_callee = &it->second;
@@ -15272,6 +15314,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === CallStaticDirect (resolved static method call, skips AST round-trip) ===
         case QoreIROpcode::CallStaticDirect: {
             const auto* direct_inst = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            const auto* static_call = dynamic_cast<const StaticMethodCallNode*>(
+                direct_inst->expr.getInternalNode());
+            const QoreTypeInfo* receiver_type_info =
+                direct_inst->receiver_type_info
+                    ? direct_inst->receiver_type_info
+                    : (static_call ? static_call->getReceiverTypeInfo() : nullptr);
+            const QoreTypeParamInstantiation* explicit_inst =
+                direct_inst->explicit_type_param_inst
+                    ? direct_inst->explicit_type_param_inst
+                    : (static_call
+                        ? static_call->getExplicitTypeParamInstantiation()
+                        : nullptr);
 
             int nargs = static_cast<int>(inst->operands.size());
             const BatchCalleeInfo* aot_static_batch_callee = nullptr;
@@ -15280,11 +15334,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(direct_inst->variant);
                 if (it != batch_callees->end()
+                        && ((!receiver_type_info && !explicit_inst)
+                            || it->second.context_independent_fast_entry)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
                         && isFastMethodCallEligible(direct_inst->variant)
                         && qore_ir_fast_entry_args_need_no_binding(
-                            direct_inst->variant, direct_inst->expr, 0, nargs)) {
+                            direct_inst->variant, direct_inst->expr, 0, nargs,
+                            explicit_inst, receiver_type_info)) {
                     aot_static_batch_fn = module.getFunction(it->second.fast_name);
                     if (aot_static_batch_fn) {
                         aot_static_batch_callee = &it->second;
@@ -15492,11 +15549,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* variant_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_call_static_method_direct",
+                if (receiver_type_info || explicit_inst) {
+                    llvm::Value* receiver_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(receiver_type_info)),
+                        ptr_type);
+                    llvm::Value* inst_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(explicit_inst)),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_static_method_direct_with_inst",
                         llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper, {method_ptr, variant_ptr, args_array,
-                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type,
+                             ptr_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {method_ptr, variant_ptr, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), receiver_ptr,
+                         inst_ptr, xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_static_method_direct",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false));
+                    call_result = builder->CreateCall(helper,
+                        {method_ptr, variant_ptr, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                }
             }
 
             // Qore's scoping allows callees to access the caller's locals

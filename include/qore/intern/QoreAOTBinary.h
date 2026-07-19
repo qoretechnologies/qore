@@ -92,12 +92,17 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
 
 //! Marker for method-ref payloads that carry deferred call argument type metadata.
 constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
+constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
 
 struct QoreAOTStaticMethodRef {
     const char* method_name = nullptr;
     const char* variant_class_path = nullptr;
     const char* sig_text = nullptr;
     const char* arg_type_sig = nullptr;
+    bool explicit_type_args_present = false;
+    bool explicit_type_args_valid = true;
+    std::vector<std::string> explicit_type_arg_paths;
+    std::string encoded_storage;
     std::string method_name_storage;
     std::string variant_class_storage;
 
@@ -106,7 +111,9 @@ struct QoreAOTStaticMethodRef {
 
 //! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
 std::string qore_aot_encode_static_method_ref(const char* method_name,
-    const AbstractQoreFunctionVariant* variant = nullptr, const type_vec_t* arg_types = nullptr);
+    const AbstractQoreFunctionVariant* variant = nullptr,
+    const type_vec_t* arg_types = nullptr,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
 //! Resolves a static-call argument type signature and uses it to find a method variant.
 const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,

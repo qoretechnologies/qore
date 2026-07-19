@@ -1395,6 +1395,13 @@ uint64_t qore_rt_pseudo_list_value_guarded_aot(QoreAOTContext* ctx, int32_t slot
 uint64_t qore_rt_call_static_method_direct(const QoreMethod* method,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct static method call with concrete receiver and method type arguments.
+uint64_t qore_rt_call_static_method_direct_with_inst(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
+
 //! AOT variant of qore_rt_call_static_method_direct: resolves method from context slot.
 uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args,
     int nargs, ExceptionSink* xsink);

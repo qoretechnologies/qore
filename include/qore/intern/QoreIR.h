@@ -2298,6 +2298,8 @@ public:
     const QoreMethod* method = nullptr;     //!< The resolved static method pointer
     const AbstractQoreFunctionVariant* variant = nullptr; //!< The resolved variant
     QoreValue expr;                         //!< Original AST expression (for AOT)
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
@@ -2612,6 +2614,7 @@ public:
     //! runtime-created closures the node's resolved-function pointer can be cleared between
     //! lowering and codegen, which would otherwise bake a null func into the direct call.
     const QoreFunction* func = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
 };
 

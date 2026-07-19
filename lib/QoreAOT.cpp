@@ -25698,6 +25698,11 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                                 expr_val.getInternalNode());
                             if (static_call && static_call->getMethod()) {
                                 ctx->call_targets[slot].method = static_call->getMethod();
+                                ctx->call_targets[slot].is_static_method = true;
+                                ctx->call_targets[slot].receiver_type_info =
+                                    static_call->getReceiverTypeInfo();
+                                ctx->call_targets[slot].explicit_type_param_instantiation =
+                                    static_call->getExplicitTypeParamInstantiation();
                                 const AbstractQoreFunctionVariant* v = static_call->getVariant();
                                 if (v) {
                                     ctx->call_targets[slot].variant = v;
@@ -27403,7 +27408,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         const AbstractQoreFunctionVariant* call_variant = call->getVariant();
         id.ref2 = qore_aot_encode_static_method_ref(call->getName(), call_variant,
-            call_variant ? nullptr : &call->getParsedArgTypeInfo());
+            call_variant ? nullptr : &call->getParsedArgTypeInfo(),
+            call->getExplicitTypeParamInstantiation());
         id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());
         if (const AbstractQoreFunctionVariant* v = call_variant) {
             if (method) {

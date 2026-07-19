@@ -13496,14 +13496,29 @@ lvalue_path_unary_done:
                     for (int i = 0; i < nargs; ++i) {
                         nanboxed_args[i] = toBits(getIRValue(values, static_inst->operands[i]));
                     }
+                    const QoreTypeInfo* receiver_type_info =
+                        static_inst->receiver_type_info
+                            ? static_inst->receiver_type_info
+                            : static_call_expr->getReceiverTypeInfo();
+                    const QoreTypeParamInstantiation* explicit_inst =
+                        static_inst->explicit_type_param_inst
+                            ? static_inst->explicit_type_param_inst
+                            : static_call_expr->getExplicitTypeParamInstantiation();
                     QoreValue res;
                     bool inline_may_invalidate_external_caches = true;
-                    bool used_inline_ir = tryExecuteInterpreterInlineIRStaticMethod(static_inst, pgm,
-                        nanboxed_args, nargs, res, xsink, &inline_may_invalidate_external_caches);
+                    bool used_inline_ir = !receiver_type_info && !explicit_inst
+                        && tryExecuteInterpreterInlineIRStaticMethod(static_inst, pgm,
+                            nanboxed_args, nargs, res, xsink,
+                            &inline_may_invalidate_external_caches);
                     if (!used_inline_ir) {
-                        res = fromBits(qore_rt_call_static_method_direct(
-                            static_inst->method, static_inst->variant,
-                            nanboxed_args, nargs, xsink));
+                        res = fromBits(receiver_type_info || explicit_inst
+                            ? qore_rt_call_static_method_direct_with_inst(
+                                static_inst->method, static_inst->variant,
+                                nanboxed_args, nargs, receiver_type_info,
+                                explicit_inst, xsink)
+                            : qore_rt_call_static_method_direct(
+                                static_inst->method, static_inst->variant,
+                                nanboxed_args, nargs, xsink));
                     }
                     if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
                     if (xsink && *xsink) {

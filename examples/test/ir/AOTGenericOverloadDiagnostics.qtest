@@ -88,9 +88,10 @@ public string sub verify() {
     }
     GenericCalls calls();
     auto explicit_identity = identity<float>(41);
-    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
+    auto explicit_static = GenericChooser<int>::choose<float>(1, 42);
+    rv += sprintf(\"%d:%s:%d:%d:%s:%d:%d:%d:%d\\n\", identity<int>(41), calls.echo<string>(\"echo\"), defaultValue(),
         bounded(42), GenericChooser<int>::choose<string>(1, \"chosen\"), explicit_identity,
-        explicit_identity.typeCode());
+        explicit_identity.typeCode(), explicit_static, explicit_static.typeCode());
     return rv;
 }
 }
@@ -100,7 +101,7 @@ public string sub verify() {
     private string expectedOutput() {
         return "abc:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
             "abcdefg:RUNTIME-OVERLOAD-ERROR:call:candidate\n"
-            "41:echo:11:42:chosen:41:2\n";
+            "41:echo:11:42:chosen:41:2:42:2\n";
     }
 
     private string runModule(string module_dir, string script_path) {

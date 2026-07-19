@@ -10318,7 +10318,8 @@ static bool qore_rt_aot_env_enabled(const char* name) {
 static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
-        const QoreTypeInfo* receiver_type_info);
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
 static bool qore_rt_aot_disable_prelinked_calls() {
     static const bool enabled = qore_rt_aot_env_enabled("QORE_AOT_DISABLE_PRELINKED_CALLS");
@@ -10396,7 +10397,8 @@ static uint64_t qore_rt_call_slot_dynamic_fallback(QoreAOTContext* ctx, int32_t 
         "serialized call expression is not available");
     if (target.is_static_method && target.method) {
         return qore_rt_call_static_method_direct_impl(target.method, target.variant,
-            args, arg_cleanups, nargs, xsink, target.receiver_type_info);
+            args, arg_cleanups, nargs, xsink, target.receiver_type_info,
+            target.explicit_type_param_instantiation);
     }
     if (target.method) {
         if (target.is_self_method) {
@@ -12092,7 +12094,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_binary_m
 static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
-        const QoreTypeInfo* receiver_type_info = nullptr);
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation);
 
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
@@ -12105,7 +12108,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, in
     if (target.is_static_method && target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot", "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method, target.variant,
-                args, nullptr, nargs, xsink, target.receiver_type_info);
+                args, nullptr, nargs, xsink, target.receiver_type_info,
+                target.explicit_type_param_instantiation);
     }
     if (target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot", "method", "use");
@@ -12147,7 +12151,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot_consume_args(
             "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method,
                 target.variant, args, arg_cleanups, nargs, xsink,
-                target.receiver_type_info);
+                target.receiver_type_info,
+                target.explicit_type_param_instantiation);
     }
     if (target.method) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_with_args_aot_consume_args", "method", "use");
@@ -14477,7 +14482,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_
 static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink,
-        const QoreTypeInfo* receiver_type_info) {
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation) {
     if (!method) {
         xsink->raiseException("JIT-ERROR", "null method pointer in static method direct call");
         return toBits(QoreValue());
@@ -14491,7 +14497,8 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     // (resolveExprSlot creates nodes without a resolved variant pointer).
     // Fall through to the slow path in that case.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    if (!uvb || !qore_rt_method_fast_call_eligible(variant)
+    if (!uvb || explicit_type_param_instantiation
+            || !qore_rt_method_fast_call_eligible(variant)
             || (receiver_type_info && QoreTypeInfo::getParameterizedClassType(receiver_type_info))
             || (!uvb->hasCachedFunction() && !uvb->getCachedIR())) {
         // Use evalTmpArgs to preserve ReferenceNode values in pre-evaluated args
@@ -14500,7 +14507,8 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
             return toBits(QoreValue());
         }
         return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), nullptr, *arg_list,
-            nullptr, variant, receiver_type_info));
+            nullptr, variant, receiver_type_info,
+            explicit_type_param_instantiation));
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -14628,6 +14636,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(
             nullptr, nargs, xsink, nullptr);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_with_inst(
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
+        uint64_t* args, int nargs, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+        ExceptionSink* xsink) {
+    return qore_rt_call_static_method_direct_impl(method, variant, args,
+        nullptr, nargs, xsink, receiver_type_info,
+        explicit_type_param_instantiation);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_v2(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink) {
     // Fast path for AOT: delegates to qore_rt_call_static_method_direct with guaranteed
@@ -14652,7 +14670,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot(QoreAOTConte
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_direct_aot",
             "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method, target.variant, args, nullptr, nargs, xsink,
-                target.receiver_type_info);
+                target.receiver_type_info,
+                target.explicit_type_param_instantiation);
     }
     if (target.func) {
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_direct_aot",
@@ -14688,7 +14707,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct_aot_consume_args
             "qore_rt_call_static_method_direct_aot_consume_args", "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method,
                 target.variant, args, arg_cleanups, nargs, xsink,
-                target.receiver_type_info);
+                target.receiver_type_info,
+                target.explicit_type_param_instantiation);
     }
     if (target.func) {
         qore_rt_trace_aot_prelink(ctx, slot,
@@ -14851,14 +14871,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_fast_aot(
         qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_fast_aot",
             "static_method", "use");
         return qore_rt_call_static_method_direct_impl(target.method, target.variant, args, nullptr, nargs, xsink,
-                target.receiver_type_info);
+                target.receiver_type_info,
+                target.explicit_type_param_instantiation);
     }
 
     // Fall back to standard static method dispatch
     qore_rt_trace_aot_prelink(ctx, slot, "qore_rt_call_static_method_fast_aot",
         "static_method", "use");
     return qore_rt_call_static_method_direct_impl(target.method, target.variant, args, nullptr, nargs, xsink,
-            target.receiver_type_info);
+            target.receiver_type_info,
+            target.explicit_type_param_instantiation);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,

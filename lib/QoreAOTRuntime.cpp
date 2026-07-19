@@ -1111,6 +1111,38 @@ static QoreValue makeDeferredObjectSlotCall(QoreProgram* pgm, const char* class_
     @param pgm the QoreProgram for namespace lookups
     @return NaN-boxed bits, or 0 if unresolvable
 */
+static bool applyAOTExplicitTypeArgs(FunctionCallBase& call,
+        const QoreAOTStaticMethodRef& method_ref, QoreProgram* pgm,
+        const UserSignature* containing_signature) {
+    if (!method_ref.explicit_type_args_present) {
+        return true;
+    }
+    const AbstractQoreFunctionVariant* variant = call.getVariant();
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* callee_signature = uvb ? uvb->getUserSignature() : nullptr;
+    if (!method_ref.explicit_type_args_valid || !callee_signature
+            || method_ref.explicit_type_arg_paths.size()
+                != callee_signature->getTypeParameterCount()) {
+        return false;
+    }
+    QoreTypeParamInstantiation inst;
+    inst.owner = callee_signature;
+    QoreAOTTypeResolver type_resolver(pgm);
+    for (const std::string& path : method_ref.explicit_type_arg_paths) {
+        std::string type_error;
+        const QoreTypeInfo* type_arg = containing_signature
+            ? type_resolver.resolveForSignature(path.c_str(), type_error,
+                containing_signature)
+            : type_resolver.resolve(path.c_str(), type_error);
+        if (!type_arg || !type_error.empty()) {
+            return false;
+        }
+        inst.type_args.push_back(type_arg);
+    }
+    call.setExplicitTypeParamInstantiation(std::move(inst));
+    return true;
+}
+
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm, const UserSignature* containing_signature = nullptr) {
     if (!pgm) {
@@ -1225,6 +1257,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         fcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
+                if (!applyAOTExplicitTypeArgs(*fcn, method_ref, pgm,
+                        containing_signature)) {
+                    delete fcn;
+                    return 0;
+                }
                 return toBitsNB(QoreValue(fcn));
             };
 
@@ -1274,6 +1311,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                         sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                     }
                 }
+                if (!applyAOTExplicitTypeArgs(*sfcn, method_ref, pgm,
+                        containing_signature)) {
+                    delete sfcn;
+                    return 0;
+                }
                 return toBitsNB(QoreValue(sfcn));
             }
             // Create StaticMethodCallNode
@@ -1290,6 +1332,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     smcn->setVariant(v);
                     smcn->setTypeParamInstantiation(std::move(type_param_instantiation));
                 }
+            }
+            if (!applyAOTExplicitTypeArgs(*smcn, method_ref, pgm,
+                    containing_signature)) {
+                delete smcn;
+                return 0;
             }
             return toBitsNB(QoreValue(smcn));
         }
@@ -4598,6 +4645,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     "serialized variant signature or arg types for '%s::%s'\n",
                                     name, i, ref1 ? ref1 : "", method_name ? method_name : "");
                             }
+                            if (!applyAOTExplicitTypeArgs(*call_node, method_ref,
+                                    pgm, uvb ? uvb->getUserSignature() : nullptr)) {
+                                delete call_node;
+                                has_unsupported = true;
+                                continue;
+                            }
+                            ctx->call_targets[i].explicit_type_param_instantiation =
+                                call_node->getExplicitTypeParamInstantiation();
                             if (pln) {
                                 call_node->resolveParseArgs();
                             }
@@ -6057,6 +6112,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             ctx->call_targets[i].method = smc->getMethod();
             ctx->call_targets[i].is_static_method = true;
             ctx->call_targets[i].receiver_type_info = smc->getReceiverTypeInfo();
+            ctx->call_targets[i].explicit_type_param_instantiation =
+                smc->getExplicitTypeParamInstantiation();
             const AbstractQoreFunctionVariant* v = smc->getVariant();
             if (v) {
                 ctx->call_targets[i].variant = v;
