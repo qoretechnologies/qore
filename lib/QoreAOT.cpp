@@ -5521,8 +5521,27 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
     return true;
 }
 
+static bool qore_aot_is_non_overridable_method_call(
+        const QoreIRCallMethodDirectInstruction& call) {
+    if (!call.method || !call.qc || !call.variant
+            || call.method->getClass() != call.qc) {
+        return false;
+    }
+    if (call.qc->isFinal()) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_IR_FINAL_METHOD_DEVIRTUALIZATION")) {
+        return false;
+    }
+    const auto* method_variant =
+        dynamic_cast<const MethodVariantBase*>(call.variant);
+    return method_variant && method_variant->isFinal();
+}
+
 static bool qore_aot_get_string_expression(const QoreIRFunction& func,
-        const UserSignature& sig, AOTStringExpressionInfo& result) {
+        const UserSignature& sig, AOTStringExpressionInfo& result,
+        const std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>* batch_callees = nullptr) {
     if (std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
@@ -5574,8 +5593,163 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
 
     std::unordered_map<uint32_t, uint8_t> values;
     std::unordered_map<int8_t, uint8_t> param_nodes;
+    std::unordered_set<uint8_t> composed_concat_roots;
     const QoreIRReturnInstruction* ret = nullptr;
     unsigned concat_operations = 0;
+    auto append_callee = [&](const QoreIRStringConsumerCallInstruction* call,
+            const AbstractQoreFunctionVariant* variant,
+            const QoreValue& expr, bool has_ref_args) -> int {
+        if (!batch_callees || !call || !variant || has_ref_args
+                || std::getenv("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
+            return -1;
+        }
+        auto found = batch_callees->find(variant);
+        if (found == batch_callees->end()) {
+            return -1;
+        }
+        const BatchCalleeInfo& info = found->second;
+        if (!info.approach_b_eligible
+                || info.may_invalidate_external_caches
+                || info.return_kind != BatchCalleeReturnKind::Boxed
+                || call->operands.size() != info.num_params
+                || info.param_kinds.size() != call->operands.size()
+                || info.param_rejects_nothing.size() != call->operands.size()
+                || info.param_may_modify.size() != call->operands.size()
+                || !qore_aot_fast_entry_operands_need_no_binding(
+                    variant, expr, func, call->operands, 0,
+                    static_cast<int>(call->operands.size()))) {
+            return -1;
+        }
+        std::vector<uint8_t> args;
+        args.reserve(call->operands.size());
+        for (size_t i = 0; i < call->operands.size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT string summary call argument analysis")) {
+                return -1;
+            }
+            auto value = values.find(call->operands[i].id);
+            if (value == values.end() || !info.param_rejects_nothing[i]
+                    || info.param_may_modify[i]
+                    || composed_concat_roots.count(value->second)) {
+                return -1;
+            }
+            BatchCalleeParamKind kind = info.param_kinds[i];
+            if ((kind == BatchCalleeParamKind::Boxed
+                        && !is_string_node(value->second))
+                    || (kind == BatchCalleeParamKind::NativeInt
+                        && !is_int_node(value->second))
+                    || (kind != BatchCalleeParamKind::Boxed
+                        && kind != BatchCalleeParamKind::NativeInt)) {
+                return -1;
+            }
+            args.push_back(value->second);
+        }
+
+        if (info.string_expression) {
+            if (info.string_expression.nodes.back().kind
+                    != AOTStringExpressionNodeKind::Concat) {
+                return -1;
+            }
+            std::vector<uint8_t> remap(
+                info.string_expression.nodes.size(), UINT8_MAX);
+            for (size_t i = 0; i < info.string_expression.nodes.size(); ++i) {
+                const AOTStringExpressionNodeInfo& source =
+                    info.string_expression.nodes[i];
+                if (source.kind == AOTStringExpressionNodeKind::StringParam
+                        || source.kind
+                            == AOTStringExpressionNodeKind::IntParam) {
+                    if (source.param < 0
+                            || static_cast<size_t>(source.param) >= args.size()) {
+                        return -1;
+                    }
+                    uint8_t value = args[static_cast<size_t>(source.param)];
+                    if ((source.kind
+                                == AOTStringExpressionNodeKind::StringParam
+                                && !is_string_node(value))
+                            || (source.kind
+                                    == AOTStringExpressionNodeKind::IntParam
+                                && !is_int_node(value))) {
+                        return -1;
+                    }
+                    remap[i] = value;
+                    continue;
+                }
+                if (source.kind == AOTStringExpressionNodeKind::Substr) {
+                    return -1;
+                }
+                AOTStringExpressionNodeInfo node = source;
+                auto remap_operand = [&](uint8_t& operand) {
+                    if (operand == UINT8_MAX) {
+                        return true;
+                    }
+                    if (operand >= i || remap[operand] == UINT8_MAX) {
+                        return false;
+                    }
+                    operand = remap[operand];
+                    return true;
+                };
+                if (!remap_operand(node.lhs)
+                        || !remap_operand(node.rhs)
+                        || !remap_operand(node.third)) {
+                    return -1;
+                }
+                int index = append_node(std::move(node));
+                if (index < 0) {
+                    return -1;
+                }
+                remap[i] = static_cast<uint8_t>(index);
+                if (source.kind == AOTStringExpressionNodeKind::Concat) {
+                    ++concat_operations;
+                }
+            }
+            if (remap.empty()) {
+                return -1;
+            }
+            composed_concat_roots.insert(remap.back());
+            return remap.back();
+        }
+
+        AOTStringExpressionNodeInfo node;
+        if (info.string_op.kind == AOTStringOpKind::Concat
+                || info.string_op.kind == AOTStringOpKind::Concat3) {
+            auto get_string_arg = [&](int8_t param, uint8_t& target) {
+                if (param < 0 || static_cast<size_t>(param) >= args.size()) {
+                    return false;
+                }
+                target = args[static_cast<size_t>(param)];
+                return is_string_node(target);
+            };
+            node.kind = AOTStringExpressionNodeKind::Concat;
+            if (!get_string_arg(info.string_op.base_param, node.lhs)
+                    || !get_string_arg(info.string_op.arg0_param, node.rhs)
+                    || (info.string_op.kind == AOTStringOpKind::Concat3
+                        && !get_string_arg(
+                            info.string_op.arg1_param, node.third))) {
+                return -1;
+            }
+            ++concat_operations;
+        } else if (info.string_op.kind == AOTStringOpKind::IntToString) {
+            if (info.string_op.base_param < 0
+                    || static_cast<size_t>(info.string_op.base_param)
+                        >= args.size()) {
+                return -1;
+            }
+            node.kind = AOTStringExpressionNodeKind::IntToString;
+            node.lhs = args[static_cast<size_t>(info.string_op.base_param)];
+            if (!is_int_node(node.lhs)) {
+                return -1;
+            }
+        } else {
+            return -1;
+        }
+        int index = append_node(std::move(node));
+        if (index >= 0 && (info.string_op.kind == AOTStringOpKind::Concat
+                || info.string_op.kind == AOTStringOpKind::Concat3)) {
+            composed_concat_roots.insert(static_cast<uint8_t>(index));
+        }
+        return index;
+    };
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
         if (!inst_ptr || inst_ptr->exception_target || ret) {
             return false;
@@ -5668,7 +5842,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 parts.reserve(inst->operands.size());
                 for (const QoreIRValue& operand : inst->operands) {
                     auto part = values.find(operand.id);
-                    if (part == values.end() || !is_string_node(part->second)) {
+                    if (part == values.end() || !is_string_node(part->second)
+                            || composed_concat_roots.count(part->second)) {
                         return false;
                     }
                     parts.push_back(part->second);
@@ -5726,6 +5901,62 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 values.emplace(inst->result.id, static_cast<uint8_t>(index));
                 break;
             }
+            case QoreIROpcode::CallDirect:
+            case QoreIROpcode::CallMethodDirect:
+            case QoreIROpcode::CallStaticDirect: {
+                const QoreIRStringConsumerCallInstruction* call =
+                    static_cast<const QoreIRStringConsumerCallInstruction*>(
+                        inst);
+                const AbstractQoreFunctionVariant* variant = nullptr;
+                const QoreValue* expr = nullptr;
+                bool has_ref_args = true;
+                if (inst->opcode == QoreIROpcode::CallDirect) {
+                    const auto* direct =
+                        static_cast<const QoreIRCallDirectInstruction*>(inst);
+                    variant = direct->variant;
+                    expr = &direct->expr;
+                    has_ref_args = direct->has_ref_args;
+                    if (!variant && direct->expr.hasNode()) {
+                        const auto* call_node =
+                            dynamic_cast<const FunctionCallNode*>(
+                                direct->expr.getInternalNode());
+                        variant = call_node ? call_node->getVariant() : nullptr;
+                    }
+                } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+                    const auto* direct =
+                        static_cast<const QoreIRCallStaticDirectInstruction*>(
+                            inst);
+                    variant = direct->variant;
+                    expr = &direct->expr;
+                    has_ref_args = direct->has_ref_args;
+                } else {
+                    const auto* direct =
+                        static_cast<const QoreIRCallMethodDirectInstruction*>(
+                            inst);
+                    if (!qore_aot_is_non_overridable_method_call(*direct)) {
+                        return false;
+                    }
+                    variant = direct->variant;
+                    expr = &direct->expr;
+                    has_ref_args = direct->has_ref_args;
+                    if (!batch_callees) {
+                        return false;
+                    }
+                    auto found = batch_callees->find(variant);
+                    if (found == batch_callees->end()
+                            || !found->second.implicit_self_method) {
+                        return false;
+                    }
+                }
+                int index = expr && inst->result.isValid()
+                    ? append_callee(
+                        call, variant, *expr, has_ref_args) : -1;
+                if (index < 0) {
+                    return false;
+                }
+                values.emplace(inst->result.id, static_cast<uint8_t>(index));
+                break;
+            }
             case QoreIROpcode::Return:
                 ret = static_cast<const QoreIRReturnInstruction*>(inst);
                 break;
@@ -5755,6 +5986,37 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             [](const AOTStringExpressionNodeInfo& node) {
                 return node.kind == AOTStringExpressionNodeKind::Substr;
             }) == 1;
+}
+
+static bool qore_aot_string_expression_fast_entry_compatible(
+        const BatchCalleeInfo& info,
+        const AOTStringExpressionInfo& expression) {
+    if (!expression
+            || info.return_kind != BatchCalleeReturnKind::Boxed) {
+        return false;
+    }
+    for (const auto& node : expression.nodes) {
+        if (node.kind != AOTStringExpressionNodeKind::StringParam
+                && node.kind != AOTStringExpressionNodeKind::IntParam) {
+            continue;
+        }
+        if (node.param < 0
+                || static_cast<size_t>(node.param) >= info.param_kinds.size()
+                || static_cast<size_t>(node.param)
+                    >= info.param_rejects_nothing.size()
+                || !info.param_rejects_nothing[
+                    static_cast<size_t>(node.param)]) {
+            return false;
+        }
+        BatchCalleeParamKind expected =
+            node.kind == AOTStringExpressionNodeKind::StringParam
+            ? BatchCalleeParamKind::Boxed
+            : BatchCalleeParamKind::NativeInt;
+        if (info.param_kinds[static_cast<size_t>(node.param)] != expected) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static bool qore_aot_get_collection_op(const QoreIRFunction& func,
@@ -9537,37 +9799,12 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         }
         AOTStringExpressionInfo string_expression;
         if (!callee_it->second.string_op
-                && qore_aot_get_string_expression(*func, *sig, string_expression)
-                && callee_it->second.return_kind == BatchCalleeReturnKind::Boxed) {
-            bool valid = true;
-            for (const auto& node : string_expression.nodes) {
-                if (node.kind != AOTStringExpressionNodeKind::StringParam
-                        && node.kind != AOTStringExpressionNodeKind::IntParam) {
-                    continue;
-                }
-                if (node.param < 0
-                        || static_cast<size_t>(node.param)
-                            >= callee_it->second.param_kinds.size()
-                        || static_cast<size_t>(node.param)
-                            >= callee_it->second.param_rejects_nothing.size()
-                        || !callee_it->second.param_rejects_nothing[
-                            static_cast<size_t>(node.param)]) {
-                    valid = false;
-                    break;
-                }
-                BatchCalleeParamKind expected =
-                    node.kind == AOTStringExpressionNodeKind::StringParam
-                    ? BatchCalleeParamKind::Boxed
-                    : BatchCalleeParamKind::NativeInt;
-                if (callee_it->second.param_kinds[static_cast<size_t>(node.param)]
-                        != expected) {
-                    valid = false;
-                    break;
-                }
-            }
-            if (valid) {
-                callee_it->second.string_expression = std::move(string_expression);
-            }
+                && qore_aot_get_string_expression(
+                    *func, *sig, string_expression, &batch_callees)
+                && qore_aot_string_expression_fast_entry_compatible(
+                    callee_it->second, string_expression)) {
+            callee_it->second.string_expression =
+                std::move(string_expression);
         }
         AOTCollectionOpInfo collection_op;
         if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
@@ -9803,6 +10040,43 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             continue;
         }
         callee_it->second.scalar_leaf = leaf;
+    }
+
+    if (!std::getenv("QORE_DISABLE_AOT_STRING_SUMMARY_COMPOSITION")) {
+        for (size_t pass = 0; pass < 8; ++pass) {
+            bool changed = false;
+            for (const auto& [variant, func] : functions) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT string summary composition fixed-point")) {
+                    return false;
+                }
+                auto callee = batch_callees.find(variant);
+                UserVariantBase* uvb = variant
+                    ? const_cast<AbstractQoreFunctionVariant*>(variant)
+                        ->getUserVariantBase()
+                    : nullptr;
+                const UserSignature* sig =
+                    uvb ? uvb->getUserSignature() : nullptr;
+                if (callee == batch_callees.end() || !sig
+                        || callee->second.string_op
+                        || callee->second.string_expression) {
+                    continue;
+                }
+                AOTStringExpressionInfo expression;
+                if (!qore_aot_get_string_expression(
+                            *func, *sig, expression, &batch_callees)
+                        || !qore_aot_string_expression_fast_entry_compatible(
+                            callee->second, expression)) {
+                    continue;
+                }
+                callee->second.string_expression = std::move(expression);
+                changed = true;
+            }
+            if (!changed) {
+                break;
+            }
+        }
     }
 
     if (!qore_aot_collect_composed_aggregate_return_summaries(

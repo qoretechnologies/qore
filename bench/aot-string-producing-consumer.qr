@@ -35,6 +35,14 @@ int sub main() {
         for (int i = 0; i < rounds; ++i) {
             checksum += formatRecord(prefix, i & 1023, suffix).size();
         }
+    } else if (mode == "wrapped") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += wrappedPairTwice(prefix, suffix).size();
+        }
+    } else if (mode == "wrapped_format") {
+        for (int i = 0; i < rounds; ++i) {
+            checksum += wrappedRecord(prefix, i & 1023, suffix).size();
+        }
     } else if (mode == "concat_slice") {
         for (int i = 0; i < rounds; ++i) {
             checksum += concatSlice(prefix, suffix, i & 3, 6).size();
@@ -46,6 +54,8 @@ int sub main() {
             checksum += convertInt(i & 1023).size();
             checksum += sliceString(source, i & 7, 6).size();
             checksum += formatRecord(prefix, i & 1023, suffix).size();
+            checksum += wrappedPairTwice(prefix, suffix).size();
+            checksum += wrappedRecord(prefix, i & 1023, suffix).size();
             checksum += concatSlice(prefix, suffix, i & 3, 6).size();
         }
     }
