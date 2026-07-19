@@ -2208,46 +2208,74 @@ public class DataProviderActionCatalog {
 
     #! Resolves output types in actions
     private static resolveOutputTypes() {
-        # Output-type callbacks can lazily load provider modules.  Acquire the
-        # process-global module-load lock before the catalog mutex so a
-        # concurrent cold module initializer that registers an app or action
-        # cannot invert the order and deadlock on the catalog mutex.
-        call_with_module_load_lock(
-            \DataProviderActionCatalog::resolveOutputTypesIntern());
-    }
+        list<hash<auto>> pending;
+        {
+            AutoLock al(lck);
+            foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
+                foreach hash<auto> j in (i.value.pairIterator()) {
+                    string key = sprintf("%s/%s", i.key, j.key);
+                    *hash<DataProviderActionInfo> top_action =
+                        top_actionmap{key};
+                    *hash<DataProviderActionInfo> app_action =
+                        app_actionmap{i.key}{j.key};
+                    if (!top_action || !app_action
+                            || !top_action.get_output_type) {
+                        continue;
+                    }
+                    pending += {
+                        "app": i.key,
+                        "action": j.key,
+                        "get_output_type": top_action.get_output_type,
+                    };
+                }
+            }
+        }
 
-    private static resolveOutputTypesIntern() {
-        AutoLock al(lck);
-        foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
-            foreach hash<auto> j in (i.value.pairIterator()) {
-                string key = sprintf("%s/%s", i.key, j.key);
+        # Output-type callbacks can lazily load provider modules whose
+        # initializers register apps or actions.  Never hold the catalog mutex
+        # while invoking them.
+        list<hash<auto>> resolved;
+        foreach hash<auto> item in (pending) {
+            try {
+                item.output_type = item.get_output_type();
+                resolved += item;
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore exceptions
+            }
+        }
+
+        {
+            AutoLock al(lck);
+            foreach hash<auto> item in (resolved) {
+                string key = sprintf("%s/%s", item.app, item.action);
                 *hash<DataProviderActionInfo> top_action = top_actionmap{key};
-                *hash<DataProviderActionInfo> app_action = app_actionmap{i.key}{j.key};
-                if (!top_action || !app_action) {
+                *hash<DataProviderActionInfo> app_action =
+                    app_actionmap{item.app}{item.action};
+                # Do not publish a result into an action that was removed and
+                # replaced while its callback ran.
+                if (!top_action || !app_action
+                        || top_action.get_output_type
+                            != item.get_output_type) {
                     continue;
                 }
-                try {
-                    AbstractDataProviderType output_type = top_action.get_output_type();
-                    top_action.output_type = output_type;
-                    app_action.output_type = output_type;
-                    remove top_action.get_output_type;
-                    remove app_action.get_output_type;
-                    top_actionmap{key} = top_action;
-                    app_actionmap{i.key}{j.key} = app_action;
-                    if (*string scheme = appcache{i.key}.scheme) {
-                        *list<hash<DataProviderActionInfo>> actions = smap{scheme};
-                        if (actions) {
-                            for (int idx = 0; idx < actions.size(); ++idx) {
-                                if (actions[idx].app == i.key && actions[idx].action == j.key) {
-                                    actions[idx] = app_action;
-                                    smap{scheme} = actions;
-                                    break;
-                                }
+                top_action.output_type = item.output_type;
+                app_action.output_type = item.output_type;
+                remove top_action.get_output_type;
+                remove app_action.get_output_type;
+                top_actionmap{key} = top_action;
+                app_actionmap{item.app}{item.action} = app_action;
+                if (*string scheme = appcache{item.app}.scheme) {
+                    *list<hash<DataProviderActionInfo>> actions = smap{scheme};
+                    if (actions) {
+                        for (int idx = 0; idx < actions.size(); ++idx) {
+                            if (actions[idx].app == item.app
+                                    && actions[idx].action == item.action) {
+                                actions[idx] = app_action;
+                                smap{scheme} = actions;
+                                break;
                             }
                         }
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    # ignore exceptions
                 }
             }
         }

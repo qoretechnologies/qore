@@ -848,8 +848,13 @@ void qore_program_private_base::newProgram() {
     // init thread local storage key
     thread_local_storage = new qpgm_thread_local_storage_t;
 
-    // save thread local storage hash
-    thread_local_storage->set(new QoreHashNode(autoTypeInfo));
+    // NOTE: the per-thread thread-local-storage hash is intentionally NOT created eagerly here.
+    // It is created lazily on first access (getThreadData()/startThread()) by the thread that
+    // actually runs code in this Program, which is also the point at which that thread is registered
+    // (ThreadProgramData::saveProgram) so that its data is finalized when the thread exits.  Creating
+    // it eagerly for the constructing thread leaks when that thread neither runs in the Program (e.g.
+    // an AOT module "shadow" Program with no init functions, constructed on a transient worker thread)
+    // nor is the thread that destroys it: the constructing thread's hash is then never finalized.
 
     //printd(5, "qore_program_private_base::newProgram() this: %p\n", this);
 
