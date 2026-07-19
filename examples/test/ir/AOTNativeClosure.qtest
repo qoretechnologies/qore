@@ -87,6 +87,16 @@ string sub exercise() {
         }
         return sum;
     };
+    int sibling_box_value = 0;
+    {
+        Box local_box(70);
+        sibling_box_value = local_box.makeAdder()(1);
+    }
+    Box captured_box(6);
+    code<int(int)> local_object = int sub (int value) {
+        Box local_box(captured_box.makeAdder()(value));
+        return local_box.makeAdder()(0);
+    };
     code<int()> nested_call = int sub () {
         int offset = 9;
         return int sub (int value) {
@@ -192,10 +202,11 @@ string sub exercise() {
     } catch (hash<auto> ex) {
         typed_errors += ex.err == \"RUNTIME-OVERLOAD-ERROR\";
     }
-    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%.1f:%d:%s:%d:%d:%d\",
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%.1f:%d:%s:%d:%d:%d\",
         first, changed, second, outer_changed, initialized, added, decremented,
         writeback_counter, unset_writeback, captured_multiply(7), guarded_multiply(7), defaulted(), ref_value,
-        loop(5), nested_call(), object_adder(2), recursive(5), guarded(-1),
+        loop(5), local_object(4), sibling_box_value, nested_call(), object_adder(2),
+        recursive(5), guarded(-1),
         branched(8), branched(9), mod_zero_caught, adjusted, differs_result,
         described, typed_errors, nan_result, effect_state[0]);
 }
@@ -261,10 +272,10 @@ string disabled_eh_out = backquote(sprintf(
     "QORE_DISABLE_IR_NATIVE_CLOSURE_BINARY_INLINE=1 "
     "QORE_TEST_AOT_CLOSURE_EH=1 LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3\n";
+string expected = "7:4:8:6:1:6:-1:41:1:42:0:10:13:60:10:71:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3\n";
 if (ast_out != expected || fallback_out != expected || disabled_out != expected
         || !(native_out =~ /registered native closure/)
-        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3/)
+        || !(native_out =~ /7:4:8:6:1:6:-1:41:1:42:0:10:13:60:10:71:11:12:15:17:721:280:1:5.5:1:2.5:0:ok:3:1:3/)
         || !(ast_eh_out =~ /DIVISION-BY-ZERO/)
         || !(native_eh_out =~ /DIVISION-BY-ZERO/) || native_eh_out =~ /terminate called/
         || !(fallback_eh_out =~ /DIVISION-BY-ZERO/) || fallback_eh_out =~ /terminate called/

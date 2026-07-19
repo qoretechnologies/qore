@@ -8028,24 +8028,43 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             continue;
         }
 
-        if (LocalVar* enclosing_lv = findEnclosingLocal(lname, ltype)) {
-            func->local_var_slots[enclosing_lv] = slot_id;
+        // A declaration ordinal proves that this slot belongs to the current
+        // function.  Resolve it before the enclosing-name lookup so a closure
+        // body local cannot alias a same-named, same-typed parent local.
+        if (body_ordinal != UINT32_MAX) {
+            LocalVar* body_lv = nullptr;
+            if (direct_body_locals
+                    && body_ordinal < static_cast<uint32_t>(direct_body_locals->size())) {
+                LocalVar* direct_lv = (*direct_body_locals)[body_ordinal];
+                if (direct_lv && direct_lv->getName()
+                        && strcmp(direct_lv->getName(), lname) == 0
+                        && aotLocalTypeMatches(direct_lv, ltype, &local_type_resolver)) {
+                    body_lv = direct_lv;
+                }
+            }
+            if (!body_lv) {
+                body_lv = createLocal(lname, ltype);
+            }
+            if (!body_lv) {
+                error = "cannot reconstruct body local '";
+                error += lname;
+                error += "' in IR function '";
+                error += display_func_name;
+                error += "'";
+                return nullptr;
+            }
+            func->local_var_slots[body_lv] = slot_id;
+            local_map.emplace(lname, body_lv);
+            if (ltype && *ltype) {
+                local_map.emplace(makeLocalKey(lname, ltype), body_lv);
+            }
+            rememberCreatedSlotLocal(lname, ltype, body_lv);
             continue;
         }
 
-        if (body_ordinal != UINT32_MAX && direct_body_locals
-                && body_ordinal < static_cast<uint32_t>(direct_body_locals->size())) {
-            LocalVar* body_lv = (*direct_body_locals)[body_ordinal];
-            if (body_lv && body_lv->getName()
-                    && strcmp(body_lv->getName(), lname) == 0
-                    && aotLocalTypeMatches(body_lv, ltype, &local_type_resolver)) {
-                func->local_var_slots[body_lv] = slot_id;
-                local_map.emplace(lname, body_lv);
-                if (ltype && *ltype) {
-                    local_map.emplace(makeLocalKey(lname, ltype), body_lv);
-                }
-                continue;
-            }
+        if (LocalVar* enclosing_lv = findEnclosingLocal(lname, ltype)) {
+            func->local_var_slots[enclosing_lv] = slot_id;
+            continue;
         }
 
         // Create a new local variable (handler-specific local not in enclosing scope)
