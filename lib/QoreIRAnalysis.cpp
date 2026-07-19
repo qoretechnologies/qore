@@ -3397,6 +3397,492 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
     return changed;
 }
 
+struct QoreIRNativeSSAValue {
+    QoreIRValue value;
+    size_t phi_block = std::numeric_limits<size_t>::max();
+
+    bool isValid() const {
+        return value.isValid() || phi_block != std::numeric_limits<size_t>::max();
+    }
+
+    bool operator==(const QoreIRNativeSSAValue& other) const {
+        return value.id == other.value.id && phi_block == other.phi_block;
+    }
+
+    bool operator!=(const QoreIRNativeSSAValue& other) const {
+        return !(*this == other);
+    }
+};
+
+static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
+        const QoreIRControlFlowGraph& cfg, size_t& check_count) {
+    if (std::getenv("QORE_DISABLE_IR_NATIVE_LOCAL_SSA") || func.blocks.empty()
+            || func.ir_only_locals.empty() || func.has_opaque_ast_local_access) {
+        return 0;
+    }
+
+    // Exception handlers are not represented by normal CFG predecessors. Keep
+    // promotion on normal control flow so every PHI edge is exact.
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA exception-flow analysis")) {
+                return 0;
+            }
+            if (inst->exception_target) {
+                return 0;
+            }
+        }
+    }
+
+    std::unordered_set<const LocalVar*> parameter_locals;
+    for (const auto& [index, local] : func.param_local_vars) {
+        (void)index;
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA parameter analysis")) {
+            return 0;
+        }
+        if (local) {
+            parameter_locals.insert(local);
+        }
+    }
+
+    struct LocalAccess {
+        QoreIRInstruction* inst = nullptr;
+        size_t block = 0;
+    };
+    std::unordered_map<const LocalVar*, std::vector<LocalAccess>> accesses;
+    std::unordered_set<const LocalVar*> dedicated_accesses;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA access analysis")) {
+                return 0;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::InstantiateLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                if (local_inst->local) {
+                    accesses[local_inst->local].push_back({inst, block_id});
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* local_inst =
+                    static_cast<QoreIRAddAssignLocalIntInstruction*>(inst);
+                dedicated_accesses.insert(local_inst->target);
+                dedicated_accesses.insert(local_inst->source);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                dedicated_accesses.insert(
+                    static_cast<QoreIRIncrementLocalIntInstruction*>(inst)->local);
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* local_inst =
+                    static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                dedicated_accesses.insert(local_inst->lhs);
+                dedicated_accesses.insert(local_inst->rhs);
+            }
+        }
+    }
+    dedicated_accesses.erase(nullptr);
+
+    const std::unordered_set<const void*> unsafe =
+        qore_ir_get_native_unsafe_locals(func, {});
+    struct Promotion {
+        const LocalVar* local = nullptr;
+        QoreIRValueRepresentation representation =
+            QoreIRValueRepresentation::Unknown;
+        QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
+        std::vector<size_t> phi_blocks;
+        std::vector<QoreIRNativeSSAValue> output;
+    };
+    std::vector<Promotion> promotions;
+
+    for (const auto& [local, local_accesses] : accesses) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA candidate analysis")) {
+            return 0;
+        }
+        const void* key = reinterpret_cast<const void*>(local);
+        const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
+        QoreIRValueRepresentation representation =
+            QoreIRValueRepresentation::Unknown;
+        QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
+        if (type && !QoreTypeInfo::isReference(type)
+                && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
+            if (QoreTypeInfo::isType(type, NT_INT)
+                    && !QoreTypeInfo::getReturnEnum(type)) {
+                representation = QoreIRValueRepresentation::NativeInt;
+                phi_kind = QoreIRPhiValueKind::NativeInt;
+            } else if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+                representation = QoreIRValueRepresentation::NativeFloat;
+                phi_kind = QoreIRPhiValueKind::NativeFloat;
+            }
+        }
+        if (representation == QoreIRValueRepresentation::Unknown
+                || parameter_locals.count(local) || dedicated_accesses.count(local)
+                || unsafe.count(key) || !func.ir_only_locals.count(key)
+                || local->closureUse()) {
+            continue;
+        }
+
+        bool valid = true;
+        bool entry_store = false;
+        size_t load_count = 0;
+        for (const LocalAccess& access : local_accesses) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA candidate validation")) {
+                return 0;
+            }
+            if (!cfg.reachable[access.block]) {
+                valid = false;
+                break;
+            }
+            if (access.inst->opcode == QoreIROpcode::StoreLocal) {
+                auto* store =
+                    static_cast<QoreIRLocalInstruction*>(access.inst);
+                if (store->weak || store->is_ref || store->is_closure
+                        || store->operands.size() != 1) {
+                    valid = false;
+                    break;
+                }
+                const QoreIRValueFacts* facts =
+                    func.getValueFacts(store->operands[0]);
+                if (!facts
+                        || facts->assigned_state != QoreIRAssignedState::Assigned
+                        || !facts->never_nothing
+                        || facts->representation != representation) {
+                    valid = false;
+                    break;
+                }
+                if (access.block == 0) {
+                    entry_store = true;
+                }
+            } else if (access.inst->opcode == QoreIROpcode::LoadLocal) {
+                auto* load = static_cast<QoreIRLocalInstruction*>(access.inst);
+                const QoreIRValueFacts* facts =
+                    func.getValueFacts(load->result);
+                if (load->is_ref || load->is_closure || !facts
+                        || facts->assigned_state != QoreIRAssignedState::Assigned
+                        || !facts->never_nothing
+                        || facts->representation != representation) {
+                    valid = false;
+                    break;
+                }
+                ++load_count;
+            }
+        }
+        if (!valid || !entry_store || !load_count) {
+            continue;
+        }
+
+        // Compute pruned local liveness so PHIs are inserted only at joins where
+        // the pre-join value can actually reach a load.
+        std::vector<uint8_t> use_before_def(func.blocks.size(), 0);
+        std::vector<uint8_t> has_def(func.blocks.size(), 0);
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            bool defined = false;
+            for (const auto& inst : func.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR native local SSA liveness setup")) {
+                    return 0;
+                }
+                if ((inst->opcode == QoreIROpcode::StoreLocal
+                            || inst->opcode == QoreIROpcode::UninstantiateLocal)
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local) {
+                    defined = true;
+                    has_def[block_id] = 1;
+                } else if (inst->opcode == QoreIROpcode::LoadLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local
+                        && !defined) {
+                    use_before_def[block_id] = 1;
+                }
+            }
+        }
+        std::vector<uint8_t> live_in(func.blocks.size(), 0);
+        std::vector<uint8_t> live_out(func.blocks.size(), 0);
+        std::vector<size_t> liveness_worklist;
+        std::vector<uint8_t> liveness_queued(func.blocks.size(), 1);
+        liveness_worklist.reserve(func.blocks.size());
+        for (size_t block_id = func.blocks.size(); block_id-- > 0;) {
+            liveness_worklist.push_back(block_id);
+        }
+        while (!liveness_worklist.empty()) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA liveness analysis")) {
+                return 0;
+            }
+            size_t block_id = liveness_worklist.back();
+            liveness_worklist.pop_back();
+            liveness_queued[block_id] = 0;
+            bool next_out = false;
+            for (size_t successor : cfg.successors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR native local SSA liveness analysis")) {
+                    return 0;
+                }
+                if (live_in[successor]) {
+                    next_out = true;
+                    break;
+                }
+            }
+            bool next_in =
+                use_before_def[block_id] || (next_out && !has_def[block_id]);
+            if (live_out[block_id] == next_out
+                    && live_in[block_id] == next_in) {
+                continue;
+            }
+            live_out[block_id] = next_out;
+            live_in[block_id] = next_in;
+            for (size_t predecessor : cfg.predecessors[block_id]) {
+                if (!liveness_queued[predecessor]) {
+                    liveness_queued[predecessor] = 1;
+                    liveness_worklist.push_back(predecessor);
+                }
+            }
+        }
+
+        Promotion promotion;
+        promotion.local = local;
+        promotion.representation = representation;
+        promotion.phi_kind = phi_kind;
+        for (size_t block_id = 1; block_id < func.blocks.size(); ++block_id) {
+            if (live_in[block_id] && cfg.predecessors[block_id].size() > 1) {
+                bool all_reachable = true;
+                for (size_t predecessor : cfg.predecessors[block_id]) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR native local SSA predecessor analysis")) {
+                        return 0;
+                    }
+                    if (!cfg.reachable[predecessor]) {
+                        all_reachable = false;
+                        break;
+                    }
+                }
+                if (!all_reachable) {
+                    valid = false;
+                    break;
+                }
+                promotion.phi_blocks.push_back(block_id);
+            }
+        }
+        if (!valid || promotion.phi_blocks.empty()) {
+            continue;
+        }
+
+        std::unordered_set<size_t> phi_blocks(
+            promotion.phi_blocks.begin(), promotion.phi_blocks.end());
+        promotion.output.resize(func.blocks.size());
+        std::vector<size_t> value_worklist;
+        std::vector<uint8_t> value_queued(func.blocks.size(), 1);
+        value_worklist.reserve(func.blocks.size());
+        for (size_t block_id = func.blocks.size(); block_id-- > 0;) {
+            value_worklist.push_back(block_id);
+        }
+        while (!value_worklist.empty()) {
+            size_t block_id = value_worklist.back();
+            value_worklist.pop_back();
+            value_queued[block_id] = 0;
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA value analysis")) {
+                return 0;
+            }
+            if (!cfg.reachable[block_id]) {
+                continue;
+            }
+            QoreIRNativeSSAValue current;
+            if (phi_blocks.count(block_id)) {
+                current.phi_block = block_id;
+            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
+                current = promotion.output[
+                    cfg.predecessors[block_id].front()];
+            }
+            for (const auto& inst : func.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR native local SSA value analysis")) {
+                    return 0;
+                }
+                if ((inst->opcode == QoreIROpcode::StoreLocal
+                            || inst->opcode == QoreIROpcode::UninstantiateLocal)
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local) {
+                    if (inst->opcode == QoreIROpcode::StoreLocal) {
+                        current.value = inst->operands[0];
+                        current.phi_block =
+                            std::numeric_limits<size_t>::max();
+                    } else {
+                        current = QoreIRNativeSSAValue();
+                    }
+                }
+            }
+            if (promotion.output[block_id] == current) {
+                continue;
+            }
+            promotion.output[block_id] = current;
+            for (size_t successor : cfg.successors[block_id]) {
+                if (!value_queued[successor]) {
+                    value_queued[successor] = 1;
+                    value_worklist.push_back(successor);
+                }
+            }
+        }
+        for (size_t phi_block : promotion.phi_blocks) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA incoming validation")) {
+                return 0;
+            }
+            for (size_t predecessor : cfg.predecessors[phi_block]) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR native local SSA incoming validation")) {
+                    return 0;
+                }
+                if (!promotion.output[predecessor].isValid()) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (!valid) {
+                break;
+            }
+        }
+        if (valid) {
+            promotions.push_back(std::move(promotion));
+        }
+    }
+    if (promotions.empty()) {
+        return 0;
+    }
+
+    std::unordered_map<uint32_t, QoreIRValue> replacements;
+    std::unordered_set<const QoreIRInstruction*> eliminated;
+    for (Promotion& promotion : promotions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA commit preparation")) {
+            return 0;
+        }
+        std::unordered_map<size_t, QoreIRPhiInstruction*> phis;
+        for (size_t block_id : promotion.phi_blocks) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA commit");
+            auto phi = std::make_unique<QoreIRPhiInstruction>();
+            QoreIRPhiInstruction* raw_phi = phi.get();
+            raw_phi->result = func.createValue();
+            func.max_value_id = std::max(
+                func.max_value_id, raw_phi->result.id);
+            raw_phi->value_kind = promotion.phi_kind;
+            QoreIRValueFacts facts;
+            facts.type_info = promotion.local->getTypeInfo();
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = promotion.representation;
+            facts.never_nothing = true;
+            func.setValueFacts(raw_phi->result, facts);
+            auto& instructions = func.blocks[block_id]->instructions;
+            auto insert_at = instructions.begin();
+            while (insert_at != instructions.end()
+                    && (*insert_at)->opcode == QoreIROpcode::Phi) {
+                (void)qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA commit");
+                ++insert_at;
+            }
+            instructions.insert(insert_at, std::move(phi));
+            func.blocks[block_id]->has_phi_nodes = true;
+            phis.emplace(block_id, raw_phi);
+        }
+        auto resolve = [&](const QoreIRNativeSSAValue& value) {
+            if (value.value.isValid()) {
+                return value.value;
+            }
+            auto phi = phis.find(value.phi_block);
+            return phi == phis.end() ? QoreIRValue() : phi->second->result;
+        };
+        for (size_t block_id : promotion.phi_blocks) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA commit");
+            QoreIRPhiInstruction* phi = phis.at(block_id);
+            for (size_t predecessor : cfg.predecessors[block_id]) {
+                (void)qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA commit");
+                QoreIRValue value = resolve(promotion.output[predecessor]);
+                phi->incoming.push_back(
+                    {value, func.blocks[predecessor].get()});
+                phi->operands.push_back(value);
+            }
+        }
+
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA commit");
+            QoreIRNativeSSAValue current;
+            auto phi = phis.find(block_id);
+            if (phi != phis.end()) {
+                current.value = phi->second->result;
+            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
+                current = promotion.output[
+                    cfg.predecessors[block_id].front()];
+                current.value = resolve(current);
+                current.phi_block = std::numeric_limits<size_t>::max();
+            }
+            for (const auto& inst : func.blocks[block_id]->instructions) {
+                (void)qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA commit");
+                if (inst->opcode == QoreIROpcode::StoreLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == promotion.local) {
+                    current.value = inst->operands[0];
+                    current.phi_block = std::numeric_limits<size_t>::max();
+                } else if (inst->opcode == QoreIROpcode::UninstantiateLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == promotion.local) {
+                    current = QoreIRNativeSSAValue();
+                } else if (inst->opcode == QoreIROpcode::LoadLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == promotion.local) {
+                    QoreIRValue replacement = resolve(current);
+                    if (!replacement.isValid()) {
+                        return 0;
+                    }
+                    replacements.emplace(inst->result.id, replacement);
+                    eliminated.insert(inst.get());
+                }
+            }
+        }
+    }
+
+    // Finish the committed rewrite even when cancellation is requested so no
+    // operand can retain a reference to an erased load definition.
+    for (auto& [result, replacement] : replacements) {
+        (void)result;
+        std::unordered_set<uint32_t> seen;
+        while (seen.insert(replacement.id).second) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR native local SSA commit");
+            auto next = replacements.find(replacement.id);
+            if (next == replacements.end()) {
+                break;
+            }
+            replacement = next->second;
+        }
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto it = instructions.begin(); it != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr, "IR native local SSA commit");
+            }
+            if (eliminated.count(it->get())) {
+                it = instructions.erase(it);
+            } else {
+                (void)qore_ir_rewrite_value_operands(
+                    **it, replacements, check_count, false);
+                ++it;
+            }
+        }
+    }
+    return eliminated.size();
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm) {
     QoreIROptimizationStats local_stats;
@@ -3420,6 +3906,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
     local_stats.fixed_lists_scalarized = aggregate_stats.lists;
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
+    local_stats.native_local_loads_promoted =
+        qore_ir_promote_native_local_loads(func, cfg, check_count);
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
             if (stats) {
