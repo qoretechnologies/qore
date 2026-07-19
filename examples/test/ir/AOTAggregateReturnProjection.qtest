@@ -765,6 +765,12 @@ bool sub guardedDifferentIndexProjection(int left, int right) {
         ? makeValues(1, 2, 3) : makeValues(4, 5, 6))[index];
 }
 
+*float sub guardedDirectFloatPhiProjection(
+        bool left_branch, int index) {
+    return (left_branch
+        ? makeFloats(1.25, 2.5) : makeFloats(3.75, 5.0))[index];
+}
+
 *int sub guardedMutableDirectPhiProjection(
         bool left_branch, int index) {
     ++index;
@@ -971,13 +977,19 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedPhiProjection(True, 1) == 2,
     guardedPhiProjection(False, 1) == 5,
     repeatedMissingLocalProjection(4));
-printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedDirectPhiProjection(True, 1) == 2,
     guardedDirectPhiProjection(False, 1) == 5,
     guardedDirectPhiProjection(True, -1) == 3,
     guardedDirectPhiProjection(False, -1) == 6,
     guardedDirectPhiProjection(True, 3) === NOTHING,
     guardedDirectPhiProjection(False, -4) === NOTHING,
+    guardedDirectFloatPhiProjection(True, 1) == 2.5,
+    guardedDirectFloatPhiProjection(False, 1) == 5.0,
+    guardedDirectFloatPhiProjection(True, -1) == 2.5,
+    guardedDirectFloatPhiProjection(False, -1) == 5.0,
+    guardedDirectFloatPhiProjection(True, 2) === NOTHING,
+    guardedDirectFloatPhiProjection(False, -3) === NOTHING,
     guardedMutableDirectPhiProjection(True, 0) == 2,
     guardedMutableDirectPhiProjection(False, 0) == 5,
     guardedDirectPhiSideEffectOrder(True)
@@ -1101,6 +1113,7 @@ foreach string function in (("guardedListIndex",
         "guardedBoolListIndex", "guardedConstantListIndex",
         "guardedSideEffectOrder", "guardedMultiLocalProjection",
         "guardedDirectPhiProjection",
+        "guardedDirectFloatPhiProjection",
         "repeatedMissingLocalProjection", "dynamicListIndex",
         "dynamicSignedZeroListIndex", "missingHashProjection",
         "dynamicHashKeyProjection", "repeatedDynamicHashKeyProjection",
@@ -1366,7 +1379,7 @@ if (computed_row_line.find(
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True\n120\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
-expected += "True:True:True:True:True:True:True:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

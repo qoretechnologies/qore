@@ -3414,12 +3414,19 @@ struct QoreIRNativeSSAValue {
     }
 };
 
-static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
+struct QoreIRNativeLocalPromotionStats {
+    size_t loads = 0;
+    size_t stores = 0;
+};
+
+static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, size_t& check_count) {
     if (std::getenv("QORE_DISABLE_IR_NATIVE_LOCAL_SSA") || func.blocks.empty()
             || func.ir_only_locals.empty() || func.has_opaque_ast_local_access) {
-        return 0;
+        return {};
     }
+    const bool eliminate_stores_enabled =
+        !std::getenv("QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION");
 
     // Exception handlers are not represented by normal CFG predecessors. Keep
     // promotion on normal control flow so every PHI edge is exact.
@@ -3427,10 +3434,10 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         for (const auto& inst : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA exception-flow analysis")) {
-                return 0;
+                return {};
             }
             if (inst->exception_target) {
-                return 0;
+                return {};
             }
         }
     }
@@ -3440,7 +3447,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         (void)index;
         if (qore_ir_analysis_cancelled(check_count,
                 "IR native local SSA parameter analysis")) {
-            return 0;
+            return {};
         }
         if (local) {
             parameter_locals.insert(local);
@@ -3457,7 +3464,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA access analysis")) {
-                return 0;
+                return {};
             }
             QoreIRInstruction* inst = inst_ptr.get();
             if (inst->opcode == QoreIROpcode::LoadLocal
@@ -3495,13 +3502,14 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
         std::vector<size_t> phi_blocks;
         std::vector<QoreIRNativeSSAValue> output;
+        bool eliminate_stores = true;
     };
     std::vector<Promotion> promotions;
 
     for (const auto& [local, local_accesses] : accesses) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR native local SSA candidate analysis")) {
-            return 0;
+            return {};
         }
         const void* key = reinterpret_cast<const void*>(local);
         const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
@@ -3528,11 +3536,12 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
 
         bool valid = true;
         bool entry_store = false;
+        bool eliminate_stores = eliminate_stores_enabled;
         size_t load_count = 0;
         for (const LocalAccess& access : local_accesses) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA candidate validation")) {
-                return 0;
+                return {};
             }
             if (!cfg.reachable[access.block]) {
                 valid = false;
@@ -3545,6 +3554,9 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
                         || store->operands.size() != 1) {
                     valid = false;
                     break;
+                }
+                if (store->result.isValid()) {
+                    eliminate_stores = false;
                 }
                 const QoreIRValueFacts* facts =
                     func.getValueFacts(store->operands[0]);
@@ -3585,7 +3597,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             for (const auto& inst : func.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA liveness setup")) {
-                    return 0;
+                    return {};
                 }
                 if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::UninstantiateLocal)
@@ -3612,7 +3624,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         while (!liveness_worklist.empty()) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA liveness analysis")) {
-                return 0;
+                return {};
             }
             size_t block_id = liveness_worklist.back();
             liveness_worklist.pop_back();
@@ -3621,7 +3633,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             for (size_t successor : cfg.successors[block_id]) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA liveness analysis")) {
-                    return 0;
+                    return {};
                 }
                 if (live_in[successor]) {
                     next_out = true;
@@ -3648,13 +3660,14 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         promotion.local = local;
         promotion.representation = representation;
         promotion.phi_kind = phi_kind;
+        promotion.eliminate_stores = eliminate_stores;
         for (size_t block_id = 1; block_id < func.blocks.size(); ++block_id) {
             if (live_in[block_id] && cfg.predecessors[block_id].size() > 1) {
                 bool all_reachable = true;
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR native local SSA predecessor analysis")) {
-                        return 0;
+                        return {};
                     }
                     if (!cfg.reachable[predecessor]) {
                         all_reachable = false;
@@ -3668,7 +3681,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
                 promotion.phi_blocks.push_back(block_id);
             }
         }
-        if (!valid || promotion.phi_blocks.empty()) {
+        if (!valid) {
             continue;
         }
 
@@ -3687,7 +3700,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             value_queued[block_id] = 0;
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA value analysis")) {
-                return 0;
+                return {};
             }
             if (!cfg.reachable[block_id]) {
                 continue;
@@ -3702,7 +3715,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             for (const auto& inst : func.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA value analysis")) {
-                    return 0;
+                    return {};
                 }
                 if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::UninstantiateLocal)
@@ -3731,12 +3744,12 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
         for (size_t phi_block : promotion.phi_blocks) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR native local SSA incoming validation")) {
-                return 0;
+                return {};
             }
             for (size_t predecessor : cfg.predecessors[phi_block]) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA incoming validation")) {
-                    return 0;
+                    return {};
                 }
                 if (!promotion.output[predecessor].isValid()) {
                     valid = false;
@@ -3747,20 +3760,61 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
                 break;
             }
         }
+        // Validate every load before committing. This is required for no-PHI
+        // candidates where a multi-predecessor block is legal only when a
+        // dominating store in that block establishes the local first.
+        for (size_t block_id = 0; valid && block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR native local SSA load validation")) {
+                return {};
+            }
+            if (!cfg.reachable[block_id]) {
+                continue;
+            }
+            QoreIRNativeSSAValue current;
+            if (phi_blocks.count(block_id)) {
+                current.phi_block = block_id;
+            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
+                current = promotion.output[cfg.predecessors[block_id].front()];
+            }
+            for (const auto& inst : func.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR native local SSA load validation")) {
+                    return {};
+                }
+                if (inst->opcode == QoreIROpcode::StoreLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local) {
+                    current.value = inst->operands[0];
+                    current.phi_block = std::numeric_limits<size_t>::max();
+                } else if (inst->opcode == QoreIROpcode::UninstantiateLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local) {
+                    current = QoreIRNativeSSAValue();
+                } else if (inst->opcode == QoreIROpcode::LoadLocal
+                        && static_cast<const QoreIRLocalInstruction*>(inst.get())
+                            ->local == local
+                        && !current.isValid()) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
         if (valid) {
             promotions.push_back(std::move(promotion));
         }
     }
     if (promotions.empty()) {
-        return 0;
+        return {};
     }
 
     std::unordered_map<uint32_t, QoreIRValue> replacements;
-    std::unordered_set<const QoreIRInstruction*> eliminated;
+    std::unordered_set<const QoreIRInstruction*> eliminated_loads;
+    std::unordered_set<const QoreIRInstruction*> eliminated_stores;
     for (Promotion& promotion : promotions) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR native local SSA commit preparation")) {
-            return 0;
+            return {};
         }
         std::unordered_map<size_t, QoreIRPhiInstruction*> phis;
         for (size_t block_id : promotion.phi_blocks) {
@@ -3832,6 +3886,9 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
                             ->local == promotion.local) {
                     current.value = inst->operands[0];
                     current.phi_block = std::numeric_limits<size_t>::max();
+                    if (promotion.eliminate_stores) {
+                        eliminated_stores.insert(inst.get());
+                    }
                 } else if (inst->opcode == QoreIROpcode::UninstantiateLocal
                         && static_cast<const QoreIRLocalInstruction*>(inst.get())
                             ->local == promotion.local) {
@@ -3841,10 +3898,10 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
                             ->local == promotion.local) {
                     QoreIRValue replacement = resolve(current);
                     if (!replacement.isValid()) {
-                        return 0;
+                        return {};
                     }
                     replacements.emplace(inst->result.id, replacement);
-                    eliminated.insert(inst.get());
+                    eliminated_loads.insert(inst.get());
                 }
             }
         }
@@ -3871,7 +3928,8 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             if (++check_count % 100 == 0) {
                 (void)qore_check_cancel(nullptr, "IR native local SSA commit");
             }
-            if (eliminated.count(it->get())) {
+            if (eliminated_loads.count(it->get())
+                    || eliminated_stores.count(it->get())) {
                 it = instructions.erase(it);
             } else {
                 (void)qore_ir_rewrite_value_operands(
@@ -3880,7 +3938,7 @@ static size_t qore_ir_promote_native_local_loads(QoreIRFunction& func,
             }
         }
     }
-    return eliminated.size();
+    return {eliminated_loads.size(), eliminated_stores.size()};
 }
 
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
@@ -3906,8 +3964,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
     local_stats.fixed_lists_scalarized = aggregate_stats.lists;
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
-    local_stats.native_local_loads_promoted =
+    QoreIRNativeLocalPromotionStats native_local_stats =
         qore_ir_promote_native_local_loads(func, cfg, check_count);
+    local_stats.native_local_loads_promoted = native_local_stats.loads;
+    local_stats.native_local_stores_eliminated = native_local_stats.stores;
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count, "IR typed foreach statistics")) {
             if (stats) {
@@ -5710,6 +5770,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     valid = false;
                     break;
                 }
+                if (!direct_call && (projection.guarded_index.isValid()
+                        || !projection.guarded_descriptors.empty())) {
+                    // Static and exact-method calls can only be eliminated
+                    // into native PHI inputs. Guarded projections require
+                    // projected-call lowering, which these call kinds do not
+                    // provide.
+                    valid = false;
+                    break;
+                }
                 if ((final_consumer
                             && final_consumer != projection.consumer)
                         || (final_result.isValid()
@@ -5719,12 +5788,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 }
                 final_consumer = projection.consumer;
                 final_result = projection.result;
-                if (projection.kind
+                bool unguarded_projection =
+                    !projection.guarded_index.isValid()
+                    && projection.guarded_descriptors.empty();
+                if (unguarded_projection && projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::BoxedInt) {
                     projection.kind = QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeInt;
-                } else if (projection.kind
+                } else if (unguarded_projection && projection.kind
                         == QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind::BoxedFloat) {
                     projection.kind = QoreIRCallDirectInstruction::
@@ -5748,15 +5820,17 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     NativeFloatConstant
-                        || projection.kind
-                            == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedFloat
-                        || projection.kind
-                            == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::
-                                    BoxedFloatConstant) {
+                        || (unguarded_projection
+                            && (projection.kind
+                                    == QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedFloat
+                                || projection.kind
+                                    == QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedFloatConstant))) {
                     incoming_kind = QoreIRPhiValueKind::NativeFloat;
-                    if (projection.kind
+                    if (unguarded_projection && projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatConstant) {
@@ -5768,6 +5842,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 } else if (projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedValue
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedInt
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::BoxedFloat
                         || projection.kind
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedBool

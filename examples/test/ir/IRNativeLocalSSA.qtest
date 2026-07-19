@@ -43,6 +43,34 @@ float sub branchFloat(int rounds) {
     return checksum;
 }
 
+int sub straightInt(int rounds) {
+    int checksum = 0;
+    int value = 0;
+    for (int i = 0; i < rounds; ++i) {
+        value = i * 3 + 1;
+        checksum = checksum + value;
+    }
+    return checksum;
+}
+
+int sub storeResult() {
+    int value = 1;
+    int result = (value = 7);
+    return result + value;
+}
+
+int store_counter = 0;
+
+int sub nextValue() {
+    return ++store_counter;
+}
+
+int sub storeSideEffect() {
+    int value = 0;
+    value = nextValue();
+    return store_counter;
+}
+
 string sub maybeAssigned(bool assign) {
     int value;
     if (assign) {
@@ -71,8 +99,9 @@ string sub deletedValue(bool delete_it) {
     return value === NOTHING ? \"nothing\" : string(value);
 }
 
-printf(\"%d:%.2f:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
-    branchFloat(20), maybeAssigned(False), maybeAssigned(True),
+printf(\"%d:%.2f:%d:%d:%d:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
+    branchFloat(20), straightInt(20), storeResult(), storeSideEffect(),
+    maybeAssigned(False), maybeAssigned(True),
     removedValue(True), removedValue(False), deletedValue(True),
     deletedValue(False));
 ";
@@ -86,7 +115,7 @@ source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "220:225.00:nothing:7:nothing:11:nothing:15\n";
+string expected = "220:225.00:590:14:1:nothing:7:nothing:11:nothing:15\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -103,9 +132,18 @@ string stats = backquote(sprintf(
         + " %s -b --exec-mode=ir %s 2>&1",
     libqore_dir, qore_bin, source_path));
 if (stats !~ /IR-OPT: branchInt:.*native-local-loads=[1-9]/
-        || stats !~ /IR-OPT: branchFloat:.*native-local-loads=[1-9]/) {
+        || stats !~ /IR-OPT: branchFloat:.*native-local-loads=[1-9]/
+        || stats !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/) {
     printf("missing native local SSA promotion:\n%s", stats);
     exit(2);
+}
+foreach string function in (("branchInt", "branchFloat", "straightInt")) {
+    if (!stats.regex(sprintf(
+            "IR-OPT: %s:.*native-local-stores=[1-9]", function))) {
+        printf("missing dead native local store elimination for %s:\n%s",
+            function, stats);
+        exit(2);
+    }
 }
 foreach string function in (("maybeAssigned", "removedValue", "deletedValue")) {
     if (stats.regex(sprintf(
@@ -114,6 +152,19 @@ foreach string function in (("maybeAssigned", "removedValue", "deletedValue")) {
             function, stats);
         exit(2);
     }
+}
+
+string loads_only_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_NATIVE_LOCAL_STORE_ELIMINATION=1"
+        + " QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s"
+        + " %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+if (loads_only_stats
+        !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/
+        || loads_only_stats =~ /native-local-stores=[1-9]/) {
+    printf("invalid native local load-only optimization stats:\n%s",
+        loads_only_stats);
+    exit(2);
 }
 
 string enabled_compile = backquote(sprintf(
