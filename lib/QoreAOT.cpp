@@ -4864,6 +4864,9 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
         return nullptr;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        node = dot->getMethodCall();
+    }
     if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
@@ -4878,6 +4881,32 @@ static const type_vec_t* qore_aot_get_call_parsed_arg_types(const QoreValue& exp
         parse_args = call->getParseArgs();
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+        return &call->getParsedArgTypeInfo();
+    }
+    return nullptr;
+}
+
+static const QoreTypeInfo* qore_aot_get_call_receiver_type_info(const QoreValue& expr) {
+    if (!expr.hasNode()
+            || std::getenv("QORE_DISABLE_AOT_GENERIC_RECEIVER_BINDING")) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        node = dot->getMethodCall();
+    }
+    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
     }
     return nullptr;
 }
@@ -4899,6 +4928,8 @@ static bool qore_aot_fast_entry_args_need_no_binding(
         return false;
     }
 
+    const QoreTypeInfo* receiver_type_info =
+        qore_aot_get_call_receiver_type_info(expr);
     const QoreParseListNode* parse_args = nullptr;
     const QoreListNode* args = nullptr;
     const type_vec_t* arg_types = qore_aot_get_call_parsed_arg_types(expr, parse_args, args);
@@ -4925,7 +4956,9 @@ static bool qore_aot_fast_entry_args_need_no_binding(
                         "AOT fast-entry context-free argument analysis")) {
                 return false;
             }
-            const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+            const QoreTypeInfo* param_ti =
+                qore_substitute_type_params_if_needed(
+                    sig->lv[i]->getTypeInfo(), receiver_type_info);
             if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
                 continue;
             }
@@ -4954,8 +4987,14 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction& func, const std::vector<QoreIRValue>& operands,
         int arg_start, int nargs) {
+    int parsed_arg_start = arg_start;
+    if (expr.hasNode()
+            && dynamic_cast<const QoreDotEvalOperatorNode*>(
+                expr.getInternalNode())) {
+        parsed_arg_start = 0;
+    }
     if (qore_aot_fast_entry_args_need_no_binding(
-            variant, expr, arg_start, nargs)) {
+            variant, expr, parsed_arg_start, nargs)) {
         return true;
     }
 
@@ -4968,6 +5007,8 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
         return false;
     }
 
+    const QoreTypeInfo* receiver_type_info =
+        qore_aot_get_call_receiver_type_info(expr);
     const QoreParseListNode* parse_args = nullptr;
     const QoreListNode* args = nullptr;
     const type_vec_t* arg_types =
@@ -4992,7 +5033,9 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
                     "AOT fast-entry operand eligibility")) {
             return false;
         }
-        const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+        const QoreTypeInfo* param_ti =
+            qore_substitute_type_params_if_needed(
+                sig->lv[i]->getTypeInfo(), receiver_type_info);
         if (!QoreTypeInfo::hasType(param_ti)
                 || param_ti == autoTypeInfo) {
             continue;

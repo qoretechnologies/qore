@@ -163,9 +163,13 @@ printf(\"%s\", AOTGenericOverloadDiagnosticsMod::verify());
         script.close();
 
         string qmod_path = qmod_dir + "/AOTGenericOverloadDiagnosticsMod.qmod";
-        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+        string compile_out = backquote(sprintf("QORE_DUMP_LLVM_IR=1 QORE_LIBDIR=%s %s -b --compile-module "
+            + "--strip-source --output %s %s 2>&1",
             shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(qmod_path), shellQuote(qm_path)));
         assertTrue(is_file(qmod_path), "compiled generic overload diagnostics module: " + compile_out);
+        assertTrue(compile_out.regex(
+                "call i64 @[^\\n]*GenericBox[^\\n]*echo[^\\n]*_fast\\("),
+            "generic object call uses the native fast entry: " + compile_out);
 
         assertEq(expectedOutput(), runModule(src_dir, script_path),
             "source module generic overload diagnostics");

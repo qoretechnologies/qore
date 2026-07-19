@@ -296,6 +296,9 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
         return nullptr;
     }
     const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        node = dot->getMethodCall();
+    }
     if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
@@ -311,9 +314,36 @@ static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr
         args = call->getArgs();
         return &call->getParsedArgTypeInfo();
     }
+    if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
+        parse_args = call->getParseArgs();
+        args = call->getArgs();
+        return &call->getParsedArgTypeInfo();
+    }
     if (const auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
         parse_args = call->getParseArgs();
         args = call->getArgs();
+    }
+    return nullptr;
+}
+
+static const QoreTypeInfo* qore_ir_get_call_receiver_type_info(
+        const QoreValue& expr) {
+    if (!expr.hasNode()
+            || std::getenv("QORE_DISABLE_AOT_GENERIC_RECEIVER_BINDING")) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        node = dot->getMethodCall();
+    }
+    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
+    }
+    if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
+        return call->getReceiverTypeInfo();
     }
     return nullptr;
 }
@@ -335,6 +365,9 @@ static bool qore_ir_fast_entry_args_need_no_binding(
     unsigned num_params = sig->numParams();
     if (sig->hasVarargs() || static_cast<unsigned>(nargs) != num_params) {
         return false;
+    }
+    if (!receiver_type_info) {
+        receiver_type_info = qore_ir_get_call_receiver_type_info(expr);
     }
 
     const QoreParseListNode* parse_args = nullptr;
@@ -464,7 +497,14 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
         int arg_start, int nargs) {
-    if (qore_ir_fast_entry_args_need_no_binding(variant, expr, arg_start, nargs)) {
+    int parsed_arg_start = arg_start;
+    if (expr.hasNode()
+            && dynamic_cast<const QoreDotEvalOperatorNode*>(
+                expr.getInternalNode())) {
+        parsed_arg_start = 0;
+    }
+    if (qore_ir_fast_entry_args_need_no_binding(
+            variant, expr, parsed_arg_start, nargs)) {
         return true;
     }
 
@@ -475,6 +515,8 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
             || static_cast<size_t>(arg_start + nargs) > operands.size()) {
         return false;
     }
+    const QoreTypeInfo* receiver_type_info =
+        qore_ir_get_call_receiver_type_info(expr);
 
     // AOT slot preparation can retain a call expression without parsed type
     // metadata. In that representation the already-bound IR operands are the
@@ -503,7 +545,9 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
                     "IR fast-entry operand eligibility")) {
             return false;
         }
-        const QoreTypeInfo* param_ti = sig->lv[i]->getTypeInfo();
+        const QoreTypeInfo* param_ti =
+            qore_substitute_type_params_if_needed(
+                sig->lv[i]->getTypeInfo(), receiver_type_info);
         if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
             continue;
         }
