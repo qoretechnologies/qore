@@ -45,6 +45,35 @@ final class ProjectionFactory {
         }
         return checksum;
     }
+
+    static int staticCfgKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeStatic(i, i + 1, i + 2);
+            if (i & 1) {
+                checksum += values[0] + values[2];
+            } else {
+                checksum += values[1];
+            }
+            checksum += values[1];
+        }
+        return checksum;
+    }
+
+    int instanceCfgKernel(int rounds) {
+        int checksum = 0;
+        for (int i = 0; i < rounds; ++i) {
+            list<int> values = makeInstance(i, i + 1, i + 2);
+            if (i & 1) {
+                checksum += values[0] + values[2];
+            } else {
+                checksum += values[1];
+            }
+            checksum += values[1];
+        }
+        return checksum;
+    }
+
 }
 
 int rounds = ARGV.size() ? ARGV[0].toInt() : 1000000;
@@ -52,9 +81,13 @@ string mode = ARGV.size() > 1 ? ARGV[1] : "static";
 ProjectionFactory factory();
 int result = mode == "instance"
     ? factory.instanceKernel(rounds)
-    : mode == "multi-static"
-        ? ProjectionFactory::staticMultiKernel(rounds)
-        : mode == "multi-instance"
-            ? factory.instanceMultiKernel(rounds)
-            : ProjectionFactory::staticKernel(rounds);
+    : mode == "cfg-static"
+        ? ProjectionFactory::staticCfgKernel(rounds)
+        : mode == "cfg-instance"
+            ? factory.instanceCfgKernel(rounds)
+            : mode == "multi-static"
+                ? ProjectionFactory::staticMultiKernel(rounds)
+                : mode == "multi-instance"
+                    ? factory.instanceMultiKernel(rounds)
+                    : ProjectionFactory::staticKernel(rounds);
 printf("%d\n", result);

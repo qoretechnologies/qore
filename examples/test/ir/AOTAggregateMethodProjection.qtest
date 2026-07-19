@@ -41,6 +41,48 @@ final class ExactProjection {
         return values[0] + values[1] + values[2];
     }
 
+    static int staticCfgProjection(bool first) {
+        list<int> values = makeStatic(10, 11, 12);
+        int result;
+        if (first) {
+            result = values[0] + values[2];
+        } else {
+            result = values[1];
+        }
+        return result + values[1];
+    }
+
+    int instanceCfgProjection(bool first) {
+        list<int> values = makeInstance(20, 21, 22);
+        int result;
+        if (first) {
+            result = values[0] + values[2];
+        } else {
+            result = values[1];
+        }
+        return result + values[1];
+    }
+
+    static int staticPhiProjection(bool first) {
+        return (first
+            ? makeStatic(30, 31, 32)
+            : makeStatic(40, 41, 42))[1];
+    }
+
+    int instancePhiProjection(bool first) {
+        return (first
+            ? makeInstance(50, 51, 52)
+            : makeInstance(60, 61, 62))[1];
+    }
+
+    static int reassignedProjection(bool replace) {
+        list<int> values = makeStatic(70, 71, 72);
+        if (replace) {
+            values = (80, 81, 82);
+        }
+        return values[1];
+    }
+
     static int sideEffectProjection() {
         int effects = 0;
         int value = makeStatic((effects = 1), (effects = 2),
@@ -61,10 +103,13 @@ class OverridableProjection {
 
 ExactProjection exact();
 OverridableProjection overridable();
-printf(\"%d:%d:%d:%d:%d:%d\\n\", ExactProjection::staticProjection(),
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    ExactProjection::staticProjection(),
     exact.instanceProjection(), ExactProjection::staticMultiProjection(),
-    exact.instanceMultiProjection(), ExactProjection::sideEffectProjection(),
-    overridable.projection());
+    exact.instanceMultiProjection(), ExactProjection::staticCfgProjection(True),
+    exact.instanceCfgProjection(False), ExactProjection::staticPhiProjection(False),
+    exact.instancePhiProjection(True), ExactProjection::reassignedProjection(True),
+    ExactProjection::sideEffectProjection(), overridable.projection());
 ";
 
 string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
@@ -76,7 +121,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "5:8:15:24:23:11\n";
+string expected = "5:8:15:24:33:42:41:51:81:23:11\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -99,6 +144,7 @@ string disabled_compile = backquote(sprintf(
     libqore_dir, qcc_bin, disabled, src));
 foreach string function in (("staticProjection", "instanceProjection",
         "staticMultiProjection", "instanceMultiProjection",
+        "staticCfgProjection", "instanceCfgProjection",
         "sideEffectProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
@@ -109,7 +155,7 @@ foreach string function in (("staticProjection", "instanceProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: [^\n]*OverridableProjection::projection[^\n]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|staticPhiProjection|instancePhiProjection)[^\n]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled method aggregate projection:\n%s",
         enabled_compile + disabled_compile);

@@ -5328,8 +5328,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     }
                     if (local_inst->opcode
                                 != QoreIROpcode::LoadLocal
-                            || op.block_id != block_id
-                            || op.offset <= store_offset
+                            || (op.block_id == block_id
+                                ? op.offset <= store_offset
+                                : !cfg.dominates(block_id, op.block_id))
                             || !local_inst->result.isValid()) {
                         valid = false;
                         break;
