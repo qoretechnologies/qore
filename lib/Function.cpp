@@ -5659,35 +5659,23 @@ static bool isApproachBEligible(const UserVariantBase* uvb, const QoreIRFunction
     // Check all params
     unsigned num_params = sig->numParams();
     for (unsigned i = 0; i < num_params; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "JIT Approach B parameter eligibility")) {
+            return false;
+        }
         const LocalVar* lv = sig->lv[i];
-        const void* key = reinterpret_cast<const void*>(lv);
 
-        // Param must be IR-only
-        if (!callee_ir->ir_only_locals.count(key)) {
+        // Referenced parameters must be IR-only; unused parameters do not
+        // require a runtime-stack local and can still use the direct ABI.
+        if (!qore_ir_fast_entry_param_is_private(*callee_ir, lv)) {
             if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not IR-only\n",
+                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' not private\n",
                     callee_ir->name.c_str(), lv->getName());
             }
             return false;
         }
 
-        // No closure-captured params
-        if (lv->closureUse()) {
-            if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' closure-captured\n",
-                    callee_ir->name.c_str(), lv->getName());
-            }
-            return false;
-        }
-
-        // No reference-type params
-        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
-            if (debug) {
-                printd(5, "  APPROACH_B: '%s' ineligible: param '%s' is reference type\n",
-                    callee_ir->name.c_str(), lv->getName());
-            }
-            return false;
-        }
     }
 
     if (debug) {

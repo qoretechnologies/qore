@@ -587,18 +587,17 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
         }
     }
 
-    // All params must be IR-only, no closures, no references
+    // Referenced params must be IR-only. Unused params can remain direct-entry
+    // arguments without requiring runtime-stack locals.
     unsigned num_params = sig->numParams();
     for (unsigned i = 0; i < num_params; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT fast-entry parameter eligibility")) {
+            return false;
+        }
         const LocalVar* lv = sig->lv[i];
-        const void* key = reinterpret_cast<const void*>(lv);
-        if (!ir_func->ir_only_locals.count(key)) {
-            return false;
-        }
-        if (lv->closureUse()) {
-            return false;
-        }
-        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
+        if (!qore_ir_fast_entry_param_is_private(*ir_func, lv)) {
             return false;
         }
     }
@@ -7373,31 +7372,28 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
 static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
         const UserSignature& sig) {
     if (std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")
-            || sig.numParams() != 1 || func.blocks.size() != 1
+            || !sig.numParams() || sig.numParams() > INT8_MAX
+            || func.blocks.size() != 1
             || !func.blocks.front()
             || func.blocks.front()->instructions.size() > 4) {
         return -1;
     }
-    auto param = func.param_local_vars.find(0);
-    if (param == func.param_local_vars.end() || !param->second
-            || param->second->closureUse()
-            || QoreTypeInfo::isReference(param->second->getTypeInfo())
-            || qore_ir_get_scalar_local_kind(param->second)
-                != BatchCalleeParamKind::Boxed
-            || QoreTypeInfo::parseAcceptsReturns(
-                param->second->getTypeInfo(), NT_NOTHING)) {
-        return -1;
-    }
-    const QoreTypeInfo* type = param->second->getTypeInfo();
-    if (sig.getReturnTypeInfo() != type
-            || (!QoreTypeInfo::isHashType(type)
-            && !QoreTypeInfo::isListType(type)
-            && !QoreTypeInfo::isType(type, NT_STRING)
-            && !QoreTypeInfo::isType(type, NT_BINARY))) {
-        return -1;
+    std::unordered_map<const LocalVar*, int8_t> params;
+    for (unsigned i = 0; i < sig.numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT boxed return-parameter summary")) {
+            return -1;
+        }
+        auto param = func.param_local_vars.find(i);
+        if (param == func.param_local_vars.end() || !param->second) {
+            return -1;
+        }
+        params.emplace(param->second, static_cast<int8_t>(i));
     }
 
     QoreIRValue loaded;
+    int8_t returned_param = -1;
     const QoreIRReturnInstruction* ret = nullptr;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
         if (!inst_ptr || inst_ptr->exception_target || ret) {
@@ -7412,11 +7408,13 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
             case QoreIROpcode::LoadLocal: {
                 const auto* load =
                     static_cast<const QoreIRLocalInstruction*>(inst);
-                if (loaded.isValid() || load->local != param->second
+                auto param = params.find(load->local);
+                if (loaded.isValid() || param == params.end()
                         || !inst->result.isValid()) {
                     return -1;
                 }
                 loaded = inst->result;
+                returned_param = param->second;
                 break;
             }
             case QoreIROpcode::Return:
@@ -7426,9 +7424,25 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
                 return -1;
         }
     }
-    return loaded.isValid() && ret && ret->has_value
-            && ret->value.id == loaded.id
-        ? 0 : -1;
+    if (!loaded.isValid() || returned_param < 0 || !ret
+            || !ret->has_value || ret->value.id != loaded.id) {
+        return -1;
+    }
+    const LocalVar* returned_local =
+        func.param_local_vars.find(
+            static_cast<unsigned>(returned_param))->second;
+    const QoreTypeInfo* type = returned_local->getTypeInfo();
+    return !returned_local->closureUse()
+            && !QoreTypeInfo::isReference(type)
+            && qore_ir_get_scalar_local_kind(returned_local)
+                == BatchCalleeParamKind::Boxed
+            && !QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)
+            && sig.getReturnTypeInfo() == type
+            && (QoreTypeInfo::isHashType(type)
+                || QoreTypeInfo::isListType(type)
+                || QoreTypeInfo::isType(type, NT_STRING)
+                || QoreTypeInfo::isType(type, NT_BINARY))
+        ? returned_param : -1;
 }
 
 static bool qore_aot_get_composed_int(const QoreIRFunction& func,
@@ -10012,12 +10026,17 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         if (boxed_return_param >= 0
                 && callee_it->second.return_kind
                     == BatchCalleeReturnKind::Boxed
-                && callee_it->second.num_params == 1
-                && callee_it->second.param_kinds.size() == 1
-                && callee_it->second.param_kinds[0]
+                && static_cast<unsigned>(boxed_return_param)
+                    < callee_it->second.num_params
+                && static_cast<size_t>(boxed_return_param)
+                    < callee_it->second.param_kinds.size()
+                && callee_it->second.param_kinds[
+                    static_cast<size_t>(boxed_return_param)]
                     == BatchCalleeParamKind::Boxed
-                && callee_it->second.param_rejects_nothing.size() == 1
-                && callee_it->second.param_rejects_nothing[0]
+                && static_cast<size_t>(boxed_return_param)
+                    < callee_it->second.param_rejects_nothing.size()
+                && callee_it->second.param_rejects_nothing[
+                    static_cast<size_t>(boxed_return_param)]
                 && callee_it->second.never_returns_nothing) {
             callee_it->second.boxed_return_param = boxed_return_param;
         }
@@ -13749,10 +13768,34 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             || !found->second.never_returns_nothing
                             || call->operands.size()
                                 != found->second.num_params
+                            || found->second.param_kinds.size()
+                                != call->operands.size()
+                            || found->second.param_rejects_nothing.size()
+                                != call->operands.size()
                             || !qore_aot_fast_entry_operands_need_no_binding(
                                 callee, *expr, func, call->operands, 0,
                                 static_cast<int>(call->operands.size()))) {
                         return false;
+                    }
+                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                        if (i && !(i % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT boxed return-parameter validation")) {
+                            return false;
+                        }
+                        if (i == static_cast<size_t>(
+                                found->second.boxed_return_param)
+                                || !found->second.param_rejects_nothing[i]) {
+                            continue;
+                        }
+                        const QoreIRValueFacts* facts =
+                            func.getValueFacts(call->operands[i]);
+                        if (!facts
+                                || facts->assigned_state
+                                    != QoreIRAssignedState::Assigned
+                                || !facts->never_nothing) {
+                            return false;
+                        }
                     }
                     param = found->second.boxed_return_param;
                     if (param < 0

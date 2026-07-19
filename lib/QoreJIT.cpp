@@ -628,7 +628,7 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
             continue;
         }
         const void* key = reinterpret_cast<const void*>(lv);
-        if (!ir_func.ir_only_locals.count(key)
+        if (!qore_ir_fast_entry_param_is_private(ir_func, lv)
                 || native_unsafe_locals.count(key)) {
             continue;
         }
@@ -643,6 +643,30 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         }
     }
     return kinds;
+}
+
+bool qore_ir_fast_entry_param_is_private(
+        const QoreIRFunction& ir_func, const LocalVar* local) {
+    if (!local || local->closureUse()
+            || QoreTypeInfo::isReference(local->getTypeInfo())) {
+        return false;
+    }
+    const void* key = reinterpret_cast<const void*>(local);
+    if (ir_func.ir_only_locals.count(key)) {
+        return true;
+    }
+    if (std::getenv("QORE_DISABLE_UNUSED_FAST_ENTRY_PARAMS")) {
+        return false;
+    }
+
+    // A safe local referenced by lowered IR would be in ir_only_locals.
+    // Therefore absence from both local inventories proves that the parameter
+    // is unused. Object locals are excluded because their lifetime still
+    // requires the runtime stack even when their value is not loaded.
+    return !ir_func.has_opaque_ast_local_access
+        && !ir_func.ast_referenced_locals.count(key)
+        && !local->isTopLevel()
+        && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());
 }
 
 std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(

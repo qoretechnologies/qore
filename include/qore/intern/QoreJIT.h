@@ -399,6 +399,12 @@ struct BatchCalleeInfo {
 DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         const QoreIRFunction& ir_func, const UserSignature* sig);
 
+//! Return true when a parameter can remain private to a direct fast entry.
+//! Unused parameters qualify even though they have no LoadLocal/StoreLocal
+//! instruction and therefore are not present in ir_only_locals.
+DLLLOCAL bool qore_ir_fast_entry_param_is_private(
+        const QoreIRFunction& ir_func, const LocalVar* local);
+
 //! Derive a stable typed call ABI from exact declared parameter types.  Unlike
 //! fast-entry kinds, these kinds do not depend on one lowered body and can be
 //! reconstructed independently by an AOT closure caller and its dispatcher.
