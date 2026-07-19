@@ -9030,11 +9030,18 @@ struct AotModuleState {
 static std::unordered_map<std::string, AotModuleState> aot_module_map;
 
 //! Current module being initialized (valid only during qore_aot_module_init / _init_v2)
-static QoreProgram* aot_module_pgm = nullptr;
-static std::string aot_module_name;
-static std::string aot_module_path;
-static const QoreAOTFunc* aot_module_funcs = nullptr;
-static int aot_module_num_funcs = 0;
+/** These encode a per-init-context concept: they are written at a module's load start and read only
+    as the ns_init fallback during that same module's init, always on the loading thread.  They are
+    thread_local so that concurrent cold init of *different* modules (enabled once the process-global
+    module-load lock M is retired) cannot clobber each other's "current module" context.  While M
+    still serializes init, only one thread is ever in init at a time, so this is behaviorally
+    identical to the previous file-global storage; see aot_module_init_context_path below for the
+    same pattern. */
+static thread_local QoreProgram* aot_module_pgm = nullptr;
+static thread_local std::string aot_module_name;
+static thread_local std::string aot_module_path;
+static thread_local const QoreAOTFunc* aot_module_funcs = nullptr;
+static thread_local int aot_module_num_funcs = 0;
 
 //! Runtime .qmod path passed by the module loader to generated API-2 AOT module init adapters.
 static thread_local std::string aot_module_init_context_path;
