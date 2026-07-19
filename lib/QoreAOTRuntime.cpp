@@ -9019,14 +9019,20 @@ struct AotModuleState {
     std::unordered_set<QoreProgram*> init_done_pgms;
     //! Module path/label used for get_module_context_path() during deferred module init
     std::string path;
-    //! Whether the shared shadow (module-own) Program's constant/static-var values have already been
-    //! initialized.  The shadow Program is shared by ALL imports of this AOT module, so its
-    //! ConstantEntries / static vars must be populated exactly once (by the first import that runs the
-    //! init functions); subsequent imports write only their own target Program.  Guarded by
-    //! get_aot_module_state_lock().  Makes the previously idempotent-but-non-atomic
-    //! "!hasValue()" shadow-write guard explicit and race-free once the module-load lock no longer
-    //! serializes init.
-    bool shadow_init_done = false;
+    //! Progress of the one-time initialization of the shared shadow (module-own) Program's
+    //! constant/static-var values.  The shadow Program is shared by ALL imports of this AOT module, so
+    //! its ConstantEntries / static vars must be populated exactly once (by the first import that runs
+    //! the init functions) AND fully before any concurrent importer reads them.  Guarded by
+    //! get_aot_module_state_lock(); waiters block on get_aot_shadow_init_cond().  Makes the previously
+    //! idempotent-but-non-atomic "!hasValue()" shadow-write guard explicit and race-free once the
+    //! module-load lock no longer serializes init.
+    enum ShadowInitState : unsigned char {
+        SHADOW_NOT_STARTED = 0,  //!< no import has begun populating the shadow
+        SHADOW_IN_PROGRESS,      //!< shadow_init_tid is populating the shadow; other importers wait
+        SHADOW_DONE              //!< shadow fully populated; importers read it and write only their target
+    };
+    ShadowInitState shadow_init_state = SHADOW_NOT_STARTED;
+    int shadow_init_tid = 0;     //!< owner thread while SHADOW_IN_PROGRESS
 };
 
 //! Map from module name to per-module state
@@ -9177,6 +9183,20 @@ QoreModuleInnerLockHelper::~QoreModuleInnerLockHelper() {
 static QoreThreadLock& get_aot_module_state_lock() {
     static QoreThreadLock lock;
     return lock;
+}
+
+// Condition variable used to let a thread that is applying an already-loaded AOT module to a new
+// Program wait until another thread has finished populating the module's shared "shadow" Program
+// (its own QoreProgram, shared by every importing Program).  Guarded by get_aot_module_state_lock().
+// Once the process-global module-load lock no longer serializes AOT init, concurrent imports of the
+// same module race the shared shadow; this barrier makes the shadow populated exactly once and fully
+// before any concurrent importer reads it.  The waiting thread holds no other lock and the populating
+// thread holds no lock across generated init code, so this wait cannot deadlock (module init reads
+// already-loaded dependency constants and does not trigger a circular cross-module shadow apply; real
+// module-dependency cycles are detected at load time).
+static QoreCondition& get_aot_shadow_init_cond() {
+    static QoreCondition cond;
+    return cond;
 }
 
 //! Extract dependency module names from source \%requires directives
@@ -10219,7 +10239,7 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         std::vector<uint8_t> init_metadata;
         std::vector<AOTInitFuncDescriptor> init_descriptors;
         // whether this import is the one that populates the shared shadow (module-own) Program; set
-        // exactly once per module under the state lock (see AotModuleState::shadow_init_done)
+        // exactly once per module under the state lock (see AotModuleState::shadow_init_state)
         bool write_shadow = false;
 
         {
@@ -10241,13 +10261,54 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
                 init_metadata = it->second.metadata;
                 init_descriptors = it->second.init_descriptors;
-                // claim the one-time shadow initialization for this module
-                if (!it->second.shadow_init_done) {
-                    it->second.shadow_init_done = true;
-                    write_shadow = true;
+                // Coordinate the one-time population of the shared shadow Program.  Only the first
+                // importer populates it (write_shadow=true); concurrent importers of the same module
+                // wait until it is fully populated, then read it (write_shadow=false).  NOTE: the wait
+                // releases only the state lock; the populating thread holds no lock across generated
+                // init code, so this cannot deadlock.  While the module-load lock still serializes AOT
+                // init, no thread ever observes SHADOW_IN_PROGRESS from another thread, so this is inert.
+                while (true) {
+                    // 'it' may be invalidated by the wait below; re-find each iteration
+                    auto sit = aot_module_map.find(mod_name);
+                    if (sit == aot_module_map.end()) {
+                        break;  // module state removed (unloaded) concurrently; nothing to populate
+                    }
+                    if (sit->second.shadow_init_state == AotModuleState::SHADOW_IN_PROGRESS
+                            && sit->second.shadow_init_tid != q_gettid()) {
+                        get_aot_shadow_init_cond().wait(get_aot_module_state_lock());
+                        continue;  // re-find and re-check after wake
+                    }
+                    if (sit->second.shadow_init_state == AotModuleState::SHADOW_NOT_STARTED) {
+                        sit->second.shadow_init_state = AotModuleState::SHADOW_IN_PROGRESS;
+                        sit->second.shadow_init_tid = q_gettid();
+                        write_shadow = true;
+                    }
+                    // else SHADOW_DONE, or SHADOW_IN_PROGRESS by this same thread (nested recursion):
+                    // read the shadow, do not (re)populate it -> write_shadow stays false
+                    break;
                 }
             }
         }
+
+        // RAII: if this import claimed the one-time shadow population, mark it complete and wake any
+        // waiters on EVERY exit path from here on — including the error returns below and C++ unwind —
+        // so a concurrent importer waiting on the shadow can never be stranded.
+        struct ShadowInitFinalizer {
+            const char* mod_name;
+            bool& write_shadow;
+            ~ShadowInitFinalizer() {
+                if (!write_shadow) {
+                    return;
+                }
+                AutoLocker al(get_aot_module_state_lock());
+                auto sit = aot_module_map.find(mod_name);
+                if (sit != aot_module_map.end()) {
+                    sit->second.shadow_init_state = AotModuleState::SHADOW_DONE;
+                    sit->second.shadow_init_tid = 0;
+                }
+                get_aot_shadow_init_cond().broadcast();
+            }
+        } shadow_finalizer{mod_name, write_shadow};
 
         if (!init_descriptors.empty() && !init_metadata.empty()) {
             // Build function table from the stored function pointers.
