@@ -167,6 +167,12 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
       I/O thread to flush, matching the existing HTTP/3 path.
     - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
       "WebSocketConnection::setEchoMode()" for automatic echo of received frames
+    - fixed a teardown deadlock where a WebSocket connection whose handler thread started around the
+      moment its listener was stopped could register in the handler's connection hash after the
+      listener-stop sweep had already run, so it was never signaled to stop; its async transport was
+      never closed, its handler thread blocked forever, and the listener's shutdown (and therefore
+      server shutdown) hung.  New connections now observe the listener-stopped flag when they register
+      and self-close if the sweep missed them
 
     @subsection websockethandler_v2_7 Version 2.7
     - added @ref WebSocketHandler::WebSocketConnection::setWsPollOp()
@@ -2192,8 +2198,37 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
-        wsc.setListenerId(lid);
+        # Publish the listener id and observe whether the listener has already been stopped.
+        # rwl serializes publication against stopImpl()'s connection sweep, while the inherited
+        # mutex m protects the inherited listener-stop hash lsh.  This closes a teardown
+        # race: doNewConnection() above registers the connection in ch, but a listener stop
+        # running around the same moment can sweep ch (in stopImpl()) before this connection
+        # is registered — or before its listener id is set — and therefore never call stop()
+        # on it.  Such a connection would then block forever on the done Counter below (async
+        # H1) or the stream_done Counter (H2/H3), hanging the listener's shutdown.  The
+        # parent's stop() sets lsh{lid} before invoking stopImpl(), and start() increments the
+        # listener refcount before startImpl() runs, so a stop that swept ch without seeing us
+        # is always observable here as lsh{lid}.
+        bool listener_already_stopped;
+        {
+            rwl.writeLock();
+            on_exit rwl.writeUnlock();
+            wsc.setListenerId(lid);
+            {
+                m.lock();
+                on_exit m.unlock();
+                listener_already_stopped = lsh{lid} ?? False;
+            }
+        }
         wsc.setAsyncIo(async_ctrl);
+        if (listener_already_stopped) {
+            # the sweep missed us; signal the stop it would have delivered so the connection
+            # tears down instead of lingering — the transport is not wired yet, so this only
+            # sets the stop flag and startImpl() replays signalTransportClose() once the poll
+            # op (H1) or stream processor (H2/H3) is registered (see the wsc.stop_flag checks
+            # below)
+            wsc.stop();
+        }
         if (is_http2) {
             @assert(h2_stream_id > 0, "missing HTTP/2 stream id for WebSocket");
             # The I/O controller reads HTTP/2 frames from TCP and
@@ -2574,10 +2609,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         @see WebSocketConnection::stop() for how individual connections are signaled
     */
     private stopImpl(string lid) {
-        # Mark this listener as stopped; connections check lsh{lid} in their main loop
-        lsh{lid} = True;
-
-        # Wake up connections for this listener immediately
+        # The inherited stop() method has already marked lsh{lid} while holding m.  Wake up
+        # connections for this listener immediately; rwl orders this sweep against listener-id
+        # publication in startImpl().
         rwl.readLock();
         on_exit rwl.readUnlock();
         map $1.stop(), ch.iterator(), $1.getListenerId() == lid;

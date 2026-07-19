@@ -246,6 +246,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     constructor() : Test("WebSocketClientTest", "1.0") {
+        # Install signal handler early to debug hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("wedged-state reconnect recovery", \wedgedReconnectRecoveryTest());
         addTestCase("data provider test", \dataProviderTest());

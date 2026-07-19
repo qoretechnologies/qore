@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires AsyncSocketIo
+
+%exec-class WebSocketListenerStopRaceTest
+
+#! Connection created by RaceHandler; nothing special is needed here
+class RaceConn inherits WebSocketConnection {
+    constructor(WebSocketHandler h) : WebSocketConnection(h) {
+    }
+}
+
+#! Handler that lets the test drive the exact interleaving of connection setup vs. listener
+#! stop, so the "connection registers in ch after stopImpl() swept it" race is deterministic.
+class RaceHandler inherits WebSocketHandler {
+    public {
+        # getConnectionImpl() has been entered (runs BEFORE the connection is registered in ch)
+        Counter entered(1);
+        # the test releases getConnectionImpl() only after stopImpl() has swept ch
+        Counter release(1);
+        # our stopImpl() override has run the base-class connection sweep
+        Counter stopimpl_ran(1);
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        # signal that the handler thread is here (ch is still empty), then block until the
+        # test has forced the listener stop to sweep the empty ch
+        entered.dec();
+        release.waitForZero(30s);
+        return new RaceConn(self);
+    }
+
+    private stopImpl(string lid) {
+        # run the real (racy) sweep, then tell the test it has completed on an empty ch
+        WebSocketHandler::stopImpl(lid);
+        stopimpl_ran.dec();
+    }
+}
+
+public class WebSocketListenerStopRaceTest inherits QUnit::Test {
+    private {
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketListenerStopRaceTest", "1.0") {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        addTestCase("listener stop vs. late connection", \listenerStopRaceTest());
+        set_return_value(main());
+    }
+
+    #! Reproduces the missed-stop teardown deadlock and verifies the listener shuts down cleanly.
+    /** A WebSocket connection whose handler thread starts around the moment its listener is
+        stopped can register in the handler's connection hash (ch) AFTER stopImpl() has already
+        swept ch, so it is never sent stop().  Before the fix, its async-H1 poll operation is
+        never closed, startImpl() blocks forever on the "done" Counter, and stopListenerID()'s
+        WaitGroup wait hangs.  The fix makes startImpl() observe the listener-stopped flag
+        (lsh{lid}) after registering and self-close if the sweep missed it.
+
+        The interleaving is forced deterministically with Counters (no sleeps): the handler's
+        getConnectionImpl() blocks before ch registration; the test kicks off the listener stop,
+        waits until stopImpl() has swept the still-empty ch, then releases the connection so it
+        registers "too late".
+    */
+    listenerStopRaceTest() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+
+        RaceHandler handler({"logger": logger});
+        bool handler_released = False;
+        on_exit {
+            if (!handler_released) {
+                handler.release.dec();
+            }
+        }
+        server.setHandler("ws", "", NOTHING, handler);
+        server.setDefaultHandler("ws", handler);
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+        int port = linfo.port;
+
+        # raw client: perform the WebSocket upgrade to spawn a server-side handler thread
+        Socket s();
+        on_exit s.close();
+        s.connect("localhost:" + port, 5s);
+        s.send(sprintf("GET / HTTP/1.1\r\nHost: localhost:%d\r\n"
+            "Upgrade: websocket\r\nConnection: Upgrade\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+            port));
+        string resp = "";
+        while (!(resp =~ /\r\n\r\n/)) {
+            resp += s.recv(1, 5s);
+        }
+        assertTrue(resp =~ /101/, "server completed the WebSocket upgrade");
+
+        # 1) wait until the handler thread is inside getConnectionImpl() (ch still empty)
+        assertEq(0, handler.entered.waitForZero(10s),
+            "handler entered connection creation before listener stop");
+
+        # 2) stop the listener in the background; its stopImpl() sweeps the (empty) ch
+        Counter stopped(1);
+        background sub () {
+            server.stopListenerID(linfo.id);
+            stopped.dec();
+        }();
+
+        # 3) wait until stopImpl() has swept ch, then release the late connection
+        assertEq(0, handler.stopimpl_ran.waitForZero(10s),
+            "listener stop swept existing connections before late registration");
+        handler_released = True;
+        handler.release.dec();
+
+        # 4) the listener must shut down cleanly; before the fix stopListenerID() hangs forever
+        int rc = stopped.waitForZero(20s);
+        assertEq(0, rc, "stopListenerID() must complete after a connection registers post-sweep");
+    }
+}
