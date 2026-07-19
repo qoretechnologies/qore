@@ -2206,8 +2206,17 @@ public class DataProviderActionCatalog {
         return path == "/" ? path : "/" + path;
     }
 
-    #! Resolves output fypes in actions
+    #! Resolves output types in actions
     private static resolveOutputTypes() {
+        # Output-type callbacks can lazily load provider modules.  Acquire the
+        # process-global module-load lock before the catalog mutex so a
+        # concurrent cold module initializer that registers an app or action
+        # cannot invert the order and deadlock on the catalog mutex.
+        call_with_module_load_lock(
+            \DataProviderActionCatalog::resolveOutputTypesIntern());
+    }
+
+    private static resolveOutputTypesIntern() {
         AutoLock al(lck);
         foreach hash<auto> i in ((remove resolve_output_types).pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
