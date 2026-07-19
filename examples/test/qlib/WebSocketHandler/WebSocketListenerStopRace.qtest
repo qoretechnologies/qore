@@ -86,6 +86,12 @@ public class WebSocketListenerStopRaceTest inherits QUnit::Test {
         on_exit server.stop();
 
         RaceHandler handler({"logger": logger});
+        bool handler_released = False;
+        on_exit {
+            if (!handler_released) {
+                handler.release.dec();
+            }
+        }
         server.setHandler("ws", "", NOTHING, handler);
         server.setDefaultHandler("ws", handler);
         hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
@@ -106,7 +112,8 @@ public class WebSocketListenerStopRaceTest inherits QUnit::Test {
         assertTrue(resp =~ /101/, "server completed the WebSocket upgrade");
 
         # 1) wait until the handler thread is inside getConnectionImpl() (ch still empty)
-        handler.entered.waitForZero(10s);
+        assertEq(0, handler.entered.waitForZero(10s),
+            "handler entered connection creation before listener stop");
 
         # 2) stop the listener in the background; its stopImpl() sweeps the (empty) ch
         Counter stopped(1);
@@ -116,7 +123,9 @@ public class WebSocketListenerStopRaceTest inherits QUnit::Test {
         }();
 
         # 3) wait until stopImpl() has swept ch, then release the late connection
-        handler.stopimpl_ran.waitForZero(10s);
+        assertEq(0, handler.stopimpl_ran.waitForZero(10s),
+            "listener stop swept existing connections before late registration");
+        handler_released = True;
         handler.release.dec();
 
         # 4) the listener must shut down cleanly; before the fix stopListenerID() hangs forever

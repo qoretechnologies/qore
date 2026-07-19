@@ -1,7 +1,9 @@
 #!/usr/bin/env qore
-%new-style
-%require-types
-%strict-args
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
 
 # One attempt: two threads concurrently load a mutually-dependent module pair into separate Programs.
 # Prints exactly one outcome token: CYCLE, OK, HANG, or OTHER:<err>.  Used by

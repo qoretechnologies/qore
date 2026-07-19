@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 # Validates the cross-thread module-dependency cycle detector.
 #
 # Once the process-global module-load lock M was retired (it serialized all module init and, held
@@ -58,7 +60,7 @@ class CircularModuleDependencyTest inherits QUnit::Test {
             ++attempts;
             # do not cd: keep the harness working directory so any relative entries inherited in
             # QORE_MODULE_DIR stay valid; reference the driver and fixtures by absolute path
-            string cmd = sprintf("QORE_MODULE_DIR=%y %s --enable-debug %y 2>&1",
+            string cmd = sprintf("QORE_MODULE_DIR=%y %y --enable-debug %y 2>&1",
                 modpath, qore_bin, dir + "/cross-cycle-attempt.qr");
             string out = trim(backquote(cmd));
             on_error printf("attempt %d output: %y\n", i, out);

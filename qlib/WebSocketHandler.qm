@@ -2198,8 +2198,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
         sock.setEncoding("UTF-8");
         wsc.setSocket(sock);
-        # Publish the listener id and observe whether the listener has already been stopped,
-        # serialized against stopImpl()'s connection sweep via rwl.  This closes a teardown
+        # Publish the listener id and observe whether the listener has already been stopped.
+        # rwl serializes publication against stopImpl()'s connection sweep, while the inherited
+        # mutex m protects the inherited listener-stop hash lsh.  This closes a teardown
         # race: doNewConnection() above registers the connection in ch, but a listener stop
         # running around the same moment can sweep ch (in stopImpl()) before this connection
         # is registered — or before its listener id is set — and therefore never call stop()
@@ -2213,7 +2214,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             rwl.writeLock();
             on_exit rwl.writeUnlock();
             wsc.setListenerId(lid);
-            listener_already_stopped = lsh{lid} ?? False;
+            {
+                m.lock();
+                on_exit m.unlock();
+                listener_already_stopped = lsh{lid} ?? False;
+            }
         }
         wsc.setAsyncIo(async_ctrl);
         if (listener_already_stopped) {
@@ -2612,10 +2617,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         @see WebSocketConnection::stop() for how individual connections are signaled
     */
     private stopImpl(string lid) {
-        # Mark this listener as stopped; connections check lsh{lid} in their main loop
-        lsh{lid} = True;
-
-        # Wake up connections for this listener immediately
+        # The inherited stop() method has already marked lsh{lid} while holding m.  Wake up
+        # connections for this listener immediately; rwl orders this sweep against listener-id
+        # publication in startImpl().
         rwl.readLock();
         on_exit rwl.readUnlock();
         map $1.stop(), ch.iterator(), $1.getListenerId() == lid;

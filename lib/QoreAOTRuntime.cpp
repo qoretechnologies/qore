@@ -11292,10 +11292,11 @@ struct AOTModuleInitRunResult {
     std::string error;
 };
 
-static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm);
+static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
+        ExceptionSink& xsink);
 
 static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_name,
-        QoreProgram* tpgm) {
+        QoreProgram* tpgm, ExceptionSink& xsink) {
     AOTModuleInitRunResult result;
     if (mod_name.empty() || !tpgm) {
         return result;
@@ -11358,7 +11359,17 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             }
             if (sit->second.shadow_init_state == AotModuleState::SHADOW_IN_PROGRESS
                     && sit->second.shadow_init_tid != q_gettid()) {
-                get_aot_shadow_init_cond().wait(get_aot_module_state_lock());
+                int wait_rc = get_aot_shadow_init_cond().waitWithInterrupt(
+                    get_aot_module_state_lock(), &xsink);
+                if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
+                    auto retry_state = aot_module_map.find(mod_name);
+                    if (retry_state != aot_module_map.end()) {
+                        retry_state->second.init_in_progress_pgms.erase(tpgm);
+                    }
+                    result.attempted = true;
+                    result.success = false;
+                    return result;
+                }
                 continue;  // re-find and re-check after wake
             }
             if (sit->second.shadow_init_state == AotModuleState::SHADOW_NOT_STARTED) {
@@ -11451,7 +11462,10 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         return finish(false, true, "missing module program");
     }
     if (init_ctx_pgm != tpgm) {
-        retryPendingAOTModuleInitsForProgram(init_ctx_pgm);
+        retryPendingAOTModuleInitsForProgram(init_ctx_pgm, xsink);
+        if (xsink) {
+            return finish(false);
+        }
     }
 
     QoreAOTBinaryReader fallback_init_reader;
@@ -11516,7 +11530,8 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     return finish(true);
 }
 
-static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm) {
+static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
+        ExceptionSink& xsink) {
     if (!tpgm) {
         return;
     }
@@ -11544,7 +11559,11 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm) {
         bool completed_any = false;
         bool attempted_any = false;
         for (const std::string& name : pending) {
-            AOTModuleInitRunResult r = runAOTModuleInitForProgram(name, tpgm);
+            AOTModuleInitRunResult r =
+                runAOTModuleInitForProgram(name, tpgm, xsink);
+            if (xsink) {
+                return;
+            }
             attempted_any = attempted_any || r.attempted;
             completed_any = completed_any || (r.attempted && r.success);
             if (r.hard_error) {
@@ -12502,13 +12521,26 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
             }
         }
 
-        AOTModuleInitRunResult init_result = runAOTModuleInitForProgram(mod_name, tpgm);
+        AOTModuleInitRunResult init_result =
+            runAOTModuleInitForProgram(mod_name, tpgm, xsink);
+        if (xsink) {
+            if (!external_xsink) {
+                xsink.handleExceptions();
+            }
+            return;
+        }
         if (init_result.hard_error) {
             raise_ns_init_error(std::string("AOT ns_init '")
                 + (mod_name ? mod_name : "(unknown)") + "': " + init_result.error);
             return;
         }
-        retryPendingAOTModuleInitsForProgram(tpgm);
+        retryPendingAOTModuleInitsForProgram(tpgm, xsink);
+        if (xsink) {
+            if (!external_xsink) {
+                xsink.handleExceptions();
+            }
+            return;
+        }
     }
     preInitStaticVarsInProgram(tpgm);
 }

@@ -1166,20 +1166,25 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         if (e.state == MLS_INITIALIZING) {
             // another thread is initializing this feature; detect a genuine cross-thread cycle
             // before parking, so a real circular dependency raises instead of deadlocking silently
-            if (checkModuleLoadCycle(name, e.owner_tid, xsink)) {
+            const int owner_tid = e.owner_tid;
+            if (checkModuleLoadCycle(name, owner_tid, xsink)) {
                 return nullptr;
             }
             ++e.waiters;
             ++module_load_waiting;
-            module_load_cond.wait(mutex);
+            int wait_rc = module_load_cond.waitWithInterrupt(mutex, &xsink);
             --module_load_waiting;
             // NOTE: the entry may have been erased while we were unlocked; re-find below.  Decrement
             // the waiter count on the (possibly still-present) entry and drop our wait-for edge.
             module_load_map_t::iterator wi = module_load_map.find(name);
-            if (wi != module_load_map.end() && wi->second.owner_tid == e.owner_tid) {
+            if (wi != module_load_map.end() && wi->second.owner_tid == owner_tid) {
+                assert(wi->second.waiters);
                 --wi->second.waiters;
             }
             clearModuleLoadWaitEdge(q_gettid());
+            if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
+                return nullptr;
+            }
             continue;                           // re-check terminal state / new owner
         }
         if (e.state == MLS_FAILED) {
@@ -2854,33 +2859,47 @@ bool QoreModuleManager::checkModuleLoadCycle(const char* feature, int owner_tid,
     // mutex held; module_wait_for is guarded by the same mutex as module_load_map.
     int me = q_gettid();
     std::vector<int> chain;
+    chain.reserve(module_wait_for.size() + 2);
     chain.push_back(me);
     int cur = owner_tid;
+    size_t cancel_check = 0;
     while (true) {
+        if (++cancel_check % 100 == 0
+                && qore_check_cancel(&xsink, "module dependency cycle check")) {
+            return true;
+        }
         chain.push_back(cur);
         if (cur == me) {
             // format a readable chain, annotating each thread with the feature it is initializing
-            QoreStringNode* desc = new QoreStringNodeMaker("circular module dependency detected while "
-                "loading feature '%s': ", feature);
+            std::map<int, const std::string*> features_by_owner;
+            cancel_check = 0;
+            for (const auto& entry : module_load_map) {
+                if (++cancel_check % 100 == 0
+                        && qore_check_cancel(&xsink, "module dependency cycle report")) {
+                    return true;
+                }
+                features_by_owner.emplace(entry.second.owner_tid, &entry.first);
+            }
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker(
+                "circular module dependency detected while "
+                "loading feature '%s': ", feature));
+            cancel_check = 0;
             for (size_t j = 0; j < chain.size(); ++j) {
+                if (++cancel_check % 100 == 0
+                        && qore_check_cancel(&xsink, "module dependency cycle report")) {
+                    return true;
+                }
                 if (j) {
                     desc->concat(" -> ");
                 }
-                const char* f = nullptr;
-                for (module_load_map_t::iterator mi = module_load_map.begin(); mi != module_load_map.end();
-                        ++mi) {
-                    if (mi->second.owner_tid == chain[j]) {
-                        f = mi->first.c_str();
-                        break;
-                    }
-                }
-                if (f) {
-                    desc->sprintf("'%s' (tid %d)", f, chain[j]);
+                auto fi = features_by_owner.find(chain[j]);
+                if (fi != features_by_owner.end()) {
+                    desc->sprintf("'%s' (tid %d)", fi->second->c_str(), chain[j]);
                 } else {
                     desc->sprintf("tid %d", chain[j]);
                 }
             }
-            xsink.raiseException("CIRCULAR-MODULE-DEPENDENCY", desc);
+            xsink.raiseException("CIRCULAR-MODULE-DEPENDENCY", desc.release());
             return true;
         }
         std::map<int, int>::iterator it = module_wait_for.find(cur);
@@ -2902,14 +2921,29 @@ ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature, ExceptionSink& xsi
         : xsink(xsink), unlocked(false) {
     // Only a lingering terminal (LOADED/FAILED) entry, kept alive for waiters to observe, may still be
     // present for this feature; an in-progress reservation on another thread must never reach here
-    // (the waiter loop in loadModuleIntern guarantees the feature is absent before we get here).
+    // (the waiter loop in loadModuleIntern guarantees the feature is absent before we get here).  Such
+    // an entry is always this thread's own leftover from an earlier phase of the same load (e.g. the
+    // parse-phase reservation handing off to this init-phase reservation for the same feature).
+    //
+    // Re-open that same entry in place rather than erasing and re-inserting it.  A cross-thread waiter
+    // may be parked on it with its wait recorded in the entry's waiters count; erasing would silently
+    // discard that count, and a fresh entry that (as here) reuses this thread's TID as owner_tid would
+    // then fail the waiter's assert(waiters) on wake-up — it re-finds an owner-matching entry whose
+    // waiters count has been reset to 0.  Preserving waiters keeps the parse->init handoff a single
+    // continuous single-writer reservation as far as waiter accounting is concerned.
     QoreModuleManager::module_load_map_t::iterator ex = QMM.module_load_map.find(feature);
     if (ex != QMM.module_load_map.end()) {
         assert(ex->second.state != QoreModuleManager::MLS_INITIALIZING);
-        QMM.module_load_map.erase(ex);
+        // reset the entry to a fresh reservation owned by this thread, preserving its waiters count
+        ex->second.owner_tid = q_gettid();
+        ex->second.state = QoreModuleManager::MLS_INITIALIZING;
+        ex->second.err.clear();
+        ex->second.desc.clear();
+        i = ex;
+    } else {
+        i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(
+            feature, QoreModuleManager::ModuleLoadEntry(q_gettid()))).first;
     }
-    i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(
-        feature, QoreModuleManager::ModuleLoadEntry(q_gettid()))).first;
 
     // increment nested load depth counter
     ++module_load_depth;
