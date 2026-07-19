@@ -1,0 +1,32 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub adjusted(int value) {
+    int local = value * 3 + 1;
+    return local + (local >> 2);
+}
+
+int sub mix(int seed, int iteration) {
+    return adjusted((seed ^ iteration) & 1023)
+        ^ adjusted((seed + iteration) & 1023)
+        ^ adjusted((seed - iteration) & 1023)
+        ^ adjusted((seed + (iteration << 1)) & 1023)
+        ^ adjusted((seed ^ (iteration >> 1)) & 1023)
+        ^ adjusted((seed + 17) & 1023)
+        ^ adjusted((seed ^ 31) & 1023)
+        ^ adjusted((seed - 47) & 1023);
+}
+
+int sub main() {
+    int rounds = ARGV.size() ? ARGV[0].toInt() : 5000000;
+    int checksum = 1;
+    for (int i = 0; i < rounds; ++i) {
+        checksum = mix(checksum, i);
+    }
+    printf("%d\n", checksum);
+    return 0;
+}
+
+main();

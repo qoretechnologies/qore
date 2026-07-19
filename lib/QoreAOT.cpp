@@ -5046,7 +5046,12 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
         const std::unordered_set<const LocalVar*>* explicit_captures = nullptr) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
-    if (!sig || !ir_func.all_body_locals.empty()) {
+    if (!sig) {
+        return false;
+    }
+    const bool allow_body_locals =
+        std::getenv("QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_BODY_LOCALS") == nullptr;
+    if (!allow_body_locals && !ir_func.all_body_locals.empty()) {
         return false;
     }
 
@@ -5065,6 +5070,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
 
     std::unordered_set<const LocalVar*> context_independent_locals;
     context_independent_locals.reserve(sig->numParams()
+        + ir_func.all_body_locals.size()
         + (explicit_captures ? explicit_captures->size() : 0));
     for (unsigned i = 0; i < sig->numParams(); ++i) {
         if (i && !(i % 100)
@@ -5084,6 +5090,24 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
             }
             context_independent_locals.insert(capture);
         }
+    }
+    for (size_t i = 0; i < ir_func.all_body_locals.size(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT context-independent body-local analysis")) {
+            return false;
+        }
+        const LocalVar* local = ir_func.all_body_locals[i];
+        const void* key = reinterpret_cast<const void*>(local);
+        if (!local || local->closureUse()
+                || QoreTypeInfo::isReference(local->getTypeInfo())
+                || !ir_func.ir_only_locals.count(key)
+                || native_unsafe_locals.count(key)
+                || qore_ir_get_scalar_local_kind(local)
+                    == BatchCalleeParamKind::Boxed) {
+            return false;
+        }
+        context_independent_locals.insert(local);
     }
 
     size_t inst_count = 0;
@@ -5267,6 +5291,11 @@ static void resolveAOTBatchContextIndependentFastEntries(
             if (qore_aot_fast_entry_is_context_independent(candidate.first, *candidate.second,
                     aot_batch_callee_map)) {
                 it->second.context_independent_fast_entry = true;
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: context-independent fast entry '%s'\n",
+                        it->second.name.c_str());
+                }
                 changed = true;
             }
         }
