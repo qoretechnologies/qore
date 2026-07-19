@@ -605,12 +605,36 @@ private:
     // not implemented
     DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&) = delete;
 
-    typedef std::map<std::string, int> module_load_map_t;
+    // per-feature load/init state; absence from module_load_map encodes NOT_LOADED
+    enum ModuleLoadState : unsigned char {
+        MLS_INITIALIZING,   // owner_tid is running init; other threads wait or detect a cycle
+        MLS_LOADED,         // init completed without error (terminal)
+        MLS_FAILED          // init aborted with an exception (terminal); err/desc carry it
+    };
+    struct ModuleLoadEntry {
+        int owner_tid;                          // the single writer running this feature's init
+        ModuleLoadState state = MLS_INITIALIZING;
+        std::string err;                        // valid iff state == MLS_FAILED
+        std::string desc;                       // valid iff state == MLS_FAILED
+        unsigned waiters = 0;                   // cross-thread waiters currently parked on this entry
+
+        DLLLOCAL ModuleLoadEntry(int tid) : owner_tid(tid) {}
+    };
+    typedef std::map<std::string, ModuleLoadEntry> module_load_map_t;
     QoreCondition module_load_cond;
-    // map feature names to TIDs when module initialization is in progress
+    // map feature names to per-feature load state when module initialization is in progress
     module_load_map_t module_load_map;
-    // number of threads waiting on module_load_set
+    // number of threads waiting on module_load_cond
     int module_load_waiting = 0;
+    // wait-for graph for cross-thread module-load cycle detection: waiter TID -> owner TID it blocks on
+    std::map<int, int> module_wait_for;
+
+    // Registers a wait-for edge (caller_tid -> owner_tid) and walks the graph; if it leads back to the
+    // caller, raises CIRCULAR-MODULE-DEPENDENCY and returns true (caller must NOT wait).  Otherwise
+    // commits the edge and returns false.  Must be called with mutex held.
+    DLLLOCAL bool checkModuleLoadCycle(const char* feature, int owner_tid, ExceptionSink& xsink);
+    // Removes any wait-for edge owned by the given TID.  Must be called with mutex held.
+    DLLLOCAL void clearModuleLoadWaitEdge(int tid);
 
 protected:
     // mutex for atomicity
@@ -860,7 +884,11 @@ protected:
 
 class ModuleLoadMapHelper {
 public:
-    DLLLOCAL ModuleLoadMapHelper(const char* feature, bool unlock_now = true);
+    // reserves \a feature in module_load_map as MLS_INITIALIZING(this thread); on destruction the
+    // reservation transitions to MLS_FAILED (capturing the pending exception) if \a xsink holds an
+    // exception, otherwise MLS_LOADED.  Every failure path in the module loader sets \a xsink before
+    // the reservation is released, so the terminal state is inferred rather than signalled explicitly.
+    DLLLOCAL ModuleLoadMapHelper(const char* feature, ExceptionSink& xsink, bool unlock_now = true);
     DLLLOCAL ~ModuleLoadMapHelper();
 
     DLLLOCAL void unlock();
@@ -868,6 +896,7 @@ public:
 
 private:
     QoreModuleManager::module_load_map_t::iterator i;
+    ExceptionSink& xsink;
     bool unlocked;
 };
 
