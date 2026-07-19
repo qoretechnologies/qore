@@ -160,6 +160,10 @@ struct QoreAOTContext {
     //! True if all body locals are IR-only (enables skipping instantiation in fast call path)
     bool all_body_locals_ir_only = false;
 
+    //! Runtime implicit contexts required by the compiled function.
+    bool uses_argv = true;
+    bool uses_self = true;
+
     //! True if this context owns the regex_cases (created by buildContextFromSlotMap).
     //! False when regex_cases are borrowed pointers from the IR function (buildAOTContext).
     bool owns_regex_cases = true;
@@ -378,6 +382,24 @@ struct QoreAOTFunc {
     int num_stmts;                              //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
 };
+
+//! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context-elision metadata.
+constexpr uint32_t QORE_AOT_FUNC_NO_ARGV_CONTEXT = 1U << 30;
+constexpr uint32_t QORE_AOT_FUNC_NO_SELF_CONTEXT = 1U << 31;
+constexpr uint32_t QORE_AOT_FUNC_REGEX_COUNT_MASK = (1U << 30) - 1;
+
+inline int qore_aot_func_num_regex_cases(const QoreAOTFunc& func) {
+    return static_cast<int>(static_cast<uint32_t>(func.num_regex_cases)
+        & QORE_AOT_FUNC_REGEX_COUNT_MASK);
+}
+
+inline bool qore_aot_func_uses_argv(const QoreAOTFunc& func) {
+    return !(static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_NO_ARGV_CONTEXT);
+}
+
+inline bool qore_aot_func_uses_self(const QoreAOTFunc& func) {
+    return !(static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_NO_SELF_CONTEXT);
+}
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()
 /** Initializes the Qore runtime, re-parses the embedded source to build the AST/type system,

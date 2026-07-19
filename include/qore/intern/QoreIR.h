@@ -2967,6 +2967,12 @@ public:
     // as a value rather than only accessing members through self helpers.
     bool has_explicit_self_local_access = false;
 
+    //! Runtime call-context requirements derived from final IR.
+    struct ContextUsage {
+        bool argv = false;
+        bool self = false;
+    };
+
     // Total number of unique locals referenced by LoadLocal/StoreLocal/UninstantiateLocal.
     // Used with ir_only_locals.size() to determine if ALL locals are IR-only
     // (enabling reloadAllLocalsFromRuntime to be skipped entirely).
@@ -2985,6 +2991,10 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Return the implicit argv/self contexts required by this function.
+    //! Opaque AST callbacks and closure captures are handled conservatively.
+    ContextUsage getContextUsage(const LocalVar* argvid, const LocalVar* selfid) const;
 
     //! Returns true if all body locals are IR-only (managed by LLVM allocas,
     //! never accessed via thread-local stack).  When true, callers can skip

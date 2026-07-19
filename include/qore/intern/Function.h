@@ -994,12 +994,7 @@ public:
     }
 
     //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
-    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx) {
-        cached_aot_fn = fn;
-        cached_aot_ctx = ctx;
-        jit_compile_state.store(2, std::memory_order_relaxed);
-        current_tier.store(TIER_JIT, std::memory_order_release);
-    }
+    DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx);
 
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
     DLLLOCAL bool hasCachedFunction() const {

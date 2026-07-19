@@ -916,6 +916,20 @@ struct AOTCompiledFunc {
     std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
 };
 
+static uint32_t encodeAOTRegexCountAndContext(
+        int num_regex_cases, const AOTSlotIdentities& slot_ids) {
+    assert(num_regex_cases >= 0
+        && static_cast<uint32_t>(num_regex_cases) <= QORE_AOT_FUNC_REGEX_COUNT_MASK);
+    uint32_t encoded = static_cast<uint32_t>(num_regex_cases);
+    if (!slot_ids.uses_argv) {
+        encoded |= QORE_AOT_FUNC_NO_ARGV_CONTEXT;
+    }
+    if (!slot_ids.uses_self) {
+        encoded |= QORE_AOT_FUNC_NO_SELF_CONTEXT;
+    }
+    return encoded;
+}
+
 static bool buildAOTNativeSymbolMap(const std::vector<AOTCompiledFunc>& funcs,
         std::unordered_map<std::string, std::string>& symbols, std::string& error,
         const char* operation) {
@@ -16506,7 +16520,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_globals),
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
-            llvm::ConstantInt::get(i32_type, cf.num_regex_cases)
+            llvm::ConstantInt::get(i32_type,
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
         });
         func_entries.push_back(entry);
     }
@@ -16530,7 +16545,8 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cif.num_globals),
             llvm::ConstantInt::get(i32_type, cif.num_exprs),
             llvm::ConstantInt::get(i32_type, cif.num_stmts),
-            llvm::ConstantInt::get(i32_type, cif.num_regex_cases)
+            llvm::ConstantInt::get(i32_type,
+                encodeAOTRegexCountAndContext(cif.num_regex_cases, cif.slot_ids))
         });
         func_entries.push_back(entry);
     }
@@ -18123,7 +18139,8 @@ static bool emitScriptRegisterSymbols(llvm::LLVMContext& ctx,
             llvm::ConstantInt::get(i32_type, cf.num_globals),
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
-            llvm::ConstantInt::get(i32_type, cf.num_regex_cases),
+            llvm::ConstantInt::get(i32_type,
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids)),
         });
         entries.push_back(entry);
     }
@@ -18492,7 +18509,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_globals),
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
-            llvm::ConstantInt::get(i32_type, cf.num_regex_cases)
+            llvm::ConstantInt::get(i32_type,
+                encodeAOTRegexCountAndContext(cf.num_regex_cases, cf.slot_ids))
         });
         func_entries.push_back(entry);
     }
@@ -27768,6 +27786,14 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const AOTConstantReverseMap* const_reverse_map, QoreProgram* pgm) {
     // Get signature info for local classification
     UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    QoreIRFunction::ContextUsage context_usage = func.getContextUsage(
+        sig ? sig->argvid : nullptr, sig ? sig->selfid : nullptr);
+    out.uses_argv = context_usage.argv;
+    out.uses_self = context_usage.self;
+    if (uvb && getenv("QORE_IR_CONTEXT_STATS")) {
+        fprintf(stderr, "AOT-CONTEXT: %s: argv=%d self=%d\n",
+            func.name.c_str(), out.uses_argv, out.uses_self);
+    }
     std::unordered_map<const void*, uint16_t> param_indices;
     const void* self_ptr = nullptr;
     const void* argv_ptr = nullptr;

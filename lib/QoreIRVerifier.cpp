@@ -1775,6 +1775,130 @@ void QoreIRFunction::computeIROnlyLocals() {
 
 }
 
+QoreIRFunction::ContextUsage QoreIRFunction::getContextUsage(
+        const LocalVar* argvid, const LocalVar* selfid) const {
+    ContextUsage usage;
+    if (has_opaque_ast_local_access) {
+        usage.argv = argvid != nullptr;
+        usage.self = selfid != nullptr;
+    }
+
+    const void* argv_key = reinterpret_cast<const void*>(argvid);
+    const void* self_key = reinterpret_cast<const void*>(selfid);
+    if (argvid && (argvid->closureUse() || ast_referenced_locals.count(argv_key))) {
+        usage.argv = true;
+    }
+    if (selfid && (selfid->closureUse() || ast_referenced_locals.count(self_key)
+            || has_explicit_self_local_access)) {
+        usage.self = true;
+    }
+
+    size_t check_count = 0;
+    for (const auto& block : blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (++check_count % 100 == 0
+                    && qore_check_cancel(nullptr, "IR call context analysis")) {
+                usage.argv = argvid != nullptr;
+                usage.self = selfid != nullptr;
+                return usage;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const LocalVar* lv =
+                    static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                usage.argv |= argvid && lv == argvid;
+                usage.self |= selfid && lv == selfid;
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                const auto* local =
+                    static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+                usage.argv |= argvid
+                    && (local->target == argvid || local->source == argvid);
+                usage.self |= selfid
+                    && (local->target == selfid || local->source == selfid);
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                const LocalVar* lv =
+                    static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local;
+                usage.argv |= argvid && lv == argvid;
+                usage.self |= selfid && lv == selfid;
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                const auto* local =
+                    static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst);
+                usage.argv |= argvid && (local->lhs == argvid || local->rhs == argvid);
+                usage.self |= selfid && (local->lhs == selfid || local->rhs == selfid);
+            }
+
+            QoreIROpcode op = inst->opcode;
+            if (op == QoreIROpcode::Invoke) {
+                op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+            }
+            if (op == QoreIROpcode::LoadImplicitArg
+                    || op == QoreIROpcode::LoadImplicitArgv) {
+                usage.argv = true;
+            }
+            if (op == QoreIROpcode::LoadSelfMember
+                    || op == QoreIROpcode::CallMethod
+                    || op == QoreIROpcode::CallMethodDirect
+                    || op == QoreIROpcode::InvokeMethodDirect) {
+                usage.self = selfid != nullptr;
+            }
+            if (op == QoreIROpcode::CreateMethodRef && inst->operands.empty()) {
+                usage.self = selfid != nullptr;
+            }
+            if (op == QoreIROpcode::CreateClosure) {
+                const QoreClosureParseNode* closure = nullptr;
+                if (inst->opcode == QoreIROpcode::CreateClosure) {
+                    const auto* create =
+                        static_cast<const QoreIRCreateClosureInstruction*>(inst);
+                    closure = create->closure_node;
+                    if (!closure) {
+                        closure = dynamic_cast<const QoreClosureParseNode*>(
+                            create->expr.getInternalNode());
+                    }
+                } else {
+                    const auto* invoke =
+                        static_cast<const QoreIRInvokeInstruction*>(inst);
+                    closure = dynamic_cast<const QoreClosureParseNode*>(
+                        invoke->expr.getInternalNode());
+                }
+                if (closure && closure->isInMethod()) {
+                    usage.self = selfid != nullptr;
+                }
+            }
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                const auto* path =
+                    static_cast<const QoreIRLValuePathInstruction*>(inst);
+                for (const LVPathStep& step : path->path) {
+                    if (step.kind == LVPathStepKind::SelfMember) {
+                        usage.self = selfid != nullptr;
+                        break;
+                    }
+                }
+            }
+
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const auto* block_exit =
+                    static_cast<const QoreIROnBlockExitInstruction*>(inst);
+                if (block_exit->handler_ir) {
+                    ContextUsage handler =
+                        block_exit->handler_ir->getContextUsage(argvid, selfid);
+                    usage.argv |= handler.argv;
+                    usage.self |= handler.self;
+                }
+            }
+        }
+    }
+    return usage;
+}
+
 void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Pass 1: Compute max value ID for right-sizing interpreter value vector
     // AND compute local variable slot IDs for flat array access in interpreter

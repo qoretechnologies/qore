@@ -3443,6 +3443,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
     uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
+    int aot_num_regex_cases = qore_aot_func_num_regex_cases(aot_func);
     printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
     const char* trace_slot_reg_env = getenv("QORE_AOT_TRACE_SLOT_REG");
     const bool trace_slot_reg = trace_slot_reg_env
@@ -3453,7 +3454,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             "stmts=%d regex=%d)\n", name, num_locals, num_globals, num_exprs, num_stmts,
             num_regex_cases, num_body_locals, num_lv_path_insts, has_unsupported,
             aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
-            aot_func.num_regex_cases);
+            aot_num_regex_cases);
     }
 
     if (debug > 1 && has_unsupported) {
@@ -3463,18 +3464,19 @@ static QoreAOTContext* buildContextFromSlotMap(
     // Validate slot counts match the AOT function descriptor
     if (num_locals != aot_func.num_locals || num_globals != aot_func.num_globals
             || num_exprs != aot_func.num_exprs || num_stmts != aot_func.num_stmts
-            || num_regex_cases != aot_func.num_regex_cases) {
+            || num_regex_cases != aot_num_regex_cases) {
         std::string msg = "slot count mismatch: binary("
             + std::to_string(num_locals) + "," + std::to_string(num_globals) + ","
             + std::to_string(num_exprs) + "," + std::to_string(num_stmts) + ","
             + std::to_string(num_regex_cases) + ") vs function descriptor("
             + std::to_string(aot_func.num_locals) + "," + std::to_string(aot_func.num_globals) + ","
             + std::to_string(aot_func.num_exprs) + "," + std::to_string(aot_func.num_stmts) + ","
-            + std::to_string(aot_func.num_regex_cases) + ")";
+            + std::to_string(aot_num_regex_cases) + ")";
         setBuildError(msg);
         printd(0, "AOT v2: slot count mismatch for '%s': binary(%d,%d,%d,%d,%d) vs func(%d,%d,%d,%d,%d)\n",
             name, num_locals, num_globals, num_exprs, num_stmts, num_regex_cases,
-            aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
+            aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
+            aot_num_regex_cases);
         if (trace_slot_reg) {
             fprintf(stderr, "[aot-slot-reg] slot count mismatch for '%s'\n", name);
         }
@@ -3493,6 +3495,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     ctx->num_stmts = num_stmts;
     ctx->num_regex_cases = num_regex_cases;
     ctx->num_lv_path_insts = num_lv_path_insts;
+    ctx->uses_argv = qore_aot_func_uses_argv(aot_func);
+    ctx->uses_self = qore_aot_func_uses_self(aot_func);
     ctx->allocate();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -8297,9 +8301,13 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
     removeSignatureLocalsFromBodyLocals(ir_func->all_body_locals, sig);
 
     // Build the context from the fresh IR (same walk order → same slot indices)
-    QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
+    QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals,
+        aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts,
+        qore_aot_func_num_regex_cases(aot_func));
     if (ctx) {
         ctx->pgm = pgm;
+        ctx->uses_argv = qore_aot_func_uses_argv(aot_func);
+        ctx->uses_self = qore_aot_func_uses_self(aot_func);
     }
     if (ctx && ctx->num_lv_path_insts > 0) {
         // Keep IR function alive — LValuePath instructions reference path data in it
@@ -10376,7 +10384,8 @@ extern "C" DLLEXPORT int qore_aot_run(
                         if (QoreIRVerifier::verify(*ir_func, verify_error)) {
                             QoreAOTContext* ctx = buildAOTContext(*ir_func,
                                 toplevel_func->num_locals, toplevel_func->num_globals,
-                                toplevel_func->num_exprs, toplevel_func->num_stmts, toplevel_func->num_regex_cases);
+                                toplevel_func->num_exprs, toplevel_func->num_stmts,
+                                qore_aot_func_num_regex_cases(*toplevel_func));
                             if (ctx) {
                                 sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
                                 ++registered;

@@ -4800,6 +4800,23 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
     return po;
 }
 
+void UserVariantBase::registerPrecompiledAOTFunction(
+        AotFunctionPtr fn, QoreAOTContext* ctx) {
+    cached_aot_fn = fn;
+    cached_aot_ctx = ctx;
+    if (ctx) {
+        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+            uses_argv = signature.argvid != nullptr;
+            uses_self = signature.selfid != nullptr;
+        } else {
+            uses_argv = ctx->uses_argv;
+            uses_self = ctx->uses_self;
+        }
+    }
+    jit_compile_state.store(2, std::memory_order_relaxed);
+    current_tier.store(TIER_JIT, std::memory_order_release);
+}
+
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     if (cached_aot_ctx) {
         return cached_aot_ctx->all_body_locals;
@@ -4828,6 +4845,15 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
     if (cached_ir) {
         cached_ir->computeIROnlyLocals();
         all_body_locals_ir_only = cached_ir->areAllBodyLocalsIROnly();
+        if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+            uses_argv = signature.argvid != nullptr;
+            uses_self = signature.selfid != nullptr;
+        } else {
+            QoreIRFunction::ContextUsage usage =
+                cached_ir->getContextUsage(signature.argvid, signature.selfid);
+            uses_argv = usage.argv;
+            uses_self = usage.self;
+        }
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
             if (!cached_ir->ir_only_locals.empty()) {
@@ -5455,13 +5481,19 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             optimization_stats.in_place_list_pushes);
     }
 
-    // Conservative approach: assume argv and self are used if they exist
-    // This allows the framework to skip ArgvContextHelper and SelfFunctionCallHelper
-    // instantiation when both flags are false, but for now both default to the presence
-    // of argv/self in the function signature. More precise analysis can be added later
-    // to detect when they're actually unused in the IR body.
-    uses_argv = signature.argvid != nullptr;
-    uses_self = signature.selfid != nullptr;
+    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        uses_argv = signature.argvid != nullptr;
+        uses_self = signature.selfid != nullptr;
+    } else {
+        QoreIRFunction::ContextUsage usage =
+            func->getContextUsage(signature.argvid, signature.selfid);
+        uses_argv = usage.argv;
+        uses_self = usage.self;
+    }
+    if (getenv("QORE_IR_CONTEXT_STATS")) {
+        fprintf(stderr, "IR-CONTEXT: %s: argv=%d self=%d\n",
+            name ? name : "<fn>", uses_argv, uses_self);
+    }
     // Initialize type profiling for guards
     func->initGuardProfiles();
 
@@ -6213,7 +6245,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             } else {
                 // argv not used - just discard the reference without creating context
                 if (argv) {
-                    argv->deref(xsink);
+                    argv.release()->deref(xsink);
                 }
             }
 

@@ -1801,6 +1801,8 @@ struct AOTSlotIdentities {
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
+    bool uses_argv = true;                //!< function requires the caller's implicit argv context
+    bool uses_self = true;                //!< function requires the caller's implicit self context
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
 
