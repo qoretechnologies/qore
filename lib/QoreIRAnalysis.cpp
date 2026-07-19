@@ -2921,6 +2921,7 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
         size_t assignment_offset = 0;
         size_t assignments = 0;
         bool assigned_non_nothing = false;
+        int64_t exact_list_size = -1;
         bool list_parameter = false;
         size_t parameter_count = 0;
         for (const auto& [index, parameter] : func.param_local_vars) {
@@ -2955,6 +2956,18 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                         || (value_def && (value_def->opcode == QoreIROpcode::MakeList
                             || value_def->opcode == QoreIROpcode::CreateEmptyList
                             || value_def->opcode == QoreIROpcode::CreateSizedList));
+                    if (value_def
+                            && value_def->opcode == QoreIROpcode::MakeList
+                            && value_def->operands.size()
+                                <= static_cast<size_t>(
+                                    std::numeric_limits<int64_t>::max())) {
+                        exact_list_size = static_cast<int64_t>(
+                            value_def->operands.size());
+                    } else if (value_def
+                            && value_def->opcode
+                                == QoreIROpcode::CreateEmptyList) {
+                        exact_list_size = 0;
+                    }
                 }
             }
         }
@@ -3109,7 +3122,21 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
                     auto* increment = static_cast<QoreIRIncrementLocalIntInstruction*>(inst);
                     if (increment->local == index_local) {
-                        if (increment->delta != (reverse_loop ? -1 : 1)) {
+                        bool valid_delta = reverse_loop
+                            ? increment->delta < 0
+                            : increment->delta == 1;
+                        if (!reverse_loop && increment->delta > 1
+                                && exact_list_size >= 0) {
+                            __int128 largest_index =
+                                exact_list_size
+                                ? static_cast<__int128>(exact_list_size) - 1
+                                : 0;
+                            valid_delta = largest_index
+                                    + static_cast<__int128>(
+                                        increment->delta)
+                                <= std::numeric_limits<int64_t>::max();
+                        }
+                        if (!valid_delta) {
                             invalidated = true;
                             break;
                         }

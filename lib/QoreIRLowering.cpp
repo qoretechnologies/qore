@@ -7192,6 +7192,21 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         }
     }
     QoreValue right_expr(op->getRight());
+    if (!getenv("QORE_DISABLE_IR_FUSED_MINUS_EQUALS")
+            && force_int && isLocalNonClosureVar(left_var)
+            && !QoreTypeInfo::isReference(left_var->getTypeInfo())
+            && right_expr.getType() == NT_INT) {
+        int64_t amount = right_expr.getAsBigInt();
+        int64_t delta = amount == std::numeric_limits<int64_t>::min()
+            ? amount : -amount;
+        auto* inst = builder.createIncrementLocalInt(
+            left_var->ref.id, delta, op->loc);
+        if (parse_context) {
+            parse_context->markLocalAssignment(left_var->ref.id, true,
+                left_var->getTypeInfo());
+        }
+        return inst->result;
+    }
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
         return QoreIRValue();

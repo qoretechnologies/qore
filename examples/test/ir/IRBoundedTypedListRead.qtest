@@ -181,6 +181,53 @@ int sub affineBackwardInt() {
     return total;
 }
 
+int sub stridedForwardInt() {
+    list<int> values = (1, 2, 3, 4, 5);
+    int total = 0;
+    for (int i = 0; i < values.size(); i += 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub stridedForwardString() {
+    list<string> values = (\"a\", \"bb\", \"ccc\", \"dddd\");
+    int total = 0;
+    for (int i = 1; i < values.size(); i += 2) {
+        if (values[i] !== \"\") {
+            ++total;
+        }
+    }
+    return total;
+}
+
+int sub reverseStridedInt() {
+    list<int> values = (1, 2, 3, 4, 5);
+    int total = 0;
+    for (int i = values.size() - 1; i >= 0; i -= 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+int sub parameterStridedInt(list<int> values) {
+    int total = 0;
+    for (int i = 0; i < values.size(); i += 2) {
+        total += values[i];
+    }
+    return total;
+}
+
+auto sub unsafeStridedOverflow() {
+    list<int> values = (1, 2);
+    auto last;
+    for (int i = 1; i < values.size();
+            i += 9223372036854775807) {
+        last = values[i];
+    }
+    return last;
+}
+
 int sub swappedBoundInt() {
     list<int> values = (1, 2, 3);
     int total = 0;
@@ -369,9 +416,11 @@ printf(\"%d:%.1f:%d:%.1f:%d:%y:%d:%d:%d:%d:%y:%y:%y:%y:%d:%.1f:%d:%d:%d:%d:%d:%.
     parameterBigInt((281474976710656, 3)), parameterInt(sparse_int), parameterFloat(sparse_float), boundedBool(),
     boundedString(), parameterBool((True, False, True)), parameterString((\"ab\", \"cde\")), escapingString((\"x\", \"last\")),
     parameterBool(sparse_bool), parameterString(sparse_string));
-printf(\"broader:%d:%d:%d:%d:%d:%y:%y:%y:%y:%d\\n\",
+printf(\"broader:%d:%d:%d:%d:%d:%y:%y:%y:%y:%d:%d:%d:%d:%d\\n\",
     affineForwardInt(), affineBackwardInt(), swappedBoundInt(), reverseInt(), reverseString(),
-    affinePastEnd(), affineBeforeStart(), reversePastEnd(), advancedBeforeRead(), reverseMutatedList());
+    affinePastEnd(), affineBeforeStart(), reversePastEnd(), advancedBeforeRead(), reverseMutatedList(),
+    stridedForwardInt(), stridedForwardString(), reverseStridedInt(),
+    parameterStridedInt((1, 2, 3, 4, 5)));
 ";
 
 string script_path = "/tmp/qore-ir-bounded-typed-list-read-" + string(getpid()) + ".qr";
@@ -397,7 +446,7 @@ string sub runAot() {
 }
 
 string expected = "10:7.5:15:4.0:6:6:15:0:0:0:null:null:null:null:6:4.0:0:9:0:281474976710659:7:2.5:2:3:2:2:last:1:1\n"
-    + "broader:9:6:6:6:3:null:3:null:null:6\n";
+    + "broader:9:6:6:6:3:null:3:null:null:6:9:2:9:9\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -420,6 +469,9 @@ if (stats !~ /IR-OPT: boundedInt:.*bounded-list=1/
         || stats !~ /IR-OPT: inclusiveBound:.*bounded-list=1/
         || stats !~ /IR-OPT: affineForwardInt:.*bounded-list=1/
         || stats !~ /IR-OPT: affineBackwardInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: stridedForwardInt:.*bounded-list=1/
+        || stats !~ /IR-OPT: stridedForwardString:.*bounded-list=1.*boxed-direct=1/
+        || stats !~ /IR-OPT: reverseStridedInt:.*bounded-list=1/
         || stats !~ /IR-OPT: swappedBoundInt:.*bounded-list=1/
         || stats !~ /IR-OPT: reverseInt:.*bounded-list=1/
         || stats !~ /IR-OPT: reverseString:.*bounded-list=1.*boxed-direct=1/
@@ -448,6 +500,8 @@ if (stats !~ /IR-OPT: negativeStart:.*bounded-list=0/
         || stats !~ /IR-OPT: oversizedCachedBound:.*bounded-list=0/
         || stats !~ /IR-OPT: reassignedCachedBound:.*bounded-list=0/
         || stats !~ /IR-OPT: staleCachedBound:.*bounded-list=0/
+        || stats !~ /IR-OPT: parameterStridedInt:.*bounded-list=0/
+        || stats !~ /IR-OPT: unsafeStridedOverflow:.*bounded-list=0/
         || stats !~ /IR-OPT: optionalParameter:.*bounded-list=0/
         || stats !~ /IR-OPT: mutatedParameter:.*bounded-list=0/
         || stats !~ /IR-OPT: removedParameter:.*bounded-list=0/) {
