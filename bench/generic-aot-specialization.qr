@@ -190,13 +190,14 @@ nothing sub printTiming(hash<BenchTiming> timing) {
 }
 
 nothing sub usage() {
-    printf("usage: generic-aot-specialization.qr [--mode=NAME] [--samples=N] [--warmup=N] [--inner=N] "
-        "[--hash-inner=N] [--no-header]\n");
+    printf("usage: generic-aot-specialization.qr [--mode=NAME] [--kernel=NAME] [--samples=N] [--warmup=N] "
+        "[--inner=N] [--hash-inner=N] [--no-header]\n");
 }
 
 class BenchGenericAotSpecialization {
     constructor() {
         string mode = "qore";
+        string kernel;
         int samples = 7;
         int warmup = 2;
         int inner = 400000;
@@ -206,6 +207,8 @@ class BenchGenericAotSpecialization {
         foreach string arg in (ARGV) {
             if (arg =~ /^--mode=/) {
                 mode = arg.substr(7);
+            } else if (arg =~ /^--kernel=/) {
+                kernel = arg.substr(9);
             } else if (arg =~ /^--samples=/) {
                 samples = arg.substr(10).toInt();
             } else if (arg =~ /^--warmup=/) {
@@ -230,26 +233,55 @@ class BenchGenericAotSpecialization {
             stderr.printf("samples, inner, and hash-inner must be positive; warmup must be non-negative\n");
             exit(2);
         }
+        if (kernel
+                && kernel != "generic_class_method"
+                && kernel != "method_generic_function"
+                && kernel != "static_generic_method"
+                && kernel != "generic_hashdecl_records"
+                && kernel != "typed_list_literal"
+                && kernel != "plain_hash_record"
+                && kernel != "hashdecl_construct_only"
+                && kernel != "hashdecl_access_only") {
+            stderr.printf("unknown kernel: %s\n", kernel);
+            usage();
+            exit(2);
+        }
 
         if (header) {
             printHeader();
         }
 
-        printTiming(measureKernel(mode, "generic_class_method", inner, samples, warmup,
-            int sub () { return benchGenericClassMethod(inner); }));
-        printTiming(measureKernel(mode, "method_generic_function", inner, samples, warmup,
-            int sub () { return benchMethodGenericFunction(inner); }));
-        printTiming(measureKernel(mode, "static_generic_method", inner, samples, warmup,
-            int sub () { return benchStaticGenericMethod(inner); }));
-        printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclRecords(hash_inner); }));
-        printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
-            int sub () { return benchTypedListLiteral(hash_inner); }));
-        printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
-            int sub () { return benchPlainHashRecord(hash_inner); }));
-        printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
-        printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
-            int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+        if (!kernel || kernel == "generic_class_method") {
+            printTiming(measureKernel(mode, "generic_class_method", inner, samples, warmup,
+                int sub () { return benchGenericClassMethod(inner); }));
+        }
+        if (!kernel || kernel == "method_generic_function") {
+            printTiming(measureKernel(mode, "method_generic_function", inner, samples, warmup,
+                int sub () { return benchMethodGenericFunction(inner); }));
+        }
+        if (!kernel || kernel == "static_generic_method") {
+            printTiming(measureKernel(mode, "static_generic_method", inner, samples, warmup,
+                int sub () { return benchStaticGenericMethod(inner); }));
+        }
+        if (!kernel || kernel == "generic_hashdecl_records") {
+            printTiming(measureKernel(mode, "generic_hashdecl_records", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclRecords(hash_inner); }));
+        }
+        if (!kernel || kernel == "typed_list_literal") {
+            printTiming(measureKernel(mode, "typed_list_literal", hash_inner, samples, warmup,
+                int sub () { return benchTypedListLiteral(hash_inner); }));
+        }
+        if (!kernel || kernel == "plain_hash_record") {
+            printTiming(measureKernel(mode, "plain_hash_record", hash_inner, samples, warmup,
+                int sub () { return benchPlainHashRecord(hash_inner); }));
+        }
+        if (!kernel || kernel == "hashdecl_construct_only") {
+            printTiming(measureKernel(mode, "hashdecl_construct_only", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclConstructOnly(hash_inner); }));
+        }
+        if (!kernel || kernel == "hashdecl_access_only") {
+            printTiming(measureKernel(mode, "hashdecl_access_only", hash_inner, samples, warmup,
+                int sub () { return benchGenericHashdeclAccessOnly(hash_inner); }));
+        }
     }
 }

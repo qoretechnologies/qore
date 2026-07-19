@@ -695,6 +695,9 @@ uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_
     ExceptionSink* xsink);
 uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx, const char* hd_path,
     uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
+//! Create a typed hash from a compile-time-proven concrete AOT hashdecl path.
+uint64_t qore_rt_new_hash_decl_from_hash_by_concrete_path_cached(QoreAOTContext* ctx, const char* hd_path,
+    uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, uint64_t hash_bits,
     ExceptionSink* xsink);

@@ -851,6 +851,11 @@ static std::string aotRelocConstructorDisplayKey(const QoreClass* qc,
 }
 
 
+QoreAOTContext::QoreAOTContext() {
+    static std::atomic<uint64_t> next_generation{1};
+    hashdecl_cache_generation = next_generation.fetch_add(1, std::memory_order_relaxed);
+}
+
 QoreAOTContext::~QoreAOTContext() {
     // Deref all held expression values (we took a ref in buildAOTContext)
     for (int i = 0; i < num_exprs; ++i) {

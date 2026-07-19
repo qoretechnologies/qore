@@ -137,6 +137,8 @@ struct QoreAOTCallTarget {
     native code uses index-based lookups instead of embedded pointers.
 */
 struct QoreAOTContext {
+    QoreAOTContext();
+
     QoreProgram* pgm = nullptr;     //!< Program owning the deserialized AOT symbols for type/name resolution
 
     LocalVar** locals = nullptr;    //!< LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
@@ -175,6 +177,8 @@ struct QoreAOTContext {
     QoreAOTCallTarget* call_targets = nullptr;
 
     //! Lazily resolved hashdecl paths used by source-stripped AOT typed-container helpers.
+    //! The generation distinguishes TLS front-cache entries after context address reuse.
+    uint64_t hashdecl_cache_generation = 0;
     std::mutex hashdecl_path_cache_mutex;
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;

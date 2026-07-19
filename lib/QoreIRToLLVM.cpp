@@ -13284,12 +13284,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         runtime_check ? 1 : 0);
                 if (aot_mode) {
                     // AOT: resolve hashdecl by namespace path at runtime
+                    bool concrete_path = hd && !qore_type_contains_type_parameter(hd->getTypeInfo());
                     if (hd_path.empty()) {
                         hd_path = qore_get_aot_serializable_type_path(hd->getTypeInfo());
                     }
                     llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                     auto helper = module.getOrInsertFunction(
-                            "qore_rt_new_hash_decl_from_hash_by_path_cached",
+                            concrete_path
+                                ? "qore_rt_new_hash_decl_from_hash_by_concrete_path_cached"
+                                : "qore_rt_new_hash_decl_from_hash_by_path_cached",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper,
@@ -20106,10 +20109,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                 auto nhdfhp_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false);
+                bool concrete_path = nhdfh_inst->hd
+                    && !qore_type_contains_type_parameter(nhdfh_inst->hd->getTypeInfo());
                 auto helper = module.getOrInsertFunction(
-                        "qore_rt_new_hash_decl_from_hash_by_path_cached", nhdfhp_ft);
+                        concrete_path
+                            ? "qore_rt_new_hash_decl_from_hash_by_concrete_path_cached"
+                            : "qore_rt_new_hash_decl_from_hash_by_path_cached",
+                        nhdfhp_ft);
                 auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_new_hash_decl_from_hash_by_path_cached_throwing", nhdfhp_ft);
+                        concrete_path
+                            ? "qore_rt_new_hash_decl_from_hash_by_concrete_path_cached_throwing"
+                            : "qore_rt_new_hash_decl_from_hash_by_path_cached_throwing",
+                        nhdfhp_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg},
                         module, llvm_func, inst);
