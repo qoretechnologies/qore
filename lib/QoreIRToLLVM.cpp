@@ -3672,6 +3672,23 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
     (void)module;
 }
 
+void QoreIRToLLVM::invalidateLocalsForCallee(
+        const BatchCalleeInfo& info, llvm::Module& module,
+        llvm::Function* llvm_func, bool honor_reload_exempt) {
+    if (info.may_modify_runtime_locals) {
+        reloadAllLocalsFromRuntime(
+            module, llvm_func, honor_reload_exempt);
+        return;
+    }
+    for (const void* local : info.modified_runtime_locals) {
+        if (canReloadLocalFromRuntime(local, honor_reload_exempt)) {
+            reloadAllLocalsFromRuntime(
+                module, llvm_func, honor_reload_exempt);
+            return;
+        }
+    }
+}
+
 llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id) {
     if (nanboxed_values.count(id)) {
         return val;  // Already NaN-boxed
@@ -13788,6 +13805,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
             BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             if (type_name_fast_path) {
                 auto helper = module.getOrInsertFunction("qore_rt_pseudo_type",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -14453,8 +14471,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 call_return_kind = aot_approach_b_callee->return_kind;
-                call_may_modify_runtime_locals =
-                    aot_approach_b_callee->may_invalidate_external_caches;
+                call_may_modify_runtime_locals = false;
+                call_effect_info = aot_approach_b_callee;
             } else if (aot_mode && direct_inst->is_self_recursive
                     && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()
@@ -14672,7 +14690,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !direct_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
             }
 
@@ -14755,6 +14776,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
             BatchCalleeReturnKind call_return_kind = aot_self_batch_callee
@@ -14797,9 +14819,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    call_may_modify_runtime_locals =
-                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                        || aot_self_batch_callee->may_invalidate_external_caches;
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        call_may_modify_runtime_locals = true;
+                    } else {
+                        call_may_modify_runtime_locals = false;
+                        call_effect_info = aot_self_batch_callee;
+                    }
                 } else {
                     // Use fast path if variant is compile-time known and eligible.
                     bool use_fast_helper = false;
@@ -14906,7 +14932,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !direct_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
             }
 
@@ -14990,6 +15019,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             if (aot_mode && invoke_inst->expr) {
                 // AOT mode: use expression slot to look up the class and method at runtime
                 QoreValue expr_val = invoke_inst->expr;
@@ -15007,9 +15037,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    call_may_modify_runtime_locals =
-                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                        || aot_self_batch_callee->may_invalidate_external_caches;
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        call_may_modify_runtime_locals = true;
+                    } else {
+                        call_may_modify_runtime_locals = false;
+                        call_effect_info = aot_self_batch_callee;
+                    }
                 } else {
                     // Use fast path if variant is compile-time known and eligible.
                     bool use_fast_helper = false;
@@ -15116,7 +15150,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !invoke_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 reloadAllLocalsFromRuntime(module, llvm_func, !invoke_inst->has_ref_args);
             }
 
@@ -15244,6 +15281,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             bool fused_string_consumer = direct_inst->aot_string_consumer
                 != QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
             BatchCalleeReturnKind call_return_kind = aot_static_batch_callee
@@ -15288,9 +15326,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     call_result = builder->CreateCall(aot_static_batch_fn, call_args);
                 }
-                call_may_modify_runtime_locals =
-                    std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                    || aot_static_batch_callee->may_invalidate_external_caches;
+                if (std::getenv(
+                        "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                    call_may_modify_runtime_locals = true;
+                } else {
+                    call_may_modify_runtime_locals = false;
+                    call_effect_info = aot_static_batch_callee;
+                }
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
                             "qore_rt_clear_arg_cleanups",
@@ -15314,9 +15356,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!call_result) {
                     return false;
                 }
-                call_may_modify_runtime_locals =
-                    std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                    || aot_static_batch_callee->may_invalidate_external_caches;
+                if (std::getenv(
+                        "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                    call_may_modify_runtime_locals = true;
+                } else {
+                    call_may_modify_runtime_locals = false;
+                    call_effect_info = aot_static_batch_callee;
+                }
             } else if (aot_mode) {
                 // AOT mode: always use expression slot — embedded pointer optimization is only valid
                 // in JIT mode (same process). In AOT, compile-time pointers are invalid at runtime.
@@ -15376,7 +15422,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Qore's scoping allows callees to access the caller's locals
             // through the TLS variable stack. Reference-capable arguments can
             // also mutate locals that normal call invalidation would skip.
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !direct_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 reloadAllLocalsFromRuntime(module, llvm_func, !direct_inst->has_ref_args);
             }
 
@@ -15536,6 +15585,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             bool call_may_throw = true;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             bool result_needs_cleanup = true;
             BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;
             bool invert_list_empty = false;
@@ -15734,9 +15784,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    call_may_modify_runtime_locals =
-                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                        || aot_object_batch_callee->may_invalidate_external_caches;
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        call_may_modify_runtime_locals = true;
+                    } else {
+                        call_may_modify_runtime_locals = false;
+                        call_effect_info = aot_object_batch_callee;
+                    }
                     call_return_kind = aot_object_batch_callee->return_kind;
                     result_needs_cleanup = call_return_kind
                         == BatchCalleeReturnKind::Boxed;
@@ -15883,7 +15937,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !direct_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 // Qore's scoping allows callees to access the caller's locals
                 // through the TLS variable stack. Reference-capable arguments can
                 // also mutate locals that normal call invalidation would skip.
@@ -16057,6 +16114,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             bool call_may_throw = true;
             bool call_may_modify_runtime_locals = true;
+            const BatchCalleeInfo* call_effect_info = nullptr;
             bool result_needs_cleanup = true;
             BatchCalleeReturnKind call_return_kind = BatchCalleeReturnKind::Boxed;
             bool invert_list_empty = false;
@@ -16255,9 +16313,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (!call_result) {
                         return false;
                     }
-                    call_may_modify_runtime_locals =
-                        std::getenv("QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")
-                        || aot_object_batch_callee->may_invalidate_external_caches;
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_METHOD_EFFECT_SUMMARY")) {
+                        call_may_modify_runtime_locals = true;
+                    } else {
+                        call_may_modify_runtime_locals = false;
+                        call_effect_info = aot_object_batch_callee;
+                    }
                     call_return_kind = aot_object_batch_callee->return_kind;
                     result_needs_cleanup = call_return_kind
                         == BatchCalleeReturnKind::Boxed;
@@ -16404,7 +16466,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            if (call_may_modify_runtime_locals) {
+            if (call_effect_info) {
+                invalidateLocalsForCallee(*call_effect_info, module, llvm_func,
+                    !invoke_inst->has_ref_args);
+            } else if (call_may_modify_runtime_locals) {
                 // Qore's scoping allows callees to access the caller's locals
                 // through the TLS variable stack. Reference-capable arguments can
                 // also mutate locals that normal call invalidation would skip.
@@ -17689,9 +17754,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         if (callee->second.never_returns_nothing) {
                             known_not_nothing_values.insert(inst->result.id);
                         }
-                        if (callee->second.may_invalidate_external_caches) {
-                            reloadAllLocalsFromRuntime(module, llvm_func, true);
-                        }
+                        invalidateLocalsForCallee(
+                            callee->second, module, llvm_func, true);
                         emitExceptionCheck(module, llvm_func, inst);
                         return true;
                     }
@@ -17987,9 +18051,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
                         builder->CreateCall(decref_capture, {captured, xsink_arg});
                     }
-                    if (guarded_stored_closure || !immediate_closure_summary
-                            || immediate_closure_summary->may_invalidate_external_caches) {
+                    if (guarded_stored_closure || !immediate_closure_summary) {
                         reloadAllLocalsFromRuntime(module, llvm_func, true);
+                    } else {
+                        invalidateLocalsForCallee(*immediate_closure_summary,
+                            module, llvm_func, true);
                     }
                     values[inst->result.id] = result;
                     if (closure_return_kind == BatchCalleeReturnKind::Boxed) {
@@ -18126,13 +18192,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             auto* closure_inst = static_cast<const QoreIRExprInstruction*>(inst);
-            bool closure_may_invalidate = guarded_stored_closure
-                || closure_inst->has_ref_args
-                || !immediate_closure_summary
-                || immediate_closure_summary->may_invalidate_external_caches;
-            if (closure_may_invalidate) {
+            if (guarded_stored_closure || closure_inst->has_ref_args
+                    || !immediate_closure_summary) {
                 reloadAllLocalsFromRuntime(module, llvm_func,
                     !closure_inst->has_ref_args);
+            } else {
+                invalidateLocalsForCallee(*immediate_closure_summary,
+                    module, llvm_func, true);
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

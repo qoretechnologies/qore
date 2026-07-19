@@ -176,11 +176,19 @@ int sub parameterEffects() {
     return result * 100 + observed[0] * 10 + stable[0];
 }
 
+int sub preciseRuntimeLocalEffects() {
+    int before_global = global_value;
+    int unaffected = assigned_context;
+    int result = mutatingLeaf(2);
+    return before_global * 100000 + global_value * 1000
+        + unaffected * 100 + result;
+}
+
 hash<auto> input = {\"number\": 7};
 EffectHolder holder = objectIdentity(new EffectHolder(11));
-printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
+printf(\"%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", caller(), global_value, pureNested(4), maybeNothing(False),
     recursiveIdentity(input, 5).number, reassigned(input).number, escaping(input).number, escaped.number,
-    holder.get(), methodEffects(), contextSummary(), parameterEffects());
+    holder.get(), methodEffects(), contextSummary(), parameterEffects(), preciseRuntimeLocalEffects());
 ";
 
 string script_path = "/tmp/qore-aot-function-effect-summary-" + string(getpid()) + ".qr";
@@ -202,6 +210,7 @@ if (!is_file(exe_path)) {
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
 string disabled_compile_out = backquote(sprintf(
     "QORE_DISABLE_AOT_CONTEXT_INT_IMPORT=1 QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY=1"
+        + " QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS=1"
         + " LD_LIBRARY_PATH=%s %s --strip-debug-info -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_exe_path, script_path));
 if (!is_file(disabled_exe_path)) {
@@ -210,7 +219,7 @@ if (!is_file(disabled_exe_path)) {
 }
 string disabled_aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-if (ast != "71055:5:10:null:7:9:7:7:11:5606:7817:853\n"
+if (ast != "71055:5:10:null:7:9:7:7:11:5606:7817:853:608308\n"
         || aot != ast || disabled_aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);

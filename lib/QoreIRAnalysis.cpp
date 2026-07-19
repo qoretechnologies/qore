@@ -247,6 +247,160 @@ static bool qore_ir_lvalue_path_may_invalidate_caller_caches(
     }
 }
 
+static bool qore_ir_var_ref_write_may_modify_caller_runtime_locals(
+        const QoreIRFunction& func, const VarRefNode* var) {
+    if (!var) {
+        return true;
+    }
+    switch (var->getType()) {
+        case VT_LOCAL:
+            return qore_ir_local_write_may_invalidate_caller_caches(
+                func, var->ref.id);
+        case VT_GLOBAL:
+        case VT_THREAD_LOCAL:
+            return !var->getTypeInfo()
+                || QoreTypeInfo::isReference(var->getTypeInfo());
+        case VT_LOCAL_TS:
+        case VT_CLOSURE:
+        case VT_IMMEDIATE:
+        default:
+            return true;
+    }
+}
+
+static bool qore_ir_container_write_may_modify_caller_runtime_locals(
+        const QoreIRFunction& func, const VarRefNode* container,
+        const LocalVar* container_local) {
+    return container_local
+        ? qore_ir_local_write_may_invalidate_caller_caches(
+            func, container_local)
+        : qore_ir_var_ref_write_may_modify_caller_runtime_locals(
+            func, container);
+}
+
+static bool qore_ir_lvalue_path_may_modify_caller_runtime_locals(
+        const QoreIRFunction& func,
+        const QoreIRLValuePathInstruction* inst) {
+    if (!inst || inst->path.empty()) {
+        return true;
+    }
+    const LVPathStep& root = inst->path.front();
+    switch (root.kind) {
+        case LVPathStepKind::LocalVar: {
+            auto* local =
+                reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            return qore_ir_local_write_may_invalidate_caller_caches(
+                    func, local)
+                || !root.type_info
+                || QoreTypeInfo::isReference(root.type_info);
+        }
+        case LVPathStepKind::SelfMember:
+            return false;
+        case LVPathStepKind::GlobalVar:
+        case LVPathStepKind::ThreadLocalVar:
+            return !root.type_info
+                || QoreTypeInfo::isReference(root.type_info);
+        case LVPathStepKind::ClosureVar:
+        case LVPathStepKind::StaticVar:
+        default:
+            return true;
+    }
+}
+
+static bool qore_ir_instruction_may_modify_caller_runtime_locals(
+        const QoreIRFunction& func, const QoreIRInstruction* inst) {
+    if (!inst) {
+        return true;
+    }
+    switch (inst->opcode) {
+        case QoreIROpcode::StoreGlobal:
+        case QoreIROpcode::StoreThreadLocal: {
+            const auto* var_inst =
+                static_cast<const QoreIRVarInstruction*>(inst);
+            return !var_inst->var || !var_inst->var->getTypeInfo()
+                || QoreTypeInfo::isReference(
+                    var_inst->var->getTypeInfo());
+        }
+        case QoreIROpcode::Backquote:
+            return false;
+        case QoreIROpcode::StoreLocal: {
+            const auto* local_inst =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            return qore_ir_local_write_may_invalidate_caller_caches(
+                func, local_inst->local);
+        }
+        case QoreIROpcode::AddAssignLocalInt: {
+            const auto* add_inst =
+                static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            return !add_inst->target_ir_only
+                || qore_ir_local_write_may_invalidate_caller_caches(
+                    func, add_inst->target);
+        }
+        case QoreIROpcode::IncrementLocalInt: {
+            const auto* inc_inst =
+                static_cast<const QoreIRIncrementLocalIntInstruction*>(inst);
+            return !inc_inst->ir_only
+                || qore_ir_local_write_may_invalidate_caller_caches(
+                    func, inc_inst->local);
+        }
+        case QoreIROpcode::HashKeyStore: {
+            const auto* store =
+                static_cast<const QoreIRHashKeyStoreInstruction*>(inst);
+            return qore_ir_container_write_may_modify_caller_runtime_locals(
+                func, store->container, store->container_lv);
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            const auto* store =
+                static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(
+                    inst);
+            return qore_ir_container_write_may_modify_caller_runtime_locals(
+                func, store->container, store->container_lv);
+        }
+        case QoreIROpcode::ListIndexStore: {
+            const auto* store =
+                static_cast<const QoreIRListIndexStoreInstruction*>(inst);
+            return qore_ir_container_write_may_modify_caller_runtime_locals(
+                func, store->container, store->container_lv);
+        }
+        case QoreIROpcode::StoreLValue:
+        case QoreIROpcode::PreIncLValue:
+        case QoreIROpcode::PreDecLValue:
+        case QoreIROpcode::PostIncLValue:
+        case QoreIROpcode::PostDecLValue:
+        case QoreIROpcode::AddAssignLValue:
+        case QoreIROpcode::SubAssignLValue:
+        case QoreIROpcode::MulAssignLValue:
+        case QoreIROpcode::DivAssignLValue:
+        case QoreIROpcode::ModAssignLValue:
+        case QoreIROpcode::AndAssignLValue:
+        case QoreIROpcode::OrAssignLValue:
+        case QoreIROpcode::XorAssignLValue:
+        case QoreIROpcode::ShlAssignLValue:
+        case QoreIROpcode::ShrAssignLValue:
+        case QoreIROpcode::ShiftLValue:
+        case QoreIROpcode::UnshiftLValue:
+        case QoreIROpcode::PopAny:
+        case QoreIROpcode::PushAny:
+        case QoreIROpcode::SpliceLValue: {
+            const auto* lvalue_inst =
+                static_cast<const QoreIRLValueInstruction*>(inst);
+            return qore_ir_var_ref_write_may_modify_caller_runtime_locals(
+                func, extractLValueBaseVarRef(lvalue_inst->lvalue));
+        }
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            return qore_ir_lvalue_path_may_modify_caller_runtime_locals(
+                func,
+                static_cast<const QoreIRLValuePathInstruction*>(inst));
+        default:
+            return qore_ir_instruction_may_invalidate_caller_caches(
+                func, inst);
+    }
+}
+
 static const LocalVar* qore_ir_get_written_local(
         const QoreIRInstruction* inst) {
     if (!inst) {
@@ -702,9 +856,13 @@ static bool qore_ir_is_read_only_aggregate_use(const QoreIRInstruction& inst,
 bool qore_ir_compute_function_effect_summaries(
         const std::vector<std::pair<const AbstractQoreFunctionVariant*, const QoreIRFunction*>>& functions,
         std::unordered_map<const AbstractQoreFunctionVariant*, QoreIRFunctionEffectSummary>& summaries) {
+    constexpr size_t MAX_EXACT_RUNTIME_LOCAL_EFFECTS = 16;
+
     struct FunctionEffects {
         const AbstractQoreFunctionVariant* variant = nullptr;
         bool local_may_invalidate = false;
+        bool local_may_modify_runtime_locals = false;
+        std::unordered_set<const void*> local_modified_runtime_locals;
         bool local_never_returns_nothing = true;
         bool saw_return = false;
         std::vector<const AbstractQoreFunctionVariant*> callees;
@@ -822,6 +980,8 @@ bool qore_ir_compute_function_effect_summaries(
                                 ->invoke_opcode == QoreIROpcode::CallClosureDirect)))) {
                     if (has_ref_args || !callee) {
                         effect.local_may_invalidate = true;
+                        effect.local_may_modify_runtime_locals = true;
+                        effect.local_modified_runtime_locals.clear();
                     } else {
                         effect.callees.push_back(callee);
                     }
@@ -836,6 +996,26 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.param_may_modify[param_it->second] = true;
                     } else {
                         effect.local_may_invalidate = true;
+                        if (qore_ir_instruction_may_modify_caller_runtime_locals(
+                                *func, inst)) {
+                            if (written_local && !written_local->closureUse()
+                                    && !QoreTypeInfo::isReference(
+                                        written_local->getTypeInfo())) {
+                                if (!effect.local_may_modify_runtime_locals) {
+                                    effect.local_modified_runtime_locals.insert(
+                                        reinterpret_cast<const void*>(
+                                            written_local));
+                                    if (effect.local_modified_runtime_locals.size()
+                                            > MAX_EXACT_RUNTIME_LOCAL_EFFECTS) {
+                                        effect.local_may_modify_runtime_locals = true;
+                                        effect.local_modified_runtime_locals.clear();
+                                    }
+                                }
+                            } else {
+                                effect.local_may_modify_runtime_locals = true;
+                                effect.local_modified_runtime_locals.clear();
+                            }
+                        }
                     }
                 }
             }
@@ -937,6 +1117,11 @@ bool qore_ir_compute_function_effect_summaries(
             }
         }
         summaries[effect.variant].may_invalidate_external_caches = may_invalidate;
+        summaries[effect.variant].may_modify_runtime_locals =
+            effect.local_may_modify_runtime_locals;
+        summaries[effect.variant].modified_runtime_locals.assign(
+            effect.local_modified_runtime_locals.begin(),
+            effect.local_modified_runtime_locals.end());
         summaries[effect.variant].never_returns_nothing =
             effect.saw_return && effect.local_never_returns_nothing;
         summaries[effect.variant].param_noescape = effect.param_noescape;
@@ -958,6 +1143,65 @@ bool qore_ir_compute_function_effect_summaries(
             QoreIRFunctionEffectSummary& caller_summary = summaries[effects[caller_id].variant];
             if (!caller_summary.may_invalidate_external_caches) {
                 caller_summary.may_invalidate_external_caches = true;
+                worklist.push_back(caller_id);
+            }
+        }
+    }
+    worklist.clear();
+    for (size_t function_id = 0; function_id < effects.size();
+            ++function_id) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR runtime-local effect worklist construction")) {
+            return false;
+        }
+        const auto& summary = summaries[effects[function_id].variant];
+        if (summary.may_modify_runtime_locals
+                || !summary.modified_runtime_locals.empty()) {
+            worklist.push_back(function_id);
+        }
+    }
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR runtime-local effect propagation")) {
+            return false;
+        }
+        size_t callee_id = worklist.back();
+        worklist.pop_back();
+        for (size_t caller_id : callers[callee_id]) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR runtime-local effect propagation")) {
+                return false;
+            }
+            auto& caller_summary =
+                summaries[effects[caller_id].variant];
+            bool changed = false;
+            const auto& callee_summary =
+                summaries[effects[callee_id].variant];
+            if (callee_summary.may_modify_runtime_locals
+                    && !caller_summary.may_modify_runtime_locals) {
+                caller_summary.may_modify_runtime_locals = true;
+                caller_summary.modified_runtime_locals.clear();
+                changed = true;
+            }
+            if (!caller_summary.may_modify_runtime_locals) {
+                for (const void* local
+                        : callee_summary.modified_runtime_locals) {
+                    if (std::find(
+                            caller_summary.modified_runtime_locals.begin(),
+                            caller_summary.modified_runtime_locals.end(), local)
+                            == caller_summary.modified_runtime_locals.end()) {
+                        caller_summary.modified_runtime_locals.push_back(local);
+                        changed = true;
+                        if (caller_summary.modified_runtime_locals.size()
+                                > MAX_EXACT_RUNTIME_LOCAL_EFFECTS) {
+                            caller_summary.may_modify_runtime_locals = true;
+                            caller_summary.modified_runtime_locals.clear();
+                            break;
+                        }
+                    }
+                }
+            }
+            if (changed) {
                 worklist.push_back(caller_id);
             }
         }

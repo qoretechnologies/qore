@@ -371,6 +371,8 @@ struct BatchCalleeInfo {
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     bool may_invalidate_external_caches = true; //!< Callee can mutate caller-visible runtime state
+    bool may_modify_runtime_locals = true; //!< Callee can change unknown caller-visible runtime local slots
+    std::vector<const void*> modified_runtime_locals; //!< Exact modified locals when effects are known
     bool never_returns_nothing = false; //!< Every normal return has an assigned non-NOTHING value
     BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed; //!< Fast-entry return ABI
     std::string fast_name;               //!< Fast entry function name (if eligible)

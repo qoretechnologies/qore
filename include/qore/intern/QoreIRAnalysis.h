@@ -89,6 +89,14 @@ struct QoreIROptimizationStats {
 //! Conservative interprocedural effects used to preserve caller-side caches.
 struct QoreIRFunctionEffectSummary {
     bool may_invalidate_external_caches = true;
+    //! True when the callee can change a runtime local visible to its caller.
+    //! This is narrower than may_invalidate_external_caches: writes to proven
+    //! non-reference globals remain externally visible but cannot rebind a
+    //! caller local.
+    bool may_modify_runtime_locals = true;
+    //! Exact runtime locals modified when may_modify_runtime_locals is false.
+    //! Pointer identities are valid within one IR/JIT/AOT compilation group.
+    std::vector<const void*> modified_runtime_locals;
     bool never_returns_nothing = false;
     //! True for parameters whose value is only observed during the call.
     //! A returned value is allowed because return lowering takes an owning ref.

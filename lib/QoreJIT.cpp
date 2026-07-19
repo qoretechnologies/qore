@@ -1191,6 +1191,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         auto summary = effect_summaries.find(callee.variant);
         info.may_invalidate_external_caches = summary == effect_summaries.end()
             || summary->second.may_invalidate_external_caches;
+        info.may_modify_runtime_locals = summary == effect_summaries.end()
+            || summary->second.may_modify_runtime_locals;
+        if (summary != effect_summaries.end()) {
+            info.modified_runtime_locals =
+                summary->second.modified_runtime_locals;
+        }
         info.never_returns_nothing = summary != effect_summaries.end()
             && summary->second.never_returns_nothing;
         info.return_kind = qore_ir_get_fast_entry_return_kind(

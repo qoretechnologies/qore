@@ -1197,6 +1197,9 @@ private:
     // can modify locals through the Qore runtime stack; actual reloads are lazy.
     void reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Function* llvm_func,
             bool honor_reload_exempt = true, bool eager = false);
+    void invalidateLocalsForCallee(const BatchCalleeInfo& info,
+            llvm::Module& module, llvm::Function* llvm_func,
+            bool honor_reload_exempt = true);
 
     // Phase 5b: Emit inline LLVM fast-path for .any comparisons (EqAny/NeAny/etc).
     // Type-checks operands for int-vs-int and float-vs-float, falls back to helper for mixed types.

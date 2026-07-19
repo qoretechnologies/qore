@@ -1011,6 +1011,14 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             if (info.may_invalidate_external_caches) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
             }
+            entry.flags |= QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS;
+            // Exact LocalVar identities are compilation-group local. Export a
+            // conservative unknown effect when an entry modifies such locals.
+            if (info.may_modify_runtime_locals
+                    || !info.modified_runtime_locals.empty()) {
+                entry.flags |=
+                    QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS;
+            }
             if (info.never_returns_nothing) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
             }
@@ -9879,6 +9887,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
     const bool disable_noescape_params = std::getenv("QORE_DISABLE_AOT_NOESCAPE_PARAMS");
     const bool disable_param_effects =
         std::getenv("QORE_DISABLE_AOT_PARAM_EFFECT_SUMMARY");
+    const bool disable_precise_effect_domains =
+        std::getenv("QORE_DISABLE_AOT_PRECISE_EFFECT_DOMAINS");
     for (const auto& [variant, summary] : summaries) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT batch function effect propagation")) {
@@ -9892,6 +9902,14 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     && std::find(summary.param_may_modify.begin(),
                         summary.param_may_modify.end(), 1)
                         != summary.param_may_modify.end());
+            callee_it->second.may_modify_runtime_locals =
+                disable_precise_effect_domains
+                ? callee_it->second.may_invalidate_external_caches
+                : summary.may_modify_runtime_locals;
+            callee_it->second.modified_runtime_locals =
+                disable_precise_effect_domains
+                ? std::vector<const void*>()
+                : summary.modified_runtime_locals;
             callee_it->second.never_returns_nothing =
                 summary.never_returns_nothing;
             callee_it->second.return_kind = qore_ir_get_fast_entry_return_kind(
@@ -11469,6 +11487,11 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT;
     info.may_invalidate_external_caches =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_MAY_INVALIDATE;
+    info.may_modify_runtime_locals =
+        rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS
+        ? static_cast<bool>(rec.fast_entry_flags
+            & QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS)
+        : info.may_invalidate_external_caches;
     info.never_returns_nothing =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_NEVER_NOTHING;
     if (rec.fast_return_kind > static_cast<uint8_t>(BatchCalleeReturnKind::NativeBool)) {

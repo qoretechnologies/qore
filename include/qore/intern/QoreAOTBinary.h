@@ -326,6 +326,10 @@ constexpr uint32_t QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT = 0x0002; //!< No cal
 constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_INVALIDATE = 0x0004; //!< Callee may mutate caller-visible state
 constexpr uint32_t QORE_AOT_FAST_ENTRY_NEVER_NOTHING = 0x0008; //!< All normal returns are non-NOTHING
 constexpr uint32_t QORE_AOT_FAST_ENTRY_IMPLICIT_SELF = 0x0010; //!< Entry reuses caller self/class context
+//! Runtime-local effect metadata is present; without this bit readers fall back
+//! to QORE_AOT_FAST_ENTRY_MAY_INVALIDATE.
+constexpr uint32_t QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS = 0x0020;
+constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS = 0x0040;
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
