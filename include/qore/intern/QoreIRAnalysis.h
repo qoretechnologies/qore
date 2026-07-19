@@ -215,7 +215,10 @@ using QoreIRStringProducerQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRCallDirectInstruction*,
     QoreIRCallDirectInstruction::AOTStringConsumerKind)>;
 
-//! Fuse exact imported string producers with sole size or length consumers.
+//! Fuse exact string producers with sole supported consumers.
+/** Supports direct consumers, single-assignment non-escaping string locals
+    consumed by size or length, and size/length consumers of PHIs whose incoming
+    values are all compatible producers. */
 //! @param func function to optimize in place
 //! @param is_supported returns true for calls with a compatible producer summary
 //! @return number of producer/consumer pairs fused

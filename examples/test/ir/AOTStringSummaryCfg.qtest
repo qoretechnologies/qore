@@ -1,0 +1,164 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+string sub pair(string left, string right) {
+    return left + right;
+}
+
+string sub triple(string left, string middle, string right) {
+    return left + middle + right;
+}
+
+int sub localSize(bool first) {
+    string value = pair(\"left\", \"right\");
+    int adjustment;
+    if (first) {
+        adjustment = 1;
+    } else {
+        adjustment = 2;
+    }
+    return value.size() + adjustment;
+}
+
+int sub localLength(bool first) {
+    string value = pair(\"Dvo\\u0159\", \"\\u00e1k\");
+    int adjustment;
+    if (first) {
+        adjustment = 3;
+    } else {
+        adjustment = 4;
+    }
+    return value.length() + adjustment;
+}
+
+int sub phiSize(bool first) {
+    return (first
+        ? pair(\"left\", \"right\")
+        : triple(\"one\", \"two\", \"three\")).size();
+}
+
+int sub phiLength(bool first) {
+    return (first
+        ? pair(\"Dvo\\u0159\", \"\\u00e1k\")
+        : triple(\"Sme\", \"ta\", \"na\")).length();
+}
+
+int sub repeatedLocal() {
+    string value = pair(\"left\", \"right\");
+    return value.size() + value.length();
+}
+
+int sub reassignedLocal(bool replace) {
+    string value = pair(\"left\", \"right\");
+    if (replace) {
+        value = \"x\";
+    }
+    return value.size();
+}
+
+int sub removedLocal() {
+    string value = pair(\"left\", \"right\");
+    remove value;
+    return value.size();
+}
+
+int sub optionalLocal() {
+    *string value = pair(\"left\", \"right\");
+    return value.size();
+}
+
+bool sub searchedLocal() {
+    string value = pair(\"left\", \"right\");
+    return value.contains(\"right\");
+}
+
+int sub mixedPhi(bool first) {
+    return (first
+        ? pair(\"left\", \"right\")
+        : convert_encoding(\"latin\", \"ISO-8859-1\")).size();
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%y:%d\\n\", localSize(True),
+    localLength(False), phiSize(False), phiLength(True), repeatedLocal(),
+    reassignedLocal(True), removedLocal(), optionalLocal(), searchedLocal(),
+    mixedPhi(False));
+";
+
+string root = "/tmp/qore-aot-string-summary-cfg-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string expected = "10:10:11:6:18:1:0:9:True:5\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, src));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled, src));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, src));
+foreach string function in (("localSize", "localLength", "phiSize", "phiLength")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^\\n]*:.*string-consumers=1",
+            function))) {
+        printf("missing string CFG fusion for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (repeatedLocal|reassignedLocal|removedLocal|optionalLocal|searchedLocal|mixedPhi)[^\n]*:.*string-consumers=[1-9]/
+        || disabled_compile =~ /string-consumers=[1-9]/) {
+    printf("unsafe or disabled string CFG fusion:\n%s",
+        enabled_compile + disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled, disabled)) {
+    if (!is_file(path)) {
+        printf("AOT compile failed for %s:\n%s%s",
+            path, enabled_compile, disabled_compile);
+        exit(2);
+    }
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(src);
+unlink(enabled);
+unlink(disabled);
