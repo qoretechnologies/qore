@@ -160,6 +160,15 @@ int sub staticCall() {
     return ExactIdentity::staticIdentity(value).size();
 }
 
+int sub invokeCall() {
+    string value = \"invoke\";
+    try {
+        return identityString(value).size();
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
 bool sub unassignedRejected() {
     hash<string, int> value;
     try {
@@ -186,9 +195,9 @@ bool sub removedRejected() {
 int sub main() {
     *hash<string, int> missing;
     ExactIdentity exact();
-    printf(\"%d:%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d:%d\\n\",
+    printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%y:%y:%y:%d:%d:%d:%y:%d:%d\\n\",
         localCalls(), temporaryCall(), chainedCall(), aliasing(),
-        sideEffectArgument(), staticCall(), exact.selfCall(),
+        sideEffectArgument(), staticCall(), invokeCall(), exact.selfCall(),
         optionalIdentity(missing),
         unassignedRejected(), removedRejected(),
         mutatingIdentity({\"value\": 4}).extra,
@@ -228,7 +237,7 @@ combined_file.write("%modern\n\n" + providerCode() + consumerCode()
     + "\nmain();\n");
 combined_file.close();
 
-string expected = "743:5:8:19:66:6:6:null:True:True:2:9:94:True:6:777\n";
+string expected = "743:5:8:19:66:6:6:6:null:True:True:2:9:94:True:6:777\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -326,7 +335,7 @@ string disabled_compile = backquote(sprintf(
 foreach string function in (("localCalls", "temporaryCall", "chainedCall",
         "aliasing", "sideEffectArgument", "multiParamCall",
         "multiParamSideEffect", "multiParamOptionalNothing",
-        "wrapperCalls", "staticCall", "selfCall")) {
+        "wrapperCalls", "staticCall", "invokeCall", "selfCall")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*boxed-return-calls=[1-9]",
             function))) {

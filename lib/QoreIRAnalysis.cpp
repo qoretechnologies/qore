@@ -661,10 +661,26 @@ static const AbstractQoreFunctionVariant* qore_ir_get_resolved_effect_callee(
         }
         case QoreIROpcode::Invoke: {
             const auto* call = static_cast<const QoreIRInvokeInstruction*>(inst);
+            has_ref_args = call->has_ref_args;
+            if (call->invoke_opcode == QoreIROpcode::CallDirect) {
+                if (call->expr.hasNode()) {
+                    const auto* expr = dynamic_cast<const FunctionCallNode*>(
+                        call->expr.getInternalNode());
+                    if (expr && expr->getVariant()) {
+                        return expr->getVariant();
+                    }
+                }
+                return call->func && call->func->numVariants() == 1
+                    ? call->func->first() : nullptr;
+            }
+            if (call->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                const auto* expr = dynamic_cast<const StaticMethodCallNode*>(
+                    call->expr.getInternalNode());
+                return expr ? expr->getVariant() : nullptr;
+            }
             if (call->invoke_opcode != QoreIROpcode::CallClosureDirect) {
                 return nullptr;
             }
-            has_ref_args = call->has_ref_args;
             if (!closure_values || inst->operands.empty()) {
                 return nullptr;
             }
@@ -7207,15 +7223,24 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
             if (inst_ptr && inst_ptr->result.isValid()) {
                 definitions.emplace(inst_ptr->result.id, inst_ptr.get());
             }
-            if (!inst_ptr || inst_ptr->exception_target
-                    || !inst_ptr->result.isValid()
+            const auto* invoke = inst_ptr
+                    && inst_ptr->opcode == QoreIROpcode::Invoke
+                ? static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get())
+                : nullptr;
+            bool supported_invoke = invoke
+                && (invoke->invoke_opcode == QoreIROpcode::CallDirect
+                    || invoke->invoke_opcode
+                        == QoreIROpcode::CallStaticDirect);
+            if (!inst_ptr || !inst_ptr->result.isValid()
+                    || (inst_ptr->exception_target && !supported_invoke)
                     || (inst_ptr->opcode != QoreIROpcode::CallDirect
                         && inst_ptr->opcode
                             != QoreIROpcode::CallStaticDirect
                         && (inst_ptr->opcode
                                 != QoreIROpcode::CallMethodDirect
                             || !qore_ir_is_non_overridable_method_call(
-                                *inst_ptr)))) {
+                                *inst_ptr))
+                        && !supported_invoke)) {
                 continue;
             }
             QoreIRInstruction* call = inst_ptr.get();
@@ -7343,7 +7368,22 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                     "IR boxed return-parameter call folding");
             }
             if (eliminated.count(inst->get())) {
-                inst = instructions.erase(inst);
+                if ((*inst)->opcode == QoreIROpcode::Invoke) {
+                    const auto* invoke =
+                        static_cast<const QoreIRInvokeInstruction*>(
+                            inst->get());
+                    auto branch =
+                        std::make_unique<QoreIRBranchInstruction>();
+                    branch->target = invoke->normal_target;
+                    branch->loc = invoke->loc;
+                    branch->cached_start_line =
+                        invoke->cached_start_line;
+                    branch->intrinsic = invoke->intrinsic;
+                    *inst = std::move(branch);
+                    ++inst;
+                } else {
+                    inst = instructions.erase(inst);
+                }
                 continue;
             }
             (void)qore_ir_rewrite_value_operands(

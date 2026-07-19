@@ -14236,6 +14236,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             expr = &static_cast<
                                 const QoreIRCallMethodDirectInstruction*>(
                                     call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::Invoke) {
+                            const auto* invoke = static_cast<
+                                const QoreIRInvokeInstruction*>(call);
+                            if (invoke->invoke_opcode
+                                    == QoreIROpcode::CallDirect
+                                    || invoke->invoke_opcode
+                                        == QoreIROpcode::CallStaticDirect) {
+                                expr = &invoke->expr;
+                            }
                         }
                     }
                     auto found = aot_batch_callee_map->find(callee);
