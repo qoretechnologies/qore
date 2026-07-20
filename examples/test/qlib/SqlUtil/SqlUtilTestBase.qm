@@ -110,6 +110,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("Column Operators", \columnOperatorTest());
         addTestCase("Update Operators", \updateOperatorTest());
         addTestCase("Where Operators", \whereOperatorTest());
+        addTestCase("Where Operator Subquery Expressions", \whereOperatorSubqueryExpressionTest());
         addTestCase("Group By", \groupByTest());
         addTestCase("Order By", \orderByTest());
         addTestCase("Offset / Limit", \offsetLimitTest());
@@ -1568,6 +1569,50 @@ public class SqlTestBase inherits QUnit::Test {
                         rn, d.key));
             }
         }
+    }
+
+    whereOperatorSubqueryExpressionTest() {
+        if (!table) testSkip("no DB connection");
+
+        on_success table.commit();
+        on_error table.rollback();
+
+        string sql;
+        on_error printf("SQL: %s\n", sql);
+
+        # generic (DataProvider) expressions in an op_in_select() subquery hash must survive where-clause
+        # processing: coercing the where hash to plain "hash" recursively strips nested runtime types, so the
+        # subquery's hash<DataProviderExpression> where was processed as a plain column hash and failed with
+        # COLUMN-ERROR referencing an "exp" column
+        hash<DataProviderExpression> sub_where = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_GE,
+            "args": (<DataProviderFieldReference>{"field": "id"}, 2),
+        };
+        *list<auto> rows = table.selectRows({
+            "columns": ("id",),
+            "where": {"id": op_in_select(table, {"columns": "id", "where": sub_where})},
+            "orderby": ("id",),
+        }, \sql);
+        assertEq((2,), (map $1.id.toInt(), rows), "in_select with expression sub-where");
+
+        # the same subquery expression negated (anti-join form)
+        rows = table.selectRows({
+            "columns": ("id",),
+            "where": {"id": op_not(op_in_select(table, {"columns": "id", "where": sub_where}))},
+            "orderby": ("id",),
+        }, \sql);
+        assertEq((1,), (map $1.id.toInt(), rows), "negated in_select with expression sub-where");
+
+        # a where list (or-combined clauses) routes through the list branch of the same coercion
+        rows = table.selectRows({
+            "columns": ("id",),
+            "where": (
+                {"id": op_in_select(table, {"columns": "id", "where": sub_where})},
+                {"id": 1},
+            ),
+            "orderby": ("id",),
+        }, \sql);
+        assertEq((1, 2), (map $1.id.toInt(), rows), "where list with expression sub-where");
     }
 
     groupByTest() {

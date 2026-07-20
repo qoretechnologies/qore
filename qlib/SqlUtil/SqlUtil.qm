@@ -7083,8 +7083,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @endcode
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
+
+        @note the parameter is typed \c hash<auto> so the wrapped operator hash is passed through unchanged;
+        a plain \c hash parameter would coerce the argument, recursively stripping nested runtime types and
+        destroying hash<DataProviderExpression> sub-wheres in wrapped operators (e.g. @ref op_in_select())
     */
-    public hash<OperatorInfo> sub op_not(hash arg) {
+    public hash<OperatorInfo> sub op_not(hash<auto> arg) {
         return make_op(OP_NOT, arg);
     }
 
