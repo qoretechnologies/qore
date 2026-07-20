@@ -1709,6 +1709,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return True;
     }
 
+    #! returns a temporary table name qualified with PostgreSQL's session-local temporary schema alias
+    private string getTempTableNameImpl(string name, bool precreated) {
+        return precreated ? name : "pg_temp." + name;
+    }
+
     #! returns @ref True "True" if the database supports named types
     private bool supportsTypesImpl() {
         return True;
