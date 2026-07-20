@@ -579,6 +579,10 @@ public const DataSchemaJsonSchema = {
                             "maximum": 10000,
                         },
                         "quarantine_table": {"type": "string"},
+                        "preserve_legacy_columns": {
+                            "type": "boolean",
+                            "enum": (True,),
+                        },
                     },
                 },
                 "constraints_and_indexes": {

@@ -681,6 +681,9 @@ class DataSchemaTest inherits QUnit::Test {
             normalized.constraints_and_indexes.primary_key.columns[0]);
         assertEq(500, normalized.backfill.batch_size);
         assertTrue(normalized.backfill.preserve_legacy_columns);
+        assertEq(normalized,
+            Schema::DataSchemaTableMigration::validate_contract(normalized),
+            "the normalized closed contract is valid input");
 
         hash<auto> invalid = tableReconciliationContract();
         invalid.table = "unsafe.table";
@@ -703,6 +706,14 @@ class DataSchemaTest inherits QUnit::Test {
             "backfill.batch_size must be between 1 and 10000",
             \Schema::DataSchemaTableMigration::validate_contract(),
             (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.preserve_legacy_columns = False;
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill.preserve_legacy_columns must be true",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,),
+            "the normalized safety invariant cannot be disabled");
 
         invalid = tableReconciliationContract();
         invalid.canonical_columns[0].type = "hash<auto>";

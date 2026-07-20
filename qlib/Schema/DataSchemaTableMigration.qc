@@ -278,10 +278,17 @@ public hash<auto> sub validate_contract(hash<auto> raw) {
     }
 
     hash<auto> backfill = as_hash(raw.backfill);
-    validate_keys(backfill, ("batch_size", "quarantine_table"),
-        "backfill");
+    validate_keys(backfill, ("batch_size", "quarantine_table",
+        "preserve_legacy_columns"), "backfill");
     require_type(backfill, "batch_size", NT_INT, "backfill");
     require_type(backfill, "quarantine_table", NT_STRING, "backfill");
+    require_type(backfill, "preserve_legacy_columns", NT_BOOLEAN,
+        "backfill", True);
+    if (exists backfill.preserve_legacy_columns
+            && !backfill.preserve_legacy_columns.toBool()) {
+        throw "DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill.preserve_legacy_columns must be true";
+    }
     string quarantine_table = require_identifier(backfill.quarantine_table,
         "backfill.quarantine_table");
     if (quarantine_table == table) {

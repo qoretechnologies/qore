@@ -523,6 +523,7 @@ The contract fields are:
 | `column_mappings` | Exactly one source mapping for every canonical column |
 | `backfill.batch_size` | Number of rows processed per restartable transaction, from 1 through 10,000 |
 | `backfill.quarantine_table` | Separate table that preserves rows that fail conversion before removing them from active processing |
+| `backfill.preserve_legacy_columns` | Optional safety invariant; when present it must be `true`. Normalized contracts always include it so they can be validated and executed again without weakening legacy-column preservation |
 | `constraints_and_indexes.primary_key` | One canonical key column and its reviewed constraint name |
 | `constraints_and_indexes.indexes` | Optional bounded list of reviewed secondary indexes |
 
