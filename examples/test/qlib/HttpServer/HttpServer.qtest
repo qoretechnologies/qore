@@ -1962,6 +1962,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
         assertEq(200, resp1.status_code);
         assertEq("started", resp1.body);
+        assertTrue(resp1."x-sock-key".val(),
+            "HTTP/1.x persistent handler receives cx.sock_key during initial dispatch");
         int tid1 = resp1."x-thread-id".toInt();
         assertTrue(tid1 > 0, "Thread ID should be positive");
 
@@ -4156,7 +4158,10 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
         if (path =~ /start$/) {
             # Start persistent mode
             setPersistent(True);
-            return makeResponse({"x-thread-id": string(tid)}, 200, "started");
+            return makeResponse({
+                "x-thread-id": string(tid),
+                "x-sock-key": cx.sock_key.toString(),
+            }, 200, "started");
         } else if (path =~ /continue$/) {
             # Continue in persistent mode (verify we're persistent)
             if (!isPersistent()) {
