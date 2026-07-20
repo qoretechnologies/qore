@@ -65,7 +65,14 @@ try {
     removed_exception = ex.err;
 }
 
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+string identity_map_sparse_exception = \"none\";
+try {
+    auto unused = (map $1, sparse).join(\", \");
+} catch (hash<ExceptionInfo> ex) {
+    identity_map_sparse_exception = ex.err;
+}
+
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     regular.join(\", \"),
     sparse.join(\", \"),
     all_missing.join(\", \"),
@@ -77,7 +84,11 @@ printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     mixed_result.encoding(),
     encoding_exception,
     unassigned_exception,
-    removed_exception);
+    removed_exception,
+    (map $1, regular).join(\", \"),
+    (map $1, empty).join(\", \"),
+    (map $1, singleton).join(\", \"),
+    identity_map_sparse_exception);
 ";
 
 string script_path = "/tmp/qore-aot-list-string-join-method-" + string(getpid()) + ".qr";
@@ -106,7 +117,8 @@ string sub runAot(string suffix, string env) {
 
 string expected = "alpha, beta, gamma|alpha, , gamma|, , ||solo|left/right|VS|"
     + "caf\u00e9 / d\u00e9j\u00e0|ISO-8859-1|ENCODING-CONVERSION-ERROR|"
-    + "PSEUDO-METHOD-DOES-NOT-EXIST|PSEUDO-METHOD-DOES-NOT-EXIST\n";
+    + "PSEUDO-METHOD-DOES-NOT-EXIST|PSEUDO-METHOD-DOES-NOT-EXIST|"
+    + "alpha, beta, gamma||solo|RUNTIME-TYPE-ERROR\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -121,10 +133,15 @@ if (ir_dump !~ /list\.string\.join/) {
     printf("typed list string join opcode missing from method IR dump:\n%s", ir_dump);
     exit(2);
 }
+if (ir_dump !~ /list\.string\.join\.identity-map/) {
+    printf("identity-map list string join opcode missing from method IR dump:\n%s", ir_dump);
+    exit(2);
+}
 
 hash<string, string> aot_modes = {
     "-enabled": "",
     "-fallback": "QORE_DISABLE_IR_LIST_STRING_JOIN_METHOD=1",
+    "-identity-fallback": "QORE_DISABLE_IR_METHOD_IDENTITY_MAP_STRING_JOIN=1",
 };
 foreach string suffix in (keys aot_modes) {
     string actual = runAot(suffix, aot_modes{suffix});

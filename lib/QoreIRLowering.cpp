@@ -5621,8 +5621,8 @@ void QoreIRLowering::markLocalUnassignmentFromExpression(const QoreValue& exp) {
 }
 
 bool QoreIRLowering::expressionCanThrow(const QoreValue& expr) const {
-    if (!expr.hasNode()) {
-        // Simple values (int, float, bool, NOTHING, etc.) can never throw
+    if (!expr.hasNode() || expr.isValue()) {
+        // Runtime values, including reference-counted constants, do not require evaluation.
         return false;
     }
     auto* node = dynamic_cast<const ParseNode*>(expr.getInternalNode());
@@ -10666,6 +10666,40 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 || separator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
             && QoreTypeInfo::isType(selectAnalysisType(separator_analysis), NT_STRING);
         if (base_ok && separator_ok) {
+            if (!std::getenv("QORE_DISABLE_IR_METHOD_IDENTITY_MAP_STRING_JOIN")
+                    && !separator_expr.hasEffect() && !expressionCanThrow(separator_expr)) {
+                const auto* map = dynamic_cast<const QoreMapOperatorNode*>(base_expr.getInternalNode());
+                const QoreValue* map_expr = map ? &map->getMapExpression() : nullptr;
+                const auto* identity_arg = map_expr
+                    ? dynamic_cast<const QoreImplicitArgumentNode*>(map_expr->getInternalNode()) : nullptr;
+                QoreParseAnalysis source_analysis;
+                bool identity_map = identity_arg && identity_arg->getOffset() == 0
+                    && !map_expr->hasEffect()
+                    && getAnalysis(map->getIteratorExpr(), source_analysis)
+                    && source_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (source_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || source_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+                if (identity_map) {
+                    const QoreTypeInfo* source_element_type = QoreTypeInfo::getUniqueReturnComplexList(
+                        selectAnalysisType(source_analysis));
+                    identity_map = source_element_type
+                        && QoreTypeInfo::parseReturns(source_element_type, NT_STRING) == QTI_IDENT;
+                }
+                if (identity_map) {
+                    QoreIRValue source = lowerExpression(map->getIteratorExpr(), error);
+                    if (!source.isValid()) {
+                        return QoreIRValue();
+                    }
+                    QoreIRValue separator = lowerExpression(separator_expr, error);
+                    if (!separator.isValid()) {
+                        return QoreIRValue();
+                    }
+                    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoinIdentityMap,
+                        expr, {separator, source}, op->loc, error);
+                    --ast_delegate_count;
+                    return result;
+                }
+            }
             QoreIRValue base = lowerExpression(base_expr, error);
             if (!base.isValid()) {
                 return QoreIRValue();
