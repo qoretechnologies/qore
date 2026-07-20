@@ -5080,7 +5080,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 object subtable = info.table.getSubtableFromString(args[1], info.query_options);
                 list<auto> subargs;
                 string subsql = subtable.getSelectSql(args[2], \subargs);
-                args += subargs;
+                # the subquery's bind arguments must go to the query's argument list; appending to the
+                # local parameter silently dropped them, executing the subquery with NULL binds and
+                # returning wrong (typically empty) results
+                info.args += subargs;
                 return sprintf("%s in (%s)", exp0, subsql);
             },
         },

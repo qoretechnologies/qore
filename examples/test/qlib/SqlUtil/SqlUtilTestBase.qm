@@ -1613,6 +1613,23 @@ public class SqlTestBase inherits QUnit::Test {
             "orderby": ("id",),
         }, \sql);
         assertEq((1, 2), (map $1.id.toInt(), rows), "where list with expression sub-where");
+
+        # the generic-expression in_select operator form must carry the subquery's bind
+        # arguments into the query's argument list; they were silently dropped (bound as
+        # NULL), returning wrong (typically empty) results
+        hash<DataProviderExpression> dp_in_select = <DataProviderExpression>{
+            "exp": "in_select",
+            "args": (<DataProviderFieldReference>{"field": "id"}, table.getName(), {
+                "columns": "id",
+                "where": sub_where,
+            }),
+        };
+        rows = table.selectRows({
+            "columns": ("id",),
+            "where": dp_in_select,
+            "orderby": ("id",),
+        }, \sql);
+        assertEq((2,), (map $1.id.toInt(), rows), "generic in_select expression with subquery binds");
     }
 
     groupByTest() {
