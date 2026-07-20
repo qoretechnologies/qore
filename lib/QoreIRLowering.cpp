@@ -10700,6 +10700,59 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     return result;
                 }
             }
+            if (!std::getenv("QORE_DISABLE_IR_METHOD_PIPELINE_STRING_JOIN")
+                    && separator_expr.getType() == NT_STRING && separator_expr.isValue()) {
+                QoreStringValueHelper separator_value(separator_expr);
+                std::vector<LazyPipelineStage> source_stages;
+                QoreValue base_source;
+                if (separator_value->getEncoding() == QCS_DEFAULT
+                        && !collectLazyPipelineStages(base_expr, base_source, source_stages, error)) {
+                    return QoreIRValue();
+                }
+                bool supported_pipeline = separator_value->getEncoding() == QCS_DEFAULT
+                    && !source_stages.empty() && source_stages.size() <= 2;
+                if (supported_pipeline && source_stages.size() == 2) {
+                    supported_pipeline = source_stages[0].kind == LazyPipelineStage::Select;
+                }
+                const LazyPipelineStage* final_stage = supported_pipeline ? &source_stages.back() : nullptr;
+                supported_pipeline = final_stage
+                    && (final_stage->kind == LazyPipelineStage::Map
+                        || final_stage->kind == LazyPipelineStage::MapSelect)
+                    && final_stage->primary
+                    && !dynamic_cast<const QoreImplicitArgumentNode*>(
+                        final_stage->primary->getInternalNode());
+                QoreParseAnalysis final_analysis;
+                supported_pipeline = supported_pipeline
+                    && getAnalysis(*final_stage->primary, final_analysis)
+                    && final_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && final_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    && QoreTypeInfo::isType(selectAnalysisType(final_analysis), NT_STRING);
+                QoreParseAnalysis source_analysis;
+                supported_pipeline = supported_pipeline
+                    && getAnalysis(base_source, source_analysis)
+                    && source_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (source_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || source_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                    && QoreTypeInfo::getUniqueReturnComplexList(selectAnalysisType(source_analysis));
+                if (supported_pipeline) {
+                    QoreIRValue separator = lowerConstant(separator_expr, error);
+                    if (!separator.isValid()) {
+                        return QoreIRValue();
+                    }
+                    LazyPipelineRoot root;
+                    root.kind = LazyPipelineRoot::MethodJoin;
+                    root.join_expr = &expr;
+                    root.join_separator = separator;
+                    root.list_element_type = stringTypeInfo;
+                    root.loc = op->loc;
+                    QoreIRValue result = lowerLazyPipelineFused(
+                        base_source, source_stages, root, error);
+                    if (result.isValid()) {
+                        --ast_delegate_count;
+                    }
+                    return result;
+                }
+            }
             QoreIRValue base = lowerExpression(base_expr, error);
             if (!base.isValid()) {
                 return QoreIRValue();
@@ -16263,8 +16316,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     bool need_result = root.need_result;
     bool build_result_list = root_list && need_result;
     bool root_foldl = root.kind == LazyPipelineRoot::Foldl;
+    bool root_method_join = root.kind == LazyPipelineRoot::MethodJoin;
+    bool root_accumulator = root_foldl || root_method_join;
 
-    QoreIRValue string_join_separator;
+    QoreIRValue string_join_separator = root_method_join ? root.join_separator : QoreIRValue();
     bool root_string_join = false;
     bool supported_string_join_pipeline = root_foldl && !source_stages.empty();
     bool filtered_string_join_pipeline = false;
@@ -16413,7 +16468,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     auto lower_string_join_op = [&](QoreIROpcode opcode, QoreIRValue accum_val,
             QoreIRValue element_val) -> QoreIRValue {
-        bool should_invoke = !exception_stack.empty() && expressionCanThrow(*root.fold_expr);
+        const QoreValue* join_expr = root_method_join ? root.join_expr : root.fold_expr;
+        assert(join_expr);
+        bool should_invoke = !exception_stack.empty()
+            && (root_method_join || expressionCanThrow(*join_expr));
         if (!should_invoke) {
             return builder.createTernaryOp(opcode, accum_val, string_join_separator,
                 element_val, loc)->result;
@@ -16424,7 +16482,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             error = "IR builder failed to create fused string join continuation block";
             return QoreIRValue();
         }
-        auto* inst = builder.createInvoke(*root.fold_expr,
+        auto* inst = builder.createInvoke(*join_expr,
             {accum_val, string_join_separator, element_val}, normal_block,
             exception_stack.back(), loc);
         inst->invoke_opcode = opcode;
@@ -16518,7 +16576,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         result_list = result_inst->result;
     }
-    if (root_foldl) {
+    if (root_accumulator) {
         fold_initial_accum = builder.createConstNothing(loc)->result;
         fold_initial_has_accum = builder.createConstBool(false, loc)->result;
         if (root_string_join) {
@@ -16593,7 +16651,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue fold_accum;
     QoreIRValue fold_has_accum;
     QoreIRValue fold_join_started;
-    if (root_foldl) {
+    if (root_accumulator) {
         fold_accum_phi = builder.createPhi({}, loc);
         fold_accum = fold_accum_phi->result;
         fold_has_accum_phi = builder.createPhi({}, loc);
@@ -16789,7 +16847,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             builder.createListAppend(result_list, element_val, loc);
             add_continue(state, loc);
         }
-    } else if (root_foldl) {
+    } else if (root_accumulator) {
         QoreIRBasicBlock* init_accum_block = createBlock("stream.fused.fold.init");
         QoreIRBasicBlock* fold_block = createBlock("stream.fused.fold.body");
         QoreIRBasicBlock* fold_cont_block = createBlock("stream.fused.fold.cont");
@@ -16803,14 +16861,31 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         QoreIRValue true_val = builder.createConstBool(true, loc)->result;
         QoreIRValue false_val = root_string_join
             ? builder.createConstBool(false, loc)->result : QoreIRValue();
-        QoreIRValue init_accum_val = builder.createRefSelf(element_val, loc)->result;
+        QoreIRValue init_accum_val;
+        if (root_method_join) {
+            QoreIRValue nothing = builder.createConstNothing(loc)->result;
+            init_accum_val = lower_string_join_op(
+                QoreIROpcode::StringMethodJoinStart, nothing, element_val);
+            if (!init_accum_val.isValid()) {
+                return QoreIRValue();
+            }
+        } else {
+            init_accum_val = builder.createRefSelf(element_val, loc)->result;
+        }
         QoreIRBasicBlock* init_accum_exit_block = builder.getBlock();
         builder.createBranch(fold_cont_block, loc);
 
         builder.setBlock(fold_block);
         QoreIRValue fold_result;
         QoreIRBasicBlock* fold_exit_block = nullptr;
-        if (root_string_join) {
+        if (root_method_join) {
+            fold_result = lower_string_join_op(
+                QoreIROpcode::StringJoinAppend, state.fold_accum, element_val);
+            if (!fold_result.isValid()) {
+                return QoreIRValue();
+            }
+            fold_exit_block = builder.getBlock();
+        } else if (root_string_join) {
             QoreIRBasicBlock* join_start_block = createBlock("stream.fused.join.start");
             QoreIRBasicBlock* join_append_block = createBlock("stream.fused.join.append");
             QoreIRBasicBlock* join_cont_block = createBlock("stream.fused.join.cont");
@@ -17044,7 +17119,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (use_typed_list_sink) {
         builder.createListSetLength(result_list, root_index_phi->result, loc);
     }
-    if (root_foldl) {
+    if (root_accumulator) {
         QoreIRBasicBlock* fold_result_block = createBlock("stream.fused.fold.result");
         QoreIRBasicBlock* fold_empty_block = createBlock("stream.fused.fold.empty");
         if (!fold_result_block || !fold_empty_block) {
@@ -17057,7 +17132,17 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         add_final(fold_accum_phi->result, loc);
 
         builder.setBlock(fold_empty_block);
-        add_final(builder.createConstNothing(loc)->result, loc);
+        if (root_method_join) {
+            QoreIRValue nothing = builder.createConstNothing(loc)->result;
+            QoreIRValue empty_result = lower_string_join_op(
+                QoreIROpcode::StringMethodJoinStart, nothing, nothing);
+            if (!empty_result.isValid()) {
+                return QoreIRValue();
+            }
+            add_final(empty_result, loc);
+        } else {
+            add_final(builder.createConstNothing(loc)->result, loc);
+        }
     } else if (root_list && needs_runtime_unwrap_check) {
         QoreIRBasicBlock* list_result_block = createBlock("stream.fused.list.result");
         QoreIRBasicBlock* unwrap_check_block = createBlock("stream.fused.unwrap.check");

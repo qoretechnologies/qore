@@ -48,7 +48,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 404,
+static_assert(QORE_IR_MAX_OPCODE == 405,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -11668,7 +11668,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // String concatenation does not modify locals.
 
             } else if ((inv->invoke_opcode == QoreIROpcode::StringJoinStart
-                        || inv->invoke_opcode == QoreIROpcode::StringJoinAppend)
+                        || inv->invoke_opcode == QoreIROpcode::StringJoinAppend
+                        || inv->invoke_opcode == QoreIROpcode::StringMethodJoinStart)
                     && inv->operands.size() >= 3) {
                 auto* first = getVal(inv->operands[0].id, error);
                 auto* separator = getVal(inv->operands[1].id, error);
@@ -11678,7 +11679,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* separator_boxed = boxValue(separator, inv->operands[1].id);
                 llvm::Value* value_boxed = boxValue(value, inv->operands[2].id);
                 const char* helper_name = inv->invoke_opcode == QoreIROpcode::StringJoinStart
-                    ? "qore_rt_string_join_start" : "qore_rt_string_join_append";
+                    ? "qore_rt_string_join_start"
+                    : inv->invoke_opcode == QoreIROpcode::StringJoinAppend
+                        ? "qore_rt_string_join_append" : "qore_rt_string_method_join_start";
                 auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type,
                             {i64_type, i64_type, i64_type, ptr_type}, false));
@@ -21884,7 +21887,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::StringJoinStart:
-        case QoreIROpcode::StringJoinAppend: {
+        case QoreIROpcode::StringJoinAppend:
+        case QoreIROpcode::StringMethodJoinStart: {
             auto* first = getVal(inst->operands[0].id, error);
             auto* separator = getVal(inst->operands[1].id, error);
             auto* value = getVal(inst->operands[2].id, error);
@@ -21893,7 +21897,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* separator_boxed = boxValue(separator, inst->operands[1].id);
             llvm::Value* value_boxed = boxValue(value, inst->operands[2].id);
             const char* helper_name = inst->opcode == QoreIROpcode::StringJoinStart
-                ? "qore_rt_string_join_start" : "qore_rt_string_join_append";
+                ? "qore_rt_string_join_start"
+                : inst->opcode == QoreIROpcode::StringJoinAppend
+                    ? "qore_rt_string_join_append" : "qore_rt_string_method_join_start";
             auto helper = module.getOrInsertFunction(helper_name,
                     llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, i64_type, ptr_type}, false));

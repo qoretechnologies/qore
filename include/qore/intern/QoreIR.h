@@ -749,7 +749,10 @@ enum class QoreIROpcode : uint16_t {
     //! Join the dense result of an identity map over an exact list<string>.
     ListStringJoinIdentityMap = 404,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (405, 406, ...)
+    //! Start a pseudo-method join accumulator in the separator's encoding.
+    StringMethodJoinStart = 405,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (406, 407, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -758,8 +761,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListStringJoinIdentityMap);
-static_assert(QORE_IR_MAX_OPCODE == 404, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::StringMethodJoinStart);
+static_assert(QORE_IR_MAX_OPCODE == 405, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

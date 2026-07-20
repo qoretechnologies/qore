@@ -292,11 +292,14 @@ private:
             Streaming,
             List,
             Foldl,
+            MethodJoin,
         };
 
         Kind kind;
         const QoreStreamingOperatorNode* streaming = nullptr;
         const QoreValue* fold_expr = nullptr;
+        const QoreValue* join_expr = nullptr;
+        QoreIRValue join_separator;
         const QoreTypeInfo* list_element_type = nullptr;
         const QoreProgramLocation* loc = nullptr;
         bool need_result = true;

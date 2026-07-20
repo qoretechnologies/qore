@@ -226,6 +226,15 @@ int sub sprintfMapJoin(list<int> data, int rounds) {
     return checksum;
 }
 
+int sub methodSprintfMapJoin(list<int> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (map sprintf("item-%04d", $1), data).join(", ");
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 int sub appendLocalString(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -312,6 +321,9 @@ switch (kernel) {
         break;
     case "sprintf-map-join":
         printf("%d\n", sprintfMapJoin(makeIntData(), rounds));
+        break;
+    case "method-sprintf-map-join":
+        printf("%d\n", methodSprintfMapJoin(makeIntData(), rounds));
         break;
     case "append-local-string":
         printf("%d\n", appendLocalString(rounds));

@@ -273,6 +273,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_list_string_join_identity_map_checked) },
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
+    { "qore_rt_string_method_join_start", reinterpret_cast<void*>(&qore_rt_string_method_join_start) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
     { "qore_rt_string_append_cow", reinterpret_cast<void*>(&qore_rt_string_append_cow) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
@@ -6795,6 +6796,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
     }
     result->ref();
     return toBits(accumulator);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
+        uint64_t, uint64_t separator_bits, uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue value = fromBits(value_bits);
+    if (separator_value.getType() != NT_STRING || !qore_rt_is_optional_string(value)) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in fused method string join");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreStringValueHelper separator(separator_value);
+    QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
+    if (value.getType() == NT_STRING) {
+        QoreStringValueHelper string(value, separator->getEncoding(), xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        qore_string_private::get(*result)->concat(*string);
+    }
+    return toBits(QoreValue(result.release()));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(

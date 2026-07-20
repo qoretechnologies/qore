@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 404,
+static_assert(QORE_IR_MAX_OPCODE == 405,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4377,7 +4377,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::RangeSliceInt:
         case QoreIROpcode::RangeSliceFloat:
         case QoreIROpcode::StringJoinStart:
-        case QoreIROpcode::StringJoinAppend: {
+        case QoreIROpcode::StringJoinAppend:
+        case QoreIROpcode::StringMethodJoinStart: {
             if (inv->operands.size() < 3) {
                 if (xsink) {
                     xsink->raiseException("IR-EXEC-ERROR",
@@ -11880,6 +11881,7 @@ load_local_done:
             case QoreIROpcode::HashMap:
             case QoreIROpcode::StringJoinStart:
             case QoreIROpcode::StringJoinAppend:
+            case QoreIROpcode::StringMethodJoinStart:
             case QoreIROpcode::SprintfIntFixed: {
                 QoreValue res;
                 if (inst->operands.empty()) {
@@ -16451,6 +16453,9 @@ QoreValue QoreIRInterpreter::evalTernary(QoreIROpcode op, const QoreValue& first
             return fromBits(qore_rt_string_join_start(toBits(first), toBits(second), toBits(third), xsink));
         case QoreIROpcode::StringJoinAppend:
             return fromBits(qore_rt_string_join_append(toBits(first), toBits(second), toBits(third), xsink));
+        case QoreIROpcode::StringMethodJoinStart:
+            return fromBits(qore_rt_string_method_join_start(
+                toBits(first), toBits(second), toBits(third), xsink));
         case QoreIROpcode::SprintfIntFixed:
             return fromBits(qore_rt_sprintf_int_fixed(toBits(first), toBits(second), third.getAsBigInt()));
         default:
