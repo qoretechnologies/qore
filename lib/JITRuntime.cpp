@@ -274,6 +274,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
     { "qore_rt_string_method_join_start", reinterpret_cast<void*>(&qore_rt_string_method_join_start) },
+    { "qore_rt_list_int_sprintf_join", reinterpret_cast<void*>(&qore_rt_list_int_sprintf_join) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
     { "qore_rt_string_append_cow", reinterpret_cast<void*>(&qore_rt_string_append_cow) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
@@ -6821,18 +6822,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_method_join_start(
     return toBits(QoreValue(result.release()));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(
-        uint64_t literal_bits, uint64_t value_bits, int64_t metadata) {
-    QoreValue literal_value = fromBits(literal_bits);
-    if (literal_value.getType() != NT_STRING) {
-        return toBits(QoreValue());
-    }
-
-    QoreStringValueHelper literal(literal_value);
+static bool qore_rt_build_fixed_int_format(
+        int64_t metadata, size_t literal_size, size_t& prefix_size, char (&format)[32]) {
     uint64_t packed = static_cast<uint64_t>(metadata);
-    size_t prefix_size = static_cast<uint32_t>(packed);
-    if (prefix_size > literal->size()) {
-        return toBits(QoreValue());
+    prefix_size = static_cast<uint32_t>(packed);
+    if (prefix_size > literal_size) {
+        return false;
     }
 
     constexpr uint64_t LEFT = 1;
@@ -6842,7 +6837,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(
     uint64_t flags = (packed >> 32) & 0xf;
     uint64_t encoded_width = packed >> 36;
 
-    char format[32];
     char* pos = format;
     *pos++ = '%';
     if (flags & LEFT) {
@@ -6870,12 +6864,92 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(
 #endif
     *pos++ = 'd';
     *pos = '\0';
+    return true;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_sprintf_int_fixed(
+        uint64_t literal_bits, uint64_t value_bits, int64_t metadata) {
+    QoreValue literal_value = fromBits(literal_bits);
+    if (literal_value.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    QoreStringValueHelper literal(literal_value);
+    size_t prefix_size;
+    char format[32];
+    if (!qore_rt_build_fixed_int_format(metadata, literal->size(), prefix_size, format)) {
+        return toBits(QoreValue());
+    }
 
     QoreStringNodeHolder result(new QoreStringNode(literal->getEncoding()));
     result->reserve(literal->size() + 32);
     result->concat(literal->getBuffer(), prefix_size);
     result->sprintf(format, fromBits(value_bits).getAsBigInt());
     result->concat(literal->getBuffer() + prefix_size, literal->size() - prefix_size);
+    return toBits(QoreValue(result.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_int_sprintf_join(
+        uint64_t separator_bits, uint64_t list_bits, uint64_t literal_bits,
+        int64_t metadata, ExceptionSink* xsink) {
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue list_value = fromBits(list_bits);
+    QoreValue literal_value = fromBits(literal_bits);
+    if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST
+            || literal_value.getType() != NT_STRING) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid value in fused list<int> sprintf join");
+        }
+        return toBits(QoreValue());
+    }
+
+    QoreStringValueHelper separator(separator_value);
+    QoreStringValueHelper literal(literal_value);
+    if (separator->getEncoding() != literal->getEncoding()) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "incompatible internal encodings in fused sprintf join");
+        }
+        return toBits(QoreValue());
+    }
+    size_t prefix_size;
+    char format[32];
+    if (!qore_rt_build_fixed_int_format(metadata, literal->size(), prefix_size, format)) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid fixed sprintf metadata in fused join");
+        }
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = list_value.get<const QoreListNode>();
+    size_t size = list->size();
+    QoreStringNodeHolder result(new QoreStringNode(separator->getEncoding()));
+    size_t per_element = literal->size() + 32;
+    bool reserve_ok = !size || per_element <= std::numeric_limits<size_t>::max() / size;
+    size_t reserve_size = reserve_ok ? per_element * size : 0;
+    if (reserve_ok && size > 1) {
+        size_t separator_count = size - 1;
+        reserve_ok = !separator->size()
+            || separator_count <= (std::numeric_limits<size_t>::max() - reserve_size) / separator->size();
+        if (reserve_ok) {
+            reserve_size += separator_count * separator->size();
+        }
+    }
+    if (reserve_ok) {
+        result->reserve(reserve_size);
+    }
+
+    qore_string_private* result_priv = qore_string_private::get(*result);
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "fused list int sprintf join")) {
+            return toBits(QoreValue());
+        }
+        if (i) {
+            result_priv->concat(*separator);
+        }
+        result->concat(literal->getBuffer(), prefix_size);
+        result->sprintf(format, list->retrieveEntry(i).getAsBigInt());
+        result->concat(literal->getBuffer() + prefix_size, literal->size() - prefix_size);
+    }
     return toBits(QoreValue(result.release()));
 }
 

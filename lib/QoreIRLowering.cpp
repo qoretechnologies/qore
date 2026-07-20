@@ -10590,6 +10590,16 @@ static bool qore_ir_method_target_is_final(const QoreClass* qc,
     return method_variant && method_variant->isFinal();
 }
 
+struct QoreIRFixedSprintfIntFormat {
+    std::string literal;
+    int64_t metadata = 0;
+};
+
+static bool qore_ir_get_positional_call_args_no_holes(const QoreParseListNode* parse_args,
+    const QoreListNode* args, size_t nargs, std::vector<QoreValue>& positional_args);
+static bool qore_ir_parse_fixed_sprintf_int(
+    const QoreValue& format_value, QoreIRFixedSprintfIntFormat& result);
+
 QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
@@ -10696,6 +10706,61 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     }
                     QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoinIdentityMap,
                         expr, {separator, source}, op->loc, error);
+                    --ast_delegate_count;
+                    return result;
+                }
+            }
+            if (!std::getenv("QORE_DISABLE_IR_LIST_INT_SPRINTF_JOIN")
+                    && separator_expr.getType() == NT_STRING && separator_expr.isValue()) {
+                QoreStringValueHelper separator_value(separator_expr);
+                const auto* map = separator_value->getEncoding() == QCS_DEFAULT
+                    ? dynamic_cast<const QoreMapOperatorNode*>(base_expr.getInternalNode()) : nullptr;
+                const auto* sprintf_call = map
+                    ? dynamic_cast<const FunctionCallNode*>(map->getMapExpression().getInternalNode()) : nullptr;
+                const AbstractQoreFunctionVariant* variant = sprintf_call ? sprintf_call->getVariant() : nullptr;
+                const FunctionEntry* fe = sprintf_call ? sprintf_call->getFunctionEntry() : nullptr;
+                std::string namespace_path;
+                if (fe && fe->getNamespace()) {
+                    fe->getNamespace()->getPath(namespace_path);
+                }
+                std::vector<QoreValue> sprintf_args;
+                QoreIRFixedSprintfIntFormat format;
+                bool sprintf_map = sprintf_call && sprintf_call->getName()
+                    && !strcmp(sprintf_call->getName(), "sprintf")
+                    && !sprintf_call->hasExplicitTypeArgs()
+                    && variant && !variant->isUser() && fe && fe->hasBuiltin()
+                    && namespace_path == "Qore"
+                    && qore_ir_get_positional_call_args_no_holes(
+                        sprintf_call->getParseArgs(), sprintf_call->getArgs(), 2, sprintf_args)
+                    && qore_ir_parse_fixed_sprintf_int(sprintf_args[0], format);
+                const auto* implicit_arg = sprintf_map
+                    ? dynamic_cast<const QoreImplicitArgumentNode*>(
+                        sprintf_args[1].getInternalNode()) : nullptr;
+                QoreParseAnalysis source_analysis;
+                sprintf_map = implicit_arg && implicit_arg->getOffset() == 0
+                    && getAnalysis(map->getIteratorExpr(), source_analysis)
+                    && source_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                    && (source_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                        || source_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+                if (sprintf_map) {
+                    const QoreTypeInfo* source_element_type = QoreTypeInfo::getUniqueReturnComplexList(
+                        selectAnalysisType(source_analysis));
+                    sprintf_map = source_element_type
+                        && QoreTypeInfo::parseReturns(source_element_type, NT_INT) == QTI_IDENT;
+                }
+                if (sprintf_map) {
+                    QoreIRValue source = lowerExpression(map->getIteratorExpr(), error);
+                    if (!source.isValid()) {
+                        return QoreIRValue();
+                    }
+                    QoreIRValue separator = lowerConstant(separator_expr, error);
+                    if (!separator.isValid()) {
+                        return QoreIRValue();
+                    }
+                    QoreIRValue literal = builder.createConstString(format.literal, op->loc)->result;
+                    QoreIRValue metadata = builder.createConstInt(format.metadata, op->loc)->result;
+                    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListIntSprintfJoin,
+                        expr, {separator, source, literal, metadata}, op->loc, error);
                     --ast_delegate_count;
                     return result;
                 }
@@ -11875,17 +11940,15 @@ bool QoreIRLowering::overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction
         && directCallVariantMayRejectRuntimeNothing(variant, parse_args, args);
 }
 
-struct QoreIRFixedSprintfIntFormat {
-    std::string literal;
-    int64_t metadata = 0;
-};
-
 static bool qore_ir_parse_fixed_sprintf_int(const QoreValue& format_value,
         QoreIRFixedSprintfIntFormat& result) {
     if (format_value.getType() != NT_STRING || !format_value.isValue()) {
         return false;
     }
     QoreStringValueHelper format(format_value);
+    if (format->getEncoding() != QCS_DEFAULT) {
+        return false;
+    }
     const char* str = format->getBuffer();
     size_t size = format->size();
     if (!str || size > std::numeric_limits<uint32_t>::max()) {

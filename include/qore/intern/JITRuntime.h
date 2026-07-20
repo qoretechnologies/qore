@@ -902,6 +902,10 @@ uint64_t qore_rt_string_join_append(uint64_t accumulator, uint64_t separator, ui
 uint64_t qore_rt_string_method_join_start(uint64_t unused, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);
 
+//! Format an exact list<int> with fixed %d metadata and join it in one pass.
+uint64_t qore_rt_list_int_sprintf_join(uint64_t separator, uint64_t list, uint64_t literal,
+        int64_t metadata, ExceptionSink* xsink);
+
 //! Format one boxed integer according to compiler-validated fixed %d metadata.
 uint64_t qore_rt_sprintf_int_fixed(uint64_t literal, uint64_t value, int64_t metadata);
 

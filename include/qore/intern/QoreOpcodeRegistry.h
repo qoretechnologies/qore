@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[406] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[407] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -464,12 +464,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[406] = {
     { "FoldrStringJoin"                , true , false, false,  2, "Reverse-join exact list<string> with a constant separator", false, true , "FoldrOperatorNode", true , false, true , false, true  }, // 403
     { "ListStringJoinIdentityMap"      , false, true , false,  2, "Join dense identity-map result over exact list<string>", false, true , "FunctionCallNode", true , false, true , false, true  }, // 404
     { "StringMethodJoinStart"          , false, true , false,  3, "Start owned method-join accumulator in separator encoding", false, true , "QoreDotEvalOperatorNode", true , false, true , false, false }, // 405
+    { "ListIntSprintfJoin"             , false, true , false,  4, "Format exact list<int> and join in one pass", false, true , "QoreDotEvalOperatorNode", true , false, true , false, false }, // 406
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 406,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 406"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 407,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 407"
 );
 
 //! ============================================================================

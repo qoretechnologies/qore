@@ -48,7 +48,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 405,
+static_assert(QORE_IR_MAX_OPCODE == 406,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -11689,6 +11689,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     {first_boxed, separator_boxed, value_boxed, xsink_arg});
                 // The owned accumulator is internal to the fused fold.
 
+            } else if (inv->invoke_opcode == QoreIROpcode::ListIntSprintfJoin
+                    && inv->operands.size() >= 4) {
+                auto* separator = getVal(inv->operands[0].id, error);
+                auto* list = getVal(inv->operands[1].id, error);
+                auto* literal = getVal(inv->operands[2].id, error);
+                auto* metadata = getVal(inv->operands[3].id, error);
+                if (!separator || !list || !literal || !metadata) { return false; }
+                llvm::Value* separator_boxed = boxValue(separator, inv->operands[0].id);
+                llvm::Value* list_boxed = boxValue(list, inv->operands[1].id);
+                llvm::Value* literal_boxed = boxValue(literal, inv->operands[2].id);
+                llvm::Value* metadata_int = ensureIntTypeInline(metadata, inv->operands[3].id);
+                auto helper = module.getOrInsertFunction("qore_rt_list_int_sprintf_join",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                    {separator_boxed, list_boxed, literal_boxed, metadata_int, xsink_arg});
+
             } else if ((inv->invoke_opcode == QoreIROpcode::EqString
                         || inv->invoke_opcode == QoreIROpcode::NeString
                         || inv->invoke_opcode == QoreIROpcode::LtString
@@ -21905,6 +21922,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {i64_type, i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper,
                 {first_boxed, separator_boxed, value_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::ListIntSprintfJoin: {
+            auto* separator = getVal(inst->operands[0].id, error);
+            auto* list = getVal(inst->operands[1].id, error);
+            auto* literal = getVal(inst->operands[2].id, error);
+            auto* metadata = getVal(inst->operands[3].id, error);
+            if (!separator || !list || !literal || !metadata) { return false; }
+            llvm::Value* separator_boxed = boxValue(separator, inst->operands[0].id);
+            llvm::Value* list_boxed = boxValue(list, inst->operands[1].id);
+            llvm::Value* literal_boxed = boxValue(literal, inst->operands[2].id);
+            llvm::Value* metadata_int = ensureIntTypeInline(metadata, inst->operands[3].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_int_sprintf_join",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper,
+                {separator_boxed, list_boxed, literal_boxed, metadata_int, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

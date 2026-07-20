@@ -752,7 +752,10 @@ enum class QoreIROpcode : uint16_t {
     //! Start a pseudo-method join accumulator in the separator's encoding.
     StringMethodJoinStart = 405,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (406, 407, ...)
+    //! Format an exact list<int> with fixed sprintf metadata and join in one pass.
+    ListIntSprintfJoin = 406,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (407, 408, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -761,8 +764,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::StringMethodJoinStart);
-static_assert(QORE_IR_MAX_OPCODE == 405, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ListIntSprintfJoin);
+static_assert(QORE_IR_MAX_OPCODE == 406, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

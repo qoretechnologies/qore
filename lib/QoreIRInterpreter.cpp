@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 405,
+static_assert(QORE_IR_MAX_OPCODE == 406,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4391,6 +4391,21 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue second = getIRValue(values, inv->operands[1]);
             QoreValue third = getIRValue(values, inv->operands[2]);
             return QoreIRInterpreter::evalTernary(op, first, second, third, xsink);
+        }
+        case QoreIROpcode::ListIntSprintfJoin: {
+            if (inv->operands.size() < 4) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR",
+                        "fused sprintf join requires four operands; got %zu", inv->operands.size());
+                }
+                return QoreValue();
+            }
+            QoreValue separator = getIRValue(values, inv->operands[0]);
+            QoreValue list = getIRValue(values, inv->operands[1]);
+            QoreValue literal = getIRValue(values, inv->operands[2]);
+            QoreValue metadata = getIRValue(values, inv->operands[3]);
+            return fromBits(qore_rt_list_int_sprintf_join(
+                toBits(separator), toBits(list), toBits(literal), metadata.getAsBigInt(), xsink));
         }
         // Regex match/nmatch: use operand value instead of AST expression's left operand
         case QoreIROpcode::RegexMatchAny:
@@ -11902,6 +11917,33 @@ load_local_done:
                     QoreValue third = getIRValue(values, inst->operands[2]);
                     res = QoreIRInterpreter::evalTernary(inst->opcode, first, second, third, xsink);
                 }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ListIntSprintfJoin: {
+                if (inst->operands.size() < 4) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "fused sprintf join missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue separator = getIRValue(values, inst->operands[0]);
+                QoreValue list = getIRValue(values, inst->operands[1]);
+                QoreValue literal = getIRValue(values, inst->operands[2]);
+                QoreValue metadata = getIRValue(values, inst->operands[3]);
+                QoreValue res = fromBits(qore_rt_list_int_sprintf_join(
+                    toBits(separator), toBits(list), toBits(literal), metadata.getAsBigInt(), xsink));
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
