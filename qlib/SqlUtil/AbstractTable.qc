@@ -6057,7 +6057,10 @@ string sql = table.getSelectSql(sh, \args);
                     throw "WHERE-ERROR", sprintf("expected \"hash\" in \"where\" list; got type %y instead",
                         c.fullType());
                 }
-                owl = getWhereClauseListIntern(\info, cast<hash>(c), cprefix);
+                # pass the hash through without coercing to plain "hash": that conversion recursively strips
+                # nested runtime types, destroying hash<DataProviderExpression> sub-wheres in operator
+                # arguments (e.g. op_in_select() subquery hashes)
+                owl = getWhereClauseListIntern(\info, c, cprefix);
                 if (owl) {
                     wl += "(" + (foldl $1 + " and " + $2, owl) + ")";
                 }
@@ -6070,7 +6073,8 @@ string sql = table.getSelectSql(sh, \args);
                 throw "WHERE-ERROR", sprintf("expected \"hash\" or \"list\" in \"where\" argument; got type %y "
                     "instead", cond.fullType());
             }
-            wl = getWhereClauseListIntern(\info, cast<hash>(cond), cprefix);
+            # no plain-"hash" coercion here either; see the comment in the list branch above
+            wl = getWhereClauseListIntern(\info, cond, cprefix);
             if (wl) {
                 return " where " + (foldl $1 + " and " + $2, wl);
             }

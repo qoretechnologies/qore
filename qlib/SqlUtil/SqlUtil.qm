@@ -39,7 +39,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.1.0";
+    version = "3.2.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -111,8 +111,16 @@ module SqlUtil {
       - @ref dba_indexes
       - @ref dba_statistics
       - @ref dba_space_management
+    - @ref SqlUtil::RestartableTransaction "RestartableTransaction": bounded,
+      driver-independent restart decisions for complete idempotent transaction
+      bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_2_0 SqlUtil v3.2.0
+    - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
+      bounded, driver-independent recovery of complete idempotent transaction
+      bodies after database failover and datasource-pool timeout errors
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
@@ -5080,7 +5088,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 object subtable = info.table.getSubtableFromString(args[1], info.query_options);
                 list<auto> subargs;
                 string subsql = subtable.getSelectSql(args[2], \subargs);
-                args += subargs;
+                # the subquery's bind arguments must go to the query's argument list; appending to the
+                # local parameter silently dropped them, executing the subquery with NULL binds and
+                # returning wrong (typically empty) results
+                info.args += subargs;
                 return sprintf("%s in (%s)", exp0, subsql);
             },
         },
@@ -7083,8 +7094,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @endcode
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
+
+        @note the parameter is typed \c hash<auto> so the wrapped operator hash is passed through unchanged;
+        a plain \c hash parameter would coerce the argument, recursively stripping nested runtime types and
+        destroying hash<DataProviderExpression> sub-wheres in wrapped operators (e.g. @ref op_in_select())
     */
-    public hash<OperatorInfo> sub op_not(hash arg) {
+    public hash<OperatorInfo> sub op_not(hash<auto> arg) {
         return make_op(OP_NOT, arg);
     }
 

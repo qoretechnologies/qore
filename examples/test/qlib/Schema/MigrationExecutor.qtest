@@ -4,10 +4,9 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Schema
-%requires SqlUtil
-
-%requires QUnit
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/QUnit.qmod
 
 %exec-class MigrationExecutorTest
 
@@ -110,7 +109,8 @@ class MigrationExecutorTest inherits QUnit::Test {
         foreach string action in (("update", "insert", "delete", "insert_from_select",
                 "add_column", "drop_column", "modify_column", "rename_column",
                 "rename_table", "add_index", "drop_index",
-                "add_constraint", "drop_constraint", "add_trigger", "drop_trigger")) {
+                "add_constraint", "drop_constraint", "add_trigger", "drop_trigger",
+                "reconcile_table")) {
             assertTrue(Schema::UnrestrictedActions{action}, sprintf("%s should be unrestricted", action));
         }
 
@@ -246,7 +246,7 @@ class MigrationExecutorTest inherits QUnit::Test {
 
         # Verify all action types are in either UnrestrictedActions or RestrictedActions
         hash<string, bool> all_actions = Schema::UnrestrictedActions + Schema::RestrictedActions;
-        assertEq(17, all_actions.size());  # 15 unrestricted + 2 restricted
+        assertEq(18, all_actions.size());  # 16 unrestricted + 2 restricted
 
         # Empty steps list
         assertEq(0, Schema::MigrationExecutor::resolveStepOrder(()).size());
@@ -270,6 +270,7 @@ class MigrationExecutorTest inherits QUnit::Test {
             "add_column", "drop_column", "modify_column", "rename_column",
             "rename_table", "add_index", "drop_index",
             "add_constraint", "drop_constraint", "add_trigger", "drop_trigger",
+            "reconcile_table",
         );
         foreach string action in (expected_unrestricted) {
             assertTrue(Schema::UnrestrictedActions{action},

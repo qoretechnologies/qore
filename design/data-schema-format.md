@@ -452,6 +452,7 @@ where that column already exists.
 | `rename_table` | `table`, `to` | Rename a table |
 | `add_trigger` | `table`, `name`, `source` | Add a trigger |
 | `drop_trigger` | `table`, `name` | Drop a trigger |
+| `reconcile_table` | `contract` | Apply a closed, additive, data-preserving table reconciliation with bounded backfill, quarantine, indexes, and verification |
 
 **Restricted actions** (require `trusted` or `admin` access level):
 
@@ -459,6 +460,105 @@ where that column already exists.
 |--------|----------------|-------------|
 | `sql` | `statements` | Execute raw SQL |
 | `script` | `file` | Execute a .qr migration script |
+
+#### Additive table reconciliation
+
+`reconcile_table` is a closed, database-independent migration action for
+reconciling an existing table with a reviewed canonical definition without
+dropping or renaming live data. It is designed for migrations that need more
+control than normal table alignment: a complete conversion preflight, bounded
+restartable backfill, quarantine of rows that cannot be converted, and
+deterministic post-migration verification.
+
+The action accepts one `contract`:
+
+```yaml
+- action: reconcile_table
+  contract:
+    contract_version: 1
+    migration_id: users-canonical-id
+    table: users
+    canonical_columns:
+      - name: user_id
+        type: int
+        notnull: true
+        primary_key: true
+        missing_live: true
+      - name: display_name
+        type: string
+        size: 240
+        notnull: true
+        missing_live: true
+    column_mappings:
+      - target: user_id
+        source: id
+        source_kind: legacy_column
+        conversion: numeric_compatible
+      - target: display_name
+        source: name
+        source_kind: legacy_column
+        conversion: to_string
+    backfill:
+      batch_size: 1000
+      quarantine_table: users_schema_quarantine
+    constraints_and_indexes:
+      primary_key:
+        name: pk_users
+        columns: [user_id]
+      indexes:
+        - name: idx_users_display_name
+          columns: [display_name]
+          unique: false
+```
+
+The contract fields are:
+
+| Field | Meaning |
+|-------|---------|
+| `contract_version` | Must be `1` |
+| `migration_id` | Stable identifier used to make quarantine handling idempotent |
+| `table` | Existing table to reconcile |
+| `canonical_columns` | Closed list of canonical column definitions; supported logical types are `date`, `number`, `int`, `float`, `bool`, `string`, and `binary` |
+| `canonical_columns[].missing_live` | Records that the reviewed evidence found the column absent; only these columns may be added or have their nullability tightened |
+| `column_mappings` | Exactly one source mapping for every canonical column |
+| `backfill.batch_size` | Number of rows processed per restartable transaction, from 1 through 10,000 |
+| `backfill.quarantine_table` | Separate table that preserves rows that fail conversion before removing them from active processing |
+| `backfill.preserve_legacy_columns` | Optional safety invariant; when present it must be `true`. Normalized contracts always include it so they can be validated and executed again without weakening legacy-column preservation |
+| `constraints_and_indexes.primary_key` | One canonical key column and its reviewed constraint name |
+| `constraints_and_indexes.indexes` | Optional bounded list of reviewed secondary indexes |
+
+Mapping `source_kind` values are `existing_column`, `legacy_column`,
+`constant_null`, `schema_default`, and `empty_table_initialization`.
+`empty_table_initialization` is accepted only when the table is still empty at
+execution time. Supported conversion labels are `identity`, `to_timestamp`,
+`numeric_compatible`, `to_number`, `string_size_validation`, `to_string`,
+`validated_cast`, `none`, and `schema_default`; all conversions still use the
+closed target type and size checks.
+
+Before its first material change, the action validates identifiers and bounds,
+checks the current table and source columns, requires a unique single-column
+cursor for non-empty tables, validates existing index definitions, and scans
+every active row for conversion safety. DML is committed in bounded,
+restartable batches. A row that cannot be converted is first copied to the
+quarantine table with the migration ID and reason, then removed from the
+active table in the same transaction. Existing columns are never dropped or
+narrowed, and legacy columns are retained.
+
+Successful execution returns bounded aggregate evidence: material change
+count, before/after active and quarantine row counts, and deterministic
+verification results. It does not return row values. Re-executing the same
+contract is idempotent.
+
+Embedding applications can pass `ddl_change_callback` in
+`SchemaOptionInfo`, or to `Schema::execute_migration_action()`. The callback
+receives the actual datasource object and the affected table names after
+committed DDL. This lets an application associate the change with its own
+named datasource without putting application-specific names in the
+DataSchema. An empty affected-table list means that all cached metadata for
+that datasource must be invalidated; this is used for raw SQL and scripts
+whose exact DDL targets cannot be determined. If a DDL operation fails, the
+callback is invoked conservatively because some database drivers auto-commit
+DDL before reporting a later error.
 
 ### Step Dependencies
 

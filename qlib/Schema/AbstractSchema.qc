@@ -95,6 +95,10 @@ public namespace Schema {
             #! the info callback for schema operations; can be used for explicit logging
             code info_callback;
 
+            #! optional datasource-aware callback for invalidating external table metadata caches
+            *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
+                ddl_change_callback;
+
             #! explicit data tablespace name
             *string data_ts;
 
@@ -246,12 +250,18 @@ public namespace Schema {
 
             on_error {
                 ds.rollback();
+                if (list<string> tables = sch.getChangedTables()) {
+                    notifyDdlChangeNoThrow(tables);
+                }
                 if (verbose > 0) {
                     logpf("ALIGNMENT ROLLED BACK");
                 }
             }
             on_success {
                 ds.commit();
+                if (list<string> tables = sch.getChangedTables()) {
+                    notifyDdlChange(tables);
+                }
                 if (verbose > 0) {
                     logpf("COMMITTED ALIGNMENT");
                 }
@@ -389,8 +399,18 @@ public namespace Schema {
                 sch.sql_cache = ();
             }
 
-            on_success ds.commit();
-            on_error ds.rollback();
+            on_success {
+                ds.commit();
+                if (list<string> tables = sch.getChangedTables()) {
+                    notifyDdlChange(tables);
+                }
+            }
+            on_error {
+                ds.rollback();
+                if (list<string> tables = sch.getChangedTables()) {
+                    notifyDdlChangeNoThrow(tables);
+                }
+            }
 
 %ifndef QoreDebug
             db.getDropSchemaSql(schema, callback_opts);
@@ -548,6 +568,7 @@ public namespace Schema {
             version = getVersion();
             data_ts = opts.data_ts;
             index_ts = opts.index_ts;
+            ddl_change_callback = opts.ddl_change_callback;
 
             drv = ds.getDriverName();
 
@@ -568,6 +589,40 @@ public namespace Schema {
                 "packages": getPackages(),
                 "materialized_views": getMaterializedViews(),
             };
+        }
+
+        #! Notifies an external cache after table metadata can have changed
+        /** @param tables affected table names; an empty list means every
+            table for the datasource
+
+            @throw SCHEMA-DDL-CHANGE-CALLBACK-ERROR if the callback fails
+
+            @since Schema 1.7
+        */
+        private notifyDdlChange(list<string> tables) {
+            if (!ddl_change_callback) {
+                return;
+            }
+            try {
+                ddl_change_callback(ds, tables);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "SCHEMA-DDL-CHANGE-CALLBACK-ERROR", sprintf(
+                    "DDL was applied, but the datasource metadata callback "
+                        "failed: %s: %s", ex.err, ex.desc);
+            }
+        }
+
+        #! Best-effort cache invalidation that preserves an active exception
+        private notifyDdlChangeNoThrow(list<string> tables) {
+            if (!ddl_change_callback) {
+                return;
+            }
+            try {
+                ddl_change_callback(ds, tables);
+            } catch (hash<ExceptionInfo> ex) {
+                logpf("DDL metadata callback failed while preserving an "
+                    "active schema error: %s: %s", ex.err, ex.desc);
+            }
         }
 
         #! returns the name of the schema

@@ -249,7 +249,8 @@ public class DataSchema inherits AbstractVersionedSchema {
     */
     private bool checkUpgrade(string current_version) {
         if (schema_data.migrations) {
-            MigrationExecutor executor(getDatasource(), access_level, align_verbose);
+            MigrationExecutor executor(getDatasource(), access_level,
+                align_verbose, NOTHING, ddl_change_callback);
             executor.executeMigrations(schema_data.migrations, current_version,
                 getVersion(), "pre_align");
         }
@@ -273,7 +274,8 @@ public class DataSchema inherits AbstractVersionedSchema {
         }
 
         if (schema_data.migrations && !first_time_install && initial_schema_info.current_version) {
-            MigrationExecutor executor(getDatasource(), access_level, verbose);
+            MigrationExecutor executor(getDatasource(), access_level,
+                verbose, NOTHING, ddl_change_callback);
             executor.executeMigrations(schema_data.migrations, initial_schema_info.current_version,
                 getVersion(), "post_align", table_cache, initial_schema_info);
         }
