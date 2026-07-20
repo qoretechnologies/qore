@@ -2029,6 +2029,47 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return h2_err.err == "SOCKET-CONNECT-ERROR";
     }
 
+    #! Internal: builds the happy-eyeballs connect-error description from both legs' errors
+    /** Pure formatter (no I/O, no side effects) so the message construction can
+        be unit-tested directly and shared by every happy-eyeballs terminal-error
+        site.
+
+        Happy eyeballs races H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel; when the
+        terminal error path is reached both legs have failed to become ready, so
+        the message must report BOTH underlying reasons.  Reporting only one — the
+        historical @code h2_err.desc ?? h3_err.desc @endcode — made a
+        total-endpoint outage look like a QUIC-specific problem whenever the H2
+        leg's error hash carried no @c desc: the message fell through to the
+        H3/QUIC handshake-timeout text and silently hid that TCP had also been
+        tried and had also failed.
+
+        Each present leg contributes a labelled reason (its @c desc, falling back
+        to its @c err, then to a placeholder).  A leg whose error is
+        @ref NOTHING — e.g. a still-pending H3 during the TCP-refused fast-fail —
+        is omitted rather than reported as a spurious failure.
+
+        @param h3_err the H3/QUIC poll-op error (may be @ref NOTHING)
+        @param h2_err the H2/TCP poll-op error (may be @ref NOTHING)
+        @param key the \c host:port pool key
+
+        @return a user-friendly @code could not connect to <key>[: <reasons>] @endcode
+        string, where \c reasons is the "; "-joined set of present, labelled legs
+    */
+    static string heBuildConnectErrorDesc(*hash<auto> h3_err, *hash<auto> h2_err, string key) {
+        list<string> reasons = ();
+        if (h3_err) {
+            reasons += sprintf("H3/QUIC: %s", h3_err.desc ?? h3_err.err ?? "no error reported");
+        }
+        if (h2_err) {
+            reasons += sprintf("H2/TCP: %s", h2_err.desc ?? h2_err.err ?? "no error reported");
+        }
+        string desc = sprintf("could not connect to %s", key);
+        if (reasons) {
+            desc += ": " + reasons.join("; ");
+        }
+        return desc;
+    }
+
     #! Internal: builds and throws the happy-eyeballs connect error, closing both conns
     /** Exact behavior of the synchronous race's terminal error path: collect the
         underlying H3/H2 poll-op errors, close both connections, and throw a
@@ -2039,8 +2080,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
 
         This single helper also covers the synchronous race's earlier
         H2-fast-fail throw site: in that case @c h2_err.err is
-        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the message and
-        thrown error code are identical to the former inline block.
+        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the thrown error
+        code is unchanged and the message carries the labelled H2/TCP reason
+        (the still-pending H3 leg is omitted — see @ref heBuildConnectErrorDesc()).
+
+        The description reports every failed leg (not just one), so a message can
+        no longer surface the H3/QUIC handshake timeout while silently hiding that
+        the H2/TCP attempt also failed.
 
         @param h3conn the HTTP/3 candidate (closed here)
         @param h2conn the HTTP/2 candidate (closed here)
@@ -2056,13 +2102,15 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         try { h3conn.close(); } catch () {}
         try { h2conn.close(); } catch () {}
 
-        # Build a user-friendly error message with the underlying failure reasons
-        string desc = sprintf("could not connect to %s", key);
-        # Use the most informative underlying error (prefer H2 as it's TCP-based)
-        *string detail = h2_err.desc ?? h3_err.desc;
-        if (detail) {
-            desc += sprintf(": %s", detail);
-        }
+        # Build a user-friendly error message reporting BOTH legs' underlying
+        # failure reasons (see heBuildConnectErrorDesc()).  Reporting only one
+        # (the historical "h2_err.desc ?? h3_err.desc") made a total-endpoint
+        # outage look like a QUIC-specific problem whenever the H2 (TCP) leg's
+        # error carried no "desc" — the message then showed only the H3/QUIC
+        # handshake-timeout text even though TCP had been tried and had also
+        # failed.  Surfacing both makes it clear the happy-eyeballs race
+        # attempted (and lost) both protocols.
+        string desc = heBuildConnectErrorDesc(h3_err, h2_err, key);
 
         # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
         # the endpoint is definitively refused at the kernel level (ECONNREFUSED
