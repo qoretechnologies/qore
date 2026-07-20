@@ -248,6 +248,7 @@ class OracleTest inherits SqlTestBase {
             table = (new Table(schema.getDatasource(), "oracle_test")).getTable();
             table2 = (new Table(schema.getDatasource(), "oracle_test2")).getTable();
 
+            addTestCase("precreated GTT temp table", \precreatedGttTempTableTest());
             addTestCase("rowid test", \rowidTest());
             addTestCase("rownum test", \rownumTest());
             addTestCase("for update and limit", \forupdateAndLimitTest());
@@ -272,6 +273,76 @@ class OracleTest inherits SqlTestBase {
         }
 
         set_return_value(main());
+    }
+
+    precreatedGttTempTableTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+        AbstractDatasource ds = table.getDatasource();
+        ds.commit();
+        Database db(ds);
+
+        string gtt = "sqlutil_tt_gtt";
+        string src_name = "sqlutil_tt_src2";
+        db.dropTableIfExists(src_name);
+        ds.commit();
+        try { ds.execRaw("drop table " + gtt); ds.commit(); } catch (hash<ExceptionInfo> ex) {}
+
+        # source table with known data
+        AbstractTable src = db.makeTable(src_name, {
+            "columns": {"id": c_number(14, True), "grp": c_number(14, True)},
+            "primary_key": {"name": "pk_" + src_name, "columns": ("id",)},
+        });
+        src.create();
+        ds.commit();
+        on_exit {
+            db.dropTableIfExists(src_name);
+            ds.commit();
+        }
+        for (int i = 0; i < 20; ++i) {
+            src.insert({"id": i, "grp": i % 2});
+        }
+        ds.commit();
+
+        # schema-managed global temporary table (transaction scope: rows cleared at commit)
+        ds.execRaw("create global temporary table " + gtt + " (id number(14) not null) on commit delete rows");
+        ds.commit();
+        on_exit {
+            try { ds.execRaw("drop table " + gtt); ds.commit(); } catch (hash<ExceptionInfo> ex) {}
+        }
+
+        list<int> expected = map $1.id.toInt(),
+            src.selectRows({"columns": ("id",), "where": {"grp": 1}, "orderby": "id"});
+        assertEq(10, expected.size());
+
+        {
+            ds.beginTransaction();
+            on_error ds.rollback();
+            on_success ds.commit();
+
+            # precreated mode: no runtime DDL, no name mangling
+            AbstractTable tmp = db.createTempTable(gtt, {"id": c_number(14, True)}, {"precreated": True});
+            assertTrue(tmp.isTempTable());
+            assertTrue(tmp.isPreCreatedTempTable());
+            assertEq(gtt, tmp.getName());
+            TempTableHelper th(tmp);
+
+            int filled = tmp.insertFromSelect(("id",), src, {"columns": "id", "where": {"grp": 1}});
+            assertEq(expected.size(), filled);
+            list<int> got = map $1.id.toInt(), src.selectRows({
+                "columns": ("id",),
+                "join": join_inner(tmp, "t", {"id": "id"}),
+                "orderby": "id",
+            });
+            assertEq(expected, got);
+
+            # dropping via the helper must be a no-op for a schema-managed GTT
+            th.dropTempTable();
+        }
+
+        # the GTT schema object must still exist after the helper ran (rows cleared by "on commit delete rows")
+        assertEq(0, ds.selectRow("select count(1) c from " + gtt).c.toInt());
     }
 
     rowidTest() {

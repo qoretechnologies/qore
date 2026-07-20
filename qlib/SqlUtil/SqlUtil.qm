@@ -39,7 +39,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.0.0";
+    version = "3.1.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -113,6 +113,16 @@ module SqlUtil {
       - @ref dba_space_management
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_1_0 SqlUtil v3.1.0
+    - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
+      "AbstractDatabase::supportsTempTables()" and @ref SqlUtil::AbstractDatabase::createTempTable()
+      "AbstractDatabase::createTempTable()" create a temporary table from an in-memory column description (no
+      catalog introspection), with a @ref SqlUtil::TempTableHelper "TempTableHelper" scope guard for
+      exception-safe cleanup; see @ref temporary_tables for details and a worked fill-and-join example.  This
+      provides the temporary-table join mechanism recommended as an alternative to large \c "in" operator argument
+      lists.  Driver support: PostgreSQL, Oracle (pre-created global temporary tables on all versions, private
+      temporary tables on 18c+), MySQL, SQL Server, and SQLite3
 
     @subsection sqlutilv3_0_0 SqlUtil v3.0.0
     - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
@@ -1981,6 +1991,65 @@ hash<auto> ix_desc = (
     "unique": True,
 );
     @endcode
+
+    @section temporary_tables Temporary Tables
+
+    SqlUtil provides a portable temporary-table abstraction that is useful for avoiding very large \c "in" operator
+    argument lists (which are slow to generate and to parse/plan, and which fail outright on some database servers,
+    for example Oracle's hard 1000-element \c IN limit).  Instead of passing tens of thousands of ids to an \c "in"
+    clause, the ids can be materialized into a temporary table and used in a join.
+
+    Temporary-table support is advertised per driver by
+    @ref SqlUtil::AbstractDatabase::supportsTempTables() "AbstractDatabase::supportsTempTables()" and the table is
+    created with @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()", which
+    builds the @ref SqlUtil::AbstractTable "AbstractTable" purely from the supplied
+    @ref column_desc_hash "column description hash" (never from catalog introspection).  Use
+    @ref SqlUtil::TempTableHelper "TempTableHelper" for exception-safe cleanup.
+
+    @par Example: fill a temporary table server-side and join against it
+    @code{.py}
+Database db(ds);
+
+# on a DatasourcePool a transaction must already be in progress on the calling thread so that the temporary
+# table is created on the same pooled connection that subsequent statements use
+dsp.beginTransaction();
+on_error dsp.rollback();
+on_success dsp.commit();
+
+# create a transaction-scoped temporary table (dropped automatically at commit where the backend supports it)
+AbstractTable tmp = db.createTempTable("tmp_ids", {"id": {"qore_type": "integer", "notnull": True}});
+TempTableHelper th(tmp);
+
+# fill the temporary table entirely in the database server (INSERT ... SELECT); the ids never leave the DB
+tmp.insertFromSelect(("id",), source_table, {"columns": "id", "where": filter_expression});
+
+# use a join against the temporary table instead of a large "in" clause
+list<auto> rows = source_table.selectRows({
+    "columns": ("id", "name"),
+    "join": join_inner(tmp, "t", {"id": "id"}),
+});
+    @endcode
+
+    @par Scope
+    The \c "scope" option controls the temporary table's lifetime:
+    - @ref SqlUtil::TT_Transaction (the default): the table exists only for the current transaction; on backends
+      that support it (PostgreSQL \c "on commit drop", Oracle private temporary tables \c "on commit drop
+      definition", Oracle global temporary tables \c "on commit delete rows") storage is released automatically
+      when the transaction ends
+    - @ref SqlUtil::TT_Session: the table persists for the database session and must be dropped explicitly (for
+      example, with @ref SqlUtil::TempTableHelper)
+
+    @par Driver notes
+    - <b>PostgreSQL</b>: emits \c "create temporary table ... on commit drop" (transaction scope)
+    - <b>Oracle</b>: with the \c "precreated" option a schema-managed global temporary table is used (no runtime
+      DDL; works on all supported Oracle versions and supports \c NOT \c NULL columns) — this is the recommended
+      approach for Oracle; without \c "precreated", a private temporary table (\c "ORA$PTT_" name prefix) is
+      created at runtime, which requires Oracle 18c or later and does not support \c NOT \c NULL column constraints
+      (they are dropped automatically)
+    - <b>MySQL</b>: emits \c "create temporary table"; session temporary tables are invisible to
+      \c information_schema, which is why the table object is built from the supplied column description
+    - <b>SQL Server</b>: uses a \c "#"-prefixed local temporary table name
+    - <b>SQLite3</b>: emits \c "create temp table"
 
     @section callbacks Callbacks
 
@@ -6940,7 +7009,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
 
-        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table instead of passing a large number of arguments to this function
+        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table (see @ref temporary_tables) instead of passing a large number of arguments to this function
     */
     public hash<OperatorInfo> sub op_in() {
         return make_op(OP_IN, argv);
@@ -7001,7 +7070,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
 
-        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table instead of passing a large number of arguments to this function
+        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table (see @ref temporary_tables) instead of passing a large number of arguments to this function
     */
     public hash<OperatorInfo> sub op_in(list<auto> args) {
         return make_op(OP_IN, args);

@@ -36,7 +36,7 @@
 # enable all warnings
 
 module Sqlite3SqlUtil {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for working with Sqlite3 SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -85,6 +85,8 @@ module Sqlite3SqlUtil {
     @section sqlite3_relnotes Release Notes
 
     @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - added temporary-table support (\c "create temp table"); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
     - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
       DataProvider case-sensitivity contract instead of inheriting SQLite's case-insensitive ASCII \c LIKE
       behavior; SQL LIKE wildcard translation now also preserves literal SQLite GLOB metacharacters
@@ -681,6 +683,11 @@ auto v = c.name;
             return False;
         }
 
+        #! returns @ref True "True" as SQLite3 supports temporary tables (\c "create temp table")
+        private bool supportsTempTablesImpl() {
+            return True;
+        }
+
         #! returns @ref True "True" if the database supports named types
         private bool supportsTypesImpl() {
             return False;
@@ -1171,10 +1178,19 @@ auto v = c.name;
         }
 
         string getCreateTableSqlImpl(*hash<auto> opt) {
-            string sql = sprintf("create table %s (\n", name);
+            string sql = sprintf("%s (\n", getCreateTableStartSql());
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
             sql += "\n)";
+            sql += getCreateTableTempClauseSql();
             return sql;
+        }
+
+        #! returns \c "create temp table <name>" for temporary tables, \c "create table <name>" otherwise
+        private string getCreateTableStartSql() {
+            if (isTempTable()) {
+                return sprintf("create temp table %s", name);
+            }
+            return AbstractTable::getCreateTableStartSql();
         }
 
         #! returns @ref False "False" because the sqlite3 driver does not support array binds / bulk DML operations

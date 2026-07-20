@@ -36,7 +36,7 @@
 # enable all warnings
 
 module MysqlSqlUtil {
-    version = "1.5";
+    version = "1.6";
     desc = "user module for working with MySQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -97,6 +97,10 @@ module MysqlSqlUtil {
     @endcode
 
     @section mysql_relnotes Release Notes
+
+    @subsection mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - added temporary-table support (\c "create temporary table"); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
 
     @subsection mysqlsqlutilv15 MysqlSqlUtil v1.5
     - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases by using an
@@ -1277,6 +1281,11 @@ end";
             return False;
         }
 
+        #! returns @ref True "True" as MySQL supports temporary tables (\c "create temporary table")
+        private bool supportsTempTablesImpl() {
+            return True;
+        }
+
         #! returns @ref True "True" if the database supports named types
         private bool supportsTypesImpl() {
             return False;
@@ -2403,7 +2412,7 @@ end";
         }
 
         string getCreateTableSqlImpl(*hash opt) {
-            string sql = sprintf("create table %s (\n", name);
+            string sql = sprintf("%s (\n", getCreateTableStartSql());
 
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
             sql += sprintf("\n) engine %s", engine);
@@ -2424,6 +2433,17 @@ end";
             sql += getMysqlPartitionCreateClause();
 
             return sql;
+        }
+
+        #! returns \c "create temporary table <name>" for temporary tables, \c "create table <name>" otherwise
+        /** MySQL temporary tables are session-scoped and are dropped automatically at the end of the session or
+            explicitly; there is no \c "on commit" clause
+        */
+        private string getCreateTableStartSql() {
+            if (isTempTable()) {
+                return sprintf("create temporary table %s", name);
+            }
+            return AbstractTable::getCreateTableStartSql();
         }
 
         private string getMysqlPartitionCreateClause() {

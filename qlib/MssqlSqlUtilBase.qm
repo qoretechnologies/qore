@@ -39,7 +39,7 @@
 # enable all warnings
 
 module MssqlSqlUtilBase {
-    version = "1.0";
+    version = "1.1";
     desc = "user module for working with MS SQL databases";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -112,6 +112,10 @@ module MssqlSqlUtilBase {
     To use other types, use the \c "native_type"
     @ref SqlUtil::AbstractTable::ColumnDescOptions "column description option" with the native Mssql type name
     instead (under the \c "driver" and \c "Mssql" keys for schemas supporting multiple databases).
+
+    @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - added temporary-table support (\c "#"-prefixed local temporary tables); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - added targeted logical partition-name metadata lookup without loading all partition-function boundaries
@@ -1106,6 +1110,23 @@ public class MssqlDatabase inherits SqlUtil::AbstractDatabase {
     #! returns @ref True "True" if the database supports named types
     private bool supportsTypesImpl() {
         return True;
+    }
+
+    #! returns @ref True "True" as SQL Server supports temporary tables (\c "#"-prefixed local temporary tables)
+    private bool supportsTempTablesImpl() {
+        return True;
+    }
+
+    #! returns the physical name for a temporary table: a \c "#"-prefixed local temporary table name
+    /** SQL Server local temporary tables are identified by a \c "#" name prefix (session-scoped) rather than a
+        keyword in the \c CREATE statement; pre-created temporary tables are assumed to already carry the correct
+        physical name and are returned unchanged
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        if (precreated || name =~ /^#/) {
+            return name;
+        }
+        return "#" + name;
     }
 
     #! returns @ref True "True" if the database supports packages
