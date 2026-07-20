@@ -503,6 +503,14 @@ public:
         ha.assign(val, xsink);
     }
 
+    DLLLOCAL void setKeyValueKnownAbsentIntern(const char* key, QoreValue val) {
+        HashMember* member = createMemberKnownAbsent(key);
+        member->val = val;
+        if (needs_scan(val)) {
+            incScanCount(1);
+        }
+    }
+
     DLLLOCAL void setKeyValue(const std::string& key, QoreValue val, ExceptionSink* xsink) {
         hash_assignment_priv ha(*this, key.c_str());
         ha.assign(val, xsink);

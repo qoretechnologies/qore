@@ -32,10 +32,30 @@ hash<auto> empty = {};
 hash<auto> single = {
     \"single-long-key\": 7,
 };
+hash<auto> pair_same = {
+    \"pair-int-a\": 10,
+    \"pair-int-b\": 20,
+};
+hash<auto> pair_mixed = {
+    \"pair-mixed-a\": 10,
+    \"pair-mixed-b\": \"twenty\",
+};
+hash<auto> pair_scanned = {
+    \"pair-list-a\": (1,),
+    \"pair-list-b\": (2,),
+};
+hash<auto> pair_nothing = {
+    \"pair-nothing-a\": NOTHING,
+    \"pair-nothing-b\": 30,
+};
 
 printf(\"%y|%y|%y|%s|%d\\n\", unique, duplicate, typed,
     join(\",\", keys duplicate), duplicate{\"same-long-key\"});
 printf(\"%d|%d\\n\", empty.size(), single{\"single-long-key\"});
+printf(\"%s|%s|%s|%d|%s\\n\", pair_same.fullType(), pair_mixed.fullType(),
+    pair_scanned.fullType(), pair_same{\"pair-int-b\"}, pair_mixed{\"pair-mixed-b\"});
+printf(\"%s|%s|%s\\n\", pair_nothing.fullType(), join(\",\", keys pair_nothing),
+    exists pair_nothing{\"pair-nothing-a\"} ? \"exists\" : \"nothing\");
 ";
 
 list<string> large_entries;
@@ -81,7 +101,10 @@ string sub runAot(string suffix, string env) {
 
 string expected = "{alpha-long-key: 1, beta-long-key: \"two\", gamma-long-key: null}|"
     + "{same-long-key: 3, other-long-key: 2}|{converted-long-key: 42}|"
-    + "same-long-key,other-long-key|3\n0|7\n40|39|40|99\n101|100\n";
+    + "same-long-key,other-long-key|3\n0|7\n"
+    + "hash<string, int>|hash<auto>|hash<string, list<int>>|20|twenty\n"
+    + "hash<string, *int>|pair-nothing-a,pair-nothing-b|nothing\n"
+    + "40|39|40|99\n101|100\n";
 
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     foreach string env in (("", "QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT=1")) {
@@ -97,6 +120,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
 hash<string, string> aot_modes = {
     "-optimized": "",
     "-fallback": "QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT=1",
+    "-pair-fallback": "QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1",
 };
 foreach string suffix in (keys aot_modes) {
     string actual = runAot(suffix, aot_modes{suffix});

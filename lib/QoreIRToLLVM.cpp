@@ -20856,6 +20856,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* mhck = static_cast<const QoreIRMakeHashConstKeysInstruction*>(inst);
             int count = static_cast<int>(mhck->keys.size());
             assert(count == static_cast<int>(inst->operands.size()));
+            bool unique_keys = mhck->unique_keys && qore_ir_use_unique_hash_literal_insert();
+            if (count == 2 && unique_keys && !mhck->typeInfo) {
+                auto* val0 = getVal(inst->operands[0].id, error);
+                auto* val1 = getVal(inst->operands[1].id, error);
+                if (!val0 || !val1) {
+                    return false;
+                }
+                llvm::Value* key0 = builder->CreateGlobalString(mhck->keys[0], "hck_" + mhck->keys[0]);
+                llvm::Value* key1 = builder->CreateGlobalString(mhck->keys[1], "hck_" + mhck->keys[1]);
+                auto direct_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_make_hash_const_keys_2_unique", direct_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_make_hash_const_keys_2_unique_throwing", direct_ft);
+                llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
+                    {key0, boxValue(val0, inst->operands[0].id), key1,
+                        boxValue(val1, inst->operands[1].id), xsink_arg},
+                    module, llvm_func, inst);
+                values[inst->result.id] = hash_result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(hash_result, inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             // Hoist allocas to entry block
             llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
                     llvm_func->getEntryBlock().begin());
@@ -20884,7 +20909,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_arg;
             const char* helper_name = "qore_rt_make_hash_const_keys";
             const char* helper_throwing_name = "qore_rt_make_hash_const_keys_throwing";
-            bool unique_keys = mhck->unique_keys && qore_ir_use_unique_hash_literal_insert();
             if (unique_keys) {
                 helper_name = "qore_rt_make_hash_const_keys_unique";
                 helper_throwing_name = "qore_rt_make_hash_const_keys_unique_throwing";

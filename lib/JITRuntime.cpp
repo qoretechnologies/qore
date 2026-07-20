@@ -219,6 +219,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_unique) },
     { "qore_rt_make_hash_const_keys_unique_by_type_path",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_unique_by_type_path) },
+    { "qore_rt_make_hash_const_keys_2_unique",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique) },
+    { "qore_rt_make_hash_const_keys_2_unique_throwing",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_throwing) },
     { "qore_rt_fixed_hash_remap2_aot",
         reinterpret_cast<void*>(&qore_rt_fixed_hash_remap2_aot) },
     { "qore_rt_fixed_hash_remap2_aot_throwing",
@@ -3976,6 +3980,49 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
         hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
+        const char* key0, uint64_t val0_bits, const char* key1, uint64_t val1_bits,
+        ExceptionSink* xsink) {
+    static const bool enabled =
+        std::getenv("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD") == nullptr;
+    if (!enabled) {
+        const char* keys[] = {key0, key1};
+        uint64_t values[] = {val0_bits, val1_bits};
+        return qore_rt_make_hash_const_keys_impl(keys, values, 2, nullptr, xsink, true);
+    }
+
+    QoreValue val0 = fromBits(val0_bits);
+    QoreValue val1 = fromBits(val1_bits);
+    if (val0.hasNode()) {
+        val0.refSelf();
+    }
+    if (val1.hasNode()) {
+        val1.refSelf();
+    }
+
+    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+    qore_hash_private* hp = qore_hash_private::get(*hash);
+    hp->hm.reserve(2);
+    hp->setKeyValueKnownAbsentIntern(key0, val0);
+    hp->setKeyValueKnownAbsentIntern(key1, val1);
+
+    const QoreTypeInfo* value_type = val0.getFullTypeInfo();
+    bool common_type = QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
+    if (!value_type || value_type == anyTypeInfo || !common_type) {
+        value_type = autoTypeInfo;
+    }
+    hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
+    return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(
+        const char* key0, uint64_t val0, const char* key1, uint64_t val1,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys_2_unique(key0, val0, key1, val1, xsink);
+    QORE_RT_CHECK_THROW(xsink);
+    return result;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals,
