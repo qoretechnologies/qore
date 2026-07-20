@@ -315,6 +315,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::StringJoinStart: return "string.join.start";
         case QoreIROpcode::StringJoinAppend: return "string.join.append";
         case QoreIROpcode::ListStringJoin: return "list.string.join";
+        case QoreIROpcode::FoldrStringJoin: return "foldr.string.join";
+        case QoreIROpcode::ListStringJoinIdentityMap: return "list.string.join.identity-map";
         case QoreIROpcode::SprintfIntFixed: return "sprintf.int.fixed";
         case QoreIROpcode::AppendStringCow: return "string.append.cow";
         case QoreIROpcode::MapSelectAny: return "map.select.any";

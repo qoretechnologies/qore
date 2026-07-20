@@ -77,7 +77,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 402,
+static_assert(QORE_IR_MAX_OPCODE == 404,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -4359,7 +4359,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::FusedMapFoldlSumOffsetInt:
         case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
         case QoreIROpcode::FoldlStringJoin:
+        case QoreIROpcode::FoldrStringJoin:
         case QoreIROpcode::ListStringJoin:
+        case QoreIROpcode::ListStringJoinIdentityMap:
         case QoreIROpcode::RangeAny:
         case QoreIROpcode::RangeInt:
         case QoreIROpcode::RangeFloat:
@@ -11677,7 +11679,9 @@ load_local_done:
             case QoreIROpcode::FusedMapFoldlSumOffsetInt:
             case QoreIROpcode::FusedMapFoldlSumOffsetFloat:
             case QoreIROpcode::FoldlStringJoin:
+            case QoreIROpcode::FoldrStringJoin:
             case QoreIROpcode::ListStringJoin:
+            case QoreIROpcode::ListStringJoinIdentityMap:
             case QoreIROpcode::RangeAny:
             case QoreIROpcode::RangeInt:
             case QoreIROpcode::RangeFloat:
@@ -16304,8 +16308,13 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::FoldlStringJoin:
             return fromBits(qore_rt_foldl_string_join_checked(toBits(left), toBits(right), xsink));
+        case QoreIROpcode::FoldrStringJoin:
+            return fromBits(qore_rt_foldr_string_join_checked(toBits(left), toBits(right), xsink));
         case QoreIROpcode::ListStringJoin:
             return fromBits(qore_rt_list_string_join_checked(toBits(left), toBits(right), xsink));
+        case QoreIROpcode::ListStringJoinIdentityMap:
+            return fromBits(qore_rt_list_string_join_identity_map_checked(
+                toBits(left), toBits(right), xsink));
         case QoreIROpcode::RangeAny: {
             bool needs_deref = true;
             ValueHolder node(QoreValue(new QoreRangeOperatorNode(get_runtime_location(), left.refSelf(), right.refSelf())), xsink);

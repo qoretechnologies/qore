@@ -267,7 +267,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_string_equals_cstr",
         reinterpret_cast<void*>(&qore_rt_string_equals_cstr) },
     { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
+    { "qore_rt_foldr_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldr_string_join_checked) },
     { "qore_rt_list_string_join_checked", reinterpret_cast<void*>(&qore_rt_list_string_join_checked) },
+    { "qore_rt_list_string_join_identity_map_checked",
+        reinterpret_cast<void*>(&qore_rt_list_string_join_identity_map_checked) },
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
@@ -6670,6 +6673,87 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
     return toBits(QoreValue(result.release()));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_foldr_string_join_checked(
+        uint64_t list_val, uint64_t separator_val, ExceptionSink* xsink) {
+    QoreValue value = fromBits(list_val);
+    QoreValue separator_value = fromBits(separator_val);
+    if (value.getType() != NT_LIST || separator_value.getType() != NT_STRING) {
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    size_t size = list->size();
+    if (!size) {
+        return toBits(QoreValue());
+    }
+    if (size == 1) {
+        return toBits(list->retrieveEntry(0).refSelf());
+    }
+
+    QoreStringValueHelper separator(separator_value);
+    QoreValue first = list->retrieveEntry(size - 1);
+    const QoreEncoding* encoding = separator->getEncoding();
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        encoding = first_string->getEncoding();
+    }
+
+    size_t reserve_size = 0;
+    bool can_reserve = true;
+    auto add_reserve_size = [&reserve_size, &can_reserve](size_t length) {
+        if (length > std::numeric_limits<size_t>::max() - reserve_size) {
+            can_reserve = false;
+        } else {
+            reserve_size += length;
+        }
+    };
+    if (separator->size() > std::numeric_limits<size_t>::max() / (size - 1)) {
+        can_reserve = false;
+    } else {
+        add_reserve_size(separator->size() * (size - 1));
+    }
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "foldr string join sizing")) {
+            return toBits(QoreValue());
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.getType() == NT_STRING) {
+            QoreStringValueHelper string(entry);
+            add_reserve_size(string->size());
+        }
+    }
+
+    QoreStringNodeHolder result(new QoreStringNode(encoding));
+    if (can_reserve) {
+        result->reserve(reserve_size);
+    }
+    if (first.getType() == NT_STRING) {
+        QoreStringValueHelper first_string(first);
+        result->concat(*first_string, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    for (size_t i = 1; i < size; ++i) {
+        if (!(i % 100) && qore_check_cancel(xsink, "foldr string join")) {
+            return toBits(QoreValue());
+        }
+        result->concat(*separator, xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        QoreValue entry = list->retrieveEntry(size - i - 1);
+        if (entry.getType() == NT_STRING) {
+            QoreStringValueHelper string(entry);
+            result->concat(*string, xsink);
+            if (xsink && *xsink) {
+                return toBits(QoreValue());
+            }
+        }
+    }
+    return toBits(QoreValue(result.release()));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
         uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) {
     QoreValue separator_value = fromBits(separator_bits);
@@ -6682,6 +6766,35 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
     }
     const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
     const QoreListNode* list = list_value.get<const QoreListNode>();
+    return toBits(QoreValue(join_intern(separator, list, 0, xsink)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) {
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue list_value = fromBits(list_bits);
+    if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in identity-map list<string> join");
+        }
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = list_value.get<const QoreListNode>();
+    for (size_t i = 0, size = list->size(); i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "identity-map list string join")) {
+            return toBits(QoreValue());
+        }
+        QoreValue entry = list->retrieveEntry(i);
+        if (entry.getType() != NT_STRING) {
+            ValueHolder checked(entry.refSelf(), xsink);
+            QoreTypeInfo::acceptAssignment(stringTypeInfo,
+                "<list element assignment>", *checked, xsink);
+            return toBits(QoreValue());
+        }
+    }
+
+    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
     return toBits(QoreValue(join_intern(separator, list, 0, xsink)));
 }
 

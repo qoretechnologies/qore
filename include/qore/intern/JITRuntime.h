@@ -880,8 +880,16 @@ uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsi
 uint64_t qore_rt_foldl_string_join_checked(uint64_t list_val, uint64_t separator_val,
         ExceptionSink* xsink);
 
+//! Reverse-fold an exact list<string> with a constant separator.
+uint64_t qore_rt_foldr_string_join_checked(uint64_t list_val, uint64_t separator_val,
+        ExceptionSink* xsink);
+
 //! Join an assigned exact list<string> using the separator's encoding.
 uint64_t qore_rt_list_string_join_checked(uint64_t separator, uint64_t list,
+        ExceptionSink* xsink);
+
+//! Join the result of a typed identity map, rejecting unassigned list entries.
+uint64_t qore_rt_list_string_join_identity_map_checked(uint64_t separator, uint64_t list,
         ExceptionSink* xsink);
 
 //! Start and extend an accumulator owned exclusively by fused string-join IR.

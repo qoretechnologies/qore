@@ -48,7 +48,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 402,
+static_assert(QORE_IR_MAX_OPCODE == 404,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -21838,6 +21838,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
+        case QoreIROpcode::FoldrStringJoin: {
+            auto* list = getVal(inst->operands[0].id, error);
+            auto* separator = getVal(inst->operands[1].id, error);
+            if (!list || !separator) { return false; }
+            llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            llvm::Value* separator_boxed = boxValue(separator, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_foldr_string_join_checked",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, separator_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
         case QoreIROpcode::ListStringJoin: {
             auto* separator = getVal(inst->operands[0].id, error);
             auto* list = getVal(inst->operands[1].id, error);
@@ -21845,6 +21860,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* separator_boxed = boxValue(separator, inst->operands[0].id);
             llvm::Value* list_boxed = boxValue(list, inst->operands[1].id);
             auto helper = module.getOrInsertFunction("qore_rt_list_string_join_checked",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {separator_boxed, list_boxed, xsink_arg});
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::ListStringJoinIdentityMap: {
+            auto* separator = getVal(inst->operands[0].id, error);
+            auto* list = getVal(inst->operands[1].id, error);
+            if (!separator || !list) { return false; }
+            llvm::Value* separator_boxed = boxValue(separator, inst->operands[0].id);
+            llvm::Value* list_boxed = boxValue(list, inst->operands[1].id);
+            auto helper = module.getOrInsertFunction("qore_rt_list_string_join_identity_map_checked",
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {separator_boxed, list_boxed, xsink_arg});
             values[inst->result.id] = result;

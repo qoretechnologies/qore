@@ -11902,7 +11902,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                         if (!source.isValid()) {
                             return QoreIRValue();
                         }
-                        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
+                        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoinIdentityMap,
                             expr, {separator, source}, call->loc, error);
                         --ast_delegate_count;
                         return result;
@@ -13166,6 +13166,39 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
 
+    const QoreTypeInfo* source_type = getExprTypeInfo(foldr->getRight());
+    const QoreTypeInfo* element_type = QoreTypeInfo::getReturnComplexListOrNothing(source_type);
+    QoreValue string_join_separator;
+    bool string_join = !std::getenv("QORE_DISABLE_IR_FOLDR_STRING_JOIN")
+        && element_type
+        && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT
+        && analyzeStringJoinFoldPattern(foldr->getLeft(), string_join_separator);
+    auto lower_string_join = [&](QoreIRValue list) -> QoreIRValue {
+        QoreIRValue separator = lowerConstant(string_join_separator, error);
+        if (!separator.isValid()) {
+            return QoreIRValue();
+        }
+
+        QoreIRValue result;
+        if (!exception_stack.empty()) {
+            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+            if (!normal_block) {
+                error = "IR builder failed to create invoke continuation block";
+                return QoreIRValue();
+            }
+            auto* inst = builder.createInvoke(expr, {list, separator}, normal_block,
+                exception_stack.back(), foldr->loc);
+            inst->invoke_opcode = QoreIROpcode::FoldrStringJoin;
+            builder.setBlock(normal_block);
+            result = inst->result;
+        } else {
+            result = builder.createBinaryOp(QoreIROpcode::FoldrStringJoin,
+                list, separator, foldr->loc)->result;
+        }
+        maybeInsertNotNothingGuard(result, &expr, foldr->loc, nullptr);
+        return result;
+    };
+
     {
         std::vector<LazyPipelineStage> source_stages;
         QoreValue base_source;
@@ -13182,8 +13215,19 @@ QoreIRValue QoreIRLowering::lowerFoldr(const QoreValue& expr, std::string& error
             if (!list.isValid()) {
                 return QoreIRValue();
             }
+            if (string_join) {
+                return lower_string_join(list);
+            }
             return lowerFoldrNativeValue(foldr, list, error);
         }
+    }
+
+    if (string_join) {
+        QoreIRValue list = lowerExpression(foldr->getRight(), error);
+        if (!list.isValid()) {
+            return QoreIRValue();
+        }
+        return lower_string_join(list);
     }
 
     // Try to detect optimizable pattern (reuse analyzeFoldPattern from foldl)

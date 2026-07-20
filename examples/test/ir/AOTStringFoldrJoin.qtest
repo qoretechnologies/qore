@@ -30,6 +30,7 @@ string dynamic_separator = \" / \";
 string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
 list<string> mixed = (latin1, \"d\\u00e9j\\u00e0\");
 string mixed_result = (foldr \$1 + \", \" + \$2, mixed);
+string pipeline_result = (foldr \$1 + \", \" + \$2, (map \$1, regular));
 
 string encoding_exception = \"none\";
 try {
@@ -41,7 +42,7 @@ try {
 
 auto empty_result = (foldr \$1 + \", \" + \$2, empty);
 auto singleton_missing_result = (foldr \$1 + \", \" + \$2, singleton_missing);
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     (foldr \$1 + \", \" + \$2, regular),
     (foldr \$1 + \", \" + \$2, sparse),
     (foldr \$1 + \", \" + \$2, all_missing),
@@ -51,7 +52,8 @@ printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     (foldr \$1 + dynamic_separator + \$2, regular),
     convert_encoding(mixed_result, \"UTF-8\"),
     mixed_result.encoding(),
-    encoding_exception);
+    encoding_exception,
+    pipeline_result);
 ";
 
 string script_path = "/tmp/qore-aot-string-foldr-join-" + string(getpid()) + ".qr";
@@ -65,10 +67,11 @@ string sub runMode(string mode, string env = "") {
         env, libqore_dir, qore_bin, mode, script_path));
 }
 
-string sub runAot(string suffix) {
+string sub runAot(string suffix, string env) {
     string exe = "/tmp/qore-aot-string-foldr-join-" + string(getpid()) + suffix;
-    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
-        libqore_dir, qcc_bin, exe, script_path));
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed (%s):\n%s", suffix, compile_out);
         exit(2);
@@ -79,7 +82,8 @@ string sub runAot(string suffix) {
 }
 
 string expected = "gamma, beta, alpha|gamma, , alpha|, , |NOTHING|solo|NOTHING|"
-    + "gamma / beta / alpha|d\u00e9j\u00e0, caf\u00e9|UTF-8|ENCODING-CONVERSION-ERROR\n";
+    + "gamma / beta / alpha|d\u00e9j\u00e0, caf\u00e9|UTF-8|ENCODING-CONVERSION-ERROR|"
+    + "gamma, beta, alpha\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -94,10 +98,23 @@ if (fallback != expected) {
     exit(2);
 }
 
-string aot = runAot("-enabled");
-if (aot != expected) {
-    printf("AOT mismatch\nexpected:\n%sactual:\n%s", expected, aot);
+string ir_dump = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (ir_dump !~ /foldr\.string\.join/) {
+    printf("specialized foldr string join opcode missing from IR dump:\n%s", ir_dump);
     exit(2);
+}
+
+hash<string, string> aot_modes = {
+    "-enabled": "",
+    "-fallback": "QORE_DISABLE_IR_FOLDR_STRING_JOIN=1",
+};
+foreach string suffix in (keys aot_modes) {
+    string aot = runAot(suffix, aot_modes{suffix});
+    if (aot != expected) {
+        printf("AOT %s mismatch\nexpected:\n%sactual:\n%s", suffix, expected, aot);
+        exit(2);
+    }
 }
 
 unlink(script_path);
