@@ -948,9 +948,10 @@ public:
     QoreIRBasicBlock* exception_target = nullptr;
     const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
+    bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
     bool typed_value_prevalidated = false;  // Transient: a dominating typed store validated this scalar value
     bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
-    bool redundant_store = false;  // Transient: store-back paired with list_push_in_place
+    bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
 
     // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set
     // by the IR builder in correctly-nested call order during lowering, so the

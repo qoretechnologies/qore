@@ -50,10 +50,36 @@ code<nothing()> append_closure = sub () {
 };
 append_closure();
 
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+string sub makeBuilder() {
+    string value = \"\";
+    for (int i = 0; i < 256; ++i) {
+        value += \"ab\";
+    }
+    return value;
+}
+string sub aliasBuilder(bool escape) {
+    string value = \"\";
+    string value_alias;
+    if (escape) {
+        value_alias = value;
+    }
+    value += \"x\";
+    return value + \"/\" + value_alias;
+}
+string builder = makeBuilder();
+string branch_alias = aliasBuilder(True);
+string branch_no_alias = aliasBuilder(False);
+string escaped_builder = \"\";
+string escaped_alias = escaped_builder;
+for (int i = 0; i < 4; ++i) {
+    escaped_builder += \"x\";
+}
+
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s/%s|%s|%s\\n\",
     value, append_result, alias_source, alias, self, unset, removed, optional,
     convert_encoding(latin1, \"UTF-8\"), latin1.encoding(), encoding_exception,
-    referenced + \"/\" + captured);
+    referenced + \"/\" + captured, builder.size(), escaped_builder, escaped_alias,
+    branch_alias, branch_no_alias);
 ";
 
 string script_path = "/tmp/qore-aot-string-append-cow-" + string(getpid()) + ".qr";
@@ -79,7 +105,7 @@ string sub runAot(string suffix, string env) {
 }
 
 string expected = "ab|ab|left-right|left|xyxy|assigned|new|kept|café déjà|"
-    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append\n";
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|512|xxxx/|x/|x/\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -95,9 +121,32 @@ if (ir_dump !~ /string\.append\.cow/) {
     exit(2);
 }
 
+string opt_stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (opt_stats !~ /IR-OPT: makeBuilder:.*inplace-string=1/) {
+    printf("in-place string append optimization missing:\n%s", opt_stats);
+    exit(2);
+}
+if (opt_stats =~ /IR-OPT: aliasBuilder:.*inplace-string=[1-9][0-9]*/) {
+    printf("in-place string append incorrectly accepted a branch-dependent alias:\n%s",
+        opt_stats);
+    exit(2);
+}
+string fallback_stats = backquote(sprintf(
+    "QORE_DISABLE_IR_IN_PLACE_STRING_APPEND=1 QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s "
+        + "%s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+if (fallback_stats =~ /inplace-string=[1-9][0-9]*/) {
+    printf("in-place string append fallback did not disable the optimization:\n%s",
+        fallback_stats);
+    exit(2);
+}
+
 hash<string, string> aot_modes = {
     "-enabled": "",
-    "-fallback": "QORE_DISABLE_IR_STRING_APPEND_COW=1",
+    "-inplace-fallback": "QORE_DISABLE_IR_IN_PLACE_STRING_APPEND=1",
+    "-cow-fallback": "QORE_DISABLE_IR_STRING_APPEND_COW=1",
 };
 foreach string suffix in (keys aot_modes) {
     string actual = runAot(suffix, aot_modes{suffix});

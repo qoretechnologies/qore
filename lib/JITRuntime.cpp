@@ -277,6 +277,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_list_int_sprintf_join", reinterpret_cast<void*>(&qore_rt_list_int_sprintf_join) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
     { "qore_rt_string_append_cow", reinterpret_cast<void*>(&qore_rt_string_append_cow) },
+    { "qore_rt_string_append_in_place", reinterpret_cast<void*>(&qore_rt_string_append_in_place) },
     { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
     { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
     { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
@@ -7023,6 +7024,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         return toBits(QoreValue());
     }
     return toBits(QoreValue(result));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
+        uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
+    QoreValue left = fromBits(left_bits);
+    QoreValue right = fromBits(right_bits);
+    if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+        xsink->raiseException("IR-EXEC-ERROR",
+            "in-place string append requires assigned string operands");
+        return toBits(QoreValue());
+    }
+
+    QoreStringNode* left_string = left.get<QoreStringNode>();
+    QoreStringNode* right_string = right.get<QoreStringNode>();
+    if (left_string == right_string) {
+        SimpleRefHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string));
+        left_string->concat(*right_copy, xsink);
+    } else {
+        left_string->concat(right_string, xsink);
+    }
+    return xsink && *xsink ? toBits(QoreValue()) : left_bits;
 }
 
 // Multi-string concatenation - concatenates N strings in a single pass

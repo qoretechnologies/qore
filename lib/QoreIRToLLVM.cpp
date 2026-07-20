@@ -9091,12 +9091,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_append_cow",
+            const char* helper_name = inst->string_append_in_place
+                ? "qore_rt_string_append_in_place" : "qore_rt_string_append_cow";
+            auto helper = module.getOrInsertFunction(helper_name,
                     llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!inst->string_append_in_place) {
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }

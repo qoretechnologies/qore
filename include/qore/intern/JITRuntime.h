@@ -912,6 +912,9 @@ uint64_t qore_rt_sprintf_int_fixed(uint64_t literal, uint64_t value, int64_t met
 //! Append a string value in place when the left string has one owner, or copy it otherwise.
 uint64_t qore_rt_string_append_cow(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+//! Append to a compiler-proven uniquely owned string and return the borrowed left value.
+uint64_t qore_rt_string_append_in_place(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
 // --- Optimized list iteration helpers (higher-order optimization) ---
 
 //! Get list size; returns 0 if value is not a list.

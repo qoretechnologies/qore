@@ -86,6 +86,7 @@ struct QoreIROptimizationStats {
     size_t bounded_typed_list_reads = 0;
     size_t bounded_boxed_direct_reads = 0;
     size_t in_place_list_pushes = 0;
+    size_t in_place_string_appends = 0;
 };
 
 //! Conservative interprocedural effects used to preserve caller-side caches.

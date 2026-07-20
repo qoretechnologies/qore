@@ -3853,6 +3853,240 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
     return changed;
 }
 
+static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
+        const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
+        size_t& check_count) {
+    std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
+    std::unordered_set<LocalVar*> candidate_locals;
+    for (const auto& block : cfg.blocks) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR in-place string append definition analysis")) {
+            return 0;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR in-place string append definition analysis")) {
+                return 0;
+            }
+            if (inst->result.isValid()) {
+                definitions[inst->result.id] = inst.get();
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal) {
+                auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
+                if (local_inst->local && !local_inst->is_ref && !local_inst->is_closure
+                        && local_inst->local->getTypeInfo() == stringTypeInfo
+                        && func.ir_only_locals.count(
+                            reinterpret_cast<const void*>(local_inst->local))) {
+                    candidate_locals.insert(local_inst->local);
+                }
+            }
+        }
+    }
+
+    auto get_loaded_local = [&](QoreIRValue value) -> LocalVar* {
+        auto def_it = definitions.find(value.id);
+        if (def_it == definitions.end()
+                || def_it->second->opcode != QoreIROpcode::LoadLocal) {
+            return nullptr;
+        }
+        auto* load = static_cast<QoreIRLocalInstruction*>(def_it->second);
+        return load->is_ref || load->is_closure ? nullptr : load->local;
+    };
+    auto get_paired_append_store = [&](const QoreIRInstruction& append,
+            LocalVar* local) -> const QoreIRLocalInstruction* {
+        if (append.opcode != QoreIROpcode::AppendStringCow
+                || append.operands.size() != 2 || !append.result.isValid()
+                || get_loaded_local(append.operands[0]) != local) {
+            return nullptr;
+        }
+        auto use_it = uses.find(append.result.id);
+        if (use_it == uses.end() || use_it->second.size() != 1
+                || !use_it->second[0].inst
+                || use_it->second[0].inst->opcode != QoreIROpcode::StoreLocal) {
+            return nullptr;
+        }
+        auto* store =
+            static_cast<const QoreIRLocalInstruction*>(use_it->second[0].inst);
+        return store->local == local && !store->weak
+                && store->operands.size() == 1
+                && store->operands[0].id == append.result.id
+            ? store : nullptr;
+    };
+    auto is_exclusive_fresh_store = [&](const QoreIRLocalInstruction& store) {
+        if (store.weak || store.operands.size() != 1) {
+            return false;
+        }
+        auto def_it = definitions.find(store.operands[0].id);
+        if (def_it == definitions.end()
+                || (def_it->second->opcode != QoreIROpcode::ConstString
+                    && def_it->second->opcode != QoreIROpcode::StringConcat)) {
+            return false;
+        }
+        auto use_it = uses.find(def_it->second->result.id);
+        return use_it != uses.end() && use_it->second.size() == 1
+            && use_it->second[0].inst == &store;
+    };
+
+    using FreshLocalSet = std::unordered_set<LocalVar*>;
+    bool cancelled = false;
+    auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
+            size_t& changed) -> FreshLocalSet {
+        for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR in-place string append escape analysis")) {
+                cancelled = true;
+                return state;
+            }
+            QoreIRInstruction& inst = *inst_ptr;
+            if (!qore_ir_visit_value_operands(inst, [&](QoreIRValue operand) {
+                LocalVar* local = get_loaded_local(operand);
+                if (!local || !candidate_locals.count(local)) {
+                    return;
+                }
+                bool preserves_freshness =
+                    qore_ir_is_read_only_string_use(inst, operand)
+                    || (inst.opcode == QoreIROpcode::AppendStringCow
+                        && !inst.operands.empty()
+                        && inst.operands[0].id == operand.id
+                        && get_paired_append_store(inst, local));
+                if (!preserves_freshness) {
+                    state.erase(local);
+                }
+            }, &check_count, "IR in-place string append escape analysis")) {
+                cancelled = true;
+                return state;
+            }
+            if (inst.opcode == QoreIROpcode::AppendStringCow
+                    && inst.operands.size() == 2) {
+                LocalVar* local = get_loaded_local(inst.operands[0]);
+                const QoreIRLocalInstruction* store = local
+                    ? get_paired_append_store(inst, local) : nullptr;
+                const QoreIRValueFacts* facts =
+                    func.getValueFacts(inst.operands[0]);
+                if (mark && !inst.string_append_in_place && store
+                        && state.count(local) && facts
+                        && facts->assigned_state == QoreIRAssignedState::Assigned
+                        && facts->never_nothing
+                        && QoreTypeInfo::parseReturns(
+                            facts->type_info, NT_STRING) == QTI_IDENT) {
+                    inst.string_append_in_place = true;
+                    const_cast<QoreIRLocalInstruction*>(store)->redundant_store =
+                        true;
+                    ++changed;
+                }
+            }
+            if (inst.opcode == QoreIROpcode::StoreLocal) {
+                auto& store = static_cast<QoreIRLocalInstruction&>(inst);
+                if (store.local && candidate_locals.count(store.local)) {
+                    if (is_exclusive_fresh_store(store)) {
+                        state.insert(store.local);
+                    } else {
+                        auto def_it = store.operands.empty()
+                            ? definitions.end()
+                            : definitions.find(store.operands[0].id);
+                        if (def_it == definitions.end()
+                                || !get_paired_append_store(
+                                    *def_it->second, store.local)) {
+                            state.erase(store.local);
+                        }
+                    }
+                }
+            }
+        }
+        return state;
+    };
+
+    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), candidate_locals);
+    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), candidate_locals);
+    std::vector<size_t> worklist;
+    std::vector<uint8_t> queued(cfg.blocks.size(), 0);
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR in-place string append dataflow")) {
+            return 0;
+        }
+        if (cfg.reachable[block_id]) {
+            worklist.push_back(block_id);
+            queued[block_id] = 1;
+        }
+    }
+    size_t ignored_changed = 0;
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR in-place string append dataflow")) {
+            return 0;
+        }
+        size_t block_id = worklist.back();
+        worklist.pop_back();
+        queued[block_id] = 0;
+        FreshLocalSet input;
+        if (block_id) {
+            bool first = true;
+            for (size_t predecessor : cfg.predecessors[block_id]) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR in-place string append dataflow")) {
+                    return 0;
+                }
+                if (!cfg.reachable[predecessor]) {
+                    continue;
+                }
+                if (first) {
+                    input = fresh_out[predecessor];
+                    first = false;
+                    continue;
+                }
+                for (auto it = input.begin(); it != input.end();) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR in-place string append dataflow")) {
+                        return 0;
+                    }
+                    if (!fresh_out[predecessor].count(*it)) {
+                        it = input.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+        }
+        fresh_in[block_id] = input;
+        FreshLocalSet output =
+            transfer_block(block_id, input, false, ignored_changed);
+        if (cancelled) {
+            return 0;
+        }
+        if (output == fresh_out[block_id]) {
+            continue;
+        }
+        fresh_out[block_id] = std::move(output);
+        for (size_t successor : cfg.successors[block_id]) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR in-place string append dataflow")) {
+                return 0;
+            }
+            if (!queued[successor]) {
+                queued[successor] = 1;
+                worklist.push_back(successor);
+            }
+        }
+    }
+
+    size_t changed = 0;
+    for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR in-place string append escape analysis")) {
+            return changed;
+        }
+        if (cfg.reachable[block_id]) {
+            transfer_block(block_id, fresh_in[block_id], true, changed);
+            if (cancelled) {
+                return changed;
+            }
+        }
+    }
+    return changed;
+}
+
 struct QoreIRNativeSSAValue {
     QoreIRValue value;
     size_t phi_block = std::numeric_limits<size_t>::max();
@@ -4909,34 +5143,51 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         }
     }
     std::vector<QoreIRNaturalLoop> loops = qore_ir_find_natural_loops(cfg);
+    bool enable_in_place_list_push =
+        !getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH");
+    bool enable_in_place_string_append =
+        !getenv("QORE_DISABLE_IR_IN_PLACE_STRING_APPEND");
     bool has_list_push = false;
-    if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
+    bool has_string_append = false;
+    if (enable_in_place_list_push || enable_in_place_string_append) {
         for (const QoreIRBasicBlock* block : cfg.blocks) {
-            if (qore_ir_analysis_cancelled(check_count, "IR list push discovery")) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR in-place mutation discovery")) {
                 if (stats) {
                     *stats = local_stats;
                 }
                 return;
             }
             for (const auto& inst : block->instructions) {
-                if (qore_ir_analysis_cancelled(check_count, "IR list push discovery")) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR in-place mutation discovery")) {
                     if (stats) {
                         *stats = local_stats;
                     }
                     return;
                 }
-                if (inst->opcode == QoreIROpcode::ListPush) {
+                if (enable_in_place_list_push
+                        && inst->opcode == QoreIROpcode::ListPush) {
                     has_list_push = true;
+                } else if (enable_in_place_string_append
+                        && inst->opcode == QoreIROpcode::AppendStringCow) {
+                    has_string_append = true;
+                }
+                if ((!enable_in_place_list_push || has_list_push)
+                        && (!enable_in_place_string_append
+                            || has_string_append)) {
                     break;
                 }
             }
-            if (has_list_push) {
+            if ((!enable_in_place_list_push || has_list_push)
+                    && (!enable_in_place_string_append
+                        || has_string_append)) {
                 break;
             }
         }
     }
     QoreIRScalarUses uses;
-    if ((!loops.empty() || has_list_push)
+    if ((!loops.empty() || has_list_push || has_string_append)
             && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
         if (stats) {
             *stats = local_stats;
@@ -4951,9 +5202,14 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         local_stats.borrowed_list_reads = qore_ir_mark_borrowed_list_reads(
             cfg, loops, uses, check_count);
     }
-    if (!getenv("QORE_DISABLE_IR_IN_PLACE_LIST_PUSH")) {
+    if (enable_in_place_list_push) {
         local_stats.in_place_list_pushes = qore_ir_mark_in_place_list_pushes(
             func, cfg, uses, check_count, nullptr);
+    }
+    if (enable_in_place_string_append) {
+        local_stats.in_place_string_appends =
+            qore_ir_mark_in_place_string_appends(
+                func, cfg, uses, check_count);
     }
     if (!enable_licm || getenv("QORE_DISABLE_IR_LICM")) {
         loops.clear();

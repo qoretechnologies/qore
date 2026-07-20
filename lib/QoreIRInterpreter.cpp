@@ -11586,12 +11586,46 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::AppendStringCow: {
+                if (inst->operands.size() < 2) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR",
+                            "string append missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue left = getIRValue(values, inst->operands[0]);
+                QoreValue right = getIRValue(values, inst->operands[1]);
+                QoreValue result = inst->string_append_in_place
+                    ? fromBits(qore_rt_string_append_in_place(
+                        toBits(left), toBits(right), xsink))
+                    : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (inst->string_append_in_place) {
+                    setValueSlotDirect(values, inst->result.id, result);
+                    if (result.hasNode()) {
+                        trackBorrowedTemp(inst->result.id);
+                    }
+                } else {
+                    setValueSlot(values, inst->result.id, result, xsink);
+                    if (result.hasNode()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::AddInt:
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::AddAny:
             case QoreIROpcode::AddTimeout:
             case QoreIROpcode::AddString:
-            case QoreIROpcode::AppendStringCow:
             case QoreIROpcode::SubInt:
             case QoreIROpcode::SubFloat:
             case QoreIROpcode::SubAny:
