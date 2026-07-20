@@ -798,8 +798,8 @@ list<auto> rows = target.selectRows({"join": join_inner(tmp, NOTHING, {"id": "id
         temporary tables are invisible to the system catalog (e.g. MySQL, SQL Server).
 
         @param name the logical name of the temporary table; the driver applies any required name mangling (e.g. a
-        \c "#" prefix for SQL Server, an \c "ORA$PTT_" prefix for Oracle private temporary tables), and the returned
-        table object carries the physical name
+        \c "#" prefix for SQL Server, an \c "ORA$PTT_" prefix for Oracle private temporary tables, a \c "pg_temp"
+        schema qualification for PostgreSQL), and the returned table object carries the physical name
         @param columns a @ref column_desc_hash "column description hash" (keyed by column name) describing the
         temporary table's columns
         @param opts an optional hash of options:

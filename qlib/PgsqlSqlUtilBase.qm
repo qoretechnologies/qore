@@ -1709,6 +1709,26 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
         return True;
     }
 
+    #! returns the physical name for a temporary table: a \c "pg_temp"-qualified name
+    /** PostgreSQL creates temporary tables in a session-private schema (\c "pg_temp_N") that is never the
+        connection's default schema, so an unqualified temporary-table name would be qualified with the
+        connection's default schema (e.g. \c "public") in generated SQL and fail to resolve; the \c "pg_temp"
+        alias always refers to the calling session's own temporary schema, so the physical name is qualified
+        with it explicitly.  Pre-created temporary tables are assumed to already carry the correct physical
+        name and are returned unchanged
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        if (precreated || name =~ /^pg_temp\./) {
+            return name;
+        }
+        if (name =~ /\./) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y: PostgreSQL temporary tables "
+                "cannot be created in an explicit schema; use an unqualified name (the table is created in the "
+                "session's temporary schema)", name);
+        }
+        return "pg_temp." + name;
+    }
+
     #! returns @ref True "True" if the database supports named types
     private bool supportsTypesImpl() {
         return True;
