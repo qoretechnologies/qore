@@ -740,7 +740,10 @@ enum class QoreIROpcode : uint16_t {
     //! and non-escaping uses of the result.
     ListGetValueNoRefUnchecked = 401,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (402, 403, ...)
+    //! Join an assigned exact list<string> using the separator's encoding.
+    ListStringJoin = 402,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (403, 404, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -749,8 +752,8 @@ enum class QoreIROpcode : uint16_t {
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
 constexpr uint16_t QORE_IR_MAX_OPCODE
-    = static_cast<uint16_t>(QoreIROpcode::ListGetValueNoRefUnchecked);
-static_assert(QORE_IR_MAX_OPCODE == 401, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+    = static_cast<uint16_t>(QoreIROpcode::ListStringJoin);
+static_assert(QORE_IR_MAX_OPCODE == 402, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

@@ -880,6 +880,10 @@ uint64_t qore_rt_string_concat(uint64_t left, uint64_t right, ExceptionSink* xsi
 uint64_t qore_rt_foldl_string_join_checked(uint64_t list_val, uint64_t separator_val,
         ExceptionSink* xsink);
 
+//! Join an assigned exact list<string> using the separator's encoding.
+uint64_t qore_rt_list_string_join_checked(uint64_t separator, uint64_t list,
+        ExceptionSink* xsink);
+
 //! Start and extend an accumulator owned exclusively by fused string-join IR.
 uint64_t qore_rt_string_join_start(uint64_t first, uint64_t separator, uint64_t value,
         ExceptionSink* xsink);

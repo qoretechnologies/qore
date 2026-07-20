@@ -57,7 +57,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[402] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[403] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -460,12 +460,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[402] = {
     { "ListSetLength"                  , false, false, false,  2, "Finalize fresh scalar list length", false, false, "ParseNode", false, false, false, false, false }, // 399
     { "ConstBoolBoxed"                 , false, false, false,  0, "Load boxed boolean constant", false, false, "ConstantNode", true , false, false, false, false }, // 400
     { "ListGetValueNoRefUnchecked"      , false, false, false,  2, "Load proven in-bounds borrowed boxed list element", false, true , "ParseNode", true , false, false, false, false }, // 401
+    { "ListStringJoin"                 , false, true , false,  2, "Join assigned exact list<string>", false, true , "FunctionCallNode", true , false, true , false, true  }, // 402
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 402,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 402"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 403,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 403"
 );
 
 //! ============================================================================

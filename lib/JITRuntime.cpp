@@ -267,6 +267,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_string_equals_cstr",
         reinterpret_cast<void*>(&qore_rt_string_equals_cstr) },
     { "qore_rt_foldl_string_join_checked", reinterpret_cast<void*>(&qore_rt_foldl_string_join_checked) },
+    { "qore_rt_list_string_join_checked", reinterpret_cast<void*>(&qore_rt_list_string_join_checked) },
     { "qore_rt_string_join_start", reinterpret_cast<void*>(&qore_rt_string_join_start) },
     { "qore_rt_string_join_append", reinterpret_cast<void*>(&qore_rt_string_join_append) },
     { "qore_rt_sprintf_int_fixed", reinterpret_cast<void*>(&qore_rt_sprintf_int_fixed) },
@@ -6667,6 +6668,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
         }
     }
     return toBits(QoreValue(result.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
+        uint64_t separator_bits, uint64_t list_bits, ExceptionSink* xsink) {
+    QoreValue separator_value = fromBits(separator_bits);
+    QoreValue list_value = fromBits(list_bits);
+    if (separator_value.getType() != NT_STRING || list_value.getType() != NT_LIST) {
+        if (xsink) {
+            xsink->raiseException("IR-EXEC-ERROR", "invalid typed value in list<string> join");
+        }
+        return toBits(QoreValue());
+    }
+    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
+    const QoreListNode* list = list_value.get<const QoreListNode>();
+    return toBits(QoreValue(join_intern(separator, list, 0, xsink)));
 }
 
 static bool qore_rt_is_optional_string(const QoreValue& value) {

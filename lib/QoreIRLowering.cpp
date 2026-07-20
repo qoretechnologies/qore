@@ -11838,6 +11838,51 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return hoisted;
     }
     const char* func_name = call->getName();
+    if (func_name && !strcmp(func_name, "join") && !call->hasExplicitTypeArgs()
+            && !std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
+        const FunctionEntry* fe = call->getFunctionEntry();
+        std::string namespace_path;
+        if (fe && fe->getNamespace()) {
+            fe->getNamespace()->getPath(namespace_path);
+        }
+        const QoreParseListNode* parse_args = call->getParseArgs();
+        const QoreListNode* args = call->getArgs();
+        std::vector<QoreValue> positional_args;
+        if (variant && !variant->isUser() && fe && fe->hasBuiltin() && namespace_path == "Qore"
+                && qore_ir_get_positional_call_args_no_holes(parse_args, args, 2, positional_args)
+                && positional_args.size() == 2) {
+            QoreParseAnalysis separator_analysis;
+            QoreParseAnalysis list_analysis;
+            bool separator_ok = getAnalysis(positional_args[0], separator_analysis)
+                && separator_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                && (separator_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    || separator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                && QoreTypeInfo::isType(selectAnalysisType(separator_analysis), NT_STRING);
+            bool list_ok = getAnalysis(positional_args[1], list_analysis)
+                && list_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                && (list_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                    || list_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+            if (list_ok) {
+                const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(
+                    selectAnalysisType(list_analysis));
+                list_ok = element_type
+                    && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT;
+            }
+            if (separator_ok && list_ok) {
+                std::vector<QoreIRValue> operands;
+                if (!lowerCallArgs(parse_args, args, operands, error)) {
+                    return QoreIRValue();
+                }
+                if (operands.size() == 2) {
+                    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
+                        expr, operands, call->loc, error);
+                    --ast_delegate_count;
+                    return result;
+                }
+            }
+        }
+    }
     if (func_name && !strcmp(func_name, "sprintf") && !call->hasExplicitTypeArgs()
             && !std::getenv("QORE_DISABLE_IR_FIXED_SPRINTF_INT")) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
