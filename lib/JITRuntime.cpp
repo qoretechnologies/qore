@@ -265,6 +265,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_map_hash_key_offset_any_prehashed) },
     { "qore_rt_map_hash_key_offset_any",
         reinterpret_cast<void*>(&qore_rt_map_hash_key_offset_any) },
+    { "qore_rt_hash_map_two_keys_prehashed",
+        reinterpret_cast<void*>(&qore_rt_hash_map_two_keys_prehashed) },
     { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
     { "qore_rt_list_index_access_compat", reinterpret_cast<void*>(&qore_rt_list_index_access_compat) },
     { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
@@ -6198,6 +6200,50 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const
             }
             result->setKeyValue(key_str.c_str(), val.refSelf(), nullptr);
         }
+    }
+    return toBits(result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val,
+        const char* key1, uint64_t key1_hash64, uint32_t key1_hash32,
+        const char* key2, uint64_t key2_hash64, uint32_t key2_hash32,
+        ExceptionSink* xsink) {
+    static const bool enabled =
+        std::getenv("QORE_DISABLE_AOT_HASH_MAP_TWO_KEYS_FAST_BUILD") == nullptr;
+    if (!enabled) {
+        return qore_rt_hash_map_two_keys(list_val, key1, key2);
+    }
+
+    QoreValue value = fromBits(list_val);
+    if (value.getType() != NT_LIST) {
+        return toBits(QoreValue());
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    size_t size = list->size();
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    qore_hash_private* result_priv = qore_hash_private::get(*result);
+    result_priv->hm.reserve(size);
+    size_t key1_hash = qore_rt_select_precomputed_hash(key1_hash64, key1_hash32);
+    size_t key2_hash = qore_rt_select_precomputed_hash(key2_hash64, key2_hash32);
+    for (size_t i = 0; i < size; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "hash map two-key projection")) {
+            return toBits(QoreValue());
+        }
+
+        QoreValue element = list->retrieveEntry(i);
+        if (element.getType() != NT_HASH) {
+            continue;
+        }
+        const qore_hash_private* input_priv =
+            qore_hash_private::get(*element.get<const QoreHashNode>());
+        bool exists;
+        QoreValue key_value =
+            input_priv->getKeyValueExistencePrehashedIntern(key1, key1_hash, exists);
+        QoreValue mapped =
+            input_priv->getKeyValueExistencePrehashedIntern(key2, key2_hash, exists);
+        QoreStringValueHelper key_string(key_value);
+        result_priv->setKeyValueIntern(key_string->c_str(), mapped.refSelf());
     }
     return toBits(result.release());
 }

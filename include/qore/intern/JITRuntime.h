@@ -866,6 +866,11 @@ uint64_t qore_rt_map_hash_key_offset_any(uint64_t list_val, const char* key,
 uint64_t qore_rt_map_hash_key_offset_any_prehashed(uint64_t list_val, const char* key,
         uint64_t hash64, uint32_t hash32, int64_t offset, ExceptionSink* xsink);
 
+//! Build a hash from two constant keys projected from each input hash.
+uint64_t qore_rt_hash_map_two_keys_prehashed(uint64_t list_val, const char* key1,
+        uint64_t key1_hash64, uint32_t key1_hash32, const char* key2,
+        uint64_t key2_hash64, uint32_t key2_hash32, ExceptionSink* xsink);
+
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.
 uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink);

@@ -21548,12 +21548,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Constant* key1_const = builder->CreateGlobalString(mhk->key1, "map_hk_key1");
             llvm::Constant* key2_const = builder->CreateGlobalString(mhk->key2, "map_hk_key2");
-            auto helper = module.getOrInsertFunction("qore_rt_hash_map_two_keys",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key1_const, key2_const});
+            QoreIRPrecomputedStringHash key1_hash = qore_ir_precompute_string_hash(mhk->key1);
+            QoreIRPrecomputedStringHash key2_hash = qore_ir_precompute_string_hash(mhk->key2);
+            auto helper = module.getOrInsertFunction("qore_rt_hash_map_two_keys_prehashed",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, i64_type, i32_type, ptr_type, i64_type,
+                            i32_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {list_boxed, key1_const,
+                llvm::ConstantInt::get(i64_type, key1_hash.hash64),
+                llvm::ConstantInt::get(i32_type, key1_hash.hash32), key2_const,
+                llvm::ConstantInt::get(i64_type, key2_hash.hash64),
+                llvm::ConstantInt::get(i32_type, key2_hash.hash32), xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         // === Optimized select operations (native runtime helpers) ===
