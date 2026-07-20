@@ -1356,7 +1356,16 @@ llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val)
 // Handles: native i64 → pass through, NaN-boxed (INT48 or big int) → runtime conversion.
 llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
     if (!nanboxed_values.count(value_id)) {
-        return val;  // Already native i64
+        if (val->getType() == i64_type) {
+            return val;
+        }
+        if (val->getType() == i1_type) {
+            return builder->CreateZExt(val, i64_type);
+        }
+        if (val->getType()->isIntegerTy()) {
+            return builder->CreateSExtOrTrunc(val, i64_type);
+        }
+        return val;
     }
     // NaN-boxed value: call runtime to extract int (handles both INT48 and QoreBigIntNode)
     auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
@@ -1372,7 +1381,16 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
         return builder->CreatePtrToInt(val, i64_type);
     }
     if (!nanboxed_values.count(value_id)) {
-        return val;  // Already native i64
+        if (val->getType() == i64_type) {
+            return val;
+        }
+        if (val->getType() == i1_type) {
+            return builder->CreateZExt(val, i64_type);
+        }
+        if (val->getType()->isIntegerTy()) {
+            return builder->CreateSExtOrTrunc(val, i64_type);
+        }
+        return val;
     }
     // Inline tag check + sign-extend for INT48, runtime call for QoreBigIntNode
     auto* cur_func = builder->GetInsertBlock()->getParent();
@@ -4455,7 +4473,8 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
     builder->CreateBr(merge_bb);
     fallback_bb = builder->GetInsertBlock();
     builder->SetInsertPoint(merge_bb);
-    llvm::PHINode* phi = builder->CreatePHI(i64_type, 2, "aot.int.source.result");
+    llvm::PHINode* phi = builder->CreatePHI(result->getType(), 2,
+        "aot.int.source.result");
     phi->addIncoming(result, assigned_bb);
     phi->addIncoming(fallback_result, fallback_bb);
     return phi;

@@ -23,6 +23,14 @@ int sub pair(int left, int right) {
     return leaf(left) + leaf(right);
 }
 
+bool sub positive_bool_expr(int value, int threshold) {
+    return value > threshold;
+}
+
+bool sub nested_positive_bool_expr(int value, int threshold) {
+    return positive_bool_expr(value, threshold);
+}
+
 int sub bounded_expr(int a, int b, int c) {
     return (a * 3 + b * 5) - (c * 7) + (a * b) - 11;
 }
@@ -213,6 +221,11 @@ int sub side_effect_expr(int value) {
     return value + 1;
 }
 
+bool sub side_effect_bool_expr(int value) {
+    side_effect_value = value;
+    return value > 0;
+}
+
 int sub too_large(int value) {
     return value + 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
         + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20;
@@ -236,6 +249,12 @@ string sub consumerCode() {
         pair(removed, 2);
     } catch (hash<auto> ex) {
         removed_rejected = True;
+    }
+    bool missing_bool_rejected = False;
+    try {
+        positive_bool_expr(missing, 0);
+    } catch (hash<auto> ex) {
+        missing_bool_rejected = True;
     }
     string missing_string;
     bool missing_string_rejected = False;
@@ -277,6 +296,14 @@ string sub consumerCode() {
         optional_nothing_rejected,
         missing_string_rejected,
         list_measure_expr((1, 2, 3), (4, 5), 6));
+    printf(\"bool-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        positive_bool_expr(5, 2),
+        positive_bool_expr(-1, 2),
+        nested_positive_bool_expr(7, 3),
+        1 + nested_positive_bool_expr(7, 3),
+        nested_positive_bool_expr(7, 3) + 1,
+        nested_positive_bool_expr(7, 3) + positive_bool_expr(5, 2),
+        missing_bool_rejected);
     string utf8 = \"a\u00e9bc\u00e9\";
     string latin1 = convert_encoding(utf8, \"ISO-8859-1\");
     bool encoding_rejected = False;
@@ -369,6 +396,8 @@ string sub consumerCode() {
         nested_hash_value_expr(hash_present, 2),
         hash_value_expr(hash_missing, 2),
         hash_value_expr(hash_removed, 3));
+    printf(\"bool-side-effect:%d:%d\\n\",
+        side_effect_bool_expr(-4), side_effect_value);
     return 0;
 }
 ";
@@ -414,6 +443,8 @@ string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, pr
 if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"25\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_bitwise_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -466,6 +497,7 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"25\"/)
         || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 6/)
         || !(provider_index =~ /\"float_expression_nodes\": \[[^\n]*\"kind\": 7/)
         || !(provider_index =~ /\"qore_path\": \"side_effect_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
+        || !(provider_index =~ /\"qore_path\": \"side_effect_bool_expr\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)
         || !(provider_index =~ /\"qore_path\": \"too_large\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/)) {
     printf("unexpected integer expression metadata:\n%s", provider_index);
     exit(2);

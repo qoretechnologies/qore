@@ -8424,6 +8424,17 @@ static bool qore_aot_collect_int_expression_summaries(
             || (kind >= AOTIntExpressionNodeKind::StringStartsWith
                 && kind <= AOTIntExpressionNodeKind::StringContains);
     };
+    auto result_matches_return_kind = [&](const AOTIntExpressionInfo& expression,
+            int result, BatchCalleeReturnKind return_kind) {
+        if (result < 0
+                || result != static_cast<int>(expression.nodes.size() - 1)) {
+            return false;
+        }
+        bool result_is_bool = is_bool_node(expression.nodes.back().kind);
+        return return_kind == BatchCalleeReturnKind::NativeBool
+            ? result_is_bool
+            : return_kind == BatchCalleeReturnKind::NativeInt && !result_is_bool;
+    };
     auto is_fallible_node = [&](AOTIntExpressionNodeKind kind) {
         return is_string_operation(kind)
             || kind == AOTIntExpressionNodeKind::Div
@@ -8816,7 +8827,8 @@ static bool qore_aot_collect_int_expression_summaries(
         auto func_it = function_map.find(variant);
         const QoreIRFunction* func = func_it == function_map.end() ? nullptr : func_it->second;
         BatchCalleeReturnKind proven_return_kind = callee->second.return_kind;
-        if (proven_return_kind != BatchCalleeReturnKind::NativeInt) {
+        if (proven_return_kind != BatchCalleeReturnKind::NativeInt
+                && proven_return_kind != BatchCalleeReturnKind::NativeBool) {
             proven_return_kind = qore_ir_get_fast_entry_return_kind(variant, true);
         }
         bool nested_cfg_select = !std::getenv(
@@ -8824,8 +8836,8 @@ static bool qore_aot_collect_int_expression_summaries(
         if (!func || (func->blocks.size() != 1 && func->blocks.size() != 3
                     && func->blocks.size() != 4
                     && (!nested_cfg_select || func->blocks.size() != 5))
-                || (callee->second.return_kind != BatchCalleeReturnKind::NativeInt
-                    && proven_return_kind != BatchCalleeReturnKind::NativeInt)
+                || (proven_return_kind != BatchCalleeReturnKind::NativeInt
+                    && proven_return_kind != BatchCalleeReturnKind::NativeBool)
                 || callee->second.num_params > QORE_AOT_INT_EXPRESSION_MAX_NODES
                 || callee->second.param_kinds.size() != callee->second.num_params
                 || callee->second.param_rejects_nothing.size() != callee->second.num_params
@@ -9350,9 +9362,8 @@ static bool qore_aot_collect_int_expression_summaries(
                 int result = append_select(expression, condition_value,
                     true_is_nested ? nested_result : direct_value,
                     true_is_nested ? direct_value : nested_result);
-                if (result < 0
-                        || result != static_cast<int>(expression.nodes.size() - 1)
-                        || is_bool_node(expression.nodes.back().kind)) {
+                if (!result_matches_return_kind(
+                        expression, result, proven_return_kind)) {
                     state = VisitState::Failed;
                     return false;
                 }
@@ -9495,9 +9506,8 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
                 auto return_value = merge_values.find(ret->value.id);
                 if (return_value == merge_values.end()
-                        || return_value->second
-                            != static_cast<int>(expression.nodes.size() - 1)
-                        || is_bool_node(expression.nodes.back().kind)) {
+                        || !result_matches_return_kind(expression,
+                            return_value->second, proven_return_kind)) {
                     state = VisitState::Failed;
                     return false;
                 }
@@ -9537,7 +9547,8 @@ static bool qore_aot_collect_int_expression_summaries(
             int false_value = get_return(branch->false_target);
             int result = append_select(expression, condition_value,
                 true_value, false_value);
-            if (result < 0 || result != static_cast<int>(expression.nodes.size() - 1)) {
+            if (!result_matches_return_kind(
+                    expression, result, proven_return_kind)) {
                 state = VisitState::Failed;
                 return false;
             }
@@ -9574,8 +9585,8 @@ static bool qore_aot_collect_int_expression_summaries(
         }
         auto result = values.find(ret->value.id);
         if (result == values.end()
-                || result->second != static_cast<int>(expression.nodes.size() - 1)
-                || is_bool_node(expression.nodes.back().kind)) {
+                || !result_matches_return_kind(
+                    expression, result->second, proven_return_kind)) {
             state = VisitState::Failed;
             return false;
         }
@@ -11943,7 +11954,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     }
     if (!rec.int_expression_nodes.empty()) {
         if (rec.int_expression_nodes.size() > QORE_AOT_INT_EXPRESSION_MAX_NODES
-                || info.return_kind != BatchCalleeReturnKind::NativeInt) {
+                || (info.return_kind != BatchCalleeReturnKind::NativeInt
+                    && info.return_kind != BatchCalleeReturnKind::NativeBool)) {
             return false;
         }
         info.int_expression.nodes.reserve(rec.int_expression_nodes.size());
@@ -12068,7 +12080,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             info.int_expression.nodes.push_back(node);
             node_is_bool.push_back(is_comparison);
         }
-        if (node_is_bool.back()) {
+        if (node_is_bool.back()
+                != (info.return_kind == BatchCalleeReturnKind::NativeBool)) {
             return false;
         }
     }

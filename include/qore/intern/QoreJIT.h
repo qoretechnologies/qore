@@ -142,7 +142,7 @@ enum class AOTIntExpressionNodeKind : uint8_t {
 
 constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 16;
 
-//! One topologically ordered node in a bounded pure native-integer expression.
+//! One topologically ordered node in a bounded pure native-integer or boolean expression.
 struct AOTIntExpressionNodeInfo {
     AOTIntExpressionNodeKind kind = AOTIntExpressionNodeKind::Constant;
     uint8_t lhs = UINT8_MAX;
@@ -153,7 +153,7 @@ struct AOTIntExpressionNodeInfo {
     std::string key;
 };
 
-//! Bounded pure native-integer expression; the last node is the result.
+//! Bounded pure native-integer or boolean expression; the last node is the result.
 struct AOTIntExpressionInfo {
     std::vector<AOTIntExpressionNodeInfo> nodes;
 
@@ -384,7 +384,7 @@ struct BatchCalleeInfo {
     std::vector<const LocalVar*> capture_locals; //!< Read-only scalar captures passed to fast entries
     std::vector<BatchCalleeParamKind> capture_kinds; //!< Native capture ABI kinds
     AOTScalarLeafInfo scalar_leaf;       //!< Importable pure scalar body summary
-    AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int expression
+    AOTIntExpressionInfo int_expression; //!< Importable bounded pure native-int/bool expression
     AOTFloatExpressionInfo float_expression; //!< Importable bounded pure native-float expression
     AOTFixedHashRemapInfo fixed_hash_remap; //!< Importable two-key hash remap body
     AOTStringOpInfo string_op;            //!< Importable encoding-aware string operation
