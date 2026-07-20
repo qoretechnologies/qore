@@ -252,7 +252,11 @@ public:
         if (om)
             return om;
 
-        om = new HashMember(key);
+        return createMemberKnownAbsent(key);
+    }
+
+    DLLLOCAL HashMember* createMemberKnownAbsent(const char* key) {
+        HashMember* om = new HashMember(key);
         assert(om->val.isNothing());
         member_list.push_back(om);
 
@@ -491,6 +495,11 @@ public:
 
     DLLLOCAL void setKeyValue(const char* key, QoreValue val, ExceptionSink* xsink) {
         hash_assignment_priv ha(*this, key);
+        ha.assign(val, xsink);
+    }
+
+    DLLLOCAL void setKeyValueKnownAbsent(const char* key, QoreValue val, ExceptionSink* xsink) {
+        hash_assignment_priv ha(*this, createMemberKnownAbsent(key));
         ha.assign(val, xsink);
     }
 

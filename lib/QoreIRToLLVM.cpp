@@ -69,6 +69,11 @@ static bool qore_ir_use_prehashed_keys() {
     return enabled;
 }
 
+static bool qore_ir_use_unique_hash_literal_insert() {
+    static const bool enabled = std::getenv("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT") == nullptr;
+    return enabled;
+}
+
 static bool qore_ir_use_typed_map_fusion(bool aot_mode, const char* aot_disable_env) {
     return std::getenv(aot_mode ? aot_disable_env : "QORE_DISABLE_JIT_TYPED_MAP_FUSION") == nullptr;
 }
@@ -20879,10 +20884,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_arg;
             const char* helper_name = "qore_rt_make_hash_const_keys";
             const char* helper_throwing_name = "qore_rt_make_hash_const_keys_throwing";
+            bool unique_keys = mhck->unique_keys && qore_ir_use_unique_hash_literal_insert();
+            if (unique_keys) {
+                helper_name = "qore_rt_make_hash_const_keys_unique";
+                helper_throwing_name = "qore_rt_make_hash_const_keys_unique_throwing";
+            }
             if (aot_mode && mhck->typeInfo) {
                 ti_arg = getTypePathArg(mhck->typeInfo);
-                helper_name = "qore_rt_make_hash_const_keys_by_type_path";
-                helper_throwing_name = "qore_rt_make_hash_const_keys_by_type_path_throwing";
+                helper_name = unique_keys
+                    ? "qore_rt_make_hash_const_keys_unique_by_type_path"
+                    : "qore_rt_make_hash_const_keys_by_type_path";
+                helper_throwing_name = unique_keys
+                    ? "qore_rt_make_hash_const_keys_unique_by_type_path_throwing"
+                    : "qore_rt_make_hash_const_keys_by_type_path_throwing";
             } else {
                 ti_arg = aot_mode
                     ? llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type))

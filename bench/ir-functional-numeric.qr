@@ -266,6 +266,33 @@ int sub appendLocalString(int rounds) {
     return checksum;
 }
 
+int sub constHashLiteral(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<auto> value = {
+            "constant-hash-key-00": i,
+            "constant-hash-key-01": i + 1,
+            "constant-hash-key-02": i + 2,
+            "constant-hash-key-03": i + 3,
+            "constant-hash-key-04": i + 4,
+            "constant-hash-key-05": i + 5,
+            "constant-hash-key-06": i + 6,
+            "constant-hash-key-07": i + 7,
+            "constant-hash-key-08": i + 8,
+            "constant-hash-key-09": i + 9,
+            "constant-hash-key-10": i + 10,
+            "constant-hash-key-11": i + 11,
+            "constant-hash-key-12": i + 12,
+            "constant-hash-key-13": i + 13,
+            "constant-hash-key-14": i + 14,
+            "constant-hash-key-15": i + 15,
+        };
+        value{"constant-hash-key-00"} += 1;
+        checksum += value{"constant-hash-key-00"};
+    }
+    return checksum;
+}
+
 string kernel = ENV.QORE_BENCH_KERNEL ?? (ARGV.size() ? ARGV[0] : "fold-sum-int");
 int rounds = ENV.QORE_BENCH_ROUNDS
     ? ENV.QORE_BENCH_ROUNDS.toInt()
@@ -349,6 +376,9 @@ switch (kernel) {
         break;
     case "append-local-string":
         printf("%d\n", appendLocalString(rounds));
+        break;
+    case "const-hash-literal":
+        printf("%d\n", constHashLiteral(rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", sprintf("unknown kernel '%s'", kernel);

@@ -407,6 +407,10 @@ uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* 
         const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique(const char** keys, uint64_t* vals, int count,
+        const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(const char** keys, uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink);
 
 //! Convert an assigned native integer to a referenced string without boxing it first.
 uint64_t qore_rt_int_to_string(int64_t value);

@@ -104,6 +104,11 @@ extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8
 extern "C" uint64_t qore_rt_background_static_method_name_call_aot(const char* qualified_name,
         uint64_t* args, int nargs, ExceptionSink* xsink);
 
+static bool qore_ir_interpreter_use_unique_hash_literal_insert() {
+    static const bool enabled = std::getenv("QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT") == nullptr;
+    return enabled;
+}
+
 static bool qore_ir_interpreter_is_type_name_builtin_call(const QoreValue& expr) {
     const auto* call = expr.hasNode()
         ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
@@ -6938,7 +6943,11 @@ next_instruction:
                     } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
                         vcommon = false;
                     }
-                    hash->setKeyValue(ckeys[i].c_str(), stored, xsink);
+                    if (mhck->unique_keys && qore_ir_interpreter_use_unique_hash_literal_insert()) {
+                        hp->setKeyValueKnownAbsent(ckeys[i].c_str(), stored, xsink);
+                    } else {
+                        hash->setKeyValue(ckeys[i].c_str(), stored, xsink);
+                    }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();

@@ -38,6 +38,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -1749,9 +1750,22 @@ class QoreIRMakeHashConstKeysInstruction : public QoreIRInstruction {
 public:
     QoreIRMakeHashConstKeysInstruction(std::vector<std::string>&& n_keys)
             : QoreIRInstruction(QoreIROpcode::MakeHashConstKeys), keys(std::move(n_keys)) {
+        if (keys.size() > 100) {
+            unique_keys = false;
+            return;
+        }
+        std::unordered_set<std::string_view> seen;
+        seen.reserve(keys.size());
+        for (const std::string& key : keys) {
+            if (!seen.insert(key).second) {
+                unique_keys = false;
+                break;
+            }
+        }
     }
 
     std::vector<std::string> keys;  //!< constant key names (one per value operand)
+    bool unique_keys = true;  //!< true when every key can be inserted without a lookup
     const QoreTypeInfo* typeInfo = nullptr;  //!< parse-time type info (may be nullptr for auto)
 };
 
