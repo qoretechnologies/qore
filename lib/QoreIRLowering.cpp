@@ -10640,6 +10640,46 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             }
         }
     }
+    if (m && m->isPseudo() && m->getName() && !strcmp(m->getName(), "join")
+            && !std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN_METHOD")
+            && !std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+        const QoreMethod* method = m->getMethod();
+        QoreValue separator_expr;
+        QoreParseAnalysis base_analysis;
+        QoreParseAnalysis separator_analysis;
+        bool base_ok = method && method->getClass()
+            && !strcmp(method->getClass()->getName(), "<list>")
+            && getAnalysis(base_expr, base_analysis)
+            && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+        if (base_ok) {
+            const QoreTypeInfo* element_type = QoreTypeInfo::getUniqueReturnComplexList(
+                selectAnalysisType(base_analysis));
+            base_ok = element_type
+                && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT;
+        }
+        bool separator_ok = qoreIrGetSinglePositionalCallArgNoHoles(m, separator_expr)
+            && getAnalysis(separator_expr, separator_analysis)
+            && separator_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+            && (separator_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                || separator_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+            && QoreTypeInfo::isType(selectAnalysisType(separator_analysis), NT_STRING);
+        if (base_ok && separator_ok) {
+            QoreIRValue base = lowerExpression(base_expr, error);
+            if (!base.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue separator = lowerExpression(separator_expr, error);
+            if (!separator.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
+                expr, {separator, base}, op->loc, error);
+            --ast_delegate_count;
+            return result;
+        }
+    }
     QoreIRValue base_val = lowerExpression(op->getExpression(), error);
     if (!base_val.isValid()) {
         return QoreIRValue();

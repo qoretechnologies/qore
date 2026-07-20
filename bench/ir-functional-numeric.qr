@@ -4,6 +4,7 @@
 %modern
 
 const int DATA_SIZE = 1024;
+const int SMALL_DATA_SIZE = 32;
 
 list<int> sub makeIntData() {
     list<int> data = ();
@@ -24,6 +25,14 @@ list<float> sub makeFloatData() {
 list<string> sub makeStringData() {
     list<string> data = ();
     for (int i = 0; i < DATA_SIZE; ++i) {
+        push data, sprintf("item-%04d", i);
+    }
+    return data;
+}
+
+list<string> sub makeSmallStringData() {
+    list<string> data = ();
+    for (int i = 0; i < SMALL_DATA_SIZE; ++i) {
         push data, sprintf("item-%04d", i);
     }
     return data;
@@ -154,6 +163,15 @@ int sub listJoinString(list<string> data, int rounds) {
     return checksum;
 }
 
+int sub methodListJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = data.join(", ");
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 int sub mapListJoinString(list<string> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -261,6 +279,12 @@ switch (kernel) {
         break;
     case "list-join-string":
         printf("%d\n", listJoinString(makeStringData(), rounds));
+        break;
+    case "method-list-join-string":
+        printf("%d\n", methodListJoinString(makeStringData(), rounds));
+        break;
+    case "method-list-join-small-string":
+        printf("%d\n", methodListJoinString(makeSmallStringData(), rounds));
         break;
     case "map-list-join-string":
         printf("%d\n", mapListJoinString(makeStringData(), rounds));
