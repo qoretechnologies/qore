@@ -6592,8 +6592,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t righ
     return qore_rt_add_any(left, right, xsink);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
-        uint64_t list_val, uint64_t separator_val, ExceptionSink* xsink) {
+static uint64_t qore_rt_fold_string_join_checked(
+        uint64_t list_val, uint64_t separator_val, bool reverse, ExceptionSink* xsink) {
     QoreValue value = fromBits(list_val);
     QoreValue separator_value = fromBits(separator_val);
     if (value.getType() != NT_LIST || separator_value.getType() != NT_STRING) {
@@ -6609,149 +6609,50 @@ extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
         return toBits(list->retrieveEntry(0).refSelf());
     }
 
-    QoreStringValueHelper separator(separator_value);
-    QoreValue first = list->retrieveEntry(0);
+    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
+    size_t first_index = reverse ? size - 1 : 0;
+    QoreValue first = list->retrieveEntry(first_index);
     const QoreEncoding* encoding = separator->getEncoding();
     if (first.getType() == NT_STRING) {
-        QoreStringValueHelper first_string(first);
-        encoding = first_string->getEncoding();
-    }
-
-    size_t reserve_size = 0;
-    bool can_reserve = true;
-    auto add_reserve_size = [&reserve_size, &can_reserve](size_t length) {
-        if (length > std::numeric_limits<size_t>::max() - reserve_size) {
-            can_reserve = false;
-        } else {
-            reserve_size += length;
-        }
-    };
-    if (separator->size() > std::numeric_limits<size_t>::max() / (size - 1)) {
-        can_reserve = false;
-    } else {
-        add_reserve_size(separator->size() * (size - 1));
-    }
-    for (size_t i = 0; i < size; ++i) {
-        if (i && !(i % 100) && qore_check_cancel(xsink, "foldl string join sizing")) {
-            return toBits(QoreValue());
-        }
-        QoreValue entry = list->retrieveEntry(i);
-        if (entry.getType() == NT_STRING) {
-            QoreStringValueHelper string(entry);
-            add_reserve_size(string->size());
-        }
+        encoding = first.get<const QoreStringNode>()->getEncoding();
     }
 
     QoreStringNodeHolder result(new QoreStringNode(encoding));
-    if (can_reserve) {
-        result->reserve(reserve_size);
-    }
-    if (first.getType() == NT_STRING) {
-        QoreStringValueHelper first_string(first);
-        result->concat(*first_string, xsink);
-        if (xsink && *xsink) {
-            return toBits(QoreValue());
+    // The new result cannot escape while this loop mutates it.
+    qore_string_private* result_priv = qore_string_private::get(*result);
+    auto append_value = [&](const QoreValue& entry) -> bool {
+        if (entry.getType() != NT_STRING) {
+            return true;
         }
+        result_priv->concat(entry.get<const QoreStringNode>(), xsink);
+        return !(xsink && *xsink);
+    };
+    if (!append_value(first)) {
+        return toBits(QoreValue());
     }
+
+    const char* cancel_operation = reverse ? "foldr string join" : "foldl string join";
     for (size_t i = 1; i < size; ++i) {
-        if (!(i % 100) && qore_check_cancel(xsink, "foldl string join")) {
+        if (!(i % 100) && qore_check_cancel(xsink, cancel_operation)) {
             return toBits(QoreValue());
         }
-        result->concat(*separator, xsink);
-        if (xsink && *xsink) {
+        size_t index = reverse ? size - i - 1 : i;
+        if (result_priv->concat(separator, xsink)
+                || !append_value(list->retrieveEntry(index))) {
             return toBits(QoreValue());
-        }
-        QoreValue entry = list->retrieveEntry(i);
-        if (entry.getType() == NT_STRING) {
-            QoreStringValueHelper string(entry);
-            result->concat(*string, xsink);
-            if (xsink && *xsink) {
-                return toBits(QoreValue());
-            }
         }
     }
     return toBits(QoreValue(result.release()));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_foldl_string_join_checked(
+        uint64_t list_val, uint64_t separator_val, ExceptionSink* xsink) {
+    return qore_rt_fold_string_join_checked(list_val, separator_val, false, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_foldr_string_join_checked(
         uint64_t list_val, uint64_t separator_val, ExceptionSink* xsink) {
-    QoreValue value = fromBits(list_val);
-    QoreValue separator_value = fromBits(separator_val);
-    if (value.getType() != NT_LIST || separator_value.getType() != NT_STRING) {
-        return toBits(QoreValue());
-    }
-
-    const QoreListNode* list = value.get<const QoreListNode>();
-    size_t size = list->size();
-    if (!size) {
-        return toBits(QoreValue());
-    }
-    if (size == 1) {
-        return toBits(list->retrieveEntry(0).refSelf());
-    }
-
-    QoreStringValueHelper separator(separator_value);
-    QoreValue first = list->retrieveEntry(size - 1);
-    const QoreEncoding* encoding = separator->getEncoding();
-    if (first.getType() == NT_STRING) {
-        QoreStringValueHelper first_string(first);
-        encoding = first_string->getEncoding();
-    }
-
-    size_t reserve_size = 0;
-    bool can_reserve = true;
-    auto add_reserve_size = [&reserve_size, &can_reserve](size_t length) {
-        if (length > std::numeric_limits<size_t>::max() - reserve_size) {
-            can_reserve = false;
-        } else {
-            reserve_size += length;
-        }
-    };
-    if (separator->size() > std::numeric_limits<size_t>::max() / (size - 1)) {
-        can_reserve = false;
-    } else {
-        add_reserve_size(separator->size() * (size - 1));
-    }
-    for (size_t i = 0; i < size; ++i) {
-        if (i && !(i % 100) && qore_check_cancel(xsink, "foldr string join sizing")) {
-            return toBits(QoreValue());
-        }
-        QoreValue entry = list->retrieveEntry(i);
-        if (entry.getType() == NT_STRING) {
-            QoreStringValueHelper string(entry);
-            add_reserve_size(string->size());
-        }
-    }
-
-    QoreStringNodeHolder result(new QoreStringNode(encoding));
-    if (can_reserve) {
-        result->reserve(reserve_size);
-    }
-    if (first.getType() == NT_STRING) {
-        QoreStringValueHelper first_string(first);
-        result->concat(*first_string, xsink);
-        if (xsink && *xsink) {
-            return toBits(QoreValue());
-        }
-    }
-    for (size_t i = 1; i < size; ++i) {
-        if (!(i % 100) && qore_check_cancel(xsink, "foldr string join")) {
-            return toBits(QoreValue());
-        }
-        result->concat(*separator, xsink);
-        if (xsink && *xsink) {
-            return toBits(QoreValue());
-        }
-        QoreValue entry = list->retrieveEntry(size - i - 1);
-        if (entry.getType() == NT_STRING) {
-            QoreStringValueHelper string(entry);
-            result->concat(*string, xsink);
-            if (xsink && *xsink) {
-                return toBits(QoreValue());
-            }
-        }
-    }
-    return toBits(QoreValue(result.release()));
+    return qore_rt_fold_string_join_checked(list_val, separator_val, true, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
