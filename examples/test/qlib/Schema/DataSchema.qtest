@@ -15,6 +15,8 @@ class DataSchemaTest inherits QUnit::Test {
     constructor() : Test("DataSchema", "1.0") {
         addTestCase("meta-schema structure", \metaSchemaTests());
         addTestCase("meta-schema migration action fields", \metaSchemaMigrationFieldTests());
+        addTestCase("table reconciliation contract validation",
+            \tableReconciliationContractTests());
         addTestCase("column normalization", \columnNormalizationTests());
         addTestCase("table normalization", \tableNormalizationTests());
         addTestCase("partition normalization", \partitionNormalizationTests());
@@ -583,9 +585,30 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(action_enum.contains("add_trigger"));
         assertTrue(action_enum.contains("drop_trigger"));
         assertTrue(action_enum.contains("add_constraint"));
+        assertTrue(action_enum.contains("reconcile_table"));
         assertTrue(action_enum.contains("sql"));
         assertTrue(action_enum.contains("script"));
-        assertEq(17, action_enum.size());  # 15 unrestricted + 2 restricted
+        assertEq(18, action_enum.size());  # 16 unrestricted + 2 restricted
+        assertTrue(action_def.properties.hasKey("contract"));
+        assertEq("#/$defs/tableReconciliationContract",
+            action_def.properties.contract."$ref");
+
+        hash<auto> reconcile_schema = {
+            "schema": {"name": "Reconcile", "version": "1.1"},
+            "migrations": ({
+                "version": "1.1",
+                "post_align": ({
+                    "action": "reconcile_table",
+                    "contract": tableReconciliationContract(),
+                },),
+            },),
+        };
+        Schema::DataSchemaLoader::validate(reconcile_schema);
+        reconcile_schema.migrations[0].post_align[0].contract
+            .unsupported_field = True;
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate(reconcile_schema);
+        });
 
         # Verify source-version gating fields exist on both migration and migrationAction
         assertTrue(action_def.properties.hasKey("min_source_version"),
@@ -615,6 +638,92 @@ class DataSchemaTest inherits QUnit::Test {
         };
         hash<auto> loaded = Schema::DataSchemaLoader::loadHash(gated, True);
         assertEq("0.22", loaded.migrations[0].min_source_version);
+    }
+
+    private hash<auto> tableReconciliationContract() {
+        return {
+            "contract_version": 1,
+            "migration_id": "canonical-payment-id",
+            "table": "payments",
+            "canonical_columns": ({
+                "name": "payment_id",
+                "type": "int",
+                "notnull": True,
+                "primary_key": True,
+                "missing_live": True,
+            },),
+            "column_mappings": ({
+                "target": "payment_id",
+                "source": "id",
+                "source_kind": "legacy_column",
+                "conversion": "numeric_compatible",
+            },),
+            "backfill": {
+                "batch_size": 500,
+                "quarantine_table": "payments_schema_quarantine",
+            },
+            "constraints_and_indexes": {
+                "primary_key": {
+                    "name": "pk_payments",
+                    "columns": ("payment_id",),
+                },
+                "indexes": (),
+            },
+        };
+    }
+
+    tableReconciliationContractTests() {
+        hash<auto> normalized =
+            Schema::DataSchemaTableMigration::validate_contract(
+                tableReconciliationContract());
+        assertEq("payments", normalized.table);
+        assertEq("payment_id",
+            normalized.constraints_and_indexes.primary_key.columns[0]);
+        assertEq(500, normalized.backfill.batch_size);
+        assertTrue(normalized.backfill.preserve_legacy_columns);
+
+        hash<auto> invalid = tableReconciliationContract();
+        invalid.table = "unsafe.table";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "table must be a safe identifier",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.column_mappings[0].source_kind = "raw_sql";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "mapping for \"payment_id\" has unsupported source_kind "
+                "\"raw_sql\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.batch_size = 0;
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill.batch_size must be between 1 and 10000",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.canonical_columns[0].type = "hash<auto>";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "unsupported canonical column type \"hash<auto>\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.column_mappings[0].expression = "unsafe SQL";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "column mapping contains unsupported field \"expression\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.batch_size = "500";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill field \"batch_size\" has an invalid type",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
     }
 
     loaderErrorPathTests() {

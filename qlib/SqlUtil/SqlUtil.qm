@@ -39,7 +39,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.1.0";
+    version = "3.2.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -111,8 +111,16 @@ module SqlUtil {
       - @ref dba_indexes
       - @ref dba_statistics
       - @ref dba_space_management
+    - @ref SqlUtil::RestartableTransaction "RestartableTransaction": bounded,
+      driver-independent restart decisions for complete idempotent transaction
+      bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
+
+    @subsection sqlutilv3_2_0 SqlUtil v3.2.0
+    - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
+      bounded, driver-independent recovery of complete idempotent transaction
+      bodies after database failover and datasource-pool timeout errors
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()

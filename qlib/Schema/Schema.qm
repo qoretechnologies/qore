@@ -46,7 +46,7 @@
 %endtry
 
 module Schema {
-    version = "1.6.0";
+    version = "1.7.0";
     desc = "user module for working with SQL schemas";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -77,6 +77,13 @@ module Schema {
       normalizing data schema files
     - @ref Schema::MigrationExecutor "MigrationExecutor": executes data-driven migration actions defined
       in schema files
+
+    Migration support is also provided by the
+    @ref Schema::DataSchemaTableMigration "DataSchemaTableMigration"
+    namespace for closed, additive table reconciliation and by
+    @ref Schema::execute_migration_action() "execute_migration_action()" for
+    executing one reviewed DataSchema action with a datasource-aware metadata
+    callback.
 
     @section schema_data_schema Pure Data Schema Definitions
 
@@ -477,6 +484,29 @@ module Schema {
         columns: [user_id]
         target_table: users
         target_columns: [id]
+
+      # Apply a reviewed additive reconciliation with bounded backfill,
+      # quarantine, and aggregate verification.
+      - action: reconcile_table
+        contract:
+          contract_version: 1
+          migration_id: users-canonical-id
+          table: users
+          canonical_columns:
+            - {name: user_id, type: int, notnull: true,
+               primary_key: true, missing_live: true}
+          column_mappings:
+            - {target: user_id, source: id,
+               source_kind: legacy_column,
+               conversion: numeric_compatible}
+          backfill:
+            batch_size: 1000
+            quarantine_table: users_schema_quarantine
+          constraints_and_indexes:
+            primary_key:
+              name: pk_users
+              columns: [user_id]
+            indexes: []
     @endcode
 
     @subsection schema_upgrade_sql Raw SQL Migrations
@@ -798,11 +828,20 @@ module Schema {
     - Required top-level keys: \c schema (with \c name and \c version)
     - Column types: \c int, \c varchar, \c char, \c timestamp, \c date, \c number, \c blob,
       \c clob, \c binary, \c bool, \c float, \c text
-    - Migration action types: all 17 supported actions with their field definitions
+    - Migration action types: all 18 supported actions with their field definitions
     - Reference data categories: \c strict, \c normal, \c create_only, \c insert_only
     - Auto-trigger configuration: \c created, \c modified, \c sequence_columns
 
     @section schema_relnotes Schema Module Release History
+
+    @subsection schema_v1_7_0 Schema Module v1.7.0
+    - added the additive, data-preserving \c reconcile_table DataSchema
+      migration action with bounded conversion preflight, restartable
+      backfill, quarantine, indexes, and deterministic aggregate verification
+    - added the datasource-aware \c ddl_change_callback schema option so
+      external table metadata caches can be invalidated after DataSchema or
+      schema-alignment DDL without relying on datasource names embedded in
+      the schema format
 
     @subsection schema_v1_6_0 Schema Module v1.6.0
     - added \c populate attribute on column definitions for automatic backfill when adding new
@@ -845,9 +884,10 @@ module Schema {
       @ref Schema::AL_TRUSTED "AL_TRUSTED", @ref Schema::AL_ADMIN "AL_ADMIN"
     - added \c qschema CLI tool for schema management (align, drop, diff, validate, info, export)
     - added DataProvider dependency for DPQL expression evaluation in reference data
-    - 17 migration actions supported: update, insert, delete, insert_from_select, add_column,
-      drop_column, modify_column, rename_column, rename_table, add_index, drop_index,
-      add_constraint, drop_constraint, add_trigger, drop_trigger, sql, script
+    - 17 migration actions supported: update, insert, delete,
+      insert_from_select, add_column, drop_column, modify_column,
+      rename_column, rename_table, add_index, drop_index, add_constraint,
+      drop_constraint, add_trigger, drop_trigger, sql, script
 
     @subsection schema_v1_4_2 Schema Module v1.4.2
     - fixed reporting changes with negative verbose options
@@ -1207,5 +1247,14 @@ public namespace Schema {
         *string index_ts;
         #! options for @ref SqlUtil::Database::constructor()
         *hash<auto> db_opts;
+        #! callback invoked after DDL can have changed table metadata
+        /** The callback receives the exact datasource object and a bounded
+            list of affected table names.  An empty list means that every
+            cached table for the datasource must be invalidated.
+
+            @since Schema 1.7
+        */
+        *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
+            ddl_change_callback;
     }
 } # namespace Schema

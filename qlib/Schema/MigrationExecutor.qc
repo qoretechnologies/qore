@@ -45,6 +45,27 @@ public const UnrestrictedActions = {
     "drop_constraint": True,
     "add_trigger": True,
     "drop_trigger": True,
+    "reconcile_table": True,
+};
+
+#! Migration actions that can change database metadata
+public const DdlActions = {
+    "add_column": True,
+    "drop_column": True,
+    "modify_column": True,
+    "rename_column": True,
+    "rename_table": True,
+    "add_index": True,
+    "drop_index": True,
+    "add_constraint": True,
+    "drop_constraint": True,
+    "add_trigger": True,
+    "drop_trigger": True,
+    "reconcile_table": True,
+    # Raw SQL and scripts can contain DDL.  Their affected table set is
+    # deliberately unknown, so callbacks invalidate the whole datasource.
+    "sql": True,
+    "script": True,
 };
 
 #! Actions requiring trusted or admin access
@@ -54,6 +75,57 @@ public const RestrictedActions = {
     "sql": True,
     "script": True,
 };
+
+#! Executes one DataSchema migration action
+/** This convenience function provides the same access checks, DDL cache
+    callback, and bounded action result as @ref MigrationExecutor while
+    allowing embedding applications to execute a single reviewed action.
+
+    @param ds datasource used for the action
+    @param step one DataSchema migration action
+    @param access_level action access level
+    @param verbose verbosity level
+    @param ddl_callback datasource-aware metadata callback
+    @return a bounded action report when the action provides one, otherwise
+        @ref NOTHING
+
+    @throw MIGRATION-ACCESS-ERROR if the action is not allowed at the
+        requested access level
+    @throw MIGRATION-ERROR if the action is invalid
+    @throw DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR if a
+        \c reconcile_table contract is invalid
+    @throw DATA-SCHEMA-TABLE-MIGRATION-PREFLIGHT-ERROR if current metadata or
+        data no longer supports a reviewed reconciliation
+    @throw DATA-SCHEMA-TABLE-MIGRATION-VALIDATION-ERROR if a reconciliation
+        outcome cannot be verified
+    @throw SCHEMA-DDL-CHANGE-CALLBACK-ERROR if DDL was committed but the
+        metadata callback failed
+
+    @par Example
+    Execute one reviewed additive reconciliation and invalidate the embedding
+    application's table metadata cache with the exact datasource object:
+    @code{.py}
+code<nothing(AbstractDatasource, list<string>)> callback =
+    nothing sub (AbstractDatasource changed_ds, list<string> tables) {
+        application_cache.invalidate(changed_ds, tables);
+    };
+hash<auto> report = execute_migration_action(ds, {
+    "action": "reconcile_table",
+    "contract": reviewed_contract,
+}, AL_TRUSTED, 0, callback);
+    @endcode
+
+    @since Schema 1.7
+*/
+public *hash<auto> sub execute_migration_action(
+        Qore::SQL::AbstractDatasource ds, hash<auto> step,
+        string access_level = AL_TRUSTED, int verbose = 0,
+        *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
+            ddl_callback = NOTHING) {
+    MigrationExecutor executor(ds, access_level, verbose, NOTHING,
+        ddl_callback);
+    return executor.executeStep(step, NOTHING);
+}
 
 #! Executes data-driven migration actions defined in .ysm/.jsm schema files
 /** This class translates migration action hashes into SqlUtil API calls, enforces access level
@@ -75,11 +147,18 @@ public class MigrationExecutor {
         #! Optional log callback
         *code<nothing(string)> log_callback;
 
+        #! Optional datasource-aware table metadata cache callback
+        *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
+            ddl_change_callback;
+
         #! Schema info passed through to migration scripts
         *hash<auto> schema_info;
 
         #! Local cache for tables referenced by migration steps without an external alignment cache
         SqlUtil::Tables migration_table_cache;
+
+        #! Bounded reports returned by migration actions with deterministic verification
+        list<hash<auto>> action_results;
     }
 
     #! Creates the executor
@@ -87,13 +166,19 @@ public class MigrationExecutor {
         @param al the access level (AL_UNTRUSTED, AL_TRUSTED, AL_ADMIN)
         @param v verbosity level
         @param log optional logging callback: code<nothing(string)>
+        @param ddl_callback optional callback invoked after an action can
+            have changed table metadata; an empty table list means the whole
+            datasource
     */
     constructor(Qore::SQL::AbstractDatasource n_ds, string al = AL_TRUSTED, int v = 0,
-            *code<nothing(string)> log) {
+            *code<nothing(string)> log,
+            *code<nothing(Qore::SQL::AbstractDatasource, list<string>)>
+                ddl_callback) {
         ds = n_ds;
         access_level = al;
         verbose = v;
         log_callback = log;
+        ddl_change_callback = ddl_callback;
         migration_table_cache = new SqlUtil::Tables();
     }
 
@@ -105,7 +190,7 @@ public class MigrationExecutor {
         @param target_version the target schema version
         @param phase "pre_align" or "post_align"
         @param table_cache optional Tables cache (available in post_align phase)
-        @param schema_info optional schema info hash
+        @param n_schema_info optional schema info hash
     */
     executeMigrations(*list<auto> migrations, string current_version, string target_version,
             string phase, *SqlUtil::Tables table_cache, *hash<auto> n_schema_info) {
@@ -139,9 +224,24 @@ public class MigrationExecutor {
             list<auto> ordered = resolveStepOrder(steps);
 
             foreach hash<auto> step in (ordered) {
-                executeStep(step, table_cache);
+                if (*hash<auto> result = executeStep(step, table_cache)) {
+                    action_results += result;
+                }
             }
         }
+    }
+
+    #! Returns bounded reports produced by executed migration actions
+    /** Most migration actions return no report.  Actions such as
+        \c reconcile_table return deterministic aggregate verification without
+        exposing row values.
+
+        @return reports accumulated by the executor
+
+        @since Schema 1.7
+    */
+    list<hash<auto>> getActionResults() {
+        return action_results;
     }
 
     #! Returns @ref True "True" if a migration applies for the given version transition
@@ -216,10 +316,14 @@ public class MigrationExecutor {
     /** @param step the migration action hash
         @param table_cache optional table cache for table operations
 
+        @return a bounded action report when the action provides one,
+            otherwise @ref NOTHING
+
         @throw MIGRATION-ACCESS-ERROR if the action requires higher access than currently allowed
         @throw MIGRATION-ERROR unknown action, missing required field, or step execution failure
     */
-    executeStep(hash<auto> step, *SqlUtil::Tables table_cache) {
+    *hash<auto> executeStep(hash<auto> step,
+            *SqlUtil::Tables table_cache) {
         string action = step.action;
 
         # Access level check
@@ -230,60 +334,130 @@ public class MigrationExecutor {
 
         logMsg(sprintf("  step: %s%s", action, step.table ? sprintf(" on %s", step.table) : ""));
 
-        switch (action) {
-            case "update":
-                executeUpdate(step, table_cache);
-                break;
-            case "insert":
-                executeInsert(step, table_cache);
-                break;
-            case "delete":
-                executeDelete(step, table_cache);
-                break;
-            case "insert_from_select":
-                executeInsertFromSelect(step, table_cache);
-                break;
-            case "add_column":
-                executeAddColumn(step, table_cache);
-                break;
-            case "drop_column":
-                executeDropColumn(step, table_cache);
-                break;
-            case "modify_column":
-                executeModifyColumn(step, table_cache);
-                break;
-            case "rename_column":
-                executeRenameColumn(step, table_cache);
-                break;
-            case "add_index":
-                executeAddIndex(step, table_cache);
-                break;
-            case "drop_index":
-                executeDropIndex(step, table_cache);
-                break;
-            case "add_constraint":
-                executeAddConstraint(step, table_cache);
-                break;
-            case "drop_constraint":
-                executeDropConstraint(step, table_cache);
-                break;
-            case "rename_table":
-                executeRenameTable(step, table_cache);
-                break;
-            case "add_trigger":
-                executeAddTrigger(step, table_cache);
-                break;
-            case "drop_trigger":
-                executeDropTrigger(step, table_cache);
-                break;
-            case "sql":
-                executeSql(step);
-                break;
-            case "script":
-                executeScript(step, table_cache);
-                break;
-            default:
-                throw "MIGRATION-ERROR", sprintf("unknown migration action: %y", action);
+        *hash<auto> result;
+        try {
+            switch (action) {
+                case "update":
+                    executeUpdate(step, table_cache);
+                    break;
+                case "insert":
+                    executeInsert(step, table_cache);
+                    break;
+                case "delete":
+                    executeDelete(step, table_cache);
+                    break;
+                case "insert_from_select":
+                    executeInsertFromSelect(step, table_cache);
+                    break;
+                case "add_column":
+                    executeAddColumn(step, table_cache);
+                    break;
+                case "drop_column":
+                    executeDropColumn(step, table_cache);
+                    break;
+                case "modify_column":
+                    executeModifyColumn(step, table_cache);
+                    break;
+                case "rename_column":
+                    executeRenameColumn(step, table_cache);
+                    break;
+                case "add_index":
+                    executeAddIndex(step, table_cache);
+                    break;
+                case "drop_index":
+                    executeDropIndex(step, table_cache);
+                    break;
+                case "add_constraint":
+                    executeAddConstraint(step, table_cache);
+                    break;
+                case "drop_constraint":
+                    executeDropConstraint(step, table_cache);
+                    break;
+                case "rename_table":
+                    executeRenameTable(step, table_cache);
+                    break;
+                case "add_trigger":
+                    executeAddTrigger(step, table_cache);
+                    break;
+                case "drop_trigger":
+                    executeDropTrigger(step, table_cache);
+                    break;
+                case "reconcile_table":
+                    validateStepField(step, "contract");
+                    result = DataSchemaTableMigration::execute_with_report(
+                        ds, step.contract, verbose);
+                    break;
+                case "sql":
+                    executeSql(step);
+                    break;
+                case "script":
+                    executeScript(step, table_cache);
+                    break;
+                default:
+                    throw "MIGRATION-ERROR", sprintf(
+                        "unknown migration action: %y", action);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (DdlActions{action}) {
+                notifyDdlChangeNoThrow(affectedTables(step));
+            }
+            rethrow;
+        }
+        if (DdlActions{action}) {
+            notifyDdlChange(affectedTables(step));
+        }
+        return result;
+    }
+
+    #! Returns the bounded affected-table projection for a DDL action
+    private list<string> affectedTables(hash<auto> step) {
+        hash<string, bool> tables = {};
+        if (step.table.val()) {
+            tables{step.table} = True;
+        }
+        if (step.to.val() && step.action == "rename_table") {
+            tables{step.to} = True;
+        }
+        if (step.target_table.val()) {
+            tables{step.target_table} = True;
+        }
+        if (step.action == "reconcile_table") {
+            hash<auto> contract = step.contract.typeCode() == NT_HASH
+                ? step.contract : {};
+            if (contract.table.val()) {
+                tables{contract.table} = True;
+            }
+            if (contract.backfill.quarantine_table.val()) {
+                tables{contract.backfill.quarantine_table} = True;
+            }
+        }
+        return sort(keys tables);
+    }
+
+    #! Invokes the configured metadata callback after DDL
+    private notifyDdlChange(list<string> tables) {
+        if (!ddl_change_callback) {
+            return;
+        }
+        try {
+            ddl_change_callback(ds, tables);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "SCHEMA-DDL-CHANGE-CALLBACK-ERROR", sprintf(
+                "DDL was applied, but the datasource metadata callback "
+                    "failed: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Preserves an action exception if conservative invalidation also fails
+    private notifyDdlChangeNoThrow(list<string> tables) {
+        if (!ddl_change_callback) {
+            return;
+        }
+        try {
+            ddl_change_callback(ds, tables);
+        } catch (hash<ExceptionInfo> ex) {
+            logMsg(sprintf("    DDL metadata callback failed while "
+                "preserving the migration error: %s: %s", ex.err, ex.desc));
         }
     }
 
@@ -515,6 +689,7 @@ public class MigrationExecutor {
 
     #! Executes an ADD TRIGGER action
     /** @param step requires \c table, \c name, and \c source fields
+        @param table_cache optional table cache
     */
     private executeAddTrigger(hash<auto> step, *SqlUtil::Tables table_cache) {
         validateStepField(step, "table");
@@ -572,6 +747,8 @@ public class MigrationExecutor {
         @throw MIGRATION-ERROR missing required field
     */
     private executeSql(hash<auto> step) {
+        on_error ds.rollback();
+        on_success ds.commit();
         *list<string> stmts;
         string drv = ds.getDriverName();
 
@@ -602,6 +779,9 @@ public class MigrationExecutor {
         @throw RUNTIME-ERROR script execution failure
     */
     private executeScript(hash<auto> step, *SqlUtil::Tables table_cache) {
+        validateStepField(step, "file");
+        on_error ds.rollback();
+        on_success ds.commit();
         string file_path = step.file;
         logMsg(sprintf("    script: %s", file_path));
 
