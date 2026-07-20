@@ -136,6 +136,15 @@ int sub foldJoinString(*list<string> data, int rounds) {
     return checksum;
 }
 
+int sub foldrJoinString(*list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (foldr $1 + ", " + $2, data);
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 int sub listJoinString(list<string> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -246,6 +255,9 @@ switch (kernel) {
         break;
     case "fold-join-string":
         printf("%d\n", foldJoinString(makeStringData(), rounds));
+        break;
+    case "foldr-join-string":
+        printf("%d\n", foldrJoinString(makeStringData(), rounds));
         break;
     case "list-join-string":
         printf("%d\n", listJoinString(makeStringData(), rounds));

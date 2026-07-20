@@ -41,6 +41,7 @@ class QoreFoldlOperatorNode : public QoreBinaryOperatorNode<> {
 protected:
     const QoreTypeInfo* returnTypeInfo;
     FunctionalOperator* iterator_func;
+    bool string_join = false;
 
     DLLLOCAL static QoreString foldl_str;
 
@@ -77,6 +78,7 @@ public:
         QoreFoldlOperatorNode* rv = copyBackgroundExplicit<QoreFoldlOperatorNode>(xsink);
         // use lazy evaluation if the iterator expression supports it
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
+        rv->string_join = string_join;
         return rv;
     }
 
@@ -113,6 +115,7 @@ public:
         QoreFoldrOperatorNode* rv = copyBackgroundExplicit<QoreFoldrOperatorNode>(xsink);
         // use lazy evaluation if the iterator expression supports it
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
+        rv->string_join = string_join;
         return rv;
     }
 };
