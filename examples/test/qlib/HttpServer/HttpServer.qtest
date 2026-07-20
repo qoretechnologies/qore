@@ -1984,6 +1984,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp4 = client.send("end", "POST", "/persistent/end");
         assertEq(200, resp4.status_code);
         assertEq("ended", resp4.body);
+        assertTrue(handler.waitForCloseNotification(1s),
+            "persistent close notification runs after final request clears persistence flag");
+        assertFalse(handler.waitForCloseNotification(50ms),
+            "persistent close notification runs exactly once");
     }
 
     asyncModeEndPersistentReuseTest() {
@@ -4151,12 +4155,31 @@ OKKqgBjNAlYDdPhOy8O8Agk=
 
 #! Test handler that supports persistent connections
 class PersistentTestHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue close_notifications();
+    }
+
+    bool waitForCloseNotification(timeout wait_timeout) {
+        try {
+            return boolean(close_notifications.get(wait_timeout));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         string path = hdr.path;
         int tid = gettid();
 
         if (path =~ /start$/) {
             # Start persistent mode
+            Queue notifications = close_notifications;
+            notifyClosed(sub () {
+                notifications.push(True);
+            });
             setPersistent(True);
             return makeResponse({
                 "x-thread-id": string(tid),
