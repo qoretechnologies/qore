@@ -383,6 +383,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_try_get_aot_call_target_context",
         reinterpret_cast<void*>(&qore_rt_try_get_aot_call_target_context) },
     { "qore_rt_object_is_valid", reinterpret_cast<void*>(&qore_rt_object_is_valid) },
+    { "qore_rt_check_valid_object_call_receiver",
+        reinterpret_cast<void*>(&qore_rt_check_valid_object_call_receiver) },
     { "qore_rt_object_has_exact_aot_target_class",
         reinterpret_cast<void*>(&qore_rt_object_has_exact_aot_target_class) },
     { "qore_rt_object_has_exact_aot_target_class_only",
@@ -12452,6 +12454,19 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(
 extern "C" DLLEXPORT int qore_rt_object_is_valid(uint64_t value) {
     QoreValue receiver = fromBits(value);
     return receiver.getType() == NT_OBJECT && receiver.get<QoreObject>()->isValid();
+}
+
+extern "C" DLLEXPORT void qore_rt_check_valid_object_call_receiver(
+        uint64_t value, ExceptionSink* xsink) {
+    QoreValue receiver = fromBits(value);
+    if (receiver.getType() == NT_OBJECT
+            && receiver.get<QoreObject>()->isValid()) {
+        return;
+    }
+    if (xsink) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "cannot call a method on an object that has already been deleted");
+    }
 }
 
 extern "C" DLLEXPORT int qore_rt_object_has_exact_aot_target_class(

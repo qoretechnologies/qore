@@ -2314,6 +2314,9 @@ public:
 //! for obj.method(args) calls where the method is resolved at parse time.
 class QoreIRDotEvalMethodDirectInstruction : public QoreIRInstruction {
 public:
+    using AOTAggregateProjectionKind =
+        QoreIRCallDirectInstruction::AOTAggregateProjectionKind;
+
     QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
             : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
@@ -2342,6 +2345,11 @@ public:
     bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
+
+    //! Transient AOT-only scalar projection from a pure fixed aggregate.
+    AOTAggregateProjectionKind aot_aggregate_projection =
+        AOTAggregateProjectionKind::None;
+    int16_t aot_aggregate_projection_operand = -1;
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible

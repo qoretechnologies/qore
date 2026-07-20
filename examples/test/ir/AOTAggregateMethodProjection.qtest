@@ -23,6 +23,10 @@ final class ExactProjection {
         return (left, middle, right);
     }
 
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": left, \"right\": right);
+    }
+
     static list<string> makeStrings(string left, string middle, string right) {
         return (left, middle, right);
     }
@@ -109,18 +113,68 @@ class OverridableProjection {
     int projection() {
         return makeValues(10, 11, 12)[1];
     }
+
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": left, \"right\": right);
+    }
+}
+
+class OverriddenProjection inherits OverridableProjection {
+    hash<string, int> makeHash(int left, int right) {
+        return (\"left\": right, \"right\": left);
+    }
+}
+
+int sub objectDirectProjection(ExactProjection source) {
+    return source.makeHash(90, 91).right;
+}
+
+int sub objectMultiProjection(ExactProjection source) {
+    hash<string, int> values = source.makeHash(92, 93);
+    return values.left + values.right;
+}
+
+int sub objectSideEffectProjection(ExactProjection source) {
+    int effects = 0;
+    int value = source.makeHash((effects = 4), (effects = 5)).left;
+    return value * 10 + effects;
+}
+
+int sub maybeObjectProjection(*ExactProjection source) {
+    return source.makeHash(94, 95).left;
+}
+
+int sub overriddenObjectProjection(OverridableProjection source) {
+    return source.makeHash(1, 2).left;
+}
+
+int sub deletedObjectProjection() {
+    ExactProjection source();
+    ExactProjection alias = source;
+    delete source;
+    return alias.makeHash(96, 97).left;
 }
 
 ExactProjection exact();
 OverridableProjection overridable();
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s\\n\",
+OverridableProjection overridden = new OverriddenProjection();
+string deleted_error;
+try {
+    deletedObjectProjection();
+} catch (hash<ExceptionInfo> ex) {
+    deleted_error = ex.err;
+}
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%s\\n\",
     ExactProjection::staticProjection(),
     exact.instanceProjection(), ExactProjection::staticMultiProjection(),
     exact.instanceMultiProjection(), ExactProjection::staticCfgProjection(True),
     exact.instanceCfgProjection(False), ExactProjection::staticPhiProjection(False),
     exact.instancePhiProjection(True), ExactProjection::reassignedProjection(True),
     ExactProjection::sideEffectProjection(), overridable.projection(),
-    ExactProjection::boxedPhiProjection(True));
+    ExactProjection::boxedPhiProjection(True), objectDirectProjection(exact),
+    objectMultiProjection(exact), objectSideEffectProjection(exact),
+    maybeObjectProjection(exact), overriddenObjectProjection(overridden),
+    deleted_error);
 ";
 
 string root = "/tmp/qore-aot-aggregate-method-projection-" + string(getpid());
@@ -132,7 +186,7 @@ source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "5:8:15:24:33:42:41:51:81:23:11:right\n";
+string expected = "5:8:15:24:33:42:41:51:81:23:11:right:91:185:45:94:2:OBJECT-ALREADY-DELETED\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -157,7 +211,8 @@ foreach string function in (("staticProjection", "instanceProjection",
         "staticMultiProjection", "instanceMultiProjection",
         "staticCfgProjection", "instanceCfgProjection",
         "staticPhiProjection", "instancePhiProjection",
-        "sideEffectProjection")) {
+        "sideEffectProjection", "objectDirectProjection",
+        "objectSideEffectProjection", "deletedObjectProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*aggregate-projections=1",
             function))) {
@@ -167,7 +222,7 @@ foreach string function in (("staticProjection", "instanceProjection",
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|boxedPhiProjection)[^\n]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*(OverridableProjection::projection|reassignedProjection|boxedPhiProjection|objectMultiProjection|maybeObjectProjection|overriddenObjectProjection)[^\n]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled method aggregate projection:\n%s",
         enabled_compile + disabled_compile);

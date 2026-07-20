@@ -13516,6 +13516,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 guarded_descriptors,
                         std::vector<std::string>& guarded_keys) {
                     const QoreValue* expr = nullptr;
+                    size_t arg_offset = 0;
                     if (call) {
                         if (call->opcode == QoreIROpcode::CallDirect) {
                             expr = &static_cast<
@@ -13531,6 +13532,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             expr = &static_cast<
                                 const QoreIRCallMethodDirectInstruction*>(
                                     call)->expr;
+                        } else if (call->opcode
+                                == QoreIROpcode::DotEvalMethodDirect) {
+                            expr = &static_cast<
+                                const QoreIRDotEvalMethodDirectInstruction*>(
+                                    call)->expr;
+                            arg_offset = 1;
                         }
                     }
                     bool dynamic_index = kind
@@ -13540,30 +13547,34 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         == QoreIRAggregateProjectionQueryKind::
                             HashKeyDynamicValue;
                     auto found = aot_batch_callee_map->find(callee);
+                    size_t nargs = call
+                        && call->operands.size() >= arg_offset
+                        ? call->operands.size() - arg_offset : 0;
                     if (found == aot_batch_callee_map->end() || !call || !expr
                             || !found->second.approach_b_eligible
                             || !found->second.aggregate_return
-                            || call->operands.size()
-                                != found->second.num_params
+                            || nargs != found->second.num_params
                             || !qore_aot_fast_entry_operands_need_no_binding(
-                                callee, *expr, func, call->operands, 0,
-                                static_cast<int>(call->operands.size()))) {
+                                callee, *expr, func, call->operands,
+                                static_cast<int>(arg_offset),
+                                static_cast<int>(nargs))) {
                         return false;
                     }
                     if (found->second.param_kinds.size()
-                                != call->operands.size()
+                                != nargs
                             || found->second.param_rejects_nothing.size()
-                                != call->operands.size()) {
+                                != nargs) {
                         return false;
                     }
-                    for (size_t i = 0; i < call->operands.size(); ++i) {
+                    for (size_t i = 0; i < nargs; ++i) {
                         if (i && !(i % 100)
                                 && qore_check_cancel(nullptr,
                                     "AOT aggregate-return argument validation")) {
                             return false;
                         }
                         const QoreIRValueFacts* facts =
-                            func.getValueFacts(call->operands[i]);
+                            func.getValueFacts(
+                                call->operands[arg_offset + i]);
                         BatchCalleeParamKind param_kind =
                             found->second.param_kinds[i];
                         if (dynamic_index
@@ -13840,7 +13851,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         == BatchCalleeParamKind::Boxed)) {
                             return false;
                         }
-                        descriptor.operand = param;
+                        descriptor.operand =
+                            static_cast<int16_t>(arg_offset
+                                + static_cast<size_t>(param));
                         if (binary_int || compared_int) {
                             if (dynamic_index) {
                                 return false;
@@ -13859,7 +13872,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 return false;
                             }
                             descriptor.int_constant =
-                                aggregate.value_ints[value_index];
+                                static_cast<int64_t>(operation) << 8
+                                | static_cast<int64_t>(
+                                    rhs + arg_offset);
                             descriptor.kind = compared_int
                                 ? QoreIRCallDirectInstruction::
                                     AOTAggregateProjectionKind::
@@ -13915,7 +13930,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         != selected_kind) {
                                 return false;
                             }
-                            descriptor.int_constant = packed;
+                            descriptor.int_constant =
+                                static_cast<int64_t>(
+                                    alternate + arg_offset) << 8
+                                | static_cast<int64_t>(
+                                    condition + arg_offset);
                             descriptor.kind = selected_int
                                 ? boxed_projection
                                     ? QoreIRCallDirectInstruction::

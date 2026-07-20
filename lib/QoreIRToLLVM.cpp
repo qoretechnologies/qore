@@ -15774,6 +15774,49 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!base_val) { return false; }
             llvm::Value* base_boxed = boxValue(base_val, inst->operands[0].id);
 
+            auto aggregate_projection =
+                direct_inst->aot_aggregate_projection;
+            if (aggregate_projection
+                    != QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::None) {
+                int16_t operand =
+                    direct_inst->aot_aggregate_projection_operand;
+                if (operand <= 0
+                        || static_cast<size_t>(operand)
+                            >= inst->operands.size()) {
+                    error = "internal error: projected object aggregate"
+                        " operand is out of range";
+                    return false;
+                }
+                llvm::Value* projected = getVal(
+                    inst->operands[static_cast<size_t>(operand)].id, error);
+                if (!projected) {
+                    return false;
+                }
+                if ((aggregate_projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeInt
+                            && projected->getType() != i64_type)
+                        || (aggregate_projection
+                            == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::NativeFloat
+                            && projected->getType() != double_type)) {
+                    error = "internal error: projected object aggregate"
+                        " operand has the wrong native type";
+                    return false;
+                }
+                auto valid_helper = module.getOrInsertFunction(
+                    "qore_rt_check_valid_object_call_receiver",
+                    llvm::FunctionType::get(void_type,
+                        {i64_type, ptr_type}, false));
+                builder->CreateCall(valid_helper,
+                    {base_boxed, xsink_arg});
+                values[inst->result.id] = projected;
+                releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
+
             int nargs = static_cast<int>(inst->operands.size()) - 1;
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
