@@ -44,7 +44,7 @@
 # enable all warnings
 
 module OracleSqlUtilBase {
-    version = "1.6.1";
+    version = "1.7";
     desc = "user module for working with Oracle SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -272,6 +272,12 @@ hash schema = (
     description hash keys.
 
     @section ora_relnotes Release Notes
+
+    @subsection oracle17 OracleSqlUtilBase v1.7
+    - added temporary-table support: pre-created global temporary tables (the \c "precreated" option; no runtime
+      DDL, supported on all Oracle versions) and, on Oracle 18c and later, runtime private temporary tables
+      (\c "ORA$PTT_" name prefix; \c NOT \c NULL column constraints are not supported and are dropped); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
 
     @subsection oracle161 OracleSqlUtilBase v1.6.1
     - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
@@ -1910,6 +1916,41 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     #! returns @ref True "True" if the database supports sequences
     private bool supportsSequencesImpl() {
         return True;
+    }
+
+    #! returns @ref True "True" as Oracle supports temporary tables (global temporary tables and, on 18c+, private temporary tables)
+    private bool supportsTempTablesImpl() {
+        return True;
+    }
+
+    #! returns the physical name for a temporary table
+    /** pre-created (schema-managed) global temporary tables use their name unchanged; runtime temporary tables use
+        Oracle 18c+ private temporary tables, which require the mandatory \c "ORA$PTT_" name prefix
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        if (precreated) {
+            return name;
+        }
+        # runtime temporary tables require Oracle 18c+ private temporary tables
+        int major = (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        if (major < 18) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y at runtime: the Oracle server "
+                "(major version %d) does not support private temporary tables (Oracle 18c or later is required); "
+                "use a pre-created global temporary table with the \"precreated\" option instead", name, major);
+        }
+        return name =~ /^ora\$ptt_/i ? name : "ora$ptt_" + name;
+    }
+
+    #! strips NOT NULL column constraints for runtime (private) temporary tables
+    /** Oracle private temporary tables (18c+) do not support \c NOT \c NULL column constraints (ORA-14451); runtime
+        temporary tables are transient scratch tables, so the \c "notnull" attribute is removed.  Pre-created global
+        temporary tables are schema-managed and support \c NOT \c NULL, so their column description is unchanged
+    */
+    private hash<auto> prepareTempTableColumnsImpl(hash<auto> columns, bool precreated) {
+        if (precreated) {
+            return columns;
+        }
+        return map {$1.key: $1.value - "notnull"}, columns.pairIterator();
     }
 
     #! returns @ref True "True" if the database supports named types
@@ -4036,10 +4077,13 @@ group by p.index_name", schema.upr(), name.upr());
     }
 
     string getCreateTableSqlImpl(*hash opt) {
-        string sql = sprintf("create table %s (\n", name);
+        string sql = sprintf("%s (\n", getCreateTableStartSql());
 
         sql += foldl $1 + ",\n" + $2, (map sprintf("  %s", $1.getCreateSql(self)), columns.iterator());
         sql += "\n)";
+
+        # temporary-table "on commit ... definition" clause must precede any tablespace/partition clause
+        sql += getCreateTableTempClauseSql();
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts) {
@@ -4049,6 +4093,30 @@ group by p.index_name", schema.upr(), name.upr());
         sql += getOraclePartitionCreateClause();
 
         return sql;
+    }
+
+    #! returns \c "create private temporary table <name>" for runtime temporary tables, \c "create table <name>" otherwise
+    /** runtime temporary tables use Oracle 18c+ private temporary tables; pre-created (schema-managed) global
+        temporary tables never emit runtime DDL and so use the normal create prefix
+    */
+    private string getCreateTableStartSql() {
+        if (isTempTable() && !isPreCreatedTempTable()) {
+            return sprintf("create private temporary table %s", name);
+        }
+        return AbstractTable::getCreateTableStartSql();
+    }
+
+    #! returns the Oracle private-temporary-table \c "on commit ... definition" clause based on the scope
+    /** transaction-scoped private temporary tables use \c "on commit drop definition"; session-scoped ones use
+        \c "on commit preserve definition"
+    */
+    private string getCreateTableTempClauseSql() {
+        if (isTempTable() && !isPreCreatedTempTable()) {
+            return getTempScope() == SqlUtil::TT_Transaction
+                ? " on commit drop definition"
+                : " on commit preserve definition";
+        }
+        return "";
     }
 
     private string getOraclePartitionCreateClause() {

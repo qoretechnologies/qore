@@ -125,6 +125,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("result set placeholder", \resultSetPlaceholderTest());
         addTestCase("Serialization", \serializationTest());
         addTestCase("implicit composite foreign key join", \implicitCompositeForeignKeyJoinTest());
+        addTestCase("Temp Tables", \tempTableTest());
         addTestCase("wrong schema", \test2358SqlutilSchema());
         addTestCase("get DB size #3385", \testGetPhysicalSize());
     }
@@ -203,6 +204,115 @@ public class SqlTestBase inherits QUnit::Test {
         assertTrue(sql =~ /\.fk_b = p\.id_b/, sql);
         assertFalse(sql =~ /\.fk_a = p\.id_b/, sql);
         assertFalse(sql =~ /\.fk_b = p\.id_a/, sql);
+    }
+
+    tempTableTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        ds.commit();
+        Database db(ds);
+
+        # backends without temporary-table support must throw a clear error and are skipped
+        if (!db.supportsTempTables()) {
+            assertThrows("TEMP-TABLE-ERROR", "does not support temporary tables",
+                sub () { db.createTempTable("sqlutil_tt_ids", {"id": c_number(14, True)}); });
+            testSkip("driver does not support temporary tables");
+        }
+
+        # negative: empty column description
+        assertThrows("TEMP-TABLE-ERROR", "no columns",
+            sub () { db.createTempTable("sqlutil_tt_ids", {}); });
+        # negative: invalid scope
+        assertThrows("TEMP-TABLE-ERROR", "invalid temporary table scope",
+            sub () { db.createTempTable("sqlutil_tt_ids", {"id": c_number(14, True)}, {"scope": "bogus"}); });
+
+        # build a source table with known data
+        string src_name = "sqlutil_tt_src";
+        db.dropTableIfExists(src_name);
+        ds.commit();
+        AbstractTable src = db.makeTable(src_name, {
+            "columns": {
+                "id": c_number(14, True),
+                "grp": c_number(14, True),
+            },
+            "primary_key": {"name": "pk_" + src_name, "columns": ("id",)},
+        });
+        src.create();
+        ds.commit();
+        on_exit {
+            db.dropTableIfExists(src_name);
+            ds.commit();
+        }
+        for (int i = 0; i < 30; ++i) {
+            src.insert({"id": i, "grp": i % 3});
+        }
+        ds.commit();
+
+        list<int> expected = map $1.id.toInt(),
+            src.selectRows({"columns": ("id",), "where": {"grp": 1}, "orderby": "id"});
+        assertEq(10, expected.size());
+
+        # transaction-scoped temporary table filled server-side and joined for row parity
+        {
+            AbstractTable tmp = db.createTempTable("sqlutil_tt_ids", {"id": c_number(14, True)});
+            assertTrue(tmp.isTempTable());
+            assertFalse(tmp.isPreCreatedTempTable());
+            assertEq(SqlUtil::TT_Transaction, tmp.getTempScope());
+            TempTableHelper th(tmp);
+
+            # a join against an empty temporary table returns no rows
+            assertEq((), src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}));
+
+            # fill the temporary table entirely server-side (INSERT ... SELECT)
+            int filled = tmp.insertFromSelect(("id",), src, {"columns": "id", "where": {"grp": 1}});
+            assertEq(expected.size(), filled);
+
+            # the enrichment join must return exactly the same ids as the direct filtered query
+            list<int> got = map $1.id.toInt(), src.selectRows({
+                "columns": ("id",),
+                "join": join_inner(tmp, "t", {"id": "id"}),
+                "orderby": "id",
+            });
+            assertEq(expected, got);
+
+            # describe-from-definition DML works without any catalog introspection
+            tmp.insert({"id": 9999});
+            assertEq(filled + 1, tmp.selectRows({"columns": ("id",)}).size());
+            assertEq(1, tmp.del({"id": 9999}));
+            assertEq(filled, tmp.selectRows({"columns": ("id",)}).size());
+
+            # explicit drop (also exercised implicitly by TempTableHelper going out of scope)
+            th.dropTempTable();
+            assertNothing(th.get());
+        }
+        ds.commit();
+
+        # DatasourcePool transaction guard: creation without an active transaction must fail immediately
+        {
+            DatasourcePool dsp;
+            {
+                hash<auto> ch = ds.getConfigHash();
+                ch.options += {"min": 1, "max": 1};
+                dsp = new DatasourcePool(ch);
+            }
+            Database pdb(dsp);
+            assertThrows("TEMP-TABLE-ERROR", "transaction must be in progress",
+                sub () { pdb.createTempTable("sqlutil_tt_guard", {"id": c_number(14, True)}); });
+
+            # with an active transaction on the calling thread it succeeds
+            dsp.beginTransaction();
+            on_exit dsp.rollback();
+            AbstractTable tmp = pdb.createTempTable("sqlutil_tt_guard", {"id": c_number(14, True)});
+            TempTableHelper th(tmp);
+            assertTrue(tmp.isTempTable());
+            # DML on the temporary table works on the pooled (transaction-pinned) connection
+            tmp.insert({"id": 1});
+            assertEq(1, tmp.selectRows({"columns": ("id",)}).size());
+            th.dropTempTable();
+        }
     }
 
     dbProviderTest() {

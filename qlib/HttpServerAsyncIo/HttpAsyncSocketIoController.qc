@@ -695,14 +695,25 @@ public class HttpAsyncSocketIoController {
         thread has already exited).
 
         @param uh the connection unique hash
+        @param close_ack optional completion queue; when provided, the dedicated
+            handler thread pushes a value only after its persistent-close
+            callback and thread-local cleanup have completed
+
+        @return @ref True when a close entry was queued, @ref False when no
+            persistent queue was registered for @p uh
     */
-    signalPersistentQueuesForConnection(string uh) {
+    bool signalPersistentQueuesForConnection(string uh, *Queue close_ack) {
         persistent_queue_mutex.lock();
         on_exit persistent_queue_mutex.unlock();
         if (persistent_queues{uh}) {
             log(LoggerLevel::DEBUG, "signalling persistent queue for closed connection: %y", uh);
-            persistent_queues{uh}.queue.push({"type": "close"});
+            persistent_queues{uh}.queue.push({
+                "type": "close",
+                "close_ack": close_ack,
+            });
+            return True;
         }
+        return False;
     }
 
     #! Signals all persistent queues whose keys start with the given prefix

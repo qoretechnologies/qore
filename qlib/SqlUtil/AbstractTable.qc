@@ -549,6 +549,18 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! manual edits
         bool manual = False;
 
+        #! temporary-table scope; @ref nothing "NOTHING" for a normal (non-temporary) table
+        /** set to @ref SqlUtil::TT_Transaction or @ref SqlUtil::TT_Session when this object represents a
+            temporary table created with @ref SqlUtil::AbstractDatabase::createTempTable()
+
+            @since %SqlUtil 3.1
+        */
+        *string temp_scope;
+        #! @ref True "True" if this is a pre-created (schema-managed) temporary table; no runtime DDL is issued
+        /** @since %SqlUtil 3.1
+        */
+        bool temp_precreated = False;
+
         hash m_customCopMap = {};
     }
 
@@ -969,6 +981,64 @@ table.create();
     #! A legacy wrapper for create()
     deprecated createNoCommit(*hash<auto> opt) {
         create(opt);
+    }
+
+    #! returns @ref True "True" if this object represents a temporary table
+    /** @return @ref True "True" if this object represents a temporary table created with
+        @ref SqlUtil::AbstractDatabase::createTempTable(), @ref False "False" if not
+
+        @since %SqlUtil 3.1
+    */
+    bool isTempTable() {
+        return exists temp_scope;
+    }
+
+    #! returns @ref True "True" if this is a pre-created (schema-managed) temporary table
+    /** Pre-created temporary tables (for example, an Oracle global temporary table managed by the schema) are
+        never created or dropped with runtime DDL by SqlUtil
+
+        @return @ref True "True" if this is a pre-created temporary table, @ref False "False" if not
+
+        @since %SqlUtil 3.1
+    */
+    bool isPreCreatedTempTable() {
+        return temp_precreated;
+    }
+
+    #! returns the temporary-table scope or @ref nothing "NOTHING" for a normal (non-temporary) table
+    /** @return @ref SqlUtil::TT_Transaction, @ref SqlUtil::TT_Session, or @ref nothing "NOTHING" if this is not a
+        temporary table
+
+        @since %SqlUtil 3.1
+    */
+    *string getTempScope() {
+        return temp_scope;
+    }
+
+    #! marks this table object as a temporary table with the given scope
+    /** @param scope the temporary-table scope (@ref SqlUtil::TT_Transaction or @ref SqlUtil::TT_Session)
+        @param precreated @ref True "True" if the temporary table is pre-created / schema-managed
+
+        @note for internal use by @ref SqlUtil::AbstractDatabase::createTempTable(); does not issue any SQL
+
+        @since %SqlUtil 3.1
+    */
+    setTempScope(string scope, bool precreated = False) {
+        temp_scope = scope;
+        temp_precreated = precreated;
+    }
+
+    #! marks this table object as present (or not) in the database without issuing any SQL
+    /** @note for internal use by @ref SqlUtil::AbstractDatabase::createTempTable() when registering a pre-created
+        temporary table; does not issue any SQL
+
+        @since %SqlUtil 3.1
+    */
+    setInDb(bool in_db = True) {
+        inDb = in_db;
+        if (in_db) {
+            manual = False;
+        }
     }
 
     #! creates the table from a select statement and commits or rolls back the transaction
@@ -12083,6 +12153,29 @@ on_exit printf("SQL> %s\n", sql);
     private abstract ForeignConstraints getForeignConstraintsImpl(*hash<auto> opt);
     private abstract Constraints getConstraintsImpl();
     private abstract Triggers getTriggersImpl();
+
+    #! returns the leading clause of a \c CREATE TABLE statement (i.e. \c "create table <name>")
+    /** Temporary-table-capable drivers reimplement this method to inject the driver-specific temporary-table
+        keyword (e.g. \c "create temp table", \c "create temporary table", \c "create private temporary table")
+        when @ref isTempTable() returns @ref True "True".  Drivers must call this method from
+        @ref getCreateTableSqlImpl() instead of hardcoding the \c "create table" prefix.
+
+        @since %SqlUtil 3.1
+    */
+    private string getCreateTableStartSql() {
+        return sprintf("create table %s", name);
+    }
+
+    #! returns any trailing clause to append to a temporary-table \c CREATE statement (e.g. \c " on commit drop")
+    /** returns an empty string for normal tables and for drivers that do not use a trailing temporary-table clause;
+        temporary-table-capable drivers (e.g. pgsql, oracle private temporary tables) reimplement this to append
+        the appropriate \c "on commit" clause based on @ref getTempScope()
+
+        @since %SqlUtil 3.1
+    */
+    private string getCreateTableTempClauseSql() {
+        return "";
+    }
 
     private abstract string getCreateTableSqlImpl(*hash<auto> opt);
     private abstract *list<auto> getCreateMiscSqlImpl(*hash<auto> opt, bool cache);

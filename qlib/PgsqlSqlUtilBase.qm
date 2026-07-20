@@ -36,7 +36,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.9";
+    version = "1.10";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -159,6 +159,10 @@ $function$
     @ref SqlUtil::AbstractDatabase::getAlignFunctionSql() "AbstractDatabase::getAlignFunctionSql()" for example.
 
     @section pgsql_relnotes Release Notes
+
+    @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
+    - added temporary-table support (\c "create temporary table ... on commit drop"); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
@@ -1697,6 +1701,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
 
     #! returns @ref True "True" if the database supports sequences
     private bool supportsSequencesImpl() {
+        return True;
+    }
+
+    #! returns @ref True "True" as PostgreSQL supports temporary tables (\c "create temporary table")
+    private bool supportsTempTablesImpl() {
         return True;
     }
 
@@ -3858,10 +3867,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! returns a string that can be used to create the table in the database
     private string getCreateTableSqlImpl(*hash opt) {
-        string sql = sprintf("create table %s (\n", name);
+        string sql = sprintf("%s (\n", getCreateTableStartSql());
 
         sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
         sql += "\n)";
+
+        # temporary-table "on commit" clause must precede any partition/tablespace clause
+        sql += getCreateTableTempClauseSql();
 
         if (partitionStrategy) {
             sql += " " + getPgPartitionStrategySql(partitionStrategy);
@@ -3872,6 +3884,26 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             sql += sprintf(" tablespace %s", ts);
 
         return sql;
+    }
+
+    #! returns \c "create temporary table <name>" for temporary tables, \c "create table <name>" otherwise
+    private string getCreateTableStartSql() {
+        if (isTempTable()) {
+            return sprintf("create temporary table %s", name);
+        }
+        return AbstractTable::getCreateTableStartSql();
+    }
+
+    #! returns the PostgreSQL temporary-table \c "on commit" clause based on the temporary-table scope
+    /** transaction-scoped temporary tables use \c "on commit drop" so the table is removed automatically when the
+        transaction ends; session-scoped temporary tables use the PostgreSQL default (\c "on commit preserve rows")
+        and must be dropped explicitly
+    */
+    private string getCreateTableTempClauseSql() {
+        if (isTempTable() && getTempScope() == SqlUtil::TT_Transaction) {
+            return " on commit drop";
+        }
+        return "";
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {

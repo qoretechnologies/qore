@@ -208,6 +208,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HttpKeepAlivePollOperation basic test", \keepAlivePollOperationBasicTest());
         addTestCase("HttpKeepAlivePollOperation header timeout test", \keepAliveHeaderTimeoutTest());
         addTestCase("Controller start/stop test", \controllerStartStopTest());
+        addTestCase("persistent queue close completion signal",
+            \persistentQueueCloseCompletionTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
         # Binary search: comment out tests to find the hanging one
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
@@ -410,6 +412,38 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<auto> stats = ctrl.getStats();
         assertEq(0, stats.listeners);
         assertEq(0, stats.connections);
+    }
+
+    #! Verifies targeted persistent-close entries carry an exact completion channel
+    /** A service-stop caller uses this channel as a deterministic barrier against
+        unloading callback code before the dedicated persistent-handler thread has
+        finished its close notification and thread-local cleanup.
+    */
+    persistentQueueCloseCompletionTest() {
+        AsyncSocketIoController io_ctrl(False);
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+
+        Queue persistent_queue(1);
+        ctrl.registerPersistentQueue("persistent-close-test", persistent_queue, NOTHING);
+        on_exit ctrl.deregisterPersistentQueue("persistent-close-test");
+
+        Queue close_ack(1);
+        assertTrue(ctrl.signalPersistentQueuesForConnection(
+            "persistent-close-test", close_ack),
+            "registered persistent queue accepts targeted close");
+
+        hash<auto> entry = persistent_queue.get(1s);
+        assertEq("close", entry.type, "targeted signal queues a close entry");
+        assertTrue(entry.close_ack === close_ack,
+            "close entry carries the caller's exact completion queue");
+
+        entry.close_ack.push("cleanup-complete");
+        assertEq("cleanup-complete", close_ack.get(1s),
+            "caller observes owner-thread cleanup completion");
+
+        assertFalse(ctrl.signalPersistentQueuesForConnection(
+            "unknown-persistent-close-test", close_ack),
+            "unknown persistent queue is reported without blocking");
     }
 
     acceptPollHttp2ModeTest() {
