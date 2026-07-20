@@ -240,7 +240,7 @@ enum class QoreAOTSectionType : uint16_t {
     METHODS       = 10,
     SLOT_MAPS     = 11,
     TOPLEVEL      = 12,
-    FUNC_SOURCES  = 13,
+    FUNC_SOURCES  = 13,  //!< Embedded source plus the legacy source-fallback function list
     DEPENDENCIES  = 14,  //!< Module dependencies (for strip-source modules)
     REEXPORT_MODULES = 15,  //!< Modules that should be reexported (for strip-source modules)
     PROGRAM_METADATA = 16,  //!< Program-level metadata (exec-class name, etc.)
@@ -1420,7 +1420,7 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
         std::vector<std::pair<std::string, std::string>>& info,
         std::string& error);
 
-/** Read embedded source from a v2 AOT binary metadata blob without full deserialization.
+/** Read embedded source from an AOT binary metadata blob without full deserialization.
     @param data pointer to the metadata blob
     @param size size of the metadata blob
     @param source receives the embedded source text (empty if not present)
@@ -1428,7 +1428,8 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
     @param error receives error message on failure
     @return true on success, false on failure
 */
-bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len, std::string& error);
+bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,
+    std::string& error);
 
 // ---- Slot Map Serialization (Phase 5) ----
 
@@ -2023,7 +2024,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     @param source_text the full source text to embed
     @param source_len the length of the source text
 */
-void serializeFallbackSources(QoreAOTBinaryWriter& writer,
+void serializeEmbeddedSource(QoreAOTBinaryWriter& writer,
     const std::vector<AOTCompiledFuncWithSlots>& funcs,
     const char* source_text, int source_len);
 
@@ -2141,8 +2142,8 @@ class QoreAOTBinaryDeserializer {
     const std::unordered_map<std::string, QoreClass*>* batch_class_lookup_map = nullptr;
 
     // Embedded source data (from FUNC_SOURCES section)
-    const char* fallback_source = nullptr;       //!< embedded source text
-    size_t fallback_source_len = 0;              //!< length of embedded source text
+    const char* embedded_source = nullptr;       //!< embedded source text
+    size_t embedded_source_len = 0;              //!< length of embedded source text
     std::vector<std::string> fallback_func_names; //!< legacy names of functions needing source fallback
 
     // Classes that already existed in the program (from module loading)
@@ -2412,7 +2413,7 @@ private:
     bool deserializeGlobals(std::string& error);
     bool deserializeFunctions(std::string& error);
     bool deserializeMethods(std::string& error);
-    bool deserializeFallbackSources(std::string& error);
+    bool deserializeEmbeddedSource(std::string& error);
     bool commitDeserializedClasses(std::string& error);
     const QoreClass* resolveClassRefForSession(const char* class_ref,
         const std::unordered_map<std::string, QoreClass*>* local_class_map = nullptr,
@@ -2698,13 +2699,13 @@ public:
     QoreAOTTypeResolver* getTypeResolver() const { return type_resolver; }
 
     //! Check if explicit --include-source data is present.
-    bool hasEmbeddedSource() const { return fallback_source != nullptr; }
+    bool hasEmbeddedSource() const { return embedded_source != nullptr; }
 
     //! Get the embedded source text.
-    const char* getEmbeddedSource() const { return fallback_source; }
+    const char* getEmbeddedSource() const { return embedded_source; }
 
     //! Get the embedded source text length.
-    size_t getEmbeddedSourceLen() const { return fallback_source_len; }
+    size_t getEmbeddedSourceLen() const { return embedded_source_len; }
 
     //! Check if this legacy object names functions that require disabled source fallback.
     bool hasLegacyFallbackFunctions() const { return !fallback_func_names.empty(); }

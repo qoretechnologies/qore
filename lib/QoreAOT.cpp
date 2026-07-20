@@ -17715,7 +17715,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 return false;
             }
             if (include_source) {
-                serializeFallbackSources(writer, func_slots, source_text, source_len);
+                serializeEmbeddedSource(writer, func_slots, source_text, source_len);
             }
         }
 
@@ -19761,7 +19761,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
                 return false;
             }
             if (include_source) {
-                serializeFallbackSources(writer, func_slots, source_text, source_len);
+                serializeEmbeddedSource(writer, func_slots, source_text, source_len);
             }
         }
 
@@ -20234,7 +20234,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                     return false;
                 }
                 if (include_source) {
-                    serializeFallbackSources(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
+                    serializeEmbeddedSource(writer, func_slots, combined_source.c_str(), (int)combined_source.size());
                 }
             }
 
@@ -20613,7 +20613,7 @@ static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
 // register entry.
 static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const std::string& target_canon,
-        const std::string& source_text_for_fallback,
+        const std::string& source_text,
         const std::string& output_path,
         int opt_level, const char* target_triple, bool include_source,
         std::string& error,
@@ -20730,8 +20730,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         // This is conservative but harmless: already-loaded modules are no-ops,
         // and per-fragment partitioning would require tracking which file's
         // parse actually loaded each module.
-        std::vector<std::string> explicit_deps = extractAllDependencies(source_text_for_fallback.c_str(),
-            static_cast<int>(source_text_for_fallback.size()));
+        std::vector<std::string> explicit_deps = extractAllDependencies(source_text.c_str(),
+            static_cast<int>(source_text.size()));
         if (!serializeProgramFeatureDependencies(writer, pp,
                 "AOT batch script dependency serialization", nullptr, &explicit_deps)) {
             error = "operation cancelled during AOT script dependency serialization";
@@ -20801,9 +20801,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
                 return false;
             }
             if (include_source) {
-                serializeFallbackSources(writer, func_slots,
-                    source_text_for_fallback.c_str(),
-                    (int)source_text_for_fallback.size());
+                serializeEmbeddedSource(writer, func_slots,
+                    source_text.c_str(),
+                    (int)source_text.size());
             }
         }
 
@@ -22006,7 +22006,7 @@ bool QoreAOT::compileScriptAggregate(
                 return false;
             }
             if (include_source) {
-                serializeFallbackSources(writer, func_slots,
+                serializeEmbeddedSource(writer, func_slots,
                     combined_source.c_str(), (int)combined_source.size());
             }
         }
@@ -22848,7 +22848,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 return false;
             }
             if (include_source) {
-                serializeFallbackSources(writer, func_slots,
+                serializeEmbeddedSource(writer, func_slots,
                     source_text.c_str(), (int)source_text.size());
             }
         }
@@ -23413,7 +23413,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                     return false;
                 }
                 if (include_source) {
-                    serializeFallbackSources(writer, func_slots, combined_source.c_str(),
+                    serializeEmbeddedSource(writer, func_slots, combined_source.c_str(),
                         (int)combined_source.size());
                 }
             }
@@ -23879,7 +23879,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     return false;
                 }
                 if (include_source) {
-                    serializeFallbackSources(writer, func_slots,
+                    serializeEmbeddedSource(writer, func_slots,
                         combined_source.c_str(), (int)combined_source.size());
                 }
             }
@@ -24356,7 +24356,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     return false;
                 }
                 if (include_source) {
-                    serializeFallbackSources(writer, func_slots,
+                    serializeEmbeddedSource(writer, func_slots,
                         combined_source.c_str(), (int)combined_source.size());
                 }
             }

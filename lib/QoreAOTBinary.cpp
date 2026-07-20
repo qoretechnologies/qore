@@ -12835,7 +12835,7 @@ bool readInitFuncs(const QoreAOTBinaryReader& reader,
 
 // ---- Embedded Source Section (legacy fallback-function metadata) ----
 
-void serializeFallbackSources(QoreAOTBinaryWriter& writer,
+void serializeEmbeddedSource(QoreAOTBinaryWriter& writer,
         const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const char* source_text, int source_len) {
     // Collect legacy function names that would need source fallback. Current
@@ -14191,7 +14191,7 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
         }
         pending_smd.clear();
     }
-    if (!deserializeFallbackSources(error)) {
+    if (!deserializeEmbeddedSource(error)) {
         return false;
     }
     return true;
@@ -17856,7 +17856,7 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
     return true;
 }
 
-bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
+bool QoreAOTBinaryDeserializer::deserializeEmbeddedSource(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNC_SOURCES);
     if (!sec) {
         return true;
@@ -17871,8 +17871,8 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     // Read the full source text reference
     const char* src = reader.readStringRef(ptr);
     if (src && *src) {
-        fallback_source = src;
-        fallback_source_len = strlen(src);
+        embedded_source = src;
+        embedded_source_len = strlen(src);
     }
 
     // Read fallback function names
@@ -17914,7 +17914,7 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
     }
 
     printd(2, "AOT: loaded embedded source (%d bytes, no fallback functions)\n",
-        static_cast<int>(fallback_source_len));
+        static_cast<int>(embedded_source_len));
 
     return true;
 }
@@ -18795,7 +18795,7 @@ bool readBuildInfo(const uint8_t* data, uint32_t size,
     return readBuildInfo(reader, info, error);
 }
 
-bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,
+bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source, size_t& source_len,
         std::string& error) {
     source = nullptr;
     source_len = 0;
