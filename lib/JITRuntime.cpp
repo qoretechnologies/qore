@@ -5742,6 +5742,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t re
     return qore_rt_call_closure_fast_impl(ref_bits, args, arg_cleanups, nargs, xsink);
 }
 
+static qore_list_private* qore_rt_prepare_map_result(QoreListNode& result, size_t size) {
+    static const bool enabled = std::getenv("QORE_DISABLE_IR_MAP_RESULT_FAST_APPEND") == nullptr;
+    if (!enabled) {
+        return nullptr;
+    }
+    qore_list_private* priv = qore_list_private::get(result);
+    if (size) {
+        priv->reserve(size);
+    }
+    return priv;
+}
+
+static void qore_rt_append_map_result(qore_list_private* priv, QoreListNode& result,
+        QoreValue value, ExceptionSink* xsink) {
+    if (priv) {
+        priv->pushIntern(value);
+    } else {
+        result.push(value, xsink);
+    }
+}
+
 // Optimized map operations - native loops that return lists
 extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t scale) {
     QoreValue v = fromBits(list_val);
@@ -5778,8 +5799,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_int(uint64_t list_val, int64_t s
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
-        result->push(l->retrieveEntry(i).getAsBigInt() * scale, nullptr);
+        qore_rt_append_map_result(result_priv, **result,
+            QoreValue(l->retrieveEntry(i).getAsBigInt() * scale), nullptr);
     }
     return toBits(result.release());
 }
@@ -5819,8 +5842,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_scale_float(uint64_t list_val, double 
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
-        result->push(l->retrieveEntry(i).getAsFloat() * scale, nullptr);
+        qore_rt_append_map_result(result_priv, **result,
+            QoreValue(l->retrieveEntry(i).getAsFloat() * scale), nullptr);
     }
     return toBits(result.release());
 }
@@ -5860,8 +5885,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_int(uint64_t list_val, int64_t 
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
-        result->push(l->retrieveEntry(i).getAsBigInt() + offset, nullptr);
+        qore_rt_append_map_result(result_priv, **result,
+            QoreValue(l->retrieveEntry(i).getAsBigInt() + offset), nullptr);
     }
     return toBits(result.release());
 }
@@ -5901,8 +5928,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_offset_float(uint64_t list_val, double
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
-        result->push(l->retrieveEntry(i).getAsFloat() + offset, nullptr);
+        qore_rt_append_map_result(result_priv, **result,
+            QoreValue(l->retrieveEntry(i).getAsFloat() + offset), nullptr);
     }
     return toBits(result.release());
 }
@@ -5943,9 +5972,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_int(uint64_t list_val) {
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         int64_t val = l->retrieveEntry(i).getAsBigInt();
-        result->push(val * val, nullptr);
+        qore_rt_append_map_result(result_priv, **result, QoreValue(val * val), nullptr);
     }
     return toBits(result.release());
 }
@@ -5986,9 +6016,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_square_float(uint64_t list_val) {
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(floatTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         double val = l->retrieveEntry(i).getAsFloat();
-        result->push(val * val, nullptr);
+        qore_rt_append_map_result(result_priv, **result, QoreValue(val * val), nullptr);
     }
     return toBits(result.release());
 }
@@ -6002,13 +6033,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_value(uint64_t list_val, cons
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
             QoreValue val = elem.get<const QoreHashNode>()->getKeyValue(key);
-            result->push(val.refSelf(), nullptr);
+            qore_rt_append_map_result(result_priv, **result, val.refSelf(), nullptr);
         } else {
-            result->push(QoreValue(), nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(), nullptr);
         }
     }
     return toBits(result.release());
@@ -6022,12 +6054,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_int(uint64_t list_val, const 
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
-            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt(), nullptr);
+            qore_rt_append_map_result(result_priv, **result,
+                QoreValue(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt()), nullptr);
         } else {
-            result->push(0ll, nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(0ll), nullptr);
         }
     }
     return toBits(result.release());
@@ -6041,12 +6075,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_offset_int(uint64_t list_val,
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
-            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() + offset, nullptr);
+            qore_rt_append_map_result(result_priv, **result,
+                QoreValue(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() + offset), nullptr);
         } else {
-            result->push(offset, nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(offset), nullptr);
         }
     }
     return toBits(result.release());
@@ -6063,6 +6099,7 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
     const QoreListNode* list = value.get<const QoreListNode>();
     ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
     size_t size = list->size();
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, size);
     static const bool scalar_fast_path =
         std::getenv("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY_SCALAR_FAST_PATH") == nullptr;
     for (size_t i = 0; i < size; ++i) {
@@ -6083,8 +6120,9 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
         qore_type_t key_type = key_value->getType();
         if (scalar_fast_path && (key_type == NT_NOTHING || key_type == NT_INT
                 || key_type == NT_CHAR || key_type == NT_BOOLEAN)) {
-            result->push(key_value->getAsBigInt() + offset, xsink);
-            if (*xsink) {
+            qore_rt_append_map_result(result_priv, **result,
+                QoreValue(key_value->getAsBigInt() + offset), xsink);
+            if (!result_priv && *xsink) {
                 return toBits(QoreValue());
             }
             continue;
@@ -6095,8 +6133,8 @@ static uint64_t qore_rt_map_hash_key_offset_any_impl(uint64_t list_val,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        result->push(mapped.release(), xsink);
-        if (*xsink) {
+        qore_rt_append_map_result(result_priv, **result, mapped.release(), xsink);
+        if (!result_priv && *xsink) {
             return toBits(QoreValue());
         }
     }
@@ -6123,12 +6161,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_map_hash_key_scale_int(uint64_t list_val, 
     const QoreListNode* l = v.get<const QoreListNode>();
     size_t sz = l->size();
     ReferenceHolder<QoreListNode> result(new QoreListNode(bigIntTypeInfo), nullptr);
+    qore_list_private* result_priv = qore_rt_prepare_map_result(**result, sz);
     for (size_t i = 0; i < sz; ++i) {
         QoreValue elem = l->retrieveEntry(i);
         if (elem.getType() == NT_HASH) {
-            result->push(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() * scale, nullptr);
+            qore_rt_append_map_result(result_priv, **result,
+                QoreValue(elem.get<const QoreHashNode>()->getKeyValue(key).getAsBigInt() * scale), nullptr);
         } else {
-            result->push(0ll, nullptr);
+            qore_rt_append_map_result(result_priv, **result, QoreValue(0ll), nullptr);
         }
     }
     return toBits(result.release());
