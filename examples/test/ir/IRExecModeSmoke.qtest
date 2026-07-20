@@ -130,6 +130,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR list slice smoke", \testIrListSliceSmoke());
         addTestCase("IR hash op-assign smoke 2", \testIrHashOpAssignSmoke2());
         addTestCase("IR list append smoke", \testIrListAppendSmoke());
+        addTestCase("IR softlist append smoke", \testIrSoftListAppendSmoke());
         addTestCase("IR list append maybe-NOTHING smoke", \testIrListAppendMaybeNothingSmoke());
         addTestCase("IR hash append maybe-NOTHING smoke", \testIrHashAppendMaybeNothingSmoke());
         addTestCase("IR list shift empty smoke", \testIrListShiftEmptySmoke());
@@ -4428,6 +4429,54 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("listappend:4:4\n", stdout_output, "Unexpected IR list append output");
+    }
+
+    testIrSoftListAppendSmoke() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("softlist<auto> sub makeArgs(auto first, auto second, auto third) {\n");
+        script.file.write("    softlist<auto> args = first;\n");
+        script.file.write("    args += second;\n");
+        script.file.write("    args += third;\n");
+        script.file.write("    return args;\n");
+        script.file.write("}\n");
+        script.file.write("*softlist<auto> sub makeOptionalArgs(auto first) {\n");
+        script.file.write("    *softlist<auto> args = first;\n");
+        script.file.write("    args += 2;\n");
+        script.file.write("    return args;\n");
+        script.file.write("}\n");
+        script.file.write("softlist<auto> args = makeArgs(-1, -1, 0);\n");
+        script.file.write("*softlist<auto> optional_args = makeOptionalArgs(1);\n");
+        script.file.write("softlist<int> ints = 1;\n");
+        script.file.write("ints += 2;\n");
+        script.file.write("ints += (3, 4);\n");
+        script.file.write("printf(\"softlist:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",\n");
+        script.file.write("    args.size(), args[0], args[1], args[2],\n");
+        script.file.write("    optional_args.size(), optional_args[0], optional_args[1],\n");
+        script.file.write("    ints.size(), ints[0], ints[2], ints[3]);\n");
+        script.file.close();
+
+        foreach string mode in ("ir", "jit", "tiered") {
+            TmpFile out();
+            TmpFile err();
+            string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+                qore_bin, mode, script.path, out.path, err.path);
+            int rc = runCommand(cmd, script.path);
+            string err_output = ReadOnlyFile::readTextFile(err.path);
+
+            assertEq(0, rc, sprintf("%s mode process should exit cleanly", mode));
+            assertFalse(err_output =~ /IR exec fallback to AST:/,
+                sprintf("Unexpected %s mode fallback warning", mode));
+            assertEq("softlist:3:-1:-1:0:2:1:2:4:1:3:4\n",
+                ReadOnlyFile::readTextFile(out.path),
+                sprintf("Unexpected %s mode softlist append output", mode));
+        }
     }
 
     testIrListAppendMaybeNothingSmoke() {

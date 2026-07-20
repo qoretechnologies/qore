@@ -6026,6 +6026,12 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
 
     const AbstractQoreNode* left_node = assign->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Softlist assignment can coerce a scalar into a one-element list.  Route it
+    // through lvalue semantics so the declared assignment type performs that
+    // coercion before the value is cached by the IR/JIT engines.
+    if (left_var && QoreTypeInfo::isSoftListType(assign->ti)) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(assign->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {

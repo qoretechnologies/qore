@@ -700,6 +700,15 @@ public:
         return ti->return_vec[0].spec.getType() == NT_LIST;
     }
 
+    //! Returns true if the type is a softlist type, including nullable and complex variants
+    DLLLOCAL static bool isSoftListType(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        return ti == softListTypeInfo || ti == softListOrNothingTypeInfo
+            || ti->return_vec[0].spec.getComplexSoftList() != nullptr;
+    }
+
     //! returns true if the type is an explicit hash type
     DLLLOCAL static bool isHashType(const QoreTypeInfo* ti) {
         if (!hasType(ti)) {
