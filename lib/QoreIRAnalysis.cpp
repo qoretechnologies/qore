@@ -4615,6 +4615,255 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
     return refined;
 }
 
+struct QoreIRDenseListStats {
+    size_t loads = 0;
+    size_t joins = 0;
+};
+
+static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
+        QoreIRFunction& func, const QoreIRControlFlowGraph& cfg,
+        size_t& check_count) {
+    QoreIRDenseListStats stats;
+    if (std::getenv("QORE_DISABLE_IR_LIST_DENSITY")
+            || func.blocks.empty() || func.has_opaque_ast_local_access) {
+        return stats;
+    }
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dense list exception-flow analysis")) {
+                return {};
+            }
+            if (inst->exception_target) {
+                return stats;
+            }
+        }
+    }
+
+    std::unordered_set<const LocalVar*> universe;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dense list candidate analysis")) {
+                return {};
+            }
+            if (inst->opcode != QoreIROpcode::StoreLocal) {
+                continue;
+            }
+            const auto* local_inst =
+                static_cast<const QoreIRLocalInstruction*>(inst.get());
+            const LocalVar* local = local_inst->local;
+            const QoreTypeInfo* type = local ? local->getTypeInfo() : nullptr;
+            if (local && !local->closureUse()
+                    && !QoreTypeInfo::isReference(type)
+                    && local_inst->operands.size() == 1) {
+                const QoreIRValueFacts* facts =
+                    func.getValueFacts(local_inst->operands[0]);
+                if (!facts
+                        || facts->list_density != QoreIRListDensity::Dense) {
+                    continue;
+                }
+                universe.insert(local);
+            }
+        }
+    }
+    if (universe.empty()) {
+        return stats;
+    }
+
+    auto transfer_instruction = [&](const QoreIRInstruction* inst,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR dense list transfer")) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::StoreLocal) {
+            const auto* store =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!store->local || !universe.count(store->local)) {
+                return true;
+            }
+            if (store->operands.size() != 1 || store->weak
+                    || store->is_ref || store->is_closure) {
+                known.erase(store->local);
+                return true;
+            }
+            const QoreIRValueFacts* facts =
+                func.getValueFacts(store->operands[0]);
+            if (facts
+                    && facts->list_density == QoreIRListDensity::Dense) {
+                known.insert(store->local);
+            } else {
+                known.erase(store->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+            const auto* local =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (local->local) {
+                known.erase(local->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::LoadLocal) {
+            return true;
+        }
+
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+        bool direct_call = inst->opcode == QoreIROpcode::CallDirect
+            || inst->opcode == QoreIROpcode::CallStaticDirect
+            || inst->opcode == QoreIROpcode::CallMethodDirect
+            || inst->opcode == QoreIROpcode::InvokeMethodDirect
+            || inst->opcode == QoreIROpcode::CallClosureDirect;
+        if (direct_call && (!callee || has_ref_args)) {
+            known.clear();
+            return true;
+        }
+        if (!direct_call
+                && qore_ir_instruction_may_invalidate_caller_caches(
+                    func, inst)) {
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                known.erase(written);
+            } else {
+                known.clear();
+            }
+        }
+        return true;
+    };
+    auto transfer = [&](size_t block_id,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!transfer_instruction(inst.get(), known)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::vector<std::unordered_set<const LocalVar*>> in(func.blocks.size());
+    std::vector<std::unordered_set<const LocalVar*>> out(
+        func.blocks.size(), universe);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dense list fixed-point analysis")) {
+                return {};
+            }
+            std::unordered_set<const LocalVar*> next;
+            if (block_id && !cfg.predecessors[block_id].empty()) {
+                next = out[cfg.predecessors[block_id].front()];
+                for (size_t pred_index = 1;
+                        pred_index < cfg.predecessors[block_id].size();
+                        ++pred_index) {
+                    if (!(pred_index % 100)
+                            && qore_ir_analysis_cancelled(check_count,
+                                "IR dense list predecessor intersection")) {
+                        return {};
+                    }
+                    const auto& predecessor =
+                        out[cfg.predecessors[block_id][pred_index]];
+                    size_t local_count = 0;
+                    for (auto it = next.begin(); it != next.end();) {
+                        if (++local_count % 100 == 0
+                                && qore_ir_analysis_cancelled(check_count,
+                                    "IR dense list set intersection")) {
+                            return {};
+                        }
+                        if (!predecessor.count(*it)) {
+                            it = next.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
+                }
+            }
+            in[block_id] = next;
+            if (!transfer(block_id, next)) {
+                return {};
+            }
+            if (out[block_id] != next) {
+                out[block_id] = std::move(next);
+                changed = true;
+            }
+        }
+    }
+
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        std::unordered_set<const LocalVar*> known = in[block_id];
+        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dense list annotation")) {
+                return stats;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::LoadLocal) {
+                const auto* load =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                if (load->local && known.count(load->local)
+                        && inst->result.isValid()) {
+                    QoreIRValueFacts facts;
+                    if (const QoreIRValueFacts* current =
+                            func.getValueFacts(inst->result)) {
+                        facts = *current;
+                    }
+                    if (facts.list_density != QoreIRListDensity::Dense) {
+                        facts.list_density = QoreIRListDensity::Dense;
+                        func.setValueFacts(inst->result, facts);
+                        ++stats.loads;
+                    }
+                }
+            }
+            if (!transfer_instruction(inst, known)) {
+                return stats;
+            }
+        }
+    }
+
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR dense identity-map join elision")) {
+                return stats;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            QoreIRValue source;
+            if (inst->opcode == QoreIROpcode::ListStringJoinIdentityMap
+                    && inst->operands.size() >= 2) {
+                source = inst->operands[1];
+            } else if (inst->opcode == QoreIROpcode::Invoke) {
+                auto* invoke = static_cast<QoreIRInvokeInstruction*>(inst);
+                if (invoke->invoke_opcode
+                            != QoreIROpcode::ListStringJoinIdentityMap
+                        || invoke->operands.size() < 2) {
+                    continue;
+                }
+                source = invoke->operands[1];
+            } else {
+                continue;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(source);
+            if (!facts
+                    || facts->list_density != QoreIRListDensity::Dense) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::Invoke) {
+                static_cast<QoreIRInvokeInstruction*>(inst)->invoke_opcode =
+                    QoreIROpcode::ListStringJoin;
+            } else {
+                inst->opcode = QoreIROpcode::ListStringJoin;
+            }
+            ++stats.joins;
+        }
+    }
+    return stats;
+}
+
 void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         bool enable_licm) {
     QoreIROptimizationStats local_stats;
@@ -4640,6 +4889,10 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
     local_stats.local_value_facts_refined =
         qore_ir_refine_local_value_facts(func, cfg, check_count);
+    QoreIRDenseListStats dense_list_stats =
+        qore_ir_refine_dense_list_facts(func, cfg, check_count);
+    local_stats.dense_list_facts_refined = dense_list_stats.loads;
+    local_stats.dense_identity_map_joins_elided = dense_list_stats.joins;
     QoreIRNativeLocalPromotionStats native_local_stats =
         qore_ir_promote_native_local_loads(func, cfg, check_count);
     local_stats.native_local_loads_promoted = native_local_stats.loads;

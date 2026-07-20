@@ -2209,11 +2209,13 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
             optimization_stats.local_value_facts_refined,
+            optimization_stats.dense_list_facts_refined,
+            optimization_stats.dense_identity_map_joins_elided,
             optimization_stats.native_local_loads_promoted,
             optimization_stats.native_local_stores_eliminated,
             optimization_stats.scalar_expressions_eliminated,

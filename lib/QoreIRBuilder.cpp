@@ -327,6 +327,26 @@ QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>&
     inst->typeInfo = typeInfo;
     inst->result = func->createValue();
     inst->operands = values;
+    QoreIRValueFacts facts;
+    facts.type_info = typeInfo;
+    facts.assigned_state = QoreIRAssignedState::Assigned;
+    facts.representation = QoreIRValueRepresentation::Boxed;
+    facts.list_density = QoreIRListDensity::Dense;
+    facts.never_nothing = true;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "IR list density analysis")) {
+            facts.list_density = QoreIRListDensity::Unknown;
+            break;
+        }
+        const QoreIRValueFacts* element_facts = func->getValueFacts(values[i]);
+        if (!element_facts
+                || element_facts->assigned_state != QoreIRAssignedState::Assigned
+                || !element_facts->never_nothing) {
+            facts.list_density = QoreIRListDensity::Unknown;
+            break;
+        }
+    }
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 
@@ -1079,12 +1099,15 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
         bool assigned = first
             && first->assigned_state == QoreIRAssignedState::Assigned;
         bool never_nothing = first && first->never_nothing;
+        bool dense_list = first
+            && first->list_density == QoreIRListDensity::Dense;
         const QoreTypeInfo* type_info = first ? first->type_info : nullptr;
         for (size_t i = 1; i < incoming.size()
-                && (assigned || never_nothing || type_info); ++i) {
+                && (assigned || never_nothing || dense_list || type_info); ++i) {
             if (!(i % 100) && qore_check_cancel(nullptr, "IR phi fact propagation")) {
                 assigned = false;
                 never_nothing = false;
+                dense_list = false;
                 type_info = nullptr;
                 break;
             }
@@ -1092,11 +1115,13 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
             assigned = assigned && facts
                 && facts->assigned_state == QoreIRAssignedState::Assigned;
             never_nothing = never_nothing && facts && facts->never_nothing;
+            dense_list = dense_list && facts
+                && facts->list_density == QoreIRListDensity::Dense;
             if (!facts || facts->type_info != type_info) {
                 type_info = nullptr;
             }
         }
-        if (assigned || never_nothing || type_info) {
+        if (assigned || never_nothing || dense_list || type_info) {
             QoreIRValueFacts facts;
             facts.type_info = type_info;
             facts.assigned_state = assigned
@@ -1106,6 +1131,8 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
                 : value_kind == QoreIRPhiValueKind::NativeFloat
                     ? QoreIRValueRepresentation::NativeFloat
                     : QoreIRValueRepresentation::Boxed;
+            facts.list_density = dense_list
+                ? QoreIRListDensity::Dense : QoreIRListDensity::Unknown;
             facts.never_nothing = assigned && never_nothing;
             func->setValueFacts(inst->result, facts);
         }

@@ -181,6 +181,25 @@ int sub methodMapListJoinString(list<string> data, int rounds) {
     return checksum;
 }
 
+int sub methodMapDenseLocalJoinString(int rounds) {
+    list<string> data = (
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+        "abcdefgh", "abcdefgh", "abcdefgh", "abcdefgh",
+    );
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = (map $1, data).join(", ");
+        checksum += exists joined;
+    }
+    return checksum;
+}
+
 int sub mapListJoinString(list<string> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -306,6 +325,9 @@ switch (kernel) {
         break;
     case "method-map-list-join-string":
         printf("%d\n", methodMapListJoinString(makeStringData(), rounds));
+        break;
+    case "method-map-dense-local-join-string":
+        printf("%d\n", methodMapDenseLocalJoinString(rounds));
         break;
     case "map-list-join-string":
         printf("%d\n", mapListJoinString(makeStringData(), rounds));

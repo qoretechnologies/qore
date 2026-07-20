@@ -877,11 +877,18 @@ enum class QoreIRValueRepresentation : uint8_t {
     NativeBool,
 };
 
+//! Known occupancy of list slots represented by an SSA value.
+enum class QoreIRListDensity : uint8_t {
+    Unknown,
+    Dense,
+};
+
 //! Parse- and IR-derived facts attached to an SSA value.
 struct QoreIRValueFacts {
     const QoreTypeInfo* type_info = nullptr;
     QoreIRAssignedState assigned_state = QoreIRAssignedState::Unknown;
     QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
+    QoreIRListDensity list_density = QoreIRListDensity::Unknown;
     bool never_nothing = false;
 };
 

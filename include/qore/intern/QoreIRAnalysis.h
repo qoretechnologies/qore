@@ -72,6 +72,8 @@ struct QoreIROptimizationStats {
     size_t instructions_hoisted = 0;
     size_t scalar_loads_forwarded = 0;
     size_t local_value_facts_refined = 0;
+    size_t dense_list_facts_refined = 0;
+    size_t dense_identity_map_joins_elided = 0;
     size_t native_local_loads_promoted = 0;
     size_t native_local_stores_eliminated = 0;
     size_t scalar_expressions_eliminated = 0;
