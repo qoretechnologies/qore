@@ -169,11 +169,12 @@ class HashDeclTest inherits QUnit::Test {
         }
 
         {
-            hash<Container> c(("i": 2, "str": "other", "n": 1n));
+            hash<Container> c(("n": 1n, "str": "other", "i": 2));
             assertEq(Type::Hash, c.type());
             assertEq(2, c.i);
             assertEq("other", c.str);
             assertEq(1n, c.n);
+            assertEq(("i", "str", "n"), c.keys());
         }
 
         {

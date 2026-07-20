@@ -691,8 +691,11 @@ uint64_t qore_rt_new_complex_buffer(const NewComplexBufferNode* node, ExceptionS
 uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Create a new typed hash from an already-evaluated hash initializer
+static constexpr int32_t QORE_RT_HASHDECL_RUNTIME_CHECK = 1;
+static constexpr int32_t QORE_RT_HASHDECL_REUSE_TEMPORARY = 2;
+
 uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
-    ExceptionSink* xsink);
+        ExceptionSink* xsink);
 uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx, const char* hd_path,
     uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
 //! Create a typed hash from a compile-time-proven concrete AOT hashdecl path.

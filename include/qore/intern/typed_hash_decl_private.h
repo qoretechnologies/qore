@@ -209,7 +209,12 @@ public:
 
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
+    DLLLOCAL QoreHashNode* newHashFromTemporary(QoreHashNode* init, bool runtime_check,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+
+    DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink) const;
 
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
         const HashDeclMemberInfo* mem = findMember(key);
@@ -476,6 +481,7 @@ protected:
     }
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+    DLLLOCAL int initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink) const;
 };
 
 #endif

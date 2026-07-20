@@ -7388,6 +7388,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
+    reusable_hashdecl_literal_values.clear();
     local_allocas.clear();
     aot_call_target_contexts.clear();
     aot_exact_class_guards.clear();
@@ -7586,6 +7587,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_map<const LocalVar*, size_t> local_load_counts;
     std::unordered_set<const LocalVar*> stored_locals;
     std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
+    std::unordered_set<uint32_t> hashdecl_initializer_values;
     for (const auto& block : func.blocks) {
         bool entry_block = block.get() == func.blocks.front().get();
         for (const auto& inst_ptr : block->instructions) {
@@ -7645,6 +7647,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         && static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get())
                             ->invoke_opcode == QoreIROpcode::CreateParseRef)) {
                 owner_has_parse_reference = true;
+            }
+            if (inst_ptr->opcode == QoreIROpcode::NewHashDeclFromHash
+                    && inst_ptr->operands.size() == 1) {
+                hashdecl_initializer_values.insert(inst_ptr->operands[0].id);
+            } else if (inst_ptr->opcode == QoreIROpcode::Invoke
+                    && !inst_ptr->operands.empty()
+                    && static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get())
+                        ->invoke_opcode == QoreIROpcode::NewHashDeclFromHash) {
+                hashdecl_initializer_values.insert(inst_ptr->operands[0].id);
             }
             if ((inst_ptr->opcode == QoreIROpcode::ListGetInt
                     || inst_ptr->opcode == QoreIROpcode::ListGetFloat
@@ -7739,6 +7750,25 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
                 }
+            }
+        }
+    }
+    if (std::getenv("QORE_DISABLE_HASHDECL_TEMP_REUSE") == nullptr) {
+        size_t initializer_count = 0;
+        for (uint32_t value_id : hashdecl_initializer_values) {
+            if (initializer_count++ && !(initializer_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM reusable hashdecl literal analysis")) {
+                error = "cancelled during LLVM reusable hashdecl literal analysis";
+                return false;
+            }
+            auto definition = value_definitions.find(value_id);
+            auto uses = operand_remaining_uses.find(value_id);
+            if (definition != value_definitions.end()
+                    && definition->second->opcode == QoreIROpcode::MakeHashConstKeys
+                    && uses != operand_remaining_uses.end()
+                    && uses->second == 1) {
+                reusable_hashdecl_literal_values.insert(value_id);
             }
         }
     }
@@ -13280,8 +13310,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* hash_val = getVal(inv->operands[0].id, error);
                 if (!hash_val) { return false; }
                 llvm::Value* hash_boxed = boxValue(hash_val, inv->operands[0].id);
+                int32_t construct_flags = runtime_check ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
+                if (reusable_hashdecl_literal_values.count(inv->operands[0].id)) {
+                    construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
+                }
                 llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
-                        runtime_check ? 1 : 0);
+                        construct_flags);
                 if (aot_mode) {
                     // AOT: resolve hashdecl by namespace path at runtime
                     bool concrete_path = hd && !qore_type_contains_type_parameter(hd->getTypeInfo());
@@ -20093,8 +20127,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* hash_val = getVal(inst->operands[0].id, error);
             if (!hash_val) { return false; }
             llvm::Value* hash_boxed = boxValue(hash_val, inst->operands[0].id);
+            int32_t construct_flags = nhdfh_inst->runtime_check ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
+            if (reusable_hashdecl_literal_values.count(inst->operands[0].id)) {
+                construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
+            }
             llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
-                    nhdfh_inst->runtime_check ? 1 : 0);
+                    construct_flags);
             llvm::Value* result;
             if (aot_mode || !nhdfh_inst->hd) {
                 // AOT and source-stripped debug IR resolve hashdecls by

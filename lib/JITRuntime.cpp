@@ -3109,8 +3109,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDec
         }
         init = hash_val.get<const QoreHashNode>();
     }
-    QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init,
-        runtime_check != 0, xsink);
+    QoreHashNode* result = (runtime_check & QORE_RT_HASHDECL_REUSE_TEMPORARY) && init
+        ? typed_hash_decl_private::get(*hd)->newHashFromTemporary(
+            const_cast<QoreHashNode*>(init), runtime_check & QORE_RT_HASHDECL_RUNTIME_CHECK, xsink)
+        : typed_hash_decl_private::get(*hd)->newHash(init,
+            runtime_check & QORE_RT_HASHDECL_RUNTIME_CHECK, xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
