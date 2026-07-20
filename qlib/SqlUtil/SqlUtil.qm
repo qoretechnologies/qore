@@ -4914,9 +4914,13 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals));
-                return exists ins ? sprintf("%s in (%s)", exp0, ins) : "1 != 1";
+                # NOTE: build the placeholder list with join() (single-pass, O(n)) rather than
+                # "foldl $1 + \",\" + $2" (which reallocates and recopies the accumulator on every
+                # element, making SQL generation O(n^2) in the size of the IN list); large IN clauses
+                # (thousands of ids) otherwise spin CPU for seconds while generating the query
+                list<string> in_exprs = map info.table.getExpressionArg(\info, role, $1,
+                    AbstractDataProviderTypeMap."any"), in_vals;
+                return in_exprs ? sprintf("%s in (%s)", exp0, join(",", in_exprs)) : "1 != 1";
             },
         },
         OP_NOT: {
@@ -5630,9 +5634,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals));
-                return exists ins ? sprintf("%s not in (%s)", exp0, ins) : "1 = 1";
+                # join() (single-pass, O(n)) rather than "foldl $1 + \",\" + $2" (O(n^2) in the size
+                # of the value list); see the DP_SEARCH_OP_IN "in" op above for details
+                list<string> in_exprs = map info.table.getExpressionArg(\info, role, $1,
+                    AbstractDataProviderTypeMap."any"), in_vals;
+                return in_exprs ? sprintf("%s not in (%s)", exp0, join(",", in_exprs)) : "1 = 1";
             },
         },
         # --- Math functions ---
@@ -6622,8 +6628,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         ),
         OP_IN: AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN} + (
             "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
-                *string ins = (foldl $1 + "," + $2, (map info.table.getSqlValue($1), arg));
-                return exists ins ? sprintf("%s in (%s)", cn, ins) : "1 != 1";
+                # join() (single-pass, O(n)) rather than "foldl $1 + \",\" + $2" (O(n^2) in the size
+                # of the value list); large op_in() lists otherwise spin CPU generating the query
+                list<string> in_exprs = map info.table.getSqlValue($1), arg;
+                return in_exprs ? sprintf("%s in (%s)", cn, join(",", in_exprs)) : "1 != 1";
             },
         ),
         OP_IN_SELECT: {

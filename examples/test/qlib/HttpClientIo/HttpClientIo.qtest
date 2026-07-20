@@ -452,6 +452,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testAsyncHeConnectRefusedFastFail());
         addTestCase("async HE non-blocking + sync unchanged",
             \testAsyncHeNonBlockingAndSyncParity());
+        addTestCase("HE connect-error message reports both legs",
+            \testHeConnectErrorMessageReportsBothLegs());
 
         # H3 end-to-end tests
         addTestCase("H3 end-to-end basic request", \testH3EndToEndBasic());
@@ -1527,6 +1529,62 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientConnection conn = driveAsyncConnect(mgr, mQuicUrl, 15s);
         assertTrue(conn.isReady(), "async HE (QUIC) connection ready");
         assertEq("h3", conn.getProtocol(), "async HE resolved to H3 (preferred)");
+    }
+
+    #! The happy-eyeballs terminal connect error must report BOTH raced legs.
+    /** Regression for the confusing production message
+        "could not connect to <host>:<port>: QUIC handshake did not complete
+        within the configured connect_timeout": the old formatter used
+        "h2_err.desc ?? h3_err.desc", so whenever the H2 (TCP) leg's error hash
+        carried no "desc" the message fell through to the H3/QUIC text alone —
+        making a total-endpoint outage look QUIC-specific and hiding that TCP had
+        also been tried and had also failed.
+
+        Exercises the pure formatter HttpClientConnectionManager::heBuildConnectErrorDesc()
+        directly (no network, fully deterministic) across every leg combination,
+        including the exact production shape (H3 has a desc, H2 has only an err
+        code).
+    */
+    testHeConnectErrorMessageReportsBothLegs() {
+        string key = "192.168.16.30:8092";
+
+        # Production shape: H3 timed out with a desc, H2 failed with only an err
+        # code (no desc).  The old code showed ONLY the QUIC line; the new code
+        # must surface both, labelled, so the TCP failure is visible.
+        hash<auto> h3_err = {
+            "err": "HTTP3-TIMEOUT",
+            "desc": "QUIC handshake did not complete within the configured connect_timeout",
+        };
+        hash<auto> h2_err = {"err": "SOCKET-SSL-ERROR"};
+        string desc = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            h3_err, h2_err, key);
+        assertRegex("could not connect to " + key, desc, "message names the endpoint");
+        assertRegex("H3/QUIC: QUIC handshake did not complete", desc,
+            "message surfaces the H3/QUIC reason");
+        assertRegex("H2/TCP: SOCKET-SSL-ERROR", desc,
+            "message surfaces the H2/TCP reason even when it has no desc "
+            "(the historical hidden-TCP-failure bug)");
+
+        # Both legs carry a desc: both must appear.
+        string both = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            {"err": "HTTP3-TIMEOUT", "desc": "quic timed out"},
+            {"err": "SOCKET-CONNECT-ERROR", "desc": "tcp refused"}, key);
+        assertRegex("H3/QUIC: quic timed out", both, "both-desc: H3 reason present");
+        assertRegex("H2/TCP: tcp refused", both, "both-desc: H2 reason present");
+
+        # Fast-fail shape: H3 still pending (no error recorded) — only the H2/TCP
+        # leg is reported, and no bogus H3 line is emitted.
+        string h2only = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            NOTHING, {"err": "SOCKET-CONNECT-ERROR", "desc": "connection refused"}, key);
+        assertRegex("H2/TCP: connection refused", h2only, "fast-fail: H2 reason present");
+        assertEq(-1, h2only.find("H3/QUIC"), "fast-fail: no spurious H3/QUIC leg reported");
+
+        # Degenerate shape: neither leg recorded an error — a bare, non-crashing
+        # message with no dangling ": ".
+        string neither = HttpClientIo::HttpClientConnectionManager::heBuildConnectErrorDesc(
+            NOTHING, NOTHING, key);
+        assertEq("could not connect to " + key, neither,
+            "no-error case: bare message with no trailing separator");
     }
 
     testAsyncHeConnectRefusedFastFail() {
