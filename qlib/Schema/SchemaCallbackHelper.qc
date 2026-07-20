@@ -45,7 +45,7 @@ public namespace Schema {
             hash<string, int> data_change_map;
 
             #! Exact table names whose metadata changed
-            hash<string, bool> changed_tables;
+            hash<string, bool> changed_tables = {};
 
             #! Set to True if only creations / additions were made
             /** If not assigned after a schema alignment action, then no actions were taken
