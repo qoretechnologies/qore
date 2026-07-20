@@ -4791,6 +4791,40 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             "or \"binary\"", enc);
     }
 
+    #! Expands an IN/NOT IN value list into per-value SQL placeholder expressions
+    /** Each value is bound to its own placeholder (required for backends without native list-bind
+        support, e.g. numeric columns on PostgreSQL or any bind on SQLite3).
+
+        Performance: scalar bind values are accumulated in a local list and appended to
+        \c info.args in a single bulk operation rather than one value at a time via
+        getExpressionArg().  Appending to \c info.args one element at a time is pathological for
+        large IN lists: \a info is a \c reference<hash<QueryInfo>> and each append through the
+        reference copies the entire QueryInfo hash (which carries the full expression/operator
+        maps), making the bind step O(n * map-size).  Non-scalar elements (field references or
+        nested expressions) still go through getExpressionArg(); the local buffer is flushed
+        first so bind order is preserved. */
+    list<string> sub sqlutil_expand_in_placeholders(reference<hash<QueryInfo>> info, int role,
+            list<auto> in_vals) {
+        list<string> in_exprs = ();
+        list<auto> binds = ();
+        foreach auto v in (in_vals) {
+            if (v instanceof hash<DataProviderFieldReference> || v instanceof hash<DataProviderExpression>) {
+                if (binds) {
+                    info.args += binds;
+                    binds = ();
+                }
+                in_exprs += info.table.getExpressionArg(\info, role, v, AbstractDataProviderTypeMap."any");
+            } else {
+                binds += v;
+                in_exprs += "%v";
+            }
+        }
+        if (binds) {
+            info.args += binds;
+        }
+        return in_exprs;
+    }
+
     #! Default expressions to be supported by all SqlUtil modules
     public const hash<auto> DefaultExpressionMap = {
         # first the "AND" and "OR" "operators"
@@ -4914,12 +4948,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                # NOTE: build the placeholder list with join() (single-pass, O(n)) rather than
-                # "foldl $1 + \",\" + $2" (which reallocates and recopies the accumulator on every
-                # element, making SQL generation O(n^2) in the size of the IN list); large IN clauses
-                # (thousands of ids) otherwise spin CPU for seconds while generating the query
-                list<string> in_exprs = map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals;
+                # bind each value to its own placeholder with a single bulk append + O(n) join();
+                # see sqlutil_expand_in_placeholders() for why per-value binding through the
+                # reference<hash<QueryInfo>> would make large IN clauses pathologically slow
+                list<string> in_exprs = sqlutil_expand_in_placeholders(\info, role, in_vals);
                 return in_exprs ? sprintf("%s in (%s)", exp0, join(",", in_exprs)) : "1 != 1";
             },
         },
@@ -5634,10 +5666,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                # join() (single-pass, O(n)) rather than "foldl $1 + \",\" + $2" (O(n^2) in the size
-                # of the value list); see the DP_SEARCH_OP_IN "in" op above for details
-                list<string> in_exprs = map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals;
+                # single bulk append + O(n) join(); see sqlutil_expand_in_placeholders() and the
+                # DP_SEARCH_OP_IN "in" op above for details
+                list<string> in_exprs = sqlutil_expand_in_placeholders(\info, role, in_vals);
                 return in_exprs ? sprintf("%s not in (%s)", exp0, join(",", in_exprs)) : "1 = 1";
             },
         },
