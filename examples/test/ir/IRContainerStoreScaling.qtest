@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Regression tests for two IR-interpreter defects that made read+write
+# container loops O(N²) in the loop count:
+#
+# 1. The per-frame cleanup slot list allowed unbounded duplicate entries — a
+#    loop body storing a node value to the same slot every iteration grew the
+#    list by one entry per iteration, and the per-store linear scans over it
+#    (clearSlotForOverwrite() et al.) made the whole loop quadratic.  Fixed by
+#    deduplicating entries with a per-slot push count (IRCleanupSlots).
+#
+# 2. The HashKeyStore / HashKeyStoreDynamic / ListIndexStore fast paths ran
+#    their reference_count() uniqueness check while this frame's own
+#    bookkeeping references to the container (LoadLocal result slots, the
+#    locals slot cache) were still held, so any loop that read and then wrote
+#    the same local container looked "shared" and did a full copy-on-write of
+#    the container on every store.  Fixed by releasing the frame's bookkeeping
+#    references before the check for plain (non-closure) container locals.
+#
+# Originally surfaced as a >30s load of the Qorus Business-Impact Dashboard,
+# pinned in a uniqueInts() id-dedup helper (foreach + hash membership test +
+# hash insert + list append: 10k elements took ~20s).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class IRContainerStoreScalingTest
+
+class IRContainerStoreScalingTest inherits QUnit::Test {
+    constructor() : QUnit::Test("IRContainerStoreScalingTest", "1.0", \ARGV) {
+        addTestCase("hash static-key store after read", \testHashStaticKeyStoreAfterRead());
+        addTestCase("hash dynamic-key store after read", \testHashDynamicKeyStoreAfterRead());
+        addTestCase("list index store after read", \testListIndexStoreAfterRead());
+        addTestCase("genuinely shared containers still CoW", \testSharedContainersStillCow());
+        addTestCase("hash self-assignment stores pre-CoW value", \testHashSelfAssign());
+        addTestCase("read+write dedup loop correctness", \testDedupLoopCorrectness());
+        addTestCase("exception paths in read+write loops", \testExceptionPaths());
+        addTestCase("read+write dedup loop scales linearly", \testDedupLoopScaling());
+        set_return_value(main());
+    }
+
+    testHashStaticKeyStoreAfterRead() {
+        hash<auto> h = {"a": 1};
+        assertEq(1, h.a);           # read populates the interpreter's slot cache
+        h.b = 2;                    # HashKeyStore must mutate in place, not CoW
+        h = {"c": 3};               # reassign must not double-release cached refs
+        assertEq({"c": 3}, h);
+    }
+
+    testHashDynamicKeyStoreAfterRead() {
+        hash<string, int> h = {"a": 1};
+        string k = "b";
+        assertEq(1, h{"a"});
+        h{k} = 2;                   # HashKeyStoreDynamic
+        assertEq(2, h{k});
+        h = {"c": 3};
+        assertEq({"c": 3}, h);
+    }
+
+    testListIndexStoreAfterRead() {
+        list<int> l = (1, 2, 3);
+        assertEq(1, l[0]);
+        l[1] = 20;                  # ListIndexStore
+        assertEq((1, 20, 3), l);
+        l = (7, 8);
+        assertEq((7, 8), l);
+    }
+
+    testSharedContainersStillCow() {
+        # a second variable holding the container is a genuine external
+        # reference: the store must copy, leaving the alias untouched
+        hash<auto> h = {"a": 1};
+        hash<auto> alias = h;
+        assertEq(1, h.a);
+        h.b = 2;
+        assertEq({"a": 1}, alias);
+        assertEq({"a": 1, "b": 2}, h);
+
+        list<int> l = (1, 2, 3);
+        list<int> lalias = l;
+        assertEq(1, l[0]);
+        l[1] = 20;
+        assertEq((1, 2, 3), lalias);
+        assertEq((1, 20, 3), l);
+    }
+
+    testHashSelfAssign() {
+        # `h.b = h` must copy the outer hash first and store the original
+        hash<auto!> h = {"a": 1};
+        h.b = h;
+        assertEq(1, h.b.a);
+        assertFalse(exists h.b.b);
+    }
+
+    private static list<int> uniqueInts(list<int> values) {
+        # the original quadratic pattern: foreach + hash membership read +
+        # hash insert + list append, all on locals read and written in the
+        # same loop body
+        list<int> rv = ();
+        hash<string, bool> seen = {};
+        foreach int value in (values) {
+            string key = value.toString();
+            if (seen{key}) {
+                continue;
+            }
+            seen{key} = True;
+            rv += value;
+        }
+        return rv;
+    }
+
+    testDedupLoopCorrectness() {
+        assertEq((5, 3, 1, 2), IRContainerStoreScalingTest::uniqueInts((5, 3, 5, 1, 3, 5, 2)));
+        assertEq(new list<int>(), IRContainerStoreScalingTest::uniqueInts(new list<int>()));
+        list<int> vals = map $1 % 500, xrange(5000);
+        assertEq(500, IRContainerStoreScalingTest::uniqueInts(vals).size());
+    }
+
+    testExceptionPaths() {
+        # exceptions thrown mid-loop must leave the mutated containers intact
+        # and release loop temporaries without crashing
+        hash<string, bool> seen = {};
+        list<int> rv = ();
+        try {
+            foreach int i in (xrange(100)) {
+                string key = i.toString();
+                if (seen{key}) {
+                    continue;
+                }
+                seen{key} = True;
+                rv += i;
+                if (i == 50) {
+                    throw "STOP", "stop";
+                }
+            }
+            assertTrue(False);
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("STOP", ex.err);
+        }
+        assertEq(51, rv.size());
+        assertEq(51, seen.size());
+    }
+
+    private static int timeDedup(int n) {
+        list<int> vals = map $1 % (n / 2), xrange(n);
+        date t0 = now_us();
+        list<int> rv = IRContainerStoreScalingTest::uniqueInts(vals);
+        int us = (now_us() - t0).durationMicroseconds();
+        if (rv.size() != n / 2) {
+            throw "SCALING-TEST-ERROR", sprintf("dedup returned %d elements, expected %d", rv.size(), n / 2);
+        }
+        return us;
+    }
+
+    testDedupLoopScaling() {
+        # warm up (JIT promotion, allocator)
+        IRContainerStoreScalingTest::timeDedup(1000);
+        int t1 = IRContainerStoreScalingTest::timeDedup(8000);
+        int t2 = IRContainerStoreScalingTest::timeDedup(32000);
+        # 4x the input must not cost more than ~8x the time (linear is ~4x,
+        # quadratic is ~16x and hundreds of ms even on fast machines); the
+        # absolute bound keeps timer noise from failing fast runs
+        bool linear = t2 < 8 * t1 || t2 < 250000;
+        assertTrue(linear,
+            sprintf("dedup scaling: 8k=%dus 32k=%dus (ratio %.1f)", t1, t2, t1 ? float(t2) / t1 : 0.0));
+    }
+}
