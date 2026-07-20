@@ -11838,8 +11838,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         return hoisted;
     }
     const char* func_name = call->getName();
-    if (func_name && !strcmp(func_name, "join") && !call->hasExplicitTypeArgs()
-            && !std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+    if (func_name && !strcmp(func_name, "join") && !call->hasExplicitTypeArgs()) {
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         const FunctionEntry* fe = call->getFunctionEntry();
         std::string namespace_path;
@@ -11870,15 +11869,56 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                     && QoreTypeInfo::parseReturns(element_type, NT_STRING) == QTI_IDENT;
             }
             if (separator_ok && list_ok) {
-                std::vector<QoreIRValue> operands;
-                if (!lowerCallArgs(parse_args, args, operands, error)) {
-                    return QoreIRValue();
+                const qore_list_private* args_priv = args ? qore_list_private::get(args) : nullptr;
+                bool positional_eval_order = !args_priv || !args_priv->hasCallArgEvalMap();
+                if (positional_eval_order
+                        && !std::getenv("QORE_DISABLE_IR_IDENTITY_MAP_STRING_JOIN")
+                        && !std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+                    std::vector<LazyPipelineStage> source_stages;
+                    QoreValue base_source;
+                    if (!collectLazyPipelineStages(positional_args[1], base_source, source_stages, error)) {
+                        return QoreIRValue();
+                    }
+                    const QoreValue* map_expr = source_stages.size() == 1
+                            && source_stages[0].kind == LazyPipelineStage::Map
+                        ? source_stages[0].primary : nullptr;
+                    const auto* identity_arg = map_expr
+                        ? dynamic_cast<const QoreImplicitArgumentNode*>(map_expr->getInternalNode()) : nullptr;
+                    QoreParseAnalysis base_analysis;
+                    bool identity_map = identity_arg && identity_arg->getOffset() == 0
+                        && !map_expr->hasEffect() && !expressionCanThrow(*map_expr)
+                        && getAnalysis(base_source, base_analysis)
+                        && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                        && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
+                            || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned))
+                        && QoreTypeInfo::getUniqueReturnComplexList(
+                            selectAnalysisType(base_analysis));
+                    if (identity_map) {
+                        QoreIRValue separator = lowerExpression(positional_args[0], error);
+                        if (!separator.isValid()) {
+                            return QoreIRValue();
+                        }
+                        QoreIRValue source = lowerExpression(base_source, error);
+                        if (!source.isValid()) {
+                            return QoreIRValue();
+                        }
+                        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
+                            expr, {separator, source}, call->loc, error);
+                        --ast_delegate_count;
+                        return result;
+                    }
                 }
-                if (operands.size() == 2) {
-                    QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
-                        expr, operands, call->loc, error);
-                    --ast_delegate_count;
-                    return result;
+                if (!std::getenv("QORE_DISABLE_IR_LIST_STRING_JOIN")) {
+                    std::vector<QoreIRValue> operands;
+                    if (!lowerCallArgs(parse_args, args, operands, error)) {
+                        return QoreIRValue();
+                    }
+                    if (operands.size() == 2) {
+                        QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
+                            expr, operands, call->loc, error);
+                        --ast_delegate_count;
+                        return result;
+                    }
                 }
             }
         }

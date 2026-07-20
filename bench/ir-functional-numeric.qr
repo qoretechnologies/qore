@@ -145,6 +145,15 @@ int sub listJoinString(list<string> data, int rounds) {
     return checksum;
 }
 
+int sub mapListJoinString(list<string> data, int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string joined = join(", ", (map $1, data));
+        checksum += joined.size();
+    }
+    return checksum;
+}
+
 int sub mapJoinString(list<string> data, int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -240,6 +249,9 @@ switch (kernel) {
         break;
     case "list-join-string":
         printf("%d\n", listJoinString(makeStringData(), rounds));
+        break;
+    case "map-list-join-string":
+        printf("%d\n", mapListJoinString(makeStringData(), rounds));
         break;
     case "map-join-string":
         printf("%d\n", mapJoinString(makeStringData(), rounds));
