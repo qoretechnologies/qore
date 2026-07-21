@@ -404,6 +404,8 @@ struct BatchCalleeInfo {
     AOTContextIntInfo context_int;         //!< Importable affine captured-int expression
     AOTGlobalIntInfo global_int;           //!< Importable affine global-int expression
     std::string object_getter_member;     //!< Exact final-object getter member name
+    std::string object_set_get_member;    //!< Exact guarded object member assignment-return name
+    int8_t object_set_get_param = -1;     //!< Parameter assigned by object_set_get_member
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.

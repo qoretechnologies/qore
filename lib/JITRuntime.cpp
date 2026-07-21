@@ -410,6 +410,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_load_object_getter_checked_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_checked_aot) },
+    { "qore_rt_object_member_set_get_aot",
+        reinterpret_cast<void*>(&qore_rt_object_member_set_get_aot) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -14839,6 +14841,56 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_checked_aot(
         qore_rt_raise_return_nothing(xsink);
     }
     return *xsink ? toBits(QoreValue()) : result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        uint64_t* args, int nargs, const char* member_name,
+        int32_t value_param, int32_t rejects_nothing,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreValue base = fromBits(base_bits);
+    if (!target.method || !target.qc || target.is_pseudo
+            || base.getType() != NT_OBJECT || !args
+            || !member_name || !*member_name
+            || value_param < 0 || value_param >= nargs) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, args, nargs, xsink);
+    }
+
+    QoreObject* object = base.get<QoreObject>();
+    if (!object->isValid() || object->getClass() != target.qc) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, args, nargs, xsink);
+    }
+
+    {
+        LValueHelper helper(xsink);
+        const qore_class_private* class_ctx =
+            qore_class_private::get(*target.qc);
+        if (qore_object_private::getLValue(*object, member_name, helper,
+                class_ctx, false, xsink)) {
+            return toBits(QoreValue());
+        }
+        QoreValue value = fromBits(args[value_param]);
+        if (helper.assign(value.hasNode() ? value.refSelf() : value)
+                || *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+
+    ValueHolder value(object->getReferencedMemberNoMethod(
+        member_name, target.qc, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    ValueHolder result(
+        value->needsEval() ? value->eval(xsink) : value.release(), xsink);
+    if (!*xsink && rejects_nothing && result->isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+    }
+    return toBits(*xsink ? QoreValue() : result.release());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx,

@@ -10733,6 +10733,175 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         member_name = load->member_name;
         return true;
     };
+    auto get_object_set_get = [](const QoreIRFunction* func,
+            const UserSignature* sig, std::string& member_name,
+            int8_t& value_param) -> bool {
+        if (std::getenv("QORE_DISABLE_AOT_OBJECT_SET_GET_IMPORT") || !func
+                || !sig || !sig->selfid || !sig->numParams()
+                || sig->numParams() > INT8_MAX || func->blocks.size() != 1
+                || func->blocks.front()->instructions.size() > 20) {
+            return false;
+        }
+
+        std::unordered_map<const LocalVar*, int8_t> local_sources;
+        for (unsigned i = 0; i < sig->numParams(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT object set/get parameter analysis")) {
+                return false;
+            }
+            auto param = func->param_local_vars.find(i);
+            if (param == func->param_local_vars.end() || !param->second
+                    || param->second->closureUse()
+                    || QoreTypeInfo::isReference(
+                        param->second->getTypeInfo())) {
+                return false;
+            }
+            local_sources.emplace(param->second, static_cast<int8_t>(i));
+        }
+
+        const auto* self = reinterpret_cast<const LocalVar*>(sig->selfid);
+        std::unordered_map<uint32_t, int8_t> value_sources;
+        std::unordered_set<uint32_t> self_values;
+        std::unordered_set<uint32_t> member_values;
+        bool assigned = false;
+        bool returned = false;
+        for (const auto& inst_ptr : func->blocks.front()->instructions) {
+            if (!inst_ptr || inst_ptr->exception_target || returned) {
+                return false;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            switch (inst->opcode) {
+                case QoreIROpcode::DebugBlock:
+                case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::LoadLocal: {
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!inst->result.isValid()) {
+                        return false;
+                    }
+                    if (load->local == self) {
+                        self_values.insert(inst->result.id);
+                        break;
+                    }
+                    auto source = local_sources.find(load->local);
+                    if (source == local_sources.end()) {
+                        return false;
+                    }
+                    value_sources.emplace(inst->result.id, source->second);
+                    break;
+                }
+                case QoreIROpcode::StoreLocal: {
+                    const auto* store =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!store->local || store->local->closureUse()
+                            || store->weak || inst->operands.size() != 1
+                            || store->local == self) {
+                        return false;
+                    }
+                    auto source = value_sources.find(inst->operands[0].id);
+                    auto param = source == value_sources.end()
+                        ? func->param_local_vars.end()
+                        : func->param_local_vars.find(
+                            static_cast<unsigned>(source->second));
+                    if (source == value_sources.end()
+                            || param == func->param_local_vars.end()
+                            || !param->second
+                            || store->local->getTypeInfo()
+                                != param->second->getTypeInfo()
+                            || !local_sources.emplace(
+                                store->local, source->second).second) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathAssign: {
+                    const auto* assign =
+                        static_cast<const QoreIRLValuePathInstruction*>(inst);
+                    const std::string* assigned_member = nullptr;
+                    if (assign->path.size() == 1
+                            && assign->path[0].kind
+                                == LVPathStepKind::SelfMember) {
+                        assigned_member = &assign->path[0].name;
+                    } else if (assign->path.size() == 2
+                            && assign->path[0].kind
+                                == LVPathStepKind::LocalVar
+                            && assign->path[0].ref_ptr == self
+                            && assign->path[1].kind
+                                == LVPathStepKind::HashKeyConst) {
+                        assigned_member = &assign->path[1].name;
+                    }
+                    if (assigned || assign->weak
+                            || !assigned_member
+                            || assigned_member->empty()
+                            || inst->operands.size() != 1) {
+                        return false;
+                    }
+                    auto source = value_sources.find(inst->operands[0].id);
+                    if (source == value_sources.end()) {
+                        return false;
+                    }
+                    assigned = true;
+                    member_name = *assigned_member;
+                    value_param = source->second;
+                    break;
+                }
+                case QoreIROpcode::HashKeyAccess: {
+                    const auto* load =
+                        static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+                    if (!assigned || !inst->result.isValid()
+                            || inst->operands.size() != 1
+                            || !self_values.count(inst->operands[0].id)
+                            || load->key_name != member_name) {
+                        return false;
+                    }
+                    member_values.insert(inst->result.id);
+                    break;
+                }
+                case QoreIROpcode::LoadSelfMember: {
+                    const auto* load =
+                        static_cast<const QoreIRSelfMemberInstruction*>(inst);
+                    if (!assigned || !inst->result.isValid()
+                            || load->member_name != member_name) {
+                        return false;
+                    }
+                    member_values.insert(inst->result.id);
+                    break;
+                }
+                case QoreIROpcode::RefSelf:
+                    if (!inst->result.isValid() || inst->operands.size() != 1
+                            || !member_values.count(inst->operands[0].id)) {
+                        return false;
+                    }
+                    member_values.insert(inst->result.id);
+                    break;
+                case QoreIROpcode::UninstantiateLocal: {
+                    const auto* cleanup =
+                        static_cast<const QoreIRLocalInstruction*>(inst);
+                    if (!cleanup->local || cleanup->local == self
+                            || !local_sources.count(cleanup->local)) {
+                        return false;
+                    }
+                    break;
+                }
+                case QoreIROpcode::Return: {
+                    const auto* ret =
+                        static_cast<const QoreIRReturnInstruction*>(inst);
+                    if (!assigned || !ret->has_value
+                            || !member_values.count(ret->value.id)) {
+                        return false;
+                    }
+                    returned = true;
+                    break;
+                }
+                default:
+                    return false;
+            }
+        }
+        return returned && value_param >= 0;
+    };
     for (const auto& [variant, func] : functions) {
         if (++check_count % 100 == 0
                 && qore_check_cancel(nullptr, "AOT scalar leaf summary collection")) {
@@ -10748,6 +10917,16 @@ static bool resolveAOTBatchFunctionEffectSummaries(
         if (callee_it->second.implicit_self_method) {
             get_object_getter(func, static_cast<int>(sig->numParams()),
                 callee_it->second.object_getter_member);
+        }
+        const auto* method_variant =
+            dynamic_cast<const MethodVariantBase*>(variant);
+        const QoreMethod* method = method_variant
+            ? method_variant->method() : nullptr;
+        if (method && !method->isStatic()
+                && isAOTFastMethodCallEligible(variant, true)) {
+            get_object_set_get(func, sig,
+                callee_it->second.object_set_get_member,
+                callee_it->second.object_set_get_param);
         }
         AOTStringOpInfo string_op;
         if (qore_aot_get_string_op(*func, *sig, string_op)) {
@@ -11493,6 +11672,9 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
                 || (instance_method
                     ? !implicit_self
                     : !isAOTFastEntryEligible(ir.get(), uvb, true))) {
+            if (instance_method && !will_outline) {
+                candidates.emplace_back(variant, std::move(ir));
+            }
             continue;
         }
 
