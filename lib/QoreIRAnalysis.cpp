@@ -4653,6 +4653,88 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
     return {eliminated_loads.size(), eliminated_stores.size()};
 }
 
+static QoreIRValueRepresentation qore_ir_conditional_native_representation(
+        QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::AddInt:
+        case QoreIROpcode::SubInt:
+        case QoreIROpcode::MulInt:
+        case QoreIROpcode::DivInt:
+        case QoreIROpcode::ModInt:
+        case QoreIROpcode::ShlInt:
+        case QoreIROpcode::ShrInt:
+        case QoreIROpcode::AndInt:
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::XorInt:
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShrAssignInt:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::XorAssignInt:
+            return QoreIRValueRepresentation::NativeInt;
+        case QoreIROpcode::AddFloat:
+        case QoreIROpcode::SubFloat:
+        case QoreIROpcode::MulFloat:
+        case QoreIROpcode::DivFloat:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::DivAssignFloat:
+            return QoreIRValueRepresentation::NativeFloat;
+        default:
+            return QoreIRValueRepresentation::Unknown;
+    }
+}
+
+static bool qore_ir_value_is_proven_assigned(
+        const QoreIRFunction& func, QoreIRValue value,
+        const std::unordered_map<uint32_t, const QoreIRInstruction*>& definitions,
+        const std::unordered_set<const LocalVar*>* known_locals,
+        std::unordered_set<uint32_t>& visiting, size_t& check_count) {
+    if (!value.isValid()
+            || qore_ir_analysis_cancelled(check_count,
+                "IR local assigned-value proof")
+            || !visiting.insert(value.id).second) {
+        return false;
+    }
+    auto finish = [&visiting, value](bool result) {
+        visiting.erase(value.id);
+        return result;
+    };
+    auto definition = definitions.find(value.id);
+    if (definition != definitions.end() && definition->second) {
+        const QoreIRInstruction* inst = definition->second;
+        if (inst->opcode == QoreIROpcode::LoadLocal && known_locals) {
+            const auto* load =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            return finish(load->local
+                && known_locals->count(load->local));
+        }
+        if (qore_ir_conditional_native_representation(inst->opcode)
+                != QoreIRValueRepresentation::Unknown) {
+            if (inst->operands.empty()) {
+                return finish(false);
+            }
+            for (QoreIRValue operand : inst->operands) {
+                if (!qore_ir_value_is_proven_assigned(func, operand,
+                        definitions, known_locals, visiting, check_count)) {
+                    return finish(false);
+                }
+            }
+            return finish(true);
+        }
+    }
+    const QoreIRValueFacts* facts = func.getValueFacts(value);
+    return finish(facts
+        && facts->assigned_state == QoreIRAssignedState::Assigned
+        && facts->never_nothing);
+}
+
 static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, size_t& check_count) {
     if (std::getenv("QORE_DISABLE_IR_LOCAL_VALUE_FACTS")
@@ -4887,6 +4969,227 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
         }
     }
     return refined;
+}
+
+bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
+        const QoreIRInstruction* point,
+        const std::vector<QoreIRValue>& values) {
+    if (!point || values.empty() || func.blocks.empty()
+            || func.has_opaque_ast_local_access) {
+        return false;
+    }
+    size_t check_count = 0;
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return false;
+    }
+
+    size_t point_block = SIZE_MAX;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    std::unordered_set<const LocalVar*> universe;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR point assigned-value setup")) {
+                return false;
+            }
+            if (inst.get() == point) {
+                point_block = block_id;
+            }
+            if (inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const LocalVar* local =
+                    static_cast<const QoreIRLocalInstruction*>(inst.get())
+                        ->local;
+                const QoreTypeInfo* type = local
+                    ? local->getTypeInfo() : nullptr;
+                if (local && !local->closureUse()
+                        && !QoreTypeInfo::isReference(type)) {
+                    universe.insert(local);
+                }
+            }
+        }
+    }
+    if (point_block == SIZE_MAX || !cfg.reachable[point_block]) {
+        return false;
+    }
+
+    std::unordered_set<const LocalVar*> initially_known;
+    for (const auto& [index, local] : func.param_local_vars) {
+        (void)index;
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR point assigned-value parameter analysis")) {
+            return false;
+        }
+        if (local && universe.count(local)
+                && !QoreTypeInfo::parseAcceptsReturns(
+                    local->getTypeInfo(), NT_NOTHING)) {
+            initially_known.insert(local);
+        }
+    }
+
+    auto transfer_instruction = [&](const QoreIRInstruction* inst,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR point assigned-value transfer")) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::StoreLocal) {
+            const auto* store =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!store->local || !universe.count(store->local)
+                    || store->operands.size() != 1 || store->weak
+                    || store->is_ref || store->is_closure) {
+                if (store->local) {
+                    known.erase(store->local);
+                }
+                return true;
+            }
+            std::unordered_set<uint32_t> visiting;
+            if (qore_ir_value_is_proven_assigned(func,
+                    store->operands[0], definitions, &known, visiting,
+                    check_count)) {
+                known.insert(store->local);
+            } else {
+                known.erase(store->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+            const auto* local =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (local->local) {
+                known.erase(local->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::LoadLocal) {
+            return true;
+        }
+
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+        bool direct_call = inst->opcode == QoreIROpcode::CallDirect
+            || inst->opcode == QoreIROpcode::CallStaticDirect
+            || inst->opcode == QoreIROpcode::CallMethodDirect
+            || inst->opcode == QoreIROpcode::InvokeMethodDirect
+            || inst->opcode == QoreIROpcode::CallClosureDirect;
+        if (direct_call && (!callee || has_ref_args)) {
+            known.clear();
+            return true;
+        }
+        if (!direct_call
+                && qore_ir_instruction_may_invalidate_caller_caches(
+                    func, inst)) {
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                known.erase(written);
+            } else {
+                known.clear();
+            }
+        }
+        return true;
+    };
+    auto transfer_block = [&](size_t block_id,
+            std::unordered_set<const LocalVar*>& known) -> bool {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!transfer_instruction(inst.get(), known)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    std::vector<std::unordered_set<const LocalVar*>> in(func.blocks.size());
+    std::vector<std::unordered_set<const LocalVar*>> out(
+        func.blocks.size(), universe);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR point assigned-value fixed-point analysis")) {
+                return false;
+            }
+            if (!cfg.reachable[block_id]) {
+                continue;
+            }
+            std::unordered_set<const LocalVar*> next = block_id == 0
+                ? initially_known : universe;
+            bool have_predecessor = block_id == 0;
+            if (block_id) {
+                size_t predecessor_count = 0;
+                for (size_t predecessor : cfg.predecessors[block_id]) {
+                    if (++predecessor_count % 100 == 0
+                            && qore_ir_analysis_cancelled(check_count,
+                                "IR point assigned-value predecessor intersection")) {
+                        return false;
+                    }
+                    if (!cfg.reachable[predecessor]) {
+                        continue;
+                    }
+                    if (!have_predecessor) {
+                        next = out[predecessor];
+                        have_predecessor = true;
+                        continue;
+                    }
+                    size_t local_count = 0;
+                    for (auto it = next.begin(); it != next.end();) {
+                        if (++local_count % 100 == 0
+                                && qore_ir_analysis_cancelled(check_count,
+                                    "IR point assigned-value set intersection")) {
+                            return false;
+                        }
+                        if (!out[predecessor].count(*it)) {
+                            it = next.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
+                }
+            }
+            if (!have_predecessor) {
+                next.clear();
+            }
+            in[block_id] = next;
+            if (!transfer_block(block_id, next)) {
+                return false;
+            }
+            if (out[block_id] != next) {
+                out[block_id] = std::move(next);
+                changed = true;
+            }
+        }
+    }
+
+    std::unordered_set<const LocalVar*> known = in[point_block];
+    for (const auto& inst : func.blocks[point_block]->instructions) {
+        if (inst.get() == point) {
+            size_t value_count = 0;
+            for (QoreIRValue value : values) {
+                if (++value_count % 100 == 0
+                        && qore_ir_analysis_cancelled(check_count,
+                            "IR point assigned-value result validation")) {
+                    return false;
+                }
+                std::unordered_set<uint32_t> visiting;
+                if (!qore_ir_value_is_proven_assigned(func, value,
+                        definitions, &known, visiting, check_count)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if (!transfer_instruction(inst.get(), known)) {
+            return false;
+        }
+    }
+    return false;
 }
 
 struct QoreIRDenseListStats {
@@ -7879,8 +8182,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
             const AbstractQoreFunctionVariant* callee =
                 qore_ir_get_resolved_effect_callee(call, has_ref_args);
             int8_t param = -1;
-            if (!callee || has_ref_args
-                    || !get_return_param(callee, call, param)
+            if (!callee || !get_return_param(callee, call, param)
                     || param < 0
                     || static_cast<size_t>(param) >= call->operands.size()) {
                 continue;
@@ -7956,9 +8258,16 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         }
         const QoreIRValueFacts* facts =
             func.getValueFacts(replacement->second);
-        bool safe_facts = facts
+        bool assigned = facts
             && facts->assigned_state == QoreIRAssignedState::Assigned
-            && facts->never_nothing
+            && facts->never_nothing;
+        bool native_value = assigned
+            && (facts->representation == QoreIRValueRepresentation::NativeInt
+                || facts->representation
+                    == QoreIRValueRepresentation::NativeFloat
+                || facts->representation
+                    == QoreIRValueRepresentation::NativeBool);
+        bool safe_facts = assigned
             && (facts->representation == QoreIRValueRepresentation::Boxed
                 || facts->representation
                     == QoreIRValueRepresentation::Unknown);
@@ -7968,7 +8277,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                 || definition->second->opcode
                     == QoreIROpcode::MakeHashConstKeys
                 || definition->second->opcode == QoreIROpcode::MakeList);
-        if (!safe_facts && !fresh_boxed) {
+        if (!safe_facts && !native_value && !fresh_boxed) {
             replacement = replacements.erase(replacement);
             continue;
         }

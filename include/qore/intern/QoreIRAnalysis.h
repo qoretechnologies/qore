@@ -230,6 +230,15 @@ using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;
 
+/** Proves that all values are assigned at the point immediately before an instruction.
+    @param func the IR function containing the instruction and values
+    @param point the instruction defining the analysis point
+    @param values the values that must all be assigned and non-NOTHING
+    @return true only when every value is proven assigned on every reachable path
+ */
+bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
+    const QoreIRInstruction* point, const std::vector<QoreIRValue>& values);
+
 //! Replace an exact pure boxed passthrough call with its already-owned argument.
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     const QoreIRBoxedReturnParamQuery& get_return_param);

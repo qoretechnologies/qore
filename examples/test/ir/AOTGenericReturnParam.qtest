@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+class GenericChooser<T> {
+    static U choose<U>(T ignored, U value) {
+        return value;
+    }
+}
+
+T sub genericIdentity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+int sub functionLoop(int count) {
+    int result = 0;
+    for (int i = 0; i < count; i++) {
+        result += genericIdentity<int>(i);
+    }
+    return result;
+}
+
+int sub inferredFunctionLoop(int count) {
+    int result = 0;
+    for (int i = 0; i < count; i++) {
+        result += genericIdentity(i);
+    }
+    return result;
+}
+
+int sub staticLoop(int count) {
+    int result = 0;
+    for (int i = 0; i < count; i++) {
+        result += GenericChooser<int>::choose<int>(i, i + 1);
+    }
+    return result;
+}
+
+bool sub unassignedFunctionRejected() {
+    int value;
+    try {
+        genericIdentity<int>(value);
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+bool sub unassignedIgnoredStaticArgumentRejected() {
+    int ignored;
+    try {
+        GenericChooser<int>::choose<int>(ignored, 1);
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+int sub main() {
+    printf(\"%d:%d:%d:%y:%y\\n\", functionLoop(100),
+        inferredFunctionLoop(100), staticLoop(100),
+        unassignedFunctionRejected(),
+        unassignedIgnoredStaticArgumentRejected());
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-generic-return-param-" + string(getpid());
+mkdir(root);
+string source_path = root + "/generic-return.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string expected = "4950:4950:5050:True:True\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string enabled_path = root + "/enabled-aot";
+string disabled_path = root + "/disabled-aot";
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_path, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_GENERIC_RETURN_PARAM_FOLD=1"
+        + " %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_path, source_path));
+if (!is_file(enabled_path) || !is_file(disabled_path)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string function in (("functionLoop", "inferredFunctionLoop", "staticLoop")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*boxed-return-calls=[1-9]",
+            function))) {
+        printf("missing generic return-parameter fold for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (unassignedFunctionRejected|unassignedIgnoredStaticArgumentRejected|main)[^\n]*:.*boxed-return-calls=[1-9]/
+        || disabled_compile =~ /boxed-return-calls=[1-9]/) {
+    printf("unsafe or disabled generic return-parameter fold:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled_path, disabled_path)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
