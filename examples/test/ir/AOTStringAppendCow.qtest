@@ -66,7 +66,18 @@ string sub aliasBuilder(bool escape) {
     value += \"x\";
     return value + \"/\" + value_alias;
 }
+# same-statement pseudo-method reads keep the builder node non-unique in the
+# IR interpreter (the intrinsic's base load holds its own reference until the
+# statement's temps are discarded): the marked in-place append must fall back
+# to CoW and the paired store-back must store the fresh node through
+string sub chainedBuilder() {
+    string value = \"AbC\";
+    value += value.lwr();
+    value += value.upr();
+    return value;
+}
 string builder = makeBuilder();
+string chained = chainedBuilder();
 string branch_alias = aliasBuilder(True);
 string branch_no_alias = aliasBuilder(False);
 string escaped_builder = \"\";
@@ -75,10 +86,10 @@ for (int i = 0; i < 4; ++i) {
     escaped_builder += \"x\";
 }
 
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s/%s|%s|%s\\n\",
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%s|%s/%s|%s|%s\\n\",
     value, append_result, alias_source, alias, self, unset, removed, optional,
     convert_encoding(latin1, \"UTF-8\"), latin1.encoding(), encoding_exception,
-    referenced + \"/\" + captured, builder.size(), escaped_builder, escaped_alias,
+    referenced + \"/\" + captured, builder.size(), chained, escaped_builder, escaped_alias,
     branch_alias, branch_no_alias);
 ";
 
@@ -105,7 +116,7 @@ string sub runAot(string suffix, string env) {
 }
 
 string expected = "ab|ab|left-right|left|xyxy|assigned|new|kept|café déjà|"
-    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|512|xxxx/|x/|x/\n";
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|512|AbCabcABCABC|xxxx/|x/|x/\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -127,6 +138,21 @@ string opt_stats = backquote(sprintf(
 if (opt_stats !~ /IR-OPT: makeBuilder:.*inplace-string=1/) {
     printf("in-place string append optimization missing:\n%s", opt_stats);
     exit(2);
+}
+# with borrowed loads disabled, every marked in-place append in the IR
+# interpreter sees a non-unique builder node and must take the runtime CoW
+# fallback with the paired store-back storing the fresh node through; the
+# output must be identical (and debug builds must not trip the string
+# mutation-uniqueness assertion)
+foreach string mode in (("ir", "tiered")) {
+    string actual = backquote(sprintf(
+        "QORE_DISABLE_IR_BORROWED_STRING_LOAD=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s with borrowed string loads disabled\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
 }
 if (opt_stats =~ /IR-OPT: aliasBuilder:.*inplace-string=[1-9][0-9]*/) {
     printf("in-place string append incorrectly accepted a branch-dependent alias:\n%s",

@@ -7965,6 +7965,15 @@ next_instruction:
                             || (is_ir_only_local && sid < locals_instantiated.size()
                                 && locals_instantiated[sid]);
                         if (cache_has_value && cached_val.getType() != NT_REFERENCE) {
+                            if (local_inst->borrowed_local_load) {
+                                // Load pairs with an in-place mutation and has no
+                                // other consumers: borrow the slot-cache reference
+                                // so the builder node stays unique at the mutation
+                                // site (native code borrows via alloca loads)
+                                out = cached_val;
+                                result_slot_owned = false;
+                                goto load_local_done;
+                            }
                             // Cache hit: one refSelf, no hash lookups, no instantiation check
                             out = cached_val.hasNode() ? cached_val.refSelf() : cached_val;
                             result_slot_owned = out.hasNode();
@@ -8077,6 +8086,10 @@ load_local_done:
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (weak_ref_load && out.hasNode()) {
                         trackWeakLoadTemp(local_inst->result.id);
+                    } else if (local_inst->borrowed_local_load && out.hasNode()) {
+                        // clear the slot after the paired mutation consumes it so
+                        // no stale borrowed pointer outlives the local's reference
+                        trackBorrowedTemp(local_inst->result.id);
                     }
                 }
                 // Mark as local-owned for DGC container scan
@@ -9979,6 +9992,29 @@ load_local_done:
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
                 if (local_inst->redundant_store) {
+                    // The paired mutation normally updates the local's own node
+                    // in place, making this store-back a no-op forward.  When
+                    // the interpreter's append fell back to CoW (transient refs
+                    // kept the node non-unique), the result is a fresh node that
+                    // must be stored through to the local.
+                    uint32_t sid = local_inst->slot_id;
+                    if (sid != UINT32_MAX && sid < locals_slot_cache.size()
+                            && val.getInternalNode()
+                            && locals_slot_cache[sid].getInternalNode()
+                                != val.getInternalNode()) {
+                        locals_slot_cache[sid].discard(xsink);
+                        locals_slot_cache[sid] = val.refSelf();
+                        if (sid < locals_instantiated.size()) {
+                            locals_instantiated[sid] = true;
+                        }
+                        if (sid < locals_lvar_cache.size()) {
+                            locals_lvar_cache[sid] = nullptr;
+                        }
+                        if (sid < local_init_slots.size()) {
+                            local_init_slots[sid] = UINT32_MAX;
+                        }
+                        markParentLocalStoreDirty(local_inst);
+                    }
                     if (local_inst->result.isValid()) {
                         setValueSlotDirect(values, local_inst->result.id, val);
                         if (val.hasNode()) {
@@ -11769,7 +11805,17 @@ load_local_done:
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
                 QoreValue right = getIRValue(values, inst->operands[1]);
-                QoreValue result = inst->string_append_in_place
+                // The static exclusivity proof cannot see transient
+                // same-statement temps that keep the builder node non-unique
+                // (e.g. an owned load feeding another consumer, which holds
+                // its own reference until the statement's temps are discarded).
+                // Mutating in place requires a unique node; otherwise fall back
+                // to the CoW append — the paired store-back detects the fresh
+                // node and stores it through to the local.
+                bool in_place = inst->string_append_in_place
+                    && left.getType() == NT_STRING
+                    && left.get<QoreStringNode>()->is_unique();
+                QoreValue result = in_place
                     ? fromBits(qore_rt_string_append_in_place(
                         toBits(left), toBits(right), xsink))
                     : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
@@ -11778,7 +11824,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                if (inst->string_append_in_place) {
+                if (in_place) {
                     setValueSlotDirect(values, inst->result.id, result);
                     if (result.hasNode()) {
                         trackBorrowedTemp(inst->result.id);

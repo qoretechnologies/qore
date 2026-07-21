@@ -3661,6 +3661,27 @@ public:
                 return false;
             }
         }
+        // Outlined pieces access shared locals through runtime slots, and
+        // helper entry initialization holds its own reference to each
+        // pre-instantiated local's node, so the alloca-borrow invariant the
+        // in-place mutation markings rely on (the local's node is unique at
+        // the mutation site) no longer holds.  Strip the markings across the
+        // coordinator and all helpers: the paired stores become real
+        // store-backs and the appends/pushes revert to CoW helpers.
+        auto strip_in_place_markings = [](QoreIRFunction& f) {
+            for (auto& block : f.blocks) {
+                for (auto& inst : block->instructions) {
+                    inst->string_append_in_place = false;
+                    inst->list_push_in_place = false;
+                    inst->borrowed_local_load = false;
+                    inst->redundant_store = false;
+                }
+            }
+        };
+        strip_in_place_markings(*fn);
+        for (auto& h : helpers) {
+            strip_in_place_markings(*h.ir_func);
+        }
         if (dbg) {
             fprintf(stderr,
                 "AOT-OUTLINE-FN: '%s' outlined %zu regions (coordinator now %zu blocks)\n",

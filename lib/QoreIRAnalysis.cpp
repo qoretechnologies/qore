@@ -3856,6 +3856,10 @@ static size_t qore_ir_mark_in_place_list_pushes(QoreIRFunction& func,
 static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
         size_t& check_count) {
+    // test/debug knob: leave paired loads owned so the interpreter exercises
+    // its runtime-uniqueness CoW fallback instead of the borrowed fast path
+    bool enable_borrowed_load =
+        !getenv("QORE_DISABLE_IR_BORROWED_STRING_LOAD");
     std::unordered_map<uint32_t, QoreIRInstruction*> definitions;
     std::unordered_set<LocalVar*> candidate_locals;
     for (const auto& block : cfg.blocks) {
@@ -3973,6 +3977,21 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     inst.string_append_in_place = true;
                     const_cast<QoreIRLocalInstruction*>(store)->redundant_store =
                         true;
+                    // when the append is the load's only consumer, the
+                    // interpreter can borrow the local's slot-cache reference
+                    // instead of taking its own, keeping the builder node
+                    // unique at the mutation site; with other consumers the
+                    // load stays owned and the interpreter's runtime
+                    // uniqueness check falls back to the CoW append
+                    auto load_def = definitions.find(inst.operands[0].id);
+                    auto load_uses = uses.find(inst.operands[0].id);
+                    if (enable_borrowed_load
+                            && load_def != definitions.end()
+                            && load_uses != uses.end()
+                            && load_uses->second.size() == 1
+                            && load_uses->second[0].inst == &inst) {
+                        load_def->second->borrowed_local_load = true;
+                    }
                     ++changed;
                 }
             }
