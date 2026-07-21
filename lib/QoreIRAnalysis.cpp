@@ -4659,17 +4659,6 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             || func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
     }
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR local value fact exception-flow analysis")) {
-                return 0;
-            }
-            if (inst->exception_target) {
-                return 0;
-            }
-        }
-    }
 
     std::unordered_set<const LocalVar*> universe;
     for (const auto& block : func.blocks) {
@@ -4703,6 +4692,20 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
     }
     if (universe.empty()) {
         return 0;
+    }
+
+    std::unordered_set<const LocalVar*> initially_known;
+    for (const auto& [index, local] : func.param_local_vars) {
+        (void)index;
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR local value fact parameter analysis")) {
+            return 0;
+        }
+        if (local && universe.count(local)
+                && !QoreTypeInfo::parseAcceptsReturns(
+                    local->getTypeInfo(), NT_NOTHING)) {
+            initially_known.insert(local);
+        }
     }
 
     auto transfer_instruction = [&](const QoreIRInstruction* inst,
@@ -4791,7 +4794,8 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
                     "IR local value fact fixed-point analysis")) {
                 return 0;
             }
-            std::unordered_set<const LocalVar*> next;
+            std::unordered_set<const LocalVar*> next = block_id == 0
+                ? initially_known : std::unordered_set<const LocalVar*>();
             if (block_id && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
@@ -4842,23 +4846,37 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             if (inst->opcode == QoreIROpcode::LoadLocal) {
                 const auto* load =
                     static_cast<const QoreIRLocalInstruction*>(inst);
-                if (load->local && known.count(load->local)
+                if (load->local && universe.count(load->local)
                         && inst->result.isValid()) {
                     QoreIRValueFacts facts;
                     if (const QoreIRValueFacts* current =
                             func.getValueFacts(inst->result)) {
                         facts = *current;
                     }
-                    if (facts.assigned_state
-                                != QoreIRAssignedState::Assigned
-                            || !facts.never_nothing) {
-                        facts.assigned_state =
-                            QoreIRAssignedState::Assigned;
-                        facts.never_nothing = true;
-                        if (!facts.type_info) {
-                            facts.type_info = load->local->getTypeInfo();
-                        }
-                        func.setValueFacts(inst->result, facts);
+                    QoreIRValueFacts refined_facts = facts;
+                    refined_facts.type_info = load->local->getTypeInfo();
+                    bool assigned = known.count(load->local);
+                    refined_facts.assigned_state = assigned
+                        ? QoreIRAssignedState::Assigned
+                        : QoreIRAssignedState::MaybeAssigned;
+                    refined_facts.never_nothing = assigned;
+                    const QoreTypeInfo* value_type =
+                        qore_get_value_type(refined_facts.type_info);
+                    refined_facts.representation = !assigned
+                        ? QoreIRValueRepresentation::Boxed
+                        : QoreTypeInfo::isType(value_type, NT_INT)
+                            && !QoreTypeInfo::getReturnEnum(value_type)
+                            ? QoreIRValueRepresentation::NativeInt
+                            : QoreTypeInfo::isType(value_type, NT_FLOAT)
+                                ? QoreIRValueRepresentation::NativeFloat
+                                : QoreIRValueRepresentation::NativeBool;
+                    if (facts.assigned_state != refined_facts.assigned_state
+                            || facts.never_nothing
+                                != refined_facts.never_nothing
+                            || facts.type_info != refined_facts.type_info
+                            || facts.representation
+                                != refined_facts.representation) {
+                        func.setValueFacts(inst->result, refined_facts);
                         ++refined;
                     }
                 }

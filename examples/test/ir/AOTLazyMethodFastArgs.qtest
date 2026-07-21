@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+class BaseProbe {
+    int value(int left, int middle, int right) {
+        return left + middle * 3 + right;
+    }
+}
+
+class DerivedProbe inherits BaseProbe {
+    int value(int left, int middle, int right) {
+        return 1000 + left + middle + right;
+    }
+}
+
+final class ExactProbe {
+    int value(int left, int middle, int right) {
+        return left * 2 + middle + right;
+    }
+
+    int selfValue(int left, int middle, int right) {
+        return value(left, middle, right);
+    }
+
+    static int staticValue(int left, int middle, int right) {
+        return left + middle * 2 + right;
+    }
+}
+
+int sub callBase(BaseProbe probe, int left, int middle, int right) {
+    return probe.value(left, middle, right);
+}
+
+string sub maybeNothing(ExactProbe probe, bool assign) {
+    int value;
+    if (assign) {
+        value = 4;
+    }
+    try {
+        return string(probe.value(value, 2, 3));
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+
+string sub deletedReceiver() {
+    ExactProbe probe();
+    delete probe;
+    try {
+        return string(probe.value(1, 2, 3));
+    } catch (hash<ExceptionInfo> e) {
+        return e.err;
+    }
+}
+
+BaseProbe base();
+DerivedProbe derived();
+ExactProbe exact();
+printf(\"%d:%d:%d:%d:%d:%s:%s:%s\\n\",
+    exact.value(2, 3, 4), exact.selfValue(2, 3, 4),
+    ExactProbe::staticValue(2, 3, 4), callBase(base, 2, 3, 4),
+    callBase(derived, 2, 3, 4), maybeNothing(exact, False),
+    maybeNothing(exact, True), deletedReceiver());
+";
+
+string root = "/tmp/qore-aot-lazy-method-fast-args-" + string(getpid());
+string source_path = root + ".qr";
+File source();
+source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+on_exit {
+    unlink(source_path);
+    unlink(root + "-enabled");
+    unlink(root + "-disabled");
+}
+
+string expected = "11:11:12:15:1009:RUNTIME-(OVERLOAD|TYPE)-ERROR:13:"
+    + "PSEUDO-METHOD-DOES-NOT-EXIST\\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (!actual.regex("^" + expected + "$")) {
+        printf("unexpected %s result:\n%s", mode, actual);
+        exit(2);
+    }
+}
+
+foreach hash<string, string> variant in ((
+        ("name": "enabled", "env": ""),
+        ("name": "disabled", "env": "QORE_DISABLE_AOT_LAZY_FAST_ARGS=1"))) {
+    string executable = root + "-" + variant.name;
+    string compile_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s %s -O3 -o %s %s 2>&1",
+        libqore_dir, variant.env, qcc_bin, executable, source_path));
+    if (!is_file(executable)) {
+        printf("%s AOT compile failed:\n%s", variant.name, compile_out);
+        exit(2);
+    }
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, executable));
+    if (!actual.regex("^" + expected + "$")) {
+        printf("unexpected %s AOT result:\n%s", variant.name, actual);
+        exit(2);
+    }
+}

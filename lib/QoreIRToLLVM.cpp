@@ -3672,6 +3672,69 @@ bool QoreIRToLLVM::buildArgsArray(const QoreIRInstruction* inst, int arg_start,
     return true;
 }
 
+bool QoreIRToLLVM::buildAotFastEntryArgs(const QoreIRInstruction* inst,
+        int arg_start, llvm::Function* llvm_func,
+        const BatchCalleeInfo& callee_info, bool needs_fallback_array,
+        llvm::Value*& args_array, int& nargs,
+        std::vector<llvm::Value*>& raw_args,
+        std::vector<uint32_t>& raw_arg_ids,
+        std::vector<llvm::Value*>& boxed_args, std::string& error) {
+    nargs = static_cast<int>(inst->operands.size()) - arg_start;
+    raw_args.reserve(nargs);
+    raw_arg_ids.reserve(nargs);
+    boxed_args.reserve(nargs);
+
+    bool lazy_boxing = !std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS");
+    for (int i = 0; i < nargs; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "AOT fast-entry argument setup")) {
+            error = "cancelled during AOT fast-entry argument setup";
+            return false;
+        }
+        uint32_t value_id = inst->operands[arg_start + i].id;
+        llvm::Value* raw = getVal(value_id, error);
+        if (!raw) {
+            return false;
+        }
+        raw_args.push_back(raw);
+        raw_arg_ids.push_back(value_id);
+        bool needs_boxed = !lazy_boxing
+            || getFastEntryParamKind(callee_info, static_cast<unsigned>(i))
+                == BatchCalleeParamKind::Boxed
+            || (fastEntryParamRejectsNothing(callee_info,
+                    static_cast<unsigned>(i))
+                && nanboxed_values.count(value_id)
+                && !fastEntryArgumentKnownNotNothing(value_id));
+        boxed_args.push_back(needs_boxed ? boxValue(raw, value_id) : nullptr);
+    }
+
+    if (needs_fallback_array && nargs > 0) {
+        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+            llvm_func->getEntryBlock().begin());
+        args_array = ab.CreateAlloca(i64_type,
+            llvm::ConstantInt::get(i32_type, nargs));
+        for (int i = 0; i < nargs; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT fast-entry argument array setup")) {
+                error = "cancelled during AOT fast-entry argument array setup";
+                return false;
+            }
+            if (!boxed_args[i]) {
+                continue;
+            }
+            llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                llvm::ConstantInt::get(i32_type, i));
+            builder->CreateStore(boxed_args[i], gep);
+        }
+    } else {
+        args_array = llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(ptr_type));
+    }
+    return true;
+}
+
 llvm::Value* QoreIRToLLVM::buildArgCleanupArray(const QoreIRInstruction* inst,
         int arg_start, llvm::Function* llvm_func, int nargs, bool& has_cleanup) {
     has_cleanup = false;
@@ -15082,40 +15145,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
+            std::vector<llvm::Value*> raw_args;
+            std::vector<uint32_t> raw_arg_ids;
+            std::vector<llvm::Value*> boxed_args;
             llvm::Value* args_array;
-            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+            if (aot_self_batch_callee) {
+                if (!buildAotFastEntryArgs(inst, 0, llvm_func,
+                        *aot_self_batch_callee, true, args_array, nargs,
+                        raw_args, raw_arg_ids, boxed_args, error)) {
+                    return false;
+                }
+            } else if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs,
+                    error)) {
                 return false;
             }
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
                     nargs, has_arg_cleanups);
-
-            std::vector<llvm::Value*> raw_args;
-            std::vector<uint32_t> raw_arg_ids;
-            std::vector<llvm::Value*> boxed_args;
-            if (aot_self_batch_callee) {
-                raw_args.reserve(nargs);
-                raw_arg_ids.reserve(nargs);
-                boxed_args.reserve(nargs);
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT self method fast-entry argument setup")) {
-                        error = "cancelled during AOT self method fast-entry argument setup";
-                        return false;
-                    }
-                    uint32_t value_id = inst->operands[i].id;
-                    llvm::Value* raw = getVal(value_id, error);
-                    if (!raw) {
-                        return false;
-                    }
-                    raw_args.push_back(raw);
-                    raw_arg_ids.push_back(value_id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                        llvm::ConstantInt::get(i32_type, i));
-                    boxed_args.push_back(builder->CreateLoad(i64_type, gep));
-                }
-            }
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
@@ -15324,41 +15370,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
 
-            // Build args array from operands
+            std::vector<llvm::Value*> raw_args;
+            std::vector<uint32_t> raw_arg_ids;
+            std::vector<llvm::Value*> boxed_args;
             llvm::Value* args_array;
-            if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
+            if (aot_self_batch_callee) {
+                if (!buildAotFastEntryArgs(inst, 0, llvm_func,
+                        *aot_self_batch_callee, true, args_array, nargs,
+                        raw_args, raw_arg_ids, boxed_args, error)) {
+                    return false;
+                }
+            } else if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs,
+                    error)) {
                 return false;
             }
             bool has_arg_cleanups = false;
             llvm::Value* arg_cleanups = buildArgCleanupArray(inst, 0, llvm_func,
                     nargs, has_arg_cleanups);
-
-            std::vector<llvm::Value*> raw_args;
-            std::vector<uint32_t> raw_arg_ids;
-            std::vector<llvm::Value*> boxed_args;
-            if (aot_self_batch_callee) {
-                raw_args.reserve(nargs);
-                raw_arg_ids.reserve(nargs);
-                boxed_args.reserve(nargs);
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT invoke self method fast-entry argument setup")) {
-                        error = "cancelled during AOT invoke self method fast-entry argument setup";
-                        return false;
-                    }
-                    uint32_t value_id = inst->operands[i].id;
-                    llvm::Value* raw = getVal(value_id, error);
-                    if (!raw) {
-                        return false;
-                    }
-                    raw_args.push_back(raw);
-                    raw_arg_ids.push_back(value_id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                        llvm::ConstantInt::get(i32_type, i));
-                    boxed_args.push_back(builder->CreateLoad(i64_type, gep));
-                }
-            }
 
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
@@ -15577,58 +15605,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             std::vector<uint32_t> raw_arg_ids;
             std::vector<llvm::Value*> boxed_args;
             if (aot_static_batch_callee) {
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT static batch argument boxing")) {
-                        error = "cancelled during AOT static batch argument boxing";
-                        return false;
-                    }
-                    auto* arg_val = getVal(inst->operands[i].id, error);
-                    if (!arg_val) { return false; }
-                    raw_args.push_back(arg_val);
-                    raw_arg_ids.push_back(inst->operands[i].id);
+                if (!buildAotFastEntryArgs(inst, 0, llvm_func,
+                        *aot_static_batch_callee, true, args_array, nargs,
+                        raw_args, raw_arg_ids, boxed_args, error)) {
+                    return false;
                 }
                 if (aot_context_independent_fast_entry_call
                         && fastEntryNativeArgsNeedNothingGuard(
                             *aot_static_batch_callee, raw_arg_ids)) {
                     aot_context_independent_fast_entry_call = false;
-                }
-                bool selective_aot_boxing = aot_context_independent_fast_entry_call
-                    && std::getenv("QORE_DISABLE_AOT_LAZY_FAST_ARGS") == nullptr;
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT static batch argument boxing")) {
-                        error = "cancelled during AOT static batch argument boxing";
-                        return false;
-                    }
-                    bool needs_boxed = !selective_aot_boxing
-                        || getFastEntryParamKind(*aot_static_batch_callee,
-                            static_cast<unsigned>(i)) == BatchCalleeParamKind::Boxed;
-                    boxed_args.push_back(needs_boxed
-                        ? boxValue(raw_args[i], raw_arg_ids[i]) : nullptr);
-                }
-                if (nargs > 0 && !aot_context_independent_fast_entry_call) {
-                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
-                            llvm_func->getEntryBlock().begin());
-                    args_array = ab.CreateAlloca(i64_type,
-                            llvm::ConstantInt::get(i32_type, nargs));
-                    for (int i = 0; i < nargs; ++i) {
-                        if (i && !(i % 100)
-                                && qore_check_cancel(nullptr,
-                                    "AOT static batch argument array setup")) {
-                            error = "cancelled during AOT static batch argument array setup";
-                            return false;
-                        }
-                        llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                                llvm::ConstantInt::get(i32_type, i));
-                        builder->CreateStore(boxed_args[i], gep);
-                    }
-                }
-                if (!args_array && !aot_context_independent_fast_entry_call) {
-                    args_array = builder->CreateIntToPtr(
-                            llvm::ConstantInt::get(i64_type, 0), ptr_type);
                 }
             } else if (!buildArgsArray(inst, 0, llvm_func, args_array, nargs, error)) {
                 return false;
@@ -15973,7 +15958,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 return false;
             };
-            if (!string_arg_fast_path) {
+            std::vector<llvm::Value*> object_raw_args;
+            std::vector<uint32_t> object_raw_arg_ids;
+            std::vector<llvm::Value*> object_boxed_args;
+            if (aot_object_batch_callee) {
+                if (!buildAotFastEntryArgs(inst, 1, llvm_func,
+                        *aot_object_batch_callee, true, args_array, nargs,
+                        object_raw_args, object_raw_arg_ids,
+                        object_boxed_args, error)) {
+                    return false;
+                }
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            } else if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
                 }
@@ -15982,33 +15979,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (fast_path_arg_needs_cleanup()) {
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
-            }
-
-            std::vector<llvm::Value*> object_raw_args;
-            std::vector<uint32_t> object_raw_arg_ids;
-            std::vector<llvm::Value*> object_boxed_args;
-            if (aot_object_batch_callee) {
-                object_raw_args.reserve(nargs);
-                object_raw_arg_ids.reserve(nargs);
-                object_boxed_args.reserve(nargs);
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT object method fast-entry argument setup")) {
-                        error = "cancelled during AOT object method fast-entry argument setup";
-                        return false;
-                    }
-                    uint32_t value_id = inst->operands[1 + i].id;
-                    llvm::Value* raw = getVal(value_id, error);
-                    if (!raw) {
-                        return false;
-                    }
-                    object_raw_args.push_back(raw);
-                    object_raw_arg_ids.push_back(value_id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                        llvm::ConstantInt::get(i32_type, i));
-                    object_boxed_args.push_back(builder->CreateLoad(i64_type, gep));
-                }
             }
 
             llvm::Value* call_result;
@@ -16502,7 +16472,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 return false;
             };
-            if (!string_arg_fast_path) {
+            std::vector<llvm::Value*> object_raw_args;
+            std::vector<uint32_t> object_raw_arg_ids;
+            std::vector<llvm::Value*> object_boxed_args;
+            if (aot_object_batch_callee) {
+                if (!buildAotFastEntryArgs(inst, 1, llvm_func,
+                        *aot_object_batch_callee, true, args_array, nargs,
+                        object_raw_args, object_raw_arg_ids,
+                        object_boxed_args, error)) {
+                    return false;
+                }
+                arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
+                    has_arg_cleanups);
+            } else if (!string_arg_fast_path) {
                 if (!buildArgsArray(inst, 1, llvm_func, args_array, nargs, error)) {
                     return false;
                 }
@@ -16511,33 +16493,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (fast_path_arg_needs_cleanup()) {
                 arg_cleanups = buildArgCleanupArray(inst, 1, llvm_func, nargs,
                     has_arg_cleanups);
-            }
-
-            std::vector<llvm::Value*> object_raw_args;
-            std::vector<uint32_t> object_raw_arg_ids;
-            std::vector<llvm::Value*> object_boxed_args;
-            if (aot_object_batch_callee) {
-                object_raw_args.reserve(nargs);
-                object_raw_arg_ids.reserve(nargs);
-                object_boxed_args.reserve(nargs);
-                for (int i = 0; i < nargs; ++i) {
-                    if (i && !(i % 100)
-                            && qore_check_cancel(nullptr,
-                                "AOT invoke object method fast-entry argument setup")) {
-                        error = "cancelled during AOT invoke object method fast-entry argument setup";
-                        return false;
-                    }
-                    uint32_t value_id = inst->operands[1 + i].id;
-                    llvm::Value* raw = getVal(value_id, error);
-                    if (!raw) {
-                        return false;
-                    }
-                    object_raw_args.push_back(raw);
-                    object_raw_arg_ids.push_back(value_id);
-                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
-                        llvm::ConstantInt::get(i32_type, i));
-                    object_boxed_args.push_back(builder->CreateLoad(i64_type, gep));
-                }
             }
 
             llvm::Value* call_result;

@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class MethodFastEntryProbe {
+    int leaf(int left, int middle, int right) {
+        if (left & 1) {
+            return left + middle * 3 + right;
+        }
+        return left * 2 + middle + right;
+    }
+}
+
+int sub run(int rounds) {
+    MethodFastEntryProbe probe();
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += probe.leaf(i, i + 1, i + 2);
+    }
+    return checksum;
+}
+
+printf("%d\n", run(ARGV.size() ? ARGV[0].toInt() : 10000000));

@@ -1179,6 +1179,16 @@ private:
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
 
+    // Collect fast-entry arguments without eagerly boxing native values.  When
+    // a runtime fallback is possible, args_array is allocated but native slots
+    // are populated only on the fallback edge.
+    bool buildAotFastEntryArgs(const QoreIRInstruction* inst, int arg_start,
+            llvm::Function* llvm_func, const BatchCalleeInfo& callee_info,
+            bool needs_fallback_array, llvm::Value*& args_array, int& nargs,
+            std::vector<llvm::Value*>& raw_args,
+            std::vector<uint32_t>& raw_arg_ids,
+            std::vector<llvm::Value*>& boxed_args, std::string& error);
+
     // Build an entry-block alloca'd array of cleanup slot pointers for
     // operands[arg_start..].  The runtime uses this to clear consumed
     // call-argument temporaries after callee parameter instantiation.
