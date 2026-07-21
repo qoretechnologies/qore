@@ -340,34 +340,11 @@ QuicSession::~QuicSession() {
         }
     }
 
-    // Unregister all CIDs from the dispatcher before destroying the connection.
+    // Unregister all CIDs from the dispatcher before destroying the connection
+    // (no-op if already done at session-removal time).
     // Lifetime requirement: the dispatcher (owned by qore_socket_private) must outlive
     // all sessions; qore_socket_private destroys sessions (via shared_ptr) before itself.
-    if (dispatcher_ && conn_) {
-        try {
-            size_t num_scids = ngtcp2_conn_get_scid(conn_, nullptr);
-            if (num_scids > 0) {
-                std::vector<ngtcp2_cid> cids(num_scids);
-                ngtcp2_conn_get_scid(conn_, cids.data());
-                for (const auto& cid : cids) {
-                    std::string cid_str(reinterpret_cast<const char*>(cid.data), cid.datalen);
-                    dispatcher_->unregisterConnectionId(cid_str);
-                }
-            }
-            // Explicitly unregister the client's original DCID (ODCID) —
-            // ngtcp2_conn_get_scid() only returns active server CIDs, not the
-            // ODCID registered during handshake.  Without this, the stale ODCID
-            // stays in the dispatcher and can misroute reconnection packets from
-            // the same client.
-            if (!odcid_registered_.empty()) {
-                dispatcher_->unregisterConnectionId(odcid_registered_);
-            }
-        } catch (...) {
-            // Guard against std::bad_alloc from vector allocation in destructor;
-            // CIDs will be unreachable once the connection is destroyed anyway
-        }
-        dispatcher_ = nullptr;
-    }
+    unregisterFromDispatcher();
 
     if (h3_conn_) {
         nghttp3_conn_del(h3_conn_);
@@ -423,6 +400,42 @@ QuicSession::~QuicSession() {
         }
         datagram_qqueues_.clear();
     }
+}
+
+void QuicSession::unregisterFromDispatcher() {
+    // mtx_ serializes this against in-flight packet processing: the ngtcp2 CID
+    // callbacks (getNewConnectionIdCallback / removeConnectionIdCallback) run
+    // under mtx_ and null-check dispatcher_, so once dispatcher_ is cleared
+    // below no callback can re-register a CID for this session.
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!dispatcher_) {
+        return;
+    }
+    if (conn_) {
+        try {
+            size_t num_scids = ngtcp2_conn_get_scid(conn_, nullptr);
+            if (num_scids > 0) {
+                std::vector<ngtcp2_cid> cids(num_scids);
+                ngtcp2_conn_get_scid(conn_, cids.data());
+                for (const auto& cid : cids) {
+                    std::string cid_str(reinterpret_cast<const char*>(cid.data), cid.datalen);
+                    dispatcher_->unregisterConnectionId(cid_str);
+                }
+            }
+            // Explicitly unregister the client's original DCID (ODCID) —
+            // ngtcp2_conn_get_scid() only returns active server CIDs, not the
+            // ODCID registered during handshake.  Without this, the stale ODCID
+            // stays in the dispatcher and can misroute reconnection packets from
+            // the same client.
+            if (!odcid_registered_.empty()) {
+                dispatcher_->unregisterConnectionId(odcid_registered_);
+            }
+        } catch (...) {
+            // Guard against std::bad_alloc from vector allocation;
+            // stale entries only cost a dispatch miss (IDs are never dangling)
+        }
+    }
+    dispatcher_ = nullptr;
 }
 
 // ===== Factory Methods =====
@@ -996,7 +1009,7 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
         // Register server's own SCID — this is what the client will use as DCID
         // after receiving the server's first response
         std::string scid_str(reinterpret_cast<const char*>(scid_.data), scid_.datalen);
-        dispatcher_->registerConnectionId(scid_str, this);
+        dispatcher_->registerConnectionId(scid_str, session_id_);
 
         // Also register the client's original DCID — during the handshake,
         // the client may send additional packets (e.g., coalesced Handshake)
@@ -1005,7 +1018,7 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
         // include it after ngtcp2 retires it post-handshake.
         odcid_registered_.assign(reinterpret_cast<const char*>(initial_hdr->dcid.data),
                                  initial_hdr->dcid.datalen);
-        dispatcher_->registerConnectionId(odcid_registered_, this);
+        dispatcher_->registerConnectionId(odcid_registered_, session_id_);
     }
 
     return 0;
@@ -3284,7 +3297,7 @@ int QuicSession::getNewConnectionIdCallback(ngtcp2_conn* /* conn */,
     if (session->dispatcher_) {
         try {
             std::string cid_str(reinterpret_cast<const char*>(cid->data), cid->datalen);
-            session->dispatcher_->registerConnectionId(cid_str, session);
+            session->dispatcher_->registerConnectionId(cid_str, session->session_id_);
         } catch (...) {
             // std::bad_alloc must not propagate through ngtcp2 C code
             return NGTCP2_ERR_CALLBACK_FAILURE;

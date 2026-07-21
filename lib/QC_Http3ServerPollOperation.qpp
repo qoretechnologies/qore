@@ -1337,7 +1337,24 @@ nothing Http3ServerPollOperation::registerPersistentSessionQueue(int session_id,
             return QoreValue();
         }
     }
-    priv->registerPersistentSessionQueue((int64_t)session_id, *queue);
+    if (!priv->registerPersistentSessionQueue((int64_t)session_id, *queue)) {
+        // The op is already CLOSED (aborted): the C++ layer refused the binding,
+        // so remove the owning ref stored above — leaving it parked in the
+        // member hash would defer its release to QoreObject destruction (the
+        // freed-program deref hazard abort() exists to avoid)
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder existing(self->getReferencedMemberNoMethod("persistent_session_queue_objs", xsink), xsink);
+        if (*xsink || existing->getType() != NT_HASH) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> queue_objs(existing->get<QoreHashNode>()->copy(), xsink);
+        queue_objs->removeKey(std::to_string((int64_t)session_id).c_str(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        self->setMemberValue("persistent_session_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+            queue_objs.release(), xsink);
+    }
 }
 
 //! Unbinds the persistent-session close Queue for a QUIC session

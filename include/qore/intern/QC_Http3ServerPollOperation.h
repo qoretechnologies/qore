@@ -219,9 +219,21 @@ public:
         @param session_id the QUIC session ID
         @param queue the C++ QoreQueue pointer (not ref'd here)
     */
-    DLLLOCAL void registerPersistentSessionQueue(int64_t session_id, Queue* queue) {
+    /** @return false if the op is already CLOSED (aborted) and the binding was
+        refused — the caller must then drop the owning ref it holds for the
+        queue instead of leaving it parked in the QPP member hash.  CLOSED is
+        terminal, so continuePoll() could never deliver the close signal for a
+        binding registered after abort(); accepting it would defer the owning
+        ref's release to QoreObject destruction, the deferred-deref path that
+        Http3ServerPollOperationPriv::abort() exists to avoid.
+    */
+    DLLLOCAL bool registerPersistentSessionQueue(int64_t session_id, Queue* queue) {
         AutoLocker al(op_lock);
+        if (h3_state.load(std::memory_order_acquire) == H3State::CLOSED) {
+            return false;
+        }
         persistent_session_queues_[session_id] = queue;
+        return true;
     }
 
     //! Deregisters the persistent-session close Queue for a session
