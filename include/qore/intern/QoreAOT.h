@@ -194,7 +194,7 @@ struct QoreAOTContext {
 
     //! Source locations for per-line runtime_loc tracking in AOT mode.
     //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
-    //! location table at load time. Used by qore_rt_set_runtime_loc_aot().
+    //! location table at load time. Used by the AOT runtime-location helpers.
     const QoreProgramLocation** locs = nullptr;
     int num_locs = 0;
 

@@ -4012,13 +4012,15 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         if (emit_debug_info) {
             return;
         }
-        // AOT mode (stripped): call runtime helper to update location from ctx->locs.
+        // AOT mode (stripped): update the location through TLS slots resolved once
+        // at function entry instead of repeating the TLS lookup for every line.
         int32_t loc_index = getOrAddAotLocIndex(inst->loc);
-        auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot",
+        auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot_cached",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
-                {ptr_type, llvm::Type::getInt32Ty(ctx)}, false));
+                {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false));
         builder->CreateCall(helper, {aot_ctx_arg,
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), loc_index)});
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), loc_index),
+            loc_cache_ptr, stmt_cache_ptr});
     } else {
         // JIT mode: inline store of statement + location pointers
         builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
@@ -7663,38 +7665,39 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     current_aot_loc_index = -1;
     aot_loc_slots.clear();
     aot_loc_table.clear();
-    {
+    if (!aot_mode || !emit_debug_info) {
         auto loc_fn = module.getOrInsertFunction("qore_rt_get_loc_ptr",
             llvm::FunctionType::get(ptr_type, {}, false));
         loc_cache_ptr = builder->CreateCall(loc_fn, {}, "loc_ptr");
         auto stmt_fn = module.getOrInsertFunction("qore_rt_get_stmt_ptr",
             llvm::FunctionType::get(ptr_type, {}, false));
         stmt_cache_ptr = builder->CreateCall(stmt_fn, {}, "stmt_ptr");
-        // JIT mode: record this JIT frame's address as the innermost non-AOT owner of
-        // the runtime location, ONCE at function entry (the frame address is constant for
-        // the call, so no per-line store is needed). The evalTiered / fast-call SpGuard
-        // save/restores the caller's marker around the native call. Lets the AOT throw
-        // resolver tell a JIT frame from an AOT one.
-        if (!aot_mode) {
-            auto frame_fn = module.getOrInsertFunction("qore_rt_get_loc_frame_ptr",
-                llvm::FunctionType::get(ptr_type, {}, false));
-            loc_frame_cache_ptr = builder->CreateCall(frame_fn, {}, "loc_frame_ptr");
-            // Intrinsic::getDeclaration was renamed to getOrInsertDeclaration in LLVM 20
-            // (and removed in later toolchains, e.g. the macOS CI), so guard by version.
-#if LLVM_VERSION_MAJOR >= 20
-            llvm::Function* frameaddr = llvm::Intrinsic::getOrInsertDeclaration(&module,
-                llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
-#else
-            llvm::Function* frameaddr = llvm::Intrinsic::getDeclaration(&module,
-                llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
-#endif
-            llvm::Value* fa = builder->CreateCall(frameaddr,
-                {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
-            builder->CreateStore(builder->CreatePtrToInt(fa, i64_type), loc_frame_cache_ptr);
-        }
-        // AOT mode: no preloading needed — qore_rt_set_runtime_loc_aot handles
-        // null checks and TLS access internally per line change.
     }
+    // JIT mode: record this JIT frame's address as the innermost non-AOT owner of
+    // the runtime location, ONCE at function entry (the frame address is constant for
+    // the call, so no per-line store is needed). The evalTiered / fast-call SpGuard
+    // save/restores the caller's marker around the native call. Lets the AOT throw
+    // resolver tell a JIT frame from an AOT one.
+    if (!aot_mode) {
+        auto frame_fn = module.getOrInsertFunction("qore_rt_get_loc_frame_ptr",
+            llvm::FunctionType::get(ptr_type, {}, false));
+        loc_frame_cache_ptr = builder->CreateCall(frame_fn, {}, "loc_frame_ptr");
+        // Intrinsic::getDeclaration was renamed to getOrInsertDeclaration in LLVM 20
+        // (and removed in later toolchains, e.g. the macOS CI), so guard by version.
+#if LLVM_VERSION_MAJOR >= 20
+        llvm::Function* frameaddr = llvm::Intrinsic::getOrInsertDeclaration(&module,
+            llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
+#else
+        llvm::Function* frameaddr = llvm::Intrinsic::getDeclaration(&module,
+            llvm::Intrinsic::frameaddress, {llvm::PointerType::getUnqual(ctx)});
+#endif
+        llvm::Value* fa = builder->CreateCall(frameaddr,
+            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
+        builder->CreateStore(builder->CreatePtrToInt(fa, i64_type), loc_frame_cache_ptr);
+    }
+    // Stripped AOT functions pass the cached location slots to
+    // qore_rt_set_runtime_loc_aot_cached() for per-line updates. AOT functions
+    // with debug information use lazy PC maps and need none of these TLS slots.
 
     // Compute remaining use counts for each register and identify registers
     // that are only used as DotEval bases (safe for _for_call variant).

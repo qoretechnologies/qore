@@ -512,6 +512,17 @@ extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32
     }
 }
 
+// AOT mode: set runtime location through TLS slots cached by generated code at
+// function entry. Keep qore_rt_set_runtime_loc_aot() for existing AOT artifacts.
+extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot_cached(QoreAOTContext* ctx, int32_t loc_index,
+        const QoreProgramLocation** loc_ptr, const AbstractStatement** stmt_ptr) {
+    if (loc_ptr && stmt_ptr && ctx && ctx->locs && loc_index >= 0 && loc_index < ctx->num_locs
+            && ctx->locs[loc_index]) {
+        *stmt_ptr = nullptr;
+        *loc_ptr = ctx->locs[loc_index];
+    }
+}
+
 // --- Outlined function-body return token ---
 // (see design/aot-function-outlining.md)  An outlined helper signals "the
 // original function returns now" immediately before returning its value; the
