@@ -11069,6 +11069,13 @@ struct AotModuleState {
     QoreProgram* pgm = nullptr;
     const QoreAOTFunc* funcs = nullptr;
     int num_funcs = 0;
+    //! Serializes init-context construction for this module's shared shadow Program.
+    /** Context construction appends LocalVars to the shadow Program's arena.  The lock is per module so a builder
+        that resolves an API in another Program cannot block unrelated module builders while it waits for that
+        Program's parse lock.
+    */
+    std::shared_ptr<QoreRecursiveThreadLock> shadow_build_lock =
+        std::make_shared<QoreRecursiveThreadLock>();
     //! Modules that should be reexported (from %requires(reexport) directives)
     std::vector<std::string> reexport_deps;
     //! Serialized metadata retained only when deferred init cannot reuse an open reader.
@@ -11280,23 +11287,6 @@ static QoreCondition& get_aot_shadow_init_cond() {
     return cond;
 }
 
-// Serializes building AOT init-function contexts into the shared shadow (module-own) Program.  Each
-// import of an already-loaded AOT module into a new target Program calls
-// registerAOTFunctionsFromSlotMaps() against the module's shared shadow Program, which APPENDS the
-// init functions' local variables to the shadow's local-variable arena (createLocalVar()).  The
-// shadow-init barrier (shadow_init_state) only serializes the one-time shadow *constant* writes, not
-// this per-import context build, so once the process-global module-load lock M is retired two
-// importers of the same module would append to the shadow's deque concurrently and corrupt it.
-//
-// Context building performs no nested module load, so holding this lock across it cannot re-form the
-// module-load deadlock.  The lock is recursive to tolerate same-thread re-entry, and it need not be
-// held across the subsequent executeInitFunctions(): the deque is append-only with stable element
-// pointers, so contexts built under this lock remain valid while another importer appends more.
-static QoreRecursiveThreadLock& get_aot_shadow_build_lock() {
-    static QoreRecursiveThreadLock lock;
-    return lock;
-}
-
 //! Extract dependency module names from source \%requires directives
 /** Parses the source to find all \%requires directives and extracts the module names.
     Skips "qore" since it's always available.
@@ -11418,6 +11408,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     const QoreAOTFunc* init_funcs = nullptr;
     int init_num_funcs = 0;
     QoreProgram* init_ctx_pgm = nullptr;
+    std::shared_ptr<QoreRecursiveThreadLock> shadow_build_lock;
     std::shared_ptr<const std::vector<uint8_t>> init_metadata;
     std::shared_ptr<QoreAOTBinaryReader> cached_init_reader;
     std::shared_ptr<const QoreAOTDebugMetadata> cached_debug_metadata;
@@ -11452,6 +11443,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         init_funcs = it->second.funcs;
         init_num_funcs = it->second.num_funcs;
         init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
+        shadow_build_lock = it->second.shadow_build_lock;
         init_metadata = it->second.metadata;
         cached_init_reader = it->second.init_reader;
         cached_debug_metadata = it->second.debug_metadata;
@@ -11606,12 +11598,12 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             init_metadata->data(), static_cast<int>(init_metadata->size()));
     }
     {
-        // Serialize the shared-shadow context build across concurrent importers of this
-        // module: registerAOTFunctionsFromSlotMaps() appends the init functions' locals
-        // to init_ctx_pgm (the module's shared shadow Program).  See
-        // get_aot_shadow_build_lock().  No nested module load happens here, so holding
-        // this lock cannot deadlock.
-        AutoLocker shadow_build_al(get_aot_shadow_build_lock());
+        // Serialize only builders for this module's shared shadow Program.  Context
+        // deserialization can resolve APIs in another Program and wait for its parse
+        // lock; a process-global build lock would therefore couple unrelated module
+        // loads and create a lock-order cycle under concurrent imports.
+        assert(shadow_build_lock);
+        AutoLocker shadow_build_al(*shadow_build_lock);
         registerAOTFunctionsFromSlotMaps(*init_reader, init_root_priv,
             init_ctx_pgm, func_map, registered, &init_func_contexts, nullptr,
             &registration_errors, debug_metadata);
