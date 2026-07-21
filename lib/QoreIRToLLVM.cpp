@@ -12748,16 +12748,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (batch_callees && static_call && static_call->getVariant()
                             && !inv->has_ref_args) {
                         auto it = batch_callees->find(static_call->getVariant());
+                        bool generic_specialization_matches =
+                            it != batch_callees->end()
+                            && qore_ir_generic_fast_entry_matches(
+                                it->second, inv->expr);
+                        const QoreTypeParamInstantiation* concrete_inst =
+                            generic_specialization_matches
+                            ? invoke_concrete_inst : invoke_explicit_inst;
                         if (it != batch_callees->end()
                                 && ((!invoke_explicit_inst
                                         && !invoke_receiver_type_info)
+                                    || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
-                                && isFastMethodCallEligible(static_call->getVariant())
+                                && isFastMethodCallEligible(
+                                    static_call->getVariant(),
+                                    generic_specialization_matches)
                                 && qore_ir_fast_entry_args_need_no_binding(
                                     static_call->getVariant(), inv->expr, 0,
-                                    nargs, invoke_explicit_inst,
+                                    nargs, concrete_inst,
                                     invoke_receiver_type_info)) {
                             aot_static_batch_fn = module.getFunction(it->second.fast_name);
                             if (aot_static_batch_fn) {
@@ -15841,15 +15851,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (aot_mode && batch_callees && direct_inst->variant
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(direct_inst->variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, direct_inst->expr);
+                const QoreTypeParamInstantiation* concrete_inst =
+                    generic_specialization_matches
+                    ? qore_ir_get_call_type_instantiation(
+                        direct_inst->expr)
+                    : explicit_inst;
                 if (it != batch_callees->end()
                         && ((!receiver_type_info && !explicit_inst)
+                            || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastMethodCallEligible(direct_inst->variant)
+                        && isFastMethodCallEligible(direct_inst->variant,
+                            generic_specialization_matches)
                         && qore_ir_fast_entry_args_need_no_binding(
                             direct_inst->variant, direct_inst->expr, 0, nargs,
-                            explicit_inst, receiver_type_info)) {
+                            concrete_inst, receiver_type_info)) {
                     aot_static_batch_fn = module.getFunction(it->second.fast_name);
                     if (aot_static_batch_fn) {
                         aot_static_batch_callee = &it->second;

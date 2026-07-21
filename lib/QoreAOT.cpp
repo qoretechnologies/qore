@@ -11417,7 +11417,7 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
     return true;
 }
 
-static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
+static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         const AOTGenericSpecializationCandidates& specializations,
         std::unordered_map<const AbstractQoreFunctionVariant*,
@@ -11428,11 +11428,16 @@ static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
     for (const auto& [variant, specialization] : specializations) {
         if (++candidate_count % 100 == 0
                 && qore_check_cancel(nullptr,
-                    "AOT generic function specialization")) {
+                    "AOT generic specialization")) {
             return false;
         }
-        if (specialization.conflicting
-                || dynamic_cast<const MethodVariantBase*>(variant)) {
+        if (specialization.conflicting) {
+            continue;
+        }
+        const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+        const QoreMethod* method = mvb ? mvb->method() : nullptr;
+        bool static_method = method && method->isStatic();
+        if (mvb && !static_method) {
             continue;
         }
         auto info = batch_callees.find(variant);
@@ -11440,7 +11445,9 @@ static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
             ? const_cast<AbstractQoreFunctionVariant*>(variant)
                 ->getUserVariantBase() : nullptr;
         if (info == batch_callees.end() || !uvb
-                || !uvb->isStaticallyFastCallEligible(true)) {
+                || (static_method
+                    ? !isAOTFastMethodCallEligible(variant, true)
+                    : !uvb->isStaticallyFastCallEligible(true))) {
             continue;
         }
         QoreIRFunction* ir_func = nullptr;
@@ -11466,6 +11473,7 @@ static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
         BatchCalleeInfo& callee = info->second;
         callee.generic_specialized_fast_entry = true;
         callee.approach_b_eligible = true;
+        callee.implicit_self_method = false;
         callee.fast_name = callee.name + "_generic_fast";
         callee.specialization_key = specialization.key;
         callee.specialization_receiver_type_info =
@@ -11499,6 +11507,19 @@ static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
         }
         auto info = batch_callees.find(variant);
         if (info != batch_callees.end()) {
+            // A generic fast entry bypasses the runtime call frame that owns
+            // receiver and method/function type-instantiation state. Keep the
+            // optimized entry only when every instruction is independently
+            // proven not to need that runtime context.
+            if (!info->second.context_independent_fast_entry) {
+                info->second.generic_specialized_fast_entry = false;
+                info->second.approach_b_eligible = false;
+                info->second.fast_name.clear();
+                info->second.specialization_key.clear();
+                info->second.specialization_receiver_type_info = nullptr;
+                info->second.specialization_type_param_instantiation = nullptr;
+                continue;
+            }
             info->second.return_kind = qore_ir_get_fast_entry_return_kind(
                 variant, info->second.never_returns_nothing, ir.get());
         }
@@ -11996,7 +12017,7 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
     if (owns_generic_specializations
-            && !resolveAOTBatchGenericFunctionSpecializations(pgm, ctx,
+            && !resolveAOTBatchGenericSpecializations(pgm, ctx,
                 module, *generic_specializations,
                 aot_batch_callee_map)) {
         return false;
@@ -15837,24 +15858,67 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         && isAOTImplicitSelfFastEntryEligible(ir_func, uvb, qc, meth,
                             variant, speculative_object_fast_entry);
                     bool analyzed_fast_entry_eligible = true;
+                    const BatchCalleeInfo* analyzed_fast_entry = nullptr;
                     if (aot_batch_callee_map) {
                         auto analyzed = aot_batch_callee_map->find(variant);
                         analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                             && analyzed->second.approach_b_eligible;
+                        if (analyzed != aot_batch_callee_map->end()) {
+                            analyzed_fast_entry = &analyzed->second;
+                        }
                     }
-                    bool fast_entry_eligible = !metadata_only && !fn_outliner.active()
+                    std::unique_ptr<QoreIRFunction> specialized_fast_ir;
+                    QoreIRFunction* fast_ir_func = ir_func;
+                    bool generic_specialized_fast_entry = analyzed_fast_entry
+                        && analyzed_fast_entry->generic_specialized_fast_entry;
+                    if (!metadata_only && generic_specialized_fast_entry) {
+                        QoreIRFunction* specialized_ir = nullptr;
+                        std::string specialization_error;
+                        if (tryLowerFunction(uvb, method_name.c_str(), pgm,
+                                specialized_ir, specialization_error, nullptr,
+                                analyzed_fast_entry->specialization_receiver_type_info,
+                                analyzed_fast_entry->specialization_type_param_instantiation) == 0
+                                && specialized_ir) {
+                            specialized_fast_ir.reset(specialized_ir);
+                            specialized_fast_ir->name = ir_func->name;
+                            refine_interprocedural(*specialized_fast_ir);
+                            buildAOTSlotMap(*specialized_fast_ir, slots);
+                            fast_ir_func = specialized_fast_ir.get();
+                        } else {
+                            delete specialized_ir;
+                            ++failed_count;
+                            setAOTCompileFatal(fatal_error, "method",
+                                variant_key, "generic fast-entry IR lowering",
+                                specialization_error);
+                            delete ir_func;
+                            return;
+                        }
+                    }
+                    bool fast_entry_eligible = !metadata_only
+                        && (!fn_outliner.active()
+                            || generic_specialized_fast_entry)
                         && analyzed_fast_entry_eligible
-                        && isAOTFastMethodCallEligible(variant)
-                        && ((meth->isStatic() && isAOTFastEntryEligible(ir_func, uvb))
+                        && isAOTFastMethodCallEligible(variant,
+                            generic_specialized_fast_entry)
+                        && ((meth->isStatic()
+                                && isAOTFastEntryEligible(fast_ir_func, uvb,
+                                    generic_specialized_fast_entry))
                             || implicit_self_fast_entry);
                     if (fast_entry_eligible) {
-                        fast_entry_name = ir_func->name + "_fast";
+                        fast_entry_name = generic_specialized_fast_entry
+                            ? analyzed_fast_entry->fast_name
+                            : ir_func->name + "_fast";
                         const UserSignature* sig = uvb->getUserSignature();
                         unsigned num_params = sig->numParams();
-                        fast_entry_param_kinds =
-                            qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                        fast_entry_param_kinds = generic_specialized_fast_entry
+                            ? analyzed_fast_entry->param_kinds
+                            : qore_ir_get_fast_entry_param_kinds(
+                                *fast_ir_func, sig);
                         fast_entry_param_rejects_nothing =
-                            qore_ir_get_fast_entry_param_rejects_nothing(sig);
+                            generic_specialized_fast_entry
+                            ? analyzed_fast_entry->param_rejects_nothing
+                            : qore_ir_get_fast_entry_param_rejects_nothing(
+                                sig, fast_ir_func);
 
                         auto* i64_ty = llvm::Type::getInt64Ty(ctx);
                         auto* double_ty = llvm::Type::getDoubleTy(ctx);
@@ -16058,14 +16122,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 = fast_info_it == aot_batch_callee_map->end()
                                     ? BatchCalleeReturnKind::Boxed
                                     : fast_info_it->second.return_kind;
-                            const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
+                            const QoreTypeInfo* fast_return_type =
+                                fast_ir_func->specializeType(
+                                    sig->getReturnTypeInfo());
                             bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
                                 && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                     &param_kind_map, &borrowed_param_map, fast_return_kind,
                                     fast_rejects_nothing_return);
                             std::string fast_error;
-                            if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
+                            if (!fast_lowerer.lowerFunction(
+                                    *fast_ir_func, module, fast_error)) {
                                 printd(2, "AOT: method fast entry '%s' lowering failed: %s\n",
                                     fast_entry_name.c_str(), fast_error.c_str());
                                 if (getenv("QORE_AOT_DEBUG")) {
