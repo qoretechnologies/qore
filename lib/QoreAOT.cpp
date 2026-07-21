@@ -1010,12 +1010,17 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                 return false;
             }
             ++entry_i;
-            if (!variant || !info.approach_b_eligible || info.fast_name.empty()) {
+            bool callable = info.approach_b_eligible
+                && !info.fast_name.empty();
+            if (!variant || (!callable
+                    && info.object_set_get_member.empty())) {
                 continue;
             }
             QoreAOTFastEntryIndexInfo entry;
-            entry.native_symbol = info.fast_name;
-            entry.flags = QORE_AOT_FAST_ENTRY_PRESENT;
+            if (callable) {
+                entry.native_symbol = info.fast_name;
+                entry.flags = QORE_AOT_FAST_ENTRY_PRESENT;
+            }
             if (info.context_independent_fast_entry) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT;
             }
@@ -1070,6 +1075,8 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.scalar_leaf_false_scale = info.scalar_leaf.false_scale;
             entry.scalar_leaf_false_offset = info.scalar_leaf.false_offset;
             entry.object_getter_member = info.object_getter_member;
+            entry.object_set_get_member = info.object_set_get_member;
+            entry.object_set_get_param = info.object_set_get_param;
             entry.string_op_kind = static_cast<uint8_t>(info.string_op.kind);
             entry.string_op_base_param = info.string_op.base_param;
             entry.string_op_arg0_param = info.string_op.arg0_param;
@@ -12327,15 +12334,22 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         && rec.native_symbol.compare(rec.native_symbol.size()
                 - generic_suffix_len, generic_suffix_len,
             generic_suffix) == 0;
-    if (rec.abi_kind != "qore_fast_v1" || rec.native_symbol.empty()
-            || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
+    bool callable = rec.abi_kind == "qore_fast_v1";
+    bool summary_only = rec.abi_kind == "qore_summary_v1";
+    if ((!callable && !summary_only)
+            || (callable && (rec.native_symbol.empty()
+                || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)))
+            || (summary_only && (!rec.native_symbol.empty()
+                || (rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
+                || rec.object_set_get_member.empty()))
             || rec.fast_param_kinds.size() != rec.fast_entry_num_params
             || rec.fast_param_rejects_nothing.size() != rec.fast_entry_num_params
             || rec.fast_param_noescape.size() > rec.fast_entry_num_params
             || rec.fast_param_may_modify.size() > rec.fast_entry_num_params
             || (generic_specialization
                 ? rec.fast_specialization_key.empty()
-                : (!rec.fast_specialization_key.empty() || generic_symbol))) {
+                : (!rec.fast_specialization_key.empty()
+                    || (callable && generic_symbol)))) {
         return false;
     }
     info.param_kinds.reserve(rec.fast_param_kinds.size());
@@ -12352,7 +12366,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         info.param_kinds.push_back(static_cast<BatchCalleeParamKind>(kind));
         ++param_i;
     }
-    info.approach_b_eligible = true;
+    info.approach_b_eligible = callable;
     info.generic_specialized_fast_entry = generic_specialization;
     info.specialization_key = rec.fast_specialization_key;
     info.implicit_self_method = rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
@@ -12371,7 +12385,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         return false;
     }
     info.return_kind = static_cast<BatchCalleeReturnKind>(rec.fast_return_kind);
-    info.fast_name = rec.native_symbol;
+    info.fast_name = callable ? rec.native_symbol : std::string();
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
     info.param_noescape = rec.fast_param_noescape;
@@ -12399,6 +12413,15 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
     info.object_getter_member = rec.object_getter_member;
     if (!info.object_getter_member.empty()
             && (!info.implicit_self_method || info.num_params)) {
+        return false;
+    }
+    info.object_set_get_member = rec.object_set_get_member;
+    info.object_set_get_param = rec.object_set_get_param;
+    if (info.object_set_get_member.empty()
+            ? info.object_set_get_param != -1
+            : (info.object_set_get_param < 0
+                || info.object_set_get_param
+                    >= static_cast<int>(info.num_params))) {
         return false;
     }
     if (rec.string_op_kind > static_cast<uint8_t>(AOTStringOpKind::IntToString)
@@ -23511,7 +23534,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                     return false;
                 }
                 ++native_i;
-                if (rec.abi_kind != "qore_fast_v1" || rec.qore_path.empty()
+                if ((rec.abi_kind != "qore_fast_v1"
+                        && rec.abi_kind != "qore_summary_v1")
+                        || rec.qore_path.empty()
                         || ambiguous_sibling_fast_entries.count(rec.qore_path)) {
                     continue;
                 }

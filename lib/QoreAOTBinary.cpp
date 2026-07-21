@@ -6968,6 +6968,8 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeF64(rec.aggregate_return_value_floats[i]);
     }
     writer.writeStringRef(rec.fast_specialization_key.c_str());
+    writer.writeStringRef(rec.object_set_get_member.c_str());
+    writer.writeU8(static_cast<uint8_t>(rec.object_set_get_param));
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7007,16 +7009,21 @@ static void aotAddNativeRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
 
 static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
         const std::string& qore_path, const QoreAOTFastEntryIndexInfo& info) {
-    if (info.native_symbol.empty() || !(info.flags & QORE_AOT_FAST_ENTRY_PRESENT)) {
+    bool callable = info.flags & QORE_AOT_FAST_ENTRY_PRESENT;
+    bool summary_only = !callable && !info.object_set_get_member.empty();
+    if ((!callable && !summary_only)
+            || (callable && info.native_symbol.empty())) {
         return;
     }
     QoreAOTSymbolIndexRecord rec;
     rec.kind = QoreAOTSymbolKind::NATIVE;
-    rec.dependency_class = QoreAOTDependencyClass::NATIVE_BODY;
-    rec.flags = QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED;
+    rec.dependency_class = callable
+        ? QoreAOTDependencyClass::NATIVE_BODY
+        : QoreAOTDependencyClass::QORE_VALUE;
+    rec.flags = callable ? QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED : 0;
     rec.qore_path = qore_path;
     rec.native_symbol = info.native_symbol;
-    rec.abi_kind = "qore_fast_v1";
+    rec.abi_kind = callable ? "qore_fast_v1" : "qore_summary_v1";
     rec.fast_entry_flags = info.flags;
     rec.fast_entry_num_params = info.num_params;
     rec.fast_return_kind = info.return_kind;
@@ -7037,6 +7044,8 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.scalar_leaf_false_scale = info.scalar_leaf_false_scale;
     rec.scalar_leaf_false_offset = info.scalar_leaf_false_offset;
     rec.object_getter_member = info.object_getter_member;
+    rec.object_set_get_member = info.object_set_get_member;
+    rec.object_set_get_param = info.object_set_get_param;
     rec.string_op_kind = info.string_op_kind;
     rec.string_op_base_param = info.string_op_base_param;
     rec.string_op_arg0_param = info.string_op_arg0_param;
@@ -8497,8 +8506,25 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     if (version < 26) {
         return true;
     }
-    return readSymbolIndexString(reader, ptr, end,
-        rec.fast_specialization_key, error, "fast_specialization_key");
+    if (!readSymbolIndexString(reader, ptr, end,
+            rec.fast_specialization_key, error,
+            "fast_specialization_key")) {
+        return false;
+    }
+    if (version < 27) {
+        return true;
+    }
+    if (!readSymbolIndexString(reader, ptr, end,
+            rec.object_set_get_member, error,
+            "object_set_get_member") || ptr == end) {
+        if (ptr == end && error.empty()) {
+            error = "truncated SYMBOL_INDEX object set/get parameter";
+        }
+        return false;
+    }
+    rec.object_set_get_param =
+        static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    return true;
 }
 
 static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
