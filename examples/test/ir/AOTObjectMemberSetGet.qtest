@@ -43,6 +43,19 @@ class OptionalBox {
     }
 }
 
+class InheritedMemberBase {
+    public {
+        int value;
+    }
+}
+
+class InheritedMemberBox inherits InheritedMemberBase {
+    int echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
 class OverrideBase {
     private {
         int value;
@@ -93,18 +106,47 @@ int sub callOverride(OverrideBase object) {
     return object.echo(4);
 }
 
+int sub concurrentWorker(int id) {
+    GenericBox<int> box(0);
+    int value = 0;
+    for (int i = 0; i < 1000; ++i) {
+        value = box.echo(id + i);
+    }
+    return value;
+}
+
+int sub concurrentChecksum() {
+    const int Threads = 8;
+    Counter done(Threads);
+    Mutex lock();
+    int checksum = 0;
+    for (int i = 0; i < Threads; ++i) {
+        background sub (int id) {
+            on_exit done.dec();
+            int value = concurrentWorker(id);
+            lock.lock();
+            on_exit lock.unlock();
+            checksum += value;
+        }(i);
+    }
+    done.waitForZero();
+    return checksum;
+}
+
 int sub main() {
     GenericBox<int> generic(1);
     OptionalBox optional();
+    InheritedMemberBox inherited();
     OverrideBase base = new OverrideChild();
     NearMiss near_miss();
     LocalNoNarrowNearMiss local_no_narrow();
     *int absent = NOTHING;
     auto flexible = local_no_narrow.echo({\"n\": 1});
     flexible.s = \"x\";
-    printf(\"%d:%y:%d:%d:%d:%s\\n\", generic.echo(7),
+    printf(\"%d:%y:%d:%d:%d:%s:%d:%d\\n\", generic.echo(7),
         optional.echo(absent) === NOTHING, callOverride(base),
-        near_miss.echo(9), near_miss.getWrites(), flexible.fullType());
+        near_miss.echo(9), near_miss.getWrites(), flexible.fullType(),
+        inherited.echo(11), concurrentChecksum());
     return 0;
 }
 
@@ -148,7 +190,7 @@ if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
 
 string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
 string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
-if (ast != "7:True:1004:9:1:hash<auto>\n"
+if (ast != "7:True:1004:9:1:hash<auto>:11:8020\n"
         || enabled != ast || disabled != ast) {
     printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
         ast, enabled, disabled);

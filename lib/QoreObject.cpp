@@ -932,10 +932,48 @@ int qore_object_private::getLValue(const char* key, LValueHelper& lvh, const qor
     return 0;
 }
 
+int qore_object_private::getLValueResolved(const char* key,
+        const QoreMemberInfo& info, const qore_class_private* class_ctx,
+        LValueHelper& lvh, bool for_remove, ExceptionSink* xsink) {
+    const qore_class_private* member_class_ctx =
+        info.getClassContext(class_ctx);
+    const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
+        info.getTypeInfo(),
+        instantiated_type ? instantiated_type : theclass->getTypeInfo());
+
+    qore_object_lock_handoff_helper qolhh(this, lvh.vl);
+    if (status == OS_DELETED) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED",
+            "write attempted to member \"%s\" in an already-deleted object",
+            key);
+        return -1;
+    }
+    qolhh.stayLocked();
+
+    QoreHashNode* odata = member_class_ctx
+        ? getCreateInternalData(member_class_ctx) : data;
+    HashMember* member = for_remove
+        ? odata->priv->findMember(key)
+        : odata->priv->findCreateMember(key);
+    if (!member) {
+        return -1;
+    }
+    lvh.setValue(member->val, mti);
+    lvh.setObjectContext(this);
+    return 0;
+}
+
 QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const {
     const qore_class_private* class_ctx = runtime_get_class();
     const qore_class_private* member_class_ctx = qore_class_private::get(*theclass)->runtimeGetMemberContext(mem,
         class_ctx);
+
+    return getReferencedMemberNoMethodResolved(mem, member_class_ctx, xsink);
+}
+
+QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
+        const char* mem, const qore_class_private* member_class_ctx,
+        ExceptionSink* xsink) const {
 
     QoreSafeVarRWReadLocker sl(rml);
 
@@ -950,10 +988,6 @@ QoreValue qore_object_private::getReferencedMemberNoMethod(const char* mem, Exce
     if (odata) {
         rv = qore_hash_private::get(*odata)->getReferencedKeyValueIntern(mem);
     }
-    //printd(5, "qore_object_private::getReferencedMemberNoMethod() this: %p mem: %s.%s xsink: %p class_ctx: %p (%s) "
-    //    "member_class_ctx: %p (%s) data->size(): %d rv: %s\n", this, theclass->getName(), mem, xsink, class_ctx,
-    //    class_ctx ? class_ctx->name.c_str() : "n/a", member_class_ctx,
-    //    member_class_ctx ? member_class_ctx->name.c_str() : "n/a", odata ? odata->size() : -1, rv.getTypeName());
     return rv;
 }
 

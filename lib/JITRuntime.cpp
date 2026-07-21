@@ -14849,7 +14849,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         int32_t value_param, int32_t rejects_nothing,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     if (!target.method || !target.qc || target.is_pseudo
             || base.getType() != NT_OBJECT || !args
@@ -14865,12 +14865,36 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
             ctx, slot, base_bits, args, nargs, xsink);
     }
 
+    const qore_class_private* class_ctx =
+        qore_class_private::get(*target.qc);
+    static const bool cache_member_info = !std::getenv(
+        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
+    const QoreMemberInfo* member_info = cache_member_info
+        ? target.object_member_info.load(std::memory_order_acquire) : nullptr;
+    if (cache_member_info && !member_info) {
+        const QoreMemberInfo* resolved =
+            class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
+        if (resolved) {
+            const QoreMemberInfo* expected = nullptr;
+            if (target.object_member_info.compare_exchange_strong(expected,
+                    resolved, std::memory_order_release,
+                    std::memory_order_acquire)) {
+                member_info = resolved;
+            } else {
+                member_info = expected;
+            }
+        }
+    }
+    qore_object_private* object_priv = qore_object_private::get(*object);
+
     {
         LValueHelper helper(xsink);
-        const qore_class_private* class_ctx =
-            qore_class_private::get(*target.qc);
-        if (qore_object_private::getLValue(*object, member_name, helper,
-                class_ctx, false, xsink)) {
+        int rc = member_info
+            ? object_priv->getLValueResolved(member_name, *member_info,
+                class_ctx, helper, false, xsink)
+            : qore_object_private::getLValue(*object, member_name, helper,
+                class_ctx, false, xsink);
+        if (rc) {
             return toBits(QoreValue());
         }
         QoreValue value = fromBits(args[value_param]);
@@ -14880,8 +14904,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         }
     }
 
-    ValueHolder value(object->getReferencedMemberNoMethod(
-        member_name, target.qc, xsink), xsink);
+    ValueHolder value(member_info
+        ? object_priv->getReferencedMemberNoMethodResolved(member_name,
+            member_info->getClassContext(class_ctx), xsink)
+        : object->getReferencedMemberNoMethod(
+            member_name, target.qc, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }

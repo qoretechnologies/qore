@@ -409,6 +409,15 @@ public:
 
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolved(const char* mem,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
+    DLLLOCAL int getLValueResolved(const char* key,
+            const QoreMemberInfo& info,
+            const qore_class_private* class_ctx, LValueHelper& lvh,
+            bool for_remove, ExceptionSink* xsink);
+
     // lock not held on entry
     DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
 

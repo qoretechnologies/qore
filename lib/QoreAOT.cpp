@@ -899,7 +899,7 @@ QoreAOTContext::~QoreAOTContext() {
     free(locals);
     free(globals);
     free(exprs);
-    free(call_targets);
+    delete[] call_targets;
     free(stmts);
     free(regex_cases);
     free(lv_path_insts);

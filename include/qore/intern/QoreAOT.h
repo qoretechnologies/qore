@@ -34,6 +34,7 @@
 
 #include <cassert>
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -61,6 +62,7 @@ class QoreFunction;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreMethod;
+class QoreMemberInfo;
 class QoreClass;
 class QoreNamespace;
 class QoreParseListNode;
@@ -122,6 +124,8 @@ struct QoreAOTCallTarget {
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution
     const qore_class_private* class_ctx = nullptr; //!< class context for self/base method calls
+    //! lazily resolved immutable metadata for object set/get summary lowering
+    std::atomic<const QoreMemberInfo*> object_member_info{nullptr};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
@@ -253,8 +257,7 @@ struct QoreAOTContext {
         }
         if (num_exprs > 0) {
             exprs = static_cast<uint64_t*>(calloc(num_exprs, sizeof(uint64_t)));
-            call_targets = static_cast<QoreAOTCallTarget*>(
-                calloc(num_exprs, sizeof(QoreAOTCallTarget)));
+            call_targets = new QoreAOTCallTarget[num_exprs]();
         }
         if (num_stmts > 0) {
             stmts = static_cast<const AbstractStatement**>(calloc(num_stmts, sizeof(const AbstractStatement*)));
