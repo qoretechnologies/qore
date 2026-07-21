@@ -7536,6 +7536,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Clear value and local maps
     values.clear();
+    value_definitions.clear();
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -7737,7 +7738,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         parameter_locals.insert(local);
     }
     std::unordered_set<const QoreIRInstruction*> entry_instructions;
-    std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
     std::unordered_map<const LocalVar*, size_t> local_load_counts;
     std::unordered_set<const LocalVar*> stored_locals;
     std::unordered_map<uint32_t, std::vector<QoreIROpcode>> value_operand_users;
@@ -13626,9 +13626,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return setExpressionFallbackError(error, inst,
                                 "VrnConstruct invoke with lowered operand has no complex hash/list target metadata");
                     }
+                    auto initializer_definition =
+                        value_definitions.find(inv->operands[0].id);
                     bool hash_prechecked = is_hash && current_ir_func
+                        && initializer_definition != value_definitions.end()
                         && qore_ir_complex_hash_initializer_prechecked(
-                            *current_ir_func, inv->operands[0], typeInfo);
+                            *current_ir_func, initializer_definition->second,
+                            typeInfo);
 
                     const char* helper_name = nullptr;
                     if (aot_mode) {
@@ -13712,9 +13716,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* hash_val = getVal(inv->operands[0].id, error);
                 if (!hash_val) { return false; }
                 llvm::Value* hash_boxed = boxValue(hash_val, inv->operands[0].id);
-                int32_t construct_flags = runtime_check ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
-                if (reusable_hashdecl_literal_values.count(inv->operands[0].id)) {
+                auto initializer_definition =
+                    value_definitions.find(inv->operands[0].id);
+                bool reuse_temporary =
+                    reusable_hashdecl_literal_values.count(inv->operands[0].id);
+                bool keys_prechecked = runtime_check && hd
+                    && initializer_definition != value_definitions.end()
+                    && qore_ir_hashdecl_literal_keys_prechecked(
+                        initializer_definition->second, hd);
+                int32_t construct_flags = runtime_check && !keys_prechecked
+                    ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
+                if (reuse_temporary) {
                     construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
+                }
+                if (aot_mode && keys_prechecked
+                        && std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: hashdecl initializer key scan elided in '%s'\n",
+                        current_ir_func->getDisplayName().c_str());
                 }
                 llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
                         construct_flags);
@@ -20684,9 +20703,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return setExpressionFallbackError(error, inst,
                             "VrnConstruct with lowered operand has no complex hash/list target metadata");
                 }
+                auto initializer_definition =
+                    value_definitions.find(inst->operands[0].id);
                 bool hash_prechecked = is_hash && current_ir_func
+                    && initializer_definition != value_definitions.end()
                     && qore_ir_complex_hash_initializer_prechecked(
-                        *current_ir_func, inst->operands[0], typeInfo);
+                        *current_ir_func, initializer_definition->second,
+                        typeInfo);
 
                 if (aot_mode) {
                     const char* helper_name = is_hash
@@ -20773,9 +20796,26 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* hash_val = getVal(inst->operands[0].id, error);
             if (!hash_val) { return false; }
             llvm::Value* hash_boxed = boxValue(hash_val, inst->operands[0].id);
-            int32_t construct_flags = nhdfh_inst->runtime_check ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
-            if (reusable_hashdecl_literal_values.count(inst->operands[0].id)) {
+            auto initializer_definition =
+                value_definitions.find(inst->operands[0].id);
+            bool reuse_temporary =
+                reusable_hashdecl_literal_values.count(inst->operands[0].id);
+            bool keys_prechecked = nhdfh_inst->runtime_check
+                && nhdfh_inst->hd
+                && initializer_definition != value_definitions.end()
+                && qore_ir_hashdecl_literal_keys_prechecked(
+                    initializer_definition->second, nhdfh_inst->hd);
+            int32_t construct_flags = nhdfh_inst->runtime_check
+                    && !keys_prechecked
+                ? QORE_RT_HASHDECL_RUNTIME_CHECK : 0;
+            if (reuse_temporary) {
                 construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
+            }
+            if (aot_mode && keys_prechecked
+                    && std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: hashdecl initializer key scan elided in '%s'\n",
+                    current_ir_func->getDisplayName().c_str());
             }
             llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
                     construct_flags);

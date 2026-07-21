@@ -244,7 +244,13 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
     non-NOTHING, input-identical facts for every value in a fresh hash literal.
     Missing facts, dynamic values, and non-literal hashes remain on the checked path. */
 bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
-    QoreIRValue initializer, const QoreTypeInfo* target_type);
+    const QoreIRInstruction* initializer, const QoreTypeInfo* target_type);
+
+//! Return true when every constant key in a fresh hash literal is a target hashdecl member.
+/** This proof removes only the redundant unknown-key scan. Member value type
+    acceptance, defaults, and declaration-order normalization remain mandatory. */
+bool qore_ir_hashdecl_literal_keys_prechecked(const QoreIRInstruction* initializer,
+    const TypedHashDecl* target);
 
 //! Replace an exact pure boxed passthrough call with its already-owned argument.
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,

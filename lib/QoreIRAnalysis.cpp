@@ -13,6 +13,7 @@
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreJITIncludes.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
+#include <qore/intern/typed_hash_decl_private.h>
 
 #include <algorithm>
 #include <bit>
@@ -5193,8 +5194,8 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
 }
 
 bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
-        QoreIRValue initializer, const QoreTypeInfo* target_type) {
-    if (!initializer.isValid()
+        const QoreIRInstruction* definition, const QoreTypeInfo* target_type) {
+    if (!definition
             || std::getenv("QORE_DISABLE_IR_COMPLEX_HASH_PRECHECK")) {
         return false;
     }
@@ -5211,26 +5212,9 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         return false;
     }
 
-    const QoreIRInstruction* definition = nullptr;
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR typed-hash initializer definition analysis")) {
-                return false;
-            }
-            if (inst->result.id == initializer.id) {
-                definition = inst.get();
-                break;
-            }
-        }
-        if (definition) {
-            break;
-        }
-    }
-    if (!definition
-            || (definition->opcode != QoreIROpcode::MakeHash
-                && definition->opcode != QoreIROpcode::MakeHashConstKeys)) {
+    if (definition->opcode != QoreIROpcode::MakeHash
+            && definition->opcode != QoreIROpcode::MakeHashConstKeys) {
         return false;
     }
 
@@ -5287,6 +5271,31 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
         if (!QoreTypeInfo::hasType(value_type)
                 || !QoreTypeInfo::isInputIdentical(
                     target_value_type, value_type)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool qore_ir_hashdecl_literal_keys_prechecked(
+        const QoreIRInstruction* initializer, const TypedHashDecl* target) {
+    if (!initializer || !target
+            || std::getenv("QORE_DISABLE_IR_HASHDECL_KEY_PROOF")
+            || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
+        return false;
+    }
+    const auto* make =
+        static_cast<const QoreIRMakeHashConstKeysInstruction*>(initializer);
+    if (make->keys.size() != initializer->operands.size()) {
+        return false;
+    }
+    const typed_hash_decl_private* target_private =
+        typed_hash_decl_private::get(*target);
+    size_t check_count = 0;
+    for (const std::string& key : make->keys) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR hashdecl initializer key analysis")
+                || !target_private->findMember(key.c_str())) {
             return false;
         }
     }

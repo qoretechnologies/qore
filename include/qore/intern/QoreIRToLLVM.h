@@ -278,6 +278,7 @@ private:
 
     // Value mapping: QoreIR value IDs → LLVM values
     std::unordered_map<uint32_t, llvm::Value*> values;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
 
     // Typed-map backing pointers materialized in loop preheaders.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;

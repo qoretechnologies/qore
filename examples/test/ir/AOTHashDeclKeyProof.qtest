@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-hashdecl-key-proof-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+hashdecl Item {
+    int base;
+    int value;
+    string label = \"default\";
+}
+
+auto sub opaque(auto value) {
+    return value;
+}
+
+string sub errorName(code<nothing()> action) {
+    try {
+        action();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return \"accepted\";
+}
+
+Item sub known() {
+    Item value((\"value\": opaque(2), \"base\": opaque(1)));
+    return value;
+}
+
+string sub invalidValue() {
+    return errorName(sub () {
+        Item invalid((\"base\": opaque(1), \"value\": opaque(\"bad\")));
+    });
+}
+
+string sub invalidKey() {
+    return errorName(sub () {
+        hash<auto> init = (\"base\": 1, \"value\": 2);
+        init{opaque(\"unknown\")} = 3;
+        Item invalid(init);
+    });
+}
+
+string sub unassignedValue() {
+    return errorName(sub () {
+        int missing;
+        Item invalid((\"base\": 1, \"value\": missing));
+    });
+}
+
+int sub main() {
+    Item value = known();
+    printf(\"%d:%d:%s:%s:%s:%s\\n\", value.base, value.value,
+        value.label, invalidValue(), invalidKey(), unassignedValue());
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+hash<string, string> outputs;
+foreach string mode in (("ast", "ir", "jit", "tiered")) {
+    outputs{mode} = backquote(sprintf("%s %s --exec-mode=%s %s 2>&1",
+        env, qore_bin, mode, source_path));
+}
+
+string enabled_exe = root + "/enabled";
+string enabled_compile = backquote(sprintf(
+    "%s QORE_AOT_DEBUG=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+if (!is_file(enabled_exe)) {
+    printf("enabled compile failed:\n%s", enabled_compile);
+    exit(2);
+}
+
+string checked_exe = root + "/checked";
+string checked_compile = backquote(sprintf(
+    "%s QORE_AOT_DEBUG=1 QORE_DISABLE_IR_HASHDECL_KEY_PROOF=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, checked_exe, source_path));
+if (!is_file(checked_exe)) {
+    printf("checked compile failed:\n%s", checked_compile);
+    exit(2);
+}
+
+foreach string name in (("known", "invalidValue", "unassignedValue")) {
+    if (!enabled_compile.regex(sprintf(
+            "hashdecl initializer key scan elided in '[^']*%s", name))) {
+        printf("missing key proof for %s:\n%s", name, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile.regex("hashdecl initializer key scan elided in '[^']*invalidKey")
+        || checked_compile.regex("hashdecl initializer key scan elided")) {
+    printf("unexpected hashdecl key proof:\nenabled:\n%schecked:\n%s",
+        enabled_compile, checked_compile);
+    exit(2);
+}
+
+outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+outputs.checked = backquote(sprintf("%s %s 2>&1", env, checked_exe));
+
+string expected = "1:2:default:RUNTIME-TYPE-ERROR:HASHDECL-INIT-ERROR:RUNTIME-TYPE-ERROR\n";
+foreach string mode in (keys outputs) {
+    string output = outputs{mode};
+    if (output != expected) {
+        printf("%s execution mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, output);
+        exit(2);
+    }
+}
