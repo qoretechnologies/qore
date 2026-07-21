@@ -6967,6 +6967,7 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeI64(rec.aggregate_return_value_ints[i]);
         writer.writeF64(rec.aggregate_return_value_floats[i]);
     }
+    writer.writeStringRef(rec.fast_specialization_key.c_str());
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7070,6 +7071,7 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.int_expression_nodes = info.int_expression_nodes;
     rec.float_expression_nodes = info.float_expression_nodes;
     rec.string_expression_nodes = info.string_expression_nodes;
+    rec.fast_specialization_key = info.specialization_key;
     native.push_back(std::move(rec));
 }
 
@@ -8492,7 +8494,11 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         rec.aggregate_return_value_floats.push_back(
             QoreAOTBinaryReader::readF64(ptr));
     }
-    return true;
+    if (version < 26) {
+        return true;
+    }
+    return readSymbolIndexString(reader, ptr, end,
+        rec.fast_specialization_key, error, "fast_specialization_key");
 }
 
 static bool readSymbolIndexRecordVector(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,

@@ -3244,6 +3244,10 @@ static void print_aot_symbol_record(const QoreAOTSymbolIndexRecord& rec, bool na
     if (rec.fast_entry_flags) {
         printf(" fast_flags=0x%x fast_params=%u fast_return=%u", rec.fast_entry_flags,
             rec.fast_entry_num_params, rec.fast_return_kind);
+        if (!rec.fast_specialization_key.empty()) {
+            printf(" fast_specialization=%s",
+                rec.fast_specialization_key.c_str());
+        }
         if (rec.scalar_leaf_kind) {
             printf(" scalar_leaf=%u:%u", rec.scalar_leaf_kind, rec.scalar_leaf_opcode);
         }
@@ -5033,6 +5037,8 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     json_print_string(rec.provider_source_file);
     printf(", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u, \"fast_return_kind\": %u",
         rec.fast_entry_flags, rec.fast_entry_num_params, rec.fast_return_kind);
+    printf(", \"fast_specialization_key\": ");
+    json_print_string(rec.fast_specialization_key);
     auto print_bytes = [](const char* name, const std::vector<uint8_t>& values) {
         printf(", \"%s\": [", name);
         for (size_t i = 0; i < values.size(); ++i) {
@@ -5678,6 +5684,8 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         json_file_string(f, rec.provider_source_file);
         fprintf(f, ", \"fast_entry_flags\": %u, \"fast_entry_num_params\": %u, \"fast_return_kind\": %u",
             rec.fast_entry_flags, rec.fast_entry_num_params, rec.fast_return_kind);
+        fputs(", \"fast_specialization_key\": ", f);
+        json_file_string(f, rec.fast_specialization_key);
         auto write_bytes = [f](const char* name, const std::vector<uint8_t>& values) {
             fprintf(f, ", \"%s\": [", name);
             for (size_t j = 0; j < values.size(); ++j) {

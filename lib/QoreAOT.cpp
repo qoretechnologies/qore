@@ -1036,6 +1036,10 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             if (info.implicit_self_method) {
                 entry.flags |= QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
             }
+            if (info.generic_specialized_fast_entry) {
+                entry.flags |= QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION;
+                entry.specialization_key = info.specialization_key;
+            }
             entry.num_params = info.num_params;
             entry.return_kind = static_cast<uint8_t>(info.return_kind);
             entry.param_kinds.reserve(info.param_kinds.size());
@@ -5177,8 +5181,11 @@ static bool collectAOTGenericSpecializationCandidates(
                         receiver_type_info, type_param_instantiation)) {
                     continue;
                 }
-                std::string key = qore_make_generic_specialization_key(
+                std::string key = qore_make_generic_specialization_dispatch_key(
                     receiver_type_info, type_param_instantiation);
+                if (key.empty()) {
+                    continue;
+                }
                 auto [candidate, inserted] = specializations.try_emplace(
                     variant);
                 if (inserted) {
@@ -12130,12 +12137,23 @@ static bool pruneUnusedAOTSharedFastEntryFunctions(llvm::Module& module,
 static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         BatchCalleeInfo& info, bool& cancelled) {
     cancelled = false;
+    static constexpr char generic_suffix[] = "_generic_fast";
+    static constexpr size_t generic_suffix_len = sizeof(generic_suffix) - 1;
+    bool generic_specialization = rec.fast_entry_flags
+        & QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION;
+    bool generic_symbol = rec.native_symbol.size() >= generic_suffix_len
+        && rec.native_symbol.compare(rec.native_symbol.size()
+                - generic_suffix_len, generic_suffix_len,
+            generic_suffix) == 0;
     if (rec.abi_kind != "qore_fast_v1" || rec.native_symbol.empty()
             || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
             || rec.fast_param_kinds.size() != rec.fast_entry_num_params
             || rec.fast_param_rejects_nothing.size() != rec.fast_entry_num_params
             || rec.fast_param_noescape.size() > rec.fast_entry_num_params
-            || rec.fast_param_may_modify.size() > rec.fast_entry_num_params) {
+            || rec.fast_param_may_modify.size() > rec.fast_entry_num_params
+            || (generic_specialization
+                ? rec.fast_specialization_key.empty()
+                : (!rec.fast_specialization_key.empty() || generic_symbol))) {
         return false;
     }
     info.param_kinds.reserve(rec.fast_param_kinds.size());
@@ -12153,6 +12171,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         ++param_i;
     }
     info.approach_b_eligible = true;
+    info.generic_specialized_fast_entry = generic_specialization;
+    info.specialization_key = rec.fast_specialization_key;
     info.implicit_self_method = rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_IMPLICIT_SELF;
     info.context_independent_fast_entry =
         rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_CONTEXT_INDEPENDENT;

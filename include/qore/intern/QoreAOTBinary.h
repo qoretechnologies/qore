@@ -293,7 +293,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 25;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 26;
 
 //! Serialized node in a bounded pure native-integer expression summary.
 struct QoreAOTIntExpressionNodeRecord {
@@ -337,6 +337,8 @@ constexpr uint32_t QORE_AOT_FAST_ENTRY_IMPLICIT_SELF = 0x0010; //!< Entry reuses
 //! to QORE_AOT_FAST_ENTRY_MAY_INVALIDATE.
 constexpr uint32_t QORE_AOT_FAST_ENTRY_PRECISE_LOCAL_EFFECTS = 0x0020;
 constexpr uint32_t QORE_AOT_FAST_ENTRY_MAY_MODIFY_RUNTIME_LOCALS = 0x0040;
+//! Entry is valid only for the serialized generic specialization dispatch key.
+constexpr uint32_t QORE_AOT_FAST_ENTRY_GENERIC_SPECIALIZATION = 0x0080;
 
 //! One record in the optional SYMBOL_INDEX section.
 struct QoreAOTSymbolIndexRecord {
@@ -404,6 +406,7 @@ struct QoreAOTSymbolIndexRecord {
     std::vector<double> aggregate_return_value_floats;
     std::vector<std::string> aggregate_return_keys;
     int8_t boxed_return_param = -1;
+    std::string fast_specialization_key;
 };
 
 //! Compile-time fast-entry metadata keyed by the resolved variant.
@@ -459,6 +462,7 @@ struct QoreAOTFastEntryIndexInfo {
     std::vector<double> aggregate_return_value_floats;
     std::vector<std::string> aggregate_return_keys;
     int8_t boxed_return_param = -1;
+    std::string specialization_key;
 };
 
 //! Parsed contents of the optional SYMBOL_INDEX section.

@@ -245,6 +245,12 @@ DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
 DLLLOCAL std::string qore_make_generic_specialization_key(
     const QoreTypeInfo* receiver_type_info,
     const QoreTypeParamInstantiation* type_param_instantiation);
+//! Returns the portable dispatch key for a concrete generic specialization.
+//! Unlike the process-local cache key, this key contains no pointer identity;
+//! callers must compare it only after resolving the exact function variant.
+DLLLOCAL std::string qore_make_generic_specialization_dispatch_key(
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* type_param_instantiation);
 
 // used to store return type info during parsing for user code
 class RetTypeInfo {

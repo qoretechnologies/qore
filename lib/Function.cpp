@@ -5996,6 +5996,32 @@ std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_ty
     return key;
 }
 
+std::string qore_make_generic_specialization_dispatch_key(
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation) {
+    std::string key;
+    if (receiver_type_info) {
+        key += "R:";
+        key += QoreTypeInfo::getPath(receiver_type_info);
+    }
+    if (type_param_instantiation && !type_param_instantiation->empty()) {
+        key += "|M:<";
+        for (size_t i = 0, e = type_param_instantiation->type_args.size(); i < e; ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "generic specialization dispatch-key construction")) {
+                return std::string();
+            }
+            if (i) {
+                key += ",";
+            }
+            key += QoreTypeInfo::getPath(type_param_instantiation->type_args[i]);
+        }
+        key += ">";
+    }
+    return key;
+}
+
 const QoreIRFunction* UserVariantBase::getOrCreateSpecializedIR(const char* name,
         const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_instantiation,
         bool raise_on_failure) const {

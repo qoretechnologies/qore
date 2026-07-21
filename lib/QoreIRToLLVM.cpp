@@ -410,7 +410,8 @@ static bool qore_ir_generic_fast_entry_matches(
             || info.specialization_key.empty()) {
         return false;
     }
-    return info.specialization_key == qore_make_generic_specialization_key(
+    return info.specialization_key
+        == qore_make_generic_specialization_dispatch_key(
         qore_ir_get_call_receiver_type_info(expr),
         qore_ir_get_call_type_instantiation(expr));
 }

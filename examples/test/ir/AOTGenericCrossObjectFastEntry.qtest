@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+T sub crossGenericSelect<T>(bool left, T a, T b) {
+    return left ? a : b;
+}
+
+class CrossStaticSelector<C> {
+    static T choose<T>(bool left, T a, T b) {
+        return left ? a : b;
+    }
+}
+
+class CrossInstanceSelector<C> {
+    constructor() {
+    }
+
+    C choose(bool left, C a, C b) {
+        return left ? a : b;
+    }
+}
+
+int sub crossGenericAnchor() {
+    CrossInstanceSelector<int> selector();
+    return crossGenericSelect<int>(True, 1, 2)
+        + CrossStaticSelector<int>::choose<int>(True, 3, 4)
+        + selector.choose(True, 5, 6);
+}
+";
+
+string consumer_source = "%modern
+
+bool sub unassignedRejected() {
+    int value;
+    try {
+        return crossGenericSelect<int>(True, value, 2) == -1;
+    } catch (hash<auto> ex) {
+        return ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+}
+
+int sub main() {
+    CrossInstanceSelector<int> selector();
+    int result = 0;
+    for (int i = 0; i < 1000; ++i) {
+        result += crossGenericSelect<int>((i & 1) == 0, i, i + 1);
+        result += CrossStaticSelector<int>::choose<int>(
+            (i & 1) == 0, i, i + 1);
+        result += selector.choose((i & 1) == 0, i, i + 1);
+    }
+
+    CrossInstanceSelector<string> string_selector();
+    printf(\"%d:%s:%s:%s:%y\\n\", result,
+        crossGenericSelect<string>(True, \"ok\", \"bad\"),
+        CrossStaticSelector<int>::choose<string>(True, \"yes\", \"no\"),
+        string_selector.choose(True, \"z\", \"x\"),
+        unassignedRejected());
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-generic-cross-object-fast-entry-" + string(getpid());
+string provider_dir = root + "/provider";
+string consumer_dir = root + "/consumer";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(consumer_dir);
+
+string provider_path = root + "/cross-provider.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/cross-provider.qo";
+if (!is_file(provider_qo)
+        || provider_compile !~ /fast entry '[^']*crossGenericSelect[^']*_generic_fast'/
+        || provider_compile !~ /method fast entry '[^']*CrossStaticSelector[^']*_generic_fast'/
+        || provider_compile !~ /method fast entry '[^']*CrossInstanceSelector[^']*_generic_fast'/) {
+    printf("provider compile failed or omitted generic entries:\n%s",
+        provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, provider_qo));
+if (provider_index !~ /\"symbol_index_version\", \"value\": \"26\"/
+        || provider_index !~ /\"native_symbol\": \"crossGenericSelect[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"\\|M:<int>\"/
+        || provider_index !~ /\"native_symbol\": \"CrossStaticSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossStaticSelector<int>>\\|M:<int>\"/
+        || provider_index !~ /\"native_symbol\": \"CrossInstanceSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossInstanceSelector<int>>\"/) {
+    printf("provider generic metadata mismatch:\n%s", provider_index);
+    exit(2);
+}
+
+# Prove the consumer uses only source-stripped provider metadata.
+unlink(provider_path);
+
+string consumer_path = root + "/cross-consumer.qr";
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+
+string consumer_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, consumer_dir, consumer_path));
+string consumer_qo = consumer_dir + "/cross-consumer.qo";
+if (!is_file(consumer_qo)) {
+    printf("consumer compile failed:\n%s", consumer_compile);
+    exit(2);
+}
+
+string undefined_symbols = backquote(sprintf("nm -u %s 2>&1", consumer_qo));
+if (undefined_symbols !~ /crossGenericSelect[^\n]*_generic_fast/
+        || undefined_symbols !~ /CrossStaticSelector[^\n]*_generic_fast/
+        || undefined_symbols !~ /CrossInstanceSelector[^\n]*_generic_fast/) {
+    printf("consumer did not import all generic fast entries:\n%scompile:\n%s",
+        undefined_symbols, consumer_compile);
+    exit(2);
+}
+
+string exe_path = root + "/cross-object";
+string link_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, provider_qo, consumer_qo));
+if (!is_file(exe_path)) {
+    printf("cross-object link failed:\n%s", link_out);
+    exit(2);
+}
+
+string actual = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+string expected = "1500000:ok:yes:z:True\n";
+if (actual != expected) {
+    printf("cross-object output mismatch:\nexpected:\n%sactual:\n%s",
+        expected, actual);
+    exit(2);
+}
