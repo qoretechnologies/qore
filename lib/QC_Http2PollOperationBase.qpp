@@ -573,16 +573,38 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
 
 void Http2PollOperationPriv::registerPersistentSessionQueue(Queue* queue, QoreObject* queue_obj,
         ExceptionSink* xsink) {
-    AutoLocker al(op_lock);
-    // Replace any previous binding (one persistent session per H2 connection).
-    if (persistent_session_queue) {
-        persistent_session_queue->deref(xsink);
+    Queue* old_q = nullptr;
+    QoreObject* old_qobj = nullptr;
+    bool closed;
+    {
+        AutoLocker al(op_lock);
+        closed = (h2_state == H2ServerState::CLOSED);
+        if (!closed) {
+            // Replace any previous binding (one persistent session per H2 connection);
+            // deref below after releasing the lock (op_lock is non-recursive)
+            old_q = persistent_session_queue;
+            old_qobj = persistent_session_queue_obj;
+            persistent_session_queue = queue;
+            persistent_session_queue_obj = queue_obj;
+        }
     }
-    if (persistent_session_queue_obj) {
-        persistent_session_queue_obj->deref(xsink);
+    if (closed) {
+        // The op was already aborted/closed: refuse the binding.  abort() has
+        // released any prior binding and CLOSED is terminal, so continuePoll()
+        // can never deliver the close signal — storing the binding here would
+        // defer its release to the destructor path, which abort() exists to
+        // avoid (the deferred deref can run a Qore destructor over freed
+        // program code; see abort() above)
+        queue->deref(xsink);
+        queue_obj->deref(xsink);
+        return;
     }
-    persistent_session_queue = queue;
-    persistent_session_queue_obj = queue_obj;
+    if (old_q) {
+        old_q->deref(xsink);
+    }
+    if (old_qobj) {
+        old_qobj->deref(xsink);
+    }
 }
 
 void Http2PollOperationPriv::deregisterPersistentSessionQueue(ExceptionSink* xsink) {

@@ -1894,9 +1894,15 @@ public:
             }
         }
         // Wake handler threads waiting for QUIC stream data/drain
-        // BEFORE removing sessions from the socket map
+        // BEFORE removing sessions from the socket map.  Also unregister each
+        // session's CIDs here: a foreign thread's transient shared_ptr (e.g.
+        // cancelQuicStreamRead() during a concurrent service stop) can carry the
+        // session past this removal, deferring destruction — and the destructor's
+        // CID cleanup — to that thread, which would leave the CIDs routable to
+        // the removed session in the meantime
         for (auto& [id, session] : sessions_) {
             session->markClosed();
+            session->unregisterFromDispatcher();
             sock->priv->socket->priv->removeQuicSession(id);
         }
         sessions_.clear();
