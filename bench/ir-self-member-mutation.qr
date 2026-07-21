@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+class SelfMemberCounter {
+    private {
+        int value;
+    }
+
+    constructor() {
+        self.value = 0;
+    }
+
+    int assignRun(int rounds) {
+        for (int i = 0; i < rounds; ++i) {
+            self.value = i;
+        }
+        return self.value;
+    }
+
+    int compoundRun(int rounds) {
+        self.value = 0;
+        for (int i = 0; i < rounds; ++i) {
+            self.value += 1;
+        }
+        return self.value;
+    }
+
+    int unaryRun(int rounds) {
+        self.value = 0;
+        for (int i = 0; i < rounds; ++i) {
+            ++self.value;
+        }
+        return self.value;
+    }
+}
+
+string mode = ARGV.size() ? ARGV[0] : "compound";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 2000000;
+SelfMemberCounter counter();
+switch (mode) {
+    case "assign":
+        printf("%d\n", counter.assignRun(rounds));
+        break;
+    case "compound":
+        printf("%d\n", counter.compoundRun(rounds));
+        break;
+    case "unary":
+        printf("%d\n", counter.unaryRun(rounds));
+        break;
+    default:
+        stderr.printf("unknown mode: %s\n", mode);
+        exit(2);
+}

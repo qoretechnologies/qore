@@ -375,6 +375,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot) },
     { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
     { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
+    { "qore_rt_self_member_assign", reinterpret_cast<void*>(&qore_rt_self_member_assign) },
+    { "qore_rt_self_member_compound", reinterpret_cast<void*>(&qore_rt_self_member_compound) },
+    { "qore_rt_self_member_update", reinterpret_cast<void*>(&qore_rt_self_member_update) },
     { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
     { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
     { "qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary) },
@@ -11097,6 +11100,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext*
 }
 
 // --- LValuePath runtime helpers ---
+static int qore_rt_get_self_member_lvalue(const char* member_name,
+        LValueHelper& lvh, ExceptionSink* xsink) {
+    QoreObject* obj = runtime_get_stack_object();
+    if (!obj) {
+        xsink->raiseException("LVALUE-ERROR",
+            "no object context for self member access");
+        return -1;
+    }
+    if (qore_rt_check_closure_self_valid(obj, xsink)) {
+        return -1;
+    }
+    return qore_object_private::getLValue(*obj, member_name, lvh,
+        runtime_get_class(), false, xsink);
+}
+
 // Copy path steps and patch dynamic operands from NaN-boxed array.
 // Note: slice_values stores BORROWED QoreValues aliasing the dyn_vals array;
 // the caller must not use path_copy beyond the lifetime of dyn_vals.
@@ -11159,6 +11177,117 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     return toBits(lvh.getReferencedValue());
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
+        const char* member_name, uint64_t rhs_bits, int32_t weak,
+        ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue val = fromBits(rhs_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
+    QoreValue assign_val = val;
+    ValueHolder eval_holder(xsink);
+    qore_type_t val_type = val.getType();
+    if (!weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH
+            || val_type == NT_WEAKREF_LIST)) {
+        eval_holder = val.eval(xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        assign_val = *eval_holder;
+    }
+
+    LValueHelper lvh(xsink);
+    if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)
+            || lvh.assign(assign_val.refSelf(), "<self member assign>",
+                true, weak)) {
+        return toBits(QoreValue());
+    }
+    return toBits(lvh.getReferencedValue());
+}
+
+static QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh,
+        LVCompoundOp compound_op, const QoreValue& rhs,
+        ExceptionSink* xsink) {
+    QoreValue res;
+    switch (compound_op) {
+        case LVCompoundOp::AddAssign:
+            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+            break;
+        case LVCompoundOp::SubAssign:
+            res = doMinusEqualsOnLValue(lvh, rhs, xsink);
+            break;
+        default: {
+            qore_type_t vtype = lvh.getType();
+            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+                switch (compound_op) {
+                    case LVCompoundOp::MulAssign:
+                        lvh.multiplyEqualsNumber(rhs);
+                        if (!*xsink) {
+                            res = lvh.getReferencedValue();
+                        }
+                        break;
+                    case LVCompoundOp::DivAssign:
+                        if (rhs.getAsFloat() == 0.0) {
+                            xsink->raiseException("DIVISION-BY-ZERO",
+                                "division by zero in arbitrary-precision numeric expression");
+                        } else {
+                            lvh.divideEqualsNumber(rhs);
+                            if (!*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
+                        }
+                        break;
+                    default: res = QoreValue(); break;
+                }
+            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                double rv = rhs.getAsFloat();
+                switch (compound_op) {
+                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                    case LVCompoundOp::DivAssign:
+                        if (rv == 0.0) {
+                            xsink->raiseException("DIVISION-BY-ZERO",
+                                "division by zero in floating-point expression");
+                        } else {
+                            res = lvh.divideEqualsFloat(rv);
+                        }
+                        break;
+                    default: break;
+                }
+            } else {
+                int64 rv = rhs.getAsBigInt();
+                switch (compound_op) {
+                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                    case LVCompoundOp::DivAssign:
+                        if (!rv) {
+                            xsink->raiseException("DIVISION-BY-ZERO",
+                                "division by zero in integer expression");
+                        } else {
+                            res = lvh.divideEqualsBigInt(rv);
+                        }
+                        break;
+                    case LVCompoundOp::ModAssign:
+                        if (!rv) {
+                            lvh.assign(0ll, "<%= operator>");
+                            res = 0ll;
+                        } else {
+                            res = lvh.modulaEqualsBigInt(rv);
+                        }
+                        break;
+                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
+                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
+                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
+                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
+                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                    default: break;
+                }
+            }
+            break;
+        }
+    }
+    return res;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
@@ -11175,50 +11304,98 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
-    QoreValue res;
-    switch (inst->compound_op) {
-        case LVCompoundOp::AddAssign:
-            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
-            break;
-        case LVCompoundOp::SubAssign:
-            res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-            break;
-        default: {
-            qore_type_t vtype = lvh.getType();
-            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                switch (inst->compound_op) {
-                    case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
-                    case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
-                    default: res = QoreValue(); break;
-                }
-            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                double rv = rhs.getAsFloat();
-                switch (inst->compound_op) {
-                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
-                    default: break;
-                }
-            } else {
-                int64 rv = rhs.getAsBigInt();
-                switch (inst->compound_op) {
-                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
-                    case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
-                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                    default: break;
-                }
-            }
-            break;
-        }
-    }
+    QoreValue res = qore_rt_apply_lvalue_compound(
+        lvh, inst->compound_op, rhs, xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
     return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_compound(
+        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
+        ExceptionSink* xsink) {
+    if (*xsink || compound_op < static_cast<int32_t>(LVCompoundOp::AddAssign)
+            || compound_op > static_cast<int32_t>(LVCompoundOp::ShrAssign)) {
+        return toBits(QoreValue());
+    }
+    QoreValue rhs = fromBits(rhs_bits);
+    ValueHolder rhs_holder(rhs.refSelf(), xsink);
+    LValueHelper lvh(xsink);
+    if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
+        return toBits(QoreValue());
+    }
+    QoreValue res = qore_rt_apply_lvalue_compound(
+        lvh, static_cast<LVCompoundOp>(compound_op), rhs, xsink);
+    return toBits(*xsink ? QoreValue() : res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_update(
+        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+    if (*xsink || unary_op < static_cast<int32_t>(LVUnaryOp::PreInc)
+            || unary_op > static_cast<int32_t>(LVUnaryOp::PostDec)) {
+        return toBits(QoreValue());
+    }
+    LValueHelper lvh(xsink);
+    if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
+        return toBits(QoreValue());
+    }
+    QoreValue res;
+    switch (static_cast<LVUnaryOp>(unary_op)) {
+        case LVUnaryOp::PreInc: {
+            qore_type_t type = lvh.getType();
+            if (type == NT_NUMBER) {
+                lvh.preIncrementNumber();
+                res = lvh.getReferencedValue();
+            } else if (type == NT_FLOAT) {
+                res = lvh.preIncrementFloat();
+            } else {
+                res = lvh.preIncrementBigInt();
+            }
+            break;
+        }
+        case LVUnaryOp::PreDec: {
+            qore_type_t type = lvh.getType();
+            if (type == NT_NUMBER) {
+                lvh.preDecrementNumber();
+                res = lvh.getReferencedValue();
+            } else if (type == NT_FLOAT) {
+                res = lvh.preDecrementFloat();
+            } else {
+                res = lvh.preDecrementBigInt();
+            }
+            break;
+        }
+        case LVUnaryOp::PostInc: {
+            qore_type_t type = lvh.getType();
+            if (type == NT_NUMBER) {
+                if (QoreNumberNode* number = lvh.postIncrementNumber(true)) {
+                    res = number;
+                }
+            } else if (type == NT_FLOAT) {
+                res = lvh.postIncrementFloat();
+            } else {
+                res = lvh.postIncrementBigInt();
+            }
+            break;
+        }
+        case LVUnaryOp::PostDec: {
+            qore_type_t type = lvh.getType();
+            if (type == NT_NUMBER) {
+                if (QoreNumberNode* number = lvh.postDecrementNumber(true)) {
+                    res = number;
+                }
+            } else if (type == NT_FLOAT) {
+                res = lvh.postDecrementFloat();
+            } else {
+                res = lvh.postDecrementBigInt();
+            }
+            break;
+        }
+        default:
+            assert(false);
+    }
+    return toBits(*xsink ? QoreValue() : res);
 }
 
 // Shared helper for HashKeySlice terminal step: iterates the resolved
@@ -12408,6 +12585,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
 }
 
 // --- Phase 2B Step 5: Lvalue ops category throwing wrappers ---
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_throwing(
+        const char* member_name, uint64_t rhs_bits, int32_t weak,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_assign(
+        member_name, rhs_bits, weak, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_compound_throwing(
+        const char* member_name, int32_t compound_op, uint64_t rhs_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_compound(
+        member_name, compound_op, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_update_throwing(
+        const char* member_name, int32_t unary_op, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_update(
+        member_name, unary_op, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lvalue_load_throwing(
         uint64_t lvalue_bits, ExceptionSink* xsink) {

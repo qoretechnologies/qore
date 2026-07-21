@@ -12488,23 +12488,59 @@ load_local_done:
                             qore_type_t vtype = lvh.getType();
                             if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
                                 switch (path_inst->compound_op) {
-                                    case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
-                                    case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
+                                    case LVCompoundOp::MulAssign:
+                                        lvh.multiplyEqualsNumber(rhs);
+                                        if (!*xsink) {
+                                            res = lvh.getReferencedValue();
+                                        }
+                                        break;
+                                    case LVCompoundOp::DivAssign:
+                                        if (rhs.getAsFloat() == 0.0) {
+                                            xsink->raiseException("DIVISION-BY-ZERO",
+                                                "division by zero in arbitrary-precision numeric expression");
+                                        } else {
+                                            lvh.divideEqualsNumber(rhs);
+                                            if (!*xsink) {
+                                                res = lvh.getReferencedValue();
+                                            }
+                                        }
+                                        break;
                                     default: res = QoreValue(); break;
                                 }
                             } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
                                 double rv = rhs.getAsFloat();
                                 switch (path_inst->compound_op) {
                                     case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
+                                    case LVCompoundOp::DivAssign:
+                                        if (rv == 0.0) {
+                                            xsink->raiseException("DIVISION-BY-ZERO",
+                                                "division by zero in floating-point expression");
+                                        } else {
+                                            res = lvh.divideEqualsFloat(rv);
+                                        }
+                                        break;
                                     default: res = QoreValue(); break;
                                 }
                             } else {
                                 int64 rv = rhs.getAsBigInt();
                                 switch (path_inst->compound_op) {
                                     case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
-                                    case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
+                                    case LVCompoundOp::DivAssign:
+                                        if (!rv) {
+                                            xsink->raiseException("DIVISION-BY-ZERO",
+                                                "division by zero in integer expression");
+                                        } else {
+                                            res = lvh.divideEqualsBigInt(rv);
+                                        }
+                                        break;
+                                    case LVCompoundOp::ModAssign:
+                                        if (!rv) {
+                                            lvh.assign(0ll, "<%= operator>");
+                                            res = 0ll;
+                                        } else {
+                                            res = lvh.modulaEqualsBigInt(rv);
+                                        }
+                                        break;
                                     case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
                                     case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
                                     case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
@@ -12520,6 +12556,13 @@ load_local_done:
                 // lvh is now destructed — object lock released
                 invalidateLValuePathClosureCache(path_inst);
                 if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;

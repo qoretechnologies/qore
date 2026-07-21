@@ -1123,6 +1123,12 @@ uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, ui
     uint64_t third, ExceptionSink* xsink);
 
 //! LValuePath runtime helpers — navigate structured lvalue path and execute operation
+uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
+    int32_t weak, ExceptionSink* xsink);
+uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,
+    ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,

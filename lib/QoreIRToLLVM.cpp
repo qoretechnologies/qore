@@ -3181,6 +3181,27 @@ static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
     return reinterpret_cast<const void*>(findLvalueRootLocalVar(lvalue));
 }
 
+static const std::string* qore_ir_get_direct_self_member(
+        const QoreIRLValuePathInstruction* path_inst) {
+    if (!path_inst) {
+        return nullptr;
+    }
+    if (path_inst->path.size() == 1
+            && path_inst->path[0].kind == LVPathStepKind::SelfMember
+            && !path_inst->path[0].name.empty()) {
+        return &path_inst->path[0].name;
+    }
+    if (path_inst->path.size() != 2
+            || path_inst->path[0].kind != LVPathStepKind::LocalVar
+            || path_inst->path[1].kind != LVPathStepKind::HashKeyConst
+            || path_inst->path[1].name.empty()) {
+        return nullptr;
+    }
+    const auto* root = reinterpret_cast<const LocalVar*>(
+        path_inst->path[0].ref_ptr);
+    return root && root->isSelf() ? &path_inst->path[1].name : nullptr;
+}
+
 const void* QoreIRToLLVM::findLVPathRootLocalKey(
         const QoreIRLValuePathInstruction* path_inst) const {
     if (!path_inst || path_inst->path.empty()) {
@@ -24565,6 +24586,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::LValuePathBinaryMut:
         case QoreIROpcode::LValuePathTernary: {
             const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst);
+            const std::string* direct_self_member =
+                std::getenv("QORE_DISABLE_IR_DIRECT_SELF_MEMBER_MUTATION")
+                ? nullptr : qore_ir_get_direct_self_member(path_inst);
+            bool direct_self_update = inst->opcode == QoreIROpcode::LValuePathUnary
+                && path_inst->unary_op >= LVUnaryOp::PreInc
+                && path_inst->unary_op <= LVUnaryOp::PostDec;
+            bool direct_self_mutation = direct_self_member
+                && (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || direct_self_update);
+            if (direct_self_mutation && std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: direct self member mutation lowered in '%s'\n",
+                    current_ir_func->getDisplayName().c_str());
+            }
+            llvm::Value* direct_member_ptr = direct_self_mutation
+                ? builder->CreateGlobalStringPtr(*direct_self_member) : nullptr;
 
             // Count dynamic operands (single-value steps with operand_idx != UINT32_MAX,
             // plus each SSA id inside slice steps)
@@ -24615,7 +24653,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             const void* local_key = findLVPathRootLocalKey(path_inst);
-            if (local_key) {
+            if (local_key && !direct_self_mutation) {
                 clearLocalCachedValue(local_key, module, llvm_func,
                     LocalCacheClearMode::DuplicateRefsOnly);
                 clearLocalReloadTracker(local_key, module, llvm_func);
@@ -24646,7 +24684,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Get instruction pointer (JIT: ConstantInt, AOT: slot lookup)
             llvm::Value* inst_ptr_val;
             int32_t aot_slot = -1;
-            if (aot_slots) {
+            if (aot_slots && !direct_self_mutation) {
                 aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLVPathSlot(
                     reinterpret_cast<const void*>(path_inst));
             }
@@ -24669,7 +24707,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* rhs_val = getVal(inst->operands[0].id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
-                    if (aot_slots) {
+                    if (direct_self_mutation) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i32_type, ptr_type}, false);
+                        auto fn = module.getOrInsertFunction(
+                            "qore_rt_self_member_assign", ft);
+                        auto fn_throwing = module.getOrInsertFunction(
+                            "qore_rt_self_member_assign_throwing", ft);
+                        result_val = emitMaybeInvoke(fn, fn_throwing,
+                            {direct_member_ptr, rhs_boxed,
+                             llvm::ConstantInt::get(i32_type,
+                                path_inst->weak ? 1 : 0), xsink_arg},
+                            module, llvm_func, inst);
+                    } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot", ft);
@@ -24695,7 +24745,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     auto* rhs_val = getVal(inst->operands[0].id, error);
                     if (!rhs_val) { return false; }
                     llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
-                    if (aot_slots) {
+                    if (direct_self_mutation) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type}, false);
+                        auto fn = module.getOrInsertFunction(
+                            "qore_rt_self_member_compound", ft);
+                        auto fn_throwing = module.getOrInsertFunction(
+                            "qore_rt_self_member_compound_throwing", ft);
+                        result_val = emitMaybeInvoke(fn, fn_throwing,
+                            {direct_member_ptr,
+                             llvm::ConstantInt::get(i32_type,
+                                static_cast<int32_t>(path_inst->compound_op)),
+                             rhs_boxed, xsink_arg},
+                            module, llvm_func, inst);
+                    } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_compound_aot", ft);
@@ -24718,7 +24781,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     break;
                 }
                 case QoreIROpcode::LValuePathUnary: {
-                    if (aot_slots) {
+                    if (direct_self_mutation) {
+                        auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type}, false);
+                        auto fn = module.getOrInsertFunction(
+                            "qore_rt_self_member_update", ft);
+                        auto fn_throwing = module.getOrInsertFunction(
+                            "qore_rt_self_member_update_throwing", ft);
+                        result_val = emitMaybeInvoke(fn, fn_throwing,
+                            {direct_member_ptr,
+                             llvm::ConstantInt::get(i32_type,
+                                static_cast<int32_t>(path_inst->unary_op)),
+                             xsink_arg}, module, llvm_func, inst);
+                    } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, ptr_type}, false);
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_unary_aot", ft);
