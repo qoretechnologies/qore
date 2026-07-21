@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-complex-hash-type-path-cache-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string source = "%modern
+
+class GenericHashBox<T> {
+    hash<string, T> convert(hash<auto> input) {
+        hash<string, T> result(input);
+        return result;
+    }
+}
+
+auto sub opaque(auto value) {
+    return value;
+}
+
+hash<string, int> sub exactLiteral(int value) {
+    hash<string, int> result((\"value\": value));
+    return result;
+}
+
+string sub invalidDynamic() {
+    try {
+        hash<string, int> invalid((\"value\": opaque(\"not-an-int\")));
+        return \"accepted-\" + invalid.value.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub invalidUnassigned() {
+    int value;
+    try {
+        hash<string, int> invalid((\"value\": value));
+        return \"accepted-\" + invalid.value.fullType();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+int sub concurrentChecksum(GenericHashBox<int> box) {
+    const int Threads = 8;
+    Counter done(Threads);
+    Mutex lock();
+    int checksum = 0;
+    for (int i = 0; i < Threads; ++i) {
+        background sub (int id) {
+            on_exit done.dec();
+            hash<string, int> value = box.convert((\"value\": id));
+            lock.lock();
+            on_exit lock.unlock();
+            checksum += value.value;
+        }(i);
+    }
+    done.waitForZero();
+    return checksum;
+}
+
+int sub main() {
+    GenericHashBox<int> ints();
+    GenericHashBox<string> strings();
+    hash<string, int> int_result = ints.convert((\"value\": 42));
+    hash<string, string> string_result = strings.convert((\"value\": \"ok\"));
+    hash<string, *int> optional((\"value\": NOTHING));
+    printf(\"%d:%d:%s:%y:%s:%s:%d\\n\", exactLiteral(43).value,
+        int_result.value, string_result.value, optional.value === NOTHING,
+        invalidDynamic(), invalidUnassigned(), concurrentChecksum(ints));
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+hash<string, string> outputs;
+foreach string mode in (("ast", "ir", "jit", "tiered")) {
+    outputs{mode} = backquote(sprintf("%s %s --exec-mode=%s %s 2>&1",
+        env, qore_bin, mode, source_path));
+}
+
+string enabled_exe = root + "/enabled";
+string enabled_compile = backquote(sprintf(
+    "%s %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, enabled_exe, source_path));
+if (!is_file(enabled_exe)) {
+    printf("enabled compile failed:\n%s", enabled_compile);
+    exit(2);
+}
+
+string checked_exe = root + "/checked";
+string checked_compile = backquote(sprintf(
+    "%s QORE_DISABLE_IR_COMPLEX_HASH_PRECHECK=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, checked_exe, source_path));
+if (!is_file(checked_exe)) {
+    printf("checked compile failed:\n%s", checked_compile);
+    exit(2);
+}
+
+string enabled_symbols = backquote(sprintf("nm -D %s 2>&1", enabled_exe));
+string checked_symbols = backquote(sprintf("nm -D %s 2>&1", checked_exe));
+if (!enabled_symbols.regex(
+        "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")
+        || !enabled_symbols.regex(
+            "qore_rt_new_complex_hash_from_hash_by_type_path_cached")
+        || checked_symbols.regex(
+            "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")) {
+    printf("unexpected helper symbols:\nenabled:\n%schecked:\n%s",
+        enabled_symbols, checked_symbols);
+    exit(2);
+}
+
+outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+outputs.cache_disabled = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE=1 %s 2>&1",
+    env, enabled_exe));
+outputs.precheck_disabled = backquote(sprintf("%s %s 2>&1", env, checked_exe));
+
+string expected = "43:42:ok:True:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:28\n";
+foreach string mode in (keys outputs) {
+    string output = outputs{mode};
+    if (output != expected) {
+        printf("%s execution mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, output);
+        exit(2);
+    }
+}

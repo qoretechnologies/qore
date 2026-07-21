@@ -5192,6 +5192,107 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
     return false;
 }
 
+bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
+        QoreIRValue initializer, const QoreTypeInfo* target_type) {
+    if (!initializer.isValid()
+            || std::getenv("QORE_DISABLE_IR_COMPLEX_HASH_PRECHECK")) {
+        return false;
+    }
+    target_type = func.specializeType(target_type);
+    const QoreTypeInfo* target_value_type =
+        QoreTypeInfo::getUniqueReturnComplexHash(target_type);
+    if (!target_value_type) {
+        target_value_type =
+            QoreTypeInfo::getReturnComplexHashOrNothing(target_type);
+    }
+    if (!QoreTypeInfo::hasType(target_value_type)
+            || target_value_type == autoTypeInfo
+            || target_value_type == anyTypeInfo) {
+        return false;
+    }
+
+    const QoreIRInstruction* definition = nullptr;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR typed-hash initializer definition analysis")) {
+                return false;
+            }
+            if (inst->result.id == initializer.id) {
+                definition = inst.get();
+                break;
+            }
+        }
+        if (definition) {
+            break;
+        }
+    }
+    if (!definition
+            || (definition->opcode != QoreIROpcode::MakeHash
+                && definition->opcode != QoreIROpcode::MakeHashConstKeys)) {
+        return false;
+    }
+
+    const QoreTypeInfo* source_type = definition->opcode
+        == QoreIROpcode::MakeHash
+        ? static_cast<const QoreIRMakeHashInstruction*>(definition)->typeInfo
+        : static_cast<const QoreIRMakeHashConstKeysInstruction*>(definition)->typeInfo;
+    source_type = func.specializeType(source_type);
+    const QoreTypeInfo* source_value_type =
+        QoreTypeInfo::getUniqueReturnComplexHash(source_type);
+    if (!source_value_type) {
+        source_value_type =
+            QoreTypeInfo::getReturnComplexHashOrNothing(source_type);
+    }
+    if (QoreTypeInfo::hasType(source_value_type)
+            && source_value_type != autoTypeInfo
+            && source_value_type != anyTypeInfo
+            && QoreTypeInfo::isInputIdentical(
+                target_value_type, source_value_type)) {
+        return true;
+    }
+
+    std::vector<QoreIRValue> values;
+    if (definition->opcode == QoreIROpcode::MakeHashConstKeys) {
+        const auto* make =
+            static_cast<const QoreIRMakeHashConstKeysInstruction*>(definition);
+        if (make->keys.size() != definition->operands.size()) {
+            return false;
+        }
+        values = definition->operands;
+    } else {
+        size_t operand_count = definition->operands.size();
+        if (operand_count % 2) {
+            --operand_count;
+        }
+        values.reserve(operand_count / 2);
+        for (size_t i = 1; i < operand_count; i += 2) {
+            values.push_back(definition->operands[i]);
+        }
+    }
+
+    for (QoreIRValue value : values) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR typed-hash initializer value analysis")) {
+            return false;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing || !facts->type_info) {
+            return false;
+        }
+        const QoreTypeInfo* value_type =
+            qore_get_value_type(func.specializeType(facts->type_info));
+        if (!QoreTypeInfo::hasType(value_type)
+                || !QoreTypeInfo::isInputIdentical(
+                    target_value_type, value_type)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 struct QoreIRDenseListStats {
     size_t loads = 0;
     size_t joins = 0;

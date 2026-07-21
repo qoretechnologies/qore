@@ -239,6 +239,13 @@ using QoreIRBoxedReturnParamQuery = std::function<bool(
 bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
     const QoreIRInstruction* point, const std::vector<QoreIRValue>& values);
 
+//! Return true when a fresh hash initializer already enforces the target value type.
+/** The proof requires either an input-identical typed hash producer or assigned,
+    non-NOTHING, input-identical facts for every value in a fresh hash literal.
+    Missing facts, dynamic values, and non-literal hashes remain on the checked path. */
+bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
+    QoreIRValue initializer, const QoreTypeInfo* target_type);
+
 //! Replace an exact pure boxed passthrough call with its already-owned argument.
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     const QoreIRBoxedReturnParamQuery& get_return_param);

@@ -3465,8 +3465,80 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
     return qore_substitute_type_params_if_needed(ti);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo,
-        uint64_t hash_bits, ExceptionSink* xsink) {
+static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
+        const char* type_path, const char* op, ExceptionSink* xsink) {
+    static const bool cache_enabled =
+        std::getenv("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE") == nullptr;
+    if (!cache_enabled || !ctx || !type_path || !*type_path) {
+        return qore_rt_resolve_full_type_path(type_path, op, xsink);
+    }
+
+    const QoreTypeInfo* receiver_type_info = qore_get_current_receiver_type_info();
+    struct TypePathFrontCacheEntry {
+        uint64_t generation = 0;
+        const char* path_address = nullptr;
+        const QoreTypeInfo* receiver_type_info = nullptr;
+        const QoreTypeInfo* type_info = nullptr;
+    };
+    static constexpr size_t TYPE_PATH_FRONT_CACHE_SIZE = 8;
+    thread_local TypePathFrontCacheEntry front_cache[TYPE_PATH_FRONT_CACHE_SIZE];
+    uintptr_t hash = reinterpret_cast<uintptr_t>(type_path) >> 4;
+    hash ^= reinterpret_cast<uintptr_t>(receiver_type_info) >> 4;
+    hash ^= ctx->hashdecl_cache_generation;
+    TypePathFrontCacheEntry& front_entry =
+        front_cache[hash & (TYPE_PATH_FRONT_CACHE_SIZE - 1)];
+    if (front_entry.generation == ctx->hashdecl_cache_generation
+            && front_entry.path_address == type_path
+            && front_entry.receiver_type_info == receiver_type_info) {
+        return front_entry.type_info;
+    }
+
+    QoreAOTHashDeclPathCacheKey key{type_path, receiver_type_info};
+    {
+        std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        auto i = ctx->type_path_cache.find(key);
+        if (i != ctx->type_path_cache.end()) {
+            front_entry = {ctx->hashdecl_cache_generation, type_path,
+                receiver_type_info, i->second};
+            return i->second;
+        }
+    }
+
+    QoreProgram* pgm = ctx->pgm ? ctx->pgm : getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("AOT-TYPE-ERROR",
+                "%s cannot resolve container type '%s' without a current Program",
+                op, type_path);
+        }
+        return nullptr;
+    }
+
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* type_info = resolver.resolve(type_path, error);
+    type_info = qore_substitute_type_params_if_needed(type_info,
+        receiver_type_info);
+    if (!type_info) {
+        if (xsink) {
+            xsink->raiseException("AOT-TYPE-ERROR",
+                "%s cannot resolve container type '%s': %s", op, type_path,
+                error.c_str());
+        }
+        return nullptr;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(ctx->type_path_cache_mutex);
+        ctx->type_path_cache.emplace(std::move(key), type_info);
+    }
+    front_entry = {ctx->hashdecl_cache_generation, type_path,
+        receiver_type_info, type_info};
+    return type_info;
+}
+
+static uint64_t qore_rt_new_complex_hash_from_hash_impl(const QoreTypeInfo* typeInfo,
+        uint64_t hash_bits, ExceptionSink* xsink, bool prechecked) {
     typeInfo = qore_substitute_type_params_if_needed(typeInfo);
     if (!typeInfo) {
         if (xsink) {
@@ -3487,8 +3559,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeI
     }
 
     QoreHashNode* init_hash = hash_val.get<QoreHashNode>()->hashRefSelf();
-    QoreHashNode* result = qore_hash_private::newComplexHashFromHash(typeInfo, init_hash, xsink);
+    QoreHashNode* result = qore_hash_private::newComplexHashFromHash(
+        typeInfo, init_hash, xsink, !prechecked);
     return toBits(result ? QoreValue(result) : QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo,
+        uint64_t hash_bits, ExceptionSink* xsink) {
+    return qore_rt_new_complex_hash_from_hash_impl(typeInfo, hash_bits, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_prechecked(
+        const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink) {
+    return qore_rt_new_complex_hash_from_hash_impl(typeInfo, hash_bits, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path,
@@ -3498,6 +3581,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(co
         return toBits(QoreValue());
     }
     return qore_rt_new_complex_hash_from_hash(typeInfo, hash_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached(
+        QoreAOTContext* ctx, const char* type_path, uint64_t hash_bits,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "NewComplexHash", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_hash_from_hash(type_info, hash_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t
+qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(
+        QoreAOTContext* ctx, const char* type_path, uint64_t hash_bits,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "NewComplexHash", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_complex_hash_from_hash_prechecked(
+        type_info, hash_bits, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo,
@@ -16510,9 +16617,46 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_hash
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_hash_from_hash_prechecked_throwing(
+        const QoreTypeInfo* typeInfo, uint64_t hash_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_hash_from_hash_prechecked(
+        typeInfo, hash_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_throwing(
         const char* type_path, uint64_t hash_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_new_complex_hash_from_hash_by_type_path(type_path, hash_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_hash_from_hash_by_type_path_cached_throwing(
+        QoreAOTContext* ctx, const char* type_path, uint64_t hash_bits,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_new_complex_hash_from_hash_by_type_path_cached(
+        ctx, type_path, hash_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked_throwing(
+        QoreAOTContext* ctx, const char* type_path, uint64_t hash_bits,
+        ExceptionSink* xsink) {
+    uint64_t result =
+        qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(
+            ctx, type_path, hash_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

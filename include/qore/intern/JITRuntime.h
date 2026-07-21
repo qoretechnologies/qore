@@ -715,8 +715,15 @@ uint64_t qore_rt_new_hash_decl_from_hash_by_path_cached(QoreAOTContext* ctx, con
 uint64_t qore_rt_new_hash_decl_from_hash_by_concrete_path_cached(QoreAOTContext* ctx, const char* hd_path,
     uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink);
+//! Construct a typed hash when IR proof shows every initializer value already satisfies the target type.
+uint64_t qore_rt_new_complex_hash_from_hash_prechecked(const QoreTypeInfo* typeInfo,
+    uint64_t hash_bits, ExceptionSink* xsink);
 uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, uint64_t hash_bits,
     ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached(QoreAOTContext* ctx,
+    const char* type_path, uint64_t hash_bits, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked(QoreAOTContext* ctx,
+    const char* type_path, uint64_t hash_bits, ExceptionSink* xsink);
 
 //! Create a new typed list from an already-evaluated constructor value
 uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);

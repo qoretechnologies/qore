@@ -13626,20 +13626,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return setExpressionFallbackError(error, inst,
                                 "VrnConstruct invoke with lowered operand has no complex hash/list target metadata");
                     }
+                    bool hash_prechecked = is_hash && current_ir_func
+                        && qore_ir_complex_hash_initializer_prechecked(
+                            *current_ir_func, inv->operands[0], typeInfo);
 
                     const char* helper_name = nullptr;
                     if (aot_mode) {
                         helper_name = is_hash
-                            ? "qore_rt_new_complex_hash_from_hash_by_type_path"
+                            ? hash_prechecked
+                                ? "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked"
+                                : "qore_rt_new_complex_hash_from_hash_by_type_path_cached"
                             : "qore_rt_new_complex_list_from_value_by_type_path";
                         std::string type_path = qore_ir_get_type_path(typeInfo);
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         auto helper = module.getOrInsertFunction(helper_name,
-                                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {type_path_ptr, init_boxed, xsink_arg});
+                                llvm::FunctionType::get(i64_type,
+                                    is_hash
+                                        ? std::vector<llvm::Type*>{ptr_type, ptr_type, i64_type, ptr_type}
+                                        : std::vector<llvm::Type*>{ptr_type, i64_type, ptr_type},
+                                    false));
+                        result = is_hash
+                            ? builder->CreateCall(helper,
+                                {aot_ctx_arg, type_path_ptr, init_boxed, xsink_arg})
+                            : builder->CreateCall(helper,
+                                {type_path_ptr, init_boxed, xsink_arg});
                     } else {
                         helper_name = is_hash
-                            ? "qore_rt_new_complex_hash_from_hash"
+                            ? hash_prechecked
+                                ? "qore_rt_new_complex_hash_from_hash_prechecked"
+                                : "qore_rt_new_complex_hash_from_hash"
                             : "qore_rt_new_complex_list_from_value";
                         llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(typeInfo));
@@ -20669,28 +20684,47 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return setExpressionFallbackError(error, inst,
                             "VrnConstruct with lowered operand has no complex hash/list target metadata");
                 }
+                bool hash_prechecked = is_hash && current_ir_func
+                    && qore_ir_complex_hash_initializer_prechecked(
+                        *current_ir_func, inst->operands[0], typeInfo);
 
                 if (aot_mode) {
                     const char* helper_name = is_hash
-                        ? "qore_rt_new_complex_hash_from_hash_by_type_path"
+                        ? hash_prechecked
+                            ? "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked"
+                            : "qore_rt_new_complex_hash_from_hash_by_type_path_cached"
                         : "qore_rt_new_complex_list_from_value_by_type_path";
                     const char* helper_throwing_name = is_hash
-                        ? "qore_rt_new_complex_hash_from_hash_by_type_path_throwing"
+                        ? hash_prechecked
+                            ? "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked_throwing"
+                            : "qore_rt_new_complex_hash_from_hash_by_type_path_cached_throwing"
                         : "qore_rt_new_complex_list_from_value_by_type_path_throwing";
                     std::string type_path = qore_ir_get_type_path(typeInfo);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     auto vc_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, ptr_type}, false);
+                            is_hash
+                                ? std::vector<llvm::Type*>{ptr_type, ptr_type, i64_type, ptr_type}
+                                : std::vector<llvm::Type*>{ptr_type, i64_type, ptr_type},
+                            false);
                     auto helper = module.getOrInsertFunction(helper_name, vc_ft);
                     auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, vc_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {type_path_ptr, init_boxed, xsink_arg}, module, llvm_func, inst);
+                    result = is_hash
+                        ? emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, type_path_ptr, init_boxed, xsink_arg},
+                            module, llvm_func, inst)
+                        : emitMaybeInvoke(helper, helper_throwing,
+                            {type_path_ptr, init_boxed, xsink_arg},
+                            module, llvm_func, inst);
                 } else {
                     const char* helper_name = is_hash
-                        ? "qore_rt_new_complex_hash_from_hash"
+                        ? hash_prechecked
+                            ? "qore_rt_new_complex_hash_from_hash_prechecked"
+                            : "qore_rt_new_complex_hash_from_hash"
                         : "qore_rt_new_complex_list_from_value";
                     const char* helper_throwing_name = is_hash
-                        ? "qore_rt_new_complex_hash_from_hash_throwing"
+                        ? hash_prechecked
+                            ? "qore_rt_new_complex_hash_from_hash_prechecked_throwing"
+                            : "qore_rt_new_complex_hash_from_hash_throwing"
                         : "qore_rt_new_complex_list_from_value_throwing";
                     llvm::Value* type_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(typeInfo));

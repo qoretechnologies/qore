@@ -187,6 +187,11 @@ struct QoreAOTContext {
     std::unordered_map<QoreAOTHashDeclPathCacheKey, const TypedHashDecl*, QoreAOTHashDeclPathCacheKeyHash>
         hashdecl_path_cache;
 
+    //! Lazily resolved full type paths used by source-stripped AOT typed-container helpers.
+    std::mutex type_path_cache_mutex;
+    std::unordered_map<QoreAOTHashDeclPathCacheKey, const QoreTypeInfo*, QoreAOTHashDeclPathCacheKeyHash>
+        type_path_cache;
+
     //! Source locations for per-line runtime_loc tracking in AOT mode.
     //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
     //! location table at load time. Used by qore_rt_set_runtime_loc_aot().
