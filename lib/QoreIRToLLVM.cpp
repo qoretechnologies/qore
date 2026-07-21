@@ -15399,11 +15399,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(direct_inst->variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, direct_inst->expr);
                 if (it != batch_callees->end()
+                        && (!it->second.generic_specialized_fast_entry
+                            || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastMethodCallEligible(direct_inst->variant)
+                        && isFastMethodCallEligible(direct_inst->variant,
+                            generic_specialization_matches)
                         && qore_ir_fast_entry_operands_need_no_binding(
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
@@ -15624,11 +15631,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->has_ref_args) {
                 auto it = batch_callees->find(invoke_inst->variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, invoke_inst->expr);
                 if (it != batch_callees->end()
+                        && (!it->second.generic_specialized_fast_entry
+                            || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastMethodCallEligible(invoke_inst->variant)
+                        && isFastMethodCallEligible(invoke_inst->variant,
+                            generic_specialization_matches)
                         && qore_ir_fast_entry_operands_need_no_binding(
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 0, nargs)) {
@@ -16162,11 +16176,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && direct_inst->method && direct_inst->qc
                     && direct_inst->method->getClass() == direct_inst->qc
                     && !direct_inst->pseudo && !direct_inst->has_ref_args
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr)
                     && !std::getenv("QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY")) {
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 auto it = batch_callees->find(direct_inst->variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, direct_inst->expr);
                 if (object_target_non_overridable && base_facts
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == direct_inst->qc
@@ -16188,6 +16205,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == direct_inst->qc
                         && it != batch_callees->end()
+                        && (!it->second.generic_specialized_fast_entry
+                            || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && it->second.context_independent_fast_entry
@@ -16195,7 +16214,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || !std::getenv(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastMethodCallEligible(direct_inst->variant)
+                        && isFastMethodCallEligible(direct_inst->variant,
+                            generic_specialization_matches)
                         && qore_ir_fast_entry_operands_need_no_binding(
                             direct_inst->variant, direct_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {
@@ -16676,11 +16696,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && invoke_inst->method && invoke_inst->qc
                     && invoke_inst->method->getClass() == invoke_inst->qc
                     && !invoke_inst->pseudo && !invoke_inst->has_ref_args
-                    && !qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr)
                     && !std::getenv("QORE_DISABLE_AOT_OBJECT_METHOD_FAST_ENTRY")) {
                 const QoreIRValueFacts* base_facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr;
                 auto it = batch_callees->find(invoke_inst->variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, invoke_inst->expr);
                 if (object_target_non_overridable && base_facts
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == invoke_inst->qc
@@ -16702,6 +16725,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && QoreTypeInfo::getUniqueReturnClass(base_facts->type_info)
                             == invoke_inst->qc
                         && it != batch_callees->end()
+                        && (!it->second.generic_specialized_fast_entry
+                            || generic_specialization_matches)
                         && it->second.approach_b_eligible
                         && it->second.implicit_self_method
                         && it->second.context_independent_fast_entry
@@ -16709,7 +16734,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || !std::getenv(
                                 "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastMethodCallEligible(invoke_inst->variant)
+                        && isFastMethodCallEligible(invoke_inst->variant,
+                            generic_specialization_matches)
                         && qore_ir_fast_entry_operands_need_no_binding(
                             invoke_inst->variant, invoke_inst->expr, current_ir_func,
                             inst->operands, 1, nargs)) {

@@ -634,14 +634,16 @@ static bool isAOTNonOverridableMethodTarget(const QoreClass* qc,
 //! local still requires the normal method frame and TLS slot.
 static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
         const UserVariantBase* uvb, const QoreClass* qc, const QoreMethod* method,
-        const AbstractQoreFunctionVariant* variant, bool allow_overridable = false) {
+        const AbstractQoreFunctionVariant* variant, bool allow_overridable = false,
+        bool allow_type_parameters = false) {
     static const bool enabled = getenv("QORE_DISABLE_AOT_SELF_FAST_ENTRY") == nullptr;
     if (!enabled || !qc
             || (!allow_overridable && !isAOTNonOverridableMethodTarget(qc, variant))
             || !method || method->isStatic()
             || method->getClass() != qc || ir_func->has_opaque_ast_local_access
             || ir_func->has_explicit_self_local_access
-            || !isAOTFastEntryEligible(ir_func, uvb)) {
+            || !isAOTFastEntryEligible(ir_func, uvb,
+                allow_type_parameters)) {
         return false;
     }
 
@@ -5069,6 +5071,13 @@ static bool qore_aot_get_direct_call_target(
         expr = &call->expr;
         return !call->has_ref_args;
     }
+    if (inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+        const auto* call =
+            static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
     if (inst->opcode != QoreIROpcode::Invoke) {
         return false;
     }
@@ -5182,6 +5191,11 @@ static bool collectAOTGenericSpecializationCandidates(
                     candidate->second.source_function = function_call
                         ? function_call->getFunction() : nullptr;
                 } else if (candidate->second.key != key) {
+                    if (std::getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr,
+                            "AOT: generic specialization conflict '%s' vs '%s'\n",
+                            candidate->second.key.c_str(), key.c_str());
+                    }
                     candidate->second.conflicting = true;
                 }
             }
@@ -11437,15 +11451,13 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
         const QoreMethod* method = mvb ? mvb->method() : nullptr;
         bool static_method = method && method->isStatic();
-        if (mvb && !static_method) {
-            continue;
-        }
+        bool instance_method = method && !static_method;
         auto info = batch_callees.find(variant);
         UserVariantBase* uvb = variant
             ? const_cast<AbstractQoreFunctionVariant*>(variant)
                 ->getUserVariantBase() : nullptr;
         if (info == batch_callees.end() || !uvb
-                || (static_method
+                || (method
                     ? !isAOTFastMethodCallEligible(variant, true)
                     : !uvb->isStaticallyFastCallEligible(true))) {
             continue;
@@ -11464,16 +11476,25 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
         AOTFunctionOutliner outline_probe;
         bool will_outline = outline_probe.run(ir.get(), false);
         outline_probe.undo();
+        static const bool speculative_object_fast_entry =
+            std::getenv("QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY") == nullptr;
+        bool implicit_self = instance_method
+            && isAOTImplicitSelfFastEntryEligible(ir.get(), uvb,
+                method->getClass(), method, variant,
+                speculative_object_fast_entry, true);
         if (will_outline
-                || !isAOTFastEntryEligible(ir.get(), uvb, true)) {
+                || (instance_method
+                    ? !implicit_self
+                    : !isAOTFastEntryEligible(ir.get(), uvb, true))) {
             continue;
         }
 
         const UserSignature* sig = uvb->getUserSignature();
         BatchCalleeInfo& callee = info->second;
+        std::string previous_fast_name = callee.fast_name;
         callee.generic_specialized_fast_entry = true;
         callee.approach_b_eligible = true;
-        callee.implicit_self_method = false;
+        callee.implicit_self_method = implicit_self;
         callee.fast_name = callee.name + "_generic_fast";
         callee.specialization_key = specialization.key;
         callee.specialization_receiver_type_info =
@@ -11485,6 +11506,15 @@ static bool resolveAOTBatchGenericSpecializations(QoreProgram* pgm,
             *ir, sig);
         callee.param_rejects_nothing =
             qore_ir_get_fast_entry_param_rejects_nothing(sig, ir.get());
+        if (!previous_fast_name.empty()
+                && previous_fast_name != callee.fast_name) {
+            if (llvm::Function* old_fn = module.getFunction(
+                    previous_fast_name)) {
+                assert(old_fn->empty());
+                assert(old_fn->use_empty());
+                old_fn->eraseFromParent();
+            }
+        }
         candidates.emplace_back(variant, std::move(ir));
     }
     if (candidates.empty()) {
@@ -11756,8 +11786,9 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                     continue;
                 }
                 const UserSignature* sig = uvb->getUserSignature();
-                bool fast_method_eligible =
-                    isAOTFastMethodCallEligible(variant);
+                bool fast_method_eligible = sig
+                    && !sig->needsTypeParameterSubstitution()
+                    && isAOTFastMethodCallEligible(variant);
                 if (!fast_method_eligible
                         && (!sig || !sig->needsTypeParameterSubstitution())) {
                     continue;
@@ -15893,6 +15924,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             delete ir_func;
                             return;
                         }
+                    }
+                    if (generic_specialized_fast_entry && !meth->isStatic()) {
+                        implicit_self_fast_entry =
+                            isAOTImplicitSelfFastEntryEligible(fast_ir_func,
+                                uvb, qc, meth, variant,
+                                speculative_object_fast_entry, true);
                     }
                     bool fast_entry_eligible = !metadata_only
                         && (!fn_outliner.active()
