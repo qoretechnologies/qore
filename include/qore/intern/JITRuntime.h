@@ -706,6 +706,8 @@ uint64_t qore_rt_new_complex_buffer_aot(QoreAOTContext* ctx, int32_t idx, Except
 //! Create a new typed hash from an already-evaluated hash initializer
 static constexpr int32_t QORE_RT_HASHDECL_RUNTIME_CHECK = 1;
 static constexpr int32_t QORE_RT_HASHDECL_REUSE_TEMPORARY = 2;
+static constexpr int32_t QORE_RT_HASHDECL_VALUES_PRECHECKED = 4;
+static constexpr int32_t QORE_RT_HASHDECL_LAYOUT_PRECHECKED = 8;
 
 uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd, uint64_t hash_bits, int32_t runtime_check,
         ExceptionSink* xsink);

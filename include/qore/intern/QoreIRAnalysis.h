@@ -252,6 +252,27 @@ bool qore_ir_complex_hash_initializer_prechecked(const QoreIRFunction& func,
 bool qore_ir_hashdecl_literal_keys_prechecked(const QoreIRInstruction* initializer,
     const TypedHashDecl* target);
 
+//! Return true when every constant-key hashdecl initializer value is already accepted.
+/** The proof requires assigned, non-NOTHING, input-identical facts for each
+    literal operand and the corresponding target member. Missing facts and
+    values requiring conversions remain on the checked path.
+    @param func function containing the initializer
+    @param initializer candidate constant-key hash literal
+    @param target target hashdecl
+    @param operands_native_and_assigned true when LLVM lowering has already
+           established non-boxed scalar representations for every operand
+    @return true only when runtime member value checks can be elided */
+bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
+    const QoreIRInstruction* initializer, const TypedHashDecl* target,
+    bool operands_native_and_assigned = false);
+
+//! Return true when a literal contains every target member in declaration order.
+/** @param initializer candidate constant-key hash literal
+    @param target target hashdecl
+    @return true only when runtime layout normalization can be elided */
+bool qore_ir_hashdecl_literal_layout_prechecked(
+    const QoreIRInstruction* initializer, const TypedHashDecl* target);
+
 //! Replace an exact pure boxed passthrough call with its already-owned argument.
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
     const QoreIRBoxedReturnParamQuery& get_return_param);

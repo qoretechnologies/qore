@@ -210,11 +210,13 @@ public:
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
     DLLLOCAL QoreHashNode* newHashFromTemporary(QoreHashNode* init, bool runtime_check,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, bool values_prechecked = false,
+            bool layout_prechecked = false) const;
 
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
 
-    DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink) const;
+    DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
+            bool values_prechecked = false) const;
 
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
         const HashDeclMemberInfo* mem = findMember(key);
@@ -243,6 +245,9 @@ public:
         }
         return nullptr;
     }
+
+    DLLLOCAL bool matchesLiteralMemberOrder(
+            const std::vector<std::string>& keys) const;
 
     DLLLOCAL void parseAdd(std::pair<char*, HashDeclMemberInfo*> pair) {
         members.addNoCheck(pair);
@@ -481,7 +486,8 @@ protected:
     }
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
-    DLLLOCAL int initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink) const;
+    DLLLOCAL int initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink,
+            bool values_prechecked) const;
 };
 
 #endif

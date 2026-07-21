@@ -13732,10 +13732,59 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (reuse_temporary) {
                     construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
                 }
+                bool native_initializer_values = reuse_temporary
+                    && initializer_definition != value_definitions.end();
+                if (native_initializer_values) {
+                    size_t native_value_count = 0;
+                    for (QoreIRValue operand :
+                            initializer_definition->second->operands) {
+                        if (++native_value_count % 100 == 0
+                                && qore_check_cancel(nullptr,
+                                    "LLVM native hashdecl initializer value analysis")) {
+                            error = "cancelled during LLVM native hashdecl initializer value analysis";
+                            return false;
+                        }
+                        auto value = values.find(operand.id);
+                        if (value == values.end()
+                                || nanboxed_values.count(operand.id)
+                                || (value->second->getType() != i64_type
+                                    && value->second->getType() != double_type
+                                    && value->second->getType() != i1_type)) {
+                            native_initializer_values = false;
+                            break;
+                        }
+                    }
+                }
+                bool values_prechecked = reuse_temporary && hd
+                    && initializer_definition != value_definitions.end()
+                    && qore_ir_hashdecl_literal_values_prechecked(
+                        *current_ir_func, initializer_definition->second, hd,
+                        native_initializer_values);
+                if (values_prechecked) {
+                    construct_flags |= QORE_RT_HASHDECL_VALUES_PRECHECKED;
+                }
+                bool layout_prechecked = values_prechecked
+                    && qore_ir_hashdecl_literal_layout_prechecked(
+                        initializer_definition->second, hd);
+                if (layout_prechecked) {
+                    construct_flags |= QORE_RT_HASHDECL_LAYOUT_PRECHECKED;
+                }
                 if (aot_mode && keys_prechecked
                         && std::getenv("QORE_AOT_DEBUG")) {
                     fprintf(stderr,
                         "AOT: hashdecl initializer key scan elided in '%s'\n",
+                        current_ir_func->getDisplayName().c_str());
+                }
+                if (aot_mode && values_prechecked
+                        && std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: hashdecl initializer value checks elided in '%s'\n",
+                        current_ir_func->getDisplayName().c_str());
+                }
+                if (aot_mode && layout_prechecked
+                        && std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: hashdecl initializer layout normalization elided in '%s'\n",
                         current_ir_func->getDisplayName().c_str());
                 }
                 llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
@@ -20814,10 +20863,59 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (reuse_temporary) {
                 construct_flags |= QORE_RT_HASHDECL_REUSE_TEMPORARY;
             }
+            bool native_initializer_values = reuse_temporary
+                && initializer_definition != value_definitions.end();
+            if (native_initializer_values) {
+                size_t native_value_count = 0;
+                for (QoreIRValue operand :
+                        initializer_definition->second->operands) {
+                    if (++native_value_count % 100 == 0
+                            && qore_check_cancel(nullptr,
+                                "LLVM native hashdecl initializer value analysis")) {
+                        error = "cancelled during LLVM native hashdecl initializer value analysis";
+                        return false;
+                    }
+                    auto value = values.find(operand.id);
+                    if (value == values.end()
+                            || nanboxed_values.count(operand.id)
+                            || (value->second->getType() != i64_type
+                                && value->second->getType() != double_type
+                                && value->second->getType() != i1_type)) {
+                        native_initializer_values = false;
+                        break;
+                    }
+                }
+            }
+            bool values_prechecked = reuse_temporary && nhdfh_inst->hd
+                && initializer_definition != value_definitions.end()
+                && qore_ir_hashdecl_literal_values_prechecked(
+                    *current_ir_func, initializer_definition->second,
+                    nhdfh_inst->hd, native_initializer_values);
+            if (values_prechecked) {
+                construct_flags |= QORE_RT_HASHDECL_VALUES_PRECHECKED;
+            }
+            bool layout_prechecked = values_prechecked
+                && qore_ir_hashdecl_literal_layout_prechecked(
+                    initializer_definition->second, nhdfh_inst->hd);
+            if (layout_prechecked) {
+                construct_flags |= QORE_RT_HASHDECL_LAYOUT_PRECHECKED;
+            }
             if (aot_mode && keys_prechecked
                     && std::getenv("QORE_AOT_DEBUG")) {
                 fprintf(stderr,
                     "AOT: hashdecl initializer key scan elided in '%s'\n",
+                    current_ir_func->getDisplayName().c_str());
+            }
+            if (aot_mode && values_prechecked
+                    && std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: hashdecl initializer value checks elided in '%s'\n",
+                    current_ir_func->getDisplayName().c_str());
+            }
+            if (aot_mode && layout_prechecked
+                    && std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: hashdecl initializer layout normalization elided in '%s'\n",
                     current_ir_func->getDisplayName().c_str());
             }
             llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,

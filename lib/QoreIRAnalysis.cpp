@@ -5302,6 +5302,66 @@ bool qore_ir_hashdecl_literal_keys_prechecked(
     return true;
 }
 
+bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
+        const QoreIRInstruction* initializer, const TypedHashDecl* target,
+        bool operands_native_and_assigned) {
+    if (!initializer || !target
+            || std::getenv("QORE_DISABLE_IR_HASHDECL_VALUE_PROOF")
+            || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
+        return false;
+    }
+    const auto* make =
+        static_cast<const QoreIRMakeHashConstKeysInstruction*>(initializer);
+    if (make->keys.size() != initializer->operands.size()) {
+        return false;
+    }
+    if (!operands_native_and_assigned
+            && !qore_ir_values_proven_assigned_at(
+                func, initializer, initializer->operands)) {
+        return false;
+    }
+    const typed_hash_decl_private* target_private =
+        typed_hash_decl_private::get(*target);
+    size_t check_count = 0;
+    for (size_t i = 0; i < make->keys.size(); ++i) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR hashdecl initializer value analysis")) {
+            return false;
+        }
+        const HashDeclMemberInfo* member =
+            target_private->findMember(make->keys[i].c_str());
+        const QoreIRValueFacts* facts =
+            func.getValueFacts(initializer->operands[i]);
+        if (!member || !facts || !facts->type_info) {
+            return false;
+        }
+        const QoreTypeInfo* member_type =
+            func.specializeType(member->getTypeInfo());
+        const QoreTypeInfo* value_type =
+            qore_get_value_type(func.specializeType(facts->type_info));
+        if (!QoreTypeInfo::hasType(member_type)
+                || !QoreTypeInfo::hasType(value_type)
+                || !QoreTypeInfo::isInputIdentical(member_type, value_type)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool qore_ir_hashdecl_literal_layout_prechecked(
+        const QoreIRInstruction* initializer, const TypedHashDecl* target) {
+    if (!initializer || !target
+            || std::getenv("QORE_DISABLE_IR_HASHDECL_LAYOUT_PROOF")
+            || initializer->opcode != QoreIROpcode::MakeHashConstKeys) {
+        return false;
+    }
+    const auto* make =
+        static_cast<const QoreIRMakeHashConstKeysInstruction*>(initializer);
+    return make->keys.size() == initializer->operands.size()
+        && typed_hash_decl_private::get(*target)
+            ->matchesLiteralMemberOrder(make->keys);
+}
+
 struct QoreIRDenseListStats {
     size_t loads = 0;
     size_t joins = 0;

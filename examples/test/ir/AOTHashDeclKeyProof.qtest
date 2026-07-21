@@ -23,6 +23,14 @@ hashdecl Item {
     string label = \"default\";
 }
 
+hashdecl SoftItem {
+    softint value;
+}
+
+hashdecl OptionalItem {
+    *int value;
+}
+
 auto sub opaque(auto value) {
     return value;
 }
@@ -39,6 +47,31 @@ string sub errorName(code<nothing()> action) {
 Item sub known() {
     Item value((\"value\": opaque(2), \"base\": opaque(1)));
     return value;
+}
+
+Item sub fullExact(int base, int value, string label) {
+    Item item((\"base\": base, \"value\": value, \"label\": label));
+    return item;
+}
+
+Item sub reorderedExact(int base, int value, string label) {
+    Item item((\"value\": value, \"base\": base, \"label\": label));
+    return item;
+}
+
+Item sub partialExact(int base, int value) {
+    Item item((\"base\": base, \"value\": value));
+    return item;
+}
+
+int sub softValue() {
+    SoftItem item((\"value\": \"10\"));
+    return item.value;
+}
+
+bool sub optionalValue() {
+    OptionalItem item((\"value\": NOTHING));
+    return item.value === NOTHING;
 }
 
 string sub invalidValue() {
@@ -62,10 +95,34 @@ string sub unassignedValue() {
     });
 }
 
+string sub removedValue() {
+    return errorName(sub () {
+        int missing = 2;
+        remove missing;
+        Item invalid((\"base\": 1, \"value\": missing));
+    });
+}
+
+string sub deletedValue() {
+    return errorName(sub () {
+        int missing = 2;
+        delete missing;
+        Item invalid((\"base\": 1, \"value\": missing));
+    });
+}
+
 int sub main() {
     Item value = known();
-    printf(\"%d:%d:%s:%s:%s:%s\\n\", value.base, value.value,
-        value.label, invalidValue(), invalidKey(), unassignedValue());
+    Item full = fullExact(3, 4, \"full\");
+    Item reordered = reorderedExact(5, 6, \"reordered\");
+    Item partial = partialExact(7, 8);
+    printf(\"%d:%d:%s:%d:%d:%s:%d:%d:%s:%d:%d:%s:%d:%y:%s:%s:%s:%s:%s\\n\",
+        value.base, value.value, value.label,
+        full.base, full.value, full.label,
+        reordered.base, reordered.value, reordered.label,
+        partial.base, partial.value, partial.label,
+        softValue(), optionalValue(),
+        invalidValue(), invalidKey(), unassignedValue(), removedValue(), deletedValue());
     return 0;
 }
 
@@ -102,6 +159,15 @@ if (!is_file(checked_exe)) {
     exit(2);
 }
 
+string value_checked_exe = root + "/value-checked";
+string value_checked_compile = backquote(sprintf(
+    "%s QORE_AOT_DEBUG=1 QORE_DISABLE_IR_HASHDECL_VALUE_PROOF=1 %s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, value_checked_exe, source_path));
+if (!is_file(value_checked_exe)) {
+    printf("value-checked compile failed:\n%s", value_checked_compile);
+    exit(2);
+}
+
 foreach string name in (("known", "invalidValue", "unassignedValue")) {
     if (!enabled_compile.regex(sprintf(
             "hashdecl initializer key scan elided in '[^']*%s", name))) {
@@ -116,10 +182,44 @@ if (enabled_compile.regex("hashdecl initializer key scan elided in '[^']*invalid
     exit(2);
 }
 
+
+foreach string name in (("fullExact", "reorderedExact", "partialExact")) {
+    if (!enabled_compile.regex(sprintf(
+            "hashdecl initializer value checks elided in '[^']*%s", name))) {
+        printf("missing value proof for %s:\n%s", name, enabled_compile);
+        exit(2);
+    }
+}
+foreach string name in (("fullExact",)) {
+    if (!enabled_compile.regex(sprintf(
+            "hashdecl initializer layout normalization elided in '[^']*%s", name))) {
+        printf("missing layout proof for %s:\n%s", name, enabled_compile);
+        exit(2);
+    }
+}
+foreach string name in (("softValue", "optionalValue", "invalidValue",
+        "unassignedValue", "removedValue", "deletedValue")) {
+    if (enabled_compile.regex(sprintf(
+            "hashdecl initializer value checks elided in '[^']*%s", name))) {
+        printf("unexpected value proof for %s:\n%s", name, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile.regex(
+        "hashdecl initializer layout normalization elided in '[^']*(reorderedExact|partialExact)")
+        || value_checked_compile.regex("hashdecl initializer (value checks|layout normalization) elided")) {
+    printf("unexpected hashdecl value/layout proof:\nenabled:\n%svalue-checked:\n%s",
+        enabled_compile, value_checked_compile);
+    exit(2);
+}
+
 outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
 outputs.checked = backquote(sprintf("%s %s 2>&1", env, checked_exe));
+outputs.value_checked = backquote(sprintf("%s %s 2>&1", env, value_checked_exe));
 
-string expected = "1:2:default:RUNTIME-TYPE-ERROR:HASHDECL-INIT-ERROR:RUNTIME-TYPE-ERROR\n";
+string expected = "1:2:default:3:4:full:5:6:reordered:7:8:default:10:True:"
+    + "RUNTIME-TYPE-ERROR:HASHDECL-INIT-ERROR:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:"
+    + "RUNTIME-TYPE-ERROR\n";
 foreach string mode in (keys outputs) {
     string output = outputs{mode};
     if (output != expected) {

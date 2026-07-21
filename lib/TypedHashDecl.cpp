@@ -662,7 +662,7 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
 }
 
 QoreHashNode* typed_hash_decl_private::newHashFromTemporary(QoreHashNode* init, bool runtime_check,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, bool values_prechecked, bool layout_prechecked) const {
     if (!init || !init->is_unique()) {
         return newHash(init, runtime_check, xsink);
     }
@@ -685,11 +685,33 @@ QoreHashNode* typed_hash_decl_private::newHashFromTemporary(QoreHashNode* init, 
         }
     }
 
-    if (initHashInPlace(init, xsink)) {
+    if (!layout_prechecked
+            && initHashInPlace(init, xsink, values_prechecked)) {
         return nullptr;
     }
     qore_hash_private::get(*init)->setHashDecl(thd);
     return static_cast<QoreHashNode*>(init->refSelf());
+}
+
+bool typed_hash_decl_private::matchesLiteralMemberOrder(
+        const std::vector<std::string>& keys) const {
+    if (parentHashDecl || keys.size() != members.size()) {
+        return false;
+    }
+    size_t offset = 0;
+    size_t member_count = 0;
+    for (const auto& member : members.member_list) {
+        if (++member_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "hashdecl literal member order analysis")) {
+            return false;
+        }
+        if (keys[offset] != member.first) {
+            return false;
+        }
+        ++offset;
+    }
+    return true;
 }
 
 int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
@@ -702,8 +724,9 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
     return rc;
 }
 
-int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsink) const {
-    int rc = initHashInternInPlace(h, xsink);
+int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
+        bool values_prechecked) const {
+    int rc = initHashInternInPlace(h, xsink, values_prechecked);
     if (rc && xsink && *xsink) {
         xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
     }
@@ -784,14 +807,17 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
     return 0;
 }
 
-int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink) const {
+int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink,
+        bool values_prechecked) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
     }
 #endif
 
-    if (parentHashDecl && get(*parentHashDecl)->initHashInternInPlace(h, xsink)) {
+    if (parentHashDecl
+            && get(*parentHashDecl)->initHashInternInPlace(
+                h, xsink, values_prechecked)) {
         return -1;
     }
 
@@ -809,6 +835,10 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
                 && qore_check_cancel(xsink,
                     "temporary hashdecl initialization")) {
             return -1;
+        }
+        if (values_prechecked && hp->findMember(i.first)) {
+            move_member_to_back(i.first);
+            continue;
         }
         bool exists;
         ValueHolder val(hp->swapKeyValueIfExists(
