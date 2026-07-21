@@ -8539,6 +8539,22 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 case QoreIRPhiValueKind::NativeFloat:
                     val = ensureFloatType(val, inc.value.id, module);
                     break;
+                case QoreIRPhiValueKind::NativeBool:
+                    if (val->getType() == i1_type) {
+                        break;
+                    }
+                    if (val->getType() != i64_type) {
+                        error = "PHI native-bool incoming has unsupported LLVM type";
+                        return false;
+                    }
+                    if (nanboxed_values.count(inc.value.id)) {
+                        auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                            llvm::FunctionType::get(i64_type, {i64_type}, false));
+                        val = builder->CreateCall(to_bool, {val});
+                    }
+                    val = builder->CreateICmpNE(val,
+                        llvm::ConstantInt::get(i64_type, 0));
+                    break;
                 case QoreIRPhiValueKind::QoreValue:
                 default:
                     val = boxValue(val, inc.value.id);
@@ -10875,7 +10891,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
             llvm::Type* phi_type =
                 phi->value_kind == QoreIRPhiValueKind::NativeFloat
-                    ? double_type : i64_type;
+                    ? double_type
+                    : phi->value_kind == QoreIRPhiValueKind::NativeBool
+                        ? i1_type : i64_type;
             llvm::PHINode* phi_node = builder->CreatePHI(phi_type, phi->incoming.size());
             values[inst->result.id] = phi_node;
             if (phi->value_kind == QoreIRPhiValueKind::QoreValue) {

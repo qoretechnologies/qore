@@ -1130,7 +1130,9 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
                 ? QoreIRValueRepresentation::NativeInt
                 : value_kind == QoreIRPhiValueKind::NativeFloat
                     ? QoreIRValueRepresentation::NativeFloat
-                    : QoreIRValueRepresentation::Boxed;
+                    : value_kind == QoreIRPhiValueKind::NativeBool
+                        ? QoreIRValueRepresentation::NativeBool
+                        : QoreIRValueRepresentation::Boxed;
             facts.list_density = dense_list
                 ? QoreIRListDensity::Dense : QoreIRListDensity::Unknown;
             facts.never_nothing = assigned && never_nothing;

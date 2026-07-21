@@ -31,6 +31,22 @@ float sub floatKernel(int rounds) {
     return checksum;
 }
 
+int sub boolKernel(int rounds) {
+    int checksum = 0;
+    bool selected = False;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = True;
+        } else {
+            selected = False;
+        }
+        if (selected) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
 int sub straightKernel(int rounds) {
     int checksum = 0;
     int value = 0;
@@ -44,6 +60,8 @@ int sub straightKernel(int rounds) {
 int rounds = ARGV.size() ? ARGV[0].toInt() : 10000000;
 if (ARGV.size() > 1 && ARGV[1] == "float") {
     printf("%.2f\n", floatKernel(rounds));
+} else if (ARGV.size() > 1 && ARGV[1] == "bool") {
+    printf("%d\n", boolKernel(rounds));
 } else if (ARGV.size() > 1 && ARGV[1] == "straight") {
     printf("%d\n", straightKernel(rounds));
 } else {

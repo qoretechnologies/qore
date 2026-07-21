@@ -43,6 +43,22 @@ float sub branchFloat(int rounds) {
     return checksum;
 }
 
+int sub branchBool(int rounds) {
+    int checksum = 0;
+    bool selected = False;
+    for (int i = 0; i < rounds; ++i) {
+        if (i & 1) {
+            selected = True;
+        } else {
+            selected = False;
+        }
+        if (selected) {
+            ++checksum;
+        }
+    }
+    return checksum;
+}
+
 int sub straightInt(int rounds) {
     int checksum = 0;
     int value = 0;
@@ -99,6 +115,34 @@ string sub deletedValue(bool delete_it) {
     return value === NOTHING ? \"nothing\" : string(value);
 }
 
+string sub maybeAssignedBool(bool assign) {
+    bool value;
+    if (assign) {
+        value = True;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub removedBool(bool remove_it) {
+    bool value = True;
+    if (remove_it) {
+        remove value;
+    } else {
+        value = False;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
+string sub deletedBool(bool delete_it) {
+    bool value = True;
+    if (delete_it) {
+        delete value;
+    } else {
+        value = False;
+    }
+    return value === NOTHING ? \"nothing\" : string(value);
+}
+
 # regression: an exact native int local promoted to SSA must stay valid across a
 # specialized typed foreach with a conditional body (loop-exit PHI wiring; the
 # done edge of TypedForeachNext* leaves a different LLVM block than the
@@ -127,11 +171,13 @@ string sub typedForeachFloat() {
     return sprintf(\"%.2f:%.2f\", scale, total);
 }
 
-printf(\"%d:%.2f:%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
-    branchFloat(20), straightInt(20), storeResult(), storeSideEffect(),
+printf(\"%d:%.2f:%d:%d:%d:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\\n\", branchInt(20),
+    branchFloat(20), branchBool(20), straightInt(20), storeResult(), storeSideEffect(),
     maybeAssigned(False), maybeAssigned(True),
     removedValue(True), removedValue(False), deletedValue(True),
-    deletedValue(False), typedForeachInt({\"int\": 1}), typedForeachFloat());
+    deletedValue(False), maybeAssignedBool(False), maybeAssignedBool(True),
+    removedBool(True), removedBool(False), deletedBool(True), deletedBool(False),
+    typedForeachInt({\"int\": 1}), typedForeachFloat());
 ";
 
 string root = "/tmp/qore-ir-native-local-ssa-" + string(getpid());
@@ -143,7 +189,7 @@ source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
 source.close();
 
-string expected = "220:225.00:590:14:1:nothing:7:nothing:11:nothing:15:12:int:1.50:3.75\n";
+string expected = "220:225.00:10:590:14:1:nothing:7:nothing:11:nothing:15:nothing:1:nothing:0:nothing:0:12:int:1.50:3.75\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -161,11 +207,12 @@ string stats = backquote(sprintf(
     libqore_dir, qore_bin, source_path));
 if (stats !~ /IR-OPT: branchInt:.*native-local-loads=[1-9]/
         || stats !~ /IR-OPT: branchFloat:.*native-local-loads=[1-9]/
+        || stats !~ /IR-OPT: branchBool:.*native-local-loads=[1-9]/
         || stats !~ /IR-OPT: straightInt:.*native-local-loads=[3-9]/) {
     printf("missing native local SSA promotion:\n%s", stats);
     exit(2);
 }
-foreach string function in (("branchInt", "branchFloat", "straightInt")) {
+foreach string function in (("branchInt", "branchFloat", "branchBool", "straightInt")) {
     if (!stats.regex(sprintf(
             "IR-OPT: %s:.*native-local-stores=[1-9]", function))) {
         printf("missing dead native local store elimination for %s:\n%s",
@@ -173,7 +220,8 @@ foreach string function in (("branchInt", "branchFloat", "straightInt")) {
         exit(2);
     }
 }
-foreach string function in (("maybeAssigned", "removedValue", "deletedValue")) {
+foreach string function in (("maybeAssigned", "removedValue", "deletedValue",
+        "maybeAssignedBool", "removedBool", "deletedBool")) {
     if (stats.regex(sprintf(
             "IR-OPT: %s:.*native-local-loads=[1-9]", function))) {
         printf("unsafe native local SSA promotion for %s:\n%s",

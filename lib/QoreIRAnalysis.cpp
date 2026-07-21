@@ -4234,6 +4234,9 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             } else if (QoreTypeInfo::isType(type, NT_FLOAT)) {
                 representation = QoreIRValueRepresentation::NativeFloat;
                 phi_kind = QoreIRPhiValueKind::NativeFloat;
+            } else if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+                representation = QoreIRValueRepresentation::NativeBool;
+                phi_kind = QoreIRPhiValueKind::NativeBool;
             }
         }
         if (representation == QoreIRValueRepresentation::Unknown
