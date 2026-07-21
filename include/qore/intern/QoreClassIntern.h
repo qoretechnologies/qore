@@ -257,9 +257,12 @@ public:
         return false;
     }
 
-    DLLLOCAL bool isStaticallyFastMethodCallEligible() const {
+    //! Returns true when this method variant can use a fast call entry.
+    //! @param allow_type_parameters allow a separately validated concrete specialization
+    DLLLOCAL bool isStaticallyFastMethodCallEligible(bool allow_type_parameters = false) const {
         const UserVariantBase* uvb = getUserVariantBase();
-        return uvb && uvb->isStaticallyFastCallEligible() && !isMethodSynchronized();
+        return uvb && uvb->isStaticallyFastCallEligible(allow_type_parameters)
+            && !isMethodSynchronized();
     }
 
     DLLLOCAL void clearAbstract() {

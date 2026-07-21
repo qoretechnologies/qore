@@ -56,6 +56,7 @@ class UserVariantBase;
 class UserSignature;
 class QoreProgram;
 class QoreTypeInfo;
+struct QoreTypeParamInstantiation;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 
@@ -370,6 +371,7 @@ struct BatchCalleeInfo {
     std::string call_ref_path;           //!< Canonical Qore function path for exact call-reference dispatch
     bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
+    bool generic_specialized_fast_entry = false; //!< Fast entry is valid only for specialization_key
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context
     bool may_invalidate_external_caches = true; //!< Callee can mutate caller-visible runtime state
@@ -378,6 +380,9 @@ struct BatchCalleeInfo {
     bool never_returns_nothing = false; //!< Every normal return has an assigned non-NOTHING value
     BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed; //!< Fast-entry return ABI
     std::string fast_name;               //!< Fast entry function name (if eligible)
+    std::string specialization_key;      //!< Concrete generic receiver/type-argument tuple
+    const QoreTypeInfo* specialization_receiver_type_info = nullptr; //!< Parse-owned concrete receiver
+    const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr; //!< Parse-owned concrete args
     unsigned num_params = 0;             //!< Number of parameters
     std::vector<BatchCalleeParamKind> param_kinds; //!< Fast-entry parameter ABI kinds
     std::vector<uint8_t> param_rejects_nothing; //!< True for params that cannot accept NOTHING
@@ -421,13 +426,15 @@ DLLLOCAL std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
 DLLLOCAL BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local);
 
 //! Derive fast-entry parameter NOTHING rejection metadata from the signature.
-DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig);
+DLLLOCAL std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(
+        const UserSignature* sig, const QoreIRFunction* ir_func = nullptr);
 
 //! Derive the fast-entry return ABI from the exact declared return type and
 //! assigned-state summary.  A native ABI is never selected for a return that
 //! can be NOTHING.
 DLLLOCAL BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
-        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing);
+        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing,
+        const QoreIRFunction* ir_func = nullptr);
 
 class QoreJIT {
 public:

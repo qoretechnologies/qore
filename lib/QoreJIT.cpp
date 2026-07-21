@@ -633,7 +633,7 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
             continue;
         }
 
-        const QoreTypeInfo* ti = lv->getTypeInfo();
+        const QoreTypeInfo* ti = ir_func.specializeType(lv->getTypeInfo());
         if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
         } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
@@ -711,7 +711,8 @@ BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
     return BatchCalleeParamKind::Boxed;
 }
 
-std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSignature* sig) {
+std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(
+        const UserSignature* sig, const QoreIRFunction* ir_func) {
     unsigned num_params = sig ? sig->numParams() : 0;
     std::vector<uint8_t> rejects(num_params, 0);
     if (!sig) {
@@ -727,7 +728,8 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSign
         if (!lv) {
             continue;
         }
-        const QoreTypeInfo* ti = lv->getTypeInfo();
+        const QoreTypeInfo* ti = ir_func
+            ? ir_func->specializeType(lv->getTypeInfo()) : lv->getTypeInfo();
         rejects[i] = QoreTypeInfo::hasType(ti)
             && !QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING);
     }
@@ -735,7 +737,8 @@ std::vector<uint8_t> qore_ir_get_fast_entry_param_rejects_nothing(const UserSign
 }
 
 BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
-        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing) {
+        const AbstractQoreFunctionVariant* variant, bool never_returns_nothing,
+        const QoreIRFunction* ir_func) {
     if (!variant || !never_returns_nothing || std::getenv("QORE_DISABLE_NATIVE_FAST_RETURNS")) {
         return BatchCalleeReturnKind::Boxed;
     }
@@ -744,7 +747,9 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     if (!sig) {
         return BatchCalleeReturnKind::Boxed;
     }
-    const QoreTypeInfo* ti = sig->getReturnTypeInfo();
+    const QoreTypeInfo* ti = ir_func
+        ? ir_func->specializeType(sig->getReturnTypeInfo())
+        : sig->getReturnTypeInfo();
     if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
         return BatchCalleeReturnKind::NativeInt;
     }

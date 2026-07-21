@@ -239,6 +239,12 @@ DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
 DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
     const QoreTypeParamInstantiation* inst);
+//! Returns the process-local identity key for a concrete generic specialization.
+//! @param receiver_type_info concrete parameterized receiver type, if any
+//! @param type_param_instantiation concrete function or method type arguments, if any
+DLLLOCAL std::string qore_make_generic_specialization_key(
+    const QoreTypeInfo* receiver_type_info,
+    const QoreTypeParamInstantiation* type_param_instantiation);
 
 // used to store return type info during parsing for user code
 class RetTypeInfo {
@@ -1109,11 +1115,12 @@ public:
     //! Returns true if this variant is statically eligible for the fast call path
     //! (no default args, not synchronized). Runtime readiness (has cached function)
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
-    DLLLOCAL bool isStaticallyFastCallEligible() const {
+    //! @param allow_type_parameters allow a separately validated concrete specialization
+    DLLLOCAL bool isStaticallyFastCallEligible(bool allow_type_parameters = false) const {
         if (isSynchronized()) {
             return false;
         }
-        if (signature.hasTypeParameters()) {
+        if (!allow_type_parameters && signature.hasTypeParameters()) {
             return false;
         }
         // Check for default args

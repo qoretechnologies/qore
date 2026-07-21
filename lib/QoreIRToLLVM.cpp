@@ -237,9 +237,12 @@ static QoreIRPseudoHelperInfo qore_ir_get_safe_value_pseudo_helper(QoreIRIntrins
     }
 }
 
-static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
+static bool isFastFunctionCallEligible(
+        const AbstractQoreFunctionVariant* variant,
+        bool allow_type_parameters = false) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    return uvb && uvb->isStaticallyFastCallEligible();
+    return uvb
+        && uvb->isStaticallyFastCallEligible(allow_type_parameters);
 }
 
 static bool qore_ir_fast_entry_variant_has_reference_params(
@@ -264,11 +267,13 @@ static bool qore_ir_fast_entry_variant_has_reference_params(
     return false;
 }
 
-static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
+static bool isFastMethodCallEligible(
+        const AbstractQoreFunctionVariant* variant,
+        bool allow_type_parameters = false) {
     const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
     return mvb
-        ? mvb->isStaticallyFastMethodCallEligible()
-        : isFastFunctionCallEligible(variant);
+        ? mvb->isStaticallyFastMethodCallEligible(allow_type_parameters)
+        : isFastFunctionCallEligible(variant, allow_type_parameters);
 }
 
 #include "qore/intern/QoreLibIntern.h"
@@ -373,6 +378,41 @@ static const QoreTypeInfo* qore_ir_get_call_receiver_type_info(
         return call->getReceiverTypeInfo();
     }
     return nullptr;
+}
+
+static const QoreTypeParamInstantiation*
+qore_ir_get_call_type_instantiation(const QoreValue& expr) {
+    if (!expr.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (const auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        node = dot->getMethodCall();
+    }
+    if (const auto* call = dynamic_cast<const FunctionCallNode*>(node)) {
+        return call->getTypeParamInstantiation();
+    }
+    if (const auto* call = dynamic_cast<const StaticMethodCallNode*>(node)) {
+        return call->getTypeParamInstantiation();
+    }
+    if (const auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
+        return call->getTypeParamInstantiation();
+    }
+    if (const auto* call = dynamic_cast<const MethodCallNode*>(node)) {
+        return call->getTypeParamInstantiation();
+    }
+    return nullptr;
+}
+
+static bool qore_ir_generic_fast_entry_matches(
+        const BatchCalleeInfo& info, const QoreValue& expr) {
+    if (!info.generic_specialized_fast_entry
+            || info.specialization_key.empty()) {
+        return false;
+    }
+    return info.specialization_key == qore_make_generic_specialization_key(
+        qore_ir_get_call_receiver_type_info(expr),
+        qore_ir_get_call_type_instantiation(expr));
 }
 
 static bool qore_ir_fast_entry_args_need_no_binding(
@@ -12203,6 +12243,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Function* aot_invoke_context_independent_fn = nullptr;
                 const QoreTypeParamInstantiation* invoke_explicit_inst =
                     inv->explicit_type_param_inst;
+                const QoreTypeParamInstantiation* invoke_concrete_inst =
+                    qore_ir_get_call_type_instantiation(inv->expr);
                 const QoreTypeInfo* invoke_receiver_type_info =
                     inv->receiver_type_info;
                 if (inv->invoke_opcode == QoreIROpcode::CallDirect) {
@@ -12244,19 +12286,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                     }
                     auto it = variant ? batch_callees->find(variant) : batch_callees->end();
+                    bool generic_specialization_matches =
+                        it != batch_callees->end()
+                        && qore_ir_generic_fast_entry_matches(
+                            it->second, inv->expr);
                     bool concrete_generic_call = invoke_explicit_inst
-                        || invoke_receiver_type_info;
+                        || invoke_receiver_type_info
+                        || generic_specialization_matches;
                     if (it != batch_callees->end()
                             && (!concrete_generic_call
+                                || generic_specialization_matches
                                 || it->second.context_independent_fast_entry)
                             && it->second.approach_b_eligible
                             && it->second.context_independent_fast_entry
                             && nargs <= static_cast<int>(it->second.num_params)
-                            && (method_call ? isFastMethodCallEligible(variant)
-                                            : isFastFunctionCallEligible(variant))
+                            && (method_call
+                                ? isFastMethodCallEligible(variant,
+                                    generic_specialization_matches)
+                                : isFastFunctionCallEligible(variant,
+                                    generic_specialization_matches))
                             && qore_ir_fast_entry_args_need_no_binding(
                                 variant, inv->expr, arg_start, nargs,
-                                invoke_explicit_inst,
+                                generic_specialization_matches
+                                    ? invoke_concrete_inst
+                                    : invoke_explicit_inst,
                                 invoke_receiver_type_info)) {
                         llvm::Function* fast_fn = module.getFunction(it->second.fast_name);
                         if (fast_fn) {
@@ -12479,15 +12532,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             && aot_call->getVariant()
                             && !inv->has_ref_args) {
                         auto it = batch_callees->find(aot_call->getVariant());
+                        bool generic_specialization_matches =
+                            it != batch_callees->end()
+                            && qore_ir_generic_fast_entry_matches(
+                                it->second, inv->expr);
                         if (it != batch_callees->end()
                                 && (!invoke_explicit_inst
+                                    || generic_specialization_matches
                                     || it->second.context_independent_fast_entry)
                                 && it->second.approach_b_eligible
                                 && nargs <= static_cast<int>(it->second.num_params)
-                                && isFastFunctionCallEligible(aot_call->getVariant())
+                                && isFastFunctionCallEligible(
+                                    aot_call->getVariant(),
+                                    generic_specialization_matches)
                                 && qore_ir_fast_entry_args_need_no_binding(
                                     aot_call->getVariant(), inv->expr, arg_start,
-                                    nargs, invoke_explicit_inst)) {
+                                    nargs, generic_specialization_matches
+                                        ? invoke_concrete_inst
+                                        : invoke_explicit_inst)) {
                             aot_approach_b_fn = module.getFunction(it->second.fast_name);
                             if (aot_approach_b_fn) {
                                 aot_approach_b_callee = &it->second;
@@ -14247,16 +14309,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (aot_mode && batch_callees && aot_direct_variant
                     && !direct_inst->has_ref_args) {
                 auto it = batch_callees->find(aot_direct_variant);
+                bool generic_specialization_matches =
+                    it != batch_callees->end()
+                    && qore_ir_generic_fast_entry_matches(
+                        it->second, direct_inst->expr);
+                const QoreTypeParamInstantiation* concrete_inst =
+                    generic_specialization_matches
+                    ? qore_ir_get_call_type_instantiation(
+                        direct_inst->expr)
+                    : explicit_inst;
                 if (it != batch_callees->end()
                         && (!explicit_inst
+                            || generic_specialization_matches
                             || it->second.context_independent_fast_entry)
                         && it->second.approach_b_eligible
                         && nargs <= static_cast<int>(it->second.num_params)
-                        && isFastFunctionCallEligible(aot_direct_variant)
+                        && isFastFunctionCallEligible(aot_direct_variant,
+                            generic_specialization_matches)
                         && (qore_ir_fast_entry_args_need_no_binding(
                                 aot_direct_variant, direct_inst->expr, arg_start,
-                                nargs, explicit_inst)
+                                nargs, concrete_inst)
                             || (!explicit_inst
+                                && !generic_specialization_matches
                                 && qore_ir_fast_entry_args_allow_optional_scalar_guard(
                                     aot_direct_variant, direct_inst->expr,
                                     arg_start, nargs)))) {

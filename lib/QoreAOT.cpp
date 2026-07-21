@@ -567,8 +567,9 @@ static llvm::Type* qore_aot_fast_entry_return_type(BatchCalleeReturnKind kind,
 //! Check if an AOT function can have an Approach B fast entry.
 //! Criteria: all params/body locals IR-only, no closures/references/varargs.
 static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
-        const UserVariantBase* uvb) {
-    if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+        const UserVariantBase* uvb, bool allow_type_parameters = false) {
+    if (!uvb
+            || !uvb->isStaticallyFastCallEligible(allow_type_parameters)) {
         return false;
     }
 
@@ -604,12 +605,15 @@ static bool isAOTFastEntryEligible(const QoreIRFunction* ir_func,
     return true;
 }
 
-static bool isAOTFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
+static bool isAOTFastMethodCallEligible(
+        const AbstractQoreFunctionVariant* variant,
+        bool allow_type_parameters = false) {
     const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
     return mvb
-        ? mvb->isStaticallyFastMethodCallEligible()
+        ? mvb->isStaticallyFastMethodCallEligible(allow_type_parameters)
         : variant && variant->getUserVariantBase()
-            && variant->getUserVariantBase()->isStaticallyFastCallEligible();
+            && variant->getUserVariantBase()->isStaticallyFastCallEligible(
+                allow_type_parameters);
 }
 
 static bool isAOTNonOverridableMethodTarget(const QoreClass* qc,
@@ -2088,7 +2092,9 @@ static bool aotFunctionBodyMayBeOutlined(const QoreIRFunction& func);
 
 static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram* pgm,
         QoreIRFunction*& ir_func, std::string& error,
-        const QoreFunction* source_qf = nullptr) {
+        const QoreFunction* source_qf = nullptr,
+        const QoreTypeInfo* specialization_receiver_type_info = nullptr,
+        const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2105,6 +2111,17 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // then issues a direct call to own fast entry → infinite
     // C++-level recursion).
     ir_func->source_qf = source_qf;
+    ir_func->return_type_info = qore_substitute_type_params_if_needed(
+        uvb->getUserSignature()->getReturnTypeInfo(),
+        specialization_receiver_type_info,
+        specialization_type_param_instantiation);
+    ir_func->specialization_receiver_type_info =
+        specialization_receiver_type_info;
+    if (specialization_type_param_instantiation
+            && !specialization_type_param_instantiation->empty()) {
+        ir_func->specialization_type_param_instantiation =
+            *specialization_type_param_instantiation;
+    }
 
     // Record pre-instantiated locals from signature
     UserSignature* sig = uvb->getUserSignature();
@@ -2123,6 +2140,40 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     QoreIRBuilder builder(ir_func);
     auto* entry = ir_func->createBlock("entry");
     builder.setBlock(entry);
+
+    struct AOTIRTypeSpecializationGuard {
+        const QoreTypeInfo* old_receiver = nullptr;
+        const QoreTypeParamInstantiation* old_type_instantiation = nullptr;
+
+        AOTIRTypeSpecializationGuard(const QoreTypeInfo* receiver_type_info,
+                const QoreTypeParamInstantiation* type_param_instantiation) {
+            if (receiver_type_info) {
+                old_receiver = runtime_set_receiver_type_info(
+                    receiver_type_info);
+                specialized_receiver = true;
+            }
+            if (type_param_instantiation
+                    && !type_param_instantiation->empty()) {
+                old_type_instantiation = runtime_set_type_param_instantiation(
+                    type_param_instantiation);
+                specialized_type_instantiation = true;
+            }
+        }
+
+        ~AOTIRTypeSpecializationGuard() {
+            if (specialized_type_instantiation) {
+                runtime_set_type_param_instantiation(
+                    old_type_instantiation);
+            }
+            if (specialized_receiver) {
+                runtime_set_receiver_type_info(old_receiver);
+            }
+        }
+
+        bool specialized_receiver = false;
+        bool specialized_type_instantiation = false;
+    } specialization_guard(specialization_receiver_type_info,
+        specialization_type_param_instantiation);
 
     QoreParseContext parse_context(pgm);
     QoreIRLowering lowering(builder, &parse_context);
@@ -4962,6 +5013,181 @@ static const QoreTypeParamInstantiation* qore_aot_get_call_type_instantiation(
         return call->getTypeParamInstantiation();
     }
     return nullptr;
+}
+
+struct AOTGenericSpecializationCandidate {
+    std::string key;
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* type_param_instantiation = nullptr;
+    const QoreFunction* source_function = nullptr;
+    bool conflicting = false;
+};
+
+using AOTGenericSpecializationCandidates = std::unordered_map<
+    const AbstractQoreFunctionVariant*, AOTGenericSpecializationCandidate>;
+
+static bool qore_aot_get_direct_call_target(
+        const QoreIRInstruction* inst,
+        const AbstractQoreFunctionVariant*& variant,
+        const QoreValue*& expr) {
+    variant = nullptr;
+    expr = nullptr;
+    if (!inst) {
+        return false;
+    }
+    if (inst->opcode == QoreIROpcode::CallDirect) {
+        const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
+    if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+        const auto* call =
+            static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
+    if (inst->opcode == QoreIROpcode::CallMethodDirect) {
+        const auto* call =
+            static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
+    if (inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+        const auto* call =
+            static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
+    if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+        const auto* call =
+            static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+        variant = call->variant;
+        expr = &call->expr;
+        return !call->has_ref_args;
+    }
+    if (inst->opcode != QoreIROpcode::Invoke) {
+        return false;
+    }
+    const auto* invoke = static_cast<const QoreIRInvokeInstruction*>(inst);
+    if (invoke->has_ref_args
+            || (invoke->invoke_opcode != QoreIROpcode::CallDirect
+                && invoke->invoke_opcode
+                    != QoreIROpcode::CallStaticDirect)) {
+        return false;
+    }
+    expr = &invoke->expr;
+    const AbstractQoreNode* node = invoke->expr.getInternalNode();
+    if (invoke->invoke_opcode == QoreIROpcode::CallDirect) {
+        const auto* call = dynamic_cast<const FunctionCallNode*>(node);
+        variant = call ? call->getVariant() : nullptr;
+    } else {
+        const auto* call = dynamic_cast<const StaticMethodCallNode*>(node);
+        variant = call ? call->getVariant() : nullptr;
+    }
+    return variant && expr;
+}
+
+static bool qore_aot_generic_specialization_is_concrete(
+        const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_instantiation) {
+    if ((!receiver_type_info
+                || !qore_type_contains_type_parameter(receiver_type_info))
+            && type_param_instantiation) {
+        size_t type_index = 0;
+        for (const QoreTypeInfo* type :
+                type_param_instantiation->type_args) {
+            if (++type_index % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT generic specialization type validation")) {
+                return false;
+            }
+            if (!type || qore_type_contains_type_parameter(type)) {
+                return false;
+            }
+        }
+        return !type_param_instantiation->empty();
+    }
+    return receiver_type_info
+        && !qore_type_contains_type_parameter(receiver_type_info);
+}
+
+static bool collectAOTGenericSpecializationCandidates(
+        const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+            std::unique_ptr<QoreIRFunction>>>& candidates,
+        AOTGenericSpecializationCandidates& specializations) {
+    if (std::getenv("QORE_DISABLE_AOT_GENERIC_FAST_ENTRY")) {
+        return true;
+    }
+    size_t candidate_count = 0;
+    size_t block_count = 0;
+    size_t instruction_count = 0;
+    for (const auto& [owner, func] : candidates) {
+        (void)owner;
+        if (++candidate_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT generic specialization candidate collection")) {
+            return false;
+        }
+        if (!func) {
+            continue;
+        }
+        for (const auto& block : func->blocks) {
+            if (++block_count % 100 == 0
+                    && qore_check_cancel(nullptr,
+                        "AOT generic specialization block collection")) {
+                return false;
+            }
+            for (const auto& inst : block->instructions) {
+                if (++instruction_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT generic specialization call-site collection")) {
+                    return false;
+                }
+                const AbstractQoreFunctionVariant* variant = nullptr;
+                const QoreValue* expr = nullptr;
+                if (!qore_aot_get_direct_call_target(
+                        inst.get(), variant, expr)) {
+                    continue;
+                }
+                const UserVariantBase* uvb = variant
+                    ? variant->getUserVariantBase() : nullptr;
+                const UserSignature* sig = uvb
+                    ? uvb->getUserSignature() : nullptr;
+                if (!sig || !sig->needsTypeParameterSubstitution()) {
+                    continue;
+                }
+                const QoreTypeInfo* receiver_type_info =
+                    qore_aot_get_call_receiver_type_info(*expr);
+                const QoreTypeParamInstantiation* type_param_instantiation =
+                    qore_aot_get_call_type_instantiation(*expr);
+                if (!qore_aot_generic_specialization_is_concrete(
+                        receiver_type_info, type_param_instantiation)) {
+                    continue;
+                }
+                std::string key = qore_make_generic_specialization_key(
+                    receiver_type_info, type_param_instantiation);
+                auto [candidate, inserted] = specializations.try_emplace(
+                    variant);
+                if (inserted) {
+                    candidate->second.key = std::move(key);
+                    candidate->second.receiver_type_info = receiver_type_info;
+                    candidate->second.type_param_instantiation =
+                        type_param_instantiation;
+                    const auto* function_call = dynamic_cast<
+                        const FunctionCallNode*>(expr->getInternalNode());
+                    candidate->second.source_function = function_call
+                        ? function_call->getFunction() : nullptr;
+                } else if (candidate->second.key != key) {
+                    candidate->second.conflicting = true;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 static bool qore_aot_fast_entry_args_need_no_binding(
@@ -11191,6 +11417,96 @@ static bool refreshAOTBatchFastEntryDeclarations(llvm::LLVMContext& ctx, llvm::M
     return true;
 }
 
+static bool resolveAOTBatchGenericFunctionSpecializations(QoreProgram* pgm,
+        llvm::LLVMContext& ctx, llvm::Module& module,
+        const AOTGenericSpecializationCandidates& specializations,
+        std::unordered_map<const AbstractQoreFunctionVariant*,
+            BatchCalleeInfo>& batch_callees) {
+    std::vector<std::pair<const AbstractQoreFunctionVariant*,
+        std::unique_ptr<QoreIRFunction>>> candidates;
+    size_t candidate_count = 0;
+    for (const auto& [variant, specialization] : specializations) {
+        if (++candidate_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT generic function specialization")) {
+            return false;
+        }
+        if (specialization.conflicting
+                || dynamic_cast<const MethodVariantBase*>(variant)) {
+            continue;
+        }
+        auto info = batch_callees.find(variant);
+        UserVariantBase* uvb = variant
+            ? const_cast<AbstractQoreFunctionVariant*>(variant)
+                ->getUserVariantBase() : nullptr;
+        if (info == batch_callees.end() || !uvb
+                || !uvb->isStaticallyFastCallEligible(true)) {
+            continue;
+        }
+        QoreIRFunction* ir_func = nullptr;
+        std::string lower_error;
+        if (tryLowerFunction(uvb, info->second.name.c_str(), pgm,
+                ir_func, lower_error, specialization.source_function,
+                specialization.receiver_type_info,
+                specialization.type_param_instantiation) != 0
+                || !ir_func) {
+            delete ir_func;
+            continue;
+        }
+        std::unique_ptr<QoreIRFunction> ir(ir_func);
+        AOTFunctionOutliner outline_probe;
+        bool will_outline = outline_probe.run(ir.get(), false);
+        outline_probe.undo();
+        if (will_outline
+                || !isAOTFastEntryEligible(ir.get(), uvb, true)) {
+            continue;
+        }
+
+        const UserSignature* sig = uvb->getUserSignature();
+        BatchCalleeInfo& callee = info->second;
+        callee.generic_specialized_fast_entry = true;
+        callee.approach_b_eligible = true;
+        callee.fast_name = callee.name + "_generic_fast";
+        callee.specialization_key = specialization.key;
+        callee.specialization_receiver_type_info =
+            specialization.receiver_type_info;
+        callee.specialization_type_param_instantiation =
+            specialization.type_param_instantiation;
+        callee.num_params = sig->numParams();
+        callee.param_kinds = qore_ir_get_fast_entry_param_kinds(
+            *ir, sig);
+        callee.param_rejects_nothing =
+            qore_ir_get_fast_entry_param_rejects_nothing(sig, ir.get());
+        candidates.emplace_back(variant, std::move(ir));
+    }
+    if (candidates.empty()) {
+        return true;
+    }
+
+    const std::vector<std::pair<const AbstractQoreFunctionVariant*,
+        std::unique_ptr<QoreIRFunction>>> effect_only_candidates;
+    if (!resolveAOTBatchFunctionEffectSummaries(candidates,
+            effect_only_candidates, batch_callees)) {
+        return false;
+    }
+    resolveAOTBatchContextIndependentFastEntries(candidates, batch_callees);
+    size_t result_count = 0;
+    for (const auto& [variant, ir] : candidates) {
+        if (++result_count % 100 == 0
+                && qore_check_cancel(nullptr,
+                    "AOT generic specialization result collection")) {
+            return false;
+        }
+        auto info = batch_callees.find(variant);
+        if (info != batch_callees.end()) {
+            info->second.return_kind = qore_ir_get_fast_entry_return_kind(
+                variant, info->second.never_returns_nothing, ir.get());
+        }
+    }
+    return refreshAOTBatchFastEntryDeclarations(ctx, module,
+        batch_callees);
+}
+
 static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         llvm::LLVMContext& ctx, llvm::Module& module,
         std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& aot_batch_callee_map,
@@ -11198,7 +11514,13 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         const char* compile_module,
         const char* compile_file,
         const std::unordered_set<std::string>* keep_modules,
-        const std::unordered_set<std::string>* compile_files) {
+        const std::unordered_set<std::string>* compile_files,
+        AOTGenericSpecializationCandidates* generic_specializations = nullptr) {
+    AOTGenericSpecializationCandidates local_generic_specializations;
+    bool owns_generic_specializations = !generic_specializations;
+    if (!generic_specializations) {
+        generic_specializations = &local_generic_specializations;
+    }
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>> context_candidates;
     std::vector<std::pair<const AbstractQoreFunctionVariant*, std::unique_ptr<QoreIRFunction>>>
         effect_only_candidates;
@@ -11630,6 +11952,12 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         }
     }
 
+    if (!collectAOTGenericSpecializationCandidates(
+            context_candidates, *generic_specializations)
+            || !collectAOTGenericSpecializationCandidates(
+                effect_only_candidates, *generic_specializations)) {
+        return false;
+    }
     if (!resolveAOTBatchFunctionEffectSummaries(
             context_candidates, effect_only_candidates, aot_batch_callee_map)) {
         return false;
@@ -11662,10 +11990,16 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
         if (ni.second) {
             if (!declareAOTBatchFastEntries(qore_ns_private::get(*ni.second), pgm, ctx, module,
                     aot_batch_callee_map, declared_keys, compile_module, compile_file,
-                    keep_modules, compile_files)) {
+                    keep_modules, compile_files, generic_specializations)) {
                 return false;
             }
         }
+    }
+    if (owns_generic_specializations
+            && !resolveAOTBatchGenericFunctionSpecializations(pgm, ctx,
+                module, *generic_specializations,
+                aot_batch_callee_map)) {
+        return false;
     }
     return true;
 }
@@ -14954,31 +15288,75 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     fn_outliner.run(ir_func);
                 }
 
-                // Check for AOT Approach B fast-entry eligibility. Fast entries
-                // pass params as LLVM arguments rather than TLS-stack slots,
-                // which outlined helpers cannot see, so all fast-entry forms
-                // are disabled while outlining is active.
+                // Check for AOT Approach B fast-entry eligibility. Ordinary
+                // fast entries share the standard body's IR and are disabled
+                // when that body is outlined. A concrete generic fast entry
+                // has separately lowered, non-outlined IR validated during
+                // declaration, so standard-body outlining does not affect it.
                 std::string fast_entry_name;
                 std::vector<BatchCalleeParamKind> fast_entry_param_kinds;
                 std::vector<uint8_t> fast_entry_param_rejects_nothing;
                 bool analyzed_fast_entry_eligible = true;
+                const BatchCalleeInfo* analyzed_fast_entry = nullptr;
                 if (aot_batch_callee_map) {
                     auto analyzed = aot_batch_callee_map->find(variant);
                     analyzed_fast_entry_eligible = analyzed != aot_batch_callee_map->end()
                         && analyzed->second.approach_b_eligible;
+                    if (analyzed != aot_batch_callee_map->end()) {
+                        analyzed_fast_entry = &analyzed->second;
+                    }
                 }
-                bool fast_entry_eligible = !metadata_only && !fn_outliner.active()
+                std::unique_ptr<QoreIRFunction> specialized_fast_ir;
+                QoreIRFunction* fast_ir_func = ir_func;
+                bool generic_specialized_fast_entry = analyzed_fast_entry
+                    && analyzed_fast_entry->generic_specialized_fast_entry;
+                if (!metadata_only && generic_specialized_fast_entry) {
+                    QoreIRFunction* specialized_ir = nullptr;
+                    std::string specialization_error;
+                    if (tryLowerFunction(uvb, function_name.c_str(), pgm,
+                            specialized_ir, specialization_error, func,
+                            analyzed_fast_entry->specialization_receiver_type_info,
+                            analyzed_fast_entry->specialization_type_param_instantiation) == 0
+                            && specialized_ir) {
+                        specialized_fast_ir.reset(specialized_ir);
+                        specialized_fast_ir->name = ir_func->name;
+                        refine_interprocedural(*specialized_fast_ir);
+                        buildAOTSlotMap(*specialized_fast_ir, slots);
+                        fast_ir_func = specialized_fast_ir.get();
+                    } else {
+                        delete specialized_ir;
+                        ++failed_count;
+                        setAOTCompileFatal(fatal_error, "function",
+                            variant_key, "generic fast-entry IR lowering",
+                            specialization_error);
+                        delete ir_func;
+                        return;
+                    }
+                }
+                bool fast_entry_eligible = !metadata_only
+                    && (!fn_outliner.active()
+                        || generic_specialized_fast_entry)
                     && analyzed_fast_entry_eligible
-                    && isAOTFastEntryEligible(ir_func, uvb);
-                bool self_rec_eligible = fast_entry_eligible && hasAOTSelfRecursiveCall(ir_func);
+                    && isAOTFastEntryEligible(fast_ir_func, uvb,
+                        generic_specialized_fast_entry);
+                bool self_rec_eligible = fast_entry_eligible
+                    && !generic_specialized_fast_entry
+                    && hasAOTSelfRecursiveCall(ir_func);
                 if (fast_entry_eligible) {
-                    fast_entry_name = ir_func->name + "_fast";
+                    fast_entry_name = generic_specialized_fast_entry
+                        ? analyzed_fast_entry->fast_name
+                        : ir_func->name + "_fast";
                     const UserSignature* sig = uvb->getUserSignature();
                     unsigned num_params = sig->numParams();
-                    fast_entry_param_kinds =
-                        qore_ir_get_fast_entry_param_kinds(*ir_func, sig);
+                    fast_entry_param_kinds = generic_specialized_fast_entry
+                        ? analyzed_fast_entry->param_kinds
+                        : qore_ir_get_fast_entry_param_kinds(
+                            *fast_ir_func, sig);
                     fast_entry_param_rejects_nothing =
-                        qore_ir_get_fast_entry_param_rejects_nothing(sig);
+                        generic_specialized_fast_entry
+                        ? analyzed_fast_entry->param_rejects_nothing
+                        : qore_ir_get_fast_entry_param_rejects_nothing(
+                            sig, fast_ir_func);
 
                     // Forward-declare fast entry: (params..., ptr ctx, ptr xsink) -> i64
                     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
@@ -15222,7 +15600,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             = fast_info_it == aot_batch_callee_map->end()
                                 ? BatchCalleeReturnKind::Boxed
                                 : fast_info_it->second.return_kind;
-                        const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
+                        const QoreTypeInfo* fast_return_type =
+                            fast_ir_func->specializeType(
+                                sig->getReturnTypeInfo());
                         bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
                             && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
@@ -15234,7 +15614,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     &fast_entry_param_rejects_nothing, fast_return_kind);
                         }
                         std::string fast_error;
-                        if (!fast_lowerer.lowerFunction(*ir_func, module, fast_error)) {
+                        if (!fast_lowerer.lowerFunction(
+                                *fast_ir_func, module, fast_error)) {
                             printd(2, "AOT: fast entry '%s' lowering failed: %s\n",
                                 fast_entry_name.c_str(), fast_error.c_str());
                             if (getenv("QORE_AOT_DEBUG")) {

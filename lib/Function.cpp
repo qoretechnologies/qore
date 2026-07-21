@@ -5974,7 +5974,7 @@ static bool qore_has_generic_specialization_context(const QoreTypeInfo* receiver
         || (type_param_instantiation && !type_param_instantiation->empty());
 }
 
-static std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
+std::string qore_make_generic_specialization_key(const QoreTypeInfo* receiver_type_info,
         const QoreTypeParamInstantiation* type_param_instantiation) {
     std::string key;
     if (receiver_type_info) {
