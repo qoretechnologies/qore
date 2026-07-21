@@ -913,6 +913,16 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         return;
     }
 
+    // Function and class/self method call-reference literals have no local
+    // expression children. Object method references are handled above through
+    // their receiver expression.
+    if (dynamic_cast<const LocalFunctionCallReferenceNode*>(node)
+            || dynamic_cast<const DeferredFunctionCallReferenceNode*>(node)
+            || dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)
+            || dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
+        return;
+    }
+
     // Parse list: recurse all elements
     if (ntype == NT_PARSE_LIST) {
         auto* plist = expr.get<const QoreParseListNode>();

@@ -492,6 +492,11 @@ private:
     // changing the identity of any closure value visible to Qore code.
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*>
         immediate_closure_creates;
+    // Exact single-variant function call references that are immutable at
+    // their call sites.  AOT can dispatch these through the callee's typed
+    // fast entry while retaining ordinary call-reference creation semantics.
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+        known_function_call_refs;
     // Native scalar captures cached at creation for entry-assigned stored
     // closures whose captured parameters cannot be modified by the owner.
     std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>

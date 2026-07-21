@@ -367,6 +367,8 @@ struct AOTGlobalIntInfo {
 
 struct BatchCalleeInfo {
     std::string name;                    //!< Standard entry function name
+    std::string call_ref_path;           //!< Canonical Qore function path for exact call-reference dispatch
+    bool single_variant_function = false; //!< True when call_ref_path names exactly one function variant
     bool approach_b_eligible = false;    //!< True if fast entry exists
     bool implicit_self_method = false;   //!< Fast entry reuses the caller's self/class context
     bool context_independent_fast_entry = false; //!< True if fast entry does not require its own AOT context

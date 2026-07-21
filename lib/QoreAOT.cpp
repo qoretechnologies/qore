@@ -11133,6 +11133,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
 
                 BatchCalleeInfo info;
                 info.name = ir_func->name;
+                info.call_ref_path = function_name;
+                info.single_variant_function = func->numVariants() == 1;
                 info.approach_b_eligible = true;
                 info.fast_name = fast_entry_name;
                 info.num_params = num_params;
@@ -12322,6 +12324,8 @@ static bool addAOTPreloadedFastEntries(qore_ns_private* ns,
             BatchCalleeInfo info;
             bool cancelled = false;
             if (loadAOTFastEntryInfo(rec_it->second, info, cancelled)) {
+                info.call_ref_path = function_name;
+                info.single_variant_function = func->numVariants() == 1;
                 batch_callees.emplace(variant, std::move(info));
             } else if (cancelled) {
                 return false;

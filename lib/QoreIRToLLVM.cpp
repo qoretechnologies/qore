@@ -242,6 +242,28 @@ static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* varian
     return uvb && uvb->isStaticallyFastCallEligible();
 }
 
+static bool qore_ir_fast_entry_variant_has_reference_params(
+        const AbstractQoreFunctionVariant* variant, bool& cancelled) {
+    cancelled = false;
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
+    if (!sig) {
+        return true;
+    }
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr,
+                    "LLVM fast-entry reference parameter analysis")) {
+            cancelled = true;
+            return true;
+        }
+        if (QoreTypeInfo::isReference(sig->getParamTypeInfo(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
     const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
     return mvb
@@ -1550,6 +1572,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
     guarded_stored_closure_creates.clear();
     guarded_stored_closure_identity_allocas.clear();
@@ -7635,6 +7658,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
     immediate_closure_creates.clear();
+    known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
     guarded_stored_closure_creates.clear();
     guarded_stored_closure_identity_allocas.clear();
@@ -7648,6 +7672,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     std::unordered_set<uint32_t> non_dot_eval_uses;
     std::unordered_map<uint32_t, int> to_bool_uses;
     std::unordered_map<uint32_t, const QoreIRCreateClosureInstruction*> closure_definitions;
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+        function_call_ref_definitions;
     std::unordered_map<const LocalVar*, size_t> closure_capture_counts;
     bool owner_has_parse_reference = false;
     std::vector<const QoreIRInstruction*> closure_call_candidates;
@@ -7722,6 +7748,71 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         }
                         ++closure_capture_counts[local];
                     }
+                }
+            } else if ((inst_ptr->opcode == QoreIROpcode::CreateCallRef
+                        || (inst_ptr->opcode == QoreIROpcode::Invoke
+                            && static_cast<const QoreIRInvokeInstruction*>(
+                                inst_ptr.get())->invoke_opcode
+                                == QoreIROpcode::CreateCallRef))
+                    && inst_ptr->result.isValid()) {
+                const QoreValue& call_ref_expr = inst_ptr->opcode
+                        == QoreIROpcode::CreateCallRef
+                    ? static_cast<const QoreIRCreateCallRefInstruction*>(
+                        inst_ptr.get())->expr
+                    : static_cast<const QoreIRInvokeInstruction*>(
+                        inst_ptr.get())->expr;
+                const auto* call_ref = call_ref_expr.hasNode()
+                    ? dynamic_cast<const LocalFunctionCallReferenceNode*>(
+                        call_ref_expr.getInternalNode())
+                    : nullptr;
+                QoreFunction* function = call_ref
+                    ? call_ref->getFunction() : nullptr;
+                const AbstractQoreFunctionVariant* variant = nullptr;
+                if (function && function->numVariants() == 1) {
+                    variant = function->first();
+                } else if (call_ref_expr.hasNode() && batch_callees) {
+                    const auto* deferred = dynamic_cast<
+                        const DeferredFunctionCallReferenceNode*>(
+                            call_ref_expr.getInternalNode());
+                    if (deferred) {
+                        std::string path = deferred->getFunctionName();
+                        size_t prefix = 0;
+                        while (path.size() >= prefix + 2
+                                && path[prefix] == ':'
+                                && path[prefix + 1] == ':') {
+                            prefix += 2;
+                            if (!(prefix % 200)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM deferred call-reference path normalization")) {
+                                error = "cancelled during LLVM deferred call-reference path normalization";
+                                return false;
+                            }
+                        }
+                        if (prefix) {
+                            path.erase(0, prefix);
+                        }
+                        size_t match_count = 0;
+                        for (const auto& [candidate, info] : *batch_callees) {
+                            if (match_count++ && !(match_count % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM deferred call-reference target analysis")) {
+                                error = "cancelled during LLVM deferred call-reference target analysis";
+                                return false;
+                            }
+                            if (info.single_variant_function
+                                    && info.call_ref_path == path) {
+                                if (variant) {
+                                    variant = nullptr;
+                                    break;
+                                }
+                                variant = candidate;
+                            }
+                        }
+                    }
+                }
+                if (variant) {
+                    function_call_ref_definitions.emplace(
+                        inst_ptr->result.id, variant);
                 }
             } else if (inst_ptr->opcode == QoreIROpcode::CallClosureDirect
                     && !inst_ptr->operands.empty()) {
@@ -7837,6 +7928,100 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 for (const auto& op : inst_ptr->operands) {
                     non_dot_eval_uses.insert(op.id);
                 }
+            }
+        }
+    }
+    if (aot_mode && !function_call_ref_definitions.empty()) {
+        size_t direct_ref_count = 0;
+        for (const auto& [value_id, variant] : function_call_ref_definitions) {
+            if (direct_ref_count++ && !(direct_ref_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM exact function call-reference analysis")) {
+                error = "cancelled during LLVM exact function call-reference analysis";
+                return false;
+            }
+            auto uses = operand_remaining_uses.find(value_id);
+            auto call = closure_calls_by_value.find(value_id);
+            if (uses != operand_remaining_uses.end() && uses->second == 1
+                    && call != closure_calls_by_value.end()
+                    && !call->second->operands.empty()
+                    && call->second->operands[0].id == value_id) {
+                known_function_call_refs.emplace(value_id, variant);
+            }
+        }
+
+        size_t local_ref_count = 0;
+        for (const auto& [local, stores] : local_store_instructions) {
+            if (local_ref_count++ && !(local_ref_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "LLVM stored function call-reference analysis")) {
+                error = "cancelled during LLVM stored function call-reference analysis";
+                return false;
+            }
+            auto loads = local_load_instructions.find(local);
+            const void* local_key = reinterpret_cast<const void*>(local);
+            if (!local || stores.size() != 1
+                    || loads == local_load_instructions.end()
+                    || loads->second.empty() || local->closureUse()
+                    || local->isTopLevel()
+                    || QoreTypeInfo::isReference(local->getTypeInfo())
+                    || func.has_opaque_ast_local_access
+                    || func.ast_referenced_locals.count(local_key)
+                    || !assigned_non_nothing_locals.count(local_key)) {
+                continue;
+            }
+            const QoreIRLocalInstruction* store = stores.front();
+            if (store->opcode != QoreIROpcode::StoreLocal || store->is_ref
+                    || store->weak || !store->initial_assignment
+                    || store->operands.size() != 1) {
+                continue;
+            }
+            auto definition = function_call_ref_definitions.find(
+                store->operands[0].id);
+            auto create = value_definitions.find(store->operands[0].id);
+            auto create_uses = operand_remaining_uses.find(
+                store->operands[0].id);
+            if (definition == function_call_ref_definitions.end()
+                    || create == value_definitions.end()
+                    || create_uses == operand_remaining_uses.end()
+                    || create_uses->second != 1) {
+                continue;
+            }
+
+            bool eligible = true;
+            size_t load_count = 0;
+            for (const QoreIRLocalInstruction* load : loads->second) {
+                if (load_count++ && !(load_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM stored function call-reference load analysis")) {
+                    error = "cancelled during LLVM stored function call-reference load analysis";
+                    return false;
+                }
+                auto uses = operand_remaining_uses.find(load->result.id);
+                auto call = closure_calls_by_value.find(load->result.id);
+                if (load->is_closure || load->is_ref
+                        || uses == operand_remaining_uses.end()
+                        || uses->second != 1
+                        || call == closure_calls_by_value.end()
+                        || call->second->operands.empty()
+                        || call->second->operands[0].id != load->result.id) {
+                    eligible = false;
+                    break;
+                }
+            }
+            if (!eligible) {
+                continue;
+            }
+            size_t mapped_load_count = 0;
+            for (const QoreIRLocalInstruction* load : loads->second) {
+                if (mapped_load_count++ && !(mapped_load_count % 100)
+                        && qore_check_cancel(nullptr,
+                            "LLVM stored function call-reference map setup")) {
+                    error = "cancelled during LLVM stored function call-reference map setup";
+                    return false;
+                }
+                known_function_call_refs.emplace(
+                    load->result.id, definition->second);
             }
         }
     }
@@ -17988,6 +18173,113 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::CallClosureDirect: {
             // operands[0] = closure/callref value, operands[1..n] = args
+            auto known_call_ref = known_function_call_refs.find(
+                inst->operands[0].id);
+            if (aot_mode && known_call_ref != known_function_call_refs.end()
+                    && batch_callees
+                    && !std::getenv("QORE_DISABLE_AOT_KNOWN_CALLREF_FAST_ENTRY")) {
+                const AbstractQoreFunctionVariant* variant =
+                    known_call_ref->second;
+                auto callee = batch_callees->find(variant);
+                const auto* call = static_cast<const QoreIRExprInstruction*>(
+                    inst);
+                int native_nargs = static_cast<int>(inst->operands.size()) - 1;
+                bool reference_param_check_cancelled = false;
+                bool has_reference_params =
+                    qore_ir_fast_entry_variant_has_reference_params(variant,
+                        reference_param_check_cancelled);
+                if (reference_param_check_cancelled) {
+                    error = "cancelled during LLVM fast-entry reference parameter analysis";
+                    return false;
+                }
+                if (callee != batch_callees->end()
+                        && callee->second.approach_b_eligible
+                        && callee->second.context_independent_fast_entry
+                        && !has_reference_params
+                        && isFastFunctionCallEligible(variant)
+                        && qore_ir_native_closure_call_eligible(variant,
+                            call->expr, current_ir_func, inst->operands, 1,
+                            native_nargs, callee->second.param_kinds)) {
+                    llvm::Function* fast_fn = module.getFunction(
+                        callee->second.fast_name);
+                    if (fast_fn) {
+                        std::vector<llvm::Value*> raw_args;
+                        std::vector<uint32_t> raw_arg_ids;
+                        std::vector<llvm::Value*> boxed_args;
+                        raw_args.reserve(static_cast<size_t>(native_nargs));
+                        raw_arg_ids.reserve(static_cast<size_t>(native_nargs));
+                        boxed_args.reserve(static_cast<size_t>(native_nargs));
+                        for (int i = 0; i < native_nargs; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM known call-reference argument lowering")) {
+                                error = "cancelled during LLVM known call-reference argument lowering";
+                                return false;
+                            }
+                            uint32_t value_id = inst->operands[1 + i].id;
+                            llvm::Value* arg = getVal(value_id, error);
+                            if (!arg) {
+                                return false;
+                            }
+                            raw_args.push_back(arg);
+                            raw_arg_ids.push_back(value_id);
+                            boxed_args.push_back(getFastEntryParamKind(
+                                    callee->second, static_cast<unsigned>(i))
+                                    == BatchCalleeParamKind::Boxed
+                                ? boxValue(arg, value_id) : nullptr);
+                        }
+                        std::vector<llvm::Value*> call_args;
+                        call_args.reserve(callee->second.num_params + 2);
+                        for (unsigned i = 0; i < callee->second.num_params; ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "LLVM known call-reference fast-entry lowering")) {
+                                error = "cancelled during LLVM known call-reference fast-entry lowering";
+                                return false;
+                            }
+                            call_args.push_back(getFastEntryCallArgument(
+                                callee->second, i, raw_args, raw_arg_ids,
+                                boxed_args, module));
+                        }
+                        call_args.push_back(aot_ctx_arg);
+                        call_args.push_back(xsink_arg);
+                        bool summary_nothrow = false;
+                        llvm::Value* result = emitAOTImportedSummary(
+                            callee->second, call_args, aot_ctx_arg, module,
+                            fast_fn, &summary_nothrow);
+                        if (!result) {
+                            result = builder->CreateCall(fast_fn, call_args,
+                                "known_callref_result");
+                        }
+                        bool has_arg_cleanups = false;
+                        llvm::Value* arg_cleanups = buildArgCleanupArray(inst,
+                            1, llvm_func, native_nargs, has_arg_cleanups);
+                        if (has_arg_cleanups) {
+                            auto clear_helper = module.getOrInsertFunction(
+                                "qore_rt_clear_arg_cleanups",
+                                llvm::FunctionType::get(void_type,
+                                    {ptr_type, i32_type, ptr_type}, false));
+                            builder->CreateCall(clear_helper,
+                                {arg_cleanups, llvm::ConstantInt::get(i32_type,
+                                    native_nargs), xsink_arg});
+                        }
+                        invalidateLocalsForCallee(callee->second, module,
+                            llvm_func, true);
+                        values[inst->result.id] = result;
+                        if (callee->second.return_kind
+                                == BatchCalleeReturnKind::Boxed) {
+                            nanboxed_values.insert(inst->result.id);
+                            trackResultForCleanup(result, inst->result.id,
+                                llvm_func);
+                        }
+                        if (callee->second.never_returns_nothing) {
+                            known_not_nothing_values.insert(inst->result.id);
+                        }
+                        emitExceptionCheck(module, llvm_func, inst);
+                        return true;
+                    }
+                }
+            }
             auto immediate_it = immediate_closure_creates.find(
                     inst->operands[0].id);
             bool immediate_closure = immediate_it != immediate_closure_creates.end();
