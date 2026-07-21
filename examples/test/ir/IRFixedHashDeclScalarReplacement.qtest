@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+hashdecl Scalars {
+    int number;
+    float decimal;
+    bool flag;
+}
+
+hashdecl Defaulted {
+    int number;
+    int other = 10;
+}
+
+hashdecl OptionalValue {
+    *int number;
+}
+
+int sub scalarExact(int number, float decimal, bool flag) {
+    Scalars values((\"number\": number, \"decimal\": decimal, \"flag\": flag));
+    return values.number + (values.flag ? values.decimal.toInt() : 0);
+}
+
+int sub crossBlock(int number, bool first) {
+    Scalars values((\"number\": number, \"decimal\": 2.0, \"flag\": first));
+    if (first) {
+        return values.number + values.decimal.toInt();
+    }
+    return values.number;
+}
+
+int sub dynamicKey(string key) {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    return values{key}.toInt();
+}
+
+int sub mutated() {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    values.number = 5;
+    return values.number;
+}
+
+Scalars sub escaped() {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    return values;
+}
+
+int sub defaulted() {
+    Defaulted values((\"number\": 1));
+    return values.number + values.other;
+}
+
+bool sub optional() {
+    OptionalValue values((\"number\": NOTHING));
+    return values.number === NOTHING;
+}
+
+bool sub unassigned() {
+    int missing;
+    try {
+        Scalars values((\"number\": missing, \"decimal\": 2.0, \"flag\": True));
+        return values.number == 0;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+bool sub removed() {
+    int missing = 1;
+    remove missing;
+    try {
+        Scalars values((\"number\": missing, \"decimal\": 2.0, \"flag\": True));
+        return values.number == 0;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+bool sub deleted() {
+    int missing = 1;
+    delete missing;
+    try {
+        Scalars values((\"number\": missing, \"decimal\": 2.0, \"flag\": True));
+        return values.number == 0;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    return False;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    scalarExact(4, 3.0, True), crossBlock(4, True), crossBlock(4, False),
+    dynamicKey(\"number\"), mutated(), escaped().number, defaulted(), optional(),
+    unassigned(), removed(), deleted());
+";
+
+string script_path = "/tmp/qore-ir-fixed-hashdecl-scalar-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string sub compile(string output, string compile_env = "") {
+    return backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        compile_env, libqore_dir, qcc_bin, output, script_path));
+}
+
+string expected = "7:6:4:1:5:1:11:1:1:1:1\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string exe = "/tmp/qore-ir-fixed-hashdecl-scalar-" + string(getpid());
+string disabled = exe + "-disabled";
+string enabled_compile = compile(exe, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1");
+if (!is_file(exe) || !is_file(disabled)) {
+    printf("AOT compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /IR-OPT-AOT: scalarExact:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: crossBlock:.*scalar-hashes=1/) {
+    printf("missing fixed-hashdecl scalar replacement:\n%s", enabled_compile);
+    exit(2);
+}
+foreach string name in (("dynamicKey", "mutated", "escaped", "defaulted", "optional",
+        "unassigned", "removed", "deleted")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT: %s:.*scalar-hashes=0", name))) {
+        printf("unsafe fixed-hashdecl scalar replacement for %s:\n%s",
+            name, enabled_compile);
+        exit(2);
+    }
+}
+if (disabled_compile =~ /scalar-hashes=[1-9]/) {
+    printf("disabled fixed-hashdecl scalar replacement fired:\n%s", disabled_compile);
+    exit(2);
+}
+
+foreach string binary in ((exe, disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, binary));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            binary, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(script_path);
+unlink(exe);
+unlink(disabled);

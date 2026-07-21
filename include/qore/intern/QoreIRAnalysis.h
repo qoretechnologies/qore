@@ -259,8 +259,8 @@ bool qore_ir_hashdecl_literal_keys_prechecked(const QoreIRInstruction* initializ
     @param func function containing the initializer
     @param initializer candidate constant-key hash literal
     @param target target hashdecl
-    @param operands_native_and_assigned true when LLVM lowering has already
-           established non-boxed scalar representations for every operand
+    @param operands_native_and_assigned true when the caller has already
+           established assigned, non-boxed scalar facts for every operand
     @return true only when runtime member value checks can be elided */
 bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
     const QoreIRInstruction* initializer, const TypedHashDecl* target,

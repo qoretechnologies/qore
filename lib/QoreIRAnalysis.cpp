@@ -1912,6 +1912,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             continue;
         }
         const QoreTypeInfo* element_type = nullptr;
+        const TypedHashDecl* hashdecl_type = nullptr;
+        bool deferred_hashdecl_type = false;
         bool hash_candidate = false;
         if (enable_lists) {
             element_type =
@@ -1921,8 +1923,19 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             element_type =
                 QoreTypeInfo::getUniqueReturnComplexHash(local->getTypeInfo());
             hash_candidate = element_type != nullptr;
+            if (!element_type) {
+                hashdecl_type =
+                    QoreTypeInfo::getUniqueReturnHashDecl(local->getTypeInfo());
+                hash_candidate = hashdecl_type != nullptr;
+                if (!hashdecl_type) {
+                    // AOT specialization can defer the local type while preserving the
+                    // exact hashdecl on NewHashDeclFromHash below.
+                    deferred_hashdecl_type = true;
+                    hash_candidate = true;
+                }
+            }
         }
-        if (!element_type) {
+        if (!element_type && !hashdecl_type && !deferred_hashdecl_type) {
             continue;
         }
         const bool cross_block = hash_candidate
@@ -1932,15 +1945,18 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             : std::getenv(
                 "QORE_DISABLE_IR_CROSS_BLOCK_FIXED_LIST_SCALAR_REPLACEMENT")
                 == nullptr;
-        QoreIRValueRepresentation expected_representation;
-        if (element_type == bigIntTypeInfo) {
-            expected_representation = QoreIRValueRepresentation::NativeInt;
-        } else if (element_type == floatTypeInfo) {
-            expected_representation = QoreIRValueRepresentation::NativeFloat;
-        } else if (element_type == boolTypeInfo) {
-            expected_representation = QoreIRValueRepresentation::NativeBool;
-        } else {
-            continue;
+        QoreIRValueRepresentation expected_representation =
+            QoreIRValueRepresentation::Boxed;
+        if (!hashdecl_type && !deferred_hashdecl_type) {
+            if (element_type == bigIntTypeInfo) {
+                expected_representation = QoreIRValueRepresentation::NativeInt;
+            } else if (element_type == floatTypeInfo) {
+                expected_representation = QoreIRValueRepresentation::NativeFloat;
+            } else if (element_type == boolTypeInfo) {
+                expected_representation = QoreIRValueRepresentation::NativeBool;
+            } else {
+                continue;
+            }
         }
 
         const InstructionPosition* store_pos = nullptr;
@@ -1974,27 +1990,53 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     store_pos->inst)->weak) {
             continue;
         }
-        auto make_it = definitions.find(store_pos->inst->operands[0].id);
-        if (make_it == definitions.end()
-                || make_it->second.inst->opcode
-                    != (hash_candidate ? QoreIROpcode::MakeHashConstKeys
-                        : QoreIROpcode::MakeList)
-                || make_it->second.inst->exception_target
-                || make_it->second.block != store_pos->block
-                || make_it->second.offset >= store_pos->offset
-                || make_it->second.inst->operands.empty()) {
+        auto aggregate_it = definitions.find(store_pos->inst->operands[0].id);
+        if (aggregate_it == definitions.end()
+                || aggregate_it->second.inst->exception_target
+                || aggregate_it->second.block != store_pos->block
+                || aggregate_it->second.offset >= store_pos->offset) {
             continue;
         }
-        QoreIRInstruction* make = make_it->second.inst;
+        QoreIRInstruction* aggregate = aggregate_it->second.inst;
+        QoreIRInstruction* make = aggregate;
+        if (hashdecl_type || deferred_hashdecl_type) {
+            if (aggregate->opcode != QoreIROpcode::NewHashDeclFromHash
+                    || aggregate->operands.size() != 1) {
+                continue;
+            }
+            const auto* construct =
+                static_cast<const QoreIRNewHashDeclFromHashInstruction*>(
+                    aggregate);
+            if (!construct->hd) {
+                continue;
+            }
+            if (hashdecl_type
+                    && !typed_hash_decl_private::get(*construct->hd)->equal(
+                        *typed_hash_decl_private::get(*hashdecl_type))) {
+                continue;
+            }
+            hashdecl_type = construct->hd;
+            auto make_it = definitions.find(aggregate->operands[0].id);
+            if (make_it == definitions.end()
+                    || make_it->second.inst->opcode
+                        != QoreIROpcode::MakeHashConstKeys
+                    || make_it->second.inst->exception_target
+                    || make_it->second.block != aggregate_it->second.block
+                    || make_it->second.offset >= aggregate_it->second.offset) {
+                continue;
+            }
+            make = make_it->second.inst;
+        }
+        if (make->opcode
+                    != (hash_candidate ? QoreIROpcode::MakeHashConstKeys
+                        : QoreIROpcode::MakeList)
+                || make->operands.empty()) {
+            continue;
+        }
         const QoreIRMakeHashConstKeysInstruction* make_hash = hash_candidate
             ? static_cast<const QoreIRMakeHashConstKeysInstruction*>(make)
             : nullptr;
         if (make_hash && make_hash->keys.size() != make->operands.size()) {
-            continue;
-        }
-        auto make_uses = uses.find(make->result.id);
-        if (make_uses == uses.end() || make_uses->second.size() != 1
-                || make_uses->second.front().inst != store_pos->inst) {
             continue;
         }
         for (QoreIRValue operand : make->operands) {
@@ -2003,7 +2045,15 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return {};
             }
             const QoreIRValueFacts* facts = func.getValueFacts(operand);
-            if (!facts || facts->representation != expected_representation
+            bool expected_native = hashdecl_type
+                ? facts && (facts->representation
+                        == QoreIRValueRepresentation::NativeInt
+                    || facts->representation
+                        == QoreIRValueRepresentation::NativeFloat
+                    || facts->representation
+                        == QoreIRValueRepresentation::NativeBool)
+                : facts && facts->representation == expected_representation;
+            if (!expected_native
                     || facts->assigned_state != QoreIRAssignedState::Assigned
                     || !facts->never_nothing) {
                 invalid = true;
@@ -2013,7 +2063,22 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         if (invalid) {
             continue;
         }
-
+        auto aggregate_uses = uses.find(aggregate->result.id);
+        if (aggregate_uses == uses.end() || aggregate_uses->second.size() != 1
+                || aggregate_uses->second.front().inst != store_pos->inst) {
+            continue;
+        }
+        if (hashdecl_type) {
+            auto make_uses = uses.find(make->result.id);
+            if (make_uses == uses.end() || make_uses->second.size() != 1
+                    || make_uses->second.front().inst != aggregate
+                    || !qore_ir_hashdecl_literal_values_prechecked(
+                        func, make, hashdecl_type, true)
+                    || !qore_ir_hashdecl_literal_layout_prechecked(
+                        make, hashdecl_type)) {
+                continue;
+            }
+        }
         std::vector<const QoreIRInstruction*> reads;
         std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
         std::unordered_map<std::string, QoreIRValue> hash_values;
@@ -2120,6 +2185,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             continue;
         }
         eliminated.insert(make);
+        eliminated.insert(aggregate);
         eliminated.insert(store_pos->inst);
         for (const InstructionPosition* load_pos : load_positions) {
             eliminated.insert(load_pos->inst);
