@@ -471,6 +471,11 @@ uint64_t qore_rt_list_push_by_type_path_throwing(uint64_t list_bits, uint64_t va
 uint64_t qore_rt_list_push_in_place(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
 uint64_t qore_rt_list_push_in_place_throwing(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink);
 
+//! Push an exact native scalar to a fresh assigned list without repeated type validation.
+//! The compiler must prove that the list is valid, exclusively owned, and has the matching element type.
+uint64_t qore_rt_list_push_float_in_place_unchecked(uint64_t list_bits, double value);
+uint64_t qore_rt_list_push_bool_in_place_unchecked(uint64_t list_bits, int64_t value);
+
 // --- Statement execution helpers ---
 
 //! Execute a statement (foreach, on_block_exit, context, etc.)

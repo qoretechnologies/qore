@@ -54,6 +54,35 @@ int sub softPush() {
     return values[0];
 }
 
+int sub exactFloatPush() {
+    list<float> values = ();
+    for (int i = 0; i < 4; ++i) {
+        push values, float(i) + 0.5;
+    }
+    return int(values[3] * 10.0);
+}
+
+int sub exactBoolPush() {
+    list<bool> values = ();
+    push values, False;
+    push values, True;
+    return values.size() * 10 + (values[1] ? 1 : 0);
+}
+
+string sub maybeFloatPush(bool assign) {
+    list<float> values = ();
+    float value;
+    if (assign) {
+        value = 2.5;
+    }
+    try {
+        push values, value;
+        return string(int(values[0] * 10.0));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
 list<int> sub expressionPush() {
     list<int> values = (1,);
     return push values, 2;
@@ -156,10 +185,11 @@ aliasedPush();
 list<int> expression_values = expressionPush();
 list<int> built_values = buildAndReturn();
 NoEscapeCalls calls();
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\", assignedPush(), singlePush(), unassignedPush(),
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%s\\n\", assignedPush(), singlePush(), unassignedPush(),
     removedPush(), deletedPush(), softPush(), expression_values.size(), expression_values[1],
     reference_values[1], built_values.size(), built_values[3], noescapeCallPush(), calls.methodPush(),
-    noescapeClosurePush(), calls.escapingMethodPush(), escapingClosurePush(), referenceClosureCallPush());
+    noescapeClosurePush(), calls.escapingMethodPush(), escapingClosurePush(), referenceClosureCallPush(),
+    exactFloatPush(), exactBoolPush(), maybeFloatPush(False), maybeFloatPush(True));
 ";
 
 string script_path = "/tmp/qore-ir-in-place-list-push-" + string(getpid()) + ".qr";
@@ -167,6 +197,13 @@ File script();
 script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
 script.write(code);
 script.close();
+
+on_exit {
+    unlink(script_path);
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()));
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-disabled");
+    unlink("/tmp/qore-ir-in-place-list-push-" + string(getpid()) + "-native-disabled");
+}
 
 string sub runMode(string mode) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
@@ -200,7 +237,7 @@ string sub runAot(string suffix, string env, bool expect_effect_refinement) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "2019:6:7:8:9:3:2:2:11:4:3:122:122:122:12:12:122\n";
+string expected = "2019:6:7:8:9:3:2:2:11:4:3:122:122:122:12:12:122:35:21:RUNTIME-TYPE-ERROR:25\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -210,8 +247,11 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
 }
 string aot = runAot("", "", True);
 string disabled_aot = runAot("-disabled", "QORE_DISABLE_AOT_FRESH_NOESCAPE_LIST_PUSH=1", False);
-if (aot != expected || disabled_aot != expected) {
-    printf("mismatch in aot\nexpected:\n%sactual:\n%sdisabled:\n%s", expected, aot, disabled_aot);
+string native_disabled_aot = runAot("-native-disabled",
+    "QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH=1", True);
+if (aot != expected || disabled_aot != expected || native_disabled_aot != expected) {
+    printf("mismatch in aot\nexpected:\n%sactual:\n%sdisabled:\n%snative disabled:\n%s",
+        expected, aot, disabled_aot, native_disabled_aot);
     exit(2);
 }
 

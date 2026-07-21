@@ -3651,6 +3651,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push_in_place(uint64_t list_bits,
     return xsink && *xsink ? toBits(QoreValue()) : list_bits;
 }
 
+static uint64_t qore_rt_list_push_native_in_place_unchecked(uint64_t list_bits,
+        QoreValue value) {
+    QoreListNode* list = fromBits(list_bits).get<QoreListNode>();
+    qore_list_private::get(*list)->pushIntern(value);
+    return list_bits;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_float_in_place_unchecked(
+        uint64_t list_bits, double value) {
+    return qore_rt_list_push_native_in_place_unchecked(list_bits,
+        QoreValue(value));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_bool_in_place_unchecked(
+        uint64_t list_bits, int64_t value) {
+    return qore_rt_list_push_native_in_place_unchecked(list_bits,
+        QoreValue(value != 0));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits,
         const char* element_type_path, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);

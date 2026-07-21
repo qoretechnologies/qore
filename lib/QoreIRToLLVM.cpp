@@ -17748,8 +17748,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[1].id, error);
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
-            llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
             if (inst->list_push_in_place) {
+                const QoreIRValueFacts* facts = current_ir_func
+                    ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;
+                bool assigned_native = facts
+                    && facts->assigned_state == QoreIRAssignedState::Assigned
+                    && facts->never_nothing;
+                bool native_specialization =
+                    !std::getenv("QORE_DISABLE_IR_NATIVE_IN_PLACE_LIST_PUSH");
+                if (native_specialization && assigned_native
+                        && facts->representation == QoreIRValueRepresentation::NativeFloat
+                        && QoreTypeInfo::parseReturns(inst->element_type, NT_FLOAT) == QTI_IDENT
+                        && val->getType() == double_type) {
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_list_push_float_in_place_unchecked",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, double_type}, false));
+                    values[inst->result.id] = builder->CreateCall(helper,
+                        {list_boxed, val}, "list_push_float_in_place");
+                    nanboxed_values.insert(inst->result.id);
+                    return true;
+                }
+                if (native_specialization && assigned_native
+                        && facts->representation == QoreIRValueRepresentation::NativeBool
+                        && QoreTypeInfo::parseReturns(inst->element_type, NT_BOOLEAN) == QTI_IDENT
+                        && val->getType() == i1_type) {
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_list_push_bool_in_place_unchecked",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type}, false));
+                    llvm::Value* bool_value = builder->CreateZExt(val, i64_type,
+                        "list_push_bool_value");
+                    values[inst->result.id] = builder->CreateCall(helper,
+                        {list_boxed, bool_value}, "list_push_bool_in_place");
+                    nanboxed_values.insert(inst->result.id);
+                    return true;
+                }
+                llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
                 auto push_ft = llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, ptr_type}, false);
                 auto push_fn = module.getOrInsertFunction("qore_rt_list_push_in_place", push_ft);
@@ -17762,6 +17797,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 return true;
             }
+            llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
             llvm::Value* type_arg = aot_mode
                 ? getTypePathArg(inst->element_type) : getTypeInfoPointerArg(inst->element_type);
             const char* helper_name = aot_mode ? "qore_rt_list_push_by_type_path" : "qore_rt_list_push_typed";

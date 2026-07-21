@@ -61,6 +61,30 @@ int sub benchPushInt(int rounds) {
     return checksum;
 }
 
+int sub benchPushFloat(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<float> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, float(j) + 0.5;
+        }
+        checksum += int(values[DATA_SIZE - 1]);
+    }
+    return checksum;
+}
+
+int sub benchPushBool(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<bool> values = ();
+        for (int j = 0; j < DATA_SIZE; ++j) {
+            push values, (j & 1) == 1;
+        }
+        checksum += values[DATA_SIZE - 1] ? 1 : 0;
+    }
+    return checksum;
+}
+
 int sub benchPushSoft(int rounds) {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
@@ -104,6 +128,12 @@ switch (kernel) {
         break;
     case "push-int":
         checksum = benchPushInt(rounds);
+        break;
+    case "push-float":
+        checksum = benchPushFloat(rounds);
+        break;
+    case "push-bool":
+        checksum = benchPushBool(rounds);
         break;
     case "push-soft":
         checksum = benchPushSoft(rounds);
