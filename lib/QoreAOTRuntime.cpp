@@ -11598,10 +11598,15 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             init_metadata->data(), static_cast<int>(init_metadata->size()));
     }
     {
+        // Lock the thread-current Program before the per-module shadow builder.  Static method references decoded
+        // below acquire this parse context.  Taking the shadow lock first can deadlock with the first importer,
+        // which already owns the shadow Program's parse context and is waiting to build the same module's contexts.
+        CurrentProgramRuntimeParseContextHelper current_pch;
         // Serialize only builders for this module's shared shadow Program.  Context
         // deserialization can resolve APIs in another Program and wait for its parse
-        // lock; a process-global build lock would therefore couple unrelated module
-        // loads and create a lock-order cycle under concurrent imports.
+        // lock; taking that context above gives every same-module importer one lock order
+        // (Program parse context, then shadow builder), while the per-module scope avoids
+        // coupling unrelated module loads.
         assert(shadow_build_lock);
         AutoLocker shadow_build_al(*shadow_build_lock);
         registerAOTFunctionsFromSlotMaps(*init_reader, init_root_priv,
