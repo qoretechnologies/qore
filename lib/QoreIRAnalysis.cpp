@@ -1833,6 +1833,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::getenv("QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT") == nullptr;
     const bool enable_mutations =
         std::getenv("QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT") == nullptr;
+    const bool enable_return_materialization =
+        std::getenv("QORE_DISABLE_IR_FIXED_AGGREGATE_RETURN_MATERIALIZATION") == nullptr;
     if (!enable_lists && !enable_hashes) {
         return stats;
     }
@@ -2022,6 +2024,28 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::vector<std::pair<QoreIRValue, size_t>> incoming;
     };
     std::vector<ScalarizedAggregatePhi> scalarized_aggregate_phis;
+    enum class ScalarizedAggregateMaterializationKind {
+        List,
+        Hash,
+        HashDecl,
+    };
+    struct ScalarizedAggregateMaterialization {
+        const QoreIRInstruction* consumer = nullptr;
+        ScalarizedAggregateMaterializationKind kind =
+            ScalarizedAggregateMaterializationKind::List;
+        QoreIRValue make_result;
+        QoreIRValue result;
+        std::vector<QoreIRValue> values;
+        std::vector<std::string> keys;
+        const QoreTypeInfo* make_type_info = nullptr;
+        const TypedHashDecl* hashdecl = nullptr;
+        std::string hashdecl_path;
+        bool runtime_check = false;
+        QoreIRValueFacts make_facts;
+        QoreIRValueFacts result_facts;
+    };
+    std::vector<ScalarizedAggregateMaterialization>
+        scalarized_aggregate_materializations;
     size_t scalarized = 0;
 
     for (const auto& [local, accesses] : local_accesses) {
@@ -2303,6 +2327,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::vector<std::pair<const QoreIRInstruction*,
             ScalarizedPathOperation>> candidate_path_operations;
         std::vector<ScalarizedAggregatePhi> candidate_aggregate_phis;
+        std::vector<ScalarizedAggregateMaterialization>
+            candidate_aggregate_materializations;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -2729,6 +2755,123 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             operation_result, state[value_index],
                             QoreIRValue(), current_facts, true}});
                     state[value_index] = operation_result;
+                    return true;
+                }
+                if ((inst->opcode == QoreIROpcode::RefSelf
+                            || inst->opcode == QoreIROpcode::Return)
+                        && enable_return_materialization) {
+                    QoreIRValue source;
+                    bool valid_return = false;
+                    if (inst->opcode == QoreIROpcode::RefSelf) {
+                        valid_return = inst->result.isValid()
+                            && inst->operands.size() == 1;
+                        if (valid_return) {
+                            source = inst->operands.front();
+                            auto result_uses = uses.find(inst->result.id);
+                            valid_return = result_uses != uses.end()
+                                && result_uses->second.size() == 1
+                                && result_uses->second.front().inst
+                                    && result_uses->second.front().inst->opcode
+                                        == QoreIROpcode::Return;
+                        }
+                    } else {
+                        const auto* ret = static_cast<
+                            const QoreIRReturnInstruction*>(inst);
+                        valid_return = ret->has_value;
+                        if (valid_return) {
+                            source = ret->value;
+                        }
+                    }
+                    valid_return = valid_return
+                        && loaded_values.count(source.id);
+                    auto source_uses = valid_return
+                        ? uses.find(source.id) : uses.end();
+                    valid_return = valid_return
+                        && source_uses != uses.end()
+                        && source_uses->second.size() == 1
+                        && source_uses->second.front().inst == inst;
+                    const QoreIRValueFacts* make_result_facts =
+                        valid_return ? func.getValueFacts(make->result) : nullptr;
+                    const QoreIRValueFacts* aggregate_result_facts =
+                        valid_return ? func.getValueFacts(aggregate->result) : nullptr;
+                    if (!valid_return) {
+                        return false;
+                    }
+                    ScalarizedAggregateMaterialization materialization;
+                    materialization.consumer = inst;
+                    materialization.values = state;
+                    materialization.keys = hash_keys;
+                    if (make_result_facts) {
+                        materialization.make_facts = *make_result_facts;
+                    }
+                    if (aggregate_result_facts) {
+                        materialization.result_facts = *aggregate_result_facts;
+                    }
+                    materialization.make_result = func.createValue();
+                    func.max_value_id = std::max(func.max_value_id,
+                        materialization.make_result.id);
+                    if (!hash_candidate) {
+                        materialization.kind =
+                            ScalarizedAggregateMaterializationKind::List;
+                        materialization.make_type_info = static_cast<
+                            const QoreIRMakeListInstruction*>(make)->typeInfo;
+                        materialization.result = materialization.make_result;
+                    } else {
+                        materialization.kind = hashdecl_type
+                            ? ScalarizedAggregateMaterializationKind::HashDecl
+                            : ScalarizedAggregateMaterializationKind::Hash;
+                        if (make->opcode == QoreIROpcode::MakeHashConstKeys) {
+                            materialization.make_type_info = static_cast<const
+                                QoreIRMakeHashConstKeysInstruction*>(make)->typeInfo;
+                        } else {
+                            materialization.make_type_info = static_cast<const
+                                QoreIRMakeHashInstruction*>(make)->typeInfo;
+                        }
+                        if (hashdecl_type) {
+                            const auto* construct = static_cast<const
+                                QoreIRNewHashDeclFromHashInstruction*>(aggregate);
+                            materialization.hashdecl = construct->hd;
+                            materialization.hashdecl_path = construct->hd_path;
+                            materialization.runtime_check = construct->runtime_check;
+                            materialization.result = func.createValue();
+                            func.max_value_id = std::max(func.max_value_id,
+                                materialization.result.id);
+                        } else {
+                            materialization.result = materialization.make_result;
+                        }
+                    }
+                    materialization.make_facts.assigned_state =
+                        QoreIRAssignedState::Assigned;
+                    materialization.make_facts.representation =
+                        QoreIRValueRepresentation::Boxed;
+                    materialization.make_facts.never_nothing = true;
+                    if (!materialization.make_facts.type_info) {
+                        materialization.make_facts.type_info =
+                            materialization.make_type_info;
+                    }
+                    if (materialization.kind
+                            == ScalarizedAggregateMaterializationKind::List) {
+                        materialization.make_facts.list_density =
+                            QoreIRListDensity::Dense;
+                    }
+                    materialization.result_facts.assigned_state =
+                        QoreIRAssignedState::Assigned;
+                    materialization.result_facts.representation =
+                        QoreIRValueRepresentation::Boxed;
+                    materialization.result_facts.never_nothing = true;
+                    if (!materialization.result_facts.type_info) {
+                        materialization.result_facts.type_info = hashdecl_type
+                            ? hashdecl_type->getTypeInfo()
+                            : local->getTypeInfo();
+                    }
+                    candidate_value_facts[materialization.make_result.id] =
+                        materialization.make_facts;
+                    candidate_value_facts[materialization.result.id] =
+                        materialization.result_facts;
+                    candidate_replacements.emplace(source.id,
+                        materialization.result);
+                    candidate_aggregate_materializations.push_back(
+                        std::move(materialization));
                     return true;
                 }
                 bool valid_operation = !inst->operands.empty()
@@ -3259,6 +3402,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             candidate_path_operations.end());
         scalarized_aggregate_phis.insert(scalarized_aggregate_phis.end(),
             candidate_aggregate_phis.begin(), candidate_aggregate_phis.end());
+        scalarized_aggregate_materializations.insert(
+            scalarized_aggregate_materializations.end(),
+            candidate_aggregate_materializations.begin(),
+            candidate_aggregate_materializations.end());
         ++scalarized;
         if (hash_candidate) {
             ++stats.hashes;
@@ -3367,6 +3514,79 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return {};
             }
             replacement = next->second;
+        }
+    }
+    std::unordered_map<const QoreIRInstruction*,
+        const ScalarizedAggregateMaterialization*> materializations;
+    for (const ScalarizedAggregateMaterialization& materialization
+            : scalarized_aggregate_materializations) {
+        (void)qore_ir_analysis_cancelled(check_count,
+            "IR fixed-aggregate materialization commit");
+        materializations.emplace(materialization.consumer, &materialization);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (size_t i = 0; i < instructions.size(); ++i) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR fixed-aggregate materialization commit");
+            auto pending = materializations.find(instructions[i].get());
+            if (pending == materializations.end()) {
+                continue;
+            }
+            const ScalarizedAggregateMaterialization& materialization =
+                *pending->second;
+            std::unique_ptr<QoreIRInstruction> make_inst;
+            if (materialization.kind
+                    == ScalarizedAggregateMaterializationKind::List) {
+                auto make_list = std::make_unique<QoreIRMakeListInstruction>();
+                make_list->typeInfo = materialization.make_type_info;
+                make_inst = std::move(make_list);
+            } else {
+                auto make_hash =
+                    std::make_unique<QoreIRMakeHashConstKeysInstruction>(
+                        std::vector<std::string>(materialization.keys));
+                make_hash->typeInfo = materialization.make_type_info;
+                make_inst = std::move(make_hash);
+            }
+            make_inst->loc = materialization.consumer->loc;
+            make_inst->cached_start_line =
+                materialization.consumer->cached_start_line;
+            make_inst->temp_scope_id = materialization.consumer->temp_scope_id;
+            make_inst->result = materialization.make_result;
+            make_inst->operands = materialization.values;
+            func.setValueFacts(make_inst->result,
+                materialization.make_facts);
+            instructions.insert(instructions.begin() + i,
+                std::move(make_inst));
+            ++i;
+            if (materialization.kind
+                    != ScalarizedAggregateMaterializationKind::HashDecl) {
+                continue;
+            }
+            std::unique_ptr<QoreIRNewHashDeclFromHashInstruction> construct;
+            if (materialization.hashdecl_path.empty()) {
+                construct =
+                    std::make_unique<QoreIRNewHashDeclFromHashInstruction>(
+                        materialization.hashdecl,
+                        materialization.runtime_check);
+            } else {
+                construct =
+                    std::make_unique<QoreIRNewHashDeclFromHashInstruction>(
+                        materialization.hashdecl_path.c_str(),
+                        materialization.hashdecl,
+                        materialization.runtime_check);
+            }
+            construct->loc = materialization.consumer->loc;
+            construct->cached_start_line =
+                materialization.consumer->cached_start_line;
+            construct->temp_scope_id = materialization.consumer->temp_scope_id;
+            construct->result = materialization.result;
+            construct->operands = {materialization.make_result};
+            func.setValueFacts(construct->result,
+                materialization.result_facts);
+            instructions.insert(instructions.begin() + i,
+                std::move(construct));
+            ++i;
         }
     }
     for (const ScalarizedAggregatePhi& pending : scalarized_aggregate_phis) {
