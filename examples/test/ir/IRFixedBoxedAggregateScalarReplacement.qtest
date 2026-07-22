@@ -1,0 +1,220 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+hashdecl StringPair {
+    string left;
+    string right;
+}
+
+string sub hashStringExact() {
+    hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
+    return values.right;
+}
+
+string sub listStringExact() {
+    list<string> values = (\"a\", \"b\");
+    return values[1];
+}
+
+string sub hashdeclStringExact() {
+    StringPair values((\"left\": \"a\", \"right\": \"b\"));
+    return values.right;
+}
+
+int sub hashStringQueries() {
+    hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
+    return values.left.size() + values.right.length();
+}
+
+int sub listStringQueries() {
+    list<string> values = (\"a\", \"b\");
+    return values[0].size() + values[1].length();
+}
+
+int sub hashdeclStringQueries() {
+    StringPair values((\"left\": \"a\", \"right\": \"b\"));
+    return values.left.size() + values.right.length();
+}
+
+string sub hashStringDynamic(string left) {
+    hash<string, string> values = {\"left\": left, \"right\": \"b\"};
+    return values.left;
+}
+
+string sub listStringDynamic(string left) {
+    list<string> values = (left, \"b\");
+    return values[0];
+}
+
+string sub hashdeclStringDynamic(string left) {
+    StringPair values((\"left\": left, \"right\": \"b\"));
+    return values.left;
+}
+
+string sub hashStringMutation() {
+    hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
+    values.left += \"x\";
+    return values.left;
+}
+
+string sub listStringMutation() {
+    list<string> values = (\"a\", \"b\");
+    values[0] += \"x\";
+    return values[0];
+}
+
+int sub nestedHashExact() {
+    hash<string, hash<string, int>> values = {
+        \"left\": {\"value\": 3},
+        \"right\": {\"value\": 7},
+    };
+    return values.left.value + values.right.value;
+}
+
+int sub nestedListExact() {
+    list<list<int>> values = ((3, 4), (6, 7));
+    return values[0][0] + values[1][1];
+}
+
+int sub nestedHashMutation() {
+    hash<string, hash<string, int>> values = {
+        \"left\": {\"value\": 3},
+        \"right\": {\"value\": 7},
+    };
+    values.left.value = 9;
+    return values.left.value + values.right.value;
+}
+
+int sub nestedListMutation() {
+    list<list<int>> values = ((3, 4), (6, 7));
+    values[0][0] = 9;
+    return values[0][0] + values[1][1];
+}
+
+int sub nestedHashAlias() {
+    hash<string, int> child = {\"value\": 3};
+    hash<string, hash<string, int>> values = {
+        \"left\": child,
+        \"right\": {\"value\": 7},
+    };
+    child.value = 9;
+    return values.left.value + child.value;
+}
+
+int sub nestedListAlias() {
+    list<int> child = (3, 4);
+    list<list<int>> values = (child, (6, 7));
+    child[0] = 9;
+    return values[0][0] + child[0];
+}
+
+printf(\"%s:%s:%s:%d:%d:%d:%s:%s:%s:%s:%s:%d:%d:%d:%d:%d:%d\\n\",
+    hashStringExact(), listStringExact(), hashdeclStringExact(),
+    hashStringQueries(), listStringQueries(), hashdeclStringQueries(),
+    hashStringDynamic(\"x\"), listStringDynamic(\"x\"),
+    hashdeclStringDynamic(\"x\"), hashStringMutation(),
+    listStringMutation(), nestedHashExact(), nestedListExact(),
+    nestedHashMutation(), nestedListMutation(), nestedHashAlias(),
+    nestedListAlias());
+";
+
+string script_path = "/tmp/qore-ir-fixed-boxed-scalar-" + string(getpid()) + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+}
+
+string expected = "b:b:b:2:2:2:x:x:x:ax:ax:10:10:16:16:12:12\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string stats = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s 2>&1",
+    libqore_dir, qore_bin, script_path));
+foreach string name in (("hashStringQueries", "hashdeclStringQueries",
+        "nestedHashExact")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=1", name))) {
+        printf("missing fixed boxed hash scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+foreach string name in (("listStringQueries", "nestedListExact")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-lists=1", name))) {
+        printf("missing fixed boxed list scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+foreach string name in (("hashStringExact", "hashdeclStringExact",
+        "hashStringDynamic", "hashdeclStringDynamic", "hashStringMutation",
+        "nestedHashMutation", "nestedHashAlias")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=0", name))) {
+        printf("unsafe fixed boxed hash scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+foreach string name in (("listStringExact", "listStringDynamic",
+        "listStringMutation", "nestedListMutation", "nestedListAlias")) {
+    if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-lists=0", name))) {
+        printf("unsafe fixed boxed list scalar replacement for %s:\n%s", name, stats);
+        exit(2);
+    }
+}
+
+string exe = "/tmp/qore-ir-fixed-boxed-scalar-" + string(getpid());
+string disabled = exe + "-disabled";
+string enabled_compile = backquote(sprintf(
+    "QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, script_path));
+string disabled_compile = backquote(sprintf(
+    "QORE_DISABLE_IR_FIXED_HASH_SCALAR_REPLACEMENT=1 "
+    + "QORE_DISABLE_IR_FIXED_LIST_SCALAR_REPLACEMENT=1 "
+    + "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled, script_path));
+if (!is_file(exe) || !is_file(disabled)) {
+    printf("AOT compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /IR-OPT-AOT: hashStringQueries:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: listStringQueries:.*scalar-lists=1/
+        || enabled_compile !~ /IR-OPT-AOT: hashdeclStringQueries:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: nestedHashExact:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: nestedListExact:.*scalar-lists=1/) {
+    printf("missing AOT fixed boxed aggregate scalar replacement:\n%s",
+        enabled_compile);
+    exit(2);
+}
+foreach string binary in ((exe, disabled)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, binary));
+    if (actual != expected) {
+        printf("AOT mismatch for %s\nexpected:\n%sactual:\n%s",
+            binary, expected, actual);
+        exit(2);
+    }
+}
+
+unlink(script_path);

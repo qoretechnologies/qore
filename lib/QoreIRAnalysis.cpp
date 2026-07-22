@@ -2046,6 +2046,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::vector<ScalarizedAggregateMaterialization>
         scalarized_aggregate_materializations;
+    struct ScalarizedLiteralIntQuery {
+        int64_t value = 0;
+        QoreIRValueFacts facts;
+    };
+    std::unordered_map<const QoreIRInstruction*, ScalarizedLiteralIntQuery>
+        scalarized_literal_int_queries;
     size_t scalarized = 0;
 
     for (const auto& [local, accesses] : local_accesses) {
@@ -2100,6 +2106,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 == nullptr;
         QoreIRValueRepresentation expected_representation =
             QoreIRValueRepresentation::Boxed;
+        bool expected_boxed_aggregate = false;
         if (!hashdecl_type && !deferred_hashdecl_type) {
             if (element_type == bigIntTypeInfo) {
                 expected_representation = QoreIRValueRepresentation::NativeInt;
@@ -2107,6 +2114,12 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 expected_representation = QoreIRValueRepresentation::NativeFloat;
             } else if (element_type == boolTypeInfo) {
                 expected_representation = QoreIRValueRepresentation::NativeBool;
+            } else if (element_type == stringTypeInfo) {
+                expected_representation = QoreIRValueRepresentation::Boxed;
+            } else if (QoreTypeInfo::getUniqueReturnComplexList(element_type)
+                    || QoreTypeInfo::getUniqueReturnComplexHash(element_type)) {
+                expected_representation = QoreIRValueRepresentation::Boxed;
+                expected_boxed_aggregate = true;
             } else {
                 continue;
             }
@@ -2239,26 +2252,73 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         } else {
             continue;
         }
+        bool retain_aggregate_owner = false;
         for (QoreIRValue operand : aggregate_values) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR fixed-aggregate scalar operand analysis")) {
                 return {};
             }
             const QoreIRValueFacts* facts = func.getValueFacts(operand);
-            bool expected_native = hashdecl_type
+            bool exact_string_constant = false;
+            bool exact_aggregate_constructor = false;
+            if (facts
+                    && facts->representation
+                        == QoreIRValueRepresentation::Boxed
+                    && facts->type_info == stringTypeInfo) {
+                auto definition = definitions.find(operand.id);
+                exact_string_constant = definition != definitions.end()
+                    && definition->second.inst->opcode
+                        == QoreIROpcode::ConstString;
+            }
+            if (expected_boxed_aggregate) {
+                auto definition = definitions.find(operand.id);
+                const QoreTypeInfo* constructor_type = nullptr;
+                if (definition != definitions.end()) {
+                    const QoreIRInstruction* constructor =
+                        definition->second.inst;
+                    if (constructor->opcode == QoreIROpcode::MakeList) {
+                        constructor_type = static_cast<const
+                            QoreIRMakeListInstruction*>(constructor)->typeInfo;
+                    } else if (constructor->opcode
+                            == QoreIROpcode::MakeHashConstKeys) {
+                        constructor_type = static_cast<const
+                            QoreIRMakeHashConstKeysInstruction*>(
+                                constructor)->typeInfo;
+                    }
+                }
+                const QoreTypeInfo* expected_type =
+                    func.specializeType(element_type);
+                constructor_type = func.specializeType(constructor_type);
+                exact_aggregate_constructor = constructor_type
+                    && QoreTypeInfo::hasType(expected_type)
+                    && QoreTypeInfo::hasType(constructor_type)
+                    && QoreTypeInfo::isInputIdentical(
+                        expected_type, constructor_type);
+            }
+            bool expected_scalar = hashdecl_type
                 ? facts && (facts->representation
                         == QoreIRValueRepresentation::NativeInt
                     || facts->representation
                         == QoreIRValueRepresentation::NativeFloat
                     || facts->representation
-                        == QoreIRValueRepresentation::NativeBool)
-                : facts && facts->representation == expected_representation;
-            if (!expected_native
-                    || facts->assigned_state != QoreIRAssignedState::Assigned
-                    || !facts->never_nothing) {
+                        == QoreIRValueRepresentation::NativeBool
+                    || exact_string_constant)
+                : exact_aggregate_constructor
+                    || (facts
+                        && facts->representation == expected_representation
+                        && (expected_representation
+                                != QoreIRValueRepresentation::Boxed
+                            || exact_string_constant));
+            if (!expected_scalar
+                    || (!exact_aggregate_constructor
+                        && (facts->assigned_state
+                                != QoreIRAssignedState::Assigned
+                            || !facts->never_nothing))) {
                 invalid = true;
                 break;
             }
+            retain_aggregate_owner = retain_aggregate_owner
+                || exact_string_constant || exact_aggregate_constructor;
         }
         if (invalid) {
             continue;
@@ -2329,6 +2389,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::vector<ScalarizedAggregatePhi> candidate_aggregate_phis;
         std::vector<ScalarizedAggregateMaterialization>
             candidate_aggregate_materializations;
+        std::unordered_map<const QoreIRInstruction*,
+            ScalarizedLiteralIntQuery> candidate_literal_int_queries;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -2369,7 +2431,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
         }
         if (has_mutation) {
-            if (!enable_mutations) {
+            if (!enable_mutations || retain_aggregate_owner) {
                 continue;
             }
             std::unordered_set<uint32_t> loaded_values;
@@ -3374,8 +3436,224 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         replacement =
                             aggregate_values[static_cast<size_t>(index)];
                     }
-                    candidate_replacements.emplace(use.inst->result.id,
-                        replacement);
+                    // Boxed constructor operands are cleared by DiscardTemps
+                    // even while the retained aggregate owns the same node.
+                    // Fold only their native consumers; never reuse that SSA.
+                    auto replacement_definition =
+                        definitions.find(replacement.id);
+                    const QoreIRInstruction* replacement_inst =
+                        replacement_definition == definitions.end()
+                        ? nullptr : replacement_definition->second.inst;
+                    if (replacement_inst && replacement_inst->opcode
+                            == QoreIROpcode::ConstString) {
+                        const auto* constant = static_cast<const
+                            QoreIRConstInstruction*>(replacement_inst);
+                        auto read_uses = uses.find(use.inst->result.id);
+                        if (read_uses == uses.end()
+                                || read_uses->second.empty()) {
+                            invalid = true;
+                            break;
+                        }
+                        bool ascii = true;
+                        for (unsigned char c
+                                : constant->constant.string_value) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR fixed-aggregate string literal analysis")) {
+                                return {};
+                            }
+                            if (c >= 0x80) {
+                                ascii = false;
+                                break;
+                            }
+                        }
+                        for (const QoreIRScalarUse& query_use
+                                : read_uses->second) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR fixed-aggregate string query analysis")) {
+                                return {};
+                            }
+                            const QoreIRInstruction* query = query_use.inst;
+                            bool valid_query = query
+                                && query->opcode
+                                    == QoreIROpcode::DotEvalMethodDirect
+                                && !query->exception_target
+                                && query->result.isValid()
+                                && query->operands.size() == 1
+                                && query->operands[0].id
+                                    == use.inst->result.id;
+                            const auto* direct = valid_query
+                                ? static_cast<const
+                                    QoreIRDotEvalMethodDirectInstruction*>(
+                                        query) : nullptr;
+                            QoreIRIntrinsic intrinsic = direct
+                                ? direct->intrinsic : QoreIRIntrinsic::None;
+                            if (direct && intrinsic
+                                    == QoreIRIntrinsic::None) {
+                                intrinsic = qore_ir_resolve_pseudo_intrinsic(
+                                    direct->method, direct->qc,
+                                    direct->fallback_method_name);
+                            }
+                            valid_query = valid_query && direct
+                                && direct->pseudo
+                                && (intrinsic == QoreIRIntrinsic::Size
+                                    || intrinsic
+                                        == QoreIRIntrinsic::StringStrlen
+                                    || (ascii && intrinsic
+                                        == QoreIRIntrinsic::StringLength));
+                            if (!valid_query) {
+                                invalid = true;
+                                break;
+                            }
+                            ScalarizedLiteralIntQuery folded;
+                            folded.value = static_cast<int64_t>(
+                                constant->constant.string_value.size());
+                            if (const QoreIRValueFacts* query_facts =
+                                    func.getValueFacts(query->result)) {
+                                folded.facts = *query_facts;
+                            }
+                            folded.facts.type_info = bigIntTypeInfo;
+                            folded.facts.assigned_state =
+                                QoreIRAssignedState::Assigned;
+                            folded.facts.representation =
+                                QoreIRValueRepresentation::NativeInt;
+                            folded.facts.never_nothing = true;
+                            candidate_literal_int_queries.emplace(
+                                query, folded);
+                        }
+                        if (invalid) {
+                            break;
+                        }
+                    } else if (replacement_inst
+                            && (replacement_inst->opcode
+                                    == QoreIROpcode::MakeList
+                                || replacement_inst->opcode
+                                    == QoreIROpcode::MakeHashConstKeys)) {
+                        std::vector<QoreIRValue> child_values =
+                            replacement_inst->operands;
+                        std::unordered_map<std::string, size_t>
+                            child_indexes;
+                        bool child_hash = false;
+                        if (replacement_inst->opcode
+                                == QoreIROpcode::MakeHashConstKeys) {
+                            const auto* child_hash_inst = static_cast<const
+                                QoreIRMakeHashConstKeysInstruction*>(
+                                    replacement_inst);
+                            child_hash = true;
+                            if (!child_hash_inst->unique_keys
+                                    || child_hash_inst->keys.size()
+                                        != child_values.size()) {
+                                invalid = true;
+                                break;
+                            }
+                            for (size_t i = 0;
+                                    i < child_hash_inst->keys.size(); ++i) {
+                                if (qore_ir_analysis_cancelled(check_count,
+                                        "IR nested fixed-aggregate key indexing")) {
+                                    return {};
+                                }
+                                child_indexes.emplace(
+                                    child_hash_inst->keys[i], i);
+                            }
+                        }
+                        for (QoreIRValue child_value : child_values) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR nested fixed-aggregate value analysis")) {
+                                return {};
+                            }
+                            const QoreIRValueFacts* child_facts =
+                                func.getValueFacts(child_value);
+                            if (!child_facts
+                                    || child_facts->assigned_state
+                                        != QoreIRAssignedState::Assigned
+                                    || !child_facts->never_nothing
+                                    || (child_facts->representation
+                                            != QoreIRValueRepresentation::NativeInt
+                                        && child_facts->representation
+                                            != QoreIRValueRepresentation::NativeFloat
+                                        && child_facts->representation
+                                            != QoreIRValueRepresentation::NativeBool)) {
+                                invalid = true;
+                                break;
+                            }
+                        }
+                        auto nested_uses = uses.find(use.inst->result.id);
+                        if (invalid || nested_uses == uses.end()
+                                || nested_uses->second.empty()) {
+                            invalid = true;
+                            break;
+                        }
+                        for (const QoreIRScalarUse& nested_use
+                                : nested_uses->second) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR nested fixed-aggregate read analysis")) {
+                                return {};
+                            }
+                            const QoreIRInstruction* nested = nested_use.inst;
+                            size_t child_index = 0;
+                            bool valid_nested = nested
+                                && !nested->exception_target
+                                && nested->result.isValid()
+                                && !nested->operands.empty()
+                                && nested->operands[0].id
+                                    == use.inst->result.id;
+                            if (valid_nested && child_hash) {
+                                valid_nested = nested->operands.size() == 1
+                                    && (nested->opcode
+                                            == QoreIROpcode::HashKeyAccess
+                                        || nested->opcode
+                                            == QoreIROpcode::HashKeyAccessInt
+                                        || nested->opcode
+                                            == QoreIROpcode::HashKeyAccessHash
+                                        || nested->opcode
+                                            == QoreIROpcode::HashKeyAccessHashGuarded);
+                                if (valid_nested) {
+                                    const auto* access = static_cast<const
+                                        QoreIRHashKeyAccessInstruction*>(nested);
+                                    auto child = child_indexes.find(
+                                        access->key_name);
+                                    valid_nested = child
+                                        != child_indexes.end();
+                                    if (valid_nested) {
+                                        child_index = child->second;
+                                    }
+                                }
+                            } else if (valid_nested) {
+                                valid_nested = nested->opcode
+                                        == QoreIROpcode::ListIndexDynamic
+                                    && nested->operands.size() == 2;
+                                const auto* index_inst = valid_nested
+                                    ? static_cast<const
+                                        QoreIRExprInstruction*>(nested)
+                                    : nullptr;
+                                valid_nested = valid_nested
+                                    && index_inst->list_selector_kinds.empty();
+                                int64_t index = 0;
+                                valid_nested = valid_nested
+                                    && resolve_int_selector(
+                                        nested->operands[1], index)
+                                    && index >= 0
+                                    && static_cast<size_t>(index)
+                                        < child_values.size();
+                                if (valid_nested) {
+                                    child_index = static_cast<size_t>(index);
+                                }
+                            }
+                            if (!valid_nested) {
+                                invalid = true;
+                                break;
+                            }
+                            candidate_replacements.emplace(
+                                nested->result.id,
+                                child_values[child_index]);
+                            reads.push_back(nested);
+                        }
+                        if (invalid) {
+                            break;
+                        }
+                    } else {
+                        candidate_replacements.emplace(use.inst->result.id,
+                            replacement);
+                    }
                     reads.push_back(use.inst);
                 }
                 if (invalid) {
@@ -3384,19 +3662,22 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
         }
         if (invalid || (candidate_replacements.empty()
-                && candidate_path_operations.empty())) {
+                && candidate_path_operations.empty()
+                && candidate_literal_int_queries.empty())) {
             continue;
         }
-        eliminated.insert(make);
-        eliminated.insert(literal_key_constants.begin(),
-            literal_key_constants.end());
-        eliminated.insert(aggregate);
-        eliminated.insert(store_pos->inst);
+        if (!retain_aggregate_owner) {
+            eliminated.insert(make);
+            eliminated.insert(literal_key_constants.begin(),
+                literal_key_constants.end());
+            eliminated.insert(aggregate);
+            eliminated.insert(store_pos->inst);
+            eliminated.insert(local_cleanup.begin(), local_cleanup.end());
+        }
         for (const InstructionPosition* load_pos : load_positions) {
             eliminated.insert(load_pos->inst);
         }
         eliminated.insert(reads.begin(), reads.end());
-        eliminated.insert(local_cleanup.begin(), local_cleanup.end());
         replacements.insert(candidate_replacements.begin(), candidate_replacements.end());
         scalarized_path_operations.insert(candidate_path_operations.begin(),
             candidate_path_operations.end());
@@ -3406,6 +3687,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             scalarized_aggregate_materializations.end(),
             candidate_aggregate_materializations.begin(),
             candidate_aggregate_materializations.end());
+        scalarized_literal_int_queries.insert(
+            candidate_literal_int_queries.begin(),
+            candidate_literal_int_queries.end());
         ++scalarized;
         if (hash_candidate) {
             ++stats.hashes;
@@ -3626,9 +3910,33 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             if (eliminated.count(it->get())) {
                 it = instructions.erase(it);
             } else {
-                auto path_operation = scalarized_path_operations.find(
+                auto literal_query = scalarized_literal_int_queries.find(
                     it->get());
-                if (path_operation != scalarized_path_operations.end()) {
+                if (literal_query
+                        != scalarized_literal_int_queries.end()) {
+                    const QoreIRInstruction* old = it->get();
+                    auto constant =
+                        std::make_unique<QoreIRConstInstruction>();
+                    constant->opcode = QoreIROpcode::ConstInt;
+                    constant->loc = old->loc;
+                    constant->cached_start_line = old->cached_start_line;
+                    constant->temp_scope_id = old->temp_scope_id;
+                    constant->result = old->result;
+                    constant->constant.kind = QoreIRConstant::Kind::Int;
+                    constant->constant.int_value =
+                        literal_query->second.value;
+                    func.setValueFacts(constant->result,
+                        literal_query->second.facts);
+                    *it = std::move(constant);
+                } else {
+                    auto path_operation = scalarized_path_operations.find(
+                        it->get());
+                    if (path_operation == scalarized_path_operations.end()) {
+                        (void)qore_ir_rewrite_value_operands(
+                            **it, replacements, check_count, false);
+                        ++it;
+                        continue;
+                    }
                     ScalarizedPathOperation operation =
                         path_operation->second;
                     QoreIRValue right = operation.right;
