@@ -1103,6 +1103,8 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
                 info.aggregate_return.value_floats;
             entry.aggregate_return_keys = info.aggregate_return.keys;
             entry.boxed_return_param = info.boxed_return_param;
+            entry.boxed_return_kind =
+                static_cast<uint8_t>(info.boxed_return_kind);
             entry.composed_int_source_kind = static_cast<uint8_t>(info.composed_int.source_kind);
             entry.composed_int_base_param = info.composed_int.base_param;
             entry.composed_int_value_param = info.composed_int.value_param;
@@ -10901,6 +10903,129 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                 summary.param_may_modify;
         }
     }
+    if (!std::getenv("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
+        for (const auto* candidate_set : {&candidates, &effect_only_candidates}) {
+            for (const auto& [variant, func] : *candidate_set) {
+                if (++check_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT exact boxed return-kind analysis")) {
+                    return false;
+                }
+                auto callee = batch_callees.find(variant);
+                if (callee == batch_callees.end() || !func
+                        || !callee->second.never_returns_nothing
+                        || callee->second.return_kind
+                            != BatchCalleeReturnKind::Boxed) {
+                    continue;
+                }
+                BatchCalleeBoxedReturnKind kind =
+                    BatchCalleeBoxedReturnKind::Unknown;
+                bool saw_return = false;
+                bool valid = true;
+                for (const auto& block : func->blocks) {
+                    for (const auto& inst_ptr : block->instructions) {
+                        if (++check_count % 100 == 0
+                                && qore_check_cancel(nullptr,
+                                    "AOT exact boxed return scan")) {
+                            return false;
+                        }
+                        if (!inst_ptr
+                                || (inst_ptr->opcode != QoreIROpcode::Return
+                                    && inst_ptr->opcode
+                                        != QoreIROpcode::ReturnNothing)) {
+                            continue;
+                        }
+                        if (inst_ptr->opcode == QoreIROpcode::ReturnNothing) {
+                            valid = false;
+                            break;
+                        }
+                        const auto* ret = static_cast<
+                            const QoreIRReturnInstruction*>(inst_ptr.get());
+                        const QoreIRValueFacts* facts = ret->has_value
+                            ? func->getValueFacts(ret->value) : nullptr;
+                        if (!facts
+                                || facts->assigned_state
+                                    != QoreIRAssignedState::Assigned
+                                || facts->representation
+                                    != QoreIRValueRepresentation::Boxed
+                                || !facts->never_nothing) {
+                            if (getenv("QORE_AOT_DEBUG")) {
+                                fprintf(stderr,
+                                    "AOT: exact boxed return rejected '%s':"
+                                    " facts=%d assigned=%d representation=%d"
+                                    " never-nothing=%d\n",
+                                    func->name.c_str(), static_cast<int>(!!facts),
+                                    facts ? static_cast<int>(
+                                        facts->assigned_state) : -1,
+                                    facts ? static_cast<int>(
+                                        facts->representation) : -1,
+                                    facts ? static_cast<int>(
+                                        facts->never_nothing) : 0);
+                            }
+                            valid = false;
+                            break;
+                        }
+                        BatchCalleeBoxedReturnKind return_kind =
+                            BatchCalleeBoxedReturnKind::Unknown;
+                        if (QoreTypeInfo::isType(
+                                facts->type_info, NT_STRING)) {
+                            return_kind =
+                                BatchCalleeBoxedReturnKind::String;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_LIST)) {
+                            return_kind = BatchCalleeBoxedReturnKind::List;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_HASH)) {
+                            return_kind = BatchCalleeBoxedReturnKind::Hash;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_BINARY)) {
+                            return_kind =
+                                BatchCalleeBoxedReturnKind::Binary;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_DATE)) {
+                            return_kind = BatchCalleeBoxedReturnKind::Date;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_OBJECT)) {
+                            return_kind =
+                                BatchCalleeBoxedReturnKind::Object;
+                        } else if (QoreTypeInfo::isType(
+                                facts->type_info, NT_NUMBER)) {
+                            return_kind =
+                                BatchCalleeBoxedReturnKind::Number;
+                        }
+                        if (return_kind
+                                == BatchCalleeBoxedReturnKind::Unknown
+                                || (saw_return && return_kind != kind)) {
+                            if (getenv("QORE_AOT_DEBUG")) {
+                                fprintf(stderr,
+                                    "AOT: exact boxed return rejected '%s':"
+                                    " type=%d previous=%d\n",
+                                    func->name.c_str(),
+                                    static_cast<int>(QoreTypeInfo::getSingleReturnType(
+                                        facts->type_info)),
+                                    static_cast<int>(kind));
+                            }
+                            valid = false;
+                            break;
+                        }
+                        kind = return_kind;
+                        saw_return = true;
+                    }
+                    if (!valid) {
+                        break;
+                    }
+                }
+                if (valid && saw_return) {
+                    callee->second.boxed_return_kind = kind;
+                    if (getenv("QORE_AOT_DEBUG")) {
+                        fprintf(stderr,
+                            "AOT: exact boxed return '%s' kind=%d\n",
+                            func->name.c_str(), static_cast<int>(kind));
+                    }
+                }
+            }
+        }
+    }
     struct ScalarIntOperand {
         int8_t param = -1;
         int64_t constant = 0;
@@ -12865,6 +12990,12 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         return false;
     }
     info.return_kind = static_cast<BatchCalleeReturnKind>(rec.fast_return_kind);
+    if (rec.boxed_return_kind > static_cast<uint8_t>(
+            BatchCalleeBoxedReturnKind::Number)) {
+        return false;
+    }
+    info.boxed_return_kind = static_cast<BatchCalleeBoxedReturnKind>(
+        rec.boxed_return_kind);
     info.fast_name = callable ? rec.native_symbol : std::string();
     info.num_params = rec.fast_entry_num_params;
     info.param_rejects_nothing = rec.fast_param_rejects_nothing;
@@ -14681,6 +14812,40 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     }
 
     auto refine_interprocedural = [&](QoreIRFunction& func) {
+        size_t exact_boxed_call_facts = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
+            QoreIRExactBoxedReturnQuery query =
+                [&](const AbstractQoreFunctionVariant* callee)
+                    -> const QoreTypeInfo* {
+                    auto info = aot_batch_callee_map->find(callee);
+                    if (info == aot_batch_callee_map->end()
+                            || !info->second.never_returns_nothing
+                            || info->second.return_kind
+                                != BatchCalleeReturnKind::Boxed) {
+                        return nullptr;
+                    }
+                    switch (info->second.boxed_return_kind) {
+                        case BatchCalleeBoxedReturnKind::String:
+                            return stringTypeInfo;
+                        case BatchCalleeBoxedReturnKind::List:
+                            return listTypeInfo;
+                        case BatchCalleeBoxedReturnKind::Hash:
+                            return hashTypeInfo;
+                        case BatchCalleeBoxedReturnKind::Binary:
+                            return binaryTypeInfo;
+                        case BatchCalleeBoxedReturnKind::Date:
+                            return dateTypeInfo;
+                        case BatchCalleeBoxedReturnKind::Object:
+                            return objectTypeInfo;
+                        case BatchCalleeBoxedReturnKind::Number:
+                            return numberTypeInfo;
+                        default:
+                            return nullptr;
+                    }
+                };
+            exact_boxed_call_facts =
+                qore_ir_import_exact_boxed_call_facts(func, query);
+        }
         size_t folded_list_sizes = 0;
         if (!std::getenv("QORE_DISABLE_AOT_FRESH_LIST_SIZE_CALL_FOLD")) {
             QoreIRFreshListSizeQuery list_size_query =
@@ -15950,27 +16115,38 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 qore_ir_fuse_string_producer_consumers(func, query);
         }
         size_t native_specializations = 0;
+        size_t boxed_specializations = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
+            boxed_specializations =
+                qore_ir_specialize_proven_boxed_operations(func);
+        }
         if (!std::getenv("QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
             native_specializations =
                 qore_ir_specialize_proven_native_operations(func);
         }
-        if ((folded_list_sizes || folded_hash_keys || aggregate_projections
+        if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
+                || aggregate_projections
                 || boxed_return_calls
                 || changed
-                || string_consumers || native_specializations)
+                || string_consumers || boxed_specializations
+                || native_specializations)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
-                "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
+                "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
+                " fresh-list-size-calls=%zu"
                 " fresh-hash-key-calls=%zu aggregate-projections=%zu"
                 " borrowed-aggregate-projections=%zu"
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu"
+                " boxed-specializations=%zu"
                 " native-specializations=%zu\n",
-                func.name.c_str(), folded_list_sizes, folded_hash_keys,
+                func.name.c_str(), exact_boxed_call_facts,
+                folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
-                string_consumers, native_specializations);
+                string_consumers, boxed_specializations,
+                native_specializations);
         }
     };
 

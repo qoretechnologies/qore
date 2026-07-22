@@ -104,7 +104,7 @@ if (!is_file(provider_qo)
 string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
     libqore_dir, qcc_bin, provider_qo));
-if (provider_index !~ /\"symbol_index_version\", \"value\": \"27\"/
+if (provider_index !~ /\"symbol_index_version\", \"value\": \"28\"/
         || provider_index !~ /\"native_symbol\": \"crossGenericSelect[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"\\|M:<int>\"/
         || provider_index !~ /\"native_symbol\": \"CrossStaticSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossStaticSelector<int>>\\|M:<int>\"/
         || provider_index !~ /\"native_symbol\": \"CrossInstanceSelector[^\"]*_generic_fast\"[^\n]*\"fast_specialization_key\": \"R:object<::CrossInstanceSelector<int>>\"/) {

@@ -84,6 +84,20 @@ enum class BatchCalleeReturnKind : uint8_t {
     NativeBool = 3,
 };
 
+//! Exact runtime kind of a proven assigned boxed return value.
+//!
+//! This enum is serialized in AOT symbol indexes; append new values only.
+enum class BatchCalleeBoxedReturnKind : uint8_t {
+    Unknown = 0,
+    String = 1,
+    List = 2,
+    Hash = 3,
+    Binary = 4,
+    Date = 5,
+    Object = 6,
+    Number = 7,
+};
+
 enum class AOTScalarLeafKind : uint8_t {
     None = 0,
     IntBinary = 1,
@@ -379,6 +393,8 @@ struct BatchCalleeInfo {
     std::vector<const void*> modified_runtime_locals; //!< Exact modified locals when effects are known
     bool never_returns_nothing = false; //!< Every normal return has an assigned non-NOTHING value
     BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed; //!< Fast-entry return ABI
+    BatchCalleeBoxedReturnKind boxed_return_kind = BatchCalleeBoxedReturnKind::Unknown;
+        //!< Exact body-proven boxed runtime kind
     std::string fast_name;               //!< Fast entry function name (if eligible)
     std::string specialization_key;      //!< Concrete generic receiver/type-argument tuple
     const QoreTypeInfo* specialization_receiver_type_info = nullptr; //!< Parse-owned concrete receiver

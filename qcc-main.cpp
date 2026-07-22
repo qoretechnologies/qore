@@ -5113,7 +5113,8 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
         }
         json_print_string(rec.aggregate_return_keys[i]);
     }
-    printf("], \"boxed_return_param\": %d", rec.boxed_return_param);
+    printf("], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+        rec.boxed_return_param, rec.boxed_return_kind);
     printf(", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
         ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
         ", \"composed_int_value_scale\": " QLLD ", \"composed_int_offset\": " QLLD,
@@ -5770,8 +5771,8 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
             }
             json_file_string(f, rec.aggregate_return_keys[j]);
         }
-        fprintf(f, "], \"boxed_return_param\": %d",
-            rec.boxed_return_param);
+        fprintf(f, "], \"boxed_return_param\": %d, \"boxed_return_kind\": %u",
+            rec.boxed_return_param, rec.boxed_return_kind);
         fprintf(f, ", \"composed_int_source_kind\": %u, \"composed_int_base_param\": %d"
             ", \"composed_int_value_param\": %d, \"composed_int_source_scale\": " QLLD
             ", \"composed_int_value_scale\": " QLLD ", \"composed_int_offset\": " QLLD,

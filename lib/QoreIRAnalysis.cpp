@@ -10811,6 +10811,132 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
     return specialized;
 }
 
+size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
+        const QoreIRExactBoxedReturnQuery& get_return_type) {
+    if (!get_return_type) {
+        return 0;
+    }
+    size_t imported = 0;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR exact boxed call-result fact import")) {
+                return imported;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst || !inst->result.isValid()) {
+                continue;
+            }
+            bool supported = inst->opcode == QoreIROpcode::CallDirect
+                || inst->opcode == QoreIROpcode::CallStaticDirect
+                || inst->opcode == QoreIROpcode::Invoke;
+            if (inst->opcode == QoreIROpcode::CallMethodDirect
+                    || inst->opcode == QoreIROpcode::InvokeMethodDirect) {
+                supported = qore_ir_is_non_overridable_method_call(*inst);
+            }
+            if (!supported) {
+                continue;
+            }
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+            const QoreTypeInfo* type_info = callee
+                ? get_return_type(callee) : nullptr;
+            if (!type_info) {
+                continue;
+            }
+            const QoreIRValueFacts* current = func.getValueFacts(inst->result);
+            if (current
+                    && current->type_info == type_info
+                    && current->assigned_state == QoreIRAssignedState::Assigned
+                    && current->representation == QoreIRValueRepresentation::Boxed
+                    && current->never_nothing) {
+                continue;
+            }
+            QoreIRValueFacts facts;
+            facts.type_info = type_info;
+            facts.assigned_state = QoreIRAssignedState::Assigned;
+            facts.representation = QoreIRValueRepresentation::Boxed;
+            facts.never_nothing = true;
+            func.setValueFacts(inst->result, facts);
+            ++imported;
+        }
+    }
+    return imported;
+}
+
+size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
+    size_t specialized = 0;
+    size_t check_count = 0;
+    auto exact_assigned = [&](QoreIRValue value, const QoreTypeInfo* type_info) {
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        return facts
+            && facts->type_info == type_info
+            && facts->assigned_state == QoreIRAssignedState::Assigned
+            && facts->representation == QoreIRValueRepresentation::Boxed
+            && facts->never_nothing;
+    };
+    auto specialize_pseudo = [&](auto* call) {
+        if (!call || !call->pseudo || call->operands.empty()) {
+            return;
+        }
+        bool changed = false;
+        if (exact_assigned(call->operands[0], stringTypeInfo)) {
+            changed = !call->pseudo_base_known_string
+                || !call->pseudo_base_known_assigned_string
+                || !call->pseudo_base_safe_value_dispatch;
+            call->pseudo_base_known_string = true;
+            call->pseudo_base_known_assigned_string = true;
+            call->pseudo_base_safe_value_dispatch = true;
+        } else {
+            const QoreIRValueFacts* base = func.getValueFacts(call->operands[0]);
+            qore_type_t type = base && base->assigned_state
+                    == QoreIRAssignedState::Assigned
+                    && base->representation == QoreIRValueRepresentation::Boxed
+                    && base->never_nothing
+                ? QoreTypeInfo::getSingleReturnType(base->type_info) : NT_ALL;
+            if (type != NT_ALL && type != NT_OBJECT && type != NT_HASH
+                    && type != NT_WEAKREF && type != NT_WEAKREF_HASH
+                    && type != NT_REFERENCE) {
+                changed = !call->pseudo_base_safe_value_dispatch;
+                call->pseudo_base_safe_value_dispatch = true;
+            }
+        }
+        if (call->operands.size() > 1
+                && exact_assigned(call->operands[1], stringTypeInfo)) {
+            changed = changed || !call->pseudo_arg0_known_string
+                || !call->pseudo_arg0_known_assigned_string;
+            call->pseudo_arg0_known_string = true;
+            call->pseudo_arg0_known_assigned_string = true;
+        }
+        if (changed) {
+            ++specialized;
+        }
+    };
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR proven-boxed operation specialization")) {
+                return specialized;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                specialize_pseudo(static_cast<
+                    QoreIRDotEvalMethodDirectInstruction*>(inst));
+            } else if (inst->opcode
+                    == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                specialize_pseudo(static_cast<
+                    QoreIRInvokeDotEvalMethodDirectInstruction*>(inst));
+            }
+        }
+    }
+    return specialized;
+}
+
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         const QoreIRBoxedReturnParamQuery& get_return_param) {
     if (!get_return_param) {

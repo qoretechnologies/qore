@@ -234,6 +234,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 //! @return number of instructions specialized
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func);
 
+using QoreIRExactBoxedReturnQuery = std::function<const QoreTypeInfo*(
+    const AbstractQoreFunctionVariant*)>;
+
+//! Import exact assigned boxed result facts for resolved calls.
+size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
+    const QoreIRExactBoxedReturnQuery& get_return_type);
+
+//! Specialize pseudo-method flags and generic collection operations from late facts.
+size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func);
+
 using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;
