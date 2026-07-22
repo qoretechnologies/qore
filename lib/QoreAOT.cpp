@@ -6985,6 +6985,8 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
     std::unordered_map<uint32_t, AggregateValue> values;
     std::unordered_map<uint32_t, std::string> string_constants;
     const QoreIRInstruction* aggregate = nullptr;
+    const TypedHashDecl* hashdecl = nullptr;
+    QoreIRValue aggregate_return_value;
     const QoreIRReturnInstruction* ret = nullptr;
     size_t instruction_count = 0;
     for (const auto& inst_ptr : func.blocks.front()->instructions) {
@@ -7061,6 +7063,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 break;
             }
             case QoreIROpcode::AddInt:
+            case QoreIROpcode::AddAssignInt:
             case QoreIROpcode::SubInt:
             case QoreIROpcode::MulInt:
             case QoreIROpcode::EqInt:
@@ -7069,7 +7072,8 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
             case QoreIROpcode::LeInt:
             case QoreIROpcode::GtInt:
             case QoreIROpcode::GeInt:
-            case QoreIROpcode::AddFloat: {
+            case QoreIROpcode::AddFloat:
+            case QoreIROpcode::AddAssignFloat: {
                 if (!inst->result.isValid()
                         || inst->operands.size() != 2) {
                     return false;
@@ -7080,7 +7084,14 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     return false;
                 }
                 AggregateValue value;
-                if (inst->opcode == QoreIROpcode::AddFloat) {
+                QoreIROpcode value_opcode = inst->opcode;
+                if (value_opcode == QoreIROpcode::AddAssignInt) {
+                    value_opcode = QoreIROpcode::AddInt;
+                } else if (value_opcode
+                        == QoreIROpcode::AddAssignFloat) {
+                    value_opcode = QoreIROpcode::AddFloat;
+                }
+                if (value_opcode == QoreIROpcode::AddFloat) {
                     const AggregateValue* param =
                         lhs->second.kind
                                 == AOTAggregateReturnValueKind::Parameter
@@ -7107,7 +7118,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                         && rhs->second.kind
                             == AOTAggregateReturnValueKind::Parameter) {
                     uint8_t operation;
-                    switch (inst->opcode) {
+                    switch (value_opcode) {
                         case QoreIROpcode::AddInt:
                             operation = 0;
                             value.kind = AOTAggregateReturnValueKind::
@@ -7160,12 +7171,19 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     value.int_value =
                         static_cast<uint8_t>(rhs->second.param)
                         | (static_cast<int64_t>(operation) << 8);
-                } else if (inst->opcode == QoreIROpcode::AddInt) {
-                    const AggregateValue* param = lhs->second.kind
-                            == AOTAggregateReturnValueKind::Parameter
-                        ? &lhs->second
-                        : rhs->second.kind
+                } else if (value_opcode == QoreIROpcode::AddInt) {
+                    const AggregateValue* param =
+                        (lhs->second.kind
                                 == AOTAggregateReturnValueKind::Parameter
+                            || lhs->second.kind
+                                == AOTAggregateReturnValueKind::
+                                    IntParamAddConstant)
+                        ? &lhs->second
+                        : (rhs->second.kind
+                                == AOTAggregateReturnValueKind::Parameter
+                            || rhs->second.kind
+                                == AOTAggregateReturnValueKind::
+                                    IntParamAddConstant)
                             ? &rhs->second : nullptr;
                     const AggregateValue* constant = lhs->second.kind
                             == AOTAggregateReturnValueKind::IntConstant
@@ -7179,8 +7197,13 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     value.kind = AOTAggregateReturnValueKind::
                         IntParamAddConstant;
                     value.param = param->param;
-                    value.int_value = constant->int_value;
-                } else if (inst->opcode == QoreIROpcode::MulInt) {
+                    value.int_value = static_cast<int64_t>(
+                        static_cast<uint64_t>(constant->int_value)
+                        + static_cast<uint64_t>(param->kind
+                                == AOTAggregateReturnValueKind::
+                                    IntParamAddConstant
+                            ? param->int_value : 0));
+                } else if (value_opcode == QoreIROpcode::MulInt) {
                     const AggregateValue* param = lhs->second.kind
                             == AOTAggregateReturnValueKind::Parameter
                         ? &lhs->second
@@ -7217,6 +7240,46 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     return false;
                 }
                 aggregate = inst;
+                aggregate_return_value = inst->result;
+                break;
+            case QoreIROpcode::NewHashDeclFromHash: {
+                const auto* construct = static_cast<const
+                    QoreIRNewHashDeclFromHashInstruction*>(inst);
+                const TypedHashDecl* return_hashdecl =
+                    QoreTypeInfo::getUniqueReturnHashDecl(
+                        func.specializeType(sig.getReturnTypeInfo()));
+                bool values_prechecked = aggregate && construct->hd
+                    && qore_ir_hashdecl_literal_values_prechecked(
+                        func, aggregate, construct->hd, false);
+                bool layout_prechecked = aggregate && construct->hd
+                    && qore_ir_hashdecl_literal_layout_prechecked(
+                        aggregate, construct->hd);
+                if (!aggregate || hashdecl
+                        || aggregate->opcode
+                            != QoreIROpcode::MakeHashConstKeys
+                        || !aggregate_return_value.isValid()
+                        || !inst->result.isValid()
+                        || inst->operands.size() != 1
+                        || inst->operands.front().id
+                            != aggregate_return_value.id
+                        || !construct->hd
+                        || construct->hd != return_hashdecl
+                        || !values_prechecked || !layout_prechecked) {
+                    return false;
+                }
+                hashdecl = construct->hd;
+                aggregate_return_value = inst->result;
+                break;
+            }
+            case QoreIROpcode::RefSelf:
+                if (!aggregate || !aggregate_return_value.isValid()
+                        || !inst->result.isValid()
+                        || inst->operands.size() != 1
+                        || inst->operands.front().id
+                            != aggregate_return_value.id) {
+                    return false;
+                }
+                aggregate_return_value = inst->result;
                 break;
             case QoreIROpcode::Return:
                 ret = static_cast<const QoreIRReturnInstruction*>(inst);
@@ -7225,8 +7288,9 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                 return false;
         }
     }
-    if (!aggregate || !ret || !ret->has_value
-            || ret->value.id != aggregate->result.id) {
+    if (!aggregate || !aggregate_return_value.isValid()
+            || !ret || !ret->has_value
+            || ret->value.id != aggregate_return_value.id) {
         return false;
     }
 
@@ -7295,19 +7359,34 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         if (parameter_value) {
             auto local = func.param_local_vars.find(
                 static_cast<unsigned>(source->second.param));
+            if (local == func.param_local_vars.end()) {
+                return false;
+            }
             BatchCalleeParamKind expected_kind = source->second.kind
-                    == AOTAggregateReturnValueKind::BoolIntParamCompare
-                ? BatchCalleeParamKind::NativeInt : element_kind;
-            if (local == func.param_local_vars.end()
-                    || qore_ir_get_scalar_local_kind(local->second)
+                        == AOTAggregateReturnValueKind::BoolIntParamCompare
+                    || source->second.kind
+                        == AOTAggregateReturnValueKind::IntParamAddConstant
+                    || source->second.kind
+                        == AOTAggregateReturnValueKind::IntParamBinary
+                    || source->second.kind
+                        == AOTAggregateReturnValueKind::IntParamMulConstant
+                ? BatchCalleeParamKind::NativeInt
+                : source->second.kind
+                        == AOTAggregateReturnValueKind::FloatParamAddConstant
+                    ? BatchCalleeParamKind::NativeFloat
+                    : hashdecl
+                        ? qore_ir_get_scalar_local_kind(local->second)
+                        : element_kind;
+            if (qore_ir_get_scalar_local_kind(local->second)
                         != expected_kind
-                    || (element_kind == BatchCalleeParamKind::Boxed
+                    || (!hashdecl
+                        && element_kind == BatchCalleeParamKind::Boxed
                         && (!element_type
                             || local->second->getTypeInfo()
                                 != element_type))) {
                 return false;
             }
-        } else if ((source->second.kind
+        } else if (!hashdecl && ((source->second.kind
                         == AOTAggregateReturnValueKind::IntConstant
                     && element_kind != BatchCalleeParamKind::NativeInt)
                 || (source->second.kind
@@ -7315,7 +7394,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
                     && element_kind != BatchCalleeParamKind::NativeFloat)
                 || (source->second.kind
                         == AOTAggregateReturnValueKind::BoolConstant
-                    && element_kind != BatchCalleeParamKind::NativeBool)) {
+                    && element_kind != BatchCalleeParamKind::NativeBool))) {
             return false;
         }
         result.value_params.push_back(source->second.param);

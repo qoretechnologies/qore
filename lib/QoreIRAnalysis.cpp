@@ -2052,6 +2052,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedLiteralIntQuery>
         scalarized_literal_int_queries;
+    std::unordered_set<const LocalVar*> scalarized_container_locals;
     size_t scalarized = 0;
 
     for (const auto& [local, accesses] : local_accesses) {
@@ -3690,6 +3691,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         scalarized_literal_int_queries.insert(
             candidate_literal_int_queries.begin(),
             candidate_literal_int_queries.end());
+        if (has_mutation && !retain_aggregate_owner) {
+            scalarized_container_locals.insert(local);
+        }
         ++scalarized;
         if (hash_candidate) {
             ++stats.hashes;
@@ -3979,6 +3983,36 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 ++it;
             }
         }
+    }
+    // Every runtime-visible access to these locals was removed or replaced;
+    // keep the local ownership metadata aligned with the rewritten IR.
+    for (const LocalVar* local : scalarized_container_locals) {
+        (void)qore_ir_analysis_cancelled(check_count,
+            "IR fixed-aggregate scalar replacement metadata commit");
+        const void* local_key = reinterpret_cast<const void*>(local);
+        func.lvalue_path_locals.erase(local_key);
+        func.cow_container_locals.erase(local_key);
+        func.ast_referenced_locals.erase(local_key);
+        func.non_structured_ast_referenced_locals.erase(local_key);
+        func.ir_only_locals.insert(local_key);
+        func.pre_instantiated_locals.erase(local_key);
+        func.pre_instantiated_cache.erase(local);
+    }
+    if (!scalarized_container_locals.empty()) {
+        auto& visible = func.ast_visible_body_locals;
+        auto write = visible.begin();
+        for (auto read = visible.begin(); read != visible.end(); ++read) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR fixed-aggregate visible-local metadata commit");
+            if (scalarized_container_locals.count(*read)) {
+                continue;
+            }
+            if (write != read) {
+                *write = *read;
+            }
+            ++write;
+        }
+        visible.erase(write, visible.end());
     }
     return stats;
 }
@@ -6639,6 +6673,25 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
         if (inst->opcode == QoreIROpcode::LoadLocal) {
             return true;
         }
+        if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+            // A fused typed increment preserves an existing assigned value;
+            // absence from known remains absence and is never inferred from
+            // the local's declaration.
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+            const auto* add = static_cast<const
+                QoreIRAddAssignLocalIntInstruction*>(inst);
+            if (add->target && universe.count(add->target)
+                    && (!known.count(add->target)
+                        || !add->source || !known.count(add->source))) {
+                known.erase(add->target);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+            return true;
+        }
 
         bool has_ref_args = true;
         const AbstractQoreFunctionVariant* callee =
@@ -8344,7 +8397,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (access->key_name.empty()) {
                 return false;
             }
-            query_kind = QoreIRAggregateProjectionQueryKind::HashKeyValue;
+            const QoreIRValueFacts* result_facts =
+                func.getValueFacts(consumer->result);
+            query_kind = result_facts
+                    && result_facts->assigned_state
+                        == QoreIRAssignedState::Assigned
+                    && result_facts->never_nothing
+                    && result_facts->representation
+                        == QoreIRValueRepresentation::NativeInt
+                ? QoreIRAggregateProjectionQueryKind::HashKeyInt
+                : QoreIRAggregateProjectionQueryKind::HashKeyValue;
             key = access->key_name;
         } else if (consumer->opcode == QoreIROpcode::HashDerefDynamic
                 && consumer->operands.size() == 2) {
