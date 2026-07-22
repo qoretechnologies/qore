@@ -155,6 +155,35 @@ public class HttpAsyncTarget {
         return NOTHING;
     }
 
+    #! Prepares a request immediately before handler-pool submission
+    /** This callback runs on an async callback dispatcher worker after protocol parsing and
+        persistent-session routing, but before the request enters the shared handler queue. A target can use it
+        for non-blocking admission control or other dispatch reservations. Returning a result rejects or handles
+        the request without consuming a handler thread; returning @ref nothing allows normal dispatch.
+
+        A successful preparation that returns @ref nothing is paired with either @ref onHttpRequest() or
+        @ref cancelPreparedHttpRequest(). The latter is called when handler-pool submission fails.
+
+        @warning This callback must be fast and non-blocking because it runs on an async callback dispatcher
+        worker.
+
+        @param info connection and request information
+        @return result hash if the request was handled before dispatch, or @ref nothing to submit it
+    */
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        return NOTHING;
+    }
+
+    #! Cancels request preparation after handler-pool submission fails
+    /** The default implementation is a no-op. Targets that reserve capacity in @ref prepareHttpRequest() must
+        release it here. This callback is not called when preparation returns a response because no reservation
+        should remain in that case.
+
+        @param info connection and request information passed to @ref prepareHttpRequest()
+    */
+    cancelPreparedHttpRequest(hash<HttpConnectionInfo> info) {
+    }
+
     #! Saves per-thread dispatch state before invoking user code on a handler-pool thread
     /** Called by @ref HttpAsyncSocketIoController on a handler-pool thread immediately
         before invoking any user-code callback (\c onHttpRequest(),

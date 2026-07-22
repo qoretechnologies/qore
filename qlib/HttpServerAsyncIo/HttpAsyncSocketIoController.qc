@@ -1892,6 +1892,35 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result = target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                on_exit if (request.hdr) {
+                    try {
+                        listener.cleanupQuicStream(session_id, stream_id);
+                    } catch () {}
+                }
+                handleHttp3MultiplexedResult(uh, new_cinfo, session_id, stream_id,
+                    prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/3 request session=%d stream=%d: %s: %s",
+                session_id, stream_id, ex.err, ex.desc);
+            try {
+                listener.submitQuicResponse(session_id, stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(listener, uh, "HTTP/3 preparation error response");
+            if (request.hdr) {
+                try {
+                    listener.cleanupQuicStream(session_id, stream_id);
+                } catch () {}
+            }
+            return;
+        }
+
         # Dispatch to handler thread pool
         # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
         # header-info) as an *early* resume right after the framework finishes reading the
@@ -1938,6 +1967,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/3 handler for session=%d stream=%d: %s: %s",
                 session_id, stream_id, ex.err, ex.desc);
+            try {
+                target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/3 request preparation for session=%d "
+                    "stream=%d: %s: %s", session_id, stream_id, cancel_ex.err,
+                    cancel_ex.desc);
+            }
             try {
                 listener.submitQuicResponse(session_id, stream_id, 503,
                     {"content-type": "text/plain"},
@@ -2922,7 +2958,28 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # tryInlineRequest returned NOTHING — dispatch to the handler_pool.
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
+                    prepared_result, dispatch_target);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing request for %y: %s: %s",
+                dispatch_uh, ex.err, ex.desc);
+            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
+                dispatch_cx, dispatch_uh, "request preparation");
+            if (dispatch_state != HttpConnectionState::Http3
+                    && dispatch_state != HttpConnectionState::Http3Sending) {
+                try { dispatch_sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # The inline and preparation callbacks returned NOTHING — dispatch to the handler_pool.
         # onHttpRequest / processNativeRequest may read the request body or
         # block while waiting for controller-backed socket I/O, so it must run
         # on a handler thread, not the call_dispatcher worker.
@@ -2948,6 +3005,12 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel request preparation for %y: %s: %s",
+                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
+            }
             if (dispatch_state != HttpConnectionState::Http3
                     && dispatch_state != HttpConnectionState::Http3Sending) {
                 try { dispatch_sock.close(); } catch () {}
@@ -3013,6 +3076,24 @@ public class HttpAsyncSocketIoController {
             remove connections{dispatch_uh};
         }
 
+        # Give the target the same pre-dispatch admission point as a bodyless request.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
+                    prepared_result, dispatch_target);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing request after body read for %y: %s: %s",
+                dispatch_uh, ex.err, ex.desc);
+            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
+                dispatch_cx, dispatch_uh, "request preparation after body read");
+            try { dispatch_sock.close(); } catch () {}
+            return;
+        }
+
         # Dispatch to handler pool (same as handleHeaderComplete)
         code<nothing()> request_handler = sub () {
             try {
@@ -3033,6 +3114,12 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel request preparation after body read for %y: %s: %s",
+                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
+            }
             try { dispatch_sock.close(); } catch () {}
         }
     }
@@ -3765,6 +3852,35 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                if (body_streaming) {
+                    resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
+                        HttpConnectionState::Http2);
+                }
+                handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                    dispatch_stream_id, prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/2 request stream=%d on %y: %s: %s",
+                dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            if (body_streaming) {
+                resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
+                    HttpConnectionState::Http2);
+            }
+            try {
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                "HTTP/2 preparation error response");
+            return;
+        }
+
         # Dispatch to handler thread pool
         # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
         # header-info) as an *early* resume right after the framework finishes reading the
@@ -3806,6 +3922,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
                 "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/2 request preparation for stream=%d "
+                    "on %y: %s: %s", dispatch_stream_id, dispatch_uh,
+                    cancel_ex.err, cancel_ex.desc);
+            }
             if (body_streaming) {
                 # Resume h2op — it was not resumed before submit in body_streaming mode
                 try {
@@ -3985,6 +4108,27 @@ public class HttpAsyncSocketIoController {
             "ssl": dispatch_ssl,
         };
 
+        # Apply the same pre-dispatch admission contract to extended CONNECT requests.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                    dispatch_stream_id, prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/2 extended CONNECT stream=%d: %s: %s",
+                dispatch_stream_id, ex.err, ex.desc);
+            try {
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                "HTTP/2 extended CONNECT preparation error response");
+            return;
+        }
+
         # Dispatch to handler thread pool
         try {
             submitToHandlerPool(dispatch_target, sub () {
@@ -4010,6 +4154,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 extended CONNECT handler for stream=%d "
                 "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/2 extended CONNECT preparation for stream=%d "
+                    "on %y: %s: %s", dispatch_stream_id, dispatch_uh,
+                    cancel_ex.err, cancel_ex.desc);
+            }
             # Send error for this stream only — other streams continue
             try {
                 dispatch_sock.submitHttp2Response(dispatch_stream_id, 503,
