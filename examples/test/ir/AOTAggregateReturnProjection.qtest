@@ -177,6 +177,55 @@ list<bool> sub makeConditionalBools(
     return (left, right);
 }
 
+list<int> sub makeConditionalComputedValues(bool reverse,
+        int left, int right, int invariant) {
+    if (reverse) {
+        return (right, left, invariant + 7, invariant * 3,
+            left + right, 11);
+    }
+    return (left, right, invariant + 7, invariant * 3,
+        left + right, 11);
+}
+
+list<float> sub makeConditionalComputedFloats(bool reverse,
+        float left, float right, float invariant) {
+    if (reverse) {
+        return (right, invariant + 0.25, -0.0);
+    }
+    return (left, invariant + 0.25, -0.0);
+}
+
+list<bool> sub makeConditionalComparedValues(bool reverse,
+        bool left, bool right, int lhs, int rhs) {
+    if (reverse) {
+        return (right, left, lhs < rhs, True);
+    }
+    return (left, right, lhs < rhs, True);
+}
+
+list<auto> sub makeConditionalAutoValues(bool reverse,
+        int left, int right, int invariant) {
+    if (reverse) {
+        return (right, invariant + 7);
+    }
+    return (left, invariant + 7);
+}
+
+list<int> sub makeConditionalDifferentComputed(
+        bool alternate, int value) {
+    if (alternate) {
+        return (value + 1,);
+    }
+    return (value + 2,);
+}
+
+list<float> sub makeConditionalDifferentZero(bool negative) {
+    if (negative) {
+        return (-0.0,);
+    }
+    return (0.0,);
+}
+
 list<int> sub makeVariableShape(bool long_value, int value) {
     if (long_value) {
         return (value, value + 1, value + 2);
@@ -628,6 +677,59 @@ bool sub conditionalFloatElementProjection(bool reverse) {
 bool sub conditionalBoolElementProjection(bool reverse) {
     return makeConditionalBools(reverse, False, True)[0]
         == reverse;
+}
+
+bool sub conditionalComputedIntProjection(bool reverse) {
+    return makeConditionalComputedValues(reverse, 2, 3, 5)[2] == 12
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[3] == 15
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[4] == 5
+        && makeConditionalComputedValues(reverse, 2, 3, 5)[5] == 11;
+}
+
+bool sub conditionalComputedFloatProjection(bool reverse) {
+    return makeConditionalComputedFloats(reverse, 1.25, 2.5, 3.75)[1]
+            == 4.0
+        && sprintf(\"%.1f\",
+            makeConditionalComputedFloats(
+                reverse, 1.25, 2.5, 3.75)[2]) == \"-0.0\";
+}
+
+bool sub conditionalComputedBoolProjection(bool reverse) {
+    return makeConditionalComparedValues(
+            reverse, False, True, 2, 3)[2]
+        && makeConditionalComparedValues(
+            reverse, False, True, 2, 3)[3];
+}
+
+bool sub conditionalComputedOverflowProjection(bool reverse, int value) {
+    return makeConditionalComputedValues(
+            reverse, value, 2, value)[2] == -9223372036854775802
+        && makeConditionalComputedValues(
+            reverse, value, 2, value)[3] == 9223372036854775805
+        && makeConditionalComputedValues(
+            reverse, value, 2, value)[4] == -9223372036854775807;
+}
+
+bool sub conditionalComputedSideEffectOrder() {
+    int effects = 0;
+    bool result = makeConditionalComputedValues(
+        (effects = 1) == 1, 2, 3, 5)[2] == 12;
+    return result && effects == 1;
+}
+
+bool sub conditionalAutoComputedProjection(bool reverse) {
+    return makeConditionalAutoValues(reverse, 2, 3, 5)[1] == 12;
+}
+
+bool sub conditionalDifferentComputedProjection(bool alternate) {
+    return makeConditionalDifferentComputed(alternate, 5)[0]
+        == (alternate ? 6 : 7);
+}
+
+bool sub conditionalDifferentZeroProjection(bool negative) {
+    return sprintf(\"%.1f\",
+        makeConditionalDifferentZero(negative)[0])
+        == (negative ? \"-0.0\" : \"0.0\");
 }
 
 int sub variableShapeProjection(bool long_value) {
@@ -1084,6 +1186,22 @@ printf(\"%y:%y:%y:%y\\n\",
     conditionalFloatElementProjection(True),
     conditionalBoolElementProjection(False),
     conditionalBoolElementProjection(True));
+printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
+    conditionalComputedIntProjection(False),
+    conditionalComputedIntProjection(True),
+    conditionalComputedFloatProjection(False),
+    conditionalComputedFloatProjection(True),
+    conditionalComputedBoolProjection(False),
+    conditionalComputedBoolProjection(True),
+    conditionalComputedOverflowProjection(False, 9223372036854775807),
+    conditionalComputedOverflowProjection(True, 9223372036854775807),
+    conditionalComputedSideEffectOrder(),
+    conditionalAutoComputedProjection(False),
+    conditionalAutoComputedProjection(True),
+    conditionalDifferentComputedProjection(False),
+    conditionalDifferentComputedProjection(True),
+    conditionalDifferentZeroProjection(False),
+    conditionalDifferentZeroProjection(True));
 printf(\"%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     guardedListIndex(9, 0) == 9,
     guardedListIndex(9, -1) == 9,
@@ -1233,6 +1351,21 @@ foreach string function in (("conditionalElementProjection",
         exit(2);
     }
 }
+foreach hash<string, auto> test in ((
+        {"function": "conditionalComputedIntProjection", "count": 4},
+        {"function": "conditionalComputedFloatProjection", "count": 2},
+        {"function": "conditionalComputedBoolProjection", "count": 2},
+        {"function": "conditionalComputedOverflowProjection", "count": 3},
+        {"function": "conditionalComputedSideEffectOrder", "count": 1},
+        {"function": "conditionalAutoComputedProjection", "count": 1})) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=%d",
+            test.function, test.count))) {
+        printf("missing conditional computed aggregate projection for %s:\n%s",
+            test.function, enabled_compile);
+        exit(2);
+    }
+}
 foreach string function in (("nonNestedComputedProjection",
         "nonConsumerComputedProjection", "computedIntProjection",
         "computedBoxedIntProjection", "computedFloatProjection",
@@ -1355,7 +1488,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection|conditionalDifferentComputedProjection|conditionalDifferentZeroProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1404,6 +1537,9 @@ string empty_row_line;
 string constant_values_line;
 string constant_row_line;
 string conditional_values_line;
+string conditional_computed_values_line;
+string conditional_computed_floats_line;
+string conditional_compared_values_line;
 string computed_row_line;
 string computed_values_line;
 string computed_floats_line;
@@ -1460,6 +1596,15 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeConditionalValues(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         conditional_values_line = line;
+    } else if (line.find("makeConditionalComputedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_computed_values_line = line;
+    } else if (line.find("makeConditionalComputedFloats(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_computed_floats_line = line;
+    } else if (line.find("makeConditionalComparedValues(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        conditional_compared_values_line = line;
     } else if (line.find("makeComputedRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         computed_row_line = line;
@@ -1536,6 +1681,23 @@ if (conditional_values_line.find("\"aggregate_return_kind\": 1") == -1
         conditional_values_line);
     exit(2);
 }
+if (conditional_computed_values_line.find(
+            "\"aggregate_return_value_kinds\": [7, 7, 5, 11, 10, 1]") == -1
+        || conditional_computed_values_line.find(
+            "\"aggregate_return_value_ints\": [256, 512, 7, 3, 2, 11]") == -1
+        || conditional_computed_floats_line.find(
+            "\"aggregate_return_value_kinds\": [8, 6, 2]") == -1
+        || conditional_computed_floats_line.find(
+            "\"aggregate_return_value_floats\": [0, 0.25, -0]") == -1
+        || conditional_compared_values_line.find(
+            "\"aggregate_return_value_kinds\": [9, 9, 12, 3]") == -1
+        || conditional_compared_values_line.find(
+            "\"aggregate_return_value_ints\": [256, 512, 516, 1]") == -1) {
+    printf("missing serialized conditional computed metadata:\n%s\n%s\n%s",
+        conditional_computed_values_line, conditional_computed_floats_line,
+        conditional_compared_values_line);
+    exit(2);
+}
 if (computed_row_line.find(
             "\"aggregate_return_value_params\": [0, 1, 2]") == -1
         || computed_row_line.find(
@@ -1578,6 +1740,7 @@ if (computed_row_line.find(
 }
 
 string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\n11:2.5:True\nTrue:True:True:True\n";
+expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
