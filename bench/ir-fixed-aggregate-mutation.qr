@@ -1,0 +1,61 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+hashdecl FixedMutationRecord {
+    int left;
+    int right;
+}
+
+int sub hashKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<string, int> values = {
+            "left": i,
+            "right": i + 1,
+        };
+        values.left = i + 2;
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub hashdeclKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        FixedMutationRecord values((
+            "left": i,
+            "right": i + 1,
+        ));
+        values.left = i + 2;
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub listKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1);
+        values[0] = i + 2;
+        checksum += values[0] + values[1];
+    }
+    return checksum;
+}
+
+string mode = ARGV.size() ? ARGV[0] : "hash";
+int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 5000000;
+switch (mode) {
+    case "hash":
+        printf("%d\n", hashKernel(rounds));
+        break;
+    case "hashdecl":
+        printf("%d\n", hashdeclKernel(rounds));
+        break;
+    case "list":
+        printf("%d\n", listKernel(rounds));
+        break;
+    default:
+        throw "BENCHMARK-ERROR", "unknown mode '%s'", mode;
+}

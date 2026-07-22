@@ -1548,6 +1548,7 @@ bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
 
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
+    cow_container_locals.clear();
     ast_referenced_locals.clear();
     has_opaque_ast_local_access = false;
     has_explicit_self_local_access = false;
@@ -1635,23 +1636,26 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (inst->opcode == QoreIROpcode::HashKeyStore) {
                 auto* hks = static_cast<const QoreIRHashKeyStoreInstruction*>(inst.get());
                 if (hks->container_lv) {
-                    ast_referenced_locals.insert(
+                    cow_container_locals.insert(
                         reinterpret_cast<const void*>(hks->container_lv));
                 } else if (hks->container && hks->container->ref.id) {
-                    ast_referenced_locals.insert(hks->container->ref.id);
+                    cow_container_locals.insert(hks->container->ref.id);
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
                 auto* hksd = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
                 if (hksd->container_lv) {
-                    ast_referenced_locals.insert(
+                    cow_container_locals.insert(
                         reinterpret_cast<const void*>(hksd->container_lv));
                 } else if (hksd->container && hksd->container->ref.id) {
-                    ast_referenced_locals.insert(hksd->container->ref.id);
+                    cow_container_locals.insert(hksd->container->ref.id);
                 }
             } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
                 auto* lis = static_cast<const QoreIRListIndexStoreInstruction*>(inst.get());
-                if (lis->container && lis->container->ref.id) {
-                    ast_referenced_locals.insert(lis->container->ref.id);
+                if (lis->container_lv) {
+                    cow_container_locals.insert(
+                        reinterpret_cast<const void*>(lis->container_lv));
+                } else if (lis->container && lis->container->ref.id) {
+                    cow_container_locals.insert(lis->container->ref.id);
                 }
             }
 
@@ -1738,6 +1742,10 @@ void QoreIRFunction::computeIROnlyLocals() {
         // Local appears in AST expression trees — must stay AST-visible
         if (ast_referenced_locals.count(key)) {
             printd(5, "  local '%s' (%p): AST-referenced (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        if (cow_container_locals.count(key)) {
+            printd(5, "  local '%s' (%p): COW container (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Closure-captured locals use the closure variable stack (not the regular

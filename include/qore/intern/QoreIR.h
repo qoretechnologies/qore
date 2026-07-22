@@ -3008,6 +3008,12 @@ public:
     // (reload after calls), since no AST callback will ever look them up.
     std::unordered_set<const void*> ir_only_locals;
 
+    // Locals kept AST-visible because a direct hash/list element store can
+    // perform COW assign-back through the runtime local stack. Optimizations
+    // that eliminate every such store can combine this with the AST-reference
+    // inventory to identify otherwise IR-only containers.
+    std::unordered_set<const void*> cow_container_locals;
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.

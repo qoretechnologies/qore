@@ -40,6 +40,26 @@ int sub mutatedList() {
     return values[0] + values[1];
 }
 
+int sub compoundList() {
+    list<int> values = (1, 2);
+    values[0] += 4;
+    return values[0] + values[1];
+}
+
+int sub unaryList() {
+    list<int> values = (1, 2);
+    int old = values[0]++;
+    int current = ++values[1];
+    return old * 100 + values[0] * 10 + current;
+}
+
+int sub aliasedList() {
+    list<int> values = (1, 2);
+    list<int> alias = values;
+    values[0] = 7;
+    return alias[0] + values[0];
+}
+
 list<int> sub escapedList() {
     list<int> values = (3, 4);
     return values;
@@ -71,8 +91,9 @@ bool sub conditionalAssignment(bool assign) {
     return values[0] === NOTHING;
 }
 
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\", scalarInt(4), scalarFloat(1.5),
-    scalarBool(True), dynamicIndex(2), mutatedList(), escapedList().size(), outOfRange(),
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\", scalarInt(4), scalarFloat(1.5),
+    scalarBool(True), dynamicIndex(2), mutatedList(), compoundList(), unaryList(), aliasedList(),
+    escapedList().size(), outOfRange(),
     boxedElement(), crossBlock(4, True), crossBlock(4, False),
     conditionalAssignment(False), conditionalAssignment(True));
 ";
@@ -101,7 +122,7 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:1:9:9:2:1:b:10:11:1:0\n";
+string expected = "11:2.5:1:9:9:7:123:8:2:1:b:10:11:1:0\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -123,12 +144,15 @@ string stats = backquote(sprintf(
 if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
         || stats !~ /IR-OPT: scalarFloat:.*scalar-lists=1/
         || stats !~ /IR-OPT: scalarBool:.*scalar-lists=1/
+        || stats !~ /IR-OPT: mutatedList:.*scalar-lists=1/
         || stats !~ /IR-OPT: crossBlock:.*scalar-lists=1/) {
     printf("missing fixed-list scalar replacement:\n%s", stats);
     exit(2);
 }
 if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
-        || stats !~ /IR-OPT: mutatedList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: compoundList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: unaryList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: aliasedList:.*scalar-lists=0/
         || stats !~ /IR-OPT: escapedList:.*scalar-lists=0/
         || stats !~ /IR-OPT: outOfRange:.*scalar-lists=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-lists=0/

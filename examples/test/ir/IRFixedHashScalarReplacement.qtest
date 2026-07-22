@@ -40,6 +40,32 @@ int sub mutatedHash() {
     return values.left + values.right;
 }
 
+int sub compoundHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.left += 4;
+    return values.left + values.right;
+}
+
+int sub unaryHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    int old = values.left++;
+    int current = ++values.right;
+    return old * 100 + values.left * 10 + current;
+}
+
+int sub aliasedHash() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    hash<string, int> alias = values;
+    values.left = 7;
+    return alias.left + values.left;
+}
+
+int sub newKey() {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    values.extra = 7;
+    return values.extra;
+}
+
 hash<string, int> sub escapedHash() {
     hash<string, int> values = {\"left\": 3, \"right\": 4};
     return values;
@@ -83,9 +109,10 @@ bool sub deletedKey() {
     return values.left === NOTHING;
 }
 
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d\\n\",
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d\\n\",
     scalarInt(4), scalarFloat(1.5), scalarBool(True), dynamicKey(\"right\"),
-    mutatedHash(), escapedHash().size(), missingKey(), boxedElement(),
+    mutatedHash(), compoundHash(), unaryHash(), aliasedHash(), newKey(),
+    escapedHash().size(), missingKey(), boxedElement(),
     crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
     conditionalAssignment(True), removedKey(), deletedKey());
 ";
@@ -114,7 +141,7 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:1:9:9:2:1:b:10:11:1:0:1:1\n";
+string expected = "11:2.5:1:9:9:7:123:8:7:2:1:b:10:11:1:0:1:1\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -136,12 +163,16 @@ string stats = backquote(sprintf(
 if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarFloat:.*scalar-hashes=1/
         || stats !~ /IR-OPT: scalarBool:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/) {
     printf("missing fixed-hash scalar replacement:\n%s", stats);
     exit(2);
 }
 if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
-        || stats !~ /IR-OPT: mutatedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: unaryHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: aliasedHash:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: newKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: escapedHash:.*scalar-hashes=0/
         || stats !~ /IR-OPT: missingKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
