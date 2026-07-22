@@ -10566,18 +10566,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
     size_t specialized = 0;
     size_t check_count = 0;
-    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
-            if (qore_ir_analysis_cancelled(check_count,
-                    "IR proven-native definition analysis")) {
-                return 0;
-            }
-            if (inst && inst->result.isValid()) {
-                definitions.emplace(inst->result.id, inst.get());
-            }
-        }
-    }
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
             const QoreTypeInfo* type_info) {
@@ -10598,46 +10586,18 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
         facts.never_nothing = true;
         func.setValueFacts(result, facts);
     };
-    auto get_const_int = [&](QoreIRValue value, int64_t& result) {
-        auto definition = definitions.find(value.id);
-        if (definition == definitions.end() || !definition->second
-                || definition->second->opcode != QoreIROpcode::ConstInt) {
-            return false;
-        }
-        result = static_cast<const QoreIRConstInstruction*>(
-            definition->second)->constant.int_value;
-        return true;
-    };
-    auto safe_int_division = [&](const QoreIRInstruction& inst) {
-        int64_t lhs = 0;
-        int64_t rhs = 0;
-        bool lhs_constant = get_const_int(inst.operands[0], lhs);
-        bool rhs_constant = get_const_int(inst.operands[1], rhs);
-        return (rhs_constant && rhs != -1)
-            || (lhs_constant && lhs != INT64_MIN);
-    };
-    auto safe_shift = [&](const QoreIRInstruction& inst) {
-        int64_t rhs = 0;
-        return get_const_int(inst.operands[1], rhs) && rhs >= 0 && rhs < 64;
-    };
     auto int_opcode = [&](const QoreIRInstruction& inst) {
         switch (inst.opcode) {
             case QoreIROpcode::AddAny: return QoreIROpcode::AddInt;
             case QoreIROpcode::SubAny: return QoreIROpcode::SubInt;
             case QoreIROpcode::MulAny: return QoreIROpcode::MulInt;
-            case QoreIROpcode::DivAny:
-                return safe_int_division(inst)
-                    ? QoreIROpcode::DivInt : inst.opcode;
-            case QoreIROpcode::ModAny:
-                return safe_int_division(inst)
-                    ? QoreIROpcode::ModInt : inst.opcode;
+            case QoreIROpcode::DivAny: return QoreIROpcode::DivInt;
+            case QoreIROpcode::ModAny: return QoreIROpcode::ModInt;
             case QoreIROpcode::AndAny: return QoreIROpcode::AndInt;
             case QoreIROpcode::OrAny: return QoreIROpcode::OrInt;
             case QoreIROpcode::XorAny: return QoreIROpcode::XorInt;
-            case QoreIROpcode::ShlAny:
-                return safe_shift(inst) ? QoreIROpcode::ShlInt : inst.opcode;
-            case QoreIROpcode::ShrAny:
-                return safe_shift(inst) ? QoreIROpcode::ShrInt : inst.opcode;
+            case QoreIROpcode::ShlAny: return QoreIROpcode::ShlInt;
+            case QoreIROpcode::ShrAny: return QoreIROpcode::ShrInt;
             case QoreIROpcode::EqAny: return QoreIROpcode::EqInt;
             case QoreIROpcode::NeAny: return QoreIROpcode::NeInt;
             case QoreIROpcode::LtAny: return QoreIROpcode::LtInt;
@@ -10648,21 +10608,13 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             case QoreIROpcode::AddAssignAny: return QoreIROpcode::AddAssignInt;
             case QoreIROpcode::SubAssignAny: return QoreIROpcode::SubAssignInt;
             case QoreIROpcode::MulAssignAny: return QoreIROpcode::MulAssignInt;
-            case QoreIROpcode::DivAssignAny:
-                return safe_int_division(inst)
-                    ? QoreIROpcode::DivAssignInt : inst.opcode;
-            case QoreIROpcode::ModAssignAny:
-                return safe_int_division(inst)
-                    ? QoreIROpcode::ModAssignInt : inst.opcode;
+            case QoreIROpcode::DivAssignAny: return QoreIROpcode::DivAssignInt;
+            case QoreIROpcode::ModAssignAny: return QoreIROpcode::ModAssignInt;
             case QoreIROpcode::AndAssignAny: return QoreIROpcode::AndAssignInt;
             case QoreIROpcode::OrAssignAny: return QoreIROpcode::OrAssignInt;
             case QoreIROpcode::XorAssignAny: return QoreIROpcode::XorAssignInt;
-            case QoreIROpcode::ShlAssignAny:
-                return safe_shift(inst)
-                    ? QoreIROpcode::ShlAssignInt : inst.opcode;
-            case QoreIROpcode::ShrAssignAny:
-                return safe_shift(inst)
-                    ? QoreIROpcode::ShrAssignInt : inst.opcode;
+            case QoreIROpcode::ShlAssignAny: return QoreIROpcode::ShlAssignInt;
+            case QoreIROpcode::ShrAssignAny: return QoreIROpcode::ShrAssignInt;
             default: return inst.opcode;
         }
     };

@@ -9299,7 +9299,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DivInt: {
-            // Phase 2E: Inline zero-check with native division for non-zero case
+            // Keep zero and signed-overflow behavior in the runtime helper;
+            // LLVM sdiv is undefined for both cases.
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -9307,11 +9308,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
             llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
+                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
+            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
+                llvm::ConstantInt::getSigned(i64_type, -1));
+            llvm::Value* use_helper = builder->CreateOr(is_zero,
+                builder->CreateAnd(is_min, is_negative_one));
 
             llvm::BasicBlock* div_zero_bb = llvm::BasicBlock::Create(ctx, "div_zero", llvm_func);
             llvm::BasicBlock* div_ok_bb = llvm::BasicBlock::Create(ctx, "div_ok", llvm_func);
             llvm::BasicBlock* div_merge_bb = llvm::BasicBlock::Create(ctx, "div_merge", llvm_func);
-            builder->CreateCondBr(is_zero, div_zero_bb, div_ok_bb);
+            builder->CreateCondBr(use_helper, div_zero_bb, div_ok_bb);
 
             // Division by zero path: call runtime helper to raise exception
             builder->SetInsertPoint(div_zero_bb);
@@ -9334,7 +9341,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ModInt: {
-            // Phase 2E: Inline zero-check with native modulo for non-zero case
+            // Keep zero and signed-overflow behavior in the runtime helper;
+            // LLVM srem is undefined for both cases.
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -9342,11 +9350,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
             llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
+                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
+            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
+                llvm::ConstantInt::getSigned(i64_type, -1));
+            llvm::Value* use_helper = builder->CreateOr(is_zero,
+                builder->CreateAnd(is_min, is_negative_one));
 
             llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "mod_zero", llvm_func);
             llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "mod_ok", llvm_func);
             llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "mod_merge", llvm_func);
-            builder->CreateCondBr(is_zero, mod_zero_bb, mod_ok_bb);
+            builder->CreateCondBr(use_helper, mod_zero_bb, mod_ok_bb);
 
             // Division by zero path: call runtime helper to raise exception
             builder->SetInsertPoint(mod_zero_bb);
@@ -9629,18 +9643,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* count = builder->CreateAnd(
+                ensureIntTypeInline(rhs, inst->operands[1].id),
+                llvm::ConstantInt::get(i64_type, 63));
             values[inst->result.id] = builder->CreateShl(
                 ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+                count);
             return true;
         }
         case QoreIROpcode::ShrInt: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* count = builder->CreateAnd(
+                ensureIntTypeInline(rhs, inst->operands[1].id),
+                llvm::ConstantInt::get(i64_type, 63));
             values[inst->result.id] = builder->CreateAShr(
                 ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+                count);
             return true;
         }
 
@@ -21775,18 +21795,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* count = builder->CreateAnd(
+                ensureIntTypeInline(rhs, inst->operands[1].id),
+                llvm::ConstantInt::get(i64_type, 63));
             values[inst->result.id] = builder->CreateShl(
                 ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+                count);
             return true;
         }
         case QoreIROpcode::ShrAssignInt: {
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
+            llvm::Value* count = builder->CreateAnd(
+                ensureIntTypeInline(rhs, inst->operands[1].id),
+                llvm::ConstantInt::get(i64_type, 63));
             values[inst->result.id] = builder->CreateAShr(
                 ensureIntTypeInline(lhs, inst->operands[0].id),
-                ensureIntTypeInline(rhs, inst->operands[1].id));
+                count);
             return true;
         }
 
@@ -21940,7 +21966,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
         // === Division/Modulo compound assignments with inline zero-check ===
         case QoreIROpcode::DivAssignInt: {
-            // Phase 2E: Inline zero-check with native division for non-zero case
+            // Keep zero and signed-overflow behavior in the runtime helper;
+            // LLVM sdiv is undefined for both cases.
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -21948,11 +21975,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
             llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
+                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
+            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
+                llvm::ConstantInt::getSigned(i64_type, -1));
+            llvm::Value* use_helper = builder->CreateOr(is_zero,
+                builder->CreateAnd(is_min, is_negative_one));
 
             llvm::BasicBlock* div_zero_bb = llvm::BasicBlock::Create(ctx, "diva_zero", llvm_func);
             llvm::BasicBlock* div_ok_bb = llvm::BasicBlock::Create(ctx, "diva_ok", llvm_func);
             llvm::BasicBlock* div_merge_bb = llvm::BasicBlock::Create(ctx, "diva_merge", llvm_func);
-            builder->CreateCondBr(is_zero, div_zero_bb, div_ok_bb);
+            builder->CreateCondBr(use_helper, div_zero_bb, div_ok_bb);
 
             // Division by zero path: call runtime helper to raise exception
             builder->SetInsertPoint(div_zero_bb);
@@ -22010,7 +22043,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ModAssignInt: {
-            // Phase 2E: Inline zero-check with native modulo for non-zero case
+            // Keep zero and signed-overflow behavior in the runtime helper;
+            // LLVM srem is undefined for both cases.
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -22018,11 +22052,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* r_int = ensureIntTypeInline(rhs, inst->operands[1].id);
             llvm::Value* zero = llvm::ConstantInt::get(i64_type, 0);
             llvm::Value* is_zero = builder->CreateICmpEQ(r_int, zero);
+            llvm::Value* is_min = builder->CreateICmpEQ(l_int,
+                llvm::ConstantInt::getSigned(i64_type, INT64_MIN));
+            llvm::Value* is_negative_one = builder->CreateICmpEQ(r_int,
+                llvm::ConstantInt::getSigned(i64_type, -1));
+            llvm::Value* use_helper = builder->CreateOr(is_zero,
+                builder->CreateAnd(is_min, is_negative_one));
 
             llvm::BasicBlock* mod_zero_bb = llvm::BasicBlock::Create(ctx, "moda_zero", llvm_func);
             llvm::BasicBlock* mod_ok_bb = llvm::BasicBlock::Create(ctx, "moda_ok", llvm_func);
             llvm::BasicBlock* mod_merge_bb = llvm::BasicBlock::Create(ctx, "moda_merge", llvm_func);
-            builder->CreateCondBr(is_zero, mod_zero_bb, mod_ok_bb);
+            builder->CreateCondBr(use_helper, mod_zero_bb, mod_ok_bb);
 
             // Division by zero path: call runtime helper to raise exception
             builder->SetInsertPoint(mod_zero_bb);

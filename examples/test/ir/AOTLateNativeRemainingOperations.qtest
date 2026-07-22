@@ -66,6 +66,22 @@ int sub dynamicModulo(int value, int divisor) {
     return remainingIntPair(value)[0] % divisor;
 }
 
+string sub dynamicZeroResults(int value) {
+    string divide_error;
+    try {
+        dynamicDivision(value, 0);
+    } catch (hash<ExceptionInfo> ex) {
+        divide_error = ex.err;
+    }
+    string modulo_error;
+    try {
+        dynamicModulo(value, 0);
+    } catch (hash<ExceptionInfo> ex) {
+        modulo_error = ex.err;
+    }
+    return divide_error + \":\" + modulo_error;
+}
+
 string sub bitwiseResults(int value) {
     return sprintf(\"%d:%d:%d\", remainingIntPair(value)[0] & 15,
         remainingIntPair(value)[0] | 16, remainingIntPair(value)[0] ^ 3);
@@ -82,6 +98,10 @@ int sub dynamicShift(int value, int count) {
 
 int sub wideShift(int value) {
     return remainingIntPair(value)[0] << 64;
+}
+
+int sub negativeShift(int value) {
+    return remainingIntPair(value)[0] << -1;
 }
 
 string sub unaryResults(int value, float fvalue) {
@@ -108,6 +128,19 @@ string sub compoundResults(int value, float fvalue) {
     float_value *= 2.0;
     float_value /= 4.0;
     return sprintf(\"%d:%g\", ivalue, float_value);
+}
+
+string sub dynamicCompoundResults(int value, int divisor, int count) {
+    auto divided = remainingIntPair(value)[0];
+    divided /= divisor;
+    auto modulo = remainingIntPair(value)[1];
+    modulo %= divisor;
+    auto shifted_left = remainingIntPair(value)[0];
+    shifted_left <<= count;
+    auto shifted_right = remainingIntPair(value)[1];
+    shifted_right >>= count;
+    return sprintf(\"%d:%d:%d:%d\", divided, modulo,
+        shifted_left, shifted_right);
 }
 
 int sub maybeAssignedCompound(bool assign, int value) {
@@ -207,6 +240,26 @@ int sub compoundKernel(int rounds) {
     return checksum;
 }
 
+int sub dynamicDivModKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int divisor = (i & 7) + 1;
+        checksum += remainingIntPair(i)[0] / divisor;
+        checksum += remainingIntPair(i)[1] % divisor;
+    }
+    return checksum;
+}
+
+int sub dynamicShiftKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int count = i & 63;
+        checksum += remainingIntPair(i)[0] << count;
+        checksum += remainingIntPair(i)[1] >> count;
+    }
+    return checksum;
+}
+
 int sub main() {
     *string kernel = ENV.QORE_LATE_NATIVE_KERNEL;
     int rounds = ENV.QORE_LATE_NATIVE_ROUNDS
@@ -223,12 +276,19 @@ int sub main() {
         printf(\"%d\\n\", unaryKernel(rounds));
     } else if (kernel == \"compound\") {
         printf(\"%d\\n\", compoundKernel(rounds));
+    } else if (kernel == \"dynamic-divmod\") {
+        printf(\"%d\\n\", dynamicDivModKernel(rounds));
+    } else if (kernel == \"dynamic-shift\") {
+        printf(\"%d\\n\", dynamicShiftKernel(rounds));
     } else {
-        printf(\"cmp:%s:%s\\ndivmod:%s:%d:%d\\nbitwise:%s\\nshift:%s:%d\\nunary:%s\\ncompound:%s:%d:%d:%d\\n\",
+        printf(\"cmp:%s:%s\\ndivmod:%s:%d:%d:%s\\nbitwise:%s\\nshift:%s:%d:%d:%d\\nunary:%s\\ncompound:%s:%s:%d:%d:%d\\n\",
             cmpResults(9, 9.0), nanCmpResult(), divModResults(10, 7.25),
-            dynamicDivision(10, 3), dynamicModulo(10, 4), bitwiseResults(10),
-            shiftResults(10), dynamicShift(10, 3), unaryResults(10, 7.25),
-            compoundResults(10, 7.25), maybeAssignedCompound(True, 10),
+            dynamicDivision(10, 3), dynamicModulo(10, 4),
+            dynamicZeroResults(10), bitwiseResults(10),
+            shiftResults(10), dynamicShift(10, 3), wideShift(10),
+            negativeShift(-4), unaryResults(10, 7.25),
+            compoundResults(10, 7.25), dynamicCompoundResults(-4, 2, -1),
+            maybeAssignedCompound(True, 10),
             removedCompound(10), optionalCompound(10));
     }
     return 0;
@@ -264,11 +324,11 @@ string expected = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
     libqore_dir, qore_bin, combined_path));
 if (!expected.contains("cmp:1:1:1:NAN-COMPARE-ERROR\n")
-        || !expected.contains("divmod:5:2:4.0:5:3\n")
+        || !expected.contains("divmod:5:2:4.0:5:3:DIVISION-BY-ZERO:DIVISION-BY-ZERO\n")
         || !expected.contains("bitwise:15:31:12\n")
-        || !expected.contains("shift:60:7:120\n")
+        || !expected.contains("shift:60:7:120:15:-9223372036854775808\n")
         || !expected.contains("unary:15:-12:8.0:-7.5\n")
-        || !expected.contains("compound:78:4.5:16:1:11\n")) {
+        || !expected.contains("compound:78:4.5:0:0:-9223372036854775808:-1:16:1:11\n")) {
     printf("unexpected AST baseline:\n%s", expected);
     exit(2);
 }
@@ -310,16 +370,24 @@ hash<string, int> specialization_counts = (
     "cmpResults": 3,
     "nanCmpValue": 1,
     "divModResults": 3,
+    "dynamicDivision": 1,
+    "dynamicModulo": 1,
     "bitwiseResults": 3,
     "shiftResults": 2,
+    "dynamicShift": 1,
+    "wideShift": 1,
+    "negativeShift": 1,
     "unaryResults": 4,
     "compoundResults": 8,
+    "dynamicCompoundResults": 1,
     "cmpKernel": 3,
     "divModKernel": 3,
     "bitwiseKernel": 3,
     "shiftKernel": 2,
     "unaryKernel": 4,
     "compoundKernel": 8,
+    "dynamicDivModKernel": 2,
+    "dynamicShiftKernel": 2,
 );
 foreach string function in (specialization_counts.keys()) {
     int count = specialization_counts{function};
@@ -332,7 +400,7 @@ foreach string function in (specialization_counts.keys()) {
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (dynamicDivision|dynamicModulo|dynamicShift|wideShift|maybeAssignedCompound|removedCompound|optionalCompound)[^:]*:.*native-specializations=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (maybeAssignedCompound|removedCompound|optionalCompound)[^:]*:.*native-specializations=[1-9]/
         || disabled_compile =~ /native-specializations=[1-9]/) {
     printf("unsafe or disabled late specialization:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
