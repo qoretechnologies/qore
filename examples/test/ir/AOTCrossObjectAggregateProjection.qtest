@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+hash<string, int> sub crossRow(int value) {
+    return {
+        \"value\": value + 7,
+        \"unused\": value + 11,
+    };
+}
+
+list<float> sub crossFloats(float value) {
+    return (value + 0.25, value + 0.5);
+}
+
+list<string> sub crossWords(string left, string right) {
+    return (left, right);
+}
+
+string sub crossAggregateAnchor() {
+    return sprintf(\"%d:%g:%s\", crossRow(1).value,
+        crossFloats(1.0)[0], crossWords(\"left\", \"right\")[1]);
+}
+";
+
+string consumer_source = "%modern
+
+int sub crossRowProjection(int value) {
+    return crossRow(value).value;
+}
+
+bool sub crossFloatProjection() {
+    return crossFloats(1.25)[0] == 1.5;
+}
+
+string sub crossWordProjection() {
+    return crossWords(\"left\", \"right\")[1];
+}
+
+int sub projectionKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += crossRow(i).value;
+    }
+    return checksum;
+}
+
+int sub main() {
+    printf(\"%d:%y:%s:%d\\n\", crossRowProjection(5),
+        crossFloatProjection(), crossWordProjection(),
+        projectionKernel(1000));
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-cross-object-aggregate-projection-"
+    + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+
+string provider_index = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-index-json %s 2>&1",
+    libqore_dir, qcc_bin, provider_qo));
+if (provider_index
+            !~ /crossRow\([^\n]*\"aggregate_return_value_kinds\": \[5, 5\][^\n]*\"aggregate_return_value_ints\": \[7, 11\]/
+        || provider_index
+            !~ /crossFloats\([^\n]*\"aggregate_return_value_kinds\": \[6, 6\][^\n]*\"aggregate_return_value_floats\": \[0.25, 0.5\]/
+        || provider_index
+            !~ /crossWords\([^\n]*\"aggregate_return_value_params\": \[0, 1\]/) {
+    printf("provider aggregate metadata mismatch:\n%s", provider_index);
+    exit(2);
+}
+
+# The consumer must rely only on the provider's serialized metadata.
+unlink(provider_path);
+
+string consumer_path = root + "/consumer.qr";
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+
+string sub compileConsumer(string output_dir, string env) {
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+        env, libqore_dir, qcc_bin, provider_dir, output_dir,
+        consumer_path));
+    if (!is_file(output_dir + "/consumer.qo")) {
+        printf("consumer compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compileConsumer(enabled_dir, "");
+string disabled_compile = compileConsumer(disabled_dir,
+    "QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
+foreach string function in (("crossRowProjection", "crossFloatProjection",
+        "crossWordProjection", "projectionKernel")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing cross-object projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("disabled cross-object projection:\n%s", disabled_compile);
+    exit(2);
+}
+
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined =~ /cross(Row|Floats|Words)/
+        || disabled_undefined !~ /crossRow[^\n]*_fast/
+        || disabled_undefined !~ /crossFloats[^\n]*_fast/
+        || disabled_undefined !~ /crossWords[^\n]*_fast/) {
+    printf("cross-object call elimination mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string sub link(string output, string consumer_qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+        libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
+    if (!is_file(output)) {
+        printf("cross-object link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_exe = link(root + "/enabled-exe", enabled_qo);
+string disabled_exe = link(root + "/disabled-exe", disabled_qo);
+string expected = "12:True:right:506500\n";
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("cross-object output mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
