@@ -244,6 +244,9 @@ size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
 //! Specialize pseudo-method flags and generic collection operations from late facts.
 size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func);
 
+//! Mark assigned exact list and binary pseudo-method receivers for no-guard lowering.
+size_t qore_ir_specialize_proven_collection_operations(QoreIRFunction& func);
+
 using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;

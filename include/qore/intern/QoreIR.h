@@ -2385,6 +2385,7 @@ public:
     bool pseudo_arg0_known_assigned_int = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING int
     bool pseudo_arg1_known_assigned_int = false; //!< True if pseudo argument 1 is proven assigned/non-NOTHING int
     bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
+    bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
 
@@ -2438,6 +2439,7 @@ public:
     bool pseudo_arg0_known_assigned_int = false; //!< True if pseudo argument 0 is proven assigned/non-NOTHING int
     bool pseudo_arg1_known_assigned_int = false; //!< True if pseudo argument 1 is proven assigned/non-NOTHING int
     bool pseudo_base_safe_value_dispatch = false; //!< True if pseudo base cannot require object/hash name dispatch
+    bool pseudo_base_known_assigned_collection = false; //!< True if pseudo base is a proven assigned list or binary
     const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr;
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success

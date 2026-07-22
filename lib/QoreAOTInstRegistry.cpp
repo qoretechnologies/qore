@@ -1406,14 +1406,16 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
 
 static uint8_t instRegistryPackDotEvalPseudoFlags(bool known_string, bool assigned_string,
         bool arg0_known_string, bool arg0_assigned_string, bool arg0_assigned_int,
-        bool arg1_assigned_int, bool safe_value_dispatch) {
+        bool arg1_assigned_int, bool safe_value_dispatch,
+        bool assigned_collection) {
     return (known_string ? 0x01 : 0)
         | (assigned_string ? 0x02 : 0)
         | (arg0_known_string ? 0x08 : 0)
         | (arg0_assigned_string ? 0x10 : 0)
         | (arg0_assigned_int ? 0x20 : 0)
         | (arg1_assigned_int ? 0x40 : 0)
-        | (safe_value_dispatch ? 0x04 : 0);
+        | (safe_value_dispatch ? 0x04 : 0)
+        | (assigned_collection ? 0x80 : 0);
 }
 
 static void instRegistryApplyDotEvalPseudoFlags(QoreIRDotEvalMethodDirectInstruction& inst, uint8_t flags) {
@@ -1424,6 +1426,7 @@ static void instRegistryApplyDotEvalPseudoFlags(QoreIRDotEvalMethodDirectInstruc
     inst.pseudo_arg0_known_assigned_int = (flags & 0x20) != 0;
     inst.pseudo_arg1_known_assigned_int = (flags & 0x40) != 0;
     inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
+    inst.pseudo_base_known_assigned_collection = (flags & 0x80) != 0;
 }
 
 static void instRegistryApplyDotEvalPseudoFlags(QoreIRInvokeDotEvalMethodDirectInstruction& inst, uint8_t flags) {
@@ -1434,6 +1437,7 @@ static void instRegistryApplyDotEvalPseudoFlags(QoreIRInvokeDotEvalMethodDirectI
     inst.pseudo_arg0_known_assigned_int = (flags & 0x20) != 0;
     inst.pseudo_arg1_known_assigned_int = (flags & 0x40) != 0;
     inst.pseudo_base_safe_value_dispatch = (flags & 0x04) != 0;
+    inst.pseudo_base_known_assigned_collection = (flags & 0x80) != 0;
 }
 
 static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
@@ -1457,7 +1461,8 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
             ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
             ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
             ci->pseudo_arg0_known_assigned_int, ci->pseudo_arg1_known_assigned_int,
-            ci->pseudo_base_safe_value_dispatch));
+            ci->pseudo_base_safe_value_dispatch,
+            ci->pseudo_base_known_assigned_collection));
     }
     return true;
 }
@@ -1525,7 +1530,8 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
             ci->pseudo_base_known_string, ci->pseudo_base_known_assigned_string,
             ci->pseudo_arg0_known_string, ci->pseudo_arg0_known_assigned_string,
             ci->pseudo_arg0_known_assigned_int, ci->pseudo_arg1_known_assigned_int,
-            ci->pseudo_base_safe_value_dispatch));
+            ci->pseudo_base_safe_value_dispatch,
+            ci->pseudo_base_known_assigned_collection));
     }
     auto it_n = ctx.block_idx.find(ci->normal_target);
     ctx.writer.writeU16(it_n != ctx.block_idx.end() ? it_n->second : 0xFFFF);

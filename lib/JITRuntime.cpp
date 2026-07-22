@@ -295,6 +295,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_load_static_var_for_call_throwing) },
     { "qore_rt_pseudo_list_bool_guarded", reinterpret_cast<void*>(&qore_rt_pseudo_list_bool_guarded) },
     { "qore_rt_pseudo_list_bool_guarded_aot", reinterpret_cast<void*>(&qore_rt_pseudo_list_bool_guarded_aot) },
+    { "qore_rt_pseudo_list_size_native_noguard",
+        reinterpret_cast<void*>(&qore_rt_pseudo_list_size_native_noguard) },
+    { "qore_rt_pseudo_binary_size_native_noguard",
+        reinterpret_cast<void*>(&qore_rt_pseudo_binary_size_native_noguard) },
+    { "qore_rt_pseudo_list_value_noguard",
+        reinterpret_cast<void*>(&qore_rt_pseudo_list_value_noguard) },
     { "qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size) },
     { "qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int) },
     { "qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float) },
@@ -15806,6 +15812,23 @@ static uint64_t qore_rt_list_first_last(uint64_t base_bits, bool last) {
         result.refSelf();
     }
     return toBits(result);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_list_size_native_noguard(
+        uint64_t base_bits) {
+    QoreValue base = fromBits(base_bits);
+    return static_cast<int64_t>(base.get<const QoreListNode>()->size());
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_binary_size_native_noguard(
+        uint64_t base_bits) {
+    QoreValue base = fromBits(base_bits);
+    return static_cast<int64_t>(base.get<const BinaryNode>()->size());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_noguard(
+        uint64_t base_bits, int32_t last) {
+    return qore_rt_list_first_last(base_bits, last != 0);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits,

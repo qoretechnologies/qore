@@ -124,6 +124,32 @@ static int qore_ir_get_list_value_pseudo_fast_path(QoreIRIntrinsic intrinsic) {
     }
 }
 
+enum class QoreIRExactCollectionKind : uint8_t {
+    None,
+    List,
+    Binary,
+};
+
+static QoreIRExactCollectionKind qore_ir_get_exact_collection_kind(
+        const QoreIRFunction* func, QoreIRValue base, bool proven) {
+    if (!func || !proven) {
+        return QoreIRExactCollectionKind::None;
+    }
+    const QoreIRValueFacts* facts = func->getValueFacts(base);
+    if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+            || facts->representation != QoreIRValueRepresentation::Boxed
+            || !facts->never_nothing) {
+        return QoreIRExactCollectionKind::None;
+    }
+    if (facts->type_info == listTypeInfo) {
+        return QoreIRExactCollectionKind::List;
+    }
+    if (facts->type_info == binaryTypeInfo) {
+        return QoreIRExactCollectionKind::Binary;
+    }
+    return QoreIRExactCollectionKind::None;
+}
+
 struct QoreIRPseudoHelperInfo {
     const char* symbol = nullptr;
     bool result_needs_cleanup = false;
@@ -16493,6 +16519,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool invert_list_empty = false;
             int list_value_id = (direct_inst->pseudo && nargs == 0)
                 ? qore_ir_get_list_value_pseudo_fast_path(direct_inst->intrinsic) : -1;
+            QoreIRExactCollectionKind exact_collection_kind =
+                qore_ir_get_exact_collection_kind(current_ir_func,
+                    inst->operands[0],
+                    direct_inst->pseudo_base_known_assigned_collection);
+            bool collection_scalar_fast_path = direct_inst->pseudo
+                && nargs == 0
+                && exact_collection_kind != QoreIRExactCollectionKind::None
+                && (direct_inst->intrinsic == QoreIRIntrinsic::Size
+                    || direct_inst->intrinsic == QoreIRIntrinsic::Empty
+                    || direct_inst->intrinsic == QoreIRIntrinsic::Val);
             const char* string_noguard_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->intrinsic,
@@ -16570,6 +16606,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (collection_scalar_fast_path) {
+                const char* helper_name = exact_collection_kind
+                        == QoreIRExactCollectionKind::List
+                    ? "qore_rt_pseudo_list_size_native_noguard"
+                    : "qore_rt_pseudo_binary_size_native_noguard";
+                auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* size = builder->CreateCall(helper, {base_boxed});
+                if (direct_inst->intrinsic == QoreIRIntrinsic::Size) {
+                    call_result = boxIntInline(size);
+                } else {
+                    llvm::Value* empty = builder->CreateICmpEQ(size,
+                        llvm::ConstantInt::get(i64_type, 0));
+                    call_result = boxBool(direct_inst->intrinsic
+                            == QoreIRIntrinsic::Empty
+                        ? empty : builder->CreateNot(empty));
+                }
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (list_value_id >= 0
+                    && exact_collection_kind
+                        == QoreIRExactCollectionKind::List) {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_pseudo_list_value_noguard",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i32_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {base_boxed,
+                     llvm::ConstantInt::get(i32_type, list_value_id)});
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
             } else if (list_value_id >= 0) {
                 if (aot_mode) {
                     QoreValue expr_val = direct_inst->expr;
@@ -17062,6 +17130,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool invert_list_empty = false;
             int list_value_id = (invoke_inst->pseudo && nargs == 0)
                 ? qore_ir_get_list_value_pseudo_fast_path(invoke_inst->intrinsic) : -1;
+            QoreIRExactCollectionKind exact_collection_kind =
+                qore_ir_get_exact_collection_kind(current_ir_func,
+                    inst->operands[0],
+                    invoke_inst->pseudo_base_known_assigned_collection);
+            bool collection_scalar_fast_path = invoke_inst->pseudo
+                && nargs == 0
+                && exact_collection_kind != QoreIRExactCollectionKind::None
+                && (invoke_inst->intrinsic == QoreIRIntrinsic::Size
+                    || invoke_inst->intrinsic == QoreIRIntrinsic::Empty
+                    || invoke_inst->intrinsic == QoreIRIntrinsic::Val);
             const char* string_noguard_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->intrinsic,
@@ -17139,6 +17217,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
+            } else if (collection_scalar_fast_path) {
+                const char* helper_name = exact_collection_kind
+                        == QoreIRExactCollectionKind::List
+                    ? "qore_rt_pseudo_list_size_native_noguard"
+                    : "qore_rt_pseudo_binary_size_native_noguard";
+                auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type, {i64_type}, false));
+                llvm::Value* size = builder->CreateCall(helper, {base_boxed});
+                if (invoke_inst->intrinsic == QoreIRIntrinsic::Size) {
+                    call_result = boxIntInline(size);
+                } else {
+                    llvm::Value* empty = builder->CreateICmpEQ(size,
+                        llvm::ConstantInt::get(i64_type, 0));
+                    call_result = boxBool(invoke_inst->intrinsic
+                            == QoreIRIntrinsic::Empty
+                        ? empty : builder->CreateNot(empty));
+                }
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+            } else if (list_value_id >= 0
+                    && exact_collection_kind
+                        == QoreIRExactCollectionKind::List) {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_pseudo_list_value_noguard",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i32_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {base_boxed,
+                     llvm::ConstantInt::get(i32_type, list_value_id)});
+                call_may_throw = false;
+                call_may_modify_runtime_locals = false;
             } else if (list_value_id >= 0) {
                 if (aot_mode) {
                     QoreValue expr_val = invoke_inst->expr;

@@ -16116,9 +16116,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
         size_t native_specializations = 0;
         size_t boxed_specializations = 0;
+        size_t collection_specializations = 0;
         if (!std::getenv("QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
             boxed_specializations =
                 qore_ir_specialize_proven_boxed_operations(func);
+        }
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_LATE_COLLECTION_SPECIALIZATION")) {
+            collection_specializations =
+                qore_ir_specialize_proven_collection_operations(func);
         }
         if (!std::getenv("QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
             native_specializations =
@@ -16129,6 +16135,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || boxed_return_calls
                 || changed
                 || string_consumers || boxed_specializations
+                || collection_specializations
                 || native_specializations)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
@@ -16140,12 +16147,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " inplace-push=%zu"
                 " string-consumers=%zu"
                 " boxed-specializations=%zu"
+                " collection-specializations=%zu"
                 " native-specializations=%zu\n",
                 func.name.c_str(), exact_boxed_call_facts,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
                 string_consumers, boxed_specializations,
+                collection_specializations,
                 native_specializations);
         }
     };

@@ -10937,6 +10937,67 @@ size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
     return specialized;
 }
 
+size_t qore_ir_specialize_proven_collection_operations(
+        QoreIRFunction& func) {
+    size_t specialized = 0;
+    size_t check_count = 0;
+    auto specialize = [&](auto* call) {
+        if (!call || !call->pseudo || call->operands.empty()
+                || call->pseudo_base_known_assigned_collection) {
+            return;
+        }
+        const QoreIRValueFacts* facts =
+            func.getValueFacts(call->operands[0]);
+        if (!facts
+                || facts->assigned_state
+                    != QoreIRAssignedState::Assigned
+                || facts->representation
+                    != QoreIRValueRepresentation::Boxed
+                || !facts->never_nothing
+                || (facts->type_info != listTypeInfo
+                    && facts->type_info != binaryTypeInfo)) {
+            return;
+        }
+        switch (call->intrinsic) {
+            case QoreIRIntrinsic::Size:
+            case QoreIRIntrinsic::Empty:
+            case QoreIRIntrinsic::Val:
+                break;
+            case QoreIRIntrinsic::ListFirst:
+            case QoreIRIntrinsic::ListLast:
+                if (facts->type_info != listTypeInfo) {
+                    return;
+                }
+                break;
+            default:
+                return;
+        }
+        call->pseudo_base_known_assigned_collection = true;
+        ++specialized;
+    };
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR proven-collection operation specialization")) {
+                return specialized;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst) {
+                continue;
+            }
+            if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+                specialize(static_cast<
+                    QoreIRDotEvalMethodDirectInstruction*>(inst));
+            } else if (inst->opcode
+                    == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                specialize(static_cast<
+                    QoreIRInvokeDotEvalMethodDirectInstruction*>(inst));
+            }
+        }
+    }
+    return specialized;
+}
+
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
         const QoreIRBoxedReturnParamQuery& get_return_param) {
     if (!get_return_param) {

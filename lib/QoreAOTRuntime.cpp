@@ -7209,6 +7209,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
             ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
             ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
+            ci->pseudo_base_known_assigned_collection = (pseudo_flags & 0x80) != 0;
             if (method_ref.method_name && *method_ref.method_name) {
                 ci->fallback_method_name = strdup(method_ref.method_name);
             }
@@ -7245,6 +7246,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             ci->pseudo_base_known_string = (pseudo_flags & 0x01) != 0;
             ci->pseudo_base_known_assigned_string = (pseudo_flags & 0x02) != 0;
             ci->pseudo_base_safe_value_dispatch = (pseudo_flags & 0x04) != 0;
+            ci->pseudo_base_known_assigned_collection = (pseudo_flags & 0x80) != 0;
             if (method_ref.method_name && *method_ref.method_name) {
                 ci->fallback_method_name = strdup(method_ref.method_name);
             }

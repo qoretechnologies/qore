@@ -1355,6 +1355,13 @@ uint64_t qore_rt_pseudo_list_bool_guarded(uint64_t base_bits, const QoreMethod* 
 uint64_t qore_rt_pseudo_list_value_guarded(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, int32_t last, ExceptionSink* xsink);
 
+//! No-guard size helpers for bases proven to be assigned lists or binaries.
+int64_t qore_rt_pseudo_list_size_native_noguard(uint64_t base_bits);
+int64_t qore_rt_pseudo_binary_size_native_noguard(uint64_t base_bits);
+
+//! No-guard <list>::first()/last() for bases proven to be assigned lists.
+uint64_t qore_rt_pseudo_list_value_noguard(uint64_t base_bits, int32_t last);
+
 //! Fast no-guard pseudo-methods: <string>::startsWith()/endsWith()/contains() for assigned string operands.
 uint64_t qore_rt_pseudo_string_predicate_noguard(uint64_t val_bits, uint64_t arg_bits, int32_t predicate,
     ExceptionSink* xsink);
