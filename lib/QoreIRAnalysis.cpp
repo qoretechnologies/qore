@@ -8147,6 +8147,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         std::pair<size_t, size_t>> instruction_positions;
     std::unordered_map<LocalVar*, std::vector<LocalOperation>> local_operations;
     std::unordered_set<const LocalVar*> written_locals;
+    std::unordered_map<const LocalVar*, size_t> local_write_counts;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
         const auto& block = func.blocks[block_id];
         for (size_t offset = 0; offset < block->instructions.size(); ++offset) {
@@ -8165,6 +8166,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 if (const LocalVar* written =
                         qore_ir_get_written_local(inst.get())) {
                     written_locals.insert(written);
+                    ++local_write_counts[written];
                 }
             }
             if (inst->opcode == QoreIROpcode::LoadLocal
@@ -8176,6 +8178,79 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 local_operations[local_inst->local].push_back(
                     {block_id, offset, local_inst});
             }
+        }
+    }
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return 0;
+    }
+    std::unordered_map<uint32_t, const AbstractQoreFunctionVariant*>
+        closure_values;
+    for (const auto& [result_id, definition] : definitions) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR aggregate-return closure definition analysis")) {
+            return 0;
+        }
+        const AbstractQoreFunctionVariant* variant =
+            qore_ir_get_created_closure_variant(definition);
+        if (variant) {
+            closure_values.emplace(result_id, variant);
+        }
+    }
+    for (const auto& [local, operations] : local_operations) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR aggregate-return stored closure analysis")) {
+            return 0;
+        }
+        if (!local || local->closureUse()
+                || local_write_counts[local] != 1
+                || !func.ir_only_locals.count(
+                    reinterpret_cast<const void*>(local))) {
+            continue;
+        }
+        const LocalOperation* store_operation = nullptr;
+        const QoreIRLocalInstruction* store = nullptr;
+        for (const LocalOperation& operation : operations) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR aggregate-return stored closure definition scan")) {
+                return 0;
+            }
+            if (operation.instruction->opcode != QoreIROpcode::StoreLocal) {
+                continue;
+            }
+            if (store) {
+                store = nullptr;
+                break;
+            }
+            store = operation.instruction;
+            store_operation = &operation;
+        }
+        if (!store || !store_operation || store->weak || store->is_ref
+                || !store->initial_assignment || store->operands.size() != 1) {
+            continue;
+        }
+        auto definition = definitions.find(store->operands.front().id);
+        const AbstractQoreFunctionVariant* variant =
+            definition == definitions.end() ? nullptr
+                : qore_ir_get_created_closure_variant(definition->second);
+        if (!variant) {
+            continue;
+        }
+        for (const LocalOperation& operation : operations) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR aggregate-return stored closure load scan")) {
+                return 0;
+            }
+            if (operation.instruction->opcode != QoreIROpcode::LoadLocal
+                    || !operation.instruction->result.isValid()
+                    || (operation.block_id == store_operation->block_id
+                        ? operation.offset <= store_operation->offset
+                        : !cfg.dominates(store_operation->block_id,
+                            operation.block_id))) {
+                continue;
+            }
+            closure_values.emplace(
+                operation.instruction->result.id, variant);
         }
     }
     std::unordered_set<const LocalVar*> immutable_parameters;
@@ -8190,10 +8265,6 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     }
     QoreIRScalarUses uses;
     if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
-        return 0;
-    }
-    QoreIRControlFlowGraph cfg(func);
-    if (cfg.cancelled) {
         return 0;
     }
     bool enable_native_scalar_projection =
@@ -8230,13 +8301,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         }
         bool direct_call = call->opcode == QoreIROpcode::CallDirect;
         bool static_call = call->opcode == QoreIROpcode::CallStaticDirect;
+        bool closure_call = call->opcode == QoreIROpcode::CallClosureDirect;
         bool exact_method_call =
             call->opcode == QoreIROpcode::CallMethodDirect
             && qore_ir_is_non_overridable_method_call(*call);
         bool exact_object_method_call =
             call->opcode == QoreIROpcode::DotEvalMethodDirect
             && qore_ir_is_non_overridable_method_call(*call);
-        if (!direct_call && !static_call && !exact_method_call
+        if (!direct_call && !static_call && !closure_call && !exact_method_call
                 && !exact_object_method_call) {
             return false;
         }
@@ -8491,7 +8563,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             callee = object_call->variant;
         } else {
             callee = qore_ir_get_resolved_effect_callee(
-                call, has_ref_args);
+                call, has_ref_args, &closure_values);
         }
         int16_t operand = -1;
         int64_t size = 0;
@@ -8975,13 +9047,16 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 && inst_ptr->opcode == QoreIROpcode::CallDirect;
             bool static_call = inst_ptr
                 && inst_ptr->opcode == QoreIROpcode::CallStaticDirect;
+            bool closure_call = inst_ptr
+                && inst_ptr->opcode == QoreIROpcode::CallClosureDirect;
             bool exact_method_call = inst_ptr
                 && inst_ptr->opcode == QoreIROpcode::CallMethodDirect
                 && qore_ir_is_non_overridable_method_call(*inst_ptr);
             bool exact_object_method_call = inst_ptr
                 && inst_ptr->opcode == QoreIROpcode::DotEvalMethodDirect
                 && qore_ir_is_non_overridable_method_call(*inst_ptr);
-            if ((!direct_call && !static_call && !exact_method_call
+            if ((!direct_call && !static_call && !closure_call
+                        && !exact_method_call
                         && !exact_object_method_call)
                     || inst_ptr->exception_target
                     || !inst_ptr->result.isValid()) {
@@ -9037,7 +9112,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 bool has_ref_args = true;
                 const AbstractQoreFunctionVariant* callee =
                     qore_ir_get_resolved_effect_callee(
-                        inst_ptr.get(), has_ref_args);
+                        inst_ptr.get(), has_ref_args, &closure_values);
                 if (!local || store->weak || !store->initial_assignment
                         || store->operands.size() != 1
                         || store->operands.front().id

@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+string code = "%modern
+
+int sub stableProjection() {
+    code<list<int>(int, int, int)> produce = list<int> sub (
+            int left, int middle, int right) {
+        return (left, middle, right);
+    };
+    list<int> values = produce(4, 5, 7);
+    return values[0] + values[1] + values[2] + values[0];
+}
+
+int sub immediateProjection() {
+    return (list<int> sub (int left, int right) {
+        return (left, right);
+    })(10, 11)[1];
+}
+
+int sub reassignedProjection(bool replace) {
+    code<list<int>(int, int)> produce = list<int> sub (
+            int left, int right) {
+        return (left, right);
+    };
+    if (replace) {
+        produce = list<int> sub (int left, int right) {
+            return (right, left);
+        };
+    }
+    return produce(4, 5)[0];
+}
+
+int sub maybeAssignedProjection(bool assign) {
+    code<list<int>(int, int)> produce;
+    if (assign) {
+        produce = list<int> sub (int left, int right) {
+            return (left, right);
+        };
+    }
+    try {
+        return produce(4, 5)[0];
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
+int sub removedProjection() {
+    code<list<int>(int, int)> produce = list<int> sub (
+            int left, int right) {
+        return (left, right);
+    };
+    remove produce;
+    try {
+        return produce(4, 5)[0];
+    } catch (hash<ExceptionInfo> ex) {
+        return -1;
+    }
+}
+
+int sub capturedProjection() {
+    int captured = 9;
+    code<list<int>(int)> produce = list<int> sub (int value) {
+        return (value, captured);
+    };
+    return produce(4)[1];
+}
+
+int closure_effects = 0;
+
+int sub sideEffectProjection() {
+    code<list<int>(int)> produce = list<int> sub (int value) {
+        ++closure_effects;
+        return (value,);
+    };
+    return produce(4)[0] * 10 + closure_effects;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    stableProjection(), immediateProjection(),
+    reassignedProjection(False), reassignedProjection(True),
+    maybeAssignedProjection(False), maybeAssignedProjection(True),
+    removedProjection(), capturedProjection(), sideEffectProjection());
+";
+
+string root = "/tmp/qore-aot-closure-aggregate-projection-" + string(getpid());
+string src = root + ".qr";
+string enabled = root + "-enabled";
+string disabled = root + "-disabled";
+File source();
+source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+source.write(code);
+source.close();
+
+string sub compile(string out, string env) {
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, out, src));
+    if (!is_file(out)) {
+        printf("AOT compile failed for %s:\n%s", out, compile_out);
+        exit(2);
+    }
+    return compile_out;
+}
+
+string enabled_compile = compile(enabled, "QORE_IR_OPT_STATS=1");
+string disabled_compile = compile(disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
+
+foreach string function in (("stableProjection", "immediateProjection")) {
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
+            function))) {
+        printf("missing closure aggregate projection for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (reassignedProjection|maybeAssignedProjection|removedProjection|capturedProjection|sideEffectProjection)[^:]*:.*aggregate-projections=[1-9]/
+        || disabled_compile =~ /aggregate-projections=[1-9]/) {
+    printf("unsafe or disabled closure aggregate projection:\n%s%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string expected = "20:11:4:5:-1:4:-1:9:41\n";
+foreach string exe in ((enabled, disabled)) {
+    string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
+    if (out != expected) {
+        printf("closure aggregate projection mismatch for %s:\nexpected: %sactual: %s",
+            exe, expected, out);
+        exit(2);
+    }
+}

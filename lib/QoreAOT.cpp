@@ -14469,6 +14469,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 const QoreIRDotEvalMethodDirectInstruction*>(
                                     call)->expr;
                             arg_offset = 1;
+                        } else if (call->opcode
+                                == QoreIROpcode::CallClosureDirect) {
+                            expr = &static_cast<
+                                const QoreIRExprInstruction*>(call)->expr;
+                            arg_offset = 1;
                         }
                     }
                     bool dynamic_index = kind
@@ -14477,12 +14482,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     bool dynamic_hash_key = kind
                         == QoreIRAggregateProjectionQueryKind::
                             HashKeyDynamicValue;
+                    bool closure_call = call
+                        && call->opcode == QoreIROpcode::CallClosureDirect;
                     auto found = aot_batch_callee_map->find(callee);
                     size_t nargs = call
                         && call->operands.size() >= arg_offset
                         ? call->operands.size() - arg_offset : 0;
                     if (found == aot_batch_callee_map->end() || !call || !expr
-                            || !found->second.approach_b_eligible
+                            || (!closure_call
+                                && !found->second.approach_b_eligible)
                             || !found->second.aggregate_return
                             || nargs != found->second.num_params
                             || !qore_aot_fast_entry_operands_need_no_binding(
