@@ -1,0 +1,281 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+list<auto> sub lateIntPair(int value) {
+    return (value + 1, value + 3);
+}
+
+list<auto> sub lateFloatPair(float value) {
+    return (value + 0.25, value + 0.75);
+}
+
+list<float> sub lateSignedZeros() {
+    return (-0.0, 0.0);
+}
+
+list<*int> sub lateOptionalPair(*int value) {
+    return (value, value);
+}
+
+string sub lateAggregateAnchor() {
+    return sprintf(\"%d:%g:%g:%d\", int(lateIntPair(1)[0]),
+        float(lateFloatPair(1.0)[0]),
+        lateSignedZeros()[0], int(lateOptionalPair(1)[0]));
+}
+";
+
+string consumer_source = "%modern
+
+string sub intResults(int value) {
+    return sprintf(\"%d:%d:%d:%y:%y:%y:%y:%y:%y\",
+        lateIntPair(value)[0] + lateIntPair(value)[1],
+        lateIntPair(value)[0] - lateIntPair(value)[1],
+        lateIntPair(value)[0] * lateIntPair(value)[1],
+        lateIntPair(value)[0] == lateIntPair(value)[1],
+        lateIntPair(value)[0] != lateIntPair(value)[1],
+        lateIntPair(value)[0] < lateIntPair(value)[1],
+        lateIntPair(value)[0] <= lateIntPair(value)[1],
+        lateIntPair(value)[0] > lateIntPair(value)[1],
+        lateIntPair(value)[0] >= lateIntPair(value)[1]);
+}
+
+string sub floatResults(float value) {
+    return sprintf(\"%g:%g:%g:%y:%y:%y:%y:%y:%y\",
+        lateFloatPair(value)[0] + lateFloatPair(value)[1],
+        lateFloatPair(value)[0] - lateFloatPair(value)[1],
+        lateFloatPair(value)[0] * lateFloatPair(value)[1],
+        lateFloatPair(value)[0] == lateFloatPair(value)[1],
+        lateFloatPair(value)[0] != lateFloatPair(value)[1],
+        lateFloatPair(value)[0] < lateFloatPair(value)[1],
+        lateFloatPair(value)[0] <= lateFloatPair(value)[1],
+        lateFloatPair(value)[0] > lateFloatPair(value)[1],
+        lateFloatPair(value)[0] >= lateFloatPair(value)[1]);
+}
+
+string sub mixedResults(int left, float right) {
+    return sprintf(\"%g:%g:%g:%y:%y:%y:%y:%y:%y\",
+        lateIntPair(left)[0] + lateFloatPair(right)[0],
+        lateIntPair(left)[0] - lateFloatPair(right)[0],
+        lateIntPair(left)[0] * lateFloatPair(right)[0],
+        lateIntPair(left)[0] == lateFloatPair(right)[0],
+        lateIntPair(left)[0] != lateFloatPair(right)[0],
+        lateIntPair(left)[0] < lateFloatPair(right)[0],
+        lateIntPair(left)[0] <= lateFloatPair(right)[0],
+        lateIntPair(left)[0] > lateFloatPair(right)[0],
+        lateIntPair(left)[0] >= lateFloatPair(right)[0]);
+}
+
+string sub signedZeroResults() {
+    return sprintf(\"%g:%g:%y:%y\",
+        lateSignedZeros()[0] + lateSignedZeros()[1],
+        lateSignedZeros()[0] * 2.0,
+        lateSignedZeros()[0] == lateSignedZeros()[1],
+        lateSignedZeros()[0] != lateSignedZeros()[1]);
+}
+
+string sub nanComparisonResults() {
+    return sprintf(\"%y:%y:%y:%y:%y:%y\",
+        lateFloatPair(@nan@)[0] == lateFloatPair(@nan@)[1],
+        lateFloatPair(@nan@)[0] != lateFloatPair(@nan@)[1],
+        lateFloatPair(@nan@)[0] < lateFloatPair(0.0)[0],
+        lateFloatPair(@nan@)[0] <= lateFloatPair(0.0)[0],
+        lateFloatPair(@nan@)[0] > lateFloatPair(0.0)[0],
+        lateFloatPair(@nan@)[0] >= lateFloatPair(0.0)[0]);
+}
+
+int sub largeIntKernel(int rounds, int offset) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += lateIntPair(offset + i)[0]
+            - lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            * lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            == lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            != lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            < lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            <= lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            > lateIntPair(offset + i)[1];
+        checksum += lateIntPair(offset + i)[0]
+            >= lateIntPair(offset + i)[1];
+    }
+    return checksum;
+}
+
+int sub maybeAssigned(bool assign, int value) {
+    int candidate;
+    if (assign) {
+        candidate = value;
+    }
+    return lateIntPair(candidate)[0] - lateIntPair(candidate)[1];
+}
+
+int sub maybeRemoved(bool restore, int value) {
+    int candidate = value;
+    remove candidate;
+    if (restore) {
+        candidate = value;
+    }
+    return lateIntPair(candidate)[0] - lateIntPair(candidate)[1];
+}
+
+int sub maybeDeleted(bool restore, int value) {
+    int candidate = value;
+    delete candidate;
+    if (restore) {
+        candidate = value;
+    }
+    return lateIntPair(candidate)[0] - lateIntPair(candidate)[1];
+}
+
+int sub optionalOperation(*int value) {
+    return lateOptionalPair(value)[0] - lateOptionalPair(value)[1];
+}
+
+int sub main() {
+    *string rounds_arg = ENV.QORE_LATE_NATIVE_ROUNDS;
+    int rounds = rounds_arg ? rounds_arg.toInt() : 1000;
+    printf(\"%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%d:%d:%d:%d:%d\\n\",
+        intResults(140737488355328), floatResults(-2.0),
+        mixedResults(9007199254740993, 9007199254740992.0),
+        signedZeroResults(), nanComparisonResults(),
+        intResults(9223372036854775807),
+        largeIntKernel(rounds, 140737488355328), maybeAssigned(True, 7),
+        maybeRemoved(True, 7), maybeDeleted(True, 7), optionalOperation(7));
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-late-native-operations-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_source + consumer_source + "\nmain();\n");
+combined_file.close();
+
+string expected = "281474976710660:-2:562949953421315:False:True:True:True:False:False\n"
+    + "-3.0:-0.5:2.1875:False:True:True:True:False:False\n"
+    + "1.80144e+16:2.0:8.11296e+31:False:True:False:False:True:True\n"
+    + "0.0:-0.0:True:False\n"
+    + "False:True:False:False:False:False\n"
+    + "2:-2:0:False:True:True:True:False:False\n"
+    + "-6414251768947593428:-2:-2:-2:0\n";
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+unlink(provider_path);
+
+string sub compileConsumer(string output_dir, string env) {
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+        env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
+    if (!is_file(output_dir + "/consumer.qo")) {
+        printf("consumer compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compileConsumer(enabled_dir, "");
+string disabled_compile = compileConsumer(disabled_dir,
+    "QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION=1");
+hash<string, int> specialization_counts = (
+    "intResults": 9,
+    "floatResults": 9,
+    "mixedResults": 9,
+    "signedZeroResults": 4,
+    "nanComparisonResults": 6,
+    "largeIntKernel": 8,
+);
+foreach string function in (specialization_counts.keys()) {
+    int count = specialization_counts{function};
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*native-specializations=%d",
+            function, count))) {
+        printf("missing late native specialization for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (maybeAssigned|maybeRemoved|maybeDeleted|optionalOperation)[^:]*:.*native-specializations=[1-9]/
+        || disabled_compile =~ /native-specializations=[1-9]/) {
+    printf("unsafe or disabled late specialization:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string sub link(string output, string consumer_qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+        libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_exe = link(root + "/enabled-exe",
+    enabled_dir + "/consumer.qo");
+string disabled_exe = link(root + "/disabled-exe",
+    disabled_dir + "/consumer.qo");
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

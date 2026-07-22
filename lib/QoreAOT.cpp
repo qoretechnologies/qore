@@ -15952,7 +15952,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         size_t native_specializations = 0;
         if (!std::getenv("QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
             native_specializations =
-                qore_ir_specialize_proven_native_additions(func);
+                qore_ir_specialize_proven_native_operations(func);
         }
         if ((folded_list_sizes || folded_hash_keys || aggregate_projections
                 || boxed_return_calls

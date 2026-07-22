@@ -17576,7 +17576,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             bool native_result = native_boolean_result_values.count(inst->result.id);
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_NE,
-                llvm::CmpInst::FCMP_ONE, static_cast<int>(inst->opcode),
+                llvm::CmpInst::FCMP_UNE, static_cast<int>(inst->opcode),
                 inst, lhs_boxed, rhs_boxed, llvm_func, module, native_result);
             values[inst->result.id] = result;
             if (!native_result) {

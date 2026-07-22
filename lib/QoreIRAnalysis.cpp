@@ -10563,7 +10563,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         + virtualized_phis.size();
 }
 
-size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func) {
+size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
             const QoreTypeInfo* type_info) {
@@ -10585,12 +10585,45 @@ size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func) {
         func.setValueFacts(result, facts);
     };
     auto int_opcode = [](QoreIROpcode opcode) {
-        return opcode == QoreIROpcode::AddAny
-            ? QoreIROpcode::AddInt : opcode;
+        switch (opcode) {
+            case QoreIROpcode::AddAny: return QoreIROpcode::AddInt;
+            case QoreIROpcode::SubAny: return QoreIROpcode::SubInt;
+            case QoreIROpcode::MulAny: return QoreIROpcode::MulInt;
+            case QoreIROpcode::EqAny: return QoreIROpcode::EqInt;
+            case QoreIROpcode::NeAny: return QoreIROpcode::NeInt;
+            case QoreIROpcode::LtAny: return QoreIROpcode::LtInt;
+            case QoreIROpcode::LeAny: return QoreIROpcode::LeInt;
+            case QoreIROpcode::GtAny: return QoreIROpcode::GtInt;
+            case QoreIROpcode::GeAny: return QoreIROpcode::GeInt;
+            default: return opcode;
+        }
     };
     auto float_opcode = [](QoreIROpcode opcode) {
-        return opcode == QoreIROpcode::AddAny
-            ? QoreIROpcode::AddFloat : opcode;
+        switch (opcode) {
+            case QoreIROpcode::AddAny: return QoreIROpcode::AddFloat;
+            case QoreIROpcode::SubAny: return QoreIROpcode::SubFloat;
+            case QoreIROpcode::MulAny: return QoreIROpcode::MulFloat;
+            case QoreIROpcode::EqAny: return QoreIROpcode::EqFloat;
+            case QoreIROpcode::NeAny: return QoreIROpcode::NeFloat;
+            case QoreIROpcode::LtAny: return QoreIROpcode::LtFloat;
+            case QoreIROpcode::LeAny: return QoreIROpcode::LeFloat;
+            case QoreIROpcode::GtAny: return QoreIROpcode::GtFloat;
+            case QoreIROpcode::GeAny: return QoreIROpcode::GeFloat;
+            default: return opcode;
+        }
+    };
+    auto is_comparison = [](QoreIROpcode opcode) {
+        switch (opcode) {
+            case QoreIROpcode::EqAny:
+            case QoreIROpcode::NeAny:
+            case QoreIROpcode::LtAny:
+            case QoreIROpcode::LeAny:
+            case QoreIROpcode::GtAny:
+            case QoreIROpcode::GeAny:
+                return true;
+            default:
+                return false;
+        }
     };
 
     size_t specialized = 0;
@@ -10598,7 +10631,7 @@ size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func) {
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR proven-native addition specialization")) {
+                    "IR proven-native operation specialization")) {
                 return specialized;
             }
             QoreIRInstruction* inst = inst_ptr.get();
@@ -10633,8 +10666,12 @@ size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func) {
             if (replacement == inst->opcode) {
                 continue;
             }
+            bool comparison = is_comparison(inst->opcode);
             inst->opcode = replacement;
-            set_result_facts(inst->result, representation, type_info);
+            set_result_facts(inst->result,
+                comparison ? QoreIRValueRepresentation::NativeBool
+                    : representation,
+                comparison ? boolTypeInfo : type_info);
             ++specialized;
         }
     }
