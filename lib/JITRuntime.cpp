@@ -11111,8 +11111,19 @@ static int qore_rt_get_self_member_lvalue(const char* member_name,
     if (qore_rt_check_closure_self_valid(obj, xsink)) {
         return -1;
     }
-    return qore_object_private::getLValue(*obj, member_name, lvh,
-        runtime_get_class(), false, xsink);
+    qore_object_private* obj_private = qore_object_private::get(*obj);
+    if (qore_object_private::getLValue(*obj, member_name, lvh,
+            runtime_get_class(), false, xsink)) {
+        return -1;
+    }
+    lvh.setObjectContext(obj_private);
+
+    const ReferenceNode* ref = lvh.getReference();
+    if (!ref) {
+        return 0;
+    }
+    lvh.clearPtr();
+    return lvh.doLValue(ref, false);
 }
 
 // Copy path steps and patch dynamic operands from NaN-boxed array.

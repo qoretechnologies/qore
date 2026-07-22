@@ -17,6 +17,18 @@ mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
 
+hashdecl RefInfo {
+    int refs;
+}
+
+int ref_assign_target = 1;
+int ref_compound_target = 2;
+int ref_pre_inc_target = 3;
+int ref_post_inc_target = 4;
+int ref_pre_dec_target = 5;
+int ref_post_dec_target = 6;
+hash<string, hash<RefInfo>> ref_lock_map;
+
 class MutationBase {
     public {
         int inherited;
@@ -28,6 +40,23 @@ class MutationCase inherits MutationBase {
         int value;
         float float_value;
         number number_value;
+        reference<int> assign_ref;
+        reference<int> compound_ref;
+        reference<int> pre_inc_ref;
+        reference<int> post_inc_ref;
+        reference<int> pre_dec_ref;
+        reference<int> post_dec_ref;
+        reference<hash<RefInfo>> info;
+    }
+
+    constructor() {
+        self.assign_ref = \\ref_assign_target;
+        self.compound_ref = \\ref_compound_target;
+        self.pre_inc_ref = \\ref_pre_inc_target;
+        self.post_inc_ref = \\ref_post_inc_target;
+        self.pre_dec_ref = \\ref_pre_dec_target;
+        self.post_dec_ref = \\ref_post_dec_target;
+        self.info = \\ref_lock_map{\"workflow\"};
     }
 
     string assignedState() {
@@ -101,6 +130,26 @@ class MutationCase inherits MutationBase {
         return \"accepted\";
     }
 
+    string referenceScalarOps() {
+        auto assigned = (self.assign_ref = 11);
+        auto compound = (self.compound_ref += 20);
+        auto pre_inc = ++self.pre_inc_ref;
+        auto post_inc = self.post_inc_ref++;
+        auto pre_dec = --self.pre_dec_ref;
+        auto post_dec = self.post_dec_ref--;
+        return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+            assigned, ref_assign_target, compound, ref_compound_target,
+            pre_inc, ref_pre_inc_target, post_inc, ref_post_inc_target,
+            pre_dec, ref_pre_dec_target, post_dec, ref_post_dec_target);
+    }
+
+    string referenceHashOps() {
+        bool initially_missing = !self.info;
+        auto assigned = (self.info = <RefInfo>{\"refs\": 42});
+        return sprintf(\"%y:%d:%d\", initially_missing, assigned.refs,
+            ref_lock_map{\"workflow\"}.refs);
+    }
+
     code<int()> makeUpdater() {
         self.value = 20;
         return int sub () {
@@ -116,10 +165,13 @@ string unary_ops = mutation.unaryOps();
 string numeric_ops = mutation.numericOps();
 string inherited_ops = mutation.inheritedOps();
 string exception_path = mutation.exceptionPath();
+string reference_scalar_ops = mutation.referenceScalarOps();
+string reference_hash_ops = mutation.referenceHashOps();
 code<int()> updater = mutation.makeUpdater();
-printf(\"%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%d:%d\\n\",
+printf(\"%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%d:%d\\n\",
     assigned_state, compound_ops, unary_ops, numeric_ops, inherited_ops,
-    exception_path, updater(), updater());
+    exception_path, reference_scalar_ops, reference_hash_ops, updater(),
+    updater());
 ";
 
 File file();
@@ -153,6 +205,8 @@ string expected = "True:7:7:True:-2:True:9:9\n"
     + "3.00:0.75:1.75:5:1.25:1.25:2.25\n"
     + "True:4:7:7\n"
     + "DIVISION-BY-ZERO:12\n"
+    + "11:11:22:22:4:4:4:5:4:4:6:5\n"
+    + "True:42:42\n"
     + "22:24\n";
 
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
