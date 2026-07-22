@@ -66,6 +66,7 @@ string src = "/tmp/qore-aot-scalarized-aggregate-return-" + string(getpid()) + "
 string exe = "/tmp/qore-aot-scalarized-aggregate-return-" + string(getpid());
 string disabled = exe + "-disabled";
 string scalar_disabled = exe + "-scalar-disabled";
+string native_projection_disabled = exe + "-native-projection-disabled";
 File source();
 source.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
 source.write(code);
@@ -87,9 +88,18 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION=1");
 string scalar_disabled_compile = compile(scalar_disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT=1");
+string native_projection_disabled_compile = compile(
+    native_projection_disabled,
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION=1");
 if (enabled_compile
-        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6/) {
+        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6.*native-specializations=2/) {
     printf("missing scalarized aggregate-return projections:\n%s", enabled_compile);
+    exit(2);
+}
+if (native_projection_disabled_compile
+        !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6.*native-specializations=1/) {
+    printf("native scalar projection disable control mismatch:\n%s",
+        native_projection_disabled_compile);
     exit(2);
 }
 if (enabled_compile
@@ -112,7 +122,8 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
         exit(2);
     }
 }
-foreach string path in ((exe, disabled, scalar_disabled)) {
+foreach string path in ((exe, disabled, scalar_disabled,
+        native_projection_disabled)) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
     if (actual != expected) {
@@ -126,3 +137,4 @@ unlink(src);
 unlink(exe);
 unlink(disabled);
 unlink(scalar_disabled);
+unlink(native_projection_disabled);

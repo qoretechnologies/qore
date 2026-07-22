@@ -226,6 +226,12 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     const QoreIRAggregateProjectionQuery& get_projection,
     const QoreIRAggregateConsumerQuery& get_consumer = {});
 
+//! Replace dynamic additions with native opcodes when late AOT facts
+//! prove that every operand is assigned and has the required representation.
+//! @param func function to optimize in place
+//! @return number of instructions specialized
+size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func);
+
 using QoreIRBoxedReturnParamQuery = std::function<bool(
     const AbstractQoreFunctionVariant*, const QoreIRInstruction*,
     int8_t&)>;

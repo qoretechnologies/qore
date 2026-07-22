@@ -8196,6 +8196,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     if (cfg.cancelled) {
         return 0;
     }
+    bool enable_native_scalar_projection =
+        !std::getenv("QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION");
 
     struct Projection {
         QoreIRInstruction* call = nullptr;
@@ -8722,6 +8724,63 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     || size != static_cast<int64_t>(
                         guarded_keys.size()))) {
             return false;
+        }
+        if (enable_native_scalar_projection && !guarded_index.isValid()
+                && guarded_descriptors.empty()) {
+            switch (projection_kind) {
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedInt:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeInt;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloat:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloat;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntConstant:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntConstant;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatConstant:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatConstant;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntAddConstant:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntAddConstant;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatAddConstant:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatAddConstant;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntBinary:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntBinary;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntMulConstant:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntMulConstant;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedIntSelect:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeIntSelect;
+                    break;
+                case QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedFloatSelect:
+                    projection_kind = QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::NativeFloatSelect;
+                    break;
+                default:
+                    break;
+            }
         }
         projection.call = call;
         projection.consumer = consumer;
@@ -10177,6 +10236,84 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     }
     return projections.size() + virtualized.size()
         + virtualized_phis.size();
+}
+
+size_t qore_ir_specialize_proven_native_additions(QoreIRFunction& func) {
+    auto proven = [&](QoreIRValue value,
+            QoreIRValueRepresentation representation,
+            const QoreTypeInfo* type_info) {
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        return facts
+            && facts->assigned_state == QoreIRAssignedState::Assigned
+            && facts->never_nothing
+            && facts->representation == representation
+            && facts->type_info == type_info;
+    };
+    auto set_result_facts = [&](QoreIRValue result,
+            QoreIRValueRepresentation representation,
+            const QoreTypeInfo* type_info) {
+        QoreIRValueFacts facts;
+        facts.type_info = type_info;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation = representation;
+        facts.never_nothing = true;
+        func.setValueFacts(result, facts);
+    };
+    auto int_opcode = [](QoreIROpcode opcode) {
+        return opcode == QoreIROpcode::AddAny
+            ? QoreIROpcode::AddInt : opcode;
+    };
+    auto float_opcode = [](QoreIROpcode opcode) {
+        return opcode == QoreIROpcode::AddAny
+            ? QoreIROpcode::AddFloat : opcode;
+    };
+
+    size_t specialized = 0;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR proven-native addition specialization")) {
+                return specialized;
+            }
+            QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst || !inst->result.isValid()
+                    || inst->operands.size() != 2) {
+                continue;
+            }
+            QoreIROpcode replacement = inst->opcode;
+            QoreIRValueRepresentation representation =
+                QoreIRValueRepresentation::Unknown;
+            const QoreTypeInfo* type_info = nullptr;
+            bool lhs_int = proven(inst->operands[0],
+                QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+            bool rhs_int = proven(inst->operands[1],
+                QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+            if (lhs_int && rhs_int) {
+                replacement = int_opcode(inst->opcode);
+                representation = QoreIRValueRepresentation::NativeInt;
+                type_info = bigIntTypeInfo;
+            } else {
+                bool lhs_float = proven(inst->operands[0],
+                    QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
+                bool rhs_float = proven(inst->operands[1],
+                    QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
+                if ((lhs_float || lhs_int) && (rhs_float || rhs_int)
+                        && (lhs_float || rhs_float)) {
+                    replacement = float_opcode(inst->opcode);
+                    representation = QoreIRValueRepresentation::NativeFloat;
+                    type_info = floatTypeInfo;
+                }
+            }
+            if (replacement == inst->opcode) {
+                continue;
+            }
+            inst->opcode = replacement;
+            set_result_facts(inst->result, representation, type_info);
+            ++specialized;
+        }
+    }
+    return specialized;
 }
 
 size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,

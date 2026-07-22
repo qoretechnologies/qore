@@ -15466,20 +15466,26 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             string_consumers =
                 qore_ir_fuse_string_producer_consumers(func, query);
         }
+        size_t native_specializations = 0;
+        if (!std::getenv("QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
+            native_specializations =
+                qore_ir_specialize_proven_native_additions(func);
+        }
         if ((folded_list_sizes || folded_hash_keys || aggregate_projections
                 || boxed_return_calls
                 || changed
-                || string_consumers)
+                || string_consumers || native_specializations)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
                 " fresh-hash-key-calls=%zu aggregate-projections=%zu"
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
-                " string-consumers=%zu\n",
+                " string-consumers=%zu"
+                " native-specializations=%zu\n",
                 func.name.c_str(), folded_list_sizes, folded_hash_keys,
                 aggregate_projections, boxed_return_calls, changed,
-                string_consumers);
+                string_consumers, native_specializations);
         }
     };
 
