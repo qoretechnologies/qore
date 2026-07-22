@@ -44,6 +44,102 @@ int sub listKernel(int rounds) {
     return checksum;
 }
 
+int sub hashCompoundKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<string, int> values = {"left": i, "right": i + 1};
+        values.left += 2;
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub hashdeclCompoundKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        FixedMutationRecord values(("left": i, "right": i + 1));
+        values.left += 2;
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub listCompoundKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1);
+        values[0] += 2;
+        checksum += values[0] + values[1];
+    }
+    return checksum;
+}
+
+int sub hashUnaryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<string, int> values = {"left": i, "right": i + 1};
+        int old = values.left++;
+        int current = ++values.right;
+        checksum += old + values.left + current;
+    }
+    return checksum;
+}
+
+int sub hashdeclUnaryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        FixedMutationRecord values(("left": i, "right": i + 1));
+        int old = values.left++;
+        int current = ++values.right;
+        checksum += old + values.left + current;
+    }
+    return checksum;
+}
+
+int sub listUnaryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1);
+        int old = values[0]++;
+        int current = ++values[1];
+        checksum += old + values[0] + current;
+    }
+    return checksum;
+}
+
+int sub hashDynamicSelectorKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string key = "left";
+        hash<string, int> values = {"left": i, "right": i + 1};
+        values{key} += 2;
+        checksum += values{key} + values.right;
+    }
+    return checksum;
+}
+
+int sub hashdeclDynamicSelectorKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        string key = "left";
+        FixedMutationRecord values(("left": i, "right": i + 1));
+        values{key} += 2;
+        checksum += values{key}.toInt() + values.right;
+    }
+    return checksum;
+}
+
+int sub listDynamicSelectorKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        int index = 0;
+        list<int> values = (i, i + 1);
+        values[index] += 2;
+        checksum += values[index] + values[1];
+    }
+    return checksum;
+}
+
 string mode = ARGV.size() ? ARGV[0] : "hash";
 int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 5000000;
 switch (mode) {
@@ -55,6 +151,33 @@ switch (mode) {
         break;
     case "list":
         printf("%d\n", listKernel(rounds));
+        break;
+    case "hash-compound":
+        printf("%d\n", hashCompoundKernel(rounds));
+        break;
+    case "hashdecl-compound":
+        printf("%d\n", hashdeclCompoundKernel(rounds));
+        break;
+    case "list-compound":
+        printf("%d\n", listCompoundKernel(rounds));
+        break;
+    case "hash-unary":
+        printf("%d\n", hashUnaryKernel(rounds));
+        break;
+    case "hashdecl-unary":
+        printf("%d\n", hashdeclUnaryKernel(rounds));
+        break;
+    case "list-unary":
+        printf("%d\n", listUnaryKernel(rounds));
+        break;
+    case "hash-dynamic":
+        printf("%d\n", hashDynamicSelectorKernel(rounds));
+        break;
+    case "hashdecl-dynamic":
+        printf("%d\n", hashdeclDynamicSelectorKernel(rounds));
+        break;
+    case "list-dynamic":
+        printf("%d\n", listDynamicSelectorKernel(rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", "unknown mode '%s'", mode;

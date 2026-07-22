@@ -3014,6 +3014,11 @@ public:
     // inventory to identify otherwise IR-only containers.
     std::unordered_set<const void*> cow_container_locals;
 
+    // Locals kept AST-visible because structured lvalue paths access the
+    // runtime local stack. Scalar replacement can eliminate simple exact
+    // aggregate paths after proving that every path operation is local.
+    std::unordered_set<const void*> lvalue_path_locals;
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.

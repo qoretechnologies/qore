@@ -34,6 +34,20 @@ int sub dynamicIndex(int index) {
     return values[index];
 }
 
+int sub constantDynamicIndex() {
+    int index = 0;
+    list<int> values = (1, 2);
+    values[index] += 4;
+    return values[index] + values[1];
+}
+
+int sub reassignedDynamicIndex() {
+    int index = 0;
+    index = 1;
+    list<int> values = (1, 2);
+    return values[index];
+}
+
 int sub mutatedList() {
     list<int> values = (1, 2);
     values[0] = 7;
@@ -50,7 +64,10 @@ int sub unaryList() {
     list<int> values = (1, 2);
     int old = values[0]++;
     int current = ++values[1];
-    return old * 100 + values[0] * 10 + current;
+    int prior = values[0]--;
+    int reduced = --values[1];
+    return old * 10000 + current * 1000 + prior * 100
+        + values[0] * 10 + reduced;
 }
 
 int sub aliasedList() {
@@ -91,8 +108,9 @@ bool sub conditionalAssignment(bool assign) {
     return values[0] === NOTHING;
 }
 
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\", scalarInt(4), scalarFloat(1.5),
-    scalarBool(True), dynamicIndex(2), mutatedList(), compoundList(), unaryList(), aliasedList(),
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d\\n\", scalarInt(4), scalarFloat(1.5),
+    scalarBool(True), dynamicIndex(2), constantDynamicIndex(), reassignedDynamicIndex(),
+    mutatedList(), compoundList(), unaryList(), aliasedList(),
     escapedList().size(), outOfRange(),
     boxedElement(), crossBlock(4, True), crossBlock(4, False),
     conditionalAssignment(False), conditionalAssignment(True));
@@ -122,7 +140,7 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:1:9:9:7:123:8:2:1:b:10:11:1:0\n";
+string expected = "11:2.5:1:9:7:2:9:7:13212:8:2:1:b:10:11:1:0\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -145,13 +163,15 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
         || stats !~ /IR-OPT: scalarFloat:.*scalar-lists=1/
         || stats !~ /IR-OPT: scalarBool:.*scalar-lists=1/
         || stats !~ /IR-OPT: mutatedList:.*scalar-lists=1/
+        || stats !~ /IR-OPT: constantDynamicIndex:.*scalar-lists=1/
+        || stats !~ /IR-OPT: compoundList:.*scalar-lists=1/
+        || stats !~ /IR-OPT: unaryList:.*scalar-lists=1/
         || stats !~ /IR-OPT: crossBlock:.*scalar-lists=1/) {
     printf("missing fixed-list scalar replacement:\n%s", stats);
     exit(2);
 }
 if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
-        || stats !~ /IR-OPT: compoundList:.*scalar-lists=0/
-        || stats !~ /IR-OPT: unaryList:.*scalar-lists=0/
+        || stats !~ /IR-OPT: reassignedDynamicIndex:.*scalar-lists=0/
         || stats !~ /IR-OPT: aliasedList:.*scalar-lists=0/
         || stats !~ /IR-OPT: escapedList:.*scalar-lists=0/
         || stats !~ /IR-OPT: outOfRange:.*scalar-lists=0/

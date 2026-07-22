@@ -1549,6 +1549,7 @@ bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
     cow_container_locals.clear();
+    lvalue_path_locals.clear();
     ast_referenced_locals.clear();
     has_opaque_ast_local_access = false;
     has_explicit_self_local_access = false;
@@ -1619,7 +1620,7 @@ void QoreIRFunction::computeIROnlyLocals() {
                     if ((step.kind == LVPathStepKind::LocalVar
                             || step.kind == LVPathStepKind::ClosureVar)
                             && step.ref_ptr) {
-                        ast_referenced_locals.insert(step.ref_ptr);
+                        lvalue_path_locals.insert(step.ref_ptr);
                     }
                 }
             }
@@ -1746,6 +1747,10 @@ void QoreIRFunction::computeIROnlyLocals() {
         }
         if (cow_container_locals.count(key)) {
             printd(5, "  local '%s' (%p): COW container (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
+        if (lvalue_path_locals.count(key)) {
+            printd(5, "  local '%s' (%p): lvalue path (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Closure-captured locals use the closure variable stack (not the regular
