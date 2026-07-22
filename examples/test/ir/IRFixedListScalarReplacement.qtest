@@ -187,7 +187,8 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-lists=1/
         || stats !~ /IR-OPT: compoundList:.*scalar-lists=1/
         || stats !~ /IR-OPT: unaryList:.*scalar-lists=1/
         || stats !~ /IR-OPT: crossBlock:.*scalar-lists=1/
-        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-lists=1/) {
+        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-lists=1/
+        || stats !~ /IR-OPT: cyclicMutation:.*scalar-lists=1/) {
     printf("missing fixed-list scalar replacement:\n%s", stats);
     exit(2);
 }
@@ -197,8 +198,7 @@ if (stats !~ /IR-OPT: dynamicIndex:.*scalar-lists=0/
         || stats !~ /IR-OPT: escapedList:.*scalar-lists=0/
         || stats !~ /IR-OPT: outOfRange:.*scalar-lists=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-lists=0/
-        || stats !~ /IR-OPT: conditionalAssignment:.*scalar-lists=0/
-        || stats !~ /IR-OPT: cyclicMutation:.*scalar-lists=0/) {
+        || stats !~ /IR-OPT: conditionalAssignment:.*scalar-lists=0/) {
     printf("unsafe fixed-list scalar replacement:\n%s", stats);
     exit(2);
 }

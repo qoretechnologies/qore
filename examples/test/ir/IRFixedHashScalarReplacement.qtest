@@ -206,7 +206,8 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: unaryHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/
-        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-hashes=1/) {
+        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: cyclicMutation:.*scalar-hashes=1/) {
     printf("missing fixed-hash scalar replacement:\n%s", stats);
     exit(2);
 }
@@ -219,8 +220,7 @@ if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
         || stats !~ /IR-OPT: conditionalAssignment:.*scalar-hashes=0/
         || stats !~ /IR-OPT: removedKey:.*scalar-hashes=0/
-        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/
-        || stats !~ /IR-OPT: cyclicMutation:.*scalar-hashes=0/) {
+        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/) {
     printf("unsafe fixed-hash scalar replacement:\n%s", stats);
     exit(2);
 }

@@ -1948,8 +1948,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 return {};
             }
             if (access.inst->opcode == QoreIROpcode::LoadLocal
-                    && (access.block != store->block
-                        || access.offset <= store->offset)) {
+                    && !dominates(*store, access, true)) {
                 valid = false;
                 break;
             }
@@ -2866,8 +2865,10 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 }
             } else if (!invalid) {
-                // Restrict aggregate SSA to the acyclic dominated region rooted
-                // at the initializing store. Loop-carried state remains boxed.
+                // Restrict aggregate SSA to the dominated region rooted at the
+                // initializing store. Dominance backedges are excluded from the
+                // scheduling DAG and wired into predeclared native PHIs after
+                // every loop block has an output state.
                 std::vector<std::vector<const InstructionPosition*>>
                     operations_by_block(func.blocks.size());
                 std::vector<uint8_t> required(func.blocks.size(), 0);
@@ -2910,6 +2911,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                 }
                 std::vector<size_t> indegree(func.blocks.size(), 0);
+                std::vector<uint8_t> phi_blocks(func.blocks.size(), 0);
                 size_t required_count = 0;
                 for (size_t block_id = 0;
                         !invalid && block_id < func.blocks.size(); ++block_id) {
@@ -2924,6 +2926,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     if (block_id == store_pos->block) {
                         continue;
                     }
+                    size_t predecessor_count = 0;
+                    bool has_backedge = false;
                     for (size_t predecessor : cfg.predecessors[block_id]) {
                         if (qore_ir_analysis_cancelled(check_count,
                                 "IR fixed-aggregate mutation indegree analysis")) {
@@ -2933,8 +2937,15 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             invalid = true;
                             break;
                         }
-                        ++indegree[block_id];
+                        ++predecessor_count;
+                        if (cfg.dominates(block_id, predecessor)) {
+                            has_backedge = true;
+                        } else {
+                            ++indegree[block_id];
+                        }
                     }
+                    phi_blocks[block_id] =
+                        predecessor_count > 1 || has_backedge;
                 }
                 std::vector<size_t> order;
                 std::vector<size_t> order_worklist;
@@ -2957,6 +2968,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 || successor == store_pos->block) {
                             continue;
                         }
+                        if (cfg.dominates(successor, block_id)) {
+                            continue;
+                        }
                         if (!indegree[successor]
                                 || --indegree[successor]) {
                             continue;
@@ -2970,6 +2984,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 std::vector<std::vector<QoreIRValue>> output(
                     func.blocks.size());
                 std::vector<uint8_t> output_valid(func.blocks.size(), 0);
+                std::vector<std::vector<size_t>> block_phi_indexes(
+                    func.blocks.size());
                 for (size_t block_id : order) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR fixed-aggregate mutation state analysis")) {
@@ -2981,75 +2997,22 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     std::vector<QoreIRValue> state;
                     if (block_id == store_pos->block) {
                         state = aggregate_values;
-                    } else {
-                        const auto& predecessors = cfg.predecessors[block_id];
-                        if (predecessors.empty()) {
-                            invalid = true;
-                            break;
-                        }
-                        for (size_t predecessor : predecessors) {
-                            if (qore_ir_analysis_cancelled(check_count,
-                                    "IR fixed-aggregate mutation state analysis")) {
-                                return {};
-                            }
-                            if (!output_valid[predecessor]
-                                    || output[predecessor].size()
-                                        != aggregate_values.size()) {
-                                invalid = true;
-                                break;
-                            }
-                        }
-                        if (invalid) {
-                            break;
-                        }
+                    } else if (phi_blocks[block_id]) {
                         state.resize(aggregate_values.size());
+                        block_phi_indexes[block_id].reserve(
+                            aggregate_values.size());
                         for (size_t value_index = 0;
                                 value_index < state.size(); ++value_index) {
                             if (qore_ir_analysis_cancelled(check_count,
-                                    "IR fixed-aggregate mutation value analysis")) {
+                                    "IR fixed-aggregate mutation phi declaration")) {
                                 return {};
                             }
-                            QoreIRValue first =
-                                output[predecessors.front()][value_index];
-                            bool same = true;
-                            for (size_t predecessor : predecessors) {
-                                if (qore_ir_analysis_cancelled(check_count,
-                                        "IR fixed-aggregate mutation value merge")) {
-                                    return {};
-                                }
-                                if (output[predecessor][value_index].id
-                                        != first.id) {
-                                    same = false;
-                                    break;
-                                }
-                            }
-                            if (same) {
-                                state[value_index] = first;
-                                continue;
-                            }
                             QoreIRValueFacts phi_facts;
-                            bool valid_phi = get_value_facts(first, phi_facts)
+                            bool valid_phi = get_value_facts(
+                                aggregate_values[value_index], phi_facts)
                                 && phi_facts.assigned_state
                                     == QoreIRAssignedState::Assigned
                                 && phi_facts.never_nothing;
-                            for (size_t predecessor : predecessors) {
-                                if (qore_ir_analysis_cancelled(check_count,
-                                        "IR fixed-aggregate mutation phi analysis")) {
-                                    return {};
-                                }
-                                QoreIRValueFacts incoming_facts;
-                                valid_phi = valid_phi
-                                    && get_value_facts(
-                                        output[predecessor][value_index],
-                                        incoming_facts)
-                                    && incoming_facts.assigned_state
-                                        == QoreIRAssignedState::Assigned
-                                    && incoming_facts.never_nothing
-                                    && incoming_facts.representation
-                                        == phi_facts.representation
-                                    && incoming_facts.type_info
-                                        == phi_facts.type_info;
-                            }
                             QoreIRPhiValueKind phi_kind =
                                 QoreIRPhiValueKind::QoreValue;
                             if (valid_phi && phi_facts.representation
@@ -3077,18 +3040,21 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             phi.result = result;
                             phi.value_kind = phi_kind;
                             phi.facts = phi_facts;
-                            for (size_t predecessor : predecessors) {
-                                if (qore_ir_analysis_cancelled(check_count,
-                                        "IR fixed-aggregate mutation phi preparation")) {
-                                    return {};
-                                }
-                                phi.incoming.push_back({
-                                    output[predecessor][value_index],
-                                    predecessor});
-                            }
+                            block_phi_indexes[block_id].push_back(
+                                candidate_aggregate_phis.size());
                             candidate_aggregate_phis.push_back(std::move(phi));
                             state[value_index] = result;
                         }
+                    } else {
+                        const auto& predecessors = cfg.predecessors[block_id];
+                        if (predecessors.size() != 1
+                                || !output_valid[predecessors.front()]
+                                || output[predecessors.front()].size()
+                                    != aggregate_values.size()) {
+                            invalid = true;
+                            break;
+                        }
+                        state = output[predecessors.front()];
                     }
                     auto& block_operations = operations_by_block[block_id];
                     std::sort(block_operations.begin(), block_operations.end(),
@@ -3110,6 +3076,64 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     if (!invalid) {
                         output[block_id] = std::move(state);
                         output_valid[block_id] = 1;
+                    }
+                }
+                for (size_t block_id = 0;
+                        !invalid && block_id < func.blocks.size(); ++block_id) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR fixed-aggregate mutation phi wiring")) {
+                        return {};
+                    }
+                    if (!phi_blocks[block_id] || !required[block_id]) {
+                        continue;
+                    }
+                    const auto& predecessors = cfg.predecessors[block_id];
+                    if (block_phi_indexes[block_id].size()
+                            != aggregate_values.size()) {
+                        invalid = true;
+                        break;
+                    }
+                    for (size_t value_index = 0;
+                            value_index < aggregate_values.size(); ++value_index) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate mutation phi wiring")) {
+                            return {};
+                        }
+                        ScalarizedAggregatePhi& phi =
+                            candidate_aggregate_phis[
+                                block_phi_indexes[block_id][value_index]];
+                        for (size_t predecessor : predecessors) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR fixed-aggregate mutation phi validation")) {
+                                return {};
+                            }
+                            if (!output_valid[predecessor]
+                                    || output[predecessor].size()
+                                        != aggregate_values.size()) {
+                                invalid = true;
+                                break;
+                            }
+                            QoreIRValue incoming =
+                                output[predecessor][value_index];
+                            QoreIRValueFacts incoming_facts;
+                            bool valid_incoming = get_value_facts(
+                                    incoming, incoming_facts)
+                                && incoming_facts.assigned_state
+                                    == QoreIRAssignedState::Assigned
+                                && incoming_facts.never_nothing
+                                && incoming_facts.representation
+                                    == phi.facts.representation
+                                && incoming_facts.type_info
+                                    == phi.facts.type_info;
+                            if (!valid_incoming) {
+                                invalid = true;
+                                break;
+                            }
+                            phi.incoming.push_back({incoming, predecessor});
+                        }
+                        if (invalid) {
+                            break;
+                        }
                     }
                 }
             }

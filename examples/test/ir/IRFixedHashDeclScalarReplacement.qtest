@@ -229,12 +229,13 @@ if (enabled_compile !~ /IR-OPT-AOT: scalarExact:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: unary:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: heterogeneousMutation:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: crossBlockMutation:.*scalar-hashes=1/
-        || enabled_compile !~ /IR-OPT-AOT: crossBlockHeterogeneous:.*scalar-hashes=1/) {
+        || enabled_compile !~ /IR-OPT-AOT: crossBlockHeterogeneous:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: cyclicMutation:.*scalar-hashes=1/) {
     printf("missing fixed-hashdecl scalar replacement:\n%s", enabled_compile);
     exit(2);
 }
 foreach string name in (("dynamicKey", "reassignedDynamicKey", "aliased", "escaped", "defaulted", "optional",
-        "unassigned", "removed", "deleted", "cyclicMutation")) {
+        "unassigned", "removed", "deleted")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT: %s:.*scalar-hashes=0", name))) {
         printf("unsafe fixed-hashdecl scalar replacement for %s:\n%s",
