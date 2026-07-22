@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_source = "%modern
+
+list<auto> sub remainingIntPair(int value) {
+    return (value + 5, value + 2);
+}
+
+list<auto> sub remainingFloatPair(float value) {
+    return (value + 0.75, value + 0.25);
+}
+
+list<*int> sub remainingOptionalPair(*int value) {
+    return (value, value);
+}
+
+string sub remainingOperationsAnchor() {
+    return sprintf(\"%d:%g:%d\", int(remainingIntPair(1)[0]),
+        float(remainingFloatPair(1.0)[0]), int(remainingOptionalPair(1)[0]));
+}
+";
+
+string consumer_source = "%modern
+
+string sub cmpResults(int value, float fvalue) {
+    return sprintf(\"%d:%d:%d\",
+        remainingIntPair(value)[0] <=> remainingIntPair(value)[1],
+        remainingFloatPair(fvalue)[0] <=> remainingFloatPair(fvalue)[1],
+        remainingIntPair(value)[0] <=> remainingFloatPair(fvalue)[1]);
+}
+
+int sub nanCmpValue(float value) {
+    return remainingFloatPair(value)[0] <=> remainingFloatPair(0.0)[0];
+}
+
+string sub nanCmpResult() {
+    try {
+        return string(nanCmpValue(@nan@));
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+string sub divModResults(int value, float fvalue) {
+    return sprintf(\"%d:%d:%g\", remainingIntPair(value)[0] / 3,
+        remainingIntPair(value)[1] % 5, remainingFloatPair(fvalue)[0] / 2.0);
+}
+
+int sub dynamicDivision(int value, int divisor) {
+    return remainingIntPair(value)[0] / divisor;
+}
+
+int sub dynamicModulo(int value, int divisor) {
+    return remainingIntPair(value)[0] % divisor;
+}
+
+string sub bitwiseResults(int value) {
+    return sprintf(\"%d:%d:%d\", remainingIntPair(value)[0] & 15,
+        remainingIntPair(value)[0] | 16, remainingIntPair(value)[0] ^ 3);
+}
+
+string sub shiftResults(int value) {
+    return sprintf(\"%d:%d\", remainingIntPair(value)[0] << 2,
+        remainingIntPair(value)[0] >> 1);
+}
+
+int sub dynamicShift(int value, int count) {
+    return remainingIntPair(value)[0] << count;
+}
+
+int sub wideShift(int value) {
+    return remainingIntPair(value)[0] << 64;
+}
+
+string sub unaryResults(int value, float fvalue) {
+    return sprintf(\"%d:%d:%g:%g\", +remainingIntPair(value)[0],
+        -remainingIntPair(value)[1], +remainingFloatPair(fvalue)[0],
+        -remainingFloatPair(fvalue)[1]);
+}
+
+string sub compoundResults(int value, float fvalue) {
+    auto ivalue = remainingIntPair(value)[0];
+    ivalue += 3;
+    ivalue -= 2;
+    ivalue *= 4;
+    ivalue /= 3;
+    ivalue %= 17;
+    ivalue &= 15;
+    ivalue |= 32;
+    ivalue ^= 3;
+    ivalue <<= 2;
+    ivalue >>= 1;
+    auto float_value = remainingFloatPair(fvalue)[0];
+    float_value += 1.5;
+    float_value -= 0.5;
+    float_value *= 2.0;
+    float_value /= 4.0;
+    return sprintf(\"%d:%g\", ivalue, float_value);
+}
+
+int sub maybeAssignedCompound(bool assign, int value) {
+    int candidate;
+    if (assign) {
+        candidate = remainingIntPair(value)[0];
+    }
+    candidate += 1;
+    return candidate;
+}
+
+int sub removedCompound(int value) {
+    int candidate = remainingIntPair(value)[0];
+    remove candidate;
+    candidate += 1;
+    return candidate;
+}
+
+int sub optionalCompound(*int value) {
+    auto candidate = remainingOptionalPair(value)[0];
+    candidate += 1;
+    return candidate;
+}
+
+int sub cmpKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += remainingIntPair(i)[0] <=> remainingIntPair(i)[1];
+        checksum += remainingFloatPair(float(i))[0]
+            <=> remainingFloatPair(float(i) + 0.5)[1];
+        checksum += remainingIntPair(i)[0] <=> remainingFloatPair(float(i))[1];
+    }
+    return checksum;
+}
+
+int sub divModKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += remainingIntPair(i)[0] / 3;
+        checksum += remainingIntPair(i)[1] % 5;
+        checksum += int(remainingFloatPair(float(i))[0] / 2.0);
+    }
+    return checksum;
+}
+
+int sub bitwiseKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += remainingIntPair(i)[0] & 255;
+        checksum += remainingIntPair(i)[0] | 16;
+        checksum += remainingIntPair(i)[0] ^ 3;
+    }
+    return checksum;
+}
+
+int sub shiftKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += remainingIntPair(i)[0] << 2;
+        checksum += remainingIntPair(i)[0] >> 1;
+    }
+    return checksum;
+}
+
+int sub unaryKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += +remainingIntPair(i)[0];
+        checksum += -remainingIntPair(i)[1];
+        checksum += int(+remainingFloatPair(float(i))[0]);
+        checksum += int(-remainingFloatPair(float(i))[1]);
+    }
+    return checksum;
+}
+
+int sub compoundKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        auto ivalue = remainingIntPair(i)[0];
+        ivalue += 3;
+        ivalue -= 2;
+        ivalue *= 4;
+        ivalue /= 3;
+        ivalue %= 257;
+        ivalue &= 255;
+        ivalue |= 16;
+        ivalue ^= 3;
+        ivalue <<= 2;
+        ivalue >>= 1;
+        auto float_value = remainingFloatPair(float(i))[0];
+        float_value += 1.5;
+        float_value -= 0.5;
+        float_value *= 2.0;
+        float_value /= 4.0;
+        checksum += ivalue + int(float_value);
+    }
+    return checksum;
+}
+
+int sub main() {
+    *string kernel = ENV.QORE_LATE_NATIVE_KERNEL;
+    int rounds = ENV.QORE_LATE_NATIVE_ROUNDS
+        ? ENV.QORE_LATE_NATIVE_ROUNDS.toInt() : 1000;
+    if (kernel == \"cmp\") {
+        printf(\"%d\\n\", cmpKernel(rounds));
+    } else if (kernel == \"divmod\") {
+        printf(\"%d\\n\", divModKernel(rounds));
+    } else if (kernel == \"bitwise\") {
+        printf(\"%d\\n\", bitwiseKernel(rounds));
+    } else if (kernel == \"shift\") {
+        printf(\"%d\\n\", shiftKernel(rounds));
+    } else if (kernel == \"unary\") {
+        printf(\"%d\\n\", unaryKernel(rounds));
+    } else if (kernel == \"compound\") {
+        printf(\"%d\\n\", compoundKernel(rounds));
+    } else {
+        printf(\"cmp:%s:%s\\ndivmod:%s:%d:%d\\nbitwise:%s\\nshift:%s:%d\\nunary:%s\\ncompound:%s:%d:%d:%d\\n\",
+            cmpResults(9, 9.0), nanCmpResult(), divModResults(10, 7.25),
+            dynamicDivision(10, 3), dynamicModulo(10, 4), bitwiseResults(10),
+            shiftResults(10), dynamicShift(10, 3), unaryResults(10, 7.25),
+            compoundResults(10, 7.25), maybeAssignedCompound(True, 10),
+            removedCompound(10), optionalCompound(10));
+    }
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-late-native-remaining-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_source);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_source);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_source + consumer_source + "\nmain();\n");
+combined_file.close();
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+if (!expected.contains("cmp:1:1:1:NAN-COMPARE-ERROR\n")
+        || !expected.contains("divmod:5:2:4.0:5:3\n")
+        || !expected.contains("bitwise:15:31:12\n")
+        || !expected.contains("shift:60:7:120\n")
+        || !expected.contains("unary:15:-12:8.0:-7.5\n")
+        || !expected.contains("compound:78:4.5:16:1:11\n")) {
+    printf("unexpected AST baseline:\n%s", expected);
+    exit(2);
+}
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --strip-source --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+unlink(provider_path);
+
+string sub compileConsumer(string output_dir, string env) {
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+        env, libqore_dir, qcc_bin, provider_dir, output_dir, consumer_path));
+    if (!is_file(output_dir + "/consumer.qo")) {
+        printf("consumer compile failed:\n%s", output);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_compile = compileConsumer(enabled_dir, "");
+string disabled_compile = compileConsumer(disabled_dir,
+    "QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION=1");
+hash<string, int> specialization_counts = (
+    "cmpResults": 3,
+    "nanCmpValue": 1,
+    "divModResults": 3,
+    "bitwiseResults": 3,
+    "shiftResults": 2,
+    "unaryResults": 4,
+    "compoundResults": 8,
+    "cmpKernel": 3,
+    "divModKernel": 3,
+    "bitwiseKernel": 3,
+    "shiftKernel": 2,
+    "unaryKernel": 4,
+    "compoundKernel": 8,
+);
+foreach string function in (specialization_counts.keys()) {
+    int count = specialization_counts{function};
+    if (!enabled_compile.regex(sprintf(
+            "IR-OPT-AOT-EFFECTS: %s[^:]*:.*native-specializations=%d",
+            function, count))) {
+        printf("missing late native specialization for %s:\n%s",
+            function, enabled_compile);
+        exit(2);
+    }
+}
+if (enabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (dynamicDivision|dynamicModulo|dynamicShift|wideShift|maybeAssignedCompound|removedCompound|optionalCompound)[^:]*:.*native-specializations=[1-9]/
+        || disabled_compile =~ /native-specializations=[1-9]/) {
+    printf("unsafe or disabled late specialization:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string sub link(string output, string consumer_qo) {
+    string link_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+        libqore_dir, qcc_bin, output, provider_qo, consumer_qo));
+    if (!is_file(output)) {
+        printf("link failed:\n%s", link_out);
+        exit(2);
+    }
+    return output;
+}
+
+string enabled_exe = link(root + "/enabled-exe",
+    enabled_dir + "/consumer.qo");
+string disabled_exe = link(root + "/disabled-exe",
+    disabled_dir + "/consumer.qo");
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}
+
+printf("AOT_LATE_NATIVE_REMAINING_ROOT=%s\n", root);

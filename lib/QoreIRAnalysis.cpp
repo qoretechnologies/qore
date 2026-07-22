@@ -10564,6 +10564,20 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 }
 
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
+    size_t specialized = 0;
+    size_t check_count = 0;
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definitions;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR proven-native definition analysis")) {
+                return 0;
+            }
+            if (inst && inst->result.isValid()) {
+                definitions.emplace(inst->result.id, inst.get());
+            }
+        }
+    }
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
             const QoreTypeInfo* type_info) {
@@ -10584,18 +10598,72 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
         facts.never_nothing = true;
         func.setValueFacts(result, facts);
     };
-    auto int_opcode = [](QoreIROpcode opcode) {
-        switch (opcode) {
+    auto get_const_int = [&](QoreIRValue value, int64_t& result) {
+        auto definition = definitions.find(value.id);
+        if (definition == definitions.end() || !definition->second
+                || definition->second->opcode != QoreIROpcode::ConstInt) {
+            return false;
+        }
+        result = static_cast<const QoreIRConstInstruction*>(
+            definition->second)->constant.int_value;
+        return true;
+    };
+    auto safe_int_division = [&](const QoreIRInstruction& inst) {
+        int64_t lhs = 0;
+        int64_t rhs = 0;
+        bool lhs_constant = get_const_int(inst.operands[0], lhs);
+        bool rhs_constant = get_const_int(inst.operands[1], rhs);
+        return (rhs_constant && rhs != -1)
+            || (lhs_constant && lhs != INT64_MIN);
+    };
+    auto safe_shift = [&](const QoreIRInstruction& inst) {
+        int64_t rhs = 0;
+        return get_const_int(inst.operands[1], rhs) && rhs >= 0 && rhs < 64;
+    };
+    auto int_opcode = [&](const QoreIRInstruction& inst) {
+        switch (inst.opcode) {
             case QoreIROpcode::AddAny: return QoreIROpcode::AddInt;
             case QoreIROpcode::SubAny: return QoreIROpcode::SubInt;
             case QoreIROpcode::MulAny: return QoreIROpcode::MulInt;
+            case QoreIROpcode::DivAny:
+                return safe_int_division(inst)
+                    ? QoreIROpcode::DivInt : inst.opcode;
+            case QoreIROpcode::ModAny:
+                return safe_int_division(inst)
+                    ? QoreIROpcode::ModInt : inst.opcode;
+            case QoreIROpcode::AndAny: return QoreIROpcode::AndInt;
+            case QoreIROpcode::OrAny: return QoreIROpcode::OrInt;
+            case QoreIROpcode::XorAny: return QoreIROpcode::XorInt;
+            case QoreIROpcode::ShlAny:
+                return safe_shift(inst) ? QoreIROpcode::ShlInt : inst.opcode;
+            case QoreIROpcode::ShrAny:
+                return safe_shift(inst) ? QoreIROpcode::ShrInt : inst.opcode;
             case QoreIROpcode::EqAny: return QoreIROpcode::EqInt;
             case QoreIROpcode::NeAny: return QoreIROpcode::NeInt;
             case QoreIROpcode::LtAny: return QoreIROpcode::LtInt;
             case QoreIROpcode::LeAny: return QoreIROpcode::LeInt;
             case QoreIROpcode::GtAny: return QoreIROpcode::GtInt;
             case QoreIROpcode::GeAny: return QoreIROpcode::GeInt;
-            default: return opcode;
+            case QoreIROpcode::CmpAny: return QoreIROpcode::CmpInt;
+            case QoreIROpcode::AddAssignAny: return QoreIROpcode::AddAssignInt;
+            case QoreIROpcode::SubAssignAny: return QoreIROpcode::SubAssignInt;
+            case QoreIROpcode::MulAssignAny: return QoreIROpcode::MulAssignInt;
+            case QoreIROpcode::DivAssignAny:
+                return safe_int_division(inst)
+                    ? QoreIROpcode::DivAssignInt : inst.opcode;
+            case QoreIROpcode::ModAssignAny:
+                return safe_int_division(inst)
+                    ? QoreIROpcode::ModAssignInt : inst.opcode;
+            case QoreIROpcode::AndAssignAny: return QoreIROpcode::AndAssignInt;
+            case QoreIROpcode::OrAssignAny: return QoreIROpcode::OrAssignInt;
+            case QoreIROpcode::XorAssignAny: return QoreIROpcode::XorAssignInt;
+            case QoreIROpcode::ShlAssignAny:
+                return safe_shift(inst)
+                    ? QoreIROpcode::ShlAssignInt : inst.opcode;
+            case QoreIROpcode::ShrAssignAny:
+                return safe_shift(inst)
+                    ? QoreIROpcode::ShrAssignInt : inst.opcode;
+            default: return inst.opcode;
         }
     };
     auto float_opcode = [](QoreIROpcode opcode) {
@@ -10603,12 +10671,18 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             case QoreIROpcode::AddAny: return QoreIROpcode::AddFloat;
             case QoreIROpcode::SubAny: return QoreIROpcode::SubFloat;
             case QoreIROpcode::MulAny: return QoreIROpcode::MulFloat;
+            case QoreIROpcode::DivAny: return QoreIROpcode::DivFloat;
             case QoreIROpcode::EqAny: return QoreIROpcode::EqFloat;
             case QoreIROpcode::NeAny: return QoreIROpcode::NeFloat;
             case QoreIROpcode::LtAny: return QoreIROpcode::LtFloat;
             case QoreIROpcode::LeAny: return QoreIROpcode::LeFloat;
             case QoreIROpcode::GtAny: return QoreIROpcode::GtFloat;
             case QoreIROpcode::GeAny: return QoreIROpcode::GeFloat;
+            case QoreIROpcode::CmpAny: return QoreIROpcode::CmpFloat;
+            case QoreIROpcode::AddAssignAny: return QoreIROpcode::AddAssignFloat;
+            case QoreIROpcode::SubAssignAny: return QoreIROpcode::SubAssignFloat;
+            case QoreIROpcode::MulAssignAny: return QoreIROpcode::MulAssignFloat;
+            case QoreIROpcode::DivAssignAny: return QoreIROpcode::DivAssignFloat;
             default: return opcode;
         }
     };
@@ -10626,53 +10700,160 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
         }
     };
 
-    size_t specialized = 0;
-    size_t check_count = 0;
+    auto specialize_instruction = [&](QoreIRInstruction* inst) {
+        if (!inst || !inst->result.isValid()) {
+            return;
+        }
+        if (inst->operands.size() == 1
+                && (inst->opcode == QoreIROpcode::UnaryPlusAny
+                    || inst->opcode == QoreIROpcode::UnaryMinusAny)) {
+            QoreIROpcode replacement = inst->opcode;
+            QoreIRValueRepresentation representation =
+                QoreIRValueRepresentation::Unknown;
+            const QoreTypeInfo* type_info = nullptr;
+            if (proven(inst->operands[0],
+                    QoreIRValueRepresentation::NativeInt,
+                    bigIntTypeInfo)) {
+                replacement = inst->opcode == QoreIROpcode::UnaryPlusAny
+                    ? QoreIROpcode::ToInt
+                    : QoreIROpcode::UnaryMinusInt;
+                representation = QoreIRValueRepresentation::NativeInt;
+                type_info = bigIntTypeInfo;
+            } else if (proven(inst->operands[0],
+                    QoreIRValueRepresentation::NativeFloat,
+                    floatTypeInfo)) {
+                replacement = inst->opcode == QoreIROpcode::UnaryPlusAny
+                    ? QoreIROpcode::ToFloat
+                    : QoreIROpcode::UnaryMinusFloat;
+                representation = QoreIRValueRepresentation::NativeFloat;
+                type_info = floatTypeInfo;
+            }
+            if (replacement != inst->opcode) {
+                inst->opcode = replacement;
+                set_result_facts(inst->result, representation, type_info);
+                ++specialized;
+            }
+            return;
+        }
+        if (inst->operands.size() != 2) {
+            return;
+        }
+        QoreIROpcode replacement = inst->opcode;
+        QoreIRValueRepresentation representation =
+            QoreIRValueRepresentation::Unknown;
+        const QoreTypeInfo* type_info = nullptr;
+        bool lhs_int = proven(inst->operands[0],
+            QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+        bool rhs_int = proven(inst->operands[1],
+            QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+        if (lhs_int && rhs_int) {
+            replacement = int_opcode(*inst);
+            representation = QoreIRValueRepresentation::NativeInt;
+            type_info = bigIntTypeInfo;
+        } else {
+            bool lhs_float = proven(inst->operands[0],
+                QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
+            bool rhs_float = proven(inst->operands[1],
+                QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
+            if ((lhs_float || lhs_int) && (rhs_float || rhs_int)
+                    && (lhs_float || rhs_float)) {
+                replacement = float_opcode(inst->opcode);
+                representation = QoreIRValueRepresentation::NativeFloat;
+                type_info = floatTypeInfo;
+            }
+        }
+        if (replacement == inst->opcode) {
+            return;
+        }
+        bool comparison = is_comparison(inst->opcode);
+        bool spaceship = inst->opcode == QoreIROpcode::CmpAny;
+        inst->opcode = replacement;
+        set_result_facts(inst->result,
+            comparison ? QoreIRValueRepresentation::NativeBool
+                : (spaceship ? QoreIRValueRepresentation::NativeInt
+                    : representation),
+            comparison ? boolTypeInfo
+                : (spaceship ? bigIntTypeInfo : type_info));
+        ++specialized;
+    };
+
     for (const auto& block : func.blocks) {
+        std::unordered_map<const LocalVar*, QoreIRValueFacts> local_facts;
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR proven-native operation specialization")) {
                 return specialized;
             }
             QoreIRInstruction* inst = inst_ptr.get();
-            if (!inst || !inst->result.isValid()
-                    || inst->operands.size() != 2) {
+            if (!inst) {
                 continue;
             }
-            QoreIROpcode replacement = inst->opcode;
-            QoreIRValueRepresentation representation =
-                QoreIRValueRepresentation::Unknown;
-            const QoreTypeInfo* type_info = nullptr;
-            bool lhs_int = proven(inst->operands[0],
-                QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
-            bool rhs_int = proven(inst->operands[1],
-                QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
-            if (lhs_int && rhs_int) {
-                replacement = int_opcode(inst->opcode);
-                representation = QoreIRValueRepresentation::NativeInt;
-                type_info = bigIntTypeInfo;
-            } else {
-                bool lhs_float = proven(inst->operands[0],
-                    QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
-                bool rhs_float = proven(inst->operands[1],
-                    QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
-                if ((lhs_float || lhs_int) && (rhs_float || rhs_int)
-                        && (lhs_float || rhs_float)) {
-                    replacement = float_opcode(inst->opcode);
-                    representation = QoreIRValueRepresentation::NativeFloat;
-                    type_info = floatTypeInfo;
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    && inst->result.isValid()) {
+                const auto* load =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                auto found = local_facts.find(load->local);
+                if (found != local_facts.end()) {
+                    func.setValueFacts(inst->result, found->second);
                 }
             }
-            if (replacement == inst->opcode) {
+            specialize_instruction(inst);
+
+            if (inst->opcode == QoreIROpcode::StoreLocal) {
+                const auto* store =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                const QoreIRValueFacts* facts =
+                    inst->operands.size() == 1
+                    ? func.getValueFacts(inst->operands[0]) : nullptr;
+                bool native = facts
+                    && (facts->representation
+                            == QoreIRValueRepresentation::NativeInt
+                        || facts->representation
+                            == QoreIRValueRepresentation::NativeFloat
+                        || facts->representation
+                            == QoreIRValueRepresentation::NativeBool);
+                if (store->local && !store->local->closureUse()
+                        && !QoreTypeInfo::isReference(
+                            store->local->getTypeInfo())
+                        && !store->weak && !store->is_ref
+                        && !store->is_closure && facts && native
+                        && facts->assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && facts->never_nothing) {
+                    local_facts[store->local] = *facts;
+                } else if (store->local) {
+                    local_facts.erase(store->local);
+                }
                 continue;
             }
-            bool comparison = is_comparison(inst->opcode);
-            inst->opcode = replacement;
-            set_result_facts(inst->result,
-                comparison ? QoreIRValueRepresentation::NativeBool
-                    : representation,
-                comparison ? boolTypeInfo : type_info);
-            ++specialized;
+            if (inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                const auto* local =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                if (local->local) {
+                    local_facts.erase(local->local);
+                }
+                continue;
+            }
+            bool has_ref_args = true;
+            const AbstractQoreFunctionVariant* callee =
+                qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+            bool direct_call = inst->opcode == QoreIROpcode::CallDirect
+                || inst->opcode == QoreIROpcode::CallStaticDirect
+                || inst->opcode == QoreIROpcode::CallMethodDirect
+                || inst->opcode == QoreIROpcode::InvokeMethodDirect
+                || inst->opcode == QoreIROpcode::CallClosureDirect;
+            if (direct_call && (!callee || has_ref_args)) {
+                local_facts.clear();
+            } else if (!direct_call
+                    && qore_ir_instruction_may_invalidate_caller_caches(
+                        func, inst)) {
+                const LocalVar* written = qore_ir_get_written_local(inst);
+                if (written) {
+                    local_facts.erase(written);
+                } else {
+                    local_facts.clear();
+                }
+            }
         }
     }
     return specialized;

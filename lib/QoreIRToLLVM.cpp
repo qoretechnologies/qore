@@ -17749,9 +17749,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
-            // lhs/rhs are native doubles (not boxed) for typed floats
-            llvm::Value* l = lhs;
-            llvm::Value* r = rhs;
+            llvm::Value* l = ensureFloatType(lhs, inst->operands[0].id, module);
+            llvm::Value* r = ensureFloatType(rhs, inst->operands[1].id, module);
 
             // Check for NaN: fcmp uno returns true if either operand is NaN
             llvm::Value* is_nan = builder->CreateFCmpUNO(l, r);
@@ -17796,7 +17795,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             phi->addIncoming(ok_result, ok_end);
             phi->addIncoming(nan_result, nan_end);
             values[inst->result.id] = phi;
-            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
