@@ -1082,7 +1082,7 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                 continue;
             }
             int idx = state.tool_calls.size();
-            hash<auto> tc = {
+            hash<auto!> tc = {
                 "id": part.functionCall.id ?? sprintf("tool-%d", idx + 1),
                 "type": "function",
                 "function": {
@@ -1090,13 +1090,22 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
                     "arguments": make_json(part.functionCall.args ?? {}),
                 },
             };
+            # the reasoning signature is a sibling of `functionCall` on the part (see
+            # parseChatResponse()); Gemini 3.x rejects a replayed call without it, so the streamed
+            # harvest must carry it exactly like the non-streaming parse or every streamed tool
+            # call poisons the conversation for the next request
+            if (part.thoughtSignature.typeCode() == NT_STRING) {
+                tc.thought_signature = part.thoughtSignature;
+            }
             state.tool_calls += tc;
             streamed += {
                 "index": idx,
                 "id": tc.id,
                 "type": "function",
                 "function": tc.function,
-            };
+            } + (tc.thought_signature.val()
+                ? {"thought_signature": tc.thought_signature}
+                : {});
         }
         return streamed;
     }
