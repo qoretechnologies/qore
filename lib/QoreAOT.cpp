@@ -7640,6 +7640,63 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                     values.emplace(inst->result.id, value);
                     break;
                 }
+                case QoreIROpcode::AddInt:
+                case QoreIROpcode::AddAssignInt:
+                case QoreIROpcode::AddFloat:
+                case QoreIROpcode::AddAssignFloat: {
+                    if (!inst->result.isValid()
+                            || inst->operands.size() != 2) {
+                        return fail();
+                    }
+                    auto lhs = values.find(inst->operands[0].id);
+                    auto rhs = values.find(inst->operands[1].id);
+                    if (lhs == values.end() || rhs == values.end()) {
+                        return fail();
+                    }
+                    bool float_add = inst->opcode == QoreIROpcode::AddFloat
+                        || inst->opcode == QoreIROpcode::AddAssignFloat;
+                    AOTAggregateReturnValueKind constant_kind = float_add
+                        ? AOTAggregateReturnValueKind::FloatConstant
+                        : AOTAggregateReturnValueKind::IntConstant;
+                    const AggregateValue* parameter =
+                        lhs->second.kind
+                                    == AOTAggregateReturnValueKind::Parameter
+                                || (!float_add && lhs->second.kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntParamAddConstant)
+                            ? &lhs->second
+                            : rhs->second.kind
+                                        == AOTAggregateReturnValueKind::Parameter
+                                    || (!float_add && rhs->second.kind
+                                        == AOTAggregateReturnValueKind::
+                                            IntParamAddConstant)
+                                ? &rhs->second : nullptr;
+                    const AggregateValue* constant =
+                        lhs->second.kind == constant_kind
+                            ? &lhs->second
+                            : rhs->second.kind == constant_kind
+                                ? &rhs->second : nullptr;
+                    if (!parameter || !constant) {
+                        return fail();
+                    }
+                    AggregateValue value;
+                    value.kind = float_add
+                        ? AOTAggregateReturnValueKind::FloatParamAddConstant
+                        : AOTAggregateReturnValueKind::IntParamAddConstant;
+                    value.param = parameter->param;
+                    if (float_add) {
+                        value.float_value = constant->float_value;
+                    } else {
+                        value.int_value = static_cast<int64_t>(
+                            static_cast<uint64_t>(constant->int_value)
+                            + static_cast<uint64_t>(parameter->kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntParamAddConstant
+                                ? parameter->int_value : 0));
+                    }
+                    values.emplace(inst->result.id, value);
+                    break;
+                }
                 case QoreIROpcode::CallDirect: {
                     if (call || !inst->result.isValid()) {
                         return fail();
@@ -7679,17 +7736,32 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                         }
                         BatchCalleeParamKind expected =
                             nested->second.param_kinds[i];
-                        if ((source->second.kind
-                                    == AOTAggregateReturnValueKind::Parameter
+                        bool parameter_value = source->second.kind
+                                == AOTAggregateReturnValueKind::Parameter
+                            || source->second.kind
+                                == AOTAggregateReturnValueKind::
+                                    IntParamAddConstant
+                            || source->second.kind
+                                == AOTAggregateReturnValueKind::
+                                    FloatParamAddConstant;
+                        BatchCalleeParamKind source_kind =
+                            source->second.kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntParamAddConstant
+                                ? BatchCalleeParamKind::NativeInt
+                                : source->second.kind
+                                        == AOTAggregateReturnValueKind::
+                                            FloatParamAddConstant
+                                    ? BatchCalleeParamKind::NativeFloat
+                                    : expected;
+                        if ((parameter_value
                                 && (source->second.param < 0
-                                    || static_cast<size_t>(
-                                        source->second.param)
-                                        >= callee->second
-                                            .param_kinds.size()
+                                    || static_cast<size_t>(source->second.param)
+                                        >= callee->second.param_kinds.size()
                                     || callee->second.param_kinds[
-                                        static_cast<size_t>(
-                                            source->second.param)]
-                                        != expected))
+                                        static_cast<size_t>(source->second.param)]
+                                        != source_kind
+                                    || source_kind != expected))
                                 || (source->second.kind
                                         == AOTAggregateReturnValueKind::
                                             IntConstant
@@ -7761,16 +7833,28 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                             if (nested_kind
                                     != AOTAggregateReturnValueKind::
                                         Parameter) {
-                                if (value.kind
-                                        != AOTAggregateReturnValueKind::
-                                            Parameter) {
+                                bool int_add = nested_kind
+                                    == AOTAggregateReturnValueKind::
+                                        IntParamAddConstant;
+                                bool compatible = value.kind
+                                        == AOTAggregateReturnValueKind::
+                                            Parameter
+                                    || (int_add && value.kind
+                                        == AOTAggregateReturnValueKind::
+                                            IntParamAddConstant);
+                                if (!compatible) {
                                     return fail();
                                 }
                                 value.kind = nested_kind;
-                                value.int_value =
-                                    nested_aggregate.value_ints[i];
-                                value.float_value =
-                                    nested_aggregate.value_floats[i];
+                                if (int_add) {
+                                    value.int_value = static_cast<int64_t>(
+                                        static_cast<uint64_t>(value.int_value)
+                                        + static_cast<uint64_t>(
+                                            nested_aggregate.value_ints[i]));
+                                } else {
+                                    value.float_value =
+                                        nested_aggregate.value_floats[i];
+                                }
                             }
                         } else {
                             value.kind = nested_kind;

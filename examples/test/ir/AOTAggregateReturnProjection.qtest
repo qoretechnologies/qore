@@ -243,7 +243,15 @@ list<int> sub valuesWrapper(int left, int middle, int right) {
 }
 
 hash<string, int> sub computedWrapper(int left, int middle, int right) {
-    return makeRow(left + 0, middle, right);
+    return makeRow(left + 7, middle, right);
+}
+
+list<int> sub nestedComputedWrapper(int value) {
+    return makeComputedValues(value + 3);
+}
+
+list<float> sub computedFloatWrapper(float left, float right) {
+    return makeFloats(left + 0.25, right);
 }
 
 hash<string, hash<string, int>> sub wrapRow(
@@ -368,8 +376,26 @@ int sub wrapperListSize() {
     return valuesWrapper(1, 2, 3).size();
 }
 
-int sub nonComposedWrapperProjection() {
-    return computedWrapper(1, 2, 3).middle;
+int sub computedWrapperProjection(int value) {
+    return computedWrapper(value, 2, 3).left;
+}
+
+bool sub computedWrapperOverflowProjection() {
+    return computedWrapperProjection(9223372036854775807)
+        == -9223372036854775802;
+}
+
+int sub nestedComputedWrapperProjection(int value) {
+    return nestedComputedWrapper(value)[0];
+}
+
+bool sub nestedComputedWrapperOverflowProjection() {
+    return nestedComputedWrapperProjection(9223372036854775807)
+        == -9223372036854775799;
+}
+
+bool sub computedFloatWrapperProjection() {
+    return computedFloatWrapper(1.25, 2.5)[0] == 1.5;
 }
 
 string sub nonComposedBindingProjection() {
@@ -1019,7 +1045,7 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     boxedMultiListProjection(), boxedMultiHashProjection(), boxedMixedUse(),
     wrapperProjection(), wrapperConstantProjection(),
     wrapperBoxedProjection(), wrapperListSize(),
-    nonComposedWrapperProjection(), nonComposedBindingProjection(),
+    computedWrapperProjection(1), nonComposedBindingProjection(),
     nestedNativeProjection(), nestedSideEffectProjection(),
     deepNestedProjection(), nestedBoxedProjection(), sharedNestedInput(),
     nonNestedComputedProjection(), listFirstProjection(),
@@ -1043,10 +1069,13 @@ printf(\"%d:%d:%d:%d:%y:%d:%d:%y:%d:%y:%s:%s:%s:%d:%d:%d:%y:%d:%d:%d:%d:%d:%d:%y
     conditionalSideEffectProjection(True),
     potentiallyLoopingProjection(True),
     hashSizeOverride());
-printf(\"%d:%d:%y:%y:%d:%y\\n\", computedIntProjection(5),
+printf(\"%d:%d:%y:%y:%d:%y:%y:%d:%y:%y\\n\", computedIntProjection(5),
     computedBoxedIntProjection(6), computedIntOverflowProjection(),
     computedFloatProjection(), twoParamComputedProjection(),
-    boundedExpressionProjection());
+    boundedExpressionProjection(), computedWrapperOverflowProjection(),
+    nestedComputedWrapperProjection(5),
+    nestedComputedWrapperOverflowProjection(),
+    computedFloatWrapperProjection());
 printf(\"%d\\n\", emptyZeroArgProjections());
 printf(\"%s:%s:%s\\n\", dynamicMixedListIndex(0),
     dynamicMixedListIndex(1), dynamicMixedListIndex(2));
@@ -1273,7 +1302,9 @@ foreach string function in (("boxedIntMultiLocalProjection",
 }
 foreach string function in (("wrapperProjection",
         "wrapperConstantProjection", "wrapperBoxedProjection",
-        "wrapperListSize")) {
+        "wrapperListSize", "computedWrapperProjection",
+        "nestedComputedWrapperProjection",
+        "computedFloatWrapperProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1324,7 +1355,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1365,6 +1396,9 @@ string float_constant_line;
 string forward_row_line;
 string tagged_wrapper_line;
 string word_wrapper_line;
+string computed_wrapper_line;
+string nested_computed_wrapper_line;
+string computed_float_wrapper_line;
 string empty_values_line;
 string empty_row_line;
 string constant_values_line;
@@ -1402,6 +1436,15 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("wordWrapper(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         word_wrapper_line = line;
+    } else if (line.find("computedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_wrapper_line = line;
+    } else if (line.find("nestedComputedWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        nested_computed_wrapper_line = line;
+    } else if (line.find("computedFloatWrapper(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        computed_float_wrapper_line = line;
     } else if (line.find("makeEmptyValues(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         empty_values_line = line;
@@ -1462,6 +1505,18 @@ if (row_line.find("\"aggregate_return_kind\": 2") == -1
         || tagged_wrapper_line.find("\"aggregate_return_value_ints\": [0, 3, 7]") == -1
         || word_wrapper_line.find("\"aggregate_return_kind\": 1") == -1
         || word_wrapper_line.find("\"aggregate_return_value_params\": [1, 0]") == -1
+        || computed_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [5, 0, 0]") == -1
+        || computed_wrapper_line.find(
+            "\"aggregate_return_value_ints\": [7, 0, 0]") == -1
+        || nested_computed_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [5]") == -1
+        || nested_computed_wrapper_line.find(
+            "\"aggregate_return_value_ints\": [10]") == -1
+        || computed_float_wrapper_line.find(
+            "\"aggregate_return_value_kinds\": [6, 0]") == -1
+        || computed_float_wrapper_line.find(
+            "\"aggregate_return_value_floats\": [0.25, 0]") == -1
         || empty_values_line.find("\"aggregate_return_kind\": 1") == -1
         || empty_values_line.find("\"aggregate_return_value_params\": []") == -1
         || empty_row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -1522,7 +1577,7 @@ if (computed_row_line.find(
     exit(2);
 }
 
-string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:2:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True\n120\n11:2.5:True\nTrue:True:True:True\n";
+string expected = "5:23:3:6:True:11:3:True:42:True:alpha:beta:left!:4:14:16:False:2:5:23:56:2:5:True:True:13:3:5:2:True:True:left-projection-value/right-projection-value/left-projection-value:hash-left-projection-value/hash-right-projection-value/hash-left-projection-value:alpha!/beta!:11:3:right:3:8:kept:2:26:8:beta:3:2:4:6:False:True:3:3:1:True:True:33:3:True:23:left-selected:right-selected:True:3:2:2:8:3:False:True:23:True:True:16:True:False:13:True:True:3:5:2:21:2:callref-size\n12:13:True:True:5:True:True:15:True:True\n120\n11:2.5:True\nTrue:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
