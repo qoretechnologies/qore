@@ -664,7 +664,7 @@ bool qore_ir_fast_entry_param_is_private(
     // is unused. Object locals are excluded because their lifetime still
     // requires the runtime stack even when their value is not loaded.
     return !ir_func.has_opaque_ast_local_access
-        && !ir_func.ast_referenced_locals.count(key)
+        && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());
 }

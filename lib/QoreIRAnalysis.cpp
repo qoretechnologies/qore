@@ -2015,6 +2015,14 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
     };
     std::unordered_map<const QoreIRInstruction*, ScalarizedPathOperation>
         scalarized_path_operations;
+    struct ScalarizedAggregatePhi {
+        size_t block = 0;
+        QoreIRValue result;
+        QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue;
+        QoreIRValueFacts facts;
+        std::vector<std::pair<QoreIRValue, size_t>> incoming;
+    };
+    std::vector<ScalarizedAggregatePhi> scalarized_aggregate_phis;
     size_t scalarized = 0;
 
     for (const auto& [local, accesses] : local_accesses) {
@@ -2026,7 +2034,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         bool container_only = local && !func.has_opaque_ast_local_access
             && (func.cow_container_locals.count(local_key)
                 || func.lvalue_path_locals.count(local_key))
-            && !func.ast_referenced_locals.count(local_key);
+            && !func.non_structured_ast_referenced_locals.count(local_key);
         if (!local || local->closureUse()
                 || local->isTopLevel()
                 || QoreTypeInfo::isReference(local->getTypeInfo())
@@ -2295,6 +2303,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         std::unordered_map<uint32_t, QoreIRValue> candidate_replacements;
         std::vector<std::pair<const QoreIRInstruction*,
             ScalarizedPathOperation>> candidate_path_operations;
+        std::vector<ScalarizedAggregatePhi> candidate_aggregate_phis;
         std::unordered_map<std::string, QoreIRValue> hash_values;
         if (hash_candidate) {
             for (size_t i = 0; i < hash_keys.size(); ++i) {
@@ -2342,13 +2351,13 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             std::vector<const InstructionPosition*> aggregate_use_positions;
             std::unordered_set<const QoreIRInstruction*> aggregate_uses_seen;
             std::unordered_map<uint32_t, QoreIRValueFacts> candidate_value_facts;
+            bool cross_block_mutation = false;
             for (const InstructionPosition* load_pos : load_positions) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR fixed-aggregate mutation use analysis")) {
                     return {};
                 }
-                if (load_pos->block != store_pos->block
-                        || load_pos->offset <= store_pos->offset
+                if (!dominates(*store_pos, *load_pos, cross_block)
                         || load_pos->inst->exception_target
                         || !load_pos->inst->result.isValid()) {
                     invalid = true;
@@ -2365,12 +2374,14 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     }
                     auto use_position = use.inst
                         ? positions.find(use.inst) : positions.end();
-                    if (!use.inst || use.block_id != store_pos->block
-                            || use_position == positions.end()
-                            || use_position->second.offset <= load_pos->offset) {
+                    if (!use.inst || use_position == positions.end()
+                            || !dominates(*load_pos, use_position->second,
+                                cross_block)) {
                         invalid = true;
                         break;
                     }
+                    cross_block_mutation = cross_block_mutation
+                        || use_position->second.block != store_pos->block;
                     if (aggregate_uses_seen.insert(use.inst).second) {
                         aggregate_use_positions.push_back(
                             &use_position->second);
@@ -2387,61 +2398,25 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             "IR fixed-aggregate path mutation analysis")) {
                         return {};
                     }
-                    if (path_pos.block != store_pos->block
-                            || path_pos.offset <= store_pos->offset) {
+                    if (!dominates(*store_pos, path_pos, cross_block)) {
                         invalid = true;
                         break;
                     }
+                    cross_block_mutation = cross_block_mutation
+                        || path_pos.block != store_pos->block;
                     if (aggregate_uses_seen.insert(path_pos.inst).second) {
                         aggregate_use_positions.push_back(&path_pos);
                     }
                 }
             }
-            std::sort(aggregate_use_positions.begin(),
-                aggregate_use_positions.end(),
-                [](const InstructionPosition* left,
-                        const InstructionPosition* right) {
-                    return left->offset < right->offset;
-            });
-            std::vector<QoreIRValue> list_values = aggregate_values;
-            auto get_path_current_value = [&](const
-                    QoreIRLValuePathInstruction* path) -> QoreIRValue* {
-                if (path->path.size() != 2
-                        || path->path.front().kind
-                            != LVPathStepKind::LocalVar
-                        || path->path.front().ref_ptr != local) {
-                    return nullptr;
-                }
-                const LVPathStep& selector = path->path.back();
-                if (hash_candidate) {
-                    std::string key;
-                    if (selector.kind == LVPathStepKind::HashKeyConst) {
-                        key = selector.name;
-                    } else if (selector.kind == LVPathStepKind::HashKey
-                            && selector.operand_idx != UINT32_MAX
-                            && resolve_string_selector(
-                                QoreIRValue(selector.operand_idx), key)) {
-                        // Resolved from a single dominating constant assignment.
-                    } else {
-                        return nullptr;
-                    }
-                    auto value_it = hash_values.find(key);
-                    return value_it != hash_values.end()
-                        ? &value_it->second : nullptr;
-                }
-                if (selector.kind != LVPathStepKind::ListIndex
-                        || selector.operand_idx == UINT32_MAX) {
-                    return nullptr;
-                }
-                int64_t index = 0;
-                if (!resolve_int_selector(
-                        QoreIRValue(selector.operand_idx), index)
-                        || index < 0
-                        || static_cast<size_t>(index) >= list_values.size()) {
-                    return nullptr;
-                }
-                return &list_values[static_cast<size_t>(index)];
-            };
+            if (!cross_block_mutation) {
+                std::sort(aggregate_use_positions.begin(),
+                    aggregate_use_positions.end(),
+                    [](const InstructionPosition* left,
+                            const InstructionPosition* right) {
+                        return left->offset < right->offset;
+                });
+            }
             std::function<bool(QoreIRValue, QoreIRValueFacts&, size_t)>
                 get_value_facts_impl;
             get_value_facts_impl = [&](QoreIRValue value,
@@ -2624,219 +2599,518 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 }
                 return false;
             };
-            if (!invalid) {
+            std::unordered_map<std::string, size_t> hash_indexes;
+            for (size_t i = 0; i < hash_keys.size(); ++i) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR fixed-aggregate mutation key indexing")) {
+                    return {};
+                }
+                hash_indexes[hash_keys[i]] = i;
+            }
+            auto get_path_value_index = [&](const
+                    QoreIRLValuePathInstruction* path, size_t& value_index) {
+                if (path->path.size() != 2
+                        || path->path.front().kind
+                            != LVPathStepKind::LocalVar
+                        || path->path.front().ref_ptr != local) {
+                    return false;
+                }
+                const LVPathStep& selector = path->path.back();
+                if (hash_candidate) {
+                    std::string key;
+                    if (selector.kind == LVPathStepKind::HashKeyConst) {
+                        key = selector.name;
+                    } else if (selector.kind == LVPathStepKind::HashKey
+                            && selector.operand_idx != UINT32_MAX
+                            && resolve_string_selector(
+                                QoreIRValue(selector.operand_idx), key)) {
+                        // Resolved from a single dominating constant assignment.
+                    } else {
+                        return false;
+                    }
+                    auto index = hash_indexes.find(key);
+                    if (index == hash_indexes.end()) {
+                        return false;
+                    }
+                    value_index = index->second;
+                    return true;
+                }
+                if (selector.kind != LVPathStepKind::ListIndex
+                        || selector.operand_idx == UINT32_MAX) {
+                    return false;
+                }
+                int64_t index = 0;
+                if (!resolve_int_selector(
+                        QoreIRValue(selector.operand_idx), index)
+                        || index < 0
+                        || static_cast<size_t>(index)
+                            >= aggregate_values.size()) {
+                    return false;
+                }
+                value_index = static_cast<size_t>(index);
+                return true;
+            };
+            auto process_operation = [&](const QoreIRInstruction* inst,
+                    std::vector<QoreIRValue>& state) {
+                if (inst->opcode == QoreIROpcode::LValuePathCompound) {
+                    const auto* path = static_cast<
+                        const QoreIRLValuePathInstruction*>(inst);
+                    size_t value_index = 0;
+                    bool valid_path = path->result.isValid()
+                        && !path->operands.empty()
+                        && get_path_value_index(path, value_index);
+                    QoreIRValueFacts current_facts;
+                    QoreIRValueFacts rhs_facts;
+                    QoreIROpcode scalar_opcode = QoreIROpcode::AddAssignAny;
+                    QoreIRValue rhs = path->operands.front();
+                    valid_path = valid_path
+                        && get_value_facts(state[value_index], current_facts)
+                        && get_value_facts(rhs, rhs_facts)
+                        && current_facts.assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && current_facts.never_nothing
+                        && rhs_facts.assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && rhs_facts.never_nothing
+                        && current_facts.representation
+                            == rhs_facts.representation
+                        && get_compound_opcode(path->compound_op,
+                            current_facts.representation, scalar_opcode);
+                    if (!valid_path) {
+                        return false;
+                    }
+                    current_facts.assigned_state = QoreIRAssignedState::Assigned;
+                    current_facts.never_nothing = true;
+                    candidate_value_facts[path->result.id] = current_facts;
+                    candidate_path_operations.push_back({inst,
+                        ScalarizedPathOperation{scalar_opcode, path->result,
+                            state[value_index], rhs, current_facts, false}});
+                    state[value_index] = path->result;
+                    return true;
+                }
+                if (inst->opcode == QoreIROpcode::LValuePathUnary) {
+                    const auto* path = static_cast<
+                        const QoreIRLValuePathInstruction*>(inst);
+                    size_t value_index = 0;
+                    bool valid_path = path->result.isValid()
+                        && (path->unary_op == LVUnaryOp::PreInc
+                            || path->unary_op == LVUnaryOp::PreDec
+                            || path->unary_op == LVUnaryOp::PostInc
+                            || path->unary_op == LVUnaryOp::PostDec)
+                        && get_path_value_index(path, value_index);
+                    QoreIRValueFacts current_facts;
+                    valid_path = valid_path
+                        && get_value_facts(state[value_index], current_facts)
+                        && current_facts.assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && current_facts.never_nothing
+                        && current_facts.representation
+                            == QoreIRValueRepresentation::NativeInt;
+                    if (!valid_path) {
+                        return false;
+                    }
+                    bool post = path->unary_op == LVUnaryOp::PostInc
+                        || path->unary_op == LVUnaryOp::PostDec;
+                    QoreIRValue operation_result = post
+                        ? func.createValue() : path->result;
+                    func.max_value_id = std::max(func.max_value_id,
+                        operation_result.id);
+                    candidate_value_facts[operation_result.id] = current_facts;
+                    if (post) {
+                        candidate_replacements.emplace(path->result.id,
+                            state[value_index]);
+                    }
+                    QoreIROpcode scalar_opcode =
+                        path->unary_op == LVUnaryOp::PreInc
+                            || path->unary_op == LVUnaryOp::PostInc
+                        ? QoreIROpcode::AddAssignInt
+                        : QoreIROpcode::SubAssignInt;
+                    candidate_path_operations.push_back({inst,
+                        ScalarizedPathOperation{scalar_opcode,
+                            operation_result, state[value_index],
+                            QoreIRValue(), current_facts, true}});
+                    state[value_index] = operation_result;
+                    return true;
+                }
+                bool valid_operation = !inst->operands.empty()
+                    && loaded_values.count(inst->operands[0].id);
+                size_t value_index = 0;
+                if (valid_operation && hash_candidate
+                        && (inst->opcode == QoreIROpcode::HashKeyAccess
+                            || inst->opcode == QoreIROpcode::HashKeyAccessInt
+                            || inst->opcode == QoreIROpcode::HashKeyAccessHash
+                            || inst->opcode
+                                == QoreIROpcode::HashKeyAccessHashGuarded)) {
+                    valid_operation = !inst->exception_target
+                        && inst->result.isValid()
+                        && inst->operands.size() == 1;
+                    if (valid_operation) {
+                        const auto* access = static_cast<
+                            const QoreIRHashKeyAccessInstruction*>(inst);
+                        auto index = hash_indexes.find(access->key_name);
+                        valid_operation = index != hash_indexes.end();
+                        if (valid_operation) {
+                            candidate_replacements.emplace(inst->result.id,
+                                state[index->second]);
+                        }
+                    }
+                } else if (valid_operation && hash_candidate
+                        && inst->opcode == QoreIROpcode::HashDerefDynamic) {
+                    valid_operation = !inst->exception_target
+                        && inst->result.isValid()
+                        && inst->operands.size() == 2;
+                    std::string key;
+                    valid_operation = valid_operation
+                        && resolve_string_selector(inst->operands[1], key);
+                    auto index = valid_operation
+                        ? hash_indexes.find(key) : hash_indexes.end();
+                    valid_operation = index != hash_indexes.end();
+                    if (valid_operation) {
+                        candidate_replacements.emplace(inst->result.id,
+                            state[index->second]);
+                    }
+                } else if (valid_operation && hash_candidate
+                        && inst->opcode == QoreIROpcode::HashKeyStore) {
+                    valid_operation = inst->operands.size() == 2
+                        && qore_ir_get_written_local(inst) == local;
+                    if (valid_operation) {
+                        const auto* store = static_cast<
+                            const QoreIRHashKeyStoreInstruction*>(inst);
+                        auto index = hash_indexes.find(store->key_name);
+                        valid_operation = index != hash_indexes.end();
+                        if (valid_operation) {
+                            value_index = index->second;
+                        }
+                    }
+                    valid_operation = valid_operation
+                        && compatible_native_value(inst->operands[1],
+                            state[value_index]);
+                    if (valid_operation) {
+                        state[value_index] = inst->operands[1];
+                    }
+                } else if (valid_operation && hash_candidate
+                        && inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                    valid_operation = inst->operands.size() == 3
+                        && qore_ir_get_written_local(inst) == local;
+                    std::string key;
+                    valid_operation = valid_operation
+                        && resolve_string_selector(inst->operands[2], key);
+                    auto index = valid_operation
+                        ? hash_indexes.find(key) : hash_indexes.end();
+                    valid_operation = index != hash_indexes.end();
+                    if (valid_operation) {
+                        value_index = index->second;
+                    }
+                    valid_operation = valid_operation
+                        && compatible_native_value(inst->operands[1],
+                            state[value_index]);
+                    if (valid_operation) {
+                        state[value_index] = inst->operands[1];
+                    }
+                } else if (valid_operation && !hash_candidate
+                        && inst->opcode == QoreIROpcode::ListIndexDynamic) {
+                    valid_operation = !inst->exception_target
+                        && inst->result.isValid()
+                        && inst->operands.size() == 2;
+                    const auto* index_inst = valid_operation
+                        ? static_cast<const QoreIRExprInstruction*>(inst)
+                        : nullptr;
+                    valid_operation = valid_operation
+                        && index_inst->list_selector_kinds.empty();
+                    int64_t index = 0;
+                    valid_operation = valid_operation
+                        && resolve_int_selector(inst->operands[1], index)
+                        && index >= 0
+                        && static_cast<size_t>(index) < state.size();
+                    if (valid_operation) {
+                        candidate_replacements.emplace(inst->result.id,
+                            state[static_cast<size_t>(index)]);
+                    }
+                } else if (valid_operation && !hash_candidate
+                        && inst->opcode == QoreIROpcode::ListIndexStore) {
+                    valid_operation = inst->operands.size() == 3
+                        && qore_ir_get_written_local(inst) == local;
+                    int64_t index = 0;
+                    valid_operation = valid_operation
+                        && resolve_int_selector(inst->operands[2], index)
+                        && index >= 0
+                        && static_cast<size_t>(index) < state.size();
+                    if (valid_operation) {
+                        value_index = static_cast<size_t>(index);
+                    }
+                    valid_operation = valid_operation
+                        && compatible_native_value(inst->operands[1],
+                            state[value_index]);
+                    if (valid_operation) {
+                        state[value_index] = inst->operands[1];
+                    }
+                } else {
+                    valid_operation = false;
+                }
+                if (valid_operation) {
+                    reads.push_back(inst);
+                }
+                return valid_operation;
+            };
+            if (!invalid && !cross_block_mutation) {
+                std::vector<QoreIRValue> state = aggregate_values;
                 for (const InstructionPosition* operation_pos
                         : aggregate_use_positions) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR fixed-aggregate mutation scalar analysis")) {
                         return {};
                     }
-                    const QoreIRInstruction* inst = operation_pos->inst;
-                    if (inst->opcode == QoreIROpcode::LValuePathCompound) {
-                        const auto* path = static_cast<
-                            const QoreIRLValuePathInstruction*>(inst);
-                        bool valid_path = path->result.isValid()
-                            && !path->operands.empty();
-                        QoreIRValue* current_value = valid_path
-                            ? get_path_current_value(path) : nullptr;
-                        QoreIRValueFacts current_facts;
-                        QoreIRValueFacts rhs_facts;
-                        QoreIROpcode scalar_opcode =
-                            QoreIROpcode::AddAssignAny;
-                        QoreIRValue rhs = path->operands.front();
-                        valid_path = valid_path && current_value
-                            && get_value_facts(*current_value, current_facts)
-                            && get_value_facts(rhs, rhs_facts)
-                            && current_facts.assigned_state
-                                == QoreIRAssignedState::Assigned
-                            && current_facts.never_nothing
-                            && rhs_facts.assigned_state
-                                == QoreIRAssignedState::Assigned
-                            && rhs_facts.never_nothing
-                            && current_facts.representation
-                                == rhs_facts.representation
-                            && get_compound_opcode(path->compound_op,
-                                current_facts.representation, scalar_opcode);
-                        if (!valid_path) {
-                            invalid = true;
-                            break;
-                        }
-                        current_facts.assigned_state =
-                            QoreIRAssignedState::Assigned;
-                        current_facts.never_nothing = true;
-                        candidate_value_facts[path->result.id] = current_facts;
-                        candidate_path_operations.push_back({inst,
-                            ScalarizedPathOperation{scalar_opcode,
-                                path->result, *current_value, rhs,
-                                current_facts, false}});
-                        *current_value = path->result;
-                        continue;
-                    }
-                    if (inst->opcode == QoreIROpcode::LValuePathUnary) {
-                        const auto* path = static_cast<
-                            const QoreIRLValuePathInstruction*>(inst);
-                        bool valid_path = path->result.isValid()
-                            && (path->unary_op == LVUnaryOp::PreInc
-                                || path->unary_op == LVUnaryOp::PreDec
-                                || path->unary_op == LVUnaryOp::PostInc
-                                || path->unary_op == LVUnaryOp::PostDec);
-                        QoreIRValue* current_value = valid_path
-                            ? get_path_current_value(path) : nullptr;
-                        QoreIRValueFacts current_facts;
-                        valid_path = valid_path && current_value
-                            && get_value_facts(*current_value, current_facts)
-                            && current_facts.assigned_state
-                                == QoreIRAssignedState::Assigned
-                            && current_facts.never_nothing
-                            && current_facts.representation
-                                == QoreIRValueRepresentation::NativeInt;
-                        if (!valid_path) {
-                            invalid = true;
-                            break;
-                        }
-                        bool post = path->unary_op == LVUnaryOp::PostInc
-                            || path->unary_op == LVUnaryOp::PostDec;
-                        QoreIRValue operation_result = post
-                            ? func.createValue() : path->result;
-                        func.max_value_id = std::max(func.max_value_id,
-                            operation_result.id);
-                        candidate_value_facts[operation_result.id] =
-                            current_facts;
-                        if (post) {
-                            candidate_replacements.emplace(path->result.id,
-                                *current_value);
-                        }
-                        QoreIROpcode scalar_opcode =
-                            path->unary_op == LVUnaryOp::PreInc
-                                || path->unary_op == LVUnaryOp::PostInc
-                            ? QoreIROpcode::AddAssignInt
-                            : QoreIROpcode::SubAssignInt;
-                        candidate_path_operations.push_back({inst,
-                            ScalarizedPathOperation{scalar_opcode,
-                                operation_result, *current_value,
-                                QoreIRValue(),
-                                current_facts, true}});
-                        *current_value = operation_result;
-                        continue;
-                    }
-                    bool valid_operation = !inst->operands.empty()
-                        && loaded_values.count(inst->operands[0].id);
-                    if (valid_operation && hash_candidate
-                            && (inst->opcode == QoreIROpcode::HashKeyAccess
-                                || inst->opcode
-                                    == QoreIROpcode::HashKeyAccessInt
-                                || inst->opcode
-                                    == QoreIROpcode::HashKeyAccessHash
-                                || inst->opcode
-                                    == QoreIROpcode::HashKeyAccessHashGuarded)) {
-                        valid_operation = !inst->exception_target
-                            && inst->result.isValid()
-                            && inst->operands.size() == 1;
-                        if (valid_operation) {
-                            const auto* access = static_cast<
-                                const QoreIRHashKeyAccessInstruction*>(inst);
-                            auto value_it = hash_values.find(access->key_name);
-                            valid_operation = value_it != hash_values.end();
-                            if (valid_operation) {
-                                candidate_replacements.emplace(inst->result.id,
-                                    value_it->second);
-                            }
-                        }
-                    } else if (valid_operation && hash_candidate
-                            && inst->opcode
-                                == QoreIROpcode::HashDerefDynamic) {
-                        valid_operation = !inst->exception_target
-                            && inst->result.isValid()
-                            && inst->operands.size() == 2;
-                        std::string key;
-                        valid_operation = valid_operation
-                            && resolve_string_selector(inst->operands[1], key);
-                        auto value_it = valid_operation
-                            ? hash_values.find(key) : hash_values.end();
-                        valid_operation = value_it != hash_values.end();
-                        if (valid_operation) {
-                            candidate_replacements.emplace(inst->result.id,
-                                value_it->second);
-                        }
-                    } else if (valid_operation && hash_candidate
-                            && inst->opcode == QoreIROpcode::HashKeyStore) {
-                        valid_operation = inst->operands.size() == 2
-                            && qore_ir_get_written_local(inst) == local;
-                        if (valid_operation) {
-                            const auto* key_store = static_cast<
-                                const QoreIRHashKeyStoreInstruction*>(inst);
-                            auto value_it = hash_values.find(key_store->key_name);
-                            valid_operation = value_it != hash_values.end()
-                                && compatible_native_value(
-                                    inst->operands[1], value_it->second);
-                            if (valid_operation) {
-                                value_it->second = inst->operands[1];
-                            }
-                        }
-                    } else if (valid_operation && hash_candidate
-                            && inst->opcode
-                                == QoreIROpcode::HashKeyStoreDynamic) {
-                        valid_operation = inst->operands.size() == 3
-                            && qore_ir_get_written_local(inst) == local;
-                        std::string key;
-                        valid_operation = valid_operation
-                            && resolve_string_selector(inst->operands[2], key);
-                        auto value_it = valid_operation
-                            ? hash_values.find(key) : hash_values.end();
-                        valid_operation = value_it != hash_values.end()
-                            && compatible_native_value(inst->operands[1],
-                                value_it->second);
-                        if (valid_operation) {
-                            value_it->second = inst->operands[1];
-                        }
-                    } else if (valid_operation && !hash_candidate
-                            && inst->opcode == QoreIROpcode::ListIndexDynamic) {
-                        valid_operation = !inst->exception_target
-                            && inst->result.isValid()
-                            && inst->operands.size() == 2;
-                        const auto* index_inst = valid_operation
-                            ? static_cast<const QoreIRExprInstruction*>(inst)
-                            : nullptr;
-                        valid_operation = valid_operation
-                            && index_inst->list_selector_kinds.empty();
-                        int64_t index = 0;
-                        valid_operation = valid_operation
-                            && resolve_int_selector(inst->operands[1], index);
-                        if (valid_operation) {
-                            valid_operation = index >= 0
-                                && static_cast<size_t>(index)
-                                    < list_values.size();
-                            if (valid_operation) {
-                                candidate_replacements.emplace(inst->result.id,
-                                    list_values[static_cast<size_t>(index)]);
-                            }
-                        }
-                    } else if (valid_operation && !hash_candidate
-                            && inst->opcode == QoreIROpcode::ListIndexStore) {
-                        valid_operation = inst->operands.size() == 3
-                            && qore_ir_get_written_local(inst) == local;
-                        int64_t index = 0;
-                        valid_operation = valid_operation
-                            && resolve_int_selector(inst->operands[2], index);
-                        if (valid_operation) {
-                            valid_operation = index >= 0
-                                && static_cast<size_t>(index)
-                                    < list_values.size()
-                                && compatible_native_value(inst->operands[1],
-                                    list_values[static_cast<size_t>(index)]);
-                            if (valid_operation) {
-                                list_values[static_cast<size_t>(index)] =
-                                    inst->operands[1];
-                            }
-                        }
-                    } else {
-                        valid_operation = false;
-                    }
-                    if (!valid_operation) {
+                    if (!process_operation(operation_pos->inst, state)) {
                         invalid = true;
                         break;
                     }
-                    reads.push_back(inst);
+                }
+            } else if (!invalid) {
+                // Restrict aggregate SSA to the acyclic dominated region rooted
+                // at the initializing store. Loop-carried state remains boxed.
+                std::vector<std::vector<const InstructionPosition*>>
+                    operations_by_block(func.blocks.size());
+                std::vector<uint8_t> required(func.blocks.size(), 0);
+                std::vector<size_t> region_worklist;
+                required[store_pos->block] = 1;
+                for (const InstructionPosition* operation_pos
+                        : aggregate_use_positions) {
+                    operations_by_block[operation_pos->block].push_back(
+                        operation_pos);
+                    if (!required[operation_pos->block]) {
+                        required[operation_pos->block] = 1;
+                        region_worklist.push_back(operation_pos->block);
+                    }
+                }
+                while (!region_worklist.empty() && !invalid) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR fixed-aggregate mutation region analysis")) {
+                        return {};
+                    }
+                    size_t block_id = region_worklist.back();
+                    region_worklist.pop_back();
+                    if (block_id == store_pos->block) {
+                        continue;
+                    }
+                    for (size_t predecessor : cfg.predecessors[block_id]) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate mutation predecessor analysis")) {
+                            return {};
+                        }
+                        if (predecessor != store_pos->block
+                                && !cfg.dominates(
+                                    store_pos->block, predecessor)) {
+                            invalid = true;
+                            break;
+                        }
+                        if (!required[predecessor]) {
+                            required[predecessor] = 1;
+                            region_worklist.push_back(predecessor);
+                        }
+                    }
+                }
+                std::vector<size_t> indegree(func.blocks.size(), 0);
+                size_t required_count = 0;
+                for (size_t block_id = 0;
+                        !invalid && block_id < func.blocks.size(); ++block_id) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR fixed-aggregate mutation indegree analysis")) {
+                        return {};
+                    }
+                    if (!required[block_id]) {
+                        continue;
+                    }
+                    ++required_count;
+                    if (block_id == store_pos->block) {
+                        continue;
+                    }
+                    for (size_t predecessor : cfg.predecessors[block_id]) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate mutation indegree analysis")) {
+                            return {};
+                        }
+                        if (!required[predecessor]) {
+                            invalid = true;
+                            break;
+                        }
+                        ++indegree[block_id];
+                    }
+                }
+                std::vector<size_t> order;
+                std::vector<size_t> order_worklist;
+                if (!invalid) {
+                    order_worklist.push_back(store_pos->block);
+                }
+                for (size_t next = 0; next < order_worklist.size(); ++next) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR fixed-aggregate mutation ordering")) {
+                        return {};
+                    }
+                    size_t block_id = order_worklist[next];
+                    order.push_back(block_id);
+                    for (size_t successor : cfg.successors[block_id]) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate mutation ordering")) {
+                            return {};
+                        }
+                        if (!required[successor]
+                                || successor == store_pos->block) {
+                            continue;
+                        }
+                        if (!indegree[successor]
+                                || --indegree[successor]) {
+                            continue;
+                        }
+                        order_worklist.push_back(successor);
+                    }
+                }
+                if (!invalid && order.size() != required_count) {
+                    invalid = true;
+                }
+                std::vector<std::vector<QoreIRValue>> output(
+                    func.blocks.size());
+                std::vector<uint8_t> output_valid(func.blocks.size(), 0);
+                for (size_t block_id : order) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR fixed-aggregate mutation state analysis")) {
+                        return {};
+                    }
+                    if (invalid) {
+                        break;
+                    }
+                    std::vector<QoreIRValue> state;
+                    if (block_id == store_pos->block) {
+                        state = aggregate_values;
+                    } else {
+                        const auto& predecessors = cfg.predecessors[block_id];
+                        if (predecessors.empty()) {
+                            invalid = true;
+                            break;
+                        }
+                        for (size_t predecessor : predecessors) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR fixed-aggregate mutation state analysis")) {
+                                return {};
+                            }
+                            if (!output_valid[predecessor]
+                                    || output[predecessor].size()
+                                        != aggregate_values.size()) {
+                                invalid = true;
+                                break;
+                            }
+                        }
+                        if (invalid) {
+                            break;
+                        }
+                        state.resize(aggregate_values.size());
+                        for (size_t value_index = 0;
+                                value_index < state.size(); ++value_index) {
+                            if (qore_ir_analysis_cancelled(check_count,
+                                    "IR fixed-aggregate mutation value analysis")) {
+                                return {};
+                            }
+                            QoreIRValue first =
+                                output[predecessors.front()][value_index];
+                            bool same = true;
+                            for (size_t predecessor : predecessors) {
+                                if (qore_ir_analysis_cancelled(check_count,
+                                        "IR fixed-aggregate mutation value merge")) {
+                                    return {};
+                                }
+                                if (output[predecessor][value_index].id
+                                        != first.id) {
+                                    same = false;
+                                    break;
+                                }
+                            }
+                            if (same) {
+                                state[value_index] = first;
+                                continue;
+                            }
+                            QoreIRValueFacts phi_facts;
+                            bool valid_phi = get_value_facts(first, phi_facts)
+                                && phi_facts.assigned_state
+                                    == QoreIRAssignedState::Assigned
+                                && phi_facts.never_nothing;
+                            for (size_t predecessor : predecessors) {
+                                if (qore_ir_analysis_cancelled(check_count,
+                                        "IR fixed-aggregate mutation phi analysis")) {
+                                    return {};
+                                }
+                                QoreIRValueFacts incoming_facts;
+                                valid_phi = valid_phi
+                                    && get_value_facts(
+                                        output[predecessor][value_index],
+                                        incoming_facts)
+                                    && incoming_facts.assigned_state
+                                        == QoreIRAssignedState::Assigned
+                                    && incoming_facts.never_nothing
+                                    && incoming_facts.representation
+                                        == phi_facts.representation
+                                    && incoming_facts.type_info
+                                        == phi_facts.type_info;
+                            }
+                            QoreIRPhiValueKind phi_kind =
+                                QoreIRPhiValueKind::QoreValue;
+                            if (valid_phi && phi_facts.representation
+                                    == QoreIRValueRepresentation::NativeInt) {
+                                phi_kind = QoreIRPhiValueKind::NativeInt;
+                            } else if (valid_phi && phi_facts.representation
+                                    == QoreIRValueRepresentation::NativeFloat) {
+                                phi_kind = QoreIRPhiValueKind::NativeFloat;
+                            } else if (valid_phi && phi_facts.representation
+                                    == QoreIRValueRepresentation::NativeBool) {
+                                phi_kind = QoreIRPhiValueKind::NativeBool;
+                            } else {
+                                valid_phi = false;
+                            }
+                            if (!valid_phi) {
+                                invalid = true;
+                                break;
+                            }
+                            QoreIRValue result = func.createValue();
+                            func.max_value_id = std::max(
+                                func.max_value_id, result.id);
+                            candidate_value_facts[result.id] = phi_facts;
+                            ScalarizedAggregatePhi phi;
+                            phi.block = block_id;
+                            phi.result = result;
+                            phi.value_kind = phi_kind;
+                            phi.facts = phi_facts;
+                            for (size_t predecessor : predecessors) {
+                                if (qore_ir_analysis_cancelled(check_count,
+                                        "IR fixed-aggregate mutation phi preparation")) {
+                                    return {};
+                                }
+                                phi.incoming.push_back({
+                                    output[predecessor][value_index],
+                                    predecessor});
+                            }
+                            candidate_aggregate_phis.push_back(std::move(phi));
+                            state[value_index] = result;
+                        }
+                    }
+                    auto& block_operations = operations_by_block[block_id];
+                    std::sort(block_operations.begin(), block_operations.end(),
+                        [](const InstructionPosition* left,
+                                const InstructionPosition* right) {
+                            return left->offset < right->offset;
+                    });
+                    for (const InstructionPosition* operation_pos
+                            : block_operations) {
+                        if (qore_ir_analysis_cancelled(check_count,
+                                "IR fixed-aggregate cross-block mutation scalar analysis")) {
+                            return {};
+                        }
+                        if (!process_operation(operation_pos->inst, state)) {
+                            invalid = true;
+                            break;
+                        }
+                    }
+                    if (!invalid) {
+                        output[block_id] = std::move(state);
+                        output_valid[block_id] = 1;
+                    }
                 }
             }
         } else {
@@ -2959,6 +3233,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
         replacements.insert(candidate_replacements.begin(), candidate_replacements.end());
         scalarized_path_operations.insert(candidate_path_operations.begin(),
             candidate_path_operations.end());
+        scalarized_aggregate_phis.insert(scalarized_aggregate_phis.end(),
+            candidate_aggregate_phis.begin(), candidate_aggregate_phis.end());
         ++scalarized;
         if (hash_candidate) {
             ++stats.hashes;
@@ -3068,6 +3344,32 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             }
             replacement = next->second;
         }
+    }
+    for (const ScalarizedAggregatePhi& pending : scalarized_aggregate_phis) {
+        (void)qore_ir_analysis_cancelled(check_count,
+            "IR fixed-aggregate scalar replacement phi commit");
+        auto phi = std::make_unique<QoreIRPhiInstruction>();
+        phi->result = pending.result;
+        phi->value_kind = pending.value_kind;
+        for (const auto& [value, predecessor] : pending.incoming) {
+            (void)qore_ir_analysis_cancelled(check_count,
+                "IR fixed-aggregate scalar replacement phi commit");
+            phi->incoming.push_back({value, func.blocks[predecessor].get()});
+            phi->operands.push_back(value);
+        }
+        func.setValueFacts(phi->result, pending.facts);
+        auto& instructions = func.blocks[pending.block]->instructions;
+        auto insert_at = instructions.begin();
+        while (insert_at != instructions.end()
+                && (*insert_at)->opcode == QoreIROpcode::Phi) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR fixed-aggregate scalar replacement phi commit");
+            }
+            ++insert_at;
+        }
+        instructions.insert(insert_at, std::move(phi));
+        func.blocks[pending.block]->has_phi_nodes = true;
     }
     for (const auto& block : func.blocks) {
         auto& instructions = block->instructions;

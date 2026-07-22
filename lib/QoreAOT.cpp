@@ -653,7 +653,7 @@ static bool isAOTImplicitSelfFastEntryEligible(const QoreIRFunction* ir_func,
     }
     const void* self_key = reinterpret_cast<const void*>(sig->selfid);
     return !ir_func->ir_only_locals.count(self_key)
-        && !ir_func->ast_referenced_locals.count(self_key);
+        && !ir_func->isAstVisibleLocal(self_key);
 }
 
 //! Check if an AOT function has self-recursive CallDirect instructions.

@@ -106,6 +106,25 @@ int sub crossBlock(int base, bool first) {
     return values.middle + values.right;
 }
 
+int sub crossBlockMutation(bool first) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    if (first) {
+        values.left += 4;
+    } else {
+        values.right = 7;
+    }
+    int old = values.left++;
+    return old * 100 + values.left * 10 + values.right;
+}
+
+int sub cyclicMutation(int rounds) {
+    hash<string, int> values = {\"left\": 1, \"right\": 2};
+    for (int i = 0; i < rounds; ++i) {
+        values.left += 1;
+    }
+    return values.left + values.right;
+}
+
 bool sub conditionalAssignment(bool assign) {
     hash<string, int> values;
     if (assign) {
@@ -126,13 +145,14 @@ bool sub deletedKey() {
     return values.left === NOTHING;
 }
 
-printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d\\n\",
+printf(\"%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     scalarInt(4), scalarFloat(1.5), scalarBool(True), dynamicKey(\"right\"),
     constantDynamicKey(), reassignedDynamicKey(),
     mutatedHash(), compoundHash(), unaryHash(), aliasedHash(), newKey(),
     escapedHash().size(), missingKey(), boxedElement(),
     crossBlock(4, True), crossBlock(4, False), conditionalAssignment(False),
-    conditionalAssignment(True), removedKey(), deletedKey());
+    conditionalAssignment(True), removedKey(), deletedKey(),
+    crossBlockMutation(True), crossBlockMutation(False), cyclicMutation(3));
 ";
 
 string script_path = "/tmp/qore-ir-fixed-hash-scalar-" + string(getpid()) + ".qr";
@@ -159,7 +179,7 @@ string sub runAot(bool disabled) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
-string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1\n";
+string expected = "11:2.5:1:9:7:2:9:7:13212:8:7:2:1:b:10:11:1:0:1:1:562:127:6\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -185,7 +205,8 @@ if (stats !~ /IR-OPT: scalarInt:.*scalar-hashes=1/
         || stats !~ /IR-OPT: constantDynamicKey:.*scalar-hashes=1/
         || stats !~ /IR-OPT: compoundHash:.*scalar-hashes=1/
         || stats !~ /IR-OPT: unaryHash:.*scalar-hashes=1/
-        || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/) {
+        || stats !~ /IR-OPT: crossBlock:.*scalar-hashes=1/
+        || stats !~ /IR-OPT: crossBlockMutation:.*scalar-hashes=1/) {
     printf("missing fixed-hash scalar replacement:\n%s", stats);
     exit(2);
 }
@@ -198,7 +219,8 @@ if (stats !~ /IR-OPT: dynamicKey:.*scalar-hashes=0/
         || stats !~ /IR-OPT: boxedElement:.*scalar-hashes=0/
         || stats !~ /IR-OPT: conditionalAssignment:.*scalar-hashes=0/
         || stats !~ /IR-OPT: removedKey:.*scalar-hashes=0/
-        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/) {
+        || stats !~ /IR-OPT: deletedKey:.*scalar-hashes=0/
+        || stats !~ /IR-OPT: cyclicMutation:.*scalar-hashes=0/) {
     printf("unsafe fixed-hash scalar replacement:\n%s", stats);
     exit(2);
 }

@@ -42,6 +42,35 @@ int sub crossBlock(int number, bool first) {
     return values.number;
 }
 
+int sub crossBlockMutation(bool first) {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    if (first) {
+        values.number += 4;
+    } else {
+        values.number = 7;
+    }
+    int old = values.number++;
+    return old * 10 + values.number;
+}
+
+int sub crossBlockHeterogeneous(bool first) {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    if (first) {
+        values.decimal += 2.5;
+    } else {
+        values.flag = False;
+    }
+    return values.decimal.toInt() * 10 + (values.flag ? 1 : 0);
+}
+
+int sub cyclicMutation(int rounds) {
+    Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
+    for (int i = 0; i < rounds; ++i) {
+        values.number += 1;
+    }
+    return values.number;
+}
+
 int sub dynamicKey(string key) {
     Scalars values((\"number\": 1, \"decimal\": 2.0, \"flag\": True));
     return values{key}.toInt();
@@ -147,12 +176,14 @@ bool sub deleted() {
     return False;
 }
 
-printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     scalarExact(4, 3.0, True), crossBlock(4, True), crossBlock(4, False),
     dynamicKey(\"number\"), constantDynamicKey(), reassignedDynamicKey(),
     mutated(), compound(), unary(), heterogeneousMutation(),
     aliased(), escaped().number, defaulted(), optional(),
-    unassigned(), removed(), deleted());
+    unassigned(), removed(), deleted(), crossBlockMutation(True),
+    crossBlockMutation(False), cyclicMutation(3),
+    crossBlockHeterogeneous(True), crossBlockHeterogeneous(False));
 ";
 
 string script_path = "/tmp/qore-ir-fixed-hashdecl-scalar-" + string(getpid()) + ".qr";
@@ -171,7 +202,7 @@ string sub compile(string output, string compile_env = "") {
         compile_env, libqore_dir, qcc_bin, output, script_path));
 }
 
-string expected = "7:6:4:1:5:1:5:5:13311:4:8:1:11:1:1:1:1\n";
+string expected = "7:6:4:1:5:1:5:5:13311:4:8:1:11:1:1:1:1:56:78:4:41:20\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -196,12 +227,14 @@ if (enabled_compile !~ /IR-OPT-AOT: scalarExact:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: constantDynamicKey:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: compound:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: unary:.*scalar-hashes=1/
-        || enabled_compile !~ /IR-OPT-AOT: heterogeneousMutation:.*scalar-hashes=1/) {
+        || enabled_compile !~ /IR-OPT-AOT: heterogeneousMutation:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: crossBlockMutation:.*scalar-hashes=1/
+        || enabled_compile !~ /IR-OPT-AOT: crossBlockHeterogeneous:.*scalar-hashes=1/) {
     printf("missing fixed-hashdecl scalar replacement:\n%s", enabled_compile);
     exit(2);
 }
 foreach string name in (("dynamicKey", "reassignedDynamicKey", "aliased", "escaped", "defaulted", "optional",
-        "unassigned", "removed", "deleted")) {
+        "unassigned", "removed", "deleted", "cyclicMutation")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT: %s:.*scalar-hashes=0", name))) {
         printf("unsafe fixed-hashdecl scalar replacement for %s:\n%s",

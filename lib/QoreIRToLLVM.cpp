@@ -8031,7 +8031,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || local->isTopLevel()
                     || QoreTypeInfo::isReference(local->getTypeInfo())
                     || func.has_opaque_ast_local_access
-                    || func.ast_referenced_locals.count(local_key)
+                    || func.isAstVisibleLocal(local_key)
                     || !assigned_non_nothing_locals.count(local_key)) {
                 continue;
             }
@@ -8122,7 +8122,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!local || local->closureUse()
                     || QoreTypeInfo::isReference(local->getTypeInfo())
                     || stored_locals.count(local)
-                    || func.ast_referenced_locals.count(key)) {
+                    || func.isAstVisibleLocal(key)) {
                 continue;
             }
             size_t stable_load_count = 0;

@@ -140,6 +140,48 @@ int sub listDynamicSelectorKernel(int rounds) {
     return checksum;
 }
 
+int sub hashCrossBlockKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        hash<string, int> values = {"left": i, "right": i + 1};
+        if (i % 2) {
+            values.left += 2;
+        } else {
+            values.right += 2;
+        }
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub hashdeclCrossBlockKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        FixedMutationRecord values(("left": i, "right": i + 1));
+        if (i % 2) {
+            values.left += 2;
+        } else {
+            values.right += 2;
+        }
+        checksum += values.left + values.right;
+    }
+    return checksum;
+}
+
+int sub listCrossBlockKernel(int rounds) {
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        list<int> values = (i, i + 1);
+        if (i % 2) {
+            values[0] += 2;
+        } else {
+            values[1] += 2;
+        }
+        checksum += values[0] + values[1];
+    }
+    return checksum;
+}
+
 string mode = ARGV.size() ? ARGV[0] : "hash";
 int rounds = ARGV.size() > 1 ? ARGV[1].toInt() : 5000000;
 switch (mode) {
@@ -178,6 +220,15 @@ switch (mode) {
         break;
     case "list-dynamic":
         printf("%d\n", listDynamicSelectorKernel(rounds));
+        break;
+    case "hash-cross-block":
+        printf("%d\n", hashCrossBlockKernel(rounds));
+        break;
+    case "hashdecl-cross-block":
+        printf("%d\n", hashdeclCrossBlockKernel(rounds));
+        break;
+    case "list-cross-block":
+        printf("%d\n", listCrossBlockKernel(rounds));
         break;
     default:
         throw "BENCHMARK-ERROR", "unknown mode '%s'", mode;

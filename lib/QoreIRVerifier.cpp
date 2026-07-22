@@ -1551,6 +1551,7 @@ void QoreIRFunction::computeIROnlyLocals() {
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     ast_referenced_locals.clear();
+    non_structured_ast_referenced_locals.clear();
     has_opaque_ast_local_access = false;
     has_explicit_self_local_access = false;
 
@@ -1706,6 +1707,12 @@ void QoreIRFunction::computeIROnlyLocals() {
             }
         }
     }
+
+    non_structured_ast_referenced_locals = ast_referenced_locals;
+    ast_referenced_locals.insert(
+        cow_container_locals.begin(), cow_container_locals.end());
+    ast_referenced_locals.insert(
+        lvalue_path_locals.begin(), lvalue_path_locals.end());
 
     // Store total local count for Phase 4 optimization (selective reload skip)
     total_local_count = all_locals.size();

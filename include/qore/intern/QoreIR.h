@@ -3024,6 +3024,22 @@ public:
     // an unused synthetic method self local from one that still requires TLS.
     std::unordered_set<const void*> ast_referenced_locals;
 
+    // AST-visible locals excluding structured COW stores and lvalue paths.
+    // Fixed aggregate scalar replacement uses this narrower inventory to prove
+    // that eliminating all structured operations removes runtime-stack access.
+    std::unordered_set<const void*> non_structured_ast_referenced_locals;
+
+    //! Returns true when a local requires visibility through the runtime stack.
+    //! The split inventories let scalar replacement reason about structured
+    //! container operations without weakening general fast-entry safety.
+    //! @param key local variable identity
+    //! @return true if the local is visible to retained AST execution
+    bool isAstVisibleLocal(const void* key) const {
+        return ast_referenced_locals.count(key)
+            || cow_container_locals.count(key)
+            || lvalue_path_locals.count(key);
+    }
+
     // True when delegate-to-AST statements or an unknown AST node prevent an
     // exact local-reference inventory.
     bool has_opaque_ast_local_access = false;
