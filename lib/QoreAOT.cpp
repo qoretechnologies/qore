@@ -14466,6 +14466,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
         }
         size_t aggregate_projections = 0;
+        size_t borrowed_aggregate_projections = 0;
         if (!std::getenv("QORE_DISABLE_AOT_AGGREGATE_RETURN_PROJECTION")) {
             QoreIRAggregateProjectionQuery projection_query =
                 [&](const AbstractQoreFunctionVariant* callee,
@@ -15323,7 +15324,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 };
             aggregate_projections =
                 qore_ir_fuse_aggregate_return_projections(
-                    func, projection_query, consumer_query);
+                    func, projection_query, consumer_query,
+                    &borrowed_aggregate_projections);
         }
         size_t boxed_return_calls = 0;
         if (!std::getenv("QORE_DISABLE_AOT_BOXED_RETURN_PARAM_FOLD")) {
@@ -15592,12 +15594,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: fresh-list-size-calls=%zu"
                 " fresh-hash-key-calls=%zu aggregate-projections=%zu"
+                " borrowed-aggregate-projections=%zu"
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu"
                 " native-specializations=%zu\n",
                 func.name.c_str(), folded_list_sizes, folded_hash_keys,
-                aggregate_projections, boxed_return_calls, changed,
+                aggregate_projections, borrowed_aggregate_projections,
+                boxed_return_calls, changed,
                 string_consumers, native_specializations);
         }
     };

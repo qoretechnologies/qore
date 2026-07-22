@@ -223,8 +223,9 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
     @param get_consumer optionally resolves exact calls consuming an aggregate
     @return number of aggregate producer/consumer groups optimized */
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
-    const QoreIRAggregateProjectionQuery& get_projection,
-    const QoreIRAggregateConsumerQuery& get_consumer = {});
+        const QoreIRAggregateProjectionQuery& get_projection,
+        const QoreIRAggregateConsumerQuery& get_consumer = {},
+        size_t* borrowed_projections = nullptr);
 
 //! Replace dynamic additions with native opcodes when late AOT facts
 //! prove that every operand is assigned and has the required representation.

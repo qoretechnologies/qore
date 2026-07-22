@@ -8132,7 +8132,13 @@ size_t qore_ir_fold_fresh_hash_key_calls(QoreIRFunction& func,
 
 size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         const QoreIRAggregateProjectionQuery& get_projection,
-        const QoreIRAggregateConsumerQuery& get_consumer) {
+        const QoreIRAggregateConsumerQuery& get_consumer,
+        size_t* borrowed_projections) {
+    if (borrowed_projections) {
+        *borrowed_projections = 0;
+    }
+    const bool enable_borrowed_projections =
+        !std::getenv("QORE_DISABLE_AOT_BORROWED_AGGREGATE_PROJECTION");
     if (!get_projection) {
         return 0;
     }
@@ -8890,7 +8896,75 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     };
     std::vector<Projection> projections;
     std::vector<VirtualizedCall> virtualized;
-    auto add_virtualized_projection = [](VirtualizedCall& candidate,
+    auto boxed_projection_source_survives = [&](const Projection& projection) {
+        if (projection.operand < 0
+                || static_cast<size_t>(projection.operand)
+                    >= projection.call->operands.size()) {
+            return false;
+        }
+        QoreIRValue source = projection.call->operands[
+            static_cast<size_t>(projection.operand)];
+        auto source_definition = definitions.find(source.id);
+        auto source_position = source_definition == definitions.end()
+            ? instruction_positions.end()
+            : instruction_positions.find(source_definition->second);
+        auto consumer_position = instruction_positions.find(
+            projection.consumer);
+        if (source_definition == definitions.end()
+                || source_position == instruction_positions.end()
+                || consumer_position == instruction_positions.end()
+                || source_position->second.first
+                    != consumer_position->second.first
+                || source_position->second.second
+                    >= consumer_position->second.second) {
+            return false;
+        }
+        const auto& instructions = func.blocks[
+            source_position->second.first]->instructions;
+        bool discarded = false;
+        for (size_t offset = source_position->second.second + 1;
+                offset < consumer_position->second.second; ++offset) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR aggregate projection lifetime analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* instruction = instructions[offset].get();
+            if (instruction->opcode == QoreIROpcode::DiscardTemps) {
+                discarded = true;
+            }
+        }
+        if (!discarded) {
+            return true;
+        }
+        if (source_definition->second->opcode != QoreIROpcode::LoadLocal) {
+            return false;
+        }
+        const auto* load = static_cast<const QoreIRLocalInstruction*>(
+            source_definition->second);
+        if (!load->local || load->is_ref || load->is_closure
+                || load->local->closureUse()) {
+            return false;
+        }
+        for (size_t offset = source_position->second.second + 1;
+                offset < consumer_position->second.second; ++offset) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR aggregate projection local lifetime analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* instruction = instructions[offset].get();
+            if (qore_ir_get_written_local(instruction) == load->local
+                    || ((instruction->opcode
+                                == QoreIROpcode::InstantiateLocal
+                            || instruction->opcode
+                                == QoreIROpcode::UninstantiateLocal)
+                        && static_cast<const QoreIRLocalInstruction*>(
+                            instruction)->local == load->local)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    auto add_virtualized_projection = [&](VirtualizedCall& candidate,
             const Projection& projection) {
         if (projection.guarded_index.isValid()) {
             return false;
@@ -8943,6 +9017,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::Size) {
+            if ((projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedValue
+                    || projection.kind
+                        == QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedValueMaybeNothing)
+                    && !boxed_projection_source_survives(projection)) {
+                return false;
+            }
             candidate.materialized_projections.push_back(projection);
             return true;
         }
@@ -9375,10 +9458,27 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     }
                 } else {
                     if (guarded_local_projection
-                            || direct_local_projection
-                            || !add_virtualized_projection(
-                                candidate, projection)) {
+                            || direct_local_projection) {
                         if (projection_count) {
+                            return false;
+                        }
+                        direct_local_projection =
+                            std::make_unique<Projection>(
+                                std::move(projection));
+                    } else if (!add_virtualized_projection(
+                            candidate, projection)) {
+                        bool unsafe_boxed_lifetime =
+                            (projection.kind
+                                    == QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::BoxedValue
+                                || projection.kind
+                                    == QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedValueMaybeNothing)
+                            && !boxed_projection_source_survives(projection);
+                        if (projection_count
+                                || (unsafe_boxed_lifetime
+                                    && !nested_projection)) {
                             return false;
                         }
                         direct_local_projection =
@@ -9728,6 +9828,119 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
     std::unordered_map<QoreIRInstruction*, MaterializedProjection>
         materialized_replacements;
     std::unordered_set<uint32_t> rewrite_sources;
+    auto can_borrow_materialized_projection = [&](const Projection& projection,
+            QoreIRValue source) {
+        if (!enable_borrowed_projections || (projection.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedValue
+                    && projection.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::BoxedValueMaybeNothing)) {
+            return false;
+        }
+        auto source_definition = definitions.find(source.id);
+        auto source_position = source_definition == definitions.end()
+            ? instruction_positions.end()
+            : instruction_positions.find(source_definition->second);
+        auto projection_position = instruction_positions.find(
+            projection.consumer);
+        if (source_definition == definitions.end()
+                || source_definition->second->opcode
+                    != QoreIROpcode::LoadLocal
+                || source_position == instruction_positions.end()
+                || projection_position == instruction_positions.end()
+                || source_position->second.first
+                    != projection_position->second.first
+                || source_position->second.second
+                    >= projection_position->second.second) {
+            return false;
+        }
+        const auto* load = static_cast<const QoreIRLocalInstruction*>(
+            source_definition->second);
+        const QoreIRValueFacts* facts = func.getValueFacts(source);
+        bool body_local = std::find(func.all_body_locals.begin(),
+            func.all_body_locals.end(), load->local)
+            != func.all_body_locals.end();
+        if (!load->local || load->is_ref || load->is_closure
+                || load->local->closureUse()
+                || (!body_local && !func.ir_only_locals.count(
+                    reinterpret_cast<const void*>(load->local)))
+                || !facts
+                || facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing
+                || facts->representation != QoreIRValueRepresentation::Boxed
+                || QoreTypeInfo::parseReturns(facts->type_info, NT_STRING)
+                    != QTI_IDENT) {
+            return false;
+        }
+        auto result_uses = uses.find(projection.result.id);
+        if (result_uses == uses.end() || result_uses->second.empty()) {
+            return false;
+        }
+        size_t last_use = projection_position->second.second;
+        for (const QoreIRScalarUse& use : result_uses->second) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR borrowed aggregate use analysis")) {
+                return false;
+            }
+            auto use_position = use.inst
+                ? instruction_positions.find(use.inst)
+                : instruction_positions.end();
+            bool read_only_string_use = use.inst
+                && qore_ir_is_read_only_string_use(
+                    *use.inst, projection.result);
+            if (!read_only_string_use && use.inst
+                    && use.inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    && !use.inst->operands.empty()
+                    && use.inst->operands.front().id == projection.result.id) {
+                const auto* direct = static_cast<const
+                    QoreIRDotEvalMethodDirectInstruction*>(use.inst);
+                read_only_string_use = direct->pseudo
+                    && qore_ir_is_read_only_string_intrinsic(
+                        direct->intrinsic);
+            }
+            if (!use.inst || use_position == instruction_positions.end()
+                    || use_position->second.first
+                        != source_position->second.first
+                    || use_position->second.second
+                        <= projection_position->second.second
+                    || !read_only_string_use) {
+                return false;
+            }
+            last_use = std::max(last_use, use_position->second.second);
+        }
+        auto operations = local_operations.find(load->local);
+        if (operations == local_operations.end()) {
+            return false;
+        }
+        for (const LocalOperation& operation : operations->second) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR borrowed aggregate local analysis")) {
+                return false;
+            }
+            if (operation.block_id == source_position->second.first
+                    && operation.offset > source_position->second.second
+                    && operation.offset <= last_use
+                    && operation.instruction->opcode
+                        != QoreIROpcode::LoadLocal) {
+                return false;
+            }
+        }
+        const auto& instructions = func.blocks[
+            source_position->second.first]->instructions;
+        for (size_t offset = source_position->second.second + 1;
+                offset <= last_use; ++offset) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR borrowed aggregate lifetime analysis")) {
+                return false;
+            }
+            const QoreIRInstruction* instruction = instructions[offset].get();
+            if (qore_ir_get_written_local(instruction) == load->local) {
+                return false;
+            }
+        }
+        return true;
+    };
     for (VirtualizedCall& candidate : virtualized) {
         if (qore_ir_analysis_cancelled(check_count,
                 "IR aggregate virtualization rewrite preparation")) {
@@ -9815,6 +10028,15 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 source = projection.call->operands[
                     static_cast<size_t>(projection.operand)];
                 rewrite_sources.insert(source.id);
+                if (can_borrow_materialized_projection(
+                        projection, source)) {
+                    eliminated.insert(projection.consumer);
+                    replacements.emplace(projection.result.id, source);
+                    if (borrowed_projections) {
+                        ++*borrowed_projections;
+                    }
+                    continue;
+                }
             } else {
                 auto source_constant =
                     std::make_unique<QoreIRConstInstruction>();
