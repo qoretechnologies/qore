@@ -564,7 +564,7 @@ static bool qore_ir_fast_entry_args_allow_optional_scalar_guard(
 static bool qore_ir_fast_entry_operands_need_no_binding(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction* ir_func, const std::vector<QoreIRValue>& operands,
-        int arg_start, int nargs) {
+        int arg_start, int nargs, bool allow_relaxed_binding = false) {
     int parsed_arg_start = arg_start;
     if (expr.hasNode()
             && dynamic_cast<const QoreDotEvalOperatorNode*>(
@@ -586,18 +586,17 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
     const QoreTypeInfo* receiver_type_info =
         qore_ir_get_call_receiver_type_info(expr);
 
-    // AOT slot preparation can retain a call expression without parsed type
-    // metadata. In that representation the already-bound IR operands are the
-    // source of argument type facts. Call-reference nodes also retain argument
-    // lists but do not expose a parsed type vector, so validate that no named or
-    // variable binding is required before using the SSA facts.
+    // The aggregate-projection path can also prove generic and optional
+    // arguments from the already-bound IR operands. Named, variable, or
+    // reordered arguments still require normal binding.
     const QoreParseListNode* parse_args = nullptr;
     const QoreListNode* args = nullptr;
-    const type_vec_t* arg_types = qore_ir_get_call_parsed_arg_types(expr, parse_args, args);
-    if (arg_types) {
-        return false;
-    }
-    if (parse_args && (parse_args->hasNamedArgs() || parse_args->isVariableList())) {
+    const type_vec_t* arg_types =
+        qore_ir_get_call_parsed_arg_types(expr, parse_args, args);
+    if ((!allow_relaxed_binding && arg_types)
+            || (parse_args
+                && (parse_args->hasNamedArgs()
+                    || parse_args->isVariableList()))) {
         return false;
     }
     if (args) {
@@ -607,6 +606,8 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
         }
     }
 
+    bool relaxed_binding = false;
+    bool relaxed_parsed_types = allow_relaxed_binding && arg_types;
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -616,14 +617,44 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
         const QoreTypeInfo* param_ti =
             qore_substitute_type_params_if_needed(
                 sig->lv[i]->getTypeInfo(), receiver_type_info);
+        if (allow_relaxed_binding
+                && (sig->lv[i]->isNoNarrowing()
+                    || param_ti == autoNoNarrowTypeInfo)) {
+            return false;
+        }
         if (!QoreTypeInfo::hasType(param_ti) || param_ti == autoTypeInfo) {
+            relaxed_binding = allow_relaxed_binding;
             continue;
         }
         const QoreIRValueFacts* facts = ir_func->getValueFacts(operands[arg_start + i]);
-        if (!facts || !facts->type_info
-                || !QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+        if (!facts || !facts->type_info) {
             return false;
         }
+        if (QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+            if (allow_relaxed_binding
+                    && QoreTypeInfo::parseAcceptsReturns(
+                        param_ti, NT_NOTHING)) {
+                relaxed_binding = true;
+            }
+            continue;
+        }
+        if (!allow_relaxed_binding) {
+            return false;
+        }
+        const QoreTypeInfo* param_value_type =
+            qore_get_value_type(param_ti);
+        const QoreTypeInfo* operand_value_type =
+            qore_get_value_type(facts->type_info);
+        if (facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing
+                || !QoreTypeInfo::parseAcceptsReturns(
+                    param_ti, NT_NOTHING)
+                || !QoreTypeInfo::hasType(param_value_type)
+                || !QoreTypeInfo::isInputIdentical(
+                    param_value_type, operand_value_type)) {
+            return false;
+        }
+        relaxed_binding = true;
     }
     for (unsigned i = 0; i < sig->numParams(); ++i) {
         if (i && !(i % 100)
@@ -635,7 +666,7 @@ static bool qore_ir_fast_entry_operands_need_no_binding(
             return false;
         }
     }
-    return true;
+    return !relaxed_parsed_types || relaxed_binding;
 }
 
 static bool qore_ir_native_closure_call_eligible(
@@ -14447,6 +14478,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && (qore_ir_fast_entry_args_need_no_binding(
                                 aot_direct_variant, direct_inst->expr, arg_start,
                                 nargs, concrete_inst)
+                            || (fused_aggregate_projection
+                                && qore_ir_fast_entry_operands_need_no_binding(
+                                    aot_direct_variant, direct_inst->expr,
+                                    current_ir_func, direct_inst->operands,
+                                    arg_start, nargs, true))
                             || (!explicit_inst
                                 && !generic_specialization_matches
                                 && qore_ir_fast_entry_args_allow_optional_scalar_guard(
@@ -14873,7 +14909,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionKind::BoxedValue) {
+                                AOTAggregateProjectionKind::BoxedValue
+                            || projection
+                                == QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::
+                                        BoxedValueMaybeNothing) {
                         llvm::Value* boxed =
                             boxed_args[static_cast<size_t>(operand)];
                         if (!boxed) {

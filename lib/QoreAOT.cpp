@@ -5308,7 +5308,7 @@ static bool qore_aot_fast_entry_args_need_no_binding(
 static bool qore_aot_fast_entry_operands_need_no_binding(
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const QoreIRFunction& func, const std::vector<QoreIRValue>& operands,
-        int arg_start, int nargs) {
+        int arg_start, int nargs, bool allow_relaxed_binding = false) {
     int parsed_arg_start = arg_start;
     if (expr.hasNode()
             && dynamic_cast<const QoreDotEvalOperatorNode*>(
@@ -5337,7 +5337,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
     const QoreListNode* args = nullptr;
     const type_vec_t* arg_types =
         qore_aot_get_call_parsed_arg_types(expr, parse_args, args);
-    if (arg_types
+    if ((!allow_relaxed_binding && arg_types)
             || (parse_args
                 && (parse_args->hasNamedArgs()
                     || parse_args->isVariableList()))) {
@@ -5351,6 +5351,8 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
         }
     }
 
+    bool relaxed_binding = false;
+    bool relaxed_parsed_types = allow_relaxed_binding && arg_types;
     for (int i = 0; i < nargs; ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr,
@@ -5362,17 +5364,46 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
             param_ti = qore_substitute_type_params_if_needed(param_ti,
                 receiver_type_info, explicit_type_param_instantiation);
         }
+        if (allow_relaxed_binding
+                && (sig->lv[i]->isNoNarrowing()
+                    || param_ti == autoNoNarrowTypeInfo)) {
+            return false;
+        }
         if (!QoreTypeInfo::hasType(param_ti)
                 || param_ti == autoTypeInfo) {
+            relaxed_binding = allow_relaxed_binding;
             continue;
         }
         const QoreIRValueFacts* facts =
             func.getValueFacts(operands[arg_start + i]);
-        if (!facts || !facts->type_info
-                || !QoreTypeInfo::isInputIdentical(
-                    param_ti, facts->type_info)) {
+        if (!facts || !facts->type_info) {
             return false;
         }
+        if (QoreTypeInfo::isInputIdentical(param_ti, facts->type_info)) {
+            if (allow_relaxed_binding
+                    && QoreTypeInfo::parseAcceptsReturns(
+                        param_ti, NT_NOTHING)) {
+                relaxed_binding = true;
+            }
+            continue;
+        }
+        if (!allow_relaxed_binding) {
+            return false;
+        }
+        const QoreTypeInfo* param_value_type =
+            qore_get_value_type(param_ti);
+        const QoreTypeInfo* operand_value_type =
+            qore_get_value_type(facts->type_info);
+        if (facts->assigned_state != QoreIRAssignedState::Assigned
+                || !facts->never_nothing
+                || !QoreTypeInfo::parseAcceptsReturns(
+                    param_ti, NT_NOTHING)
+                || !QoreTypeInfo::hasType(param_value_type)
+                || !QoreTypeInfo::isInputIdentical(
+                    param_value_type, operand_value_type)) {
+            return false;
+        }
+        relaxed_binding = true;
     }
     for (unsigned i = 0; i < sig->numParams(); ++i) {
         if (i && !(i % 100)
@@ -5384,7 +5415,7 @@ static bool qore_aot_fast_entry_operands_need_no_binding(
             return false;
         }
     }
-    return true;
+    return !relaxed_parsed_types || relaxed_binding;
 }
 
 static bool qore_aot_is_deferred_source_function_call(const QoreValue& expr) {
@@ -6661,6 +6692,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
         auto param = func.param_local_vars.find(i);
         if (param == func.param_local_vars.end() || !param->second
                 || param->second->closureUse()
+                || param->second->isNoNarrowing()
                 || !QoreTypeInfo::hasType(param->second->getTypeInfo())
                 || QoreTypeInfo::isReference(param->second->getTypeInfo())
                 || QoreTypeInfo::parseAcceptsReturns(
@@ -6966,10 +6998,9 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
         auto param = func.param_local_vars.find(i);
         if (param == func.param_local_vars.end() || !param->second
                 || param->second->closureUse()
-                || !QoreTypeInfo::hasType(param->second->getTypeInfo())
-                || QoreTypeInfo::isReference(param->second->getTypeInfo())
-                || QoreTypeInfo::parseAcceptsReturns(
-                    param->second->getTypeInfo(), NT_NOTHING)) {
+                || param->second->isNoNarrowing()
+                || param->second->getTypeInfo() == autoNoNarrowTypeInfo
+                || QoreTypeInfo::isReference(param->second->getTypeInfo())) {
             return false;
         }
         params.emplace(param->second, static_cast<int8_t>(i));
@@ -7525,6 +7556,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
             auto param = func->param_local_vars.find(i);
             if (param == func->param_local_vars.end() || !param->second
                     || param->second->closureUse()
+                    || param->second->isNoNarrowing()
                     || !QoreTypeInfo::hasType(
                         param->second->getTypeInfo())
                     || QoreTypeInfo::isReference(
@@ -11105,8 +11137,9 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                             < callee_it->second.param_kinds.size()
                         && static_cast<size_t>(param)
                             < callee_it->second.param_rejects_nothing.size()
-                        && callee_it->second.param_rejects_nothing[
-                            static_cast<size_t>(param)]
+                        && (kind == AOTAggregateReturnValueKind::Parameter
+                            || callee_it->second.param_rejects_nothing[
+                                static_cast<size_t>(param)])
                         && (kind != AOTAggregateReturnValueKind::
                                     IntParamAddConstant
                             || callee_it->second.param_kinds[
@@ -12701,8 +12734,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             >= info.param_kinds.size()
                         || static_cast<size_t>(param)
                             >= info.param_rejects_nothing.size()
-                        || !info.param_rejects_nothing[
-                            static_cast<size_t>(param)]
+                        || (kind != AOTAggregateReturnValueKind::Parameter
+                            && !info.param_rejects_nothing[
+                                static_cast<size_t>(param)])
                         || (kind == AOTAggregateReturnValueKind::
                                     IntParamAddConstant
                             && info.param_kinds[
@@ -14496,7 +14530,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             || !qore_aot_fast_entry_operands_need_no_binding(
                                 callee, *expr, func, call->operands,
                                 static_cast<int>(arg_offset),
-                                static_cast<int>(nargs))) {
+                                static_cast<int>(nargs), true)) {
                         return false;
                     }
                     if (found->second.param_kinds.size()
@@ -14530,12 +14564,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         == BatchCalleeParamKind::NativeBool
                                     ? QoreIRValueRepresentation::NativeBool
                                     : QoreIRValueRepresentation::Boxed;
-                        if (!found->second.param_rejects_nothing[i]
-                                || !facts
-                                || facts->assigned_state
-                                    != QoreIRAssignedState::Assigned
-                                || !facts->never_nothing
-                                || facts->representation != expected) {
+                        if (!facts
+                                || (found->second.param_rejects_nothing[i]
+                                    && (facts->assigned_state
+                                            != QoreIRAssignedState::Assigned
+                                        || !facts->never_nothing
+                                        || facts->representation
+                                            != expected))) {
                             return false;
                         }
                     }
@@ -14764,6 +14799,77 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     >= found->second.param_kinds.size()) {
                             return false;
                         }
+                        size_t call_operand = arg_offset
+                            + static_cast<size_t>(param);
+                        if (call_operand >= call->operands.size()) {
+                            return false;
+                        }
+                        const QoreIRValueFacts* operand_facts =
+                            func.getValueFacts(call->operands[call_operand]);
+                        if (value_kind
+                                == AOTAggregateReturnValueKind::Parameter) {
+                            if (!operand_facts) {
+                                return false;
+                            }
+                            descriptor.operand = static_cast<int16_t>(
+                                call_operand);
+                            if (!boxed_projection) {
+                                QoreIRValueRepresentation expected_rep = kind
+                                        == QoreIRAggregateProjectionQueryKind::
+                                            ListIndexFloat
+                                    ? QoreIRValueRepresentation::NativeFloat
+                                    : QoreIRValueRepresentation::NativeInt;
+                                if (operand_facts->assigned_state
+                                            != QoreIRAssignedState::Assigned
+                                        || !operand_facts->never_nothing
+                                        || operand_facts->representation
+                                            != expected_rep) {
+                                    return false;
+                                }
+                                descriptor.kind = expected_rep
+                                        == QoreIRValueRepresentation::NativeFloat
+                                    ? QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::NativeFloat
+                                    : QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::NativeInt;
+                                return true;
+                            }
+                            if (operand_facts->representation
+                                    == QoreIRValueRepresentation::NativeInt) {
+                                descriptor.kind = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedInt;
+                            } else if (operand_facts->representation
+                                    == QoreIRValueRepresentation::NativeFloat) {
+                                descriptor.kind = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedFloat;
+                            } else if (operand_facts->representation
+                                    == QoreIRValueRepresentation::NativeBool) {
+                                descriptor.kind = QoreIRCallDirectInstruction::
+                                    AOTAggregateProjectionKind::BoxedBool;
+                            } else if (operand_facts->representation
+                                    == QoreIRValueRepresentation::Boxed) {
+                                descriptor.kind = operand_facts->assigned_state
+                                            == QoreIRAssignedState::Assigned
+                                        && operand_facts->never_nothing
+                                    ? QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::BoxedValue
+                                    : QoreIRCallDirectInstruction::
+                                        AOTAggregateProjectionKind::
+                                            BoxedValueMaybeNothing;
+                            } else {
+                                return false;
+                            }
+                            if (descriptor.kind
+                                        != QoreIRCallDirectInstruction::
+                                            AOTAggregateProjectionKind::
+                                                BoxedValueMaybeNothing
+                                    && (operand_facts->assigned_state
+                                            != QoreIRAssignedState::Assigned
+                                        || !operand_facts->never_nothing)) {
+                                return false;
+                            }
+                            return true;
+                        }
                         BatchCalleeParamKind actual =
                             found->second.param_kinds[
                                 static_cast<size_t>(param)];
@@ -14791,8 +14897,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             return false;
                         }
                         descriptor.operand =
-                            static_cast<int16_t>(arg_offset
-                                + static_cast<size_t>(param));
+                            static_cast<int16_t>(call_operand);
                         if (binary_int || compared_int) {
                             if (dynamic_index) {
                                 return false;

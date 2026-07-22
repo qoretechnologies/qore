@@ -2159,6 +2159,7 @@ public:
         NativeIntMulConstant,
         BoxedIntMulConstant,
         BoxedBoolIntCompare,
+        BoxedValueMaybeNothing,
     };
 
     struct AOTAggregateProjectionDescriptor {

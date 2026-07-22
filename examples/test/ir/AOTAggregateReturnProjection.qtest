@@ -75,6 +75,22 @@ list<string> sub makeWords(string left, string right) {
     return (left, right);
 }
 
+list<auto> sub forwardAuto(auto value) {
+    return (value,);
+}
+
+list<hash<auto>> sub forwardNoNarrow(hash<auto!> value) {
+    return (value,);
+}
+
+list<*int> sub forwardOptional(*int value) {
+    return (value,);
+}
+
+list<*int> sub forwardOptionalDefault(*int value = 43) {
+    return (value,);
+}
+
 hash<string, string> sub makeWordMap(string left, string right) {
     return {
         \"left\": left,
@@ -924,6 +940,57 @@ bool sub optionalListInput(*int value) {
     }
 }
 
+int sub genericAutoIntProjection() {
+    return int(forwardAuto(17)[0]);
+}
+
+string sub genericAutoStringProjection() {
+    return string(forwardAuto(\"word\")[0]);
+}
+
+bool sub noNarrowProjection() {
+    hash<auto> source = {\"timeout\": 1};
+    hash<auto> projected = forwardNoNarrow(source)[0];
+    projected.url = \"http://localhost\";
+    return projected.fullType() == \"hash<auto>\"
+        && projected.timeout == 1 && projected.url == \"http://localhost\";
+}
+
+*int sub optionalAssignedProjection() {
+    return forwardOptional(23)[0];
+}
+
+bool sub optionalUnassignedProjection() {
+    *int value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalRemovedProjection() {
+    *int value = 29;
+    remove value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalDeletedProjection() {
+    *int value = 31;
+    delete value;
+    return forwardOptional(value)[0] === NOTHING;
+}
+
+bool sub optionalMaybeProjection(bool assign) {
+    *int value;
+    if (assign) {
+        value = 37;
+    }
+    *int result = forwardOptional(value)[0];
+    return assign ? result == 37 : result === NOTHING;
+}
+
+bool sub optionalDefaultUnsetProjection() {
+    *int value;
+    return forwardOptionalDefault(value)[0] == 43;
+}
+
 int sub emptyZeroArgProjections() {
     int checksum = 0;
     checksum += makeEmptyValues().size();
@@ -1042,6 +1109,12 @@ printf(\"%y:%y:%y:%y:%y:%y:%y:%y\\n\",
     dynamicHashSideEffectOrder());
 printf(\"%d:%d:%y\\n\", sharedListSizeConsumer(),
     sharedMutatingConsumer(), requiredUnsetConsumer());
+printf(\"%d:%s:%y:%d:%y:%y:%y:%y:%y:%y\\n\", genericAutoIntProjection(),
+    genericAutoStringProjection(), noNarrowProjection(),
+    optionalAssignedProjection(), optionalUnassignedProjection(),
+    optionalRemovedProjection(), optionalDeletedProjection(),
+    optionalMaybeProjection(True), optionalMaybeProjection(False),
+    optionalDefaultUnsetProjection());
 ";
 
 string src = "/tmp/qore-aot-aggregate-return-projection-" + string(getpid()) + ".qr";
@@ -1075,7 +1148,11 @@ foreach string function in (("freshHashProjection", "sideEffectProjection",
         "constantBoolProjection", "boxedListProjection",
         "boxedHashProjection", "boxedListSize", "sharedResult",
         "singleLocalProjection", "boxedIntLocalProjection",
-        "boxedFloatLocalProjection", "boxedBoolLocalProjection")) {
+        "boxedFloatLocalProjection", "boxedBoolLocalProjection",
+        "genericAutoIntProjection", "genericAutoStringProjection",
+        "optionalAssignedProjection", "optionalUnassignedProjection",
+        "optionalRemovedProjection", "optionalDeletedProjection",
+        "optionalMaybeProjection")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: %s[^:]*:.*aggregate-projections=1",
             function))) {
@@ -1247,7 +1324,7 @@ if (enabled_compile
     exit(2);
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (nonDominatingAssignment|mixedPhiProjection|nothingPhiProjection|sharedMutated|boxedMixedUse|nonComposedWrapperProjection|nonComposedBindingProjection|optionalAggregateConsumer|dynamicMixedListIndex|optionalGuardedListIndex|guardedUnusedBoxedListIndex|guardedMutableLocalProjection|guardedDifferentIndexProjection|guardedPhiProjection|guardedMutableDirectPhiProjection|guardedDirectPhiSideEffectOrder|guardedReferenceDirectPhiProjection|dynamicHashDifferentKeys|optionalDynamicHashKey|dynamicHashSideEffectOrder|optionalInput|optionalListInput|noNarrowProjection|optionalDefaultUnsetProjection|hashSizeOverride|variableShapeProjection|conditionalSideEffectProjection|potentiallyLoopingProjection)[^:]*:.*aggregate-projections=[1-9]/
         || disabled_compile =~ /aggregate-projections=[1-9]/) {
     printf("unsafe or disabled aggregate-return projection:\n%s",
         enabled_compile + disabled_compile);
@@ -1298,6 +1375,8 @@ string computed_values_line;
 string computed_floats_line;
 string bounded_values_line;
 string compared_values_line;
+string forward_auto_line;
+string forward_optional_line;
 foreach string line in (dump.split("\n")) {
     if (line.find("makeRow(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
@@ -1353,6 +1432,12 @@ foreach string line in (dump.split("\n")) {
     } else if (line.find("makeComparedValues(") != -1
             && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
         compared_values_line = line;
+    } else if (line.find("forwardAuto(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_auto_line = line;
+    } else if (line.find("forwardOptional(") != -1
+            && line.find("\"abi_kind\": \"qore_fast_v1\"") != -1) {
+        forward_optional_line = line;
     }
 }
 if (row_line.find("\"aggregate_return_kind\": 2") == -1
@@ -1421,10 +1506,19 @@ if (computed_row_line.find(
         || compared_values_line.find(
             "\"aggregate_return_value_kinds\": [12, 12, 12, 12, 12, 12]") == -1
         || compared_values_line.find(
-            "\"aggregate_return_value_ints\": [1, 257, 513, 769, 1025, 1281]") == -1) {
-    printf("missing serialized computed aggregate metadata:\n%s\n%s\n%s\n%s\n%s",
+            "\"aggregate_return_value_ints\": [1, 257, 513, 769, 1025, 1281]") == -1
+        || forward_auto_line.find(
+            "\"fast_param_rejects_nothing\": [0]") == -1
+        || forward_auto_line.find(
+            "\"aggregate_return_value_params\": [0]") == -1
+        || forward_optional_line.find(
+            "\"fast_param_rejects_nothing\": [0]") == -1
+        || forward_optional_line.find(
+            "\"aggregate_return_value_params\": [0]") == -1) {
+    printf("missing serialized computed aggregate metadata:\n%s\n%s\n%s\n%s\n%s\n%s\n%s",
         computed_row_line, computed_values_line, computed_floats_line,
-        bounded_values_line, compared_values_line);
+        bounded_values_line, compared_values_line, forward_auto_line,
+        forward_optional_line);
     exit(2);
 }
 
@@ -1434,6 +1528,7 @@ expected += "True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True:True:True:True:True:True:True:True:True\n";
 expected += "True:True:True:True:True:True:True:True\n";
 expected += "4:13:True\n";
+expected += "17:word:True:23:True:True:True:True:True:True\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(
         "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",

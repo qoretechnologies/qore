@@ -8620,6 +8620,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             QoreIRValueRepresentation expected = kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedValue
+                || kind == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValueMaybeNothing
                 ? QoreIRValueRepresentation::Boxed
                 : kind
                             == QoreIRCallDirectInstruction::
@@ -8673,11 +8675,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                     BoxedBoolSelect
                         ? QoreIRValueRepresentation::NativeBool
                         : QoreIRValueRepresentation::NativeFloat;
-            bool valid = facts
-                    && facts->assigned_state
-                        == QoreIRAssignedState::Assigned
-                    && facts->never_nothing
-                    && facts->representation == expected;
+            bool maybe_nothing = kind
+                == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::
+                    BoxedValueMaybeNothing;
+            bool valid = facts && facts->representation == expected
+                && (maybe_nothing
+                    || (facts->assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && facts->never_nothing));
             bool selected = kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::NativeIntSelect
@@ -8905,6 +8910,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         if (projection.kind
                 == QoreIRCallDirectInstruction::
                     AOTAggregateProjectionKind::BoxedValue
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValueMaybeNothing
                 || projection.kind
                     == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedInt
@@ -9623,6 +9631,10 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                                 AOTAggregateProjectionKind::BoxedValue
                         || projection.kind
                             == QoreIRCallDirectInstruction::
+                                AOTAggregateProjectionKind::
+                                    BoxedValueMaybeNothing
+                        || projection.kind
+                            == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::BoxedInt
                         || projection.kind
                             == QoreIRCallDirectInstruction::
@@ -9762,6 +9774,9 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         AOTAggregateProjectionKind::BoxedValue
                 || projection.kind
                     == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValueMaybeNothing
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
                         AOTAggregateProjectionKind::BoxedInt
                 || projection.kind
                     == QoreIRCallDirectInstruction::
@@ -9880,9 +9895,14 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         func.getValueFacts(source)) {
                     facts = *source_facts;
                 }
-                facts.assigned_state = QoreIRAssignedState::Assigned;
                 facts.representation = QoreIRValueRepresentation::Boxed;
-                facts.never_nothing = true;
+                if (projection.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedValueMaybeNothing) {
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                }
                 func.setValueFacts(projection.consumer->result, facts);
             }
             materialized_replacements.emplace(
@@ -10091,15 +10111,23 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         facts.never_nothing = true;
         if (projection.kind
                 == QoreIRCallDirectInstruction::
-                    AOTAggregateProjectionKind::BoxedValue) {
+                    AOTAggregateProjectionKind::BoxedValue
+                || projection.kind
+                    == QoreIRCallDirectInstruction::
+                        AOTAggregateProjectionKind::BoxedValueMaybeNothing) {
             const QoreIRValueFacts* source_facts =
                 func.getValueFacts(projection.call->operands[
                     static_cast<size_t>(projection.operand)]);
             if (source_facts) {
                 facts = *source_facts;
-                facts.assigned_state = QoreIRAssignedState::Assigned;
-                facts.never_nothing = true;
                 facts.representation = QoreIRValueRepresentation::Boxed;
+                if (projection.kind
+                        != QoreIRCallDirectInstruction::
+                            AOTAggregateProjectionKind::
+                                BoxedValueMaybeNothing) {
+                    facts.assigned_state = QoreIRAssignedState::Assigned;
+                    facts.never_nothing = true;
+                }
             }
         } else if (projection.kind
                 == QoreIRCallDirectInstruction::
