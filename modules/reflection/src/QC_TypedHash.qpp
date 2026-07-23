@@ -512,6 +512,31 @@ hash<auto> TypedHash::doCast(hash<auto> h) {
     return thd->th->doRuntimeCast(h, xsink);
 }
 
+//! Returns a typed hash for the given hashes, with values from the override hash taking precedence
+/** @par Example:
+    @code{.py}
+TypedHash th("MyModule::ConnectionInfo");
+hash<auto> info = th.doCastWithOverrides(serialized_info, {
+    "timeout": runtime_timeout,
+});
+    @endcode
+
+    @param h the base hash to convert
+    @param overrides values that take precedence over values in @a h
+
+    @return a typed hash containing the converted base and override values
+
+    This method is equivalent to @c doCast(h + overrides), but avoids constructing the intermediate merged hash.
+
+    @throw RUNTIME-TYPE-ERROR types are not compatible
+    @throw HASHDECL-INIT-ERROR either initializer contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
+    return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
+}
+
 //! Returns the parent typed hash if this typed hash inherits from another, or @ref nothing if none
 /** @par Example:
     @code{.py}

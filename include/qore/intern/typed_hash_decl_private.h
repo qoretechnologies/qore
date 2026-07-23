@@ -209,11 +209,17 @@ public:
 
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, const QoreHashNode* overrides, bool runtime_check,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL QoreHashNode* newHashFromTemporary(QoreHashNode* init, bool runtime_check,
             ExceptionSink* xsink, bool values_prechecked = false,
             bool layout_prechecked = false) const;
 
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+
+    DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink) const;
 
     DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
             bool values_prechecked = false) const;
@@ -486,6 +492,8 @@ protected:
     }
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+    DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink) const;
     DLLLOCAL int initHashInternInPlace(QoreHashNode* h, ExceptionSink* xsink,
             bool values_prechecked) const;
 };

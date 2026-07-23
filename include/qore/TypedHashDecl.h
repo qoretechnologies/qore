@@ -218,6 +218,21 @@ public:
     */
     DLLEXPORT QoreHashNode* doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const;
 
+    //! Performs a runtime cast with values from the override hash taking precedence
+    /** @param h the base initializer hash
+        @param overrides initializer values that take precedence over values in \a h
+        @param xsink the exception sink
+
+        @return a new typed hash; the caller owns the returned reference
+
+        This is equivalent to calling doRuntimeCast() with the result of adding \a overrides to \a h, but avoids
+        constructing the intermediate hash.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,
+            ExceptionSink* xsink) const;
+
     //! Returns the parent hashdecl if this hashdecl inherits from another, or nullptr if none
     /** @return the parent hashdecl or nullptr
 

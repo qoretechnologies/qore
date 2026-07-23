@@ -951,11 +951,11 @@ public class ProviderIndexUtil {
 
     #! Reconstructs one typed app metadata hash
     static private hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
-        return ctx.app_info_th.doCast(info + (
+        return ctx.app_info_th.doCastWithOverrides(info, (
             info.connection_options
             ? {
                 "connection_options": map {
-                    $1.key: ctx.conn_opt_th.doCast($1.value + {
+                    $1.key: ctx.conn_opt_th.doCastWithOverrides($1.value, {
                         "allowed_values": (exists $1.value.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                             : NOTHING),
@@ -989,12 +989,12 @@ public class ProviderIndexUtil {
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
             foreach hash<auto> j in (i.value.pairIterator()) {
                 on_error rethrow $1.err, sprintf("%s (app %y action %y)", $1.desc, i.key, j.key);
-                rv{i.key}{j.key} = action_info_th.doCast(j.value + {
+                rv{i.key}{j.key} = action_info_th.doCastWithOverrides(j.value, {
                     "path_vars": (j.value.path_vars
                         ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
                         : NOTHING),
                     "options": (exists j.value.options ? map {
-                        $1.key: option_info_th.doCast($1.value + {
+                        $1.key: option_info_th.doCastWithOverrides($1.value, {
                             "allowed_values": (exists $1.value.allowed_values
                                 ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                                 : NOTHING),
@@ -1037,7 +1037,7 @@ public class ProviderIndexUtil {
             key += "_options";
             if (rv{key}) {
                 rv{key} = map {
-                    $1.key: dp_opt_info_th.doCast($1.value + {
+                    $1.key: dp_opt_info_th.doCastWithOverrides($1.value, {
                         "allowed_values": (exists $1.value.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                             : NOTHING),
@@ -1049,13 +1049,13 @@ public class ProviderIndexUtil {
                 }, rv{key}.pairIterator();
             }
         }
-        return dp_info_th.doCast(rv + {
+        return dp_info_th.doCastWithOverrides(rv, {
             "expressions": (exists rv.expressions ? map {
-                $1.key: dp_exp_info_th.doCast($1.value + {
-                    "args": (exists $1.value.args ? map dp_sig_info_th.doCast($1 + {
+                $1.key: dp_exp_info_th.doCastWithOverrides($1.value, {
+                    "args": (exists $1.value.args ? map dp_sig_info_th.doCastWithOverrides($1, {
                         "type": type_map{$1.type} ?? type_map."auto",
                     }), $1.value.args : NOTHING),
-                    "arg_info": (exists $1.value.arg_info ? map dp_arg_info_th.doCast($1 + {
+                    "arg_info": (exists $1.value.arg_info ? map dp_arg_info_th.doCastWithOverrides($1, {
                         "allowed_values": (exists $1.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.allowed_values
                             : NOTHING),

@@ -661,6 +661,31 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
     return *xsink ? nullptr : h.release();
 }
 
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
+        bool runtime_check, ExceptionSink* xsink) const {
+    if (runtime_check) {
+        for (const QoreHashNode* source : {init, overrides}) {
+            ConstHashIterator i(source);
+            size_t key_count = 0;
+            while (i.next()) {
+                if (++key_count % 100 == 0
+                        && qore_check_cancel(xsink, "typed hash override initializer validation")) {
+                    return nullptr;
+                }
+                if (!findMember(i.getKey())) {
+                    xsink->raiseException("HASHDECL-INIT-ERROR",
+                        "hashdecl '%s' hash initializer value contains unknown key '%s'", name.c_str(), i.getKey());
+                    return nullptr;
+                }
+            }
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
+    initHash(*h, init, overrides, xsink);
+    return *xsink ? nullptr : h.release();
+}
+
 QoreHashNode* typed_hash_decl_private::newHashFromTemporary(QoreHashNode* init, bool runtime_check,
         ExceptionSink* xsink, bool values_prechecked, bool layout_prechecked) const {
     if (!init || !init->is_unique()) {
@@ -724,6 +749,15 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
     return rc;
 }
 
+int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+        ExceptionSink* xsink) const {
+    int rc = initHashIntern(h, init, overrides, xsink);
+    if (rc && xsink && *xsink) {
+        xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+    }
+    return rc;
+}
+
 int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
         bool values_prechecked) const {
     int rc = initHashInternInPlace(h, xsink, values_prechecked);
@@ -734,6 +768,11 @@ int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsi
 }
 
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
+    return initHashIntern(h, init, nullptr, xsink);
+}
+
+int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
@@ -742,15 +781,24 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
     // Initialize parent members first
     if (parentHashDecl) {
-        if (get(*parentHashDecl)->initHashIntern(h, init, xsink)) {
+        if (get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink)) {
             return -1;
         }
     }
 
+    size_t member_count = 0;
     for (auto& i : members.member_list) {
-        // first try to use value given in init hash
-        if (init) {
-            const qore_hash_private* hi = qore_hash_private::get(*init);
+        if (++member_count % 100 == 0
+                && qore_check_cancel(xsink, "typed hash initialization")) {
+            return -1;
+        }
+        // First try the override hash, then the base initializer.
+        bool initialized = false;
+        for (const QoreHashNode* source : {overrides, init}) {
+            if (!source) {
+                continue;
+            }
+            const qore_hash_private* hi = qore_hash_private::get(*source);
             bool exists;
             ValueHolder val(hi->getReferencedKeyValueIntern(i.first, exists), xsink);
             if (exists) {
@@ -767,8 +815,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 if (needs_scan(v)) {
                     h_priv->incScanCount(1);
                 }
-                continue;
+                initialized = true;
+                break;
             }
+        }
+
+        if (initialized) {
+            continue;
         }
 
         if (!i.second) {
@@ -965,6 +1018,11 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
     return priv->newHash(h, true, xsink);
+}
+
+QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,
+        ExceptionSink* xsink) const {
+    return priv->newHash(h, overrides, true, xsink);
 }
 
 const TypedHashDecl* TypedHashDecl::getParentHashDecl() const {
