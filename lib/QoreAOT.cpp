@@ -16118,23 +16118,45 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         size_t boxed_specializations = 0;
         size_t collection_specializations = 0;
         size_t cross_block_boxed_facts = 0;
-        if (!std::getenv(
-                "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS")) {
-            cross_block_boxed_facts =
-                qore_ir_propagate_exact_boxed_local_facts(func);
-        }
-        if (!std::getenv("QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
-            boxed_specializations =
-                qore_ir_specialize_proven_boxed_operations(func);
-        }
-        if (!std::getenv(
-                "QORE_DISABLE_AOT_LATE_COLLECTION_SPECIALIZATION")) {
-            collection_specializations =
-                qore_ir_specialize_proven_collection_operations(func);
-        }
-        if (!std::getenv("QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
-            native_specializations =
-                qore_ir_specialize_proven_native_operations(func);
+        size_t post_rewrite_rounds = 0;
+        constexpr size_t max_post_rewrite_rounds = 4;
+        size_t round_limit = std::getenv(
+                "QORE_DISABLE_AOT_POST_REWRITE_FIXED_POINT")
+            ? 1 : max_post_rewrite_rounds;
+        for (size_t round = 0; round < round_limit; ++round) {
+            size_t round_changes = 0;
+            if (!std::getenv(
+                    "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS")) {
+                size_t changes =
+                    qore_ir_propagate_exact_boxed_local_facts(func);
+                cross_block_boxed_facts += changes;
+                round_changes += changes;
+            }
+            if (!std::getenv(
+                    "QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
+                size_t changes =
+                    qore_ir_specialize_proven_boxed_operations(func);
+                boxed_specializations += changes;
+                round_changes += changes;
+            }
+            if (!std::getenv(
+                    "QORE_DISABLE_AOT_LATE_COLLECTION_SPECIALIZATION")) {
+                size_t changes =
+                    qore_ir_specialize_proven_collection_operations(func);
+                collection_specializations += changes;
+                round_changes += changes;
+            }
+            if (!std::getenv(
+                    "QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
+                size_t changes =
+                    qore_ir_specialize_proven_native_operations(func);
+                native_specializations += changes;
+                round_changes += changes;
+            }
+            if (!round_changes) {
+                break;
+            }
+            ++post_rewrite_rounds;
         }
         if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
                 || aggregate_projections
@@ -16143,7 +16165,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || string_consumers || cross_block_boxed_facts
                 || boxed_specializations
                 || collection_specializations
-                || native_specializations)
+                || native_specializations || post_rewrite_rounds)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
@@ -16153,6 +16175,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu"
+                " post-rewrite-rounds=%zu"
                 " cross-block-boxed-facts=%zu"
                 " boxed-specializations=%zu"
                 " collection-specializations=%zu"
@@ -16161,7 +16184,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
-                string_consumers, cross_block_boxed_facts,
+                string_consumers, post_rewrite_rounds,
+                cross_block_boxed_facts,
                 boxed_specializations,
                 collection_specializations,
                 native_specializations);
