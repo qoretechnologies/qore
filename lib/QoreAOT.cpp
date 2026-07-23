@@ -16117,6 +16117,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         size_t native_specializations = 0;
         size_t boxed_specializations = 0;
         size_t collection_specializations = 0;
+        size_t exception_edges_elided = 0;
         size_t cross_block_boxed_facts = 0;
         size_t post_rewrite_rounds = 0;
         constexpr size_t max_post_rewrite_rounds = 4;
@@ -16147,9 +16148,13 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             if (!std::getenv(
                     "QORE_DISABLE_AOT_LATE_NATIVE_SPECIALIZATION")) {
+                size_t round_exception_edges_elided = 0;
                 size_t changes =
-                    qore_ir_specialize_proven_native_operations(func);
+                    qore_ir_specialize_proven_native_operations(func,
+                        &round_exception_edges_elided);
                 native_specializations += changes;
+                exception_edges_elided +=
+                    round_exception_edges_elided;
                 round_changes += changes;
             }
             if (!round_changes) {
@@ -16164,7 +16169,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || string_consumers || cross_block_boxed_facts
                 || boxed_specializations
                 || collection_specializations
-                || native_specializations || post_rewrite_rounds)
+                || native_specializations || exception_edges_elided
+                || post_rewrite_rounds)
                 && std::getenv("QORE_IR_OPT_STATS")) {
             fprintf(stderr,
                 "IR-OPT-AOT-EFFECTS: %s: exact-boxed-call-facts=%zu"
@@ -16178,7 +16184,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " cross-block-boxed-facts=%zu"
                 " boxed-specializations=%zu"
                 " collection-specializations=%zu"
-                " native-specializations=%zu\n",
+                " native-specializations=%zu"
+                " exception-edges-elided=%zu\n",
                 func.name.c_str(), exact_boxed_call_facts,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
@@ -16187,7 +16194,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 cross_block_boxed_facts,
                 boxed_specializations,
                 collection_specializations,
-                native_specializations);
+                native_specializations,
+                exception_edges_elided);
         }
     };
 

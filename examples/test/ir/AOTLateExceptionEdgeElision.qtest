@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+int sub intOps(*int value) {
+    try {
+        return (((value * 3) + (value * 5) - (value << 1))
+            | (value & 15)) ^ 9;
+    } catch (hash<auto> ex) {
+        return -1;
+    }
+}
+
+float sub floatOps(*float value) {
+    try {
+        return (value * 3.0) + (value * 5.0) - 2.0;
+    } catch (hash<auto> ex) {
+        return -1.0;
+    }
+}
+
+bool sub divisionCaught(int divisor) {
+    try {
+        int ignored = 12 / divisor;
+    } catch (hash<auto> ex) {
+        return ex.err == \"DIVISION-BY-ZERO\";
+    }
+    return False;
+}
+
+bool sub moduloCaught(int divisor) {
+    try {
+        int ignored = 12 % divisor;
+    } catch (hash<auto> ex) {
+        return ex.err == \"DIVISION-BY-ZERO\";
+    }
+    return False;
+}
+
+int sub main() {
+    printf(\"%d:%d:%.1f:%.1f:%d:%d\\n\",
+        intOps(7), intOps(NOTHING),
+        floatOps(2.0), floatOps(NOTHING),
+        divisionCaught(0), moduloCaught(0));
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-late-exception-edge-" + string(getpid());
+mkdir(root);
+string source_path = root + "/test.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string sub compile(string output, string env) {
+    string compile_output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 QORE_DUMP_LLVM_IR=1"
+            + " %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, output, source_path));
+    if (!is_file(output)) {
+        printf("compile failed:\n%s", compile_output);
+        exit(2);
+    }
+    return compile_output;
+}
+
+string enabled_exe = root + "/enabled";
+string disabled_exe = root + "/disabled";
+string enabled_compile = compile(enabled_exe, "");
+string disabled_compile = compile(disabled_exe,
+    "QORE_DISABLE_AOT_LATE_EXCEPTION_EDGE_ELISION=1");
+if (enabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: intOps[^:]*:.*exception-edges-elided=[1-9]/
+        || enabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: floatOps[^:]*:.*exception-edges-elided=[1-9]/
+        || enabled_compile !~ /qore_rt_div_int/
+        || enabled_compile !~ /qore_rt_mod_int/
+        || enabled_compile !~ /qore_rt_has_exception/
+        || disabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (intOps|floatOps)[^:]*:.*exception-edges-elided=[1-9]/) {
+    printf("unexpected exception-edge lowering:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

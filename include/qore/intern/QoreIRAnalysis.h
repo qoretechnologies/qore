@@ -231,8 +231,11 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 //! late AOT facts prove that every operand is assigned and has the required
 //! representation.
 //! @param func function to optimize in place
+//! @param exception_edges_elided optional counter for throwing Invoke
+//! terminators replaced with non-throwing native operations
 //! @return number of instructions specialized
-size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func);
+size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
+    size_t* exception_edges_elided = nullptr);
 
 using QoreIRExactBoxedReturnQuery = std::function<const QoreTypeInfo*(
     const AbstractQoreFunctionVariant*)>;

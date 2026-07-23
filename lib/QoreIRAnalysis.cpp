@@ -10563,11 +10563,17 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
         + virtualized_phis.size();
 }
 
-size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
+size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
+        size_t* exception_edges_elided) {
     size_t specialized = 0;
     size_t check_count = 0;
+    if (exception_edges_elided) {
+        *exception_edges_elided = 0;
+    }
     bool optional_scalar_specialization =
         !std::getenv("QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION");
+    bool late_exception_edge_elision = !std::getenv(
+        "QORE_DISABLE_AOT_LATE_EXCEPTION_EDGE_ELISION");
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
             const QoreTypeInfo* type_info) {
@@ -10597,18 +10603,8 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             && (type != NT_INT
                 || !QoreTypeInfo::getReturnEnum(value_type));
     };
-    auto set_result_facts = [&](QoreIRValue result,
-            QoreIRValueRepresentation representation,
-            const QoreTypeInfo* type_info) {
-        QoreIRValueFacts facts;
-        facts.type_info = type_info;
-        facts.assigned_state = QoreIRAssignedState::Assigned;
-        facts.representation = representation;
-        facts.never_nothing = true;
-        func.setValueFacts(result, facts);
-    };
-    auto int_opcode = [&](const QoreIRInstruction& inst) {
-        switch (inst.opcode) {
+    auto int_opcode = [&](QoreIROpcode opcode) {
+        switch (opcode) {
             case QoreIROpcode::AddAny: return QoreIROpcode::AddInt;
             case QoreIROpcode::SubAny: return QoreIROpcode::SubInt;
             case QoreIROpcode::MulAny: return QoreIROpcode::MulInt;
@@ -10636,7 +10632,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             case QoreIROpcode::XorAssignAny: return QoreIROpcode::XorAssignInt;
             case QoreIROpcode::ShlAssignAny: return QoreIROpcode::ShlAssignInt;
             case QoreIROpcode::ShrAssignAny: return QoreIROpcode::ShrAssignInt;
-            default: return inst.opcode;
+            default: return opcode;
         }
     };
     auto float_opcode = [](QoreIROpcode opcode) {
@@ -10673,7 +10669,9 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
         }
     };
 
-    auto specialize_instruction = [&](QoreIRInstruction* inst) {
+    auto specialize_instruction = [&](QoreIRInstruction* inst,
+            QoreIRValueFacts* specialized_facts = nullptr,
+            bool commit = true) {
         if (!inst || !inst->result.isValid()) {
             return;
         }
@@ -10703,8 +10701,18 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             }
             if (replacement != inst->opcode) {
                 inst->opcode = replacement;
-                set_result_facts(inst->result, representation, type_info);
-                ++specialized;
+                QoreIRValueFacts facts;
+                facts.type_info = type_info;
+                facts.assigned_state = QoreIRAssignedState::Assigned;
+                facts.representation = representation;
+                facts.never_nothing = true;
+                if (specialized_facts) {
+                    *specialized_facts = facts;
+                }
+                if (commit) {
+                    func.setValueFacts(inst->result, facts);
+                    ++specialized;
+                }
             }
             return;
         }
@@ -10734,7 +10742,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             || inst->opcode == QoreIROpcode::ShrAny;
         if (lhs_exact_int && rhs_exact_int
                 && ((lhs_int && rhs_int) || optional_int_safe)) {
-            replacement = int_opcode(*inst);
+            replacement = int_opcode(inst->opcode);
             representation = QoreIRValueRepresentation::NativeInt;
             type_info = bigIntTypeInfo;
         } else {
@@ -10773,23 +10781,34 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
         bool comparison = is_comparison(inst->opcode);
         bool spaceship = inst->opcode == QoreIROpcode::CmpAny;
         inst->opcode = replacement;
-        set_result_facts(inst->result,
+        QoreIRValueFacts facts;
+        facts.type_info = comparison ? boolTypeInfo
+            : (spaceship ? bigIntTypeInfo : type_info);
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation =
             comparison ? QoreIRValueRepresentation::NativeBool
                 : (spaceship ? QoreIRValueRepresentation::NativeInt
-                    : representation),
-            comparison ? boolTypeInfo
-                : (spaceship ? bigIntTypeInfo : type_info));
-        ++specialized;
+                    : representation);
+        facts.never_nothing = true;
+        if (specialized_facts) {
+            *specialized_facts = facts;
+        }
+        if (commit) {
+            func.setValueFacts(inst->result, facts);
+            ++specialized;
+        }
     };
 
     for (const auto& block : func.blocks) {
         std::unordered_map<const LocalVar*, QoreIRValueFacts> local_facts;
-        for (const auto& inst_ptr : block->instructions) {
+        for (size_t inst_index = 0;
+                inst_index < block->instructions.size(); ++inst_index) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR proven-native operation specialization")) {
                 return specialized;
             }
-            QoreIRInstruction* inst = inst_ptr.get();
+            QoreIRInstruction* inst =
+                block->instructions[inst_index].get();
             if (!inst) {
                 continue;
             }
@@ -10800,6 +10819,94 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
                 auto found = local_facts.find(load->local);
                 if (found != local_facts.end()) {
                     func.setValueFacts(inst->result, found->second);
+                }
+            }
+            if (inst->opcode == QoreIROpcode::Invoke
+                    && inst_index + 1 == block->instructions.size()
+                    && late_exception_edge_elision) {
+                auto* invoke =
+                    static_cast<QoreIRInvokeInstruction*>(inst);
+                QoreIRInstruction candidate(invoke->invoke_opcode);
+                candidate.result = invoke->result;
+                candidate.operands = invoke->operands;
+                QoreIRValueFacts facts;
+                specialize_instruction(&candidate, &facts, false);
+                if (candidate.opcode != invoke->invoke_opcode
+                        && !getOpcodeMayThrowException(
+                            static_cast<int>(candidate.opcode))) {
+                    QoreIRBasicBlock* normal_target =
+                        invoke->normal_target;
+                    QoreIRBasicBlock* removed_target =
+                        invoke->exception_target;
+                    auto replacement =
+                        std::make_unique<QoreIRInstruction>(
+                            candidate.opcode);
+                    replacement->cached_start_line =
+                        invoke->cached_start_line;
+                    replacement->intrinsic = invoke->intrinsic;
+                    replacement->loc = invoke->loc;
+                    replacement->result = invoke->result;
+                    replacement->operands = invoke->operands;
+                    replacement->element_type =
+                        invoke->element_type;
+                    replacement->temp_scope_id =
+                        invoke->temp_scope_id;
+                    block->instructions[inst_index] =
+                        std::move(replacement);
+
+                    auto branch =
+                        std::make_unique<QoreIRBranchInstruction>();
+                    branch->cached_start_line =
+                        block->instructions[inst_index]
+                            ->cached_start_line;
+                    branch->loc =
+                        block->instructions[inst_index]->loc;
+                    branch->target = normal_target;
+                    block->instructions.push_back(std::move(branch));
+
+                    func.setValueFacts(candidate.result, facts);
+                    ++specialized;
+                    if (exception_edges_elided) {
+                        ++*exception_edges_elided;
+                    }
+                    if (removed_target
+                            && removed_target != normal_target) {
+                        for (const auto& target_inst :
+                                removed_target->instructions) {
+                            (void)qore_ir_analysis_cancelled(check_count,
+                                "IR late exception-edge phi repair");
+                            if (target_inst->opcode
+                                    != QoreIROpcode::Phi) {
+                                continue;
+                            }
+                            auto& phi =
+                                static_cast<QoreIRPhiInstruction&>(
+                                    *target_inst);
+                            phi.incoming.erase(std::remove_if(
+                                phi.incoming.begin(),
+                                phi.incoming.end(),
+                                [&](const QoreIRPhiIncoming& incoming) {
+                                    (void)qore_ir_analysis_cancelled(
+                                        check_count,
+                                        "IR late exception-edge"
+                                        " phi removal");
+                                    return incoming.block == block.get();
+                                }), phi.incoming.end());
+                            phi.operands.clear();
+                            phi.operands.reserve(
+                                phi.incoming.size());
+                            for (const QoreIRPhiIncoming& incoming :
+                                    phi.incoming) {
+                                (void)qore_ir_analysis_cancelled(
+                                    check_count,
+                                    "IR late exception-edge"
+                                    " phi operand repair");
+                                phi.operands.push_back(
+                                    incoming.value);
+                            }
+                        }
+                    }
+                    continue;
                 }
             }
             specialize_instruction(inst);
