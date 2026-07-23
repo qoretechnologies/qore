@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string sub scriptCode() {
+    return "%modern
+
+nothing sub replaceString(reference<string> value, int index) {
+    value = sprintf(\"%d%d\", index, index);
+}
+
+int sub invariantQueries(string text, string needle,
+        list<int> values, int rounds) {
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        sum += text.length();
+        if (text.contains(needle)) {
+            ++sum;
+        }
+        sum += text.find(needle);
+        sum += values.size();
+    }
+    return sum;
+}
+
+int sub mutateString() {
+    string text = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        sum += text.length();
+        text += \"b\";
+    }
+    return sum;
+}
+
+int sub mutateNeedle() {
+    string text = \"abcabc\";
+    string needle = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += text.find(needle);
+        needle += \"x\";
+    }
+    return sum;
+}
+
+int sub mutateList() {
+    list<int> values = (1, 2);
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += values.size();
+        push values, i;
+    }
+    return sum;
+}
+
+int sub referenceMutation() {
+    string text = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += text.length();
+        replaceString(\\text, i);
+    }
+    return sum;
+}
+
+int sub closureMutation() {
+    string text = \"a\";
+    code<nothing()> mutate = nothing sub () {
+        text += \"b\";
+    };
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += text.length();
+        mutate();
+    }
+    return sum;
+}
+
+int sub optionalString(*string text, int rounds) {
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        sum += text.length();
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    invariantQueries(\"a\\u2500needle-z\", \"needle\", (1, 2, 3), 4),
+    invariantQueries(\"a\\u2500needle-z\", \"needle\", (1, 2, 3), 0),
+    mutateString(), mutateNeedle(), mutateList(), referenceMutation(),
+    closureMutation(), optionalString(NOTHING, 0));
+";
+}
+
+string sub runMode(string script_path, string mode,
+        string extra_env = "") {
+    return backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        extra_env, libqore_dir, qore_bin, mode, script_path));
+}
+
+string root = "/tmp/qore-loop-invariant-read-only-query-"
+    + string(getpid());
+string script_path = root + ".qr";
+string exe = root + ".aot";
+on_exit {
+    backquote(sprintf("rm -f %s %s", script_path, exe));
+}
+
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(scriptCode());
+script.close();
+
+string ast = runMode(script_path, "ast");
+if (ast != "64:0:10:-2:9:5:6:0\n") {
+    printf("unexpected AST output:\n%s", ast);
+    exit(2);
+}
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = runMode(script_path, mode);
+    if (actual != ast) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, ast, actual);
+        exit(2);
+    }
+}
+
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, script_path));
+if (!is_file(exe)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+if (aot != ast) {
+    printf("AOT mismatch:\nexpected:\n%sactual:\n%s", ast, aot);
+    exit(2);
+}
+
+string stats = runMode(script_path, "ir", "QORE_IR_OPT_STATS=1");
+if (stats !~ /IR-OPT: invariantQueries:.*hoisted=([89]|[1-9][0-9]+)/
+        || stats !~ /64:0:10:-2:9:5:6:0/) {
+    printf("missing read-only query LICM selection:\n%s", stats);
+    exit(2);
+}
+string disabled_stats = runMode(script_path, "ir",
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_QUERY_LICM=1");
+if (disabled_stats !~ /IR-OPT: invariantQueries:.*hoisted=0/
+        || disabled_stats !~ /64:0:10:-2:9:5:6:0/) {
+    printf("unexpected disabled read-only query LICM selection:\n%s",
+        disabled_stats);
+    exit(2);
+}

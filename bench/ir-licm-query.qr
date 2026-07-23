@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub measured(string text, string needle, int rounds) {
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        sum += text.length();
+        if (text.contains(needle)) {
+            ++sum;
+        }
+        sum += text.find(needle);
+    }
+    return sum;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 10000000;
+    printf("%d\n", measured(
+        "prefix-\u2500\u2501\u2502-needle-suffix", "needle", rounds));
+    return 0;
+}
+
+main();

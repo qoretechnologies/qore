@@ -1648,6 +1648,66 @@ static bool qore_ir_is_native_scalar_constant(QoreIROpcode opcode) {
         || opcode == QoreIROpcode::ConstBool;
 }
 
+static bool qore_ir_is_assigned_boxed_string_or_list(
+        const QoreIRFunction& func, QoreIRValue value) {
+    const QoreIRValueFacts* facts = func.getValueFacts(value);
+    if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+            || !facts->never_nothing
+            || facts->representation != QoreIRValueRepresentation::Boxed) {
+        return false;
+    }
+    return facts->type_info == stringTypeInfo
+        || facts->type_info == listTypeInfo
+        || QoreTypeInfo::getUniqueReturnComplexList(facts->type_info);
+}
+
+static bool qore_ir_is_hoistable_read_only_query(
+        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+    if (!inst.result.isValid() || inst.exception_target) {
+        return false;
+    }
+    if (inst.opcode == QoreIROpcode::ListSize) {
+        return inst.operands.size() == 1
+            && qore_ir_is_assigned_boxed_string_or_list(
+                func, inst.operands[0]);
+    }
+    if (inst.opcode != QoreIROpcode::DotEvalMethodDirect) {
+        return false;
+    }
+    const auto& direct =
+        static_cast<const QoreIRDotEvalMethodDirectInstruction&>(inst);
+    if (!direct.pseudo || direct.has_ref_args
+            || !direct.pseudo_base_known_assigned_string) {
+        return false;
+    }
+    // LICM can execute the query before a zero-trip loop, so admit only
+    // assigned operands and pseudo operations that cannot throw or mutate.
+    switch (direct.intrinsic) {
+        case QoreIRIntrinsic::Size:
+        case QoreIRIntrinsic::Empty:
+        case QoreIRIntrinsic::Val:
+        case QoreIRIntrinsic::StringStrlen:
+        case QoreIRIntrinsic::StringLength:
+        case QoreIRIntrinsic::StringSizeP:
+        case QoreIRIntrinsic::StringStrP:
+        case QoreIRIntrinsic::StringIntP:
+            return inst.operands.size() == 1;
+        case QoreIRIntrinsic::StringStartsWith:
+        case QoreIRIntrinsic::StringEndsWith:
+        case QoreIRIntrinsic::StringContains:
+            return inst.operands.size() == 2
+                && direct.pseudo_arg0_known_assigned_string;
+        case QoreIRIntrinsic::StringFind:
+        case QoreIRIntrinsic::StringRFind:
+            return (inst.operands.size() == 2
+                    || (inst.operands.size() == 3
+                        && direct.pseudo_arg1_known_assigned_int))
+                && direct.pseudo_arg0_known_assigned_string;
+        default:
+            return false;
+    }
+}
+
 struct QoreIRScalarUse {
     const QoreIRInstruction* inst = nullptr;
     size_t block_id = 0;
@@ -1677,13 +1737,28 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
 
 static bool qore_ir_is_nonconsuming_scalar_use(const QoreIRFunction& func,
         const QoreIRInstruction& inst, bool allow_ir_only_store) {
-    if (qore_ir_is_native_scalar_pure_opcode(inst.opcode)) {
+    if (qore_ir_is_native_scalar_pure_opcode(inst.opcode)
+            || qore_ir_is_hoistable_read_only_query(func, inst)) {
         return true;
     }
     switch (inst.opcode) {
         case QoreIROpcode::BrIf:
         case QoreIROpcode::SwitchInt:
         case QoreIROpcode::AddAssignLocalInt:
+        case QoreIROpcode::ShlAssignInt:
+        case QoreIROpcode::ShrAssignInt:
+        case QoreIROpcode::AddAssignInt:
+        case QoreIROpcode::AddAssignFloat:
+        case QoreIROpcode::SubAssignInt:
+        case QoreIROpcode::SubAssignFloat:
+        case QoreIROpcode::MulAssignInt:
+        case QoreIROpcode::MulAssignFloat:
+        case QoreIROpcode::DivAssignInt:
+        case QoreIROpcode::DivAssignFloat:
+        case QoreIROpcode::ModAssignInt:
+        case QoreIROpcode::AndAssignInt:
+        case QoreIROpcode::OrAssignInt:
+        case QoreIROpcode::XorAssignInt:
             return true;
         case QoreIROpcode::StoreLocal: {
             if (!allow_ir_only_store) {
@@ -4573,23 +4648,9 @@ static bool qore_ir_collect_mutated_locals(const QoreIRNaturalLoop& loop, const 
                 return false;
             }
             const QoreIRInstruction* inst = inst_ptr.get();
-            switch (inst->opcode) {
-                case QoreIROpcode::StoreLocal:
-                case QoreIROpcode::StoreClosure:
-                case QoreIROpcode::UninstantiateLocal:
-                case QoreIROpcode::InstantiateLocal:
-                    mutated.insert(static_cast<const QoreIRLocalInstruction*>(inst)->local);
-                    break;
-                case QoreIROpcode::AddAssignLocalInt: {
-                    const auto* local_inst = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
-                    mutated.insert(local_inst->target);
-                    break;
-                }
-                case QoreIROpcode::IncrementLocalInt:
-                    mutated.insert(static_cast<const QoreIRIncrementLocalIntInstruction*>(inst)->local);
-                    break;
-                default:
-                    break;
+            const LocalVar* local = qore_ir_get_written_local(inst);
+            if (local) {
+                mutated.insert(local);
             }
         }
     }
@@ -4613,6 +4674,18 @@ static bool qore_ir_is_hoistable_load(const QoreIRFunction& func, const QoreIRIn
     return facts->representation == QoreIRValueRepresentation::NativeInt
         || facts->representation == QoreIRValueRepresentation::NativeFloat
         || facts->representation == QoreIRValueRepresentation::NativeBool;
+}
+
+static bool qore_ir_is_hoistable_query_load(
+        const QoreIRFunction& func, const QoreIRInstruction& inst,
+        const std::unordered_set<const LocalVar*>& mutated) {
+    if (inst.opcode != QoreIROpcode::LoadLocal) {
+        return false;
+    }
+    const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
+    return load.local && !load.is_closure && !load.is_ref
+        && !load.local->closureUse() && !mutated.count(load.local)
+        && qore_ir_is_assigned_boxed_string_or_list(func, inst.result);
 }
 
 static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& inst,
@@ -7589,6 +7662,8 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         loops.clear();
     }
     local_stats.loops_analyzed = loops.size();
+    const bool enable_query_licm =
+        !getenv("QORE_DISABLE_IR_QUERY_LICM");
 
     for (const QoreIRNaturalLoop& loop : loops) {
         if (qore_ir_analysis_cancelled(check_count, "IR loop-invariant code motion")) {
@@ -7617,23 +7692,23 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
             break;
         }
         bool loop_may_invalidate_loads = false;
-        if (getenv("QORE_DISABLE_IR_ONLY_LICM_ACROSS_CALLS")) {
-            for (size_t block_id : loop.blocks) {
-                for (const auto& inst : cfg.blocks[block_id]->instructions) {
-                    if (qore_ir_analysis_cancelled(check_count,
-                            "IR loop invalidation analysis")) {
-                        if (stats) {
-                            *stats = local_stats;
-                        }
-                        return;
+        bool loop_may_invalidate_query_loads = false;
+        for (size_t block_id : loop.blocks) {
+            for (const auto& inst : cfg.blocks[block_id]->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR loop invalidation analysis")) {
+                    if (stats) {
+                        *stats = local_stats;
                     }
-                    if (qore_ir_may_mutate_unknown_local(inst->opcode)) {
-                        loop_may_invalidate_loads = true;
-                        break;
-                    }
+                    return;
                 }
-                if (loop_may_invalidate_loads) {
-                    break;
+                if (qore_ir_may_mutate_unknown_local(inst->opcode)
+                        && !qore_ir_is_hoistable_read_only_query(
+                            func, *inst)) {
+                    loop_may_invalidate_query_loads = true;
+                    if (getenv("QORE_DISABLE_IR_ONLY_LICM_ACROSS_CALLS")) {
+                        loop_may_invalidate_loads = true;
+                    }
                 }
             }
         }
@@ -7679,9 +7754,18 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                     }
                     bool candidate = qore_ir_is_native_scalar_constant(inst->opcode)
                         || qore_ir_is_hoistable_load(func, *inst, mutated)
+                        || (enable_query_licm
+                            && (qore_ir_is_hoistable_query_load(
+                                    func, *inst, mutated)
+                                || qore_ir_is_hoistable_read_only_query(
+                                    func, *inst)))
                         || qore_ir_is_native_scalar_pure_opcode(inst->opcode);
                     if (!candidate
                             || (inst->opcode == QoreIROpcode::LoadLocal && loop_may_invalidate_loads)
+                            || (inst->opcode == QoreIROpcode::LoadLocal
+                                && loop_may_invalidate_query_loads
+                                && qore_ir_is_hoistable_query_load(
+                                    func, *inst, mutated))
                             || !safe_repeated_values.count(inst->result.id)) {
                         continue;
                     }
