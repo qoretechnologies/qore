@@ -11112,6 +11112,7 @@ size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
 
 size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
         bool propagate_positive) {
+    func.exact_assigned_boxed_local_loads.clear();
     if (func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
     }
@@ -11242,6 +11243,9 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
         if (!inst || inst->operands.empty()) {
             return false;
         }
+        if (qore_ir_is_read_only_string_use(*inst, inst->operands[0])) {
+            return true;
+        }
         bool pseudo = false;
         bool has_ref_args = true;
         QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
@@ -11267,9 +11271,6 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             ? known.end() : known.find(loaded->second);
         if (fact == known.end() || !fact->second) {
             return false;
-        }
-        if (fact->second == stringTypeInfo) {
-            return qore_ir_is_read_only_string_intrinsic(intrinsic);
         }
         if (fact->second == listTypeInfo) {
             return intrinsic == QoreIRIntrinsic::Size
@@ -11303,6 +11304,14 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             }
             const QoreTypeInfo* type = exact_boxed_type(
                 func.getValueFacts(store->operands[0]));
+            if (!type && !QoreTypeInfo::parseAcceptsReturns(
+                    store->local->getTypeInfo(), NT_NOTHING)) {
+                // A successful assignment to a strict exact-typed local
+                // establishes the declared type even when the source is
+                // optional. The store's coercion/type check prevents control
+                // from continuing with NOTHING or another runtime type.
+                type = exact_local_type(store->local);
+            }
             if (local_accepts_type(store->local, type)) {
                 known[store->local] = type;
             } else {
@@ -11497,8 +11506,12 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                 const auto* load =
                     static_cast<const QoreIRLocalInstruction*>(inst);
                 auto fact = known.find(load->local);
-                if (propagate_positive && fact != known.end()
+                if (propagate_positive
+                        && inst->opcode == QoreIROpcode::LoadLocal
+                        && fact != known.end()
                         && fact->second) {
+                    func.exact_assigned_boxed_local_loads.insert(
+                        inst->result.id);
                     QoreIRValueFacts next;
                     next.type_info = fact->second;
                     next.assigned_state = QoreIRAssignedState::Assigned;

@@ -2902,6 +2902,13 @@ public:
         can conservatively operate without these facts. */
     std::vector<QoreIRValueFacts> value_facts{1};
 
+    //! LoadLocal values positively proven assigned and exact boxed by CFG analysis.
+    /** This is intentionally separate from value_facts: parse-derived facts can
+        reflect a declared type without proving that an lvalue is currently
+        assigned. Transient AOT shortcuts that omit NOTHING guards require this
+        stronger proof. */
+    std::unordered_set<uint32_t> exact_assigned_boxed_local_loads;
+
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
     uint32_t max_value_id = 0;
 

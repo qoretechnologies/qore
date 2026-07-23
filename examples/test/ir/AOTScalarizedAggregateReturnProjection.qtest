@@ -90,7 +90,8 @@ string scalar_disabled_compile = compile(scalar_disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_FIXED_AGGREGATE_MUTATION_SCALAR_REPLACEMENT=1");
 string native_projection_disabled_compile = compile(
     native_projection_disabled,
-    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION=1");
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_NATIVE_SCALAR_PROJECTION=1"
+    " QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION=1");
 if (enabled_compile
         !~ /IR-OPT-AOT-EFFECTS: aggregateKernel[^:]*:.*aggregate-projections=6.*native-specializations=2/) {
     printf("missing scalarized aggregate-return projections:\n%s", enabled_compile);

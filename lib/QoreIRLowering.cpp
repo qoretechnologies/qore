@@ -10610,6 +10610,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         return hoisted;
     }
     MethodCallNode* m = op->getMethodCall();
+    auto finish_call = [&](QoreIRValue result) {
+        if (result.isValid() && m
+                && !markReferenceArgumentAssignmentsUnknown(
+                    m->getParseArgs(), m->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    };
     const QoreValue& base_expr = op->getExpression();
     LocalVar* base_local = getLocalVarFromValue(base_expr);
     bool self_base = base_local && !strcmp(base_local->getName(), "self");
@@ -10632,9 +10640,10 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     auto* invoke_inst = builder.createInvokeMethodDirect(method, qc, variant, lowered_args,
                         normal_block, handler, expr, op->loc);
                     builder.setBlock(normal_block);
-                    return invoke_inst->result;
+                    return finish_call(invoke_inst->result);
                 }
-                return builder.createCallMethodDirect(method, qc, variant, lowered_args, expr, op->loc)->result;
+                return finish_call(builder.createCallMethodDirect(
+                    method, qc, variant, lowered_args, expr, op->loc)->result);
             }
             error.clear();
         }
@@ -10829,7 +10838,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             QoreIRValue result = lowerExprOpOrInvoke(QoreIROpcode::ListStringJoin,
                 expr, {separator, base}, op->loc, error);
             --ast_delegate_count;
-            return result;
+            return finish_call(result);
         }
     }
     QoreIRValue base_val = lowerExpression(op->getExpression(), error);
@@ -11042,7 +11051,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 inst->pseudo_base_safe_value_dispatch = pseudo_base_safe_value_dispatch;
                 result = inst->result;
             }
-            return result;
+            return finish_call(result);
         }
         // lowerCallArgs failed — fall through to generic path
         error.clear();
@@ -11070,7 +11079,8 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             opcode = QoreIROpcode::DotEvalObject;
         }
     }
-    return lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error);
+    return finish_call(
+        lowerExprOpOrInvoke(opcode, expr, operands, op->loc, error));
 }
 
 bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
@@ -11859,6 +11869,49 @@ static bool qore_ir_direct_variant_has_reference_params(
     return false;
 }
 
+bool QoreIRLowering::markReferenceArgumentAssignmentsUnknown(
+        const QoreParseListNode* parse_args, const QoreListNode* args,
+        std::string& error) {
+    if (!parse_context) {
+        return true;
+    }
+    auto mark = [&](const QoreValue& arg) {
+        const auto* ref = arg.hasNode()
+            ? dynamic_cast<const ParseReferenceNode*>(
+                arg.getInternalNode()) : nullptr;
+        if (!ref) {
+            return;
+        }
+        if (LocalVar* local = getLocalVarFromValue(ref->getLVExp())) {
+            parse_context->markLocalAssignment(local, false, nullptr);
+        }
+    };
+    if (parse_args) {
+        for (size_t i = 0; i < parse_args->size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "IR reference argument assignment analysis")) {
+                error = "IR reference argument assignment analysis cancelled or interrupted";
+                return false;
+            }
+            mark(parse_args->get(i));
+        }
+        return true;
+    }
+    if (args) {
+        for (size_t i = 0; i < args->size(); ++i) {
+            if (i && !(i % 100)
+                    && qore_check_cancel(nullptr,
+                        "IR reference argument assignment analysis")) {
+                error = "IR reference argument assignment analysis cancelled or interrupted";
+                return false;
+            }
+            mark(args->retrieveEntry(i));
+        }
+    }
+    return true;
+}
+
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
     if (arg.isNothing()) {
         return true;
@@ -11883,9 +11936,12 @@ bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const
         // Guard insertion treats unassigned locals as valid NOTHING values, but
         // overload dispatch must fall back when a selected non-NOTHING variant
         // could reject that runtime value.
-        return !local->isAssigned()
-            || !got_analysis
-            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+        const QoreTypeInfo* local_type = local->parseGetTypeInfo();
+        return !parse_context
+            || !parse_context->isLocalDefinitelyAssigned(local)
+            || !local_type
+            || QoreTypeInfo::parseReturns(
+                local_type, NT_NOTHING) != QTI_NOT_EQUAL;
     }
 
     if (got_analysis && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
@@ -12198,71 +12254,6 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             }
         }
     }
-    const char* string_case_method_name = nullptr;
-    if (func_name && !call->hasExplicitTypeArgs()) {
-        if (!strcmp(func_name, "tolower")) {
-            string_case_method_name = "lwr";
-        } else if (!strcmp(func_name, "toupper")) {
-            string_case_method_name = "upr";
-        }
-    }
-    if (string_case_method_name) {
-        const QoreParseListNode* parse_args = call->getParseArgs();
-        const QoreListNode* args = call->getArgs();
-        QoreValue arg_expr;
-        QoreParseAnalysis arg_analysis;
-        if (qore_ir_get_single_positional_call_arg(parse_args, args, arg_expr)
-                && getAnalysis(arg_expr, arg_analysis)
-                && arg_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-                && QoreTypeInfo::isType(selectAnalysisType(arg_analysis), NT_STRING)) {
-            LocalVar* arg_local = getLocalVarFromValue(arg_expr);
-            bool arg_known_assigned = arg_local
-                && parse_context
-                && parse_context->isLocalDefinitelyAssigned(arg_local);
-            if (arg_known_assigned) {
-                std::vector<QoreIRValue> operands;
-                if (!lowerCallArgs(parse_args, args, operands, error)) {
-                    return QoreIRValue();
-                }
-                if (operands.size() == 1) {
-                    QoreClass* qc = nullptr;
-                    const QoreMethod* method = pseudo_classes_find_method(NT_STRING, string_case_method_name, qc);
-                    if (method && qc) {
-                        QoreIRDotEvalMethodDirectInstruction* direct_inst = nullptr;
-                        QoreIRInvokeDotEvalMethodDirectInstruction* invoke_inst = nullptr;
-                        if (!exception_stack.empty()) {
-                            QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-                            if (!normal_block) {
-                                error = "IR builder failed to create invoke continuation block";
-                                return QoreIRValue();
-                            }
-                            QoreIRBasicBlock* handler = exception_stack.back();
-                            invoke_inst = builder.createInvokeDotEvalMethodDirect(method, qc, nullptr, expr, true,
-                                operands, normal_block, handler, call->loc);
-                            builder.setBlock(normal_block);
-                        } else {
-                            direct_inst = builder.createDotEvalMethodDirect(method, qc, nullptr, expr, true,
-                                operands, call->loc);
-                        }
-
-                        auto set_pseudo_case_flags = [string_case_method_name](auto* inst) {
-                            inst->fallback_method_name = strdup(string_case_method_name);
-                            inst->pseudo_base_known_string = true;
-                            inst->pseudo_base_known_assigned_string = true;
-                            inst->pseudo_base_safe_value_dispatch = true;
-                        };
-                        if (direct_inst) {
-                            set_pseudo_case_flags(direct_inst);
-                            return direct_inst->result;
-                        }
-                        assert(invoke_inst);
-                        set_pseudo_case_flags(invoke_inst);
-                        return invoke_inst->result;
-                    }
-                }
-            }
-        }
-    }
     if (func_name && !strcmp(func_name, "substr") && !call->hasExplicitTypeArgs()) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
@@ -12488,6 +12479,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     const QoreFunction* func = call->getFunction();
     if (func && !overloadedDirectCallNeedsRuntimeDispatch(func, call->getVariant(),
             call->getParseArgs(), call->getArgs())) {
+        QoreIRValue result;
         if (!exception_stack.empty()) {
             // In try/catch: use Invoke with invoke_opcode = CallDirect
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -12508,16 +12500,29 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
             inst->explicit_type_param_inst =
                 call->getExplicitTypeParamInstantiation();
             builder.setBlock(normal_block);
-            return inst->result;
+            result = inst->result;
+        } else {
+            auto* inst = builder.createCallDirect(func, call->getVariant(),
+                    call->getProgram(), expr, operands, call->loc);
+            inst->explicit_type_param_inst =
+                call->getExplicitTypeParamInstantiation();
+            result = inst->result;
         }
-        auto* inst = builder.createCallDirect(func, call->getVariant(),
-                call->getProgram(), expr, operands, call->loc);
-        inst->explicit_type_param_inst =
-            call->getExplicitTypeParamInstantiation();
-        return inst->result;
+        if (!markReferenceArgumentAssignmentsUnknown(
+                call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
     }
 
-    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+    QoreIRValue result = lowerExprOpOrInvoke(
+        QoreIROpcode::Call, expr, operands, call->loc, error);
+    if (result.isValid()
+            && !markReferenceArgumentAssignmentsUnknown(
+                call->getParseArgs(), call->getArgs(), error)) {
+        return QoreIRValue();
+    }
+    return result;
 }
 
 QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::string& error) {
@@ -12539,7 +12544,15 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     // Use CallClosureDirect for fast closure/callref invocation
     // This calls qore_rt_call_closure_fast() which directly calls callref->execValue()
     // instead of going through AST node copy and dynamic_cast chain
-    return lowerExprOpOrInvoke(QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error, has_ref_args);
+    QoreIRValue result = lowerExprOpOrInvoke(
+        QoreIROpcode::CallClosureDirect, expr, operands, call->loc, error,
+        has_ref_args);
+    if (result.isValid()
+            && !markReferenceArgumentAssignmentsUnknown(
+                call->getParseArgs(), call->getArgs(), error)) {
+        return QoreIRValue();
+    }
+    return result;
 }
 
 // Helper function for Phase 3: cache direct-call target metadata. Runtime
@@ -12575,12 +12588,21 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!call) {
         return QoreIRValue();
     }
+    auto finish_call = [&](QoreIRValue result) {
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(
+                    call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    };
     std::vector<QoreIRValue> operands;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
     if (call->hasExplicitTypeArgs()) {
-        return lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, call->loc, error);
+        return finish_call(lowerExprOpOrInvoke(
+            QoreIROpcode::CallMethod, expr, operands, call->loc, error));
     }
 
     // Check for devirtualization opportunities
@@ -12617,10 +12639,11 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
             tryCacheCalleeIRForInlining(variant, call_inst);
             result = call_inst->result;
         }
-        return result;
+        return finish_call(result);
     }
 
-    return lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, call->loc, error);
+    return finish_call(lowerExprOpOrInvoke(
+        QoreIROpcode::CallMethod, expr, operands, call->loc, error));
 }
 
 QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& error) {
@@ -12629,13 +12652,22 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     if (!call) {
         return QoreIRValue();
     }
+    auto finish_call = [&](QoreIRValue result) {
+        if (result.isValid()
+                && !markReferenceArgumentAssignmentsUnknown(
+                    call->getParseArgs(), call->getArgs(), error)) {
+            return QoreIRValue();
+        }
+        return result;
+    };
     std::vector<QoreIRValue> lowered_args;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), lowered_args, error)) {
         return QoreIRValue();
     }
     if ((call->hasExplicitTypeArgs() || call->getReceiverTypeInfo())
             && std::getenv("QORE_DISABLE_IR_DIRECT_GENERIC_STATIC_CALLS")) {
-        return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error);
+        return finish_call(lowerExprOpOrInvoke(
+            QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error));
     }
 
     // Only use CallStaticDirect if AST conclusively determined the variant at parse time.
@@ -12678,10 +12710,11 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             tryCacheCalleeIRForInlining(variant, call_static_inst);
             result = call_static_inst->result;
         }
-        return result;
+        return finish_call(result);
     }
 
-    return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error);
+    return finish_call(lowerExprOpOrInvoke(
+        QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error));
 }
 
 // Pattern analysis for optimized foldl operations

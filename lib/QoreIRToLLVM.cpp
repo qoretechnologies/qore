@@ -783,7 +783,9 @@ static bool qore_llvm_is_type_name_builtin_call(const QoreValue& expr) {
     return name && (!strcmp(name, "type") || !strcmp(name, "typename"));
 }
 
-static const char* qore_llvm_get_single_arg_fast_builtin_helper(const QoreValue& expr) {
+static const char* qore_llvm_get_single_arg_fast_builtin_helper(
+        const QoreValue& expr, const QoreIRFunction* ir_func,
+        QoreIRValue argument, bool aot_mode) {
     const auto* call = expr.hasNode()
         ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
     if (!call || call->hasExplicitTypeArgs()) {
@@ -801,6 +803,34 @@ static const char* qore_llvm_get_single_arg_fast_builtin_helper(const QoreValue&
     }
     if (!strcmp(name, "abs")) {
         return "qore_fast_abs";
+    }
+    if (aot_mode && !std::getenv(
+            "QORE_DISABLE_AOT_EXACT_STRING_CASE_CALL")) {
+        const AbstractQoreFunctionVariant* variant = call->getVariant();
+        const FunctionEntry* fe = call->getFunctionEntry();
+        std::string namespace_path;
+        if (fe && fe->getNamespace()) {
+            fe->getNamespace()->getPath(namespace_path);
+        }
+        if (!variant || variant->isUser() || !fe || !fe->hasBuiltin()
+                || namespace_path != "Qore") {
+            return nullptr;
+        }
+        const QoreIRValueFacts* facts = ir_func
+            ? ir_func->getValueFacts(argument) : nullptr;
+        bool exact_assigned_string = ir_func
+            && ir_func->exact_assigned_boxed_local_loads.count(argument.id)
+            && facts
+            && facts->type_info == stringTypeInfo
+            && facts->assigned_state == QoreIRAssignedState::Assigned
+            && facts->representation == QoreIRValueRepresentation::Boxed
+            && facts->never_nothing;
+        if (exact_assigned_string && !strcmp(name, "tolower")) {
+            return "qore_rt_pseudo_string_lwr_noguard";
+        }
+        if (exact_assigned_string && !strcmp(name, "toupper")) {
+            return "qore_rt_pseudo_string_upr_noguard";
+        }
     }
     return nullptr;
 }
@@ -1518,6 +1548,21 @@ void QoreIRToLLVM::cacheStableConversion(
 }
 
 llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
+    if (val->getType()->isFloatingPointTy()) {
+        if (llvm::Value* cached =
+                getCachedStableConversion(
+                    value_id, stable_int_conversions)) {
+            return cached;
+        }
+        llvm::Value* native_float = val->getType() == double_type
+            ? val : builder->CreateFPCast(val, double_type);
+        auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        llvm::Value* result =
+            builder->CreateCall(to_int, {boxFloat(native_float)});
+        cacheStableConversion(value_id, result, stable_int_conversions);
+        return result;
+    }
     if (!nanboxed_values.count(value_id)) {
         if (val->getType() == i64_type) {
             return val;
@@ -1548,6 +1593,21 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
 llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_id) {
     if (val->getType()->isPointerTy()) {
         return builder->CreatePtrToInt(val, i64_type);
+    }
+    if (val->getType()->isFloatingPointTy()) {
+        if (llvm::Value* cached =
+                getCachedStableConversion(
+                    value_id, stable_int_conversions)) {
+            return cached;
+        }
+        llvm::Value* native_float = val->getType() == double_type
+            ? val : builder->CreateFPCast(val, double_type);
+        auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
+            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        llvm::Value* result =
+            builder->CreateCall(to_int, {boxFloat(native_float)});
+        cacheStableConversion(value_id, result, stable_int_conversions);
+        return result;
     }
     if (!nanboxed_values.count(value_id)) {
         if (val->getType() == i64_type) {
@@ -14931,7 +14991,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool type_name_fast_path = nargs == 1
                 && qore_llvm_is_type_name_builtin_call(direct_inst->expr);
             const char* single_arg_fast_builtin_helper = nargs == 1 && !direct_inst->has_ref_args
-                ? qore_llvm_get_single_arg_fast_builtin_helper(direct_inst->expr) : nullptr;
+                ? qore_llvm_get_single_arg_fast_builtin_helper(
+                    direct_inst->expr, current_ir_func,
+                    direct_inst->operands[arg_start], aot_mode)
+                : nullptr;
 
             // Collect raw args first so context-independent native fast entries
             // can avoid creating boxed temporaries that no call path observes.

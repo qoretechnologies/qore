@@ -53,10 +53,17 @@ int sub mutation(*int value) {
     return first + (value * 3);
 }
 
+int sub mixedFloatToSoftInt(softfloat value) {
+    int whole = value.toInt();
+    softint micros = (value - whole) * 1000000;
+    return micros;
+}
+
 int sub main() {
-    printf(\"%s\\n%s\\n%s\\n%s\\n%d:%d:%d\\n\",
+    printf(\"%s\\n%s\\n%s\\n%s\\n%d:%d:%d:%d\\n\",
         intOps(8), intOps(NOTHING), floatOps(8.0),
-        floatOps(NOTHING), mix(7), mix(NOTHING), mutation(7));
+        floatOps(NOTHING), mix(7), mix(NOTHING), mutation(7),
+        mixedFloatToSoftInt(123.25));
     return 0;
 }
 

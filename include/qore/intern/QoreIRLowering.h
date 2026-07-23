@@ -366,6 +366,8 @@ private:
         std::vector<QoreIRValue>& lowered, std::string& error);
     bool callArgumentMayPassReference(const QoreValue& arg) const;
     bool callArgsMayPassReferences(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+    bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
+        const QoreListNode* args, std::string& error);
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;

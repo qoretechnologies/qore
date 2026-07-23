@@ -27,6 +27,78 @@ string u_short = \"éx\";
 string u_heap = \"éabcdefghijklmnopqrstuvwxyz\";
 printf(\"case:%y:%y:%y:%y\\n\", short.lwr(), short.upr(), u_short.lwr(), u_short.upr());
 printf(\"global-case:%y:%y:%y:%y\\n\", tolower(short), toupper(short), tolower(u_short), toupper(u_short));
+*string sub optionalCaseValue(bool assigned) {
+    return assigned ? \"MiXeD\" : NOTHING;
+}
+sub clearCaseValue(reference<string> value) {
+    remove value;
+}
+string sub clearViaFunction() {
+    string value = \"MiXeD\";
+    clearCaseValue(\\value);
+    try {
+        return toupper(value);
+    } catch (hash<auto> ex) {
+        return ex.err;
+    }
+}
+final class CaseClearer {
+    static nothing clearStatic(reference<string> value) {
+        remove value;
+    }
+
+    final nothing clearMember(reference<string> value) {
+        remove value;
+    }
+
+    string clearViaSelf() {
+        string value = \"MiXeD\";
+        self.clearMember(\\value);
+        try {
+            return toupper(value);
+        } catch (hash<auto> ex) {
+            return ex.err;
+        }
+    }
+}
+string strict_case = optionalCaseValue(True);
+printf(\"global-case.strict-store:%y:%y\\n\", tolower(strict_case), toupper(strict_case));
+try {
+    printf(\"global-case.strict-store.try:%y:%y\\n\",
+        tolower(strict_case), toupper(strict_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.strict-store.try:EX:%s\\n\", ex.err);
+}
+string missing_case;
+try {
+    printf(\"global-case.missing:%y\\n\", tolower(missing_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.missing:EX:%s\\n\", ex.err);
+}
+string cleared_case = \"MiXeD\";
+clearCaseValue(\\cleared_case);
+try {
+    printf(\"global-case.ref-cleared:%y\\n\", toupper(cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.ref-cleared:EX:%s\\n\", ex.err);
+}
+string static_cleared_case = \"MiXeD\";
+CaseClearer::clearStatic(\\static_cleared_case);
+try {
+    printf(\"global-case.static-ref-cleared:%y\\n\", tolower(static_cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.static-ref-cleared:EX:%s\\n\", ex.err);
+}
+CaseClearer clearer();
+string member_cleared_case = \"MiXeD\";
+clearer.clearMember(\\member_cleared_case);
+try {
+    printf(\"global-case.member-ref-cleared:%y\\n\", toupper(member_cleared_case));
+} catch (hash<auto> ex) {
+    printf(\"global-case.member-ref-cleared:EX:%s\\n\", ex.err);
+}
+printf(\"global-case.self-ref-cleared:EX:%s\\n\", clearer.clearViaSelf());
+printf(\"global-case.function-ref-cleared:EX:%s\\n\", clearViaFunction());
 printf(\"lengths:%d:%d:%d:%d:%d:%d\\n\",
     short.size(), short.strlen(), short.length(),
     heap.size(), heap.strlen(), heap.length());
@@ -164,6 +236,14 @@ string sub expectedOutput() {
 sizep:True:True:True
 case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
 global-case:\"abc\":\"ABC\":\"éx\":\"ÉX\"
+global-case.strict-store:\"mixed\":\"MIXED\"
+global-case.strict-store.try:\"mixed\":\"MIXED\"
+global-case.missing:EX:RUNTIME-OVERLOAD-ERROR
+global-case.ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.static-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.member-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.self-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
+global-case.function-ref-cleared:EX:RUNTIME-OVERLOAD-ERROR
 lengths:3:3:3:26:26:26
 unicode-lengths:3:3:2:28:28:27
 global-lengths:3:3:2:3
