@@ -956,9 +956,12 @@ public class ProviderIndexUtil {
             ? {
                 "connection_options": map {
                     $1.key: ctx.conn_opt_th.doCast($1.value + {
-                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
-                        "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
-                            $1.value.element_allowed_values),
+                        "allowed_values": (exists $1.value.allowed_values
+                            ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
+                            : NOTHING),
+                        "element_allowed_values": (exists $1.value.element_allowed_values
+                            ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
+                            : NOTHING),
                     }),
                 }, info.connection_options.pairIterator(),
             }
@@ -990,18 +993,23 @@ public class ProviderIndexUtil {
                     "path_vars": (j.value.path_vars
                         ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
                         : NOTHING),
-                    "options": (map {
+                    "options": (exists j.value.options ? map {
                         $1.key: option_info_th.doCast(($1.value - "default_view") + {
-                            "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
-                            "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
-                                $1.value.element_allowed_values),
+                            "allowed_values": (exists $1.value.allowed_values
+                                ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
+                                : NOTHING),
+                            "element_allowed_values": (exists $1.value.element_allowed_values
+                                ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
+                                : NOTHING),
                             "type": type_map{$1.value.type} ?? type_map."auto",
                             "default_view": ui_view_map{$1.value.default_view},
                         })
-                    }, j.value.options.pairIterator()),
-                    "data_provider_info": deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
-                        dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
-                        dp_sig_info_th, dp_arg_info_th, type_map, shape_map),
+                    }, j.value.options.pairIterator() : NOTHING),
+                    "data_provider_info": (j.value.data_provider_info
+                        ? deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
+                            dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
+                            dp_sig_info_th, dp_arg_info_th, type_map, shape_map)
+                        : NOTHING),
                 });
             }
         }
@@ -1030,35 +1038,40 @@ public class ProviderIndexUtil {
             if (rv{key}) {
                 rv{key} = map {
                     $1.key: dp_opt_info_th.doCast($1.value + {
-                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
-                        "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
-                            $1.value.element_allowed_values),
+                        "allowed_values": (exists $1.value.allowed_values
+                            ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
+                            : NOTHING),
+                        "element_allowed_values": (exists $1.value.element_allowed_values
+                            ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
+                            : NOTHING),
                         "type": (map type_map{$1} ?? type_map."auto", $1.value.type),
                     }),
                 }, rv{key}.pairIterator();
             }
         }
         return dp_info_th.doCast(rv + {
-            "expressions": (map {
+            "expressions": (exists rv.expressions ? map {
                 $1.key: dp_exp_info_th.doCast($1.value + {
-                    "args": (map dp_sig_info_th.doCast($1 + {
+                    "args": (exists $1.value.args ? map dp_sig_info_th.doCast($1 + {
                         "type": type_map{$1.type} ?? type_map."auto",
-                    }), $1.value.args),
-                    "arg_info": (map dp_arg_info_th.doCast($1 + {
-                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.allowed_values),
-                    }), $1.value.arg_info),
+                    }), $1.value.args : NOTHING),
+                    "arg_info": (exists $1.value.arg_info ? map dp_arg_info_th.doCast($1 + {
+                        "allowed_values": (exists $1.allowed_values
+                            ? map cast<hash<AllowedValueInfo>>($1), $1.allowed_values
+                            : NOTHING),
+                    }), $1.value.arg_info : NOTHING),
                     "return_type": type_map{$1.value.return_type} ?? type_map."auto",
                 })
-            }, rv.expressions.pairIterator()),
-            "events": (map {
+            }, rv.expressions.pairIterator() : NOTHING),
+            "events": (exists rv.events ? map {
                 $1.key: dp_msg_info_th.doCast($1.value)
-            }, rv.events.pairIterator()),
-            "mapper_keys": (map {
+            }, rv.events.pairIterator() : NOTHING),
+            "mapper_keys": (exists rv.mapper_keys ? map {
                 $1.key: mapper_key_info_th.doCast($1.value)
-            }, rv.mapper_keys.pairIterator()),
-            "messages": (map {
+            }, rv.mapper_keys.pairIterator() : NOTHING),
+            "messages": (exists rv.messages ? map {
                 $1.key: dp_msg_info_th.doCast($1.value)
-            }, rv.messages.pairIterator()),
+            }, rv.messages.pairIterator() : NOTHING),
         });
     }
 
