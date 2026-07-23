@@ -99,6 +99,12 @@ public class ProviderIndexUtil {
         #! Condition for threads waiting for data provider index initialization
         static Condition init_cond();
 
+        #! Metadata initialization state
+        static bool metadata_initialized;
+        static bool metadata_initializing;
+        static *int metadata_initializing_tid;
+        static Condition metadata_init_cond();
+
         #! All apps loaded flag
         static bool apps_loaded;
 
@@ -109,7 +115,7 @@ public class ProviderIndexUtil {
 
     #! Returns a list of cached app info
     static *list<hash<auto>> getCachedApps() {
-        checkDataIndex();
+        checkMetadataIndex();
         return index.appinfomap.values();
     }
 
@@ -120,7 +126,7 @@ public class ProviderIndexUtil {
         @return All cached applications that match the regular expression pattern in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
-        checkDataIndex();
+        checkMetadataIndex();
         return map $1, index.appinfomap.values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -133,7 +139,7 @@ public class ProviderIndexUtil {
         @return All cached applications that match the substring argument in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppSubstr(string substr, bool ignore_case = True) {
-        checkDataIndex();
+        checkMetadataIndex();
         if (ignore_case) {
             substr = substr.upr();
 
@@ -145,19 +151,19 @@ public class ProviderIndexUtil {
 
     #! Try to return any cached app info for the given app
     static *hash<auto> tryGetAppInfo(string app) {
-        checkDataIndex();
+        checkMetadataIndex();
         return index.appinfomap{app};
     }
 
     #! Try to return any cached approximate app action list for the given app
     static *list<hash<auto>> tryGetApproximateActionsForApp(string app) {
-        checkDataIndex();
+        checkMetadataIndex();
         return index.actioninfomap{app}.values();
     }
 
     #! Try to return any cached approximate app action for the given app and action
     static *hash<auto> tryGetApproximateAppAction(string app, string action) {
-        checkDataIndex();
+        checkMetadataIndex();
         return index.actioninfomap{app}{action};
     }
 
@@ -172,7 +178,7 @@ public class ProviderIndexUtil {
     */
     static *list<hash<auto>> searchCachedAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkDataIndex();
+        checkMetadataIndex();
         return map $1, index.actioninfomap{app}.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -187,7 +193,7 @@ public class ProviderIndexUtil {
         @note If the application is not cached, no results are returned
     */
     static *list<hash<auto>> searchCachedAppActionSubstr(string app, string substr, bool ignore_case = True) {
-        checkDataIndex();
+        checkMetadataIndex();
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.actioninfomap{app}.values(),
@@ -205,7 +211,7 @@ public class ProviderIndexUtil {
     */
     static *list<hash<auto>> searchCachedActionRegex(string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkDataIndex();
+        checkMetadataIndex();
         return map $1, index.top_actioninfomap.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -217,7 +223,7 @@ public class ProviderIndexUtil {
         @return All cached actions that match the substring argument in the \c short_desc or \c desc fields
     */
     static *list<hash<auto>> searchCachedActionSubstr(string substr, bool ignore_case = True) {
-        checkDataIndex();
+        checkMetadataIndex();
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.top_actioninfomap.values(),
@@ -231,13 +237,13 @@ public class ProviderIndexUtil {
     /** @return all cached actions
     */
     static *list<hash<auto>> getAllCachedActions() {
-        checkDataIndex();
+        checkMetadataIndex();
         return index.top_actioninfomap.values();
     }
 
     #! Adds the given app and actions to the cache
     static addAppToCache(hash<auto> app) {
-        checkDataIndex();
+        checkMetadataIndex();
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
@@ -246,7 +252,7 @@ public class ProviderIndexUtil {
 
     #! Adds the given app and actions to the cache
     static addActionToCache(hash<auto> action) {
-        checkDataIndex();
+        checkMetadataIndex();
         if (!index.appinfomap{action.app}) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action for unknown app %y to cache", action.app);
         }
@@ -260,6 +266,7 @@ public class ProviderIndexUtil {
 
     #! Removes the given app and all its actions from the cache
     static bool removeCachedApp(string app) {
+        checkMetadataIndex();
         if (!remove index.appinfomap{app}) {
             return False;
         }
@@ -407,7 +414,7 @@ public class ProviderIndexUtil {
 
         *hash<DataProviderIndexInfo> new_index;
         try {
-            new_index = readDataProviderIndex();
+            new_index = readRawDataProviderIndex();
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -426,6 +433,65 @@ public class ProviderIndexUtil {
         initializing = False;
         remove initializing_tid;
         init_cond.broadcast();
+    }
+
+    #! Ensures that cached app and action metadata has been deserialized
+    static private checkMetadataIndex() {
+        checkDataIndex();
+        if (metadata_initialized) {
+            return;
+        }
+
+        *hash<DataProviderIndexInfo> raw_index;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (metadata_initializing && metadata_initializing_tid != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+
+            if (metadata_initialized) {
+                return;
+            }
+
+            if (metadata_initializing) {
+                return;
+            }
+
+            metadata_initializing = True;
+            metadata_initializing_tid = gettid();
+            raw_index = index;
+            index = <DataProviderIndexInfo>{
+                "factorymap": raw_index.factorymap,
+                "appmap": raw_index.appmap,
+                "schememap": raw_index.schememap,
+                "appinfomap": {},
+                "actioninfomap": {},
+                "top_actioninfomap": {},
+            };
+        }
+
+        *hash<DataProviderIndexInfo> new_index;
+        try {
+            new_index = deserializeDataProviderIndex(raw_index);
+        } catch (hash<ExceptionInfo> ex) {
+            m.lock();
+            on_exit m.unlock();
+            metadata_initializing = False;
+            remove metadata_initializing_tid;
+            metadata_init_cond.broadcast();
+            rethrow;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        if (new_index) {
+            index = new_index;
+        }
+        metadata_initialized = True;
+        metadata_initializing = False;
+        remove metadata_initializing_tid;
+        metadata_init_cond.broadcast();
     }
 
     #! Returns an empty data provider index with all map fields initialized
@@ -462,6 +528,24 @@ public class ProviderIndexUtil {
 
     #! Reads the data provider index from the configured directory
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
+        return deserializeDataProviderIndex(readRawDataProviderIndex());
+    }
+
+    #! Reads the serialized data provider index without reconstructing typed metadata
+    static private *hash<DataProviderIndexInfo> readRawDataProviderIndex() {
+        try {
+            return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
+        }
+    }
+
+    #! Reconstructs typed app and action metadata in a serialized data provider index
+    static private *hash<DataProviderIndexInfo> deserializeDataProviderIndex(*hash<DataProviderIndexInfo> rv) {
+        if (!rv) {
+            return;
+        }
+
         # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
         load_module("DataProvider");
         load_module("MapperUtil");
@@ -484,9 +568,7 @@ public class ProviderIndexUtil {
         # get the UiOptionViewMap for enum deserialization
         *hash<auto> ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
 
-        *hash<DataProviderIndexInfo> rv;
         try {
-            rv = cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
             if (rv.appinfomap) {
                 TypedHash conn_opt_th = TypedHash::forName("ConnectionProvider::ConnectionOptionInfo");
                 rv.appinfomap = map {
