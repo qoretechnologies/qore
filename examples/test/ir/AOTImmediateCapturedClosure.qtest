@@ -15,6 +15,49 @@ if (!is_file(qcc_bin)) {
 string sub sourceCode() {
     return "%modern
 
+int sub stableParam(int value, int base) {
+    return (int sub (int arg) {
+        return arg + base;
+    })(value);
+}
+
+int sub mutableParam(int value, int base) {
+    int result = (int sub (int arg) {
+        return arg + base;
+    })(value);
+    base = 9;
+    return result + base;
+}
+
+int sub optionalParam(int value, *int base) {
+    return (int sub (int arg) {
+        return arg + (base ?? 0);
+    })(value);
+}
+
+int sub incrementedParam(int value, int base) {
+    int result = (int sub (int arg) {
+        return arg + base;
+    })(value);
+    ++base;
+    return result + base;
+}
+
+int sub removedParam(int value, int base) {
+    remove base;
+    return (int sub (int arg) {
+        return arg + (base ?? 0);
+    })(value);
+}
+
+int sub siblingCaptures(int value, int base) {
+    return (int sub (int arg) {
+        return arg + base;
+    })(value) + (int sub (int arg) {
+        return arg * base;
+    })(value);
+}
+
 string sub exercise() {
     int assigned = 7;
     int assigned_result = (int sub (int value) {
@@ -80,10 +123,13 @@ string sub exercise() {
         caught = ex.err == \"DIVISION-BY-ZERO\" ? 1 : 0;
     }
 
-    return sprintf(\"%d:%d:%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
+    return sprintf(\"%d:%d:%d:%.1f:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\",
         assigned_result, unset_result, removed_result, float_result,
         bool_result, order_result, big_result, mutable_result, mutable,
-        removed_inside_result, removed_inside, nested_result, caught);
+        removed_inside_result, removed_inside, nested_result, caught,
+        stableParam(6, 7), mutableParam(6, 7), optionalParam(6, NOTHING),
+        optionalParam(6, 7), incrementedParam(6, 7), removedParam(6, 7),
+        siblingCaptures(3, 4));
 }
 
 printf(\"%s\\n\", exercise());
@@ -119,9 +165,10 @@ string native_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, exe_path));
 string disabled_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe_path));
-string expected = "42:0:0:6.0:1:10:281474976710657:7:7:0:0:5:1\n";
+string expected = "42:0:0:6.0:1:10:281474976710657:7:7:0:0:5:1:13:22:6:13:21:6:19\n";
 if (ast_out != expected || jit_out != expected || native_out != expected
-        || disabled_out != expected || !(compile_out =~ /compiled native closure/)) {
+        || disabled_out != expected || !(compile_out =~ /compiled native closure/)
+        || !(compile_out =~ /promoted 1 stable immediate closure capture/)) {
     printf("immediate captured closure mismatch\nAST:\n%sJIT:\n%sNative:\n%sDisabled:\n%sCompile:\n%sDisabled compile:\n%s",
         ast_out, jit_out, native_out, disabled_out, compile_out,
         disabled_compile_out);

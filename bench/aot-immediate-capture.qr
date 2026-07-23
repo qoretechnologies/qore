@@ -1,0 +1,23 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub run(int iterations, int base) {
+    int result = 0;
+    for (int i = 0; i < iterations; ++i) {
+        result += (int sub (int value) {
+            return value + base;
+        })(i & 1023);
+    }
+    return result;
+}
+
+int sub main() {
+    int iterations = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 5000000;
+    printf("%d\n", run(iterations, 17));
+    return 0;
+}
+
+main();

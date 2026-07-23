@@ -509,6 +509,9 @@ private:
     // closures whose captured parameters cannot be modified by the owner.
     std::unordered_map<uint32_t, std::vector<llvm::AllocaInst*>>
         stored_closure_capture_allocas;
+    // Proven nonescaping immediate closures with read-only required scalar
+    // parameter captures can initialize the native cache once at owner entry.
+    std::unordered_set<uint32_t> entry_promoted_closure_captures;
     // Top-level closure locals can be changed by called code outside the owner
     // IR. Loads mapped here use a retained closure-identity guard before the
     // native direct path and retain the ordinary dynamic fallback.
@@ -1057,8 +1060,9 @@ private:
     llvm::Value* boxValue(llvm::Value* val, uint32_t id);
 
     // Emit exception check: if xsink has exception, branch to exception_target
+    // unless the caller requests the function-level error path.
     void emitExceptionCheck(llvm::Module& module, llvm::Function* llvm_func,
-            const QoreIRInstruction* inst);
+            const QoreIRInstruction* inst, bool force_function_error = false);
 
     // Emit the in-place debug-step hook (issue #5352) at a DebugBlock (synthetic=true,
     // block-entry → dbgSyntheticBlockStep) or PushTempMark (synthetic=false,

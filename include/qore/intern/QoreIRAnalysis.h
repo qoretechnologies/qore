@@ -117,6 +117,11 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
     const QoreIRFunction& func, const LVarSet* captures,
     std::vector<const LocalVar*>& result);
 
+//! Return the local directly written or invalidated by one instruction.
+//! Covers ordinary stores, fused scalar writes, and local-rooted lvalue paths.
+DLLLOCAL const LocalVar* qore_ir_get_written_local(
+    const QoreIRInstruction* inst);
+
 //! Return true when one instruction can mutate state visible to its caller.
 //! Direct function calls without reference arguments are handled by the
 //! interprocedural fixed-point analysis and therefore return false here.

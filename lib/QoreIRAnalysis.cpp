@@ -402,7 +402,7 @@ static bool qore_ir_instruction_may_modify_caller_runtime_locals(
     }
 }
 
-static const LocalVar* qore_ir_get_written_local(
+const LocalVar* qore_ir_get_written_local(
         const QoreIRInstruction* inst) {
     if (!inst) {
         return nullptr;
