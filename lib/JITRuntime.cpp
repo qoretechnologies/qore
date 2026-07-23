@@ -397,6 +397,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot) },
     { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
     { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
+    { "qore_rt_call_function_with_base",
+        reinterpret_cast<void*>(&qore_rt_call_function_with_base) },
+    { "qore_rt_call_function_with_base_aot",
+        reinterpret_cast<void*>(&qore_rt_call_function_with_base_aot) },
     { "qore_rt_call_method_direct_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_method_direct_consume_args) },
     { "qore_rt_call_method_fast_consume_args",
@@ -8411,6 +8415,65 @@ static uint64_t qore_rt_call_function_dynamic(const QoreFunction* func,
         QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink) {
     return qore_rt_call_function_dynamic_impl(func, pgm, args, nullptr, nargs,
             xsink);
+}
+
+static uint64_t qore_rt_call_function_with_base_impl(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
+        uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    if (!func || nargs < 0 || (nargs && !args)) {
+        clearConsumedArgCleanups(arg_cleanups, std::max(nargs, 0), xsink);
+        if (xsink) {
+            xsink->raiseException("IR-EXECUTION-ERROR",
+                "synthetic global-function fallback has an invalid resolved target");
+        }
+        return toBits(QoreValue());
+    }
+
+    std::vector<uint64_t> call_args(nargs + 1);
+    call_args[0] = base_bits;
+    if (nargs) {
+        std::copy(args, args + nargs, call_args.begin() + 1);
+    }
+
+    std::vector<uint64_t*> call_cleanups;
+    uint64_t** cleanup_ptr = nullptr;
+    if (arg_cleanups) {
+        call_cleanups.resize(nargs + 1, nullptr);
+        std::copy(arg_cleanups, arg_cleanups + nargs,
+            call_cleanups.begin() + 1);
+        cleanup_ptr = call_cleanups.data();
+    }
+
+    return variant
+        ? qore_rt_call_function_direct_impl(func, variant, pgm,
+            call_args.data(), cleanup_ptr, nargs + 1, xsink)
+        : qore_rt_call_function_dynamic_impl(func, pgm, call_args.data(),
+            cleanup_ptr, nargs + 1, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base(
+        const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
+        QoreProgram* pgm, uint64_t base_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_function_with_base_impl(func, variant, pgm, base_bits,
+        args, arg_cleanups, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    if (!ctx || !ctx->call_targets || slot < 0 || slot >= ctx->num_exprs) {
+        clearConsumedArgCleanups(arg_cleanups, std::max(nargs, 0), xsink);
+        if (xsink) {
+            xsink->raiseException("AOT-ERROR",
+                "synthetic global-function fallback has an invalid expression slot");
+        }
+        return toBits(QoreValue());
+    }
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    return qore_rt_call_function_with_base_impl(target.func, target.variant,
+        target.pgm, base_bits, args, arg_cleanups, nargs, xsink);
 }
 
 // Stack location for JIT/AOT-executed frames.

@@ -14334,6 +14334,11 @@ lvalue_path_unary_done:
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
                 if (direct_inst->pseudo) {
+                    const auto* synthetic_global_call =
+                        direct_inst->fallback_method_name
+                            && direct_inst->expr.hasNode()
+                        ? dynamic_cast<const FunctionCallNode*>(
+                            direct_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = direct_inst->method
                         ? direct_inst->method->getName()
@@ -14373,6 +14378,14 @@ lvalue_path_unary_done:
                             direct_inst->pseudo_arg1_known_assigned_int, intrinsic,
                             base, nanboxed_args, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.
+                    } else if (synthetic_global_call
+                            && synthetic_global_call->getFunction()) {
+                        called_external = true;
+                        res = fromBits(qore_rt_call_function_with_base(
+                            synthetic_global_call->getFunction(),
+                            synthetic_global_call->getVariant(),
+                            synthetic_global_call->getProgram(), toBits(base),
+                            nanboxed_args, nullptr, nargs, xsink));
                     } else if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,
@@ -14452,6 +14465,11 @@ lvalue_path_unary_done:
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
                 if (de_invoke_inst->pseudo) {
+                    const auto* synthetic_global_call =
+                        de_invoke_inst->fallback_method_name
+                            && de_invoke_inst->expr.hasNode()
+                        ? dynamic_cast<const FunctionCallNode*>(
+                            de_invoke_inst->expr.getInternalNode()) : nullptr;
                     // Fast-path optimizations for common pseudo-methods
                     const char* method_name = de_invoke_inst->method
                         ? de_invoke_inst->method->getName()
@@ -14491,6 +14509,14 @@ lvalue_path_unary_done:
                             de_invoke_inst->pseudo_arg1_known_assigned_int, intrinsic,
                             base, nanboxed_args, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.
+                    } else if (synthetic_global_call
+                            && synthetic_global_call->getFunction()) {
+                        called_external = true;
+                        res = fromBits(qore_rt_call_function_with_base(
+                            synthetic_global_call->getFunction(),
+                            synthetic_global_call->getVariant(),
+                            synthetic_global_call->getProgram(), toBits(base),
+                            nanboxed_args, nullptr, nargs, xsink));
                     } else if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,

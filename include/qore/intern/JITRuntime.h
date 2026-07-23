@@ -1212,6 +1212,18 @@ uint64_t qore_rt_call_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
 uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Calls a resolved function after prepending a pseudo-call base to its pre-evaluated arguments.
+//! Used when a synthetic global-function optimization must fall back to the original call semantics.
+uint64_t qore_rt_call_function_with_base(const QoreFunction* func,
+    const AbstractQoreFunctionVariant* variant, QoreProgram* pgm,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_call_function_with_base(): resolves the function from an expression slot.
+uint64_t qore_rt_call_function_with_base_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
 //! Direct function call with explicit generic type arguments.
 uint64_t qore_rt_call_function_direct_with_inst(const QoreFunction* func,
     const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, uint64_t* args,

@@ -48,6 +48,54 @@ int sub fusedRFind(string left, string middle, string right) {
     return join3(left, middle, right).rfind(middle);
 }
 
+int sub globalIndex(string value, string pattern) {
+    return index(value, pattern);
+}
+
+int sub globalRIndex(string value, string pattern) {
+    return rindex(value, pattern);
+}
+
+nothing sub observeString(reference<string> value) {
+}
+
+nothing sub clearString(reference<string> value) {
+    remove value;
+}
+
+int sub globalIndexAfterReference(string value, string pattern) {
+    observeString(\\value);
+    return index(value, pattern);
+}
+
+int sub globalRIndexAfterReference(string value, string pattern) {
+    observeString(\\value);
+    return rindex(value, pattern);
+}
+
+int sub globalIndexAfterReferenceProducedPattern(string value) {
+    observeString(\\value);
+    return index(value, join3(\"\", \".\", \"\"));
+}
+
+int sub globalIndexAfterReferenceInvoke(string value, string pattern) {
+    observeString(\\value);
+    try {
+        return index(value, pattern);
+    } catch (hash<auto> ex) {
+        return -100;
+    }
+}
+
+string sub globalIndexAfterClear(string value, string pattern) {
+    clearString(\\value);
+    try {
+        return string(index(value, pattern));
+    } catch (hash<auto> ex) {
+        return ex.err;
+    }
+}
+
 string sub fusedSubstr(string left, string middle, string right) {
     return join3(left, middle, right).substr(1, 3);
 }
@@ -192,6 +240,15 @@ try {
 }
 printf(\"%y\\n\", conversion_error);
 
+printf(\"%d:%d:%d:%d:%d:%d:%s\\n\",
+    globalIndex(\"a.b.c\", \".\"),
+    globalRIndex(\"a.b.c\", \".\"),
+    globalIndexAfterReference(\"a.b.c\", \".\"),
+    globalRIndexAfterReference(\"a.b.c\", \".\"),
+    globalIndexAfterReferenceProducedPattern(\"a.b.c\"),
+    globalIndexAfterReferenceInvoke(\"a.b.c\", \".\"),
+    globalIndexAfterClear(\"a.b.c\", \".\"));
+
 ExactStringFactory factory();
 printf(\"%y:%y:%y:%d:%d:%s:%d:%s:%y:%d:%s:%d\\n\",
     localStartsWith(left, middle, right),
@@ -255,6 +312,7 @@ if (enabled_compile
 string expected = "True:True:True:False:4:4:4:ré-:13:11:False:4:ré:1:True\n"
     + "True:True\n"
     + "True\n"
+    + "1:3:1:3:1:1:RUNTIME-OVERLOAD-ERROR\n"
     + "True:True:True:4:4:ré-:4:fin:True:4:ré-:11\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = backquote(sprintf(

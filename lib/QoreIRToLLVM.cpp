@@ -196,6 +196,12 @@ static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
         ? !strcmp(name, "strlen") : !strcmp(name, "length"));
 }
 
+static const FunctionCallNode* qore_ir_get_synthetic_global_pseudo_call(const QoreValue& expr,
+        bool pseudo, const char* fallback_method_name) {
+    return pseudo && fallback_method_name && expr.hasNode()
+        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+}
+
 static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
         bool base_never_nothing) {
     if (!base_never_nothing) {
@@ -16968,6 +16974,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
+            const FunctionCallNode* synthetic_global_call =
+                qore_ir_get_synthetic_global_pseudo_call(direct_inst->expr,
+                    direct_inst->pseudo, direct_inst->fallback_method_name);
 
             bool call_may_throw = true;
             bool call_may_modify_runtime_locals = true;
@@ -17172,6 +17181,48 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = safe_value_pseudo_helper.result_needs_cleanup;
+            } else if (synthetic_global_call) {
+                if (aot_mode) {
+                    QoreValue expr_val = direct_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot =
+                        const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_function_with_base_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, ptr_type,
+                             i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         base_boxed, args_array, arg_cleanups,
+                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    llvm::Value* func_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getFunction())),
+                        ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getVariant())),
+                        ptr_type);
+                    llvm::Value* pgm_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getProgram())),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_function_with_base",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, i64_type, ptr_type,
+                             ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {func_ptr, variant_ptr, pgm_ptr, base_boxed, args_array,
+                         arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
             } else if (aot_mode) {
                 QoreValue expr_val = direct_inst->expr;
                 uint64_t expr_bits;
@@ -17615,6 +17666,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? builder->CreateIntToPtr(
                     llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
                 : nullptr;
+            const FunctionCallNode* synthetic_global_call =
+                qore_ir_get_synthetic_global_pseudo_call(invoke_inst->expr,
+                    invoke_inst->pseudo, invoke_inst->fallback_method_name);
 
             bool call_may_throw = true;
             bool call_may_modify_runtime_locals = true;
@@ -17819,6 +17873,48 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_may_throw = false;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = safe_value_pseudo_helper.result_needs_cleanup;
+            } else if (synthetic_global_call) {
+                if (aot_mode) {
+                    QoreValue expr_val = invoke_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot =
+                        const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_function_with_base_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, ptr_type,
+                             i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         base_boxed, args_array, arg_cleanups,
+                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                } else {
+                    llvm::Value* func_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getFunction())),
+                        ptr_type);
+                    llvm::Value* variant_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getVariant())),
+                        ptr_type);
+                    llvm::Value* pgm_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(
+                                synthetic_global_call->getProgram())),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_call_function_with_base",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type, i64_type, ptr_type,
+                             ptr_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {func_ptr, variant_ptr, pgm_ptr, base_boxed, args_array,
+                         arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
+                         xsink_arg});
+                }
             } else if (aot_mode) {
                 QoreValue expr_val = invoke_inst->expr;
                 uint64_t expr_bits;
