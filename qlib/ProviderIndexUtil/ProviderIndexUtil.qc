@@ -73,6 +73,25 @@ public hashdecl ProviderIndexInfo {
     hash<auto> summary;
 }
 
+#! Internal context for reconstructing typed provider metadata
+hashdecl MetadataDeserializeContext {
+    TypedHash app_info_th;
+    TypedHash conn_opt_th;
+    TypedHash action_info_th;
+    TypedHash option_info_th;
+    TypedHash path_vars_th;
+    TypedHash dp_info_th;
+    TypedHash dp_opt_info_th;
+    TypedHash dp_exp_info_th;
+    TypedHash mapper_key_info_th;
+    TypedHash dp_msg_info_th;
+    TypedHash dp_sig_info_th;
+    TypedHash dp_arg_info_th;
+    hash<auto> type_map;
+    hash<auto> shape_map;
+    *hash<auto> ui_view_map;
+}
+
 #! The main utility class
 public class ProviderIndexUtil {
     public {}
@@ -99,11 +118,22 @@ public class ProviderIndexUtil {
         #! Condition for threads waiting for data provider index initialization
         static Condition init_cond();
 
-        #! Metadata initialization state
+        #! Serialized metadata retained until the corresponding app is requested
+        static hash<string, hash<auto>> raw_appinfomap;
+        static hash<string, hash<string, hash<auto>>> raw_actioninfomap;
+
+        #! Shared metadata deserialization context
+        static *hash<MetadataDeserializeContext> metadata_context;
         static bool metadata_initialized;
         static bool metadata_initializing;
         static *int metadata_initializing_tid;
         static Condition metadata_init_cond();
+
+        #! Per-app metadata materialization state
+        static hash<string, bool> app_metadata_initialized;
+        static hash<string, int> app_metadata_initializing;
+        static hash<string, bool> action_metadata_initialized;
+        static hash<string, int> action_metadata_initializing;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -115,7 +145,7 @@ public class ProviderIndexUtil {
 
     #! Returns a list of cached app info
     static *list<hash<auto>> getCachedApps() {
-        checkMetadataIndex();
+        checkAllAppMetadata();
         return index.appinfomap.values();
     }
 
@@ -126,7 +156,7 @@ public class ProviderIndexUtil {
         @return All cached applications that match the regular expression pattern in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppRegex(string regex_pattern, int regex_options = RE_Caseless) {
-        checkMetadataIndex();
+        checkAllAppMetadata();
         return map $1, index.appinfomap.values(),
             regex($1.name, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -139,7 +169,7 @@ public class ProviderIndexUtil {
         @return All cached applications that match the substring argument in the \c name or \c desc fields
     */
     static *list<hash<auto>> searchCachedAppSubstr(string substr, bool ignore_case = True) {
-        checkMetadataIndex();
+        checkAllAppMetadata();
         if (ignore_case) {
             substr = substr.upr();
 
@@ -151,19 +181,19 @@ public class ProviderIndexUtil {
 
     #! Try to return any cached app info for the given app
     static *hash<auto> tryGetAppInfo(string app) {
-        checkMetadataIndex();
+        checkAppMetadata(app);
         return index.appinfomap{app};
     }
 
     #! Try to return any cached approximate app action list for the given app
     static *list<hash<auto>> tryGetApproximateActionsForApp(string app) {
-        checkMetadataIndex();
+        checkActionMetadata(app);
         return index.actioninfomap{app}.values();
     }
 
     #! Try to return any cached approximate app action for the given app and action
     static *hash<auto> tryGetApproximateAppAction(string app, string action) {
-        checkMetadataIndex();
+        checkActionMetadata(app);
         return index.actioninfomap{app}{action};
     }
 
@@ -178,7 +208,7 @@ public class ProviderIndexUtil {
     */
     static *list<hash<auto>> searchCachedAppActionRegex(string app, string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkMetadataIndex();
+        checkActionMetadata(app);
         return map $1, index.actioninfomap{app}.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -193,7 +223,7 @@ public class ProviderIndexUtil {
         @note If the application is not cached, no results are returned
     */
     static *list<hash<auto>> searchCachedAppActionSubstr(string app, string substr, bool ignore_case = True) {
-        checkMetadataIndex();
+        checkActionMetadata(app);
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.actioninfomap{app}.values(),
@@ -211,7 +241,7 @@ public class ProviderIndexUtil {
     */
     static *list<hash<auto>> searchCachedActionRegex(string regex_pattern,
             int regex_options = RE_Caseless) {
-        checkMetadataIndex();
+        checkAllActionMetadata();
         return map $1, index.top_actioninfomap.values(),
             regex($1.short_desc, regex_pattern, regex_options) || regex($1.desc, regex_pattern, regex_options);
     }
@@ -223,7 +253,7 @@ public class ProviderIndexUtil {
         @return All cached actions that match the substring argument in the \c short_desc or \c desc fields
     */
     static *list<hash<auto>> searchCachedActionSubstr(string substr, bool ignore_case = True) {
-        checkMetadataIndex();
+        checkAllActionMetadata();
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.top_actioninfomap.values(),
@@ -237,22 +267,29 @@ public class ProviderIndexUtil {
     /** @return all cached actions
     */
     static *list<hash<auto>> getAllCachedActions() {
-        checkMetadataIndex();
+        checkAllActionMetadata();
         return index.top_actioninfomap.values();
     }
 
     #! Adds the given app and actions to the cache
     static addAppToCache(hash<auto> app) {
-        checkMetadataIndex();
         if (!app.name) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add app info to cache: app name is missing (%y)", app);
         }
+        checkAppMetadata(app.name);
+        m.lock();
+        on_exit m.unlock();
         index.appinfomap{app.name} = app;
+        remove raw_appinfomap{app.name};
+        app_metadata_initialized{app.name} = True;
     }
 
     #! Adds the given app and actions to the cache
     static addActionToCache(hash<auto> action) {
-        checkMetadataIndex();
+        checkAppMetadata(action.app);
+        checkActionMetadata(action.app);
+        m.lock();
+        on_exit m.unlock();
         if (!index.appinfomap{action.app}) {
             throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action for unknown app %y to cache", action.app);
         }
@@ -262,11 +299,16 @@ public class ProviderIndexUtil {
         }
         index.actioninfomap{action.app}{action.action} = action;
         index.top_actioninfomap{action.app + "/" + action.action} = action;
+        remove raw_actioninfomap{action.app};
+        action_metadata_initialized{action.app} = True;
     }
 
     #! Removes the given app and all its actions from the cache
     static bool removeCachedApp(string app) {
-        checkMetadataIndex();
+        checkAppMetadata(app);
+        checkActionMetadata(app);
+        m.lock();
+        on_exit m.unlock();
         if (!remove index.appinfomap{app}) {
             return False;
         }
@@ -426,7 +468,13 @@ public class ProviderIndexUtil {
 
         m.lock();
         on_exit m.unlock();
+        raw_appinfomap = {};
+        raw_actioninfomap = {};
         if (new_index) {
+            raw_appinfomap = new_index.appinfomap ?? {};
+            raw_actioninfomap = new_index.actioninfomap ?? {};
+            new_index.appinfomap = {};
+            new_index.actioninfomap = {};
             index = new_index;
         }
         initialized = True;
@@ -435,14 +483,12 @@ public class ProviderIndexUtil {
         init_cond.broadcast();
     }
 
-    #! Ensures that cached app and action metadata has been deserialized
-    static private checkMetadataIndex() {
-        checkDataIndex();
+    #! Ensures that the shared metadata deserialization context has been initialized
+    static private bool checkMetadataContext() {
         if (metadata_initialized) {
-            return;
+            return True;
         }
 
-        *hash<DataProviderIndexInfo> raw_index;
         {
             m.lock();
             on_exit m.unlock();
@@ -451,29 +497,20 @@ public class ProviderIndexUtil {
             }
 
             if (metadata_initialized) {
-                return;
+                return True;
             }
 
             if (metadata_initializing) {
-                return;
+                return False;
             }
 
             metadata_initializing = True;
             metadata_initializing_tid = gettid();
-            raw_index = index;
-            index = <DataProviderIndexInfo>{
-                "factorymap": raw_index.factorymap,
-                "appmap": raw_index.appmap,
-                "schememap": raw_index.schememap,
-                "appinfomap": {},
-                "actioninfomap": {},
-                "top_actioninfomap": {},
-            };
         }
 
-        *hash<DataProviderIndexInfo> new_index;
+        *hash<MetadataDeserializeContext> new_context;
         try {
-            new_index = deserializeDataProviderIndex(raw_index);
+            new_context = createMetadataDeserializeContext();
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -485,12 +522,200 @@ public class ProviderIndexUtil {
 
         m.lock();
         on_exit m.unlock();
-        if (new_index) {
-            index = new_index;
-        }
+        metadata_context = new_context;
         metadata_initialized = True;
         metadata_initializing = False;
         remove metadata_initializing_tid;
+        metadata_init_cond.broadcast();
+        return True;
+    }
+
+    #! Ensures that app metadata for the given app has been deserialized
+    static private checkAppMetadata(string app) {
+        checkDataIndex();
+        if (!initialized || app_metadata_initialized{app} || !checkMetadataContext()) {
+            return;
+        }
+
+        hash<auto> raw_info;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (exists app_metadata_initializing{app} && app_metadata_initializing{app} != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+            if (app_metadata_initialized{app} || exists app_metadata_initializing{app}) {
+                return;
+            }
+            if (!exists raw_appinfomap{app}) {
+                app_metadata_initialized{app} = True;
+                return;
+            }
+            app_metadata_initializing{app} = gettid();
+            raw_info = raw_appinfomap{app};
+        }
+
+        hash<auto> app_info;
+        try {
+            app_info = deserializeAppInfo(raw_info, metadata_context);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error deserializing app %y from the data provider index: %s",
+                app, get_exception_string(ex));
+            app_info = raw_info;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        index.appinfomap{app} = app_info;
+        remove raw_appinfomap{app};
+        app_metadata_initialized{app} = True;
+        remove app_metadata_initializing{app};
+        metadata_init_cond.broadcast();
+    }
+
+    #! Ensures that action metadata for the given app has been deserialized
+    static private checkActionMetadata(string app) {
+        checkDataIndex();
+        if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
+            return;
+        }
+
+        hash<string, hash<auto>> raw_actions;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (exists action_metadata_initializing{app} && action_metadata_initializing{app} != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+            if (action_metadata_initialized{app} || exists action_metadata_initializing{app}) {
+                return;
+            }
+            if (!exists raw_actioninfomap{app}) {
+                action_metadata_initialized{app} = True;
+                return;
+            }
+            action_metadata_initializing{app} = gettid();
+            raw_actions = raw_actioninfomap{app};
+        }
+
+        hash<auto> action_map;
+        try {
+            action_map = deserializeActionsWithContext({app: raw_actions}, metadata_context);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error deserializing actions for app %y from the data provider "
+                "index: %s", app, get_exception_string(ex));
+            action_map{app} = raw_actions;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        index.actioninfomap{app} = action_map{app} ?? {};
+        foreach hash<auto> action in (index.actioninfomap{app}.pairIterator()) {
+            index.top_actioninfomap{app + "/" + action.key} = action.value;
+        }
+        remove raw_actioninfomap{app};
+        action_metadata_initialized{app} = True;
+        remove action_metadata_initializing{app};
+        metadata_init_cond.broadcast();
+    }
+
+    #! Ensures that all app metadata has been deserialized
+    static private checkAllAppMetadata() {
+        checkDataIndex();
+        if (!initialized || !checkMetadataContext()) {
+            return;
+        }
+
+        hash<string, hash<auto>> raw_apps;
+        list<string> apps;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (app_metadata_initializing.size()) {
+                foreach int tid in (app_metadata_initializing.iterator()) {
+                    if (tid == gettid()) {
+                        return;
+                    }
+                }
+                metadata_init_cond.wait(m);
+            }
+            apps = keys raw_appinfomap;
+            if (!apps) {
+                return;
+            }
+            int tid = gettid();
+            map app_metadata_initializing{$1} = tid, apps.iterator();
+            raw_apps = raw_appinfomap;
+        }
+
+        hash<string, hash<auto>> app_map;
+        try {
+            app_map = map {
+                $1.key: deserializeAppInfo($1.value, metadata_context),
+            }, raw_apps.pairIterator();
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error deserializing apps from the data provider index: %s",
+                get_exception_string(ex));
+            app_map = raw_apps;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        index.appinfomap += app_map;
+        raw_appinfomap = {};
+        map app_metadata_initialized{$1} = True, apps.iterator();
+        app_metadata_initializing = {};
+        metadata_init_cond.broadcast();
+    }
+
+    #! Ensures that all action metadata has been deserialized
+    static private checkAllActionMetadata() {
+        checkDataIndex();
+        if (!initialized || !checkMetadataContext()) {
+            return;
+        }
+
+        hash<string, hash<string, hash<auto>>> raw_actions;
+        list<string> apps;
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (action_metadata_initializing.size()) {
+                foreach int tid in (action_metadata_initializing.iterator()) {
+                    if (tid == gettid()) {
+                        return;
+                    }
+                }
+                metadata_init_cond.wait(m);
+            }
+            apps = keys raw_actioninfomap;
+            if (!apps) {
+                return;
+            }
+            int tid = gettid();
+            map action_metadata_initializing{$1} = tid, apps.iterator();
+            raw_actions = raw_actioninfomap;
+        }
+
+        hash<auto> action_map;
+        try {
+            action_map = deserializeActionsWithContext(raw_actions, metadata_context);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error deserializing actions from the data provider index: %s",
+                get_exception_string(ex));
+            action_map = raw_actions;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        index.actioninfomap += action_map;
+        foreach hash<auto> app_actions in (action_map.pairIterator()) {
+            map index.top_actioninfomap{app_actions.key + "/" + $1.key} = $1.value,
+                app_actions.value.pairIterator();
+        }
+        raw_actioninfomap = {};
+        map action_metadata_initialized{$1} = True, apps.iterator();
+        action_metadata_initializing = {};
         metadata_init_cond.broadcast();
     }
 
@@ -546,61 +771,76 @@ public class ProviderIndexUtil {
             return;
         }
 
-        # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
-        load_module("DataProvider");
-        load_module("MapperUtil");
-        # get app info typed hash object
-        TypedHash app_info_th = TypedHash::forName("DataProvider::DataProviderAppInfo");
-        # get action typed hash objects
-        TypedHash action_info_th = TypedHash::forName("DataProvider::DataProviderActionInfo");
-        TypedHash option_info_th = TypedHash::forName("DataProvider::ActionOptionInfo");
-        TypedHash path_vars_th = TypedHash::forName("DataProvider::DataProviderPathVarInfo");
-        TypedHash dp_info_th = TypedHash::forName("DataProvider::DataProviderInfo");
-        TypedHash dp_opt_info_th = TypedHash::forName("DataProvider::DataProviderOptionInfo");
-        TypedHash dp_exp_info_th = TypedHash::forName("DataProvider::DataProviderExpressionInfo");
-        TypedHash mapper_key_info_th = TypedHash::forName("Mapper::MapperRuntimeKeyInfo");
-        TypedHash dp_msg_info_th = TypedHash::forName("DataProvider::DataProviderMessageInfo");
-        TypedHash dp_sig_info_th = TypedHash::forName("DataProvider::DataProviderSignatureTypeInfo");
-        TypedHash dp_arg_info_th = TypedHash::forName("DataProvider::DataProviderArgInfo");
-        # get the AbstractDataProviderTypeMap value
-        hash<auto> type_map = Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue();
-        hash<auto> shape_map = getDataProviderShapeMap();
-        # get the UiOptionViewMap for enum deserialization
-        *hash<auto> ui_view_map = Constant::forName("DataProvider::UiOptionViewMap").getValue();
+        hash<MetadataDeserializeContext> ctx = createMetadataDeserializeContext();
 
         try {
             if (rv.appinfomap) {
-                TypedHash conn_opt_th = TypedHash::forName("ConnectionProvider::ConnectionOptionInfo");
                 rv.appinfomap = map {
-                    $1.key: app_info_th.doCast($1.value + (
-                        $1.value.connection_options
-                        ? {
-                            "connection_options": map {
-                                $1.key: conn_opt_th.doCast($1.value + {
-                                    "allowed_values": (map cast<hash<AllowedValueInfo>>($1),
-                                        $1.value.allowed_values),
-                                    "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
-                                        $1.value.element_allowed_values),
-                                }),
-                            }, $1.value.connection_options.pairIterator(),
-                        }
-                        : {}
-                    )),
+                    $1.key: deserializeAppInfo($1.value, ctx),
                 }, rv.appinfomap.pairIterator();
             }
             if (rv.actioninfomap) {
-                rv.actioninfomap = deserializeActions(rv.actioninfomap, action_info_th, option_info_th, path_vars_th,
-                    dp_info_th, dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th, dp_sig_info_th,
-                    dp_arg_info_th, type_map, shape_map, ui_view_map);
+                rv.actioninfomap = deserializeActionsWithContext(rv.actioninfomap, ctx);
                 foreach hash<auto> i in (rv.actioninfomap.pairIterator()) {
                     map rv.top_actioninfomap{i.key + "/" + $1.key} = $1.value, i.value.pairIterator();
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
-            #log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s: %s", ex.err, ex.desc);
         }
         return rv;
+    }
+
+    #! Creates the shared context used to reconstruct typed provider metadata
+    static private hash<MetadataDeserializeContext> createMetadataDeserializeContext() {
+        # dynamically load the DataProvider module; cannot be required or it would cause a circular dependency
+        load_module("DataProvider");
+        load_module("MapperUtil");
+
+        return <MetadataDeserializeContext>{
+            "app_info_th": TypedHash::forName("DataProvider::DataProviderAppInfo"),
+            "conn_opt_th": TypedHash::forName("ConnectionProvider::ConnectionOptionInfo"),
+            "action_info_th": TypedHash::forName("DataProvider::DataProviderActionInfo"),
+            "option_info_th": TypedHash::forName("DataProvider::ActionOptionInfo"),
+            "path_vars_th": TypedHash::forName("DataProvider::DataProviderPathVarInfo"),
+            "dp_info_th": TypedHash::forName("DataProvider::DataProviderInfo"),
+            "dp_opt_info_th": TypedHash::forName("DataProvider::DataProviderOptionInfo"),
+            "dp_exp_info_th": TypedHash::forName("DataProvider::DataProviderExpressionInfo"),
+            "mapper_key_info_th": TypedHash::forName("Mapper::MapperRuntimeKeyInfo"),
+            "dp_msg_info_th": TypedHash::forName("DataProvider::DataProviderMessageInfo"),
+            "dp_sig_info_th": TypedHash::forName("DataProvider::DataProviderSignatureTypeInfo"),
+            "dp_arg_info_th": TypedHash::forName("DataProvider::DataProviderArgInfo"),
+            "type_map": Constant::forName("DataProvider::AbstractDataProviderTypeMap").getValue(),
+            "shape_map": getDataProviderShapeMap(),
+            "ui_view_map": Constant::forName("DataProvider::UiOptionViewMap").getValue(),
+        };
+    }
+
+    #! Reconstructs one typed app metadata hash
+    static private hash<auto> deserializeAppInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+        return ctx.app_info_th.doCast(info + (
+            info.connection_options
+            ? {
+                "connection_options": map {
+                    $1.key: ctx.conn_opt_th.doCast($1.value + {
+                        "allowed_values": (map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values),
+                        "element_allowed_values": (map cast<hash<AllowedValueInfo>>($1),
+                            $1.value.element_allowed_values),
+                    }),
+                }, info.connection_options.pairIterator(),
+            }
+            : {}
+        ));
+    }
+
+    #! Reconstructs typed action metadata using a prepared context
+    static private hash<auto> deserializeActionsWithContext(
+            hash<string, hash<string, hash<auto>>> actioninfomap,
+            hash<MetadataDeserializeContext> ctx) {
+        return deserializeActions(actioninfomap, ctx.action_info_th, ctx.option_info_th, ctx.path_vars_th,
+            ctx.dp_info_th, ctx.dp_opt_info_th, ctx.dp_exp_info_th, ctx.mapper_key_info_th,
+            ctx.dp_msg_info_th, ctx.dp_sig_info_th, ctx.dp_arg_info_th, ctx.type_map,
+            ctx.shape_map, ctx.ui_view_map);
     }
 
     #! Deserialize action options

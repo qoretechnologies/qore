@@ -50,12 +50,25 @@ public class DataProviderAOTTest inherits QUnit::Test {
         }
 
         ProviderIndexUtil::setEnvironmentVariable(dir);
+        string indexed_app = "QoreTestIndexedApp";
+        string indexed_action = "indexed-action";
         ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
             "factorymap": {},
             "appmap": {},
             "schememap": {},
-            "appinfomap": {},
-            "actioninfomap": {},
+            "appinfomap": {
+                indexed_app: {
+                    "name": indexed_app,
+                },
+            },
+            "actioninfomap": {
+                indexed_app: {
+                    indexed_action: {
+                        "app": indexed_app,
+                        "action": indexed_action,
+                    },
+                },
+            },
             "top_actioninfomap": {},
         }, 0s, {});
 
@@ -74,9 +87,12 @@ public class DataProviderAOTTest inherits QUnit::Test {
             background sub () {
                 on_exit metadata_cnt.dec();
                 try {
-                    *list<hash<auto>> apps = ProviderIndexUtil::getCachedApps();
-                    if (apps && apps.size()) {
-                        throw "PROVIDER-INDEX-TEST-ERROR", sprintf("expected no cached apps; got %d", apps.size());
+                    *hash<auto> app_info = ProviderIndexUtil::tryGetAppInfo(indexed_app);
+                    *hash<auto> action_info =
+                        ProviderIndexUtil::tryGetApproximateAppAction(indexed_app, indexed_action);
+                    if (app_info.name != indexed_app || action_info.action != indexed_action) {
+                        throw "PROVIDER-INDEX-TEST-ERROR", sprintf("incomplete app/action metadata: %y / %y",
+                            app_info, action_info);
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(metadata_mutex);
@@ -86,6 +102,8 @@ public class DataProviderAOTTest inherits QUnit::Test {
         }
         assertEq(0, metadata_cnt.waitForZero(10s), "concurrent metadata reads completed");
         assertEq((), metadata_failures, "concurrent metadata reads returned complete results");
+        assertEq(indexed_action, ProviderIndexUtil::getAllCachedActions()[0].action,
+            "per-app materialization populates the top-level action cache");
 
         list<string> after = DataProvider::getTypeCache().listRegisteredTypes();
         hash<string, bool> after_map = map {$1: True}, after;
