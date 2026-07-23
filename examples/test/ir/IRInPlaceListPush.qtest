@@ -225,11 +225,11 @@ string sub runAot(string suffix, string env, bool expect_effect_refinement) {
         && compile_out
             =~ /IR-OPT-AOT-EFFECTS: noescapeClosurePush[^\n]*:.*inplace-push=1/;
     bool has_unsafe_refinement = compile_out
-            =~ /IR-OPT-AOT-EFFECTS: [^\n]*escapingMethodPush[^\n]*:/
+            =~ /IR-OPT-AOT-EFFECTS: [^\n]*escapingMethodPush[^\n]*:.*inplace-push=[1-9]/
         || compile_out
-            =~ /IR-OPT-AOT-EFFECTS: escapingClosurePush[^\n]*:/
+            =~ /IR-OPT-AOT-EFFECTS: escapingClosurePush[^\n]*:.*inplace-push=[1-9]/
         || compile_out
-            =~ /IR-OPT-AOT-EFFECTS: referenceClosureCallPush[^\n]*:/;
+            =~ /IR-OPT-AOT-EFFECTS: referenceClosureCallPush[^\n]*:.*inplace-push=[1-9]/;
     if (has_effect_refinement != expect_effect_refinement || has_unsafe_refinement) {
         printf("unexpected AOT effect refinement (%y):\n%s", expect_effect_refinement, compile_out);
         exit(2);
