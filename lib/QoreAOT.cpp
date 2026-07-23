@@ -16117,6 +16117,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         size_t native_specializations = 0;
         size_t boxed_specializations = 0;
         size_t collection_specializations = 0;
+        size_t cross_block_boxed_facts = 0;
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS")) {
+            cross_block_boxed_facts =
+                qore_ir_propagate_exact_boxed_local_facts(func);
+        }
         if (!std::getenv("QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
             boxed_specializations =
                 qore_ir_specialize_proven_boxed_operations(func);
@@ -16134,7 +16140,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 || aggregate_projections
                 || boxed_return_calls
                 || changed
-                || string_consumers || boxed_specializations
+                || string_consumers || cross_block_boxed_facts
+                || boxed_specializations
                 || collection_specializations
                 || native_specializations)
                 && std::getenv("QORE_IR_OPT_STATS")) {
@@ -16146,6 +16153,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu"
+                " cross-block-boxed-facts=%zu"
                 " boxed-specializations=%zu"
                 " collection-specializations=%zu"
                 " native-specializations=%zu\n",
@@ -16153,7 +16161,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
-                string_consumers, boxed_specializations,
+                string_consumers, cross_block_boxed_facts,
+                boxed_specializations,
                 collection_specializations,
                 native_specializations);
         }

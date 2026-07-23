@@ -10866,6 +10866,353 @@ size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
     return imported;
 }
 
+size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
+    if (func.blocks.empty() || func.has_opaque_ast_local_access) {
+        return 0;
+    }
+    QoreIRControlFlowGraph cfg(func);
+    if (cfg.cancelled) {
+        return 0;
+    }
+
+    auto exact_boxed_type = [](const QoreIRValueFacts* facts)
+            -> const QoreTypeInfo* {
+        if (!facts
+                || facts->assigned_state
+                    != QoreIRAssignedState::Assigned
+                || facts->representation
+                    != QoreIRValueRepresentation::Boxed
+                || !facts->never_nothing) {
+            return nullptr;
+        }
+        for (const QoreTypeInfo* type : {stringTypeInfo, listTypeInfo,
+                hashTypeInfo, binaryTypeInfo, dateTypeInfo,
+                objectTypeInfo, numberTypeInfo}) {
+            if (facts->type_info == type) {
+                return type;
+            }
+        }
+        return nullptr;
+    };
+    auto local_accepts_type = [](const LocalVar* local,
+            const QoreTypeInfo* exact_type) {
+        const QoreTypeInfo* declared = local
+            ? qore_get_value_type(local->getTypeInfo()) : nullptr;
+        if (!declared || !exact_type) {
+            return false;
+        }
+        qore_type_t kind = exact_type == stringTypeInfo ? NT_STRING
+            : exact_type == listTypeInfo ? NT_LIST
+            : exact_type == hashTypeInfo ? NT_HASH
+            : exact_type == binaryTypeInfo ? NT_BINARY
+            : exact_type == dateTypeInfo ? NT_DATE
+            : exact_type == objectTypeInfo ? NT_OBJECT
+            : exact_type == numberTypeInfo ? NT_NUMBER : NT_ALL;
+        return kind != NT_ALL && QoreTypeInfo::isType(declared, kind);
+    };
+
+    using LocalFacts =
+        std::unordered_map<const LocalVar*, const QoreTypeInfo*>;
+    std::unordered_set<const LocalVar*> universe;
+    std::unordered_map<uint32_t, const LocalVar*> load_locals;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR exact boxed local block candidate analysis")) {
+            return 0;
+        }
+        for (const auto& inst_ptr : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR exact boxed local candidate analysis")) {
+                return 0;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (!inst || (inst->opcode != QoreIROpcode::LoadLocal
+                    && inst->opcode != QoreIROpcode::StoreLocal
+                    && inst->opcode != QoreIROpcode::InstantiateLocal
+                    && inst->opcode != QoreIROpcode::UninstantiateLocal)) {
+                continue;
+            }
+            const auto* local_inst =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            const LocalVar* local = local_inst->local;
+            if (!local || local->closureUse()
+                    || QoreTypeInfo::isReference(local->getTypeInfo())) {
+                continue;
+            }
+            bool eligible = false;
+            for (const QoreTypeInfo* type : {stringTypeInfo, listTypeInfo,
+                    hashTypeInfo, binaryTypeInfo, dateTypeInfo,
+                    objectTypeInfo, numberTypeInfo}) {
+                if (local_accepts_type(local, type)) {
+                    eligible = true;
+                    break;
+                }
+            }
+            if (!eligible) {
+                continue;
+            }
+            universe.insert(local);
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    && inst->result.isValid()) {
+                load_locals.emplace(inst->result.id, local);
+            }
+        }
+    }
+    if (universe.empty()) {
+        return 0;
+    }
+
+    auto pseudo_read_only = [&](const QoreIRInstruction* inst,
+            const LocalFacts& known) {
+        if (!inst || inst->operands.empty()) {
+            return false;
+        }
+        bool pseudo = false;
+        bool has_ref_args = true;
+        QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
+        if (inst->opcode == QoreIROpcode::DotEvalMethodDirect) {
+            const auto* call = static_cast<const
+                QoreIRDotEvalMethodDirectInstruction*>(inst);
+            pseudo = call->pseudo;
+            has_ref_args = call->has_ref_args;
+            intrinsic = call->intrinsic;
+        } else if (inst->opcode
+                == QoreIROpcode::InvokeDotEvalMethodDirect) {
+            const auto* call = static_cast<const
+                QoreIRInvokeDotEvalMethodDirectInstruction*>(inst);
+            pseudo = call->pseudo;
+            has_ref_args = call->has_ref_args;
+            intrinsic = call->intrinsic;
+        }
+        if (!pseudo || has_ref_args) {
+            return false;
+        }
+        auto loaded = load_locals.find(inst->operands[0].id);
+        auto fact = loaded == load_locals.end()
+            ? known.end() : known.find(loaded->second);
+        if (fact == known.end() || !fact->second) {
+            return false;
+        }
+        if (fact->second == stringTypeInfo) {
+            return qore_ir_is_read_only_string_intrinsic(intrinsic);
+        }
+        if (fact->second == listTypeInfo) {
+            return intrinsic == QoreIRIntrinsic::Size
+                || intrinsic == QoreIRIntrinsic::Empty
+                || intrinsic == QoreIRIntrinsic::Val
+                || intrinsic == QoreIRIntrinsic::ListFirst
+                || intrinsic == QoreIRIntrinsic::ListLast;
+        }
+        return fact->second == binaryTypeInfo
+            && (intrinsic == QoreIRIntrinsic::Size
+                || intrinsic == QoreIRIntrinsic::Empty
+                || intrinsic == QoreIRIntrinsic::Val);
+    };
+    auto transfer_instruction = [&](const QoreIRInstruction* inst,
+            LocalFacts& known) -> bool {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR exact boxed local fact transfer")) {
+            return false;
+        }
+        if (inst->opcode == QoreIROpcode::StoreLocal) {
+            const auto* store =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!store->local || !universe.count(store->local)
+                    || store->operands.size() != 1 || store->weak
+                    || store->is_ref || store->is_closure) {
+                if (store->local) {
+                    known.erase(store->local);
+                }
+                return true;
+            }
+            const QoreTypeInfo* type = exact_boxed_type(
+                func.getValueFacts(store->operands[0]));
+            if (local_accepts_type(store->local, type)) {
+                known[store->local] = type;
+            } else {
+                known.erase(store->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::InstantiateLocal
+                || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+            const auto* local =
+                static_cast<const QoreIRLocalInstruction*>(inst);
+            if (local->local) {
+                known.erase(local->local);
+            }
+            return true;
+        }
+        if (inst->opcode == QoreIROpcode::LoadLocal
+                || pseudo_read_only(inst, known)) {
+            return true;
+        }
+
+        bool has_ref_args = true;
+        const AbstractQoreFunctionVariant* callee =
+            qore_ir_get_resolved_effect_callee(inst, has_ref_args);
+        bool direct_call = inst->opcode == QoreIROpcode::CallDirect
+            || inst->opcode == QoreIROpcode::CallStaticDirect
+            || inst->opcode == QoreIROpcode::CallMethodDirect
+            || inst->opcode == QoreIROpcode::InvokeMethodDirect
+            || inst->opcode == QoreIROpcode::CallClosureDirect;
+        if (direct_call && (!callee || has_ref_args)) {
+            known.clear();
+            return true;
+        }
+        if (!direct_call
+                && qore_ir_instruction_may_invalidate_caller_caches(
+                    func, inst)) {
+            const LocalVar* written = qore_ir_get_written_local(inst);
+            if (written) {
+                known.erase(written);
+            } else {
+                known.clear();
+            }
+        }
+        return true;
+    };
+    auto transfer_block = [&](size_t block_id, LocalFacts& known) {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!transfer_instruction(inst.get(), known)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    auto intersect = [&](LocalFacts& lhs, const LocalFacts& rhs) {
+        size_t local_count = 0;
+        for (auto it = lhs.begin(); it != lhs.end();) {
+            if (++local_count % 100 == 0
+                    && qore_ir_analysis_cancelled(check_count,
+                        "IR exact boxed local fact intersection")) {
+                return false;
+            }
+            auto other = rhs.find(it->first);
+            if (it->second == nullptr) {
+                if (other == rhs.end()) {
+                    it = lhs.erase(it);
+                } else {
+                    it->second = other->second;
+                    ++it;
+                }
+            } else if (other == rhs.end()) {
+                it = lhs.erase(it);
+            } else if (other->second != nullptr
+                    && other->second != it->second) {
+                it = lhs.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        return true;
+    };
+
+    LocalFacts top;
+    for (const LocalVar* local : universe) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR exact boxed local lattice initialization")) {
+            return 0;
+        }
+        top.emplace(local, nullptr);
+    }
+    std::vector<LocalFacts> in(func.blocks.size());
+    std::vector<LocalFacts> out(func.blocks.size(), top);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR exact boxed local fact fixed-point analysis")) {
+                return 0;
+            }
+            if (!cfg.reachable[block_id]) {
+                continue;
+            }
+            LocalFacts next;
+            bool have_predecessor = block_id == 0;
+            if (block_id) {
+                for (size_t predecessor : cfg.predecessors[block_id]) {
+                    if (qore_ir_analysis_cancelled(check_count,
+                            "IR exact boxed local predecessor analysis")) {
+                        return 0;
+                    }
+                    if (!cfg.reachable[predecessor]) {
+                        continue;
+                    }
+                    if (!have_predecessor) {
+                        next = out[predecessor];
+                        have_predecessor = true;
+                    } else if (!intersect(next, out[predecessor])) {
+                        return 0;
+                    }
+                }
+            }
+            if (!have_predecessor) {
+                next.clear();
+            }
+            in[block_id] = next;
+            if (!transfer_block(block_id, next)) {
+                return 0;
+            }
+            if (out[block_id] != next) {
+                out[block_id] = std::move(next);
+                changed = true;
+            }
+        }
+    }
+
+    size_t propagated = 0;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR exact boxed local annotation block analysis")) {
+            return propagated;
+        }
+        if (!cfg.reachable[block_id]) {
+            continue;
+        }
+        LocalFacts known = in[block_id];
+        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR exact boxed local fact annotation")) {
+                return propagated;
+            }
+            const QoreIRInstruction* inst = inst_ptr.get();
+            if (inst->opcode == QoreIROpcode::LoadLocal
+                    && inst->result.isValid()) {
+                const auto* load =
+                    static_cast<const QoreIRLocalInstruction*>(inst);
+                auto fact = known.find(load->local);
+                if (fact != known.end() && fact->second) {
+                    QoreIRValueFacts next;
+                    next.type_info = fact->second;
+                    next.assigned_state = QoreIRAssignedState::Assigned;
+                    next.representation =
+                        QoreIRValueRepresentation::Boxed;
+                    next.never_nothing = true;
+                    const QoreIRValueFacts* current =
+                        func.getValueFacts(inst->result);
+                    if (!current || current->type_info != next.type_info
+                            || current->assigned_state
+                                != next.assigned_state
+                            || current->representation
+                                != next.representation
+                            || current->never_nothing
+                                != next.never_nothing) {
+                        func.setValueFacts(inst->result, next);
+                        ++propagated;
+                    }
+                }
+            }
+            if (!transfer_instruction(inst, known)) {
+                return propagated;
+            }
+        }
+    }
+    return propagated;
+}
+
 size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
     size_t specialized = 0;
     size_t check_count = 0;
