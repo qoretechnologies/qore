@@ -140,8 +140,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v10: callable generic type-parameter declarations are preserved in variant signatures
 //! v11: all serialized source line numbers use signed 32-bit values
 //! v12: whole-body and sectioned Zstandard metadata compression are supported
+//! v13: lazy debugger IR is stored in a separate section referenced by SLOT_MAPS ranges
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 12;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 13;
+//! First format version storing lazy debugger IR in a separate section.
+constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
 
 constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
@@ -185,7 +188,7 @@ constexpr uint64_t QORE_AOT_FEAT_LIST_SELECTOR_RANGE = 1ULL << 22; //!< ListInde
 constexpr uint64_t QORE_AOT_FEAT_ENTRY_STMT_LINES = 1ULL << 23; //!< per-variant function-entry StatementBlock start/end line pair follows signature lines
 constexpr uint64_t QORE_AOT_FEAT_PARSE_REF_TYPE = 1ULL << 24; //!< PARSE_REF records include the parse-time reference type path before the lvalue expression
 constexpr uint64_t QORE_AOT_FEAT_STMT_LOC_TABLE = 1ULL << 25; //!< SLOT_MAPS entries may carry source-stripped metadata-only statement locations
-constexpr uint64_t QORE_AOT_FEAT_DEBUG_IR = 1ULL << 26; //!< SLOT_MAPS entries may carry full function IR for source-stripped debugging
+constexpr uint64_t QORE_AOT_FEAT_DEBUG_IR = 1ULL << 26; //!< Function metadata carries full IR for source-stripped debugging
 constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_ARGS = 1ULL << 27; //!< inline SELF_METHOD_CALL expression payloads include serialized argument expressions
 constexpr uint64_t QORE_AOT_FEAT_BODY_LOCAL_SLOT = 1ULL << 28; //!< body-local records include their local slot id for duplicate-name disambiguation
 constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records include source line ranges for parent-constructor argument callstacks
@@ -255,6 +258,7 @@ enum class QoreAOTSectionType : uint16_t {
     PLUGIN_HELPER_REFS   = 25,  //!< AOT plugin helper slot refs to plugin imports
     SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
+    DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.

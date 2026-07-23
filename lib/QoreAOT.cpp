@@ -1732,6 +1732,7 @@ static bool finalizeAOTSectionedMetadataCompression(std::vector<uint8_t>& metada
 
         const uint8_t* section_data = metadata.data() + data_area_pos + offset;
         bool compress_section = type == static_cast<uint16_t>(QoreAOTSectionType::SLOT_MAPS)
+            || type == static_cast<uint16_t>(QoreAOTSectionType::DEBUG_IR)
             || type == static_cast<uint16_t>(QoreAOTSectionType::SYMBOL_INDEX);
         if (compress_section && size) {
             std::vector<uint8_t> input(section_data, section_data + size);

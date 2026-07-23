@@ -1450,6 +1450,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::PLUGIN_HELPER_REFS: return "PLUGIN_HELPER_REFS";
         case QoreAOTSectionType::SYMBOL_INDEX: return "SYMBOL_INDEX";
         case QoreAOTSectionType::CALL_RELOCATIONS: return "CALL_RELOCATIONS";
+        case QoreAOTSectionType::DEBUG_IR: return "DEBUG_IR";
     }
     return "UNKNOWN";
 }

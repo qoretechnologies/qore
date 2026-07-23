@@ -205,10 +205,12 @@ struct QoreAOTContext {
 
     //! Shared serialized AOT metadata used to lazily materialize debug IR.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
-    //! Offset of this function's debug IR payload from the start of the SLOT_MAPS section.
-    uint32_t debug_ir_slot_map_offset = 0;
+    //! Offset of this function's debug IR payload from its containing metadata section.
+    uint32_t debug_ir_offset = 0;
     //! Serialized debug IR payload size. Zero means no lazy debug IR is available.
     uint32_t debug_ir_size = 0;
+    //! True when debug_ir_offset addresses the separately compressed DEBUG_IR section.
+    bool debug_ir_separate_section = false;
 
     //! Owned IR function kept alive for LValuePath instruction pointers.
     //! LValuePath instructions reference path data in the IR function; the function must

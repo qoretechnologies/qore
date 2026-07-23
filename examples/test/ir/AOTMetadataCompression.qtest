@@ -13,7 +13,7 @@ string source_path = "/tmp/qore-aot-metadata-compression-" + string(getpid()) + 
 {
     File source();
     source.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
-    source.write("%modern\nprintf(\"compression-ok\\n\");\n");
+    source.write("%modern\nint sub answer() { return 42; }\nprintf(\"%d\\n\", answer());\n");
 }
 
 foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
@@ -29,14 +29,15 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
 
     string execution_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
         libqore_dir, exe_path));
-    if (execution_out != "compression-ok\n") {
+    if (execution_out != "42\n") {
         printf("%s metadata execution mismatch:\n%s", mode, execution_out);
         unlink(source_path);
         unlink(exe_path);
         exit(2);
     }
 
-    string dump_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-info %s 2>&1",
+    string dump_out = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s --dump-info --dump-sections %s 2>&1",
         libqore_dir, qcc_bin, exe_path));
     bool expected_compression = mode == "none"
         ? !(dump_out =~ /bytes compressed/)
@@ -47,6 +48,15 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
                 : dump_out =~ /bytes compressed \(zstd\)/));
     if (!expected_compression) {
         printf("%s metadata dump mismatch:\n%s", mode, dump_out);
+        unlink(source_path);
+        unlink(exe_path);
+        exit(2);
+    }
+    *list<string> debug_section =
+        dump_out =~ x/DEBUG_IR\s+type=28\s+offset=\d+\s+size=(\d+)/;
+    if (!(dump_out =~ /format: 13 \(current 13\)/)
+            || !debug_section || debug_section[0].toInt() <= 4) {
+        printf("%s split debug IR metadata mismatch:\n%s", mode, dump_out);
         unlink(source_path);
         unlink(exe_path);
         exit(2);

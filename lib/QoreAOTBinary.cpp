@@ -12385,6 +12385,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
     // Number of function entries
     writer.writeU32(static_cast<uint32_t>(funcs.size()));
 
+    struct DebugIRPatch {
+        uint32_t offset_pos;
+        uint32_t size_pos;
+    };
+    std::vector<DebugIRPatch> debug_ir_patches;
+    const bool has_debug_ir = (writer.feature_flags & QORE_AOT_FEAT_DEBUG_IR) != 0;
+    if (has_debug_ir) {
+        debug_ir_patches.reserve(funcs.size());
+    }
+
     for (auto& func : funcs) {
         AOTConstantReverseMap filtered_crm;
         const AOTConstantReverseMap* func_const_reverse_map =
@@ -12690,14 +12700,54 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         }
         traceEntryOffset("after stmt-loc table");
 
-        // Full function IR for source-stripped debug execution.  This is not
-        // source fallback: it is the same lowered IR used for AOT codegen,
-        // interpreted only when DebugProgram attaches to an AOT-only variant.
-        if (func.debug_ir) {
-            writer.writeU8(1);
-            traceEntryOffset("after debug-ir flag");
+        // Keep only a range reference in the registration-critical slot map.
+        // The payload is serialized into DEBUG_IR after this section so normal
+        // module loading never has to decompress debugger-only data.
+        if (has_debug_ir) {
+            uint32_t offset_pos = writer.position();
+            writer.writeU32(0);
             uint32_t size_pos = writer.position();
             writer.writeU32(0);
+            debug_ir_patches.push_back({offset_pos, size_pos});
+            traceEntryOffset("after debug-ir range");
+        }
+
+        // Patch the entry size field
+        uint32_t entry_end_pos = writer.position();
+        writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
+        traceEntryOffset("entry end");
+    }
+
+    writer.endSection(sec_idx);
+
+    if (has_debug_ir) {
+        assert(debug_ir_patches.size() == funcs.size());
+        uint32_t debug_section_start = writer.position();
+        uint32_t debug_sec_idx = writer.beginSection(QoreAOTSectionType::DEBUG_IR);
+        writer.writeU32(static_cast<uint32_t>(funcs.size()));
+        for (size_t i = 0; i < funcs.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT debug IR serialization")) {
+                error = "operation cancelled during AOT debug IR serialization";
+                return false;
+            }
+            const auto& func = funcs[i];
+            if (!func.debug_ir) {
+                continue;
+            }
+
+            AOTConstantReverseMap filtered_crm;
+            const AOTConstantReverseMap* func_const_reverse_map =
+                func.const_reverse_map_override ? func.const_reverse_map_override.get() : const_reverse_map;
+            if (!func.const_reverse_map_override && const_reverse_map
+                    && (!func.const_reverse_map_exclude_fqns.empty()
+                    || !func.const_reverse_map_exclude_direct_fqn.empty())) {
+                filtered_crm = aot_filter_constant_reverse_map(*const_reverse_map,
+                    func.const_reverse_map_exclude_fqns, func.const_reverse_map_exclude_direct_fqn);
+                func_const_reverse_map = &filtered_crm;
+            }
+
+            uint32_t payload_offset = writer.position() - debug_section_start;
+            uint32_t payload_start = writer.position();
             const auto& parent_locals = func.slot_ids.locals;
             const auto& parent_globals = func.slot_ids.globals;
             auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
@@ -12717,24 +12767,14 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 } else {
                     error += ": serializeIRFunction returned false without a nested expression diagnostic";
                 }
-                error += "; no fallback marker was emitted";
                 return false;
             }
-            uint32_t end_pos = writer.position();
-            writer.patchU32(size_pos, end_pos - size_pos - 4);
-            traceEntryOffset("after debug-ir payload");
-        } else {
-            writer.writeU8(0);
-            traceEntryOffset("after debug-ir flag");
+            writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
+            writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
         }
-
-        // Patch the entry size field
-        uint32_t entry_end_pos = writer.position();
-        writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
-        traceEntryOffset("entry end");
+        writer.endSection(debug_sec_idx);
     }
 
-    writer.endSection(sec_idx);
     return serializeCallRelocations(writer, funcs, error);
 }
 

@@ -2999,23 +2999,29 @@ std::unique_ptr<QoreIRFunction> QoreAOTContext::materializeDebugIR(
         return nullptr;
     }
 
-    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    QoreAOTSectionType section_type = debug_ir_separate_section
+        ? QoreAOTSectionType::DEBUG_IR : QoreAOTSectionType::SLOT_MAPS;
+    const QoreAOTSectionHeader* sec = reader.findSection(section_type);
     if (!sec) {
-        error = "metadata has no SLOT_MAPS section";
+        error = debug_ir_separate_section
+            ? "metadata has no DEBUG_IR section" : "metadata has no SLOT_MAPS section";
         return nullptr;
     }
-    const uint8_t* slot_maps = reader.getSectionData(*sec);
-    if (!slot_maps) {
-        error = "metadata has invalid SLOT_MAPS section data";
+    const uint8_t* section_data = reader.getSectionData(*sec);
+    if (!section_data) {
+        error = debug_ir_separate_section
+            ? "metadata has invalid DEBUG_IR section data"
+            : "metadata has invalid SLOT_MAPS section data";
         return nullptr;
     }
-    if (debug_ir_slot_map_offset > sec->size
-            || debug_ir_size > sec->size - debug_ir_slot_map_offset) {
-        error = "serialized debug IR range exceeds SLOT_MAPS section";
+    if (debug_ir_offset > sec->size || debug_ir_size > sec->size - debug_ir_offset) {
+        error = debug_ir_separate_section
+            ? "serialized debug IR range exceeds DEBUG_IR section"
+            : "serialized debug IR range exceeds SLOT_MAPS section";
         return nullptr;
     }
 
-    const uint8_t* debug_ir_start = slot_maps + debug_ir_slot_map_offset;
+    const uint8_t* debug_ir_start = section_data + debug_ir_offset;
     const uint8_t* debug_ir_end = debug_ir_start + debug_ir_size;
     return deserializeDebugIRForContext(reader, debug_ir_start, debug_ir_end, this, name, error);
 }
@@ -6684,57 +6690,90 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
-    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_DEBUG_IR) != 0
-            && ptr + 1 <= loc_boundary) {
-        uint8_t has_debug_ir = QoreAOTBinaryReader::readU8(ptr);
-        if (trace_slot_reg) {
-            fprintf(stderr, "[aot-slot-reg] '%s': debug IR present=%u off=%zu\n",
-                name, has_debug_ir, static_cast<size_t>(ptr - entry_payload_start));
-        }
-        if (has_debug_ir && ptr + 4 <= loc_boundary) {
-            uint32_t debug_ir_size = QoreAOTBinaryReader::readU32(ptr);
-            const uint8_t* debug_ir_end = ptr + debug_ir_size;
-            if (trace_slot_reg) {
-                fprintf(stderr, "[aot-slot-reg] '%s': debug IR size=%u payload_off=%zu end_off=%zu\n",
-                    name, debug_ir_size, static_cast<size_t>(ptr - entry_payload_start),
-                    static_cast<size_t>(debug_ir_end - entry_payload_start));
-            }
-            if (debug_ir_end <= loc_boundary) {
-                if (debug_metadata && slot_maps_start && ptr >= slot_maps_start) {
-                    size_t debug_ir_offset = static_cast<size_t>(ptr - slot_maps_start);
-                    if (debug_ir_offset <= UINT32_MAX) {
-                        ctx->debug_metadata = std::move(debug_metadata);
-                        ctx->debug_ir_slot_map_offset = static_cast<uint32_t>(debug_ir_offset);
-                        ctx->debug_ir_size = debug_ir_size;
-                        if (trace_slot_reg) {
-                            fprintf(stderr,
-                                "[aot-slot-reg] '%s': stored lazy debug IR offset=%u size=%u\n",
-                                name, ctx->debug_ir_slot_map_offset, ctx->debug_ir_size);
-                        }
-                    } else {
-                        printd(2, "AOT buildCtx: '%s' debug IR offset too large: %zu\n",
-                            name, debug_ir_offset);
-                        if (trace_slot_reg) {
-                            fprintf(stderr,
-                                "[aot-slot-reg] '%s': debug IR offset too large: %zu\n",
-                                name, debug_ir_offset);
-                        }
-                    }
-                }
-                if (!ctx->debug_ir_size && trace_slot_reg) {
-                    fprintf(stderr, "[aot-slot-reg] '%s': debug IR present but lazy metadata unavailable\n",
-                        name);
-                }
-                ptr = debug_ir_end;
-            } else {
-                printd(2, "AOT buildCtx: '%s' malformed debug IR size %u\n",
-                    name, debug_ir_size);
-                std::string msg = "malformed debug IR size " + std::to_string(debug_ir_size)
-                    + " exceeds slot map entry boundary";
-                setBuildError(msg);
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_DEBUG_IR) != 0) {
+        if (reader.getHeader().version >= QORE_AOT_SPLIT_DEBUG_IR_VERSION) {
+            if (ptr + 8 > loc_boundary) {
+                setBuildError("missing split debug IR range");
                 delete ctx;
                 ptr = loc_boundary;
                 return nullptr;
+            }
+            uint32_t debug_ir_offset = QoreAOTBinaryReader::readU32(ptr);
+            uint32_t debug_ir_size = QoreAOTBinaryReader::readU32(ptr);
+            if (debug_ir_size) {
+                const QoreAOTSectionHeader* debug_sec =
+                    reader.findSection(QoreAOTSectionType::DEBUG_IR);
+                if (!debug_sec || debug_ir_offset < sizeof(uint32_t)
+                        || debug_ir_offset > debug_sec->size
+                        || debug_ir_size > debug_sec->size - debug_ir_offset) {
+                    setBuildError("split debug IR range exceeds DEBUG_IR section");
+                    delete ctx;
+                    ptr = loc_boundary;
+                    return nullptr;
+                }
+                if (debug_metadata) {
+                    ctx->debug_metadata = std::move(debug_metadata);
+                    ctx->debug_ir_offset = debug_ir_offset;
+                    ctx->debug_ir_size = debug_ir_size;
+                    ctx->debug_ir_separate_section = true;
+                }
+            }
+            if (trace_slot_reg) {
+                fprintf(stderr,
+                    "[aot-slot-reg] '%s': split debug IR offset=%u size=%u\n",
+                    name, debug_ir_offset, debug_ir_size);
+            }
+        } else if (ptr + 1 <= loc_boundary) {
+            uint8_t has_debug_ir = QoreAOTBinaryReader::readU8(ptr);
+            if (trace_slot_reg) {
+                fprintf(stderr, "[aot-slot-reg] '%s': debug IR present=%u off=%zu\n",
+                    name, has_debug_ir, static_cast<size_t>(ptr - entry_payload_start));
+            }
+            if (has_debug_ir && ptr + 4 <= loc_boundary) {
+                uint32_t debug_ir_size = QoreAOTBinaryReader::readU32(ptr);
+                const uint8_t* debug_ir_end = ptr + debug_ir_size;
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] '%s': debug IR size=%u payload_off=%zu end_off=%zu\n",
+                        name, debug_ir_size, static_cast<size_t>(ptr - entry_payload_start),
+                        static_cast<size_t>(debug_ir_end - entry_payload_start));
+                }
+                if (debug_ir_end <= loc_boundary) {
+                    if (debug_metadata && slot_maps_start && ptr >= slot_maps_start) {
+                        size_t debug_ir_offset = static_cast<size_t>(ptr - slot_maps_start);
+                        if (debug_ir_offset <= UINT32_MAX) {
+                            ctx->debug_metadata = std::move(debug_metadata);
+                            ctx->debug_ir_offset = static_cast<uint32_t>(debug_ir_offset);
+                            ctx->debug_ir_size = debug_ir_size;
+                            if (trace_slot_reg) {
+                                fprintf(stderr,
+                                    "[aot-slot-reg] '%s': stored lazy debug IR offset=%u size=%u\n",
+                                    name, ctx->debug_ir_offset, ctx->debug_ir_size);
+                            }
+                        } else {
+                            printd(2, "AOT buildCtx: '%s' debug IR offset too large: %zu\n",
+                                name, debug_ir_offset);
+                            if (trace_slot_reg) {
+                                fprintf(stderr,
+                                    "[aot-slot-reg] '%s': debug IR offset too large: %zu\n",
+                                    name, debug_ir_offset);
+                            }
+                        }
+                    }
+                    if (!ctx->debug_ir_size && trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': debug IR present but lazy metadata unavailable\n",
+                            name);
+                    }
+                    ptr = debug_ir_end;
+                } else {
+                    printd(2, "AOT buildCtx: '%s' malformed debug IR size %u\n",
+                        name, debug_ir_size);
+                    std::string msg = "malformed debug IR size " + std::to_string(debug_ir_size)
+                        + " exceeds slot map entry boundary";
+                    setBuildError(msg);
+                    delete ctx;
+                    ptr = loc_boundary;
+                    return nullptr;
+                }
             }
         }
     }
