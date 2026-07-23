@@ -27,7 +27,8 @@ public namespace ProviderIndexUtil {
 #! The environment variable for the provider index
 public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 
-const RoutingIndexVersion = 1;
+const RoutingIndexVersion = 2;
+const MetadataCacheVersion = 1;
 
 #! Data provider index
 public hashdecl DataProviderIndexInfo {
@@ -99,6 +100,8 @@ hashdecl DataProviderRoutingIndexInfo {
     int version;
     string data_sha256;
     string routing_sha256;
+    *int metadata_cache_version;
+    *string metadata_cache_sha256;
     *hash<string, string> factorymap;
     *hash<string, hash<string, bool>> appmap;
     *hash<string, hash<string, bool>> schememap;
@@ -151,6 +154,9 @@ public class ProviderIndexUtil {
         static bool raw_metadata_deferred;
         static bool raw_metadata_loading;
         static *int raw_metadata_loading_tid;
+
+        #! Validated cache digest set only by serialized index initialization and immutable after initialization
+        static *string metadata_cache_sha256;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -814,13 +820,33 @@ public class ProviderIndexUtil {
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
             hash<auto> summary) {
         hash<ProviderIndexInfo> info = writeIndex(h, "data", delta, summary);
+        *string cache_sha256;
         try {
-            writeRoutingDataProviderIndex(h, digest("sha256", File::readTextFile(info.path)).toHex());
+            cache_sha256 = writeMetadataDataProviderIndex(h);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelWarn, "Unable to write the optional data provider metadata cache: %s",
+                get_exception_string(ex));
+        }
+        try {
+            writeRoutingDataProviderIndex(h, digest("sha256", File::readTextFile(info.path)).toHex(), cache_sha256);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
                 get_exception_string(ex));
         }
         return info;
+    }
+
+    #! Writes the data-only MessagePack metadata cache when MessagePack support is available
+    static private *string writeMetadataDataProviderIndex(*hash<DataProviderIndexInfo> h) {
+%ifdef NoMsgPack
+        return;
+%else
+        binary data = msgpack_pack(h, MSGPACK_QORE_MODE);
+        File f();
+        f.open2(path: getMetadataCachePath(), flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
+        f.write(data);
+        return digest("sha256", data).toHex();
+%endif
     }
 
     #! Reads the data provider index from the configured directory
@@ -839,17 +865,25 @@ public class ProviderIndexUtil {
     }
 
     #! Writes the compact routing sidecar for a canonical data provider index
-    static private writeRoutingDataProviderIndex(*hash<DataProviderIndexInfo> h, string data_sha256) {
+    static private writeRoutingDataProviderIndex(*hash<DataProviderIndexInfo> h, string data_sha256,
+            *string cache_sha256) {
         hash<auto> routing = getRoutingIndexPayload(h);
-        writeIndex(routing + {
+        hash<auto> sidecar = routing + {
             "version": RoutingIndexVersion,
             "data_sha256": data_sha256,
-            "routing_sha256": digest("sha256", make_yaml(routing, BlockStyle)).toHex(),
-        }, "routing", 0s, {});
+        };
+        if (cache_sha256) {
+            sidecar.metadata_cache_version = MetadataCacheVersion;
+            sidecar.metadata_cache_sha256 = cache_sha256;
+        }
+        sidecar.routing_sha256 =
+            digest("sha256", make_yaml(getRoutingIndexChecksumPayload(sidecar), BlockStyle)).toHex();
+        writeIndex(sidecar, "routing", 0s, {});
     }
 
     #! Reads and validates the compact routing sidecar
     static private *hash<DataProviderIndexInfo> readRoutingDataProviderIndex() {
+        remove metadata_cache_sha256;
         try {
             *hash<DataProviderRoutingIndexInfo> routing =
                 cast<*hash<DataProviderRoutingIndexInfo>>(readIndex("routing", True));
@@ -857,14 +891,19 @@ public class ProviderIndexUtil {
                 return;
             }
 
-            hash<auto> routing_payload = getRoutingIndexPayload(routing);
-            if (routing.routing_sha256 != digest("sha256", make_yaml(routing_payload, BlockStyle)).toHex()) {
+            if (routing.routing_sha256
+                    != digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex()) {
                 return;
             }
 
             string data_yaml = File::readTextFile(getIndexPath("data"));
             if (routing.data_sha256 != digest("sha256", data_yaml).toHex()) {
                 return;
+            }
+
+            if (routing.metadata_cache_version == MetadataCacheVersion
+                    && routing.metadata_cache_sha256) {
+                metadata_cache_sha256 = routing.metadata_cache_sha256;
             }
 
             return <DataProviderIndexInfo>{
@@ -889,13 +928,52 @@ public class ProviderIndexUtil {
         };
     }
 
+    #! Returns the payload covered by the routing sidecar checksum
+    static private hash<auto> getRoutingIndexChecksumPayload(*hash<auto> h) {
+        hash<auto> rv = getRoutingIndexPayload(h) + {
+            "version": h.version,
+            "data_sha256": h.data_sha256,
+        };
+        if (exists h.metadata_cache_version) {
+            rv.metadata_cache_version = h.metadata_cache_version;
+        }
+        if (exists h.metadata_cache_sha256) {
+            rv.metadata_cache_sha256 = h.metadata_cache_sha256;
+        }
+        return rv;
+    }
+
     #! Reads the serialized data provider index without reconstructing typed metadata
     static private *hash<DataProviderIndexInfo> readRawDataProviderIndex() {
+        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex();
+        if (cache) {
+            return cache;
+        }
         try {
             return cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s", get_exception_string(ex));
         }
+    }
+
+    #! Reads and validates the data-only MessagePack metadata cache
+    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex() {
+%ifdef NoMsgPack
+        return;
+%else
+        if (!metadata_cache_sha256) {
+            return;
+        }
+        try {
+            binary data = ReadOnlyFile::readBinaryFile(getMetadataCachePath());
+            if (digest("sha256", data).toHex() != metadata_cache_sha256) {
+                return;
+            }
+            return cast<*hash<DataProviderIndexInfo>>(msgpack_unpack(data, MSGPACK_QORE_MODE));
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+%endif
     }
 
     #! Reconstructs typed app and action metadata in a serialized data provider index
@@ -1142,6 +1220,11 @@ public class ProviderIndexUtil {
     #! Returns the index path for the given type
     static string getIndexPath(string type) {
         return sprintf("%s%sqore-%s-index.yaml", tryGetIndexDir(True), DirSep, type);
+    }
+
+    #! Returns the optional data provider metadata cache path
+    static private string getMetadataCachePath() {
+        return sprintf("%s%sqore-data-index.msgpack", tryGetIndexDir(True), DirSep);
     }
 
     #! Sets the environment variable

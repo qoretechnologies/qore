@@ -1007,6 +1007,7 @@ class QoreProcessorsTest inherits QUnit::Test {
         mkdir(dir);
         on_exit {
             unlink(dir + "/qore-data-index.yaml");
+            unlink(dir + "/qore-data-index.msgpack");
             unlink(dir + "/qore-routing-index.yaml");
             rmdir(dir);
         }

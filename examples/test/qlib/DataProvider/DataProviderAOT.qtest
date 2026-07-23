@@ -15,6 +15,10 @@
 %define NoYaml
 %endtry
 
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
 %exec-class DataProviderAOTTest
 
 public class DataProviderAOTTest inherits QUnit::Test {
@@ -79,6 +83,12 @@ public class DataProviderAOTTest inherits QUnit::Test {
 
         assertFalse(ProviderIndexUtil::checkAppModule("QoreTestUnknownApp"),
             "routing-only lookup does not find an unknown app");
+
+%ifndef NoMsgPack
+        string cache_path = dir + DirSep + "qore-data-index.msgpack";
+        assertTrue(hstat(cache_path) != NOTHING, "provider index writer creates the optional metadata cache");
+        unlink(ProviderIndexUtil::getIndexPath("data"));
+%endif
 
         Counter metadata_cnt(8);
         Mutex metadata_mutex();
