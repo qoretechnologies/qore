@@ -113,11 +113,17 @@ This generalizes the existing Phase 1.5 init-expression outliner
    the function creates no closures: every access goes through the
    thread-global CVV stack, so the helper resolves the coordinator's
    CVV and stays coherent by construction (crossing locals are not
-   helper body locals, so the helper never pushes its own CVV).  When
-   the function contains a `CreateClosure`, closure-use locals must not
-   cross the boundary — real captures interact with the CVV stack
-   (especially under recursion) in ways the helper boundary does not
-   preserve.
+   helper body locals, so the helper never pushes its own CVV).  This
+   does not apply to functions with exception paths when the crossing
+   local is used through a parse reference (`\local`, including
+   reference iteration): exception cleanup can unwind nested
+   closure-use locals before the helper runs, leaving the helper unable
+   to recover the coordinator-owned CVV.  Such regions are rejected,
+   while regions without a crossing parse-reference local remain
+   eligible.  When the function contains a `CreateClosure`, closure-use
+   locals must not cross the boundary — real captures interact with the
+   CVV stack (especially under recursion) in ways the helper boundary
+   does not preserve.
 6. **Trigger.** Internal default thresholds on IR size (instructions /
    blocks) chosen so ordinary functions are never touched; only
    pathological functions pay the (small) helper-call overhead.
