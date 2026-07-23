@@ -10866,7 +10866,8 @@ size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
     return imported;
 }
 
-size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
+size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
+        bool propagate_positive) {
     if (func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
     }
@@ -10910,11 +10911,32 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
             : exact_type == numberTypeInfo ? NT_NUMBER : NT_ALL;
         return kind != NT_ALL && QoreTypeInfo::isType(declared, kind);
     };
+    auto exact_local_type = [&](const LocalVar* local)
+            -> const QoreTypeInfo* {
+        for (const QoreTypeInfo* type : {stringTypeInfo, listTypeInfo,
+                hashTypeInfo, binaryTypeInfo, dateTypeInfo,
+                objectTypeInfo, numberTypeInfo}) {
+            if (local_accepts_type(local, type)) {
+                return type;
+            }
+        }
+        return nullptr;
+    };
 
     using LocalFacts =
         std::unordered_map<const LocalVar*, const QoreTypeInfo*>;
     std::unordered_set<const LocalVar*> universe;
-    std::unordered_map<uint32_t, const LocalVar*> load_locals;
+    std::unordered_map<uint32_t, const LocalVar*> value_locals;
+    auto associate_value_local = [&](QoreIRValue value,
+            const LocalVar* local) {
+        if (!value.isValid() || !local) {
+            return;
+        }
+        auto [entry, inserted] = value_locals.emplace(value.id, local);
+        if (!inserted && entry->second != local) {
+            entry->second = nullptr;
+        }
+    };
     size_t check_count = 0;
     for (const auto& block : func.blocks) {
         if (qore_ir_analysis_cancelled(check_count,
@@ -10928,7 +10950,9 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
             }
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst || (inst->opcode != QoreIROpcode::LoadLocal
+                    && inst->opcode != QoreIROpcode::LoadClosure
                     && inst->opcode != QoreIROpcode::StoreLocal
+                    && inst->opcode != QoreIROpcode::StoreClosure
                     && inst->opcode != QoreIROpcode::InstantiateLocal
                     && inst->opcode != QoreIROpcode::UninstantiateLocal)) {
                 continue;
@@ -10936,31 +10960,37 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
             const auto* local_inst =
                 static_cast<const QoreIRLocalInstruction*>(inst);
             const LocalVar* local = local_inst->local;
-            if (!local || local->closureUse()
-                    || QoreTypeInfo::isReference(local->getTypeInfo())) {
+            if (!local || QoreTypeInfo::isReference(local->getTypeInfo())) {
                 continue;
             }
-            bool eligible = false;
-            for (const QoreTypeInfo* type : {stringTypeInfo, listTypeInfo,
-                    hashTypeInfo, binaryTypeInfo, dateTypeInfo,
-                    objectTypeInfo, numberTypeInfo}) {
-                if (local_accepts_type(local, type)) {
-                    eligible = true;
-                    break;
-                }
-            }
-            if (!eligible) {
+            if (!exact_local_type(local)) {
                 continue;
             }
             universe.insert(local);
-            if (inst->opcode == QoreIROpcode::LoadLocal
+            if ((inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::LoadClosure)
                     && inst->result.isValid()) {
-                load_locals.emplace(inst->result.id, local);
+                associate_value_local(inst->result, local);
             }
         }
     }
     if (universe.empty()) {
         return 0;
+    }
+
+    LocalFacts initially_known;
+    for (const auto& [index, local] : func.param_local_vars) {
+        (void)index;
+        if (qore_ir_analysis_cancelled(check_count,
+                "IR exact boxed local parameter analysis")) {
+            return 0;
+        }
+        const QoreTypeInfo* type = exact_local_type(local);
+        if (type && universe.count(local)
+                && !QoreTypeInfo::parseAcceptsReturns(
+                    local->getTypeInfo(), NT_NOTHING)) {
+            initially_known.emplace(local, type);
+        }
     }
 
     auto pseudo_read_only = [&](const QoreIRInstruction* inst,
@@ -10988,8 +11018,8 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
         if (!pseudo || has_ref_args) {
             return false;
         }
-        auto loaded = load_locals.find(inst->operands[0].id);
-        auto fact = loaded == load_locals.end()
+        auto loaded = value_locals.find(inst->operands[0].id);
+        auto fact = loaded == value_locals.end() || !loaded->second
             ? known.end() : known.find(loaded->second);
         if (fact == known.end() || !fact->second) {
             return false;
@@ -11015,7 +11045,8 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
                 "IR exact boxed local fact transfer")) {
             return false;
         }
-        if (inst->opcode == QoreIROpcode::StoreLocal) {
+        if (inst->opcode == QoreIROpcode::StoreLocal
+                || inst->opcode == QoreIROpcode::StoreClosure) {
             const auto* store =
                 static_cast<const QoreIRLocalInstruction*>(inst);
             if (!store->local || !universe.count(store->local)
@@ -11045,6 +11076,7 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
             return true;
         }
         if (inst->opcode == QoreIROpcode::LoadLocal
+                || inst->opcode == QoreIROpcode::LoadClosure
                 || pseudo_read_only(inst, known)) {
             return true;
         }
@@ -11060,6 +11092,19 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
         if (direct_call && (!callee || has_ref_args)) {
             known.clear();
             return true;
+        }
+        if (inst->opcode == QoreIROpcode::CallClosureDirect) {
+            for (auto it = known.begin(); it != known.end();) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR exact boxed closure invalidation")) {
+                    return false;
+                }
+                if (it->first->closureUse()) {
+                    it = known.erase(it);
+                } else {
+                    ++it;
+                }
+            }
         }
         if (!direct_call
                 && qore_ir_instruction_may_invalidate_caller_caches(
@@ -11130,7 +11175,8 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
             if (!cfg.reachable[block_id]) {
                 continue;
             }
-            LocalFacts next;
+            LocalFacts next = block_id == 0
+                ? initially_known : LocalFacts{};
             bool have_predecessor = block_id == 0;
             if (block_id) {
                 for (size_t predecessor : cfg.predecessors[block_id]) {
@@ -11179,12 +11225,36 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
                 return propagated;
             }
             const QoreIRInstruction* inst = inst_ptr.get();
-            if (inst->opcode == QoreIROpcode::LoadLocal
+            if ((inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst->opcode
+                        == QoreIROpcode::InvokeDotEvalMethodDirect)
+                    && !inst->operands.empty()) {
+                auto loaded = value_locals.find(inst->operands[0].id);
+                auto fact = loaded == value_locals.end() || !loaded->second
+                    ? known.end() : known.find(loaded->second);
+                const QoreIRValueFacts* current =
+                    func.getValueFacts(inst->operands[0]);
+                const QoreTypeInfo* current_type =
+                    exact_boxed_type(current);
+                if (current_type && loaded != value_locals.end()
+                        && loaded->second
+                        && (fact == known.end()
+                        || fact->second != current_type)) {
+                    QoreIRValueFacts next = *current;
+                    next.assigned_state =
+                        QoreIRAssignedState::MaybeAssigned;
+                    next.never_nothing = false;
+                    func.setValueFacts(inst->operands[0], next);
+                }
+            }
+            if ((inst->opcode == QoreIROpcode::LoadLocal
+                    || inst->opcode == QoreIROpcode::LoadClosure)
                     && inst->result.isValid()) {
                 const auto* load =
                     static_cast<const QoreIRLocalInstruction*>(inst);
                 auto fact = known.find(load->local);
-                if (fact != known.end() && fact->second) {
+                if (propagate_positive && fact != known.end()
+                        && fact->second) {
                     QoreIRValueFacts next;
                     next.type_info = fact->second;
                     next.assigned_state = QoreIRAssignedState::Assigned;
@@ -11203,6 +11273,16 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
                         func.setValueFacts(inst->result, next);
                         ++propagated;
                     }
+                } else {
+                    const QoreIRValueFacts* current =
+                        func.getValueFacts(inst->result);
+                    if (exact_boxed_type(current)) {
+                        QoreIRValueFacts next = *current;
+                        next.assigned_state =
+                            QoreIRAssignedState::MaybeAssigned;
+                        next.never_nothing = false;
+                        func.setValueFacts(inst->result, next);
+                    }
                 }
             }
             if (!transfer_instruction(inst, known)) {
@@ -11216,7 +11296,30 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func) {
 size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
     size_t specialized = 0;
     size_t check_count = 0;
+    std::unordered_set<uint32_t> opaque_local_values;
+    if (func.has_opaque_ast_local_access) {
+        for (const auto& block : func.blocks) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR opaque boxed local block analysis")) {
+                return 0;
+            }
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR opaque boxed local analysis")) {
+                    return 0;
+                }
+                if (inst && (inst->opcode == QoreIROpcode::LoadLocal
+                        || inst->opcode == QoreIROpcode::LoadClosure)
+                        && inst->result.isValid()) {
+                    opaque_local_values.insert(inst->result.id);
+                }
+            }
+        }
+    }
     auto exact_assigned = [&](QoreIRValue value, const QoreTypeInfo* type_info) {
+        if (opaque_local_values.count(value.id)) {
+            return false;
+        }
         const QoreIRValueFacts* facts = func.getValueFacts(value);
         return facts
             && facts->type_info == type_info
@@ -11237,6 +11340,7 @@ size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
             call->pseudo_base_known_assigned_string = true;
             call->pseudo_base_safe_value_dispatch = true;
         } else {
+            call->pseudo_base_known_assigned_string = false;
             const QoreIRValueFacts* base = func.getValueFacts(call->operands[0]);
             qore_type_t type = base && base->assigned_state
                     == QoreIRAssignedState::Assigned
@@ -11256,6 +11360,8 @@ size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func) {
                 || !call->pseudo_arg0_known_assigned_string;
             call->pseudo_arg0_known_string = true;
             call->pseudo_arg0_known_assigned_string = true;
+        } else if (call->operands.size() > 1) {
+            call->pseudo_arg0_known_assigned_string = false;
         }
         if (changed) {
             ++specialized;

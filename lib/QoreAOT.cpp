@@ -16123,15 +16123,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         size_t round_limit = std::getenv(
                 "QORE_DISABLE_AOT_POST_REWRITE_FIXED_POINT")
             ? 1 : max_post_rewrite_rounds;
+        bool propagate_cross_block_boxed_facts = !std::getenv(
+            "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS");
         for (size_t round = 0; round < round_limit; ++round) {
             size_t round_changes = 0;
-            if (!std::getenv(
-                    "QORE_DISABLE_AOT_CROSS_BLOCK_BOXED_FACTS")) {
-                size_t changes =
-                    qore_ir_propagate_exact_boxed_local_facts(func);
-                cross_block_boxed_facts += changes;
-                round_changes += changes;
-            }
+            size_t changes = qore_ir_propagate_exact_boxed_local_facts(
+                func, propagate_cross_block_boxed_facts);
+            cross_block_boxed_facts += changes;
+            round_changes += changes;
             if (!std::getenv(
                     "QORE_DISABLE_AOT_LATE_BOXED_SPECIALIZATION")) {
                 size_t changes =

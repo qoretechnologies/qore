@@ -241,8 +241,9 @@ using QoreIRExactBoxedReturnQuery = std::function<const QoreTypeInfo*(
 size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
     const QoreIRExactBoxedReturnQuery& get_return_type);
 
-//! Propagate exact assigned boxed facts through safe local stores and CFG joins.
-size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func);
+//! Refine exact assigned boxed facts through safe local stores and CFG joins.
+size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
+    bool propagate_positive = true);
 
 //! Specialize pseudo-method flags and generic collection operations from late facts.
 size_t qore_ir_specialize_proven_boxed_operations(QoreIRFunction& func);

@@ -17,6 +17,10 @@ string provider_source = "%modern
 *string sub exactString(bool alternate) {
     return alternate ? \"Dvo\\u0159\\u00e1k\" : \"abcdef\";
 }
+
+sub clearString(reference<string> value) {
+    remove value;
+}
 ";
 
 string consumer_source = "%modern
@@ -65,6 +69,42 @@ int sub restoredLocalLength() {
     }
 }
 
+int sub conditionallyRemovedLocalLength(bool restore) {
+    string value = exactString(False);
+    remove value;
+    if (restore) {
+        value = exactString(False);
+    }
+    try {
+        return value.length();
+    } catch (hash<auto> ex) {
+        return ex.err == \"PSEUDO-METHOD-DOES-NOT-EXIST\" ? -1 : -2;
+    }
+}
+
+int sub conditionallyDeletedLocalLength(bool restore) {
+    string value = exactString(False);
+    delete value;
+    if (restore) {
+        value = exactString(False);
+    }
+    try {
+        return value.length();
+    } catch (hash<auto> ex) {
+        return ex.err == \"PSEUDO-METHOD-DOES-NOT-EXIST\" ? -1 : -2;
+    }
+}
+
+int sub refClearedLocalLength() {
+    string value = exactString(False);
+    clearString(\\value);
+    try {
+        return value.length();
+    } catch (hash<auto> ex) {
+        return ex.err == \"PSEUDO-METHOD-DOES-NOT-EXIST\" ? -1 : -2;
+    }
+}
+
 int sub crossBlockStringKernel(int rounds, bool branch) {
     *string value;
     if (branch) {
@@ -84,9 +124,14 @@ int sub crossBlockStringKernel(int rounds, bool branch) {
 int sub main() {
     *string rounds_arg = ENV.QORE_EXACT_BOXED_CROSS_BLOCK_ROUNDS;
     int rounds = rounds_arg ? rounds_arg.toInt() : 1000;
-    printf(\"%s\\n%s\\n%d:%d\\n%d:%d\\n%d\\n\", mergedStringOps(False, True),
+    printf(\"%s\\n%s\\n%d:%d\\n%d:%d\\n%d:%d:%d:%d:%d\\n%d\\n\",
+        mergedStringOps(False, True),
         mergedStringOps(True, False), maybeLocalLength(True),
         maybeLocalLength(False), restoredLocalLength(), removedLocalLength(),
+        conditionallyRemovedLocalLength(True),
+        conditionallyRemovedLocalLength(False),
+        conditionallyDeletedLocalLength(True),
+        conditionallyDeletedLocalLength(False), refClearedLocalLength(),
         crossBlockStringKernel(rounds, True));
     return 0;
 }
@@ -161,7 +206,7 @@ string sub link(string output, string consumer_qo) {
     return output;
 }
 
-string expected = "6:6:True\n8:6:False\n6:-1\n6:-1\n13000\n";
+string expected = "6:6:True\n8:6:False\n6:-1\n6:-1\n6:-1:6:-1:-1\n13000\n";
 foreach string path in ((link(root + "/enabled-exe",
         enabled_dir + "/consumer.qo"), link(root + "/disabled-exe",
         disabled_dir + "/consumer.qo"))) {

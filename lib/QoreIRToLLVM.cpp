@@ -180,6 +180,22 @@ static const char* qore_ir_get_string_pseudo_noguard_helper(QoreIRIntrinsic intr
     }
 }
 
+static bool qore_ir_is_global_string_length_call(const QoreValue& expr,
+        QoreIRIntrinsic intrinsic) {
+    if (!expr.hasNode() || (intrinsic != QoreIRIntrinsic::StringStrlen
+            && intrinsic != QoreIRIntrinsic::StringLength)) {
+        return false;
+    }
+    const auto* call = dynamic_cast<const FunctionCallNode*>(
+        expr.getInternalNode());
+    if (!call || call->hasExplicitTypeArgs()) {
+        return false;
+    }
+    const char* name = call->getName();
+    return name && (intrinsic == QoreIRIntrinsic::StringStrlen
+        ? !strcmp(name, "strlen") : !strcmp(name, "length"));
+}
+
 static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntrinsic intrinsic,
         bool base_never_nothing) {
     if (!base_never_nothing) {
@@ -16532,7 +16548,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const char* string_noguard_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(direct_inst->intrinsic,
-                    direct_inst->pseudo_base_known_assigned_string)
+                    direct_inst->pseudo_base_known_assigned_string
+                        || qore_ir_is_global_string_length_call(
+                            direct_inst->expr, direct_inst->intrinsic))
                 : nullptr;
             QoreIRPseudoHelperInfo safe_value_pseudo_helper = (direct_inst->pseudo
                     && direct_inst->pseudo_base_safe_value_dispatch && nargs == 0)
@@ -17143,7 +17161,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const char* string_noguard_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_known_string && nargs == 0)
                 ? qore_ir_get_string_pseudo_noguard_helper(invoke_inst->intrinsic,
-                    invoke_inst->pseudo_base_known_assigned_string)
+                    invoke_inst->pseudo_base_known_assigned_string
+                        || qore_ir_is_global_string_length_call(
+                            invoke_inst->expr, invoke_inst->intrinsic))
                 : nullptr;
             QoreIRPseudoHelperInfo safe_value_pseudo_helper = (invoke_inst->pseudo
                     && invoke_inst->pseudo_base_safe_value_dispatch && nargs == 0)
