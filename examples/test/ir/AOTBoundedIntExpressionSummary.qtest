@@ -1,0 +1,144 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_code = "%modern
+
+int sub boundedExpression(int a, int b, int c, int d) {
+    int mixed0 = (a * 3 + b * 5) ^ (c * 7 + d * 11);
+    int mixed1 = ((a & 255) << 3) | ((b & 255) >> 2);
+    return (mixed0 + mixed1) & 0x7fffffff;
+}
+
+int sub tooLargeExpression(int value) {
+    return value + 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+        + 11 + 12 + 13 + 14 + 15 + 16 + 17 + 18 + 19 + 20
+        + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29 + 30
+        + 31 + 32 + 33 + 34 + 35 + 36 + 37 + 38 + 39 + 40;
+}
+";
+
+string consumer_code = "%modern
+
+int sub main() {
+    printf(\"%d:%d:%d\\n\",
+        boundedExpression(2, 3, 4, 5),
+        boundedExpression(-7, 11, -13, 17),
+        tooLargeExpression(1));
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-bounded-int-expression-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+on_exit {
+    backquote(sprintf("rm -rf %s", root));
+}
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File provider_file();
+provider_file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+provider_file.write(provider_code);
+provider_file.close();
+File consumer_file();
+consumer_file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+consumer_file.write(consumer_code);
+consumer_file.close();
+File combined_file();
+combined_file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+combined_file.write(provider_code + consumer_code + "\nmain();\n");
+combined_file.close();
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, combined_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+string provider_index = backquote(sprintf(
+    "%s --dump-index-json %s 2>&1", qcc_bin, provider_qo));
+if (provider_index
+            !~ /\"qore_path\": \"boundedExpression\(int,int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/
+        || provider_index
+            !~ /\"qore_path\": \"tooLargeExpression\(int\)\"[^\n]*\"int_expression_nodes\": \[\]/) {
+    printf("unexpected bounded expression metadata:\n%s", provider_index);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DUMP_LLVM_IR=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DUMP_LLVM_IR=1"
+        + " QORE_DISABLE_AOT_INT_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)
+        || enabled_compile =~ /call i64 @boundedExpression/
+        || disabled_compile !~ /call i64 @boundedExpression/
+        || enabled_compile !~ /call i64 @tooLargeExpression/) {
+    printf("unexpected bounded expression lowering:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+string enabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
+string disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
+if (expected != enabled || expected != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        expected, enabled, disabled);
+    exit(2);
+}

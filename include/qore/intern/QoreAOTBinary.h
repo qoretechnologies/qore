@@ -295,6 +295,9 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 //! Version of the optional SYMBOL_INDEX section wire format.
 constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 28;
 
+//! Maximum serialized nodes in a bounded pure native-integer expression summary.
+constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 32;
+
 //! Serialized node in a bounded pure native-integer expression summary.
 struct QoreAOTIntExpressionNodeRecord {
     uint8_t kind = 0;
@@ -305,6 +308,9 @@ struct QoreAOTIntExpressionNodeRecord {
     int64_t constant = 0;
     std::string key;
 };
+
+//! Maximum serialized nodes in a bounded pure native-float expression summary.
+constexpr size_t QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES = 16;
 
 //! Serialized node in a bounded pure native-float expression summary.
 struct QoreAOTFloatExpressionNodeRecord {

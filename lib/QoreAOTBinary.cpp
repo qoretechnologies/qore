@@ -6900,7 +6900,8 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeI64(rec.global_int_value_scale);
     writer.writeI64(rec.global_int_global_scale);
     writer.writeI64(rec.global_int_offset);
-    assert(rec.int_expression_nodes.size() <= 16);
+    assert(rec.int_expression_nodes.size()
+        <= QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES);
     writer.writeU32(static_cast<uint32_t>(rec.int_expression_nodes.size()));
     for (const auto& node : rec.int_expression_nodes) {
         writer.writeU8(node.kind);
@@ -6911,7 +6912,8 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeI64(node.constant);
         writer.writeStringRef(node.key.c_str());
     }
-    assert(rec.float_expression_nodes.size() <= 16);
+    assert(rec.float_expression_nodes.size()
+        <= QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES);
     writer.writeU32(static_cast<uint32_t>(rec.float_expression_nodes.size()));
     for (const auto& node : rec.float_expression_nodes) {
         writer.writeU8(node.kind);
@@ -8340,7 +8342,7 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     uint32_t node_count = QoreAOTBinaryReader::readU32(ptr);
     size_t node_size = (version >= 13 ? 5 : 4) + sizeof(uint64_t)
         + (version >= 20 ? sizeof(uint32_t) : 0);
-    if (node_count > QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES
+    if (node_count > QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES
             || node_count > static_cast<uint32_t>((end - ptr) / node_size)) {
         error = "invalid SYMBOL_INDEX integer expression node count";
         return false;
@@ -8372,7 +8374,7 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     }
     node_count = QoreAOTBinaryReader::readU32(ptr);
     constexpr size_t float_node_size = 4 + sizeof(uint64_t);
-    if (node_count > 16
+    if (node_count > QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES
             || node_count > static_cast<uint32_t>((end - ptr) / float_node_size)) {
         error = "invalid SYMBOL_INDEX float expression node count";
         return false;
@@ -8396,7 +8398,7 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
     }
     node_count = QoreAOTBinaryReader::readU32(ptr);
     constexpr size_t string_node_size = 5 + sizeof(uint64_t) + sizeof(uint32_t);
-    if (node_count > 16
+    if (node_count > QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES
             || node_count > static_cast<uint32_t>((end - ptr) / string_node_size)) {
         error = "invalid SYMBOL_INDEX string expression node count";
         return false;

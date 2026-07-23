@@ -82,6 +82,14 @@
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
+
+static_assert(QORE_AOT_INT_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES,
+    "AOT integer expression wire bound is smaller than the runtime bound");
+static_assert(QORE_AOT_FLOAT_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES,
+    "AOT float expression wire bound is smaller than the runtime bound");
+static_assert(QORE_AOT_STRING_EXPRESSION_MAX_NODES <= QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES,
+    "AOT string expression wire bound is smaller than the runtime bound");
+
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
