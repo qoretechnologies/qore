@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%try-module msgpack
+%define NoMsgPack
+%endtry
+
+%exec-class ProviderIndexMetadataShardTest
+
+public class ProviderIndexMetadataShardTest inherits QUnit::Test {
+    constructor() : Test("ProviderIndex metadata shard test", "1.0") {
+        addTestCase("unrequested corrupt shard is isolated", \unrequestedCorruptShardIsIsolated());
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+%ifdef NoMsgPack
+        testSkip("no msgpack module");
+%endif
+    }
+
+    unrequestedCorruptShardIsIsolated() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        string requested_app = "QoreTestRequestedApp";
+        string other_app = "QoreTestOtherApp";
+        string requested_action = "requested-action";
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {
+                requested_app: {
+                    "name": requested_app,
+                },
+                other_app: {
+                    "name": other_app,
+                },
+            },
+            "actioninfomap": {
+                requested_app: {
+                    requested_action: {
+                        "app": requested_app,
+                        "action": requested_action,
+                    },
+                },
+                other_app: {
+                    "other-action": {
+                        "app": other_app,
+                        "action": "other-action",
+                    },
+                },
+            },
+            "top_actioninfomap": {},
+        }, 0s, {});
+
+        assertFalse(ProviderIndexUtil::checkAppModule("QoreTestUnknownApp"),
+            "routing sidecar is validated while the canonical index exists");
+
+        string other_chunk_path = sprintf("%s%sqore-data-index-%s.msgpack", dir, DirSep,
+            digest("sha256", other_app).toHex());
+        assertTrue(hstat(other_chunk_path) != NOTHING, "writer creates an app-specific cache chunk");
+        File other_chunk();
+        other_chunk.open2(path: other_chunk_path, flags: O_WRONLY | O_TRUNC);
+        other_chunk.write(<deadbeef>);
+        other_chunk.close();
+        unlink(ProviderIndexUtil::getIndexPath("data"));
+
+        assertEq(requested_app, ProviderIndexUtil::tryGetAppInfo(requested_app).name,
+            "requested app loads without reading an unrelated corrupt chunk");
+        assertEq(requested_action,
+            ProviderIndexUtil::tryGetApproximateAppAction(requested_app, requested_action).action,
+            "requested action loads without reading an unrelated corrupt chunk");
+    }
+}

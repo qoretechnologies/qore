@@ -62,7 +62,8 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_0 ProviderIndexUtil v1.0
-    - added an optional, versioned MessagePack metadata cache with integrity validation and canonical YAML fallback
+    - added an optional, versioned, app-sharded MessagePack metadata cache with per-shard integrity validation and
+      canonical YAML fallback
     - initial release of the module
 */
 

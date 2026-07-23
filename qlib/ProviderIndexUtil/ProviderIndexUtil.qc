@@ -28,7 +28,7 @@ public namespace ProviderIndexUtil {
 public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 
 const RoutingIndexVersion = 2;
-const MetadataCacheVersion = 1;
+const MetadataCacheVersion = 2;
 
 #! Data provider index
 public hashdecl DataProviderIndexInfo {
@@ -107,6 +107,24 @@ hashdecl DataProviderRoutingIndexInfo {
     *hash<string, hash<string, bool>> schememap;
 }
 
+#! Integrity metadata for one app-specific metadata cache chunk
+hashdecl DataProviderMetadataCacheChunkInfo {
+    int size;
+    string sha256;
+}
+
+#! Versioned manifest for app-specific metadata cache chunks
+hashdecl DataProviderMetadataCacheManifest {
+    int version;
+    hash<string, DataProviderMetadataCacheChunkInfo> apps;
+}
+
+#! Result of loading deferred raw metadata
+hashdecl RawMetadataIndexResult {
+    *hash<DataProviderIndexInfo> index;
+    bool complete;
+}
+
 #! The main utility class
 public class ProviderIndexUtil {
     public {}
@@ -154,9 +172,12 @@ public class ProviderIndexUtil {
         static bool raw_metadata_deferred;
         static bool raw_metadata_loading;
         static *int raw_metadata_loading_tid;
+        static hash<string, bool> raw_metadata_app_loaded;
 
-        #! Validated cache digest set only by serialized index initialization and immutable after initialization
+        #! Validated manifest digest set only by serialized index initialization and immutable after initialization
         static *string metadata_cache_sha256;
+        static *hash<DataProviderMetadataCacheManifest> metadata_cache_manifest;
+        static bool metadata_cache_manifest_checked;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -506,10 +527,12 @@ public class ProviderIndexUtil {
         init_cond.broadcast();
     }
 
-    #! Loads serialized metadata from the canonical index after routing-only initialization
-    static private checkRawMetadataIndex() {
+    #! Loads serialized metadata after routing-only initialization
+    /** @param app an optional app name; when present, only that app's cache chunk is loaded
+    */
+    static private checkRawMetadataIndex(*string app = NOTHING) {
         checkDataIndex();
-        if (!initialized || !raw_metadata_deferred) {
+        if (!initialized || !raw_metadata_deferred || (app && raw_metadata_app_loaded{app})) {
             return;
         }
 
@@ -519,7 +542,7 @@ public class ProviderIndexUtil {
             while (raw_metadata_loading && raw_metadata_loading_tid != gettid()) {
                 metadata_init_cond.wait(m);
             }
-            if (!raw_metadata_deferred) {
+            if (!raw_metadata_deferred || (app && raw_metadata_app_loaded{app})) {
                 return;
             }
             if (raw_metadata_loading) {
@@ -529,9 +552,9 @@ public class ProviderIndexUtil {
             raw_metadata_loading_tid = gettid();
         }
 
-        *hash<DataProviderIndexInfo> full_index;
+        hash<RawMetadataIndexResult> result;
         try {
-            full_index = readRawDataProviderIndex();
+            result = readDeferredRawDataProviderIndex(app);
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -543,12 +566,18 @@ public class ProviderIndexUtil {
 
         m.lock();
         on_exit m.unlock();
-        raw_appinfomap = full_index.appinfomap ?? {};
-        raw_actioninfomap = full_index.actioninfomap ?? {};
-        if (full_index.top_actioninfomap) {
-            index.top_actioninfomap = full_index.top_actioninfomap;
+        if (result.index) {
+            raw_appinfomap += result.index.appinfomap ?? {};
+            raw_actioninfomap += result.index.actioninfomap ?? {};
+            if (result.index.top_actioninfomap) {
+                index.top_actioninfomap += result.index.top_actioninfomap;
+            }
         }
-        raw_metadata_deferred = False;
+        if (result.complete) {
+            raw_metadata_deferred = False;
+        } else if (app) {
+            raw_metadata_app_loaded{app} = True;
+        }
         raw_metadata_loading = False;
         remove raw_metadata_loading_tid;
         metadata_init_cond.broadcast();
@@ -603,7 +632,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that app metadata for the given app has been deserialized
     static private checkAppMetadata(string app) {
-        checkRawMetadataIndex();
+        checkRawMetadataIndex(app);
         if (!initialized || app_metadata_initialized{app} || !checkMetadataContext()) {
             return;
         }
@@ -646,7 +675,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that action metadata for the given app has been deserialized
     static private checkActionMetadata(string app) {
-        checkRawMetadataIndex();
+        checkRawMetadataIndex(app);
         if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
             return;
         }
@@ -836,12 +865,38 @@ public class ProviderIndexUtil {
         return info;
     }
 
-    #! Writes the data-only MessagePack metadata cache when MessagePack support is available
+    #! Writes the app-sharded MessagePack metadata cache when MessagePack support is available
     static private *string writeMetadataDataProviderIndex(*hash<DataProviderIndexInfo> h) {
 %ifdef NoMsgPack
         return;
 %else
-        binary data = msgpack_pack(h, MSGPACK_QORE_MODE);
+        hash<string, bool> apps = map {$1: True}, keys (h.appinfomap ?? {});
+        map apps{$1} = True, keys (h.actioninfomap ?? {});
+
+        hash<string, DataProviderMetadataCacheChunkInfo> chunks;
+        foreach string app in (keys apps) {
+            hash<DataProviderIndexInfo> app_index = createEmptyDataProviderIndex();
+            if (exists h.appinfomap{app}) {
+                app_index.appinfomap{app} = h.appinfomap{app};
+            }
+            if (exists h.actioninfomap{app}) {
+                app_index.actioninfomap{app} = h.actioninfomap{app};
+            }
+
+            binary data = msgpack_pack(app_index, MSGPACK_QORE_MODE);
+            File chunk_file();
+            chunk_file.open2(path: getMetadataCacheChunkPath(app), flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
+            chunk_file.write(data);
+            chunks{app} = <DataProviderMetadataCacheChunkInfo>{
+                "size": data.size(),
+                "sha256": digest("sha256", data).toHex(),
+            };
+        }
+
+        binary data = msgpack_pack(<DataProviderMetadataCacheManifest>{
+            "version": MetadataCacheVersion,
+            "apps": chunks,
+        }, MSGPACK_QORE_MODE);
         File f();
         f.open2(path: getMetadataCachePath(), flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
         f.write(data);
@@ -956,17 +1011,95 @@ public class ProviderIndexUtil {
         }
     }
 
-    #! Reads and validates the data-only MessagePack metadata cache
-    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex() {
+    #! Reads deferred metadata and falls back to the complete canonical index on any cache error
+    static private hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app) {
+        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app);
+        if (cache) {
+            return <RawMetadataIndexResult>{
+                "index": cache,
+                "complete": !app,
+            };
+        }
+
+        *hash<DataProviderIndexInfo> canonical;
+        try {
+            canonical = cast<*hash<DataProviderIndexInfo>>(readIndex("data"));
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelError, "Ignoring error reading data provider index: %s",
+                get_exception_string(ex));
+        }
+        return <RawMetadataIndexResult>{
+            "index": canonical,
+            "complete": True,
+        };
+    }
+
+    #! Reads and validates app-specific chunks from the MessagePack metadata cache
+    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app = NOTHING) {
 %ifdef NoMsgPack
         return;
 %else
+        *hash<DataProviderMetadataCacheManifest> manifest = readMetadataCacheManifest();
+        if (!manifest) {
+            return;
+        }
+
+        hash<DataProviderIndexInfo> rv = createEmptyDataProviderIndex();
+        list<string> apps = app ? (app,) : keys manifest.apps;
+        foreach string chunk_app in (apps) {
+            if (!exists manifest.apps{chunk_app}) {
+                continue;
+            }
+            *hash<DataProviderIndexInfo> chunk = readMetadataCacheChunk(chunk_app, manifest.apps{chunk_app});
+            if (!chunk) {
+                return;
+            }
+            rv.appinfomap += chunk.appinfomap ?? {};
+            rv.actioninfomap += chunk.actioninfomap ?? {};
+        }
+        return rv;
+%endif
+    }
+
+    #! Reads and validates the metadata cache manifest once per process
+    static private *hash<DataProviderMetadataCacheManifest> readMetadataCacheManifest() {
+%ifdef NoMsgPack
+        return;
+%else
+        if (metadata_cache_manifest_checked) {
+            return metadata_cache_manifest;
+        }
+        metadata_cache_manifest_checked = True;
         if (!metadata_cache_sha256) {
             return;
         }
         try {
             binary data = ReadOnlyFile::readBinaryFile(getMetadataCachePath());
             if (digest("sha256", data).toHex() != metadata_cache_sha256) {
+                return;
+            }
+            *hash<DataProviderMetadataCacheManifest> manifest =
+                cast<*hash<DataProviderMetadataCacheManifest>>(msgpack_unpack(data, MSGPACK_QORE_MODE));
+            if (!manifest || manifest.version != MetadataCacheVersion) {
+                return;
+            }
+            metadata_cache_manifest = manifest;
+            return manifest;
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+%endif
+    }
+
+    #! Reads and validates one app-specific metadata cache chunk
+    static private *hash<DataProviderIndexInfo> readMetadataCacheChunk(string app,
+            hash<DataProviderMetadataCacheChunkInfo> info) {
+%ifdef NoMsgPack
+        return;
+%else
+        try {
+            binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(app));
+            if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 return;
             }
             return cast<*hash<DataProviderIndexInfo>>(msgpack_unpack(data, MSGPACK_QORE_MODE));
@@ -1225,6 +1358,12 @@ public class ProviderIndexUtil {
     #! Returns the optional data provider metadata cache path
     static private string getMetadataCachePath() {
         return sprintf("%s%sqore-data-index.msgpack", tryGetIndexDir(True), DirSep);
+    }
+
+    #! Returns the app-specific data provider metadata cache chunk path
+    static private string getMetadataCacheChunkPath(string app) {
+        return sprintf("%s%sqore-data-index-%s.msgpack", tryGetIndexDir(True), DirSep,
+            digest("sha256", app).toHex());
     }
 
     #! Sets the environment variable
