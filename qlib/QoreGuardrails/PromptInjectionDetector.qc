@@ -34,11 +34,12 @@ public namespace QoreGuardrails {
     attempts.
 
     Each pattern has a weight (0.0-1.0) that reflects how strongly it indicates
-    an injection attempt. Weights from all matching patterns are accumulated,
-    and if the total exceeds \c pattern_threshold (default 0.5), the text is
-    flagged. Some patterns have context exemptions — for example, "system
-    prompt" is exempted when used in educational contexts like "what is system
-    prompt engineering?"
+    an injection attempt. Weights from all matching patterns are accumulated.
+    When the total exceeds \c pattern_threshold (default 0.5), a configured LLM
+    classifier makes the semantic decision; without an LLM, the weighted match
+    is the fallback decision. Some patterns have context exemptions — for
+    example, "system prompt" is exempted when used in educational contexts like
+    "what is system prompt engineering?"
 
     @par Example: Detect prompt injection
     @code{.py}
@@ -119,13 +120,15 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
                     "patterns (jailbreak language, instruction-override "
                     "attempts, role-play escape).  Each matching pattern "
                     "contributes a weight between 0.0 and 1.0, and the "
-                    "weights accumulate.  A violation fires when the sum "
-                    "reaches this threshold.  **Lower** values (0.3-0.4) "
+                    "weights accumulate.  Without semantic classification, a "
+                    "violation fires when the sum reaches this threshold.  "
+                    "**Lower** values (0.3-0.4) "
                     "catch more attempts but produce more false positives; "
                     "**higher** values (0.6-0.8) are more conservative but "
                     "miss subtle attempts.  The default of 0.5 is a "
                     "reasonable starting point.  When an LLM classifier is "
-                    "also configured, the two signals are combined.",
+                    "configured, a threshold match requests semantic "
+                    "corroboration instead of directly rejecting the input.",
                 "default_value": 0.5,
                 "required": False,
                 "preselected": True,
@@ -133,6 +136,17 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         };
     }
 
+    #! Evaluates text for prompt-injection intent
+    /** @param text untrusted input text
+        @param ctx optional evaluation context:
+        - \c skip_llm_classification suppresses semantic classification
+        - \c trusted_bounded_operation suppresses lexical blocking only for a
+          route already constrained by an authoritative operation contract,
+          authorization, and argument validation
+        @return structured guardrail result
+        @note Set \c trusted_bounded_operation only after resolving an exact
+        bounded operation; it is not a general prompt-injection exemption.
+    */
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 
@@ -158,7 +172,17 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
             total_weight = 1.0;
         }
 
-        if (total_weight >= pattern_threshold) {
+        if (total_weight >= pattern_threshold
+                && !ctx.trusted_bounded_operation) {
+            # Lexical patterns are English-biased heuristics, not semantic
+            # authority.  When a classifier is available, require it to
+            # corroborate even a high-scoring pattern so quoted text,
+            # cognates, names, and legitimate instructions in any language do
+            # not fail before meaning is considered.  The pattern-only result
+            # remains the no-LLM fallback.
+            if (llm && !ctx.skip_llm_classification) {
+                return classifyWithLlm(text, start);
+            }
             hash<GuardrailResult> result = makeFailResult(
                 sprintf("potential prompt injection detected (confidence: %.0f%%)",
                     total_weight * 100),
@@ -175,11 +199,12 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
 
         # LLM-based classification, when an LLM is configured and the caller
         # has not suppressed it.  A caller that has already established the
-        # request is a legitimate, bounded operation — for example, it maps to
-        # an authorized tool/action — can set ctx.skip_llm_classification to
-        # keep only the deterministic pattern check above, avoiding the LLM
-        # classifier's latency and its occasional false positives on benign
-        # operational queries (e.g. "how many users are there?").
+        # request as a legitimate, bounded operation — for example, it maps to
+        # an authorized tool/action — can set both
+        # ctx.trusted_bounded_operation and ctx.skip_llm_classification.  This
+        # prevents lexical false positives and avoids the LLM classifier's
+        # latency while the operation remains bounded by its own authorization
+        # and validation layer.
         if (llm && !ctx.skip_llm_classification) {
             return classifyWithLlm(text, start);
         }
