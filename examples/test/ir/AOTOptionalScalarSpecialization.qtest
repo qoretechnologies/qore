@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+string sub intOps(*int value) {
+    return sprintf(\"%s:%n:%s:%n:%s:%n:%s:%n:%s:%n:%s:%n:%s:%n:%s:%n:%s:%n:%s:%n\",
+        typename(value + 5), value + 5,
+        typename(value - 5), value - 5,
+        typename(value * 5), value * 5,
+        typename(value / 2), value / 2,
+        typename(value % 3), value % 3,
+        typename(value & 3), value & 3,
+        typename(value | 3), value | 3,
+        typename(value ^ 3), value ^ 3,
+        typename(value << 2), value << 2,
+        typename(value >> 2), value >> 2);
+}
+
+string sub floatOps(*float value) {
+    return sprintf(\"%s:%n:%s:%n:%s:%n:%s:%n\",
+        typename(value + 5.0), value + 5.0,
+        typename(value - 5.0), value - 5.0,
+        typename(value * 5.0), value * 5.0,
+        typename(value / 2.0), value / 2.0);
+}
+
+int sub mix(*int value) {
+    return ((value * 3) + (value * 5) + (value * 7)
+        + (value * 11) + (value * 13) + (value * 17))
+        & 0x7fffffff;
+}
+
+nothing sub setOptional(reference<*int> value) {
+    value = 11;
+}
+
+int sub mutation(*int value) {
+    int first = value * 2;
+    setOptional(\\value);
+    return first + (value * 3);
+}
+
+int sub main() {
+    printf(\"%s\\n%s\\n%s\\n%s\\n%d:%d:%d\\n\",
+        intOps(8), intOps(NOTHING), floatOps(8.0),
+        floatOps(NOTHING), mix(7), mix(NOTHING), mutation(7));
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-optional-scalar-" + string(getpid());
+mkdir(root);
+string source_path = root + "/test.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string expected = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, expected, actual);
+        exit(2);
+    }
+}
+
+string sub compile(string output, string env) {
+    string compile_output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1 %s -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, output, source_path));
+    if (!is_file(output)) {
+        printf("compile failed:\n%s", compile_output);
+        exit(2);
+    }
+    return compile_output;
+}
+
+string enabled_exe = root + "/enabled";
+string disabled_exe = root + "/disabled";
+string enabled_compile = compile(enabled_exe, "");
+string disabled_compile = compile(disabled_exe,
+    "QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION=1");
+if (enabled_compile
+            !~ /IR-OPT-AOT-EFFECTS: mix[^:]*:.*native-specializations=12/
+        || disabled_compile
+            =~ /IR-OPT-AOT-EFFECTS: (intOps|floatOps|mix)[^:]*:.*native-specializations=[1-9]/) {
+    printf("unexpected optional scalar specialization stats:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+
+foreach string path in ((enabled_exe, disabled_exe)) {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, path));
+    if (actual != expected) {
+        printf("AOT mismatch for %s:\nexpected:\n%sactual:\n%s",
+            path, expected, actual);
+        exit(2);
+    }
+}

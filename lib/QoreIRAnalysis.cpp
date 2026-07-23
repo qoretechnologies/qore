@@ -10566,6 +10566,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
 size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
     size_t specialized = 0;
     size_t check_count = 0;
+    bool optional_scalar_specialization =
+        !std::getenv("QORE_DISABLE_AOT_OPTIONAL_SCALAR_SPECIALIZATION");
     auto proven = [&](QoreIRValue value,
             QoreIRValueRepresentation representation,
             const QoreTypeInfo* type_info) {
@@ -10575,6 +10577,25 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             && facts->never_nothing
             && facts->representation == representation
             && facts->type_info == type_info;
+    };
+    auto exact_scalar = [&](QoreIRValue value,
+            QoreIRValueRepresentation native_representation,
+            qore_type_t type) {
+        if (!optional_scalar_specialization) {
+            return false;
+        }
+        const QoreIRValueFacts* facts = func.getValueFacts(value);
+        if (!facts || !facts->type_info
+                || (facts->representation != native_representation
+                    && facts->representation
+                        != QoreIRValueRepresentation::Boxed)) {
+            return false;
+        }
+        const QoreTypeInfo* value_type =
+            qore_get_value_type(facts->type_info);
+        return value_type && QoreTypeInfo::isType(value_type, type)
+            && (type != NT_INT
+                || !QoreTypeInfo::getReturnEnum(value_type));
     };
     auto set_result_facts = [&](QoreIRValue result,
             QoreIRValueRepresentation representation,
@@ -10698,7 +10719,21 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
             QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
         bool rhs_int = proven(inst->operands[1],
             QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
-        if (lhs_int && rhs_int) {
+        bool lhs_exact_int = lhs_int || exact_scalar(inst->operands[0],
+            QoreIRValueRepresentation::NativeInt, NT_INT);
+        bool rhs_exact_int = rhs_int || exact_scalar(inst->operands[1],
+            QoreIRValueRepresentation::NativeInt, NT_INT);
+        bool optional_int_safe = inst->opcode == QoreIROpcode::AddAny
+            || inst->opcode == QoreIROpcode::SubAny
+            || inst->opcode == QoreIROpcode::MulAny
+            || inst->opcode == QoreIROpcode::ModAny
+            || inst->opcode == QoreIROpcode::AndAny
+            || inst->opcode == QoreIROpcode::OrAny
+            || inst->opcode == QoreIROpcode::XorAny
+            || inst->opcode == QoreIROpcode::ShlAny
+            || inst->opcode == QoreIROpcode::ShrAny;
+        if (lhs_exact_int && rhs_exact_int
+                && ((lhs_int && rhs_int) || optional_int_safe)) {
             replacement = int_opcode(*inst);
             representation = QoreIRValueRepresentation::NativeInt;
             type_info = bigIntTypeInfo;
@@ -10707,8 +10742,26 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func) {
                 QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
             bool rhs_float = proven(inst->operands[1],
                 QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
-            if ((lhs_float || lhs_int) && (rhs_float || rhs_int)
-                    && (lhs_float || rhs_float)) {
+            bool lhs_exact_float = lhs_float || exact_scalar(
+                inst->operands[0],
+                QoreIRValueRepresentation::NativeFloat, NT_FLOAT);
+            bool rhs_exact_float = rhs_float || exact_scalar(
+                inst->operands[1],
+                QoreIRValueRepresentation::NativeFloat, NT_FLOAT);
+            bool lhs_numeric = lhs_exact_int || lhs_exact_float;
+            bool rhs_numeric = rhs_exact_int || rhs_exact_float;
+            bool proven_numeric = (lhs_float || lhs_int)
+                && (rhs_float || rhs_int)
+                && (lhs_float || rhs_float);
+            bool optional_float_safe =
+                inst->opcode == QoreIROpcode::AddAny
+                        || inst->opcode == QoreIROpcode::SubAny
+                        || inst->opcode == QoreIROpcode::MulAny
+                        || inst->opcode == QoreIROpcode::DivAny;
+            if (proven_numeric
+                    || (lhs_numeric && rhs_numeric
+                        && (lhs_exact_float || rhs_exact_float)
+                        && optional_float_safe)) {
                 replacement = float_opcode(inst->opcode);
                 representation = QoreIRValueRepresentation::NativeFloat;
                 type_info = floatTypeInfo;

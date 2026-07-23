@@ -236,6 +236,7 @@ hash<string, int> specialization_counts = (
     "signedZeroResults": 4,
     "nanComparisonResults": 6,
     "largeIntKernel": 8,
+    "optionalOperation": 1,
 );
 foreach string function in (specialization_counts.keys()) {
     int count = specialization_counts{function};
@@ -248,7 +249,7 @@ foreach string function in (specialization_counts.keys()) {
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (maybeAssigned|maybeRemoved|maybeDeleted|optionalOperation)[^:]*:.*native-specializations=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: (maybeAssigned|maybeRemoved|maybeDeleted)[^:]*:.*native-specializations=[1-9]/
         || disabled_compile =~ /native-specializations=[1-9]/) {
     printf("unsafe or disabled late specialization:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);

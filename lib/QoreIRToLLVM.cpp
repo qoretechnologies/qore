@@ -1490,6 +1490,33 @@ llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val)
 
 // Ensure a value is a native int64_t for typed int operations.
 // Handles: native i64 → pass through, NaN-boxed (INT48 or big int) → runtime conversion.
+llvm::Value* QoreIRToLLVM::getCachedStableConversion(
+        uint32_t value_id, const NativeConversionCache& cache) const {
+    if (std::getenv("QORE_DISABLE_AOT_STABLE_SCALAR_CONVERSION_REUSE")) {
+        return nullptr;
+    }
+    auto stable = stable_scalar_loads.find(value_id);
+    if (stable == stable_scalar_loads.end()) {
+        return nullptr;
+    }
+    auto found = cache.find(stable->second);
+    return found != cache.end()
+            && found->second.first == builder->GetInsertBlock()
+        ? found->second.second : nullptr;
+}
+
+void QoreIRToLLVM::cacheStableConversion(
+        uint32_t value_id, llvm::Value* value,
+        NativeConversionCache& cache) {
+    if (std::getenv("QORE_DISABLE_AOT_STABLE_SCALAR_CONVERSION_REUSE")) {
+        return;
+    }
+    auto stable = stable_scalar_loads.find(value_id);
+    if (stable != stable_scalar_loads.end()) {
+        cache[stable->second] = {builder->GetInsertBlock(), value};
+    }
+}
+
 llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
     if (!nanboxed_values.count(value_id)) {
         if (val->getType() == i64_type) {
@@ -1503,10 +1530,16 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
         }
         return val;
     }
+    if (llvm::Value* cached =
+            getCachedStableConversion(value_id, stable_int_conversions)) {
+        return cached;
+    }
     // NaN-boxed value: call runtime to extract int (handles both INT48 and QoreBigIntNode)
     auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
         llvm::FunctionType::get(i64_type, {i64_type}, false));
-    return builder->CreateCall(to_int, {val});
+    llvm::Value* result = builder->CreateCall(to_int, {val});
+    cacheStableConversion(value_id, result, stable_int_conversions);
+    return result;
 }
 
 // Inline fast-path for ensureIntType: check INT48 tag inline, call runtime only for big ints.
@@ -1527,6 +1560,10 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
             return builder->CreateSExtOrTrunc(val, i64_type);
         }
         return val;
+    }
+    if (llvm::Value* cached =
+            getCachedStableConversion(value_id, stable_int_conversions)) {
+        return cached;
     }
     // Inline tag check + sign-extend for INT48, runtime call for QoreBigIntNode
     auto* cur_func = builder->GetInsertBlock()->getParent();
@@ -1558,6 +1595,7 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
     auto* phi = builder->CreatePHI(i64_type, 2);
     phi->addIncoming(fast_result, fast_bb);
     phi->addIncoming(slow_result, slow_bb);
+    cacheStableConversion(value_id, phi, stable_int_conversions);
     return phi;
 }
 
@@ -1620,11 +1658,19 @@ llvm::Value* QoreIRToLLVM::ensureFloatType(llvm::Value* val, uint32_t value_id, 
     }
     if (val->getType() == i64_type) {
         if (nanboxed_values.count(value_id)) {
+            if (llvm::Value* cached =
+                    getCachedStableConversion(
+                        value_id, stable_float_conversions)) {
+                return cached;
+            }
             // NaN-boxed value (could be int OR float) - use runtime conversion
             // that handles both NaN-boxed types correctly
             auto to_float = module.getOrInsertFunction("qore_rt_to_float",
                 llvm::FunctionType::get(double_type, {i64_type}, false));
-            return builder->CreateCall(to_float, {val});
+            llvm::Value* result = builder->CreateCall(to_float, {val});
+            cacheStableConversion(
+                value_id, result, stable_float_conversions);
+            return result;
         } else {
             // Native integer - convert to float
             return builder->CreateSIToFP(val, double_type);
@@ -1651,6 +1697,11 @@ llvm::Value* QoreIRToLLVM::ensureFloatTypeInline(llvm::Value* val, uint32_t valu
     if (val->getType() != i64_type || !nanboxed_values.count(value_id)) {
         return ensureFloatType(val, value_id, module);
     }
+    if (llvm::Value* cached =
+            getCachedStableConversion(
+                value_id, stable_float_conversions)) {
+        return cached;
+    }
 
     auto* cur_func = builder->GetInsertBlock()->getParent();
     auto* fast_bb = llvm::BasicBlock::Create(ctx, "float_fast", cur_func);
@@ -1672,6 +1723,8 @@ llvm::Value* QoreIRToLLVM::ensureFloatTypeInline(llvm::Value* val, uint32_t valu
     auto* result = builder->CreatePHI(double_type, 2);
     result->addIncoming(fast_result, fast_bb);
     result->addIncoming(slow_result, slow_bb);
+    cacheStableConversion(
+        value_id, result, stable_float_conversions);
     return result;
 }
 
@@ -4080,6 +4133,8 @@ void QoreIRToLLVM::reloadAllLocalsFromRuntime(llvm::Module& module, llvm::Functi
     if (honor_reload_exempt && all_locals_reload_exempt) {
         return;
     }
+    stable_int_conversions.clear();
+    stable_float_conversions.clear();
     bool has_reloadable_local = false;
     for (auto& [key, alloca] : local_allocas) {
         (void)alloca;
@@ -7782,6 +7837,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_call_target_contexts.clear();
     aot_exact_class_guards.clear();
     stable_exact_receiver_loads.clear();
+    stable_scalar_loads.clear();
+    stable_int_conversions.clear();
+    stable_float_conversions.clear();
     nanboxed_values.clear();
     known_not_nothing_values.clear();
     preinstantiated_entry_loads.clear();
@@ -8339,6 +8397,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     || func.isAstVisibleLocal(key)) {
                 continue;
             }
+            const QoreTypeInfo* value_type =
+                qore_get_value_type(local->getTypeInfo());
+            bool stable_scalar = !local->isTopLevel() && value_type
+                && ((QoreTypeInfo::isType(value_type, NT_INT)
+                        && !QoreTypeInfo::getReturnEnum(value_type))
+                    || QoreTypeInfo::isType(value_type, NT_FLOAT));
             size_t stable_load_count = 0;
             for (const QoreIRLocalInstruction* load : loads) {
                 if (stable_load_count++ && !(stable_load_count % 100)
@@ -8349,6 +8413,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 }
                 if (!load->is_closure && !load->is_ref && load->result.isValid()) {
                     stable_exact_receiver_loads.emplace(load->result.id, local);
+                    if (stable_scalar) {
+                        stable_scalar_loads.emplace(load->result.id, local);
+                    }
                 }
             }
         }

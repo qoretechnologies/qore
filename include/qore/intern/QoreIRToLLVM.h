@@ -230,6 +230,13 @@ private:
     std::unordered_map<int32_t, std::unordered_map<const LocalVar*, llvm::Value*>>
         aot_exact_class_guards;
     std::unordered_map<uint32_t, const LocalVar*> stable_exact_receiver_loads;
+    std::unordered_map<uint32_t, const LocalVar*> stable_scalar_loads;
+
+    using NativeConversionCache =
+        std::unordered_map<const LocalVar*,
+            std::pair<llvm::BasicBlock*, llvm::Value*>>;
+    NativeConversionCache stable_int_conversions;
+    NativeConversionCache stable_float_conversions;
 
     // Approach B fast entry: LLVM function name override and parameter mapping.
     // When fast_entry_name is non-empty, lowerFunction uses it instead of func.name
@@ -849,6 +856,11 @@ private:
     // Ensure a value is a native int64_t for typed int operations.
     // Handles: native i64 (pass through), NaN-boxed INT48 or big int (runtime conversion).
     llvm::Value* ensureIntType(llvm::Value* val, uint32_t value_id);
+
+    llvm::Value* getCachedStableConversion(
+        uint32_t value_id, const NativeConversionCache& cache) const;
+    void cacheStableConversion(
+        uint32_t value_id, llvm::Value* value, NativeConversionCache& cache);
 
     // Inline fast-path version of ensureIntType for typed int ops (NOT in PHI fixup context).
     // Uses LLVM branches to check INT48 tag and sign-extend inline, falling back to runtime
