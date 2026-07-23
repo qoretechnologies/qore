@@ -994,7 +994,7 @@ public class ProviderIndexUtil {
                         ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
                         : NOTHING),
                     "options": (exists j.value.options ? map {
-                        $1.key: option_info_th.doCast(($1.value - "default_view") + {
+                        $1.key: option_info_th.doCast($1.value + {
                             "allowed_values": (exists $1.value.allowed_values
                                 ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                                 : NOTHING),
