@@ -1165,16 +1165,16 @@ public class ProviderIndexUtil {
         return ctx.app_info_th.doCastWithOverrides(info, (
             info.connection_options
             ? {
-                "connection_options": map {
-                    $1.key: ctx.conn_opt_th.doCastWithOverrides($1.value, {
+                "connection_options": ctx.conn_opt_th.doCastValuesWithOverrides(info.connection_options, map {
+                    $1.key: {
                         "allowed_values": (exists $1.value.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                             : NOTHING),
                         "element_allowed_values": (exists $1.value.element_allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
                             : NOTHING),
-                    }),
-                }, info.connection_options.pairIterator(),
+                    },
+                }, info.connection_options.pairIterator()),
             }
             : {}
         ));
@@ -1198,14 +1198,16 @@ public class ProviderIndexUtil {
             hash<auto> shape_map, *hash<auto> ui_view_map) {
         hash<auto> rv;
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
+            hash<auto> overrides;
             foreach hash<auto> j in (i.value.pairIterator()) {
                 on_error rethrow $1.err, sprintf("%s (app %y action %y)", $1.desc, i.key, j.key);
-                rv{i.key}{j.key} = action_info_th.doCastWithOverrides(j.value, {
+                overrides{j.key} = {
                     "path_vars": (j.value.path_vars
-                        ? map {$1.key: path_vars_th.doCast($1.value)}, j.value.path_vars.pairIterator(),
+                        ? path_vars_th.doCastValues(j.value.path_vars)
                         : NOTHING),
-                    "options": (exists j.value.options ? map {
-                        $1.key: option_info_th.doCastWithOverrides($1.value, {
+                    "options": (exists j.value.options ? option_info_th.doCastValuesWithOverrides(
+                        j.value.options, map {
+                        $1.key: {
                             "allowed_values": (exists $1.value.allowed_values
                                 ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                                 : NOTHING),
@@ -1214,15 +1216,17 @@ public class ProviderIndexUtil {
                                 : NOTHING),
                             "type": type_map{$1.value.type} ?? type_map."auto",
                             "default_view": ui_view_map{$1.value.default_view},
-                        })
-                    }, j.value.options.pairIterator() : NOTHING),
+                        }
+                    }, j.value.options.pairIterator()) : NOTHING),
                     "data_provider_info": (j.value.data_provider_info
                         ? deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
                             dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
                             dp_sig_info_th, dp_arg_info_th, type_map, shape_map)
                         : NOTHING),
-                });
+                };
             }
+            on_error rethrow $1.err, sprintf("%s (app %y)", $1.desc, i.key);
+            rv{i.key} = action_info_th.doCastValuesWithOverrides(i.value, overrides);
         }
         return rv;
     }
@@ -1247,8 +1251,8 @@ public class ProviderIndexUtil {
             "add_field", "update_field", "delete_field", "send_message") {
             key += "_options";
             if (rv{key}) {
-                rv{key} = map {
-                    $1.key: dp_opt_info_th.doCastWithOverrides($1.value, {
+                rv{key} = dp_opt_info_th.doCastValuesWithOverrides(rv{key}, map {
+                    $1.key: {
                         "allowed_values": (exists $1.value.allowed_values
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
                             : NOTHING),
@@ -1256,13 +1260,14 @@ public class ProviderIndexUtil {
                             ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
                             : NOTHING),
                         "type": (map type_map{$1} ?? type_map."auto", $1.value.type),
-                    }),
-                }, rv{key}.pairIterator();
+                    },
+                }, rv{key}.pairIterator());
             }
         }
         return dp_info_th.doCastWithOverrides(rv, {
-            "expressions": (exists rv.expressions ? map {
-                $1.key: dp_exp_info_th.doCastWithOverrides($1.value, {
+            "expressions": (exists rv.expressions ? dp_exp_info_th.doCastValuesWithOverrides(
+                rv.expressions, map {
+                $1.key: {
                     "args": (exists $1.value.args ? map dp_sig_info_th.doCastWithOverrides($1, {
                         "type": type_map{$1.type} ?? type_map."auto",
                     }), $1.value.args : NOTHING),
@@ -1272,17 +1277,11 @@ public class ProviderIndexUtil {
                             : NOTHING),
                     }), $1.value.arg_info : NOTHING),
                     "return_type": type_map{$1.value.return_type} ?? type_map."auto",
-                })
-            }, rv.expressions.pairIterator() : NOTHING),
-            "events": (exists rv.events ? map {
-                $1.key: dp_msg_info_th.doCast($1.value)
-            }, rv.events.pairIterator() : NOTHING),
-            "mapper_keys": (exists rv.mapper_keys ? map {
-                $1.key: mapper_key_info_th.doCast($1.value)
-            }, rv.mapper_keys.pairIterator() : NOTHING),
-            "messages": (exists rv.messages ? map {
-                $1.key: dp_msg_info_th.doCast($1.value)
-            }, rv.messages.pairIterator() : NOTHING),
+                }
+            }, rv.expressions.pairIterator()) : NOTHING),
+            "events": (exists rv.events ? dp_msg_info_th.doCastValues(rv.events) : NOTHING),
+            "mapper_keys": (exists rv.mapper_keys ? mapper_key_info_th.doCastValues(rv.mapper_keys) : NOTHING),
+            "messages": (exists rv.messages ? dp_msg_info_th.doCastValues(rv.messages) : NOTHING),
         });
     }
 

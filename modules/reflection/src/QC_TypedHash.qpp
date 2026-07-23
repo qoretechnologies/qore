@@ -537,6 +537,117 @@ hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
     return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
 }
 
+//! Returns a hash whose hash values have been converted to this typed hash
+/** @par Example:
+    @code{.py}
+TypedHash th = TypedHash::forName("ConnectionInfo");
+hash<auto> typed_values = th.doCastValues({
+    "primary": {"name": "main"},
+    "secondary": {"name": "backup"},
+});
+    @endcode
+
+    @param values hashes to convert, keyed by caller-defined names
+
+    @return a hash with the same keys as @a values and typed hash values
+
+    @throw RUNTIME-TYPE-ERROR an input value is not a hash or a member value has an incompatible type
+    @throw HASHDECL-INIT-ERROR an input hash contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastValues(hash<auto> values) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator i(values);
+    size_t count = 0;
+    while (i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash batch conversion")) {
+            return QoreValue();
+        }
+        QoreValue value = i.get();
+        if (value.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR",
+                "TypedHash::doCastValues() value for key '%s' must be a hash; got type '%s' instead",
+                i.getKey(), value.getTypeName());
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> cast_value(
+            thd->th->doRuntimeCast(value.get<const QoreHashNode>(), xsink), xsink);
+        if (*xsink) {
+            xsink->appendLastDescription(" (while batch-converting key '%s')", i.getKey());
+            return QoreValue();
+        }
+        rv->setKeyValue(i.getKey(), cast_value.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+//! Returns a hash whose hash values have been converted to this typed hash with per-key overrides
+/** @par Example:
+    @code{.py}
+TypedHash th = TypedHash::forName("ConnectionInfo");
+hash<auto> typed_values = th.doCastValuesWithOverrides({
+    "primary": {"name": "main"},
+    "secondary": {"name": "backup"},
+}, {
+    "primary": {"timeout": 30s},
+});
+    @endcode
+
+    @param values base hashes to convert, keyed by caller-defined names
+    @param overrides optional override hashes keyed like @a values; unmatched override keys are ignored
+
+    @return a hash with the same keys as @a values and typed hash values
+
+    @throw RUNTIME-TYPE-ERROR an input or matching override value is not a hash, or a member value has an
+        incompatible type
+    @throw HASHDECL-INIT-ERROR an input or matching override hash contains an unknown member
+
+    @since %Qore 3.0
+*/
+hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    ConstHashIterator i(values);
+    size_t count = 0;
+    while (i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash batch conversion with overrides")) {
+            return QoreValue();
+        }
+        QoreValue value = i.get();
+        if (value.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR",
+                "TypedHash::doCastValuesWithOverrides() value for key '%s' must be a hash; got type '%s' instead",
+                i.getKey(), value.getTypeName());
+            return QoreValue();
+        }
+        QoreValue override_value = overrides->getKeyValue(i.getKey());
+        const QoreHashNode* override_hash = nullptr;
+        if (!override_value.isNothing()) {
+            if (override_value.getType() != NT_HASH) {
+                xsink->raiseException("RUNTIME-TYPE-ERROR",
+                    "TypedHash::doCastValuesWithOverrides() override for key '%s' must be a hash; got type '%s' "
+                    "instead", i.getKey(), override_value.getTypeName());
+                return QoreValue();
+            }
+            override_hash = override_value.get<const QoreHashNode>();
+        }
+        ReferenceHolder<QoreHashNode> cast_value(thd->th->doRuntimeCastWithOverrides(
+            value.get<const QoreHashNode>(), override_hash, xsink), xsink);
+        if (*xsink) {
+            xsink->appendLastDescription(" (while batch-converting key '%s')", i.getKey());
+            return QoreValue();
+        }
+        rv->setKeyValue(i.getKey(), cast_value.release(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
 //! Returns the parent typed hash if this typed hash inherits from another, or @ref nothing if none
 /** @par Example:
     @code{.py}

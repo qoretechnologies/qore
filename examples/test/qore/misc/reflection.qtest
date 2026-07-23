@@ -93,6 +93,12 @@ namespace TestNs {
     }
 }
 
+hashdecl BatchCastInfo {
+    int value;
+    *string label;
+    int count = 1;
+}
+
 class CTest {
     constructor(hash h) {}
     constructor(hash<auto> h) {}
@@ -140,6 +146,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("issue 3141", \issue3141Test());
         addTestCase("issue 3035", \issue3035Test());
         addTestCase("reflection tests", \reflectionTests());
+        addTestCase("typed hash batch casts", \typedHashBatchCastTest());
         addTestCase("const method reflection tests", \constMethodReflectionTests());
         addTestCase("named-call reflection tests", \namedCallReflectionTests());
         addTestCase("plugin registry reflection tests", \pluginRegistryReflectionTests());
@@ -1912,6 +1919,48 @@ class ReflectionTest inherits QUnit::Test {
         assertEq("reflection", th.getModuleName());
         th = TypedHash::forName("StatInfo");
         assertNothing(th.getModuleName());
+    }
+
+    typedHashBatchCastTest() {
+        TypedHash th = TypedHash::forName("BatchCastInfo");
+        hash<auto> values = th.doCastValues({
+            "first": {
+                "value": 1,
+            },
+            "second": {
+                "value": 2,
+                "label": "two",
+            },
+        });
+        assertTrue(values.first instanceof hash<BatchCastInfo>, "first batch value has the requested hashdecl");
+        assertTrue(values.second instanceof hash<BatchCastInfo>, "second batch value has the requested hashdecl");
+        assertEq(1, values.first.count, "batch conversion applies hashdecl defaults");
+        assertEq("two", values.second.label, "batch conversion preserves source members");
+
+        values = th.doCastValuesWithOverrides({
+            "first": {
+                "value": 1,
+            },
+            "second": {
+                "value": 2,
+            },
+        }, {
+            "first": {
+                "label": "overridden",
+                "count": 3,
+            },
+            "unmatched": {
+                "label": "ignored",
+            },
+        });
+        assertEq("overridden", values.first.label, "matching batch overrides take precedence");
+        assertEq(3, values.first.count, "matching batch overrides preserve type conversion");
+        assertNothing(values.second.label, "missing batch override leaves an optional member unset");
+        assertThrows("RUNTIME-TYPE-ERROR", \th.doCastValues(), ({"bad": 1},),
+            "batch conversion rejects non-hash values");
+        assertThrows("RUNTIME-TYPE-ERROR", \th.doCastValuesWithOverrides(),
+            ({"bad": {"value": 1}}, {"bad": 1}),
+            "batch conversion rejects non-hash overrides");
     }
 
     typeTests() {
