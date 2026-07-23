@@ -10897,12 +10897,20 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             bool should_invoke = !exception_stack.empty();
             QoreParseAnalysis base_analysis;
             bool have_base_analysis = m->isPseudo() && getAnalysis(base_expr, base_analysis);
+            const QoreTypeInfo* analyzed_base_type = have_base_analysis
+                && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
+                ? selectAnalysisType(base_analysis) : nullptr;
             bool pseudo_base_known_string = have_base_analysis
                 && base_analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo)
-                && QoreTypeInfo::isType(selectAnalysisType(base_analysis), NT_STRING);
+                && analyzed_base_type
+                && QoreTypeInfo::isType(
+                    qore_get_value_type(analyzed_base_type), NT_STRING);
             bool pseudo_base_known_assigned_string = pseudo_base_known_string
                 && (base_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-                    || base_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
+                    || (base_analysis.hasFlag(
+                            QoreParseAnalysis::DefinitelyAssigned)
+                        && !QoreTypeInfo::parseAcceptsReturns(
+                            analyzed_base_type, NT_NOTHING)));
             bool pseudo_arg0_known_string = false;
             bool pseudo_arg0_known_assigned_string = false;
             bool pseudo_arg0_known_assigned_int = false;
@@ -10949,11 +10957,17 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     const QoreTypeInfo* arg_type = have_analysis ? selectAnalysisType(arg_analysis) : nullptr;
                     bool assigned = have_analysis
                         && (arg_analysis.hasFlag(QoreParseAnalysis::NeverNothing)
-                            || arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned));
-                    bool known_assigned_int = assigned && QoreTypeInfo::isType(arg_type, NT_INT);
+                            || (arg_analysis.hasFlag(
+                                    QoreParseAnalysis::DefinitelyAssigned)
+                                && !QoreTypeInfo::parseAcceptsReturns(
+                                    arg_type, NT_NOTHING)));
+                    bool known_assigned_int = assigned && arg_type
+                        && QoreTypeInfo::isType(
+                            qore_get_value_type(arg_type), NT_INT);
                     if (!ai) {
-                        pseudo_arg0_known_string = have_analysis
-                            && QoreTypeInfo::isType(arg_type, NT_STRING);
+                        pseudo_arg0_known_string = have_analysis && arg_type
+                            && QoreTypeInfo::isType(
+                                qore_get_value_type(arg_type), NT_STRING);
                         pseudo_arg0_known_assigned_string = assigned && pseudo_arg0_known_string;
                         pseudo_arg0_known_assigned_int = known_assigned_int;
                     } else {

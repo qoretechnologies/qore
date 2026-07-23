@@ -92,6 +92,23 @@ try {
     printf(\"substr.missing_start:EX:%s\\n\", ex.err);
 }
 
+string sub optionalStringOps(*string value, *string pattern) {
+    return sprintf(\"%y:%y:%y:%d:%d:%y\", value.startsWith(pattern),
+        value.endsWith(pattern), value.contains(pattern), value.find(pattern),
+        value.rfind(pattern), value.substr(1, 2));
+}
+printf(\"optional.assigned:%s\\n\", optionalStringOps(\"abcdef\", \"bc\"));
+try {
+    printf(\"optional.missing_base:%s\\n\", optionalStringOps(NOTHING, \"bc\"));
+} catch (hash<auto> ex) {
+    printf(\"optional.missing_base:EX:%s\\n\", ex.err);
+}
+try {
+    printf(\"optional.missing_arg:%s\\n\", optionalStringOps(\"abcdef\", NOTHING));
+} catch (hash<auto> ex) {
+    printf(\"optional.missing_arg:EX:%s\\n\", ex.err);
+}
+
 string removed = \"removed\";
 remove removed;
 printf(\"removed.val:%y\\n\", removed.val());
@@ -160,6 +177,9 @@ predicate.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
 find.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
 find.missing_offset:2
 substr.missing_start:EX:RUNTIME-OVERLOAD-ERROR
+optional.assigned:False:False:True:1:1:\"bc\"
+optional.missing_base:EX:PSEUDO-METHOD-DOES-NOT-EXIST
+optional.missing_arg:EX:RUNTIME-OVERLOAD-ERROR
 removed.val:False
 removed.empty:True
 removed.sizep:False

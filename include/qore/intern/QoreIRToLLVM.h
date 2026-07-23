@@ -1185,6 +1185,19 @@ private:
             llvm::Function* llvm_func, llvm::Value*& args_array, int& nargs,
             std::string& error);
 
+    // Emit the assigned branch of an argument-taking string pseudo-method
+    // whose statically typed operands may still contain NOTHING.  Leaves the
+    // builder on the generic fallback block when a fast path was emitted.
+    llvm::Value* emitGuardedStringPseudoFastPath(const QoreIRInstruction* inst,
+            QoreIRIntrinsic intrinsic, bool pseudo,
+            bool base_known_string, bool base_assigned_string,
+            bool arg0_known_string, bool arg0_assigned_string,
+            bool arg0_assigned_int, bool arg1_assigned_int,
+            llvm::Value* base_boxed, llvm::Module& module,
+            llvm::Function* llvm_func, llvm::BasicBlock*& fast_end,
+            llvm::BasicBlock*& merge_block, bool& result_needs_cleanup,
+            std::string& error);
+
     // Collect fast-entry arguments without eagerly boxing native values.  When
     // a runtime fallback is possible, args_array is allocated but native slots
     // are populated only on the fallback edge.

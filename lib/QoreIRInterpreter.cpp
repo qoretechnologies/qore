@@ -165,29 +165,33 @@ static bool qore_ir_try_safe_value_no_arg_pseudo_fast_path(bool pseudo, bool bas
     return false;
 }
 
-static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_assigned_string,
-        bool arg0_known_assigned_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
+static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known_string,
+        bool arg0_known_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
         QoreIRIntrinsic intrinsic, const QoreValue& base, uint64_t* nanboxed_args,
         int nargs, QoreValue& res, ExceptionSink* xsink) {
-    if (!pseudo || !base_known_assigned_string || base.getType() != NT_STRING) {
+    if (std::getenv("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO")
+            || !pseudo || !base_known_string || base.getType() != NT_STRING) {
         return false;
     }
 
     int predicate_id = qore_ir_interpreter_get_string_pseudo_predicate_id(intrinsic);
-    if (predicate_id >= 0 && nargs == 1 && arg0_known_assigned_string) {
+    if (predicate_id >= 0 && nargs == 1 && arg0_known_string
+            && fromBits(nanboxed_args[0]).getType() == NT_STRING) {
         res = fromBits(qore_rt_pseudo_string_predicate_noguard(toBits(base), nanboxed_args[0],
             predicate_id, xsink));
         return true;
     }
 
-    if (intrinsic == QoreIRIntrinsic::StringFind && arg0_known_assigned_string
+    if (intrinsic == QoreIRIntrinsic::StringFind && arg0_known_string
+            && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : 0;
         res = fromBits(qore_rt_pseudo_string_find_noguard(toBits(base), nanboxed_args[0], offset, xsink));
         return true;
     }
 
-    if (intrinsic == QoreIRIntrinsic::StringRFind && arg0_known_assigned_string
+    if (intrinsic == QoreIRIntrinsic::StringRFind && arg0_known_string
+            && fromBits(nanboxed_args[0]).getType() == NT_STRING
             && (nargs == 1 || (nargs == 2 && arg1_known_assigned_int))) {
         int64_t offset = nargs == 2 ? fromBits(nanboxed_args[1]).getAsBigInt() : -1;
         res = fromBits(qore_rt_pseudo_string_rfind_noguard(toBits(base), nanboxed_args[0], offset, xsink));
@@ -14363,8 +14367,8 @@ lvalue_path_unary_done:
                             base, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.
                     } else if (qore_ir_try_string_arg_pseudo_fast_path(direct_inst->pseudo,
-                            direct_inst->pseudo_base_known_assigned_string,
-                            direct_inst->pseudo_arg0_known_assigned_string,
+                            direct_inst->pseudo_base_known_string,
+                            direct_inst->pseudo_arg0_known_string,
                             direct_inst->pseudo_arg0_known_assigned_int,
                             direct_inst->pseudo_arg1_known_assigned_int, intrinsic,
                             base, nanboxed_args, nargs, res, xsink)) {
@@ -14481,8 +14485,8 @@ lvalue_path_unary_done:
                             base, nargs, res, xsink)) {
                         // Result produced by the inline string pseudo-method helper.
                     } else if (qore_ir_try_string_arg_pseudo_fast_path(de_invoke_inst->pseudo,
-                            de_invoke_inst->pseudo_base_known_assigned_string,
-                            de_invoke_inst->pseudo_arg0_known_assigned_string,
+                            de_invoke_inst->pseudo_base_known_string,
+                            de_invoke_inst->pseudo_arg0_known_string,
                             de_invoke_inst->pseudo_arg0_known_assigned_int,
                             de_invoke_inst->pseudo_arg1_known_assigned_int, intrinsic,
                             base, nanboxed_args, nargs, res, xsink)) {
