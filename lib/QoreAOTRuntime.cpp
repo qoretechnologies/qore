@@ -8606,7 +8606,7 @@ static void registerAOTFunctionsFromSlotMaps(
     AOTClosureRuntimeBindingMap& closure_bindings = external_closure_bindings
         ? *external_closure_bindings : local_closure_bindings;
     const bool use_slot_prefix_index = getenv("QORE_DISABLE_AOT_SLOT_PREFIX_INDEX") == nullptr;
-    std::unordered_map<std::string, std::vector<std::string>> slot_prefix_index;
+    std::unordered_map<std::string, std::vector<const QoreAOTFunc*>> slot_prefix_index;
     if (use_slot_prefix_index) {
         slot_prefix_index.reserve(func_map.size());
         size_t index_count = 0;
@@ -8615,7 +8615,7 @@ static void registerAOTFunctionsFromSlotMaps(
                     && qore_check_cancel(nullptr, "AOT slot prefix index build")) {
                 return;
             }
-            slot_prefix_index[getAOTFunctionKeyPrefix(fi.first)].push_back(fi.first);
+            slot_prefix_index[getAOTFunctionKeyPrefix(fi.first)].push_back(fi.second);
             ++index_count;
         }
     }
@@ -8668,30 +8668,32 @@ static void registerAOTFunctionsFromSlotMaps(
             bool ambiguous_compatible_func = false;
             std::string slot_key(func_name);
             std::string slot_prefix = getAOTFunctionKeyPrefix(slot_key);
-            auto check_compatible = [&](const auto& fi) {
+            auto check_compatible = [&](const std::string& candidate_name,
+                    const QoreAOTFunc* candidate_func) {
                 if (!aotSignatureStringsCompatible(slot_key.substr(slot_prefix.size()),
-                        fi->first.substr(slot_prefix.size()))) {
+                        candidate_name.substr(slot_prefix.size()))) {
                     return false;
                 }
-                if (compatible_func && compatible_func != fi->second) {
+                if (compatible_func && compatible_func != candidate_func) {
                     ambiguous_compatible_func = true;
                     return true;
                 }
-                compatible_func = fi->second;
-                compatible_func_name = fi->first;
+                compatible_func = candidate_func;
+                compatible_func_name = candidate_name;
                 return false;
             };
             if (use_slot_prefix_index) {
                 auto pi = slot_prefix_index.find(slot_prefix);
                 if (pi != slot_prefix_index.end()) {
                     size_t candidate_count = 0;
-                    for (const std::string& candidate_name : pi->second) {
+                    for (const QoreAOTFunc* candidate_func : pi->second) {
                         if (candidate_count && !(candidate_count % 100)
                                 && qore_check_cancel(nullptr, "AOT slot compatibility lookup")) {
                             return;
                         }
-                        auto fi = func_map.find(candidate_name);
-                        if (fi != func_map.end() && check_compatible(fi)) {
+                        const std::string candidate_name(candidate_func->name);
+                        if (func_map.find(candidate_name) != func_map.end()
+                                && check_compatible(candidate_name, candidate_func)) {
                             break;
                         }
                         ++candidate_count;
@@ -8702,7 +8704,7 @@ static void registerAOTFunctionsFromSlotMaps(
                     if (getAOTFunctionKeyPrefix(fi->first) != slot_prefix) {
                         continue;
                     }
-                    if (check_compatible(fi)) {
+                    if (check_compatible(fi->first, fi->second)) {
                         break;
                     }
                 }
@@ -8727,7 +8729,6 @@ static void registerAOTFunctionsFromSlotMaps(
             continue;
         }
         const QoreAOTFunc* aot_func = it->second;
-        std::string native_func_name = it->first;
         const bool is_native_closure = !strncmp(func_name, "__aot_closure::", 15);
 
         // Find the UserVariantBase in the namespace tree
@@ -8739,16 +8740,19 @@ static void registerAOTFunctionsFromSlotMaps(
             uvb = deserialized_variants->findSlotMapVariant(func_name,
                 variant_class_ctx);
         }
-        std::string fname_str(func_name);
-
-        // Strip signature suffix if present (e.g., "add(int,int)" -> "add")
-        size_t paren = fname_str.find('(');
-        if (paren != std::string::npos) {
-            fname_str = fname_str.substr(0, paren);
-        }
-
-        size_t sep = fname_str.rfind("::");
+        std::string fname_str;
+        size_t sep = std::string::npos;
         bool qualified_method_found = false;
+        if (!uvb) {
+            fname_str = func_name;
+
+            // Strip signature suffix if present (e.g., "add(int,int)" -> "add")
+            size_t paren = fname_str.find('(');
+            if (paren != std::string::npos) {
+                fname_str.resize(paren);
+            }
+            sep = fname_str.rfind("::");
+        }
 
         if (!uvb && sep != std::string::npos) {
             // Method: Namespace::ClassName::methodName — use last :: as class/method separator
@@ -9087,7 +9091,7 @@ static void registerAOTFunctionsFromSlotMaps(
             }
             if (std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr) {
                 ++registered;
-                func_map.erase(native_func_name);
+                func_map.erase(it);
                 ptr = entry_end;
                 continue;
             }
@@ -9123,7 +9127,7 @@ static void registerAOTFunctionsFromSlotMaps(
             if (ignored_unlinked_functions) {
                 ++*ignored_unlinked_functions;
             }
-            func_map.erase(native_func_name);
+            func_map.erase(it);
             printd(2, "AOT slot-reg: ignored unlinked native body '%s'\n", func_name);
             ptr = entry_end;
             continue;
@@ -9131,7 +9135,7 @@ static void registerAOTFunctionsFromSlotMaps(
 
         if (uvb && uvb->hasCachedFunction() && !is_init_func) {
             ++registered;
-            func_map.erase(native_func_name);
+            func_map.erase(it);
             printd(2, "AOT slot-reg: '%s' already registered (shared variant), skipping\n", func_name);
             ptr = entry_end;
             continue;
@@ -9157,7 +9161,7 @@ static void registerAOTFunctionsFromSlotMaps(
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
             // Remove from func_map so any registration gap is reported precisely.
-            func_map.erase(native_func_name);
+            func_map.erase(it);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
             if (is_native_closure && getenv("QORE_AOT_DEBUG_NATIVE_CLOSURES")) {
                 fprintf(stderr, "AOT: registered native closure '%s'\n", func_name);
@@ -9174,14 +9178,14 @@ static void registerAOTFunctionsFromSlotMaps(
                 info.name = func_name;
                 init_func_contexts->push_back(std::move(info));
                 ++registered;
-                func_map.erase(native_func_name);
+                func_map.erase(it);
                 printd(2, "AOT slot-reg: collected init function '%s' for execution\n", func_name);
             } else if (is_init_func) {
                 // Init function but no init_func_contexts — deferred to ns_init.
                 // Count as registered so the warning doesn't fire for these.
                 delete ctx;
                 ++registered;
-                func_map.erase(native_func_name);
+                func_map.erase(it);
                 printd(2, "AOT slot-reg: init function '%s' deferred to ns_init\n", func_name);
             } else {
                 // Toplevel or unresolved — handled separately
@@ -13929,6 +13933,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         debug_metadata = makeAOTDebugMetadata(deserializer.getReader(),
             metadata, metadata_len);
         std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+        func_map.reserve(static_cast<size_t>(num_functions));
         for (int i = 0; i < num_functions; ++i) {
             if (functions[i].name && functions[i].fn_ptr) {
                 func_map[functions[i].name] = &functions[i];
