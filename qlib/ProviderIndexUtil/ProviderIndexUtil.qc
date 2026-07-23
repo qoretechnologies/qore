@@ -27,6 +27,8 @@ public namespace ProviderIndexUtil {
 #! The environment variable for the provider index
 public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 
+const RoutingIndexVersion = 1;
+
 #! Data provider index
 public hashdecl DataProviderIndexInfo {
     #! Factory to module map
@@ -92,6 +94,16 @@ hashdecl MetadataDeserializeContext {
     *hash<auto> ui_view_map;
 }
 
+#! Versioned routing sidecar for a data provider index
+hashdecl DataProviderRoutingIndexInfo {
+    int version;
+    string data_sha256;
+    string routing_sha256;
+    *hash<string, string> factorymap;
+    *hash<string, hash<string, bool>> appmap;
+    *hash<string, hash<string, bool>> schememap;
+}
+
 #! The main utility class
 public class ProviderIndexUtil {
     public {}
@@ -134,6 +146,11 @@ public class ProviderIndexUtil {
         static hash<string, int> app_metadata_initializing;
         static hash<string, bool> action_metadata_initialized;
         static hash<string, int> action_metadata_initializing;
+
+        #! Deferred full-index metadata loading state
+        static bool raw_metadata_deferred;
+        static bool raw_metadata_loading;
+        static *int raw_metadata_loading_tid;
 
         #! All apps loaded flag
         static bool apps_loaded;
@@ -456,7 +473,7 @@ public class ProviderIndexUtil {
 
         *hash<DataProviderIndexInfo> new_index;
         try {
-            new_index = readRawDataProviderIndex();
+            new_index = readInitialDataProviderIndex();
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -481,6 +498,54 @@ public class ProviderIndexUtil {
         initializing = False;
         remove initializing_tid;
         init_cond.broadcast();
+    }
+
+    #! Loads serialized metadata from the canonical index after routing-only initialization
+    static private checkRawMetadataIndex() {
+        checkDataIndex();
+        if (!initialized || !raw_metadata_deferred) {
+            return;
+        }
+
+        {
+            m.lock();
+            on_exit m.unlock();
+            while (raw_metadata_loading && raw_metadata_loading_tid != gettid()) {
+                metadata_init_cond.wait(m);
+            }
+            if (!raw_metadata_deferred) {
+                return;
+            }
+            if (raw_metadata_loading) {
+                return;
+            }
+            raw_metadata_loading = True;
+            raw_metadata_loading_tid = gettid();
+        }
+
+        *hash<DataProviderIndexInfo> full_index;
+        try {
+            full_index = readRawDataProviderIndex();
+        } catch (hash<ExceptionInfo> ex) {
+            m.lock();
+            on_exit m.unlock();
+            raw_metadata_loading = False;
+            remove raw_metadata_loading_tid;
+            metadata_init_cond.broadcast();
+            rethrow;
+        }
+
+        m.lock();
+        on_exit m.unlock();
+        raw_appinfomap = full_index.appinfomap ?? {};
+        raw_actioninfomap = full_index.actioninfomap ?? {};
+        if (full_index.top_actioninfomap) {
+            index.top_actioninfomap = full_index.top_actioninfomap;
+        }
+        raw_metadata_deferred = False;
+        raw_metadata_loading = False;
+        remove raw_metadata_loading_tid;
+        metadata_init_cond.broadcast();
     }
 
     #! Ensures that the shared metadata deserialization context has been initialized
@@ -532,7 +597,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that app metadata for the given app has been deserialized
     static private checkAppMetadata(string app) {
-        checkDataIndex();
+        checkRawMetadataIndex();
         if (!initialized || app_metadata_initialized{app} || !checkMetadataContext()) {
             return;
         }
@@ -575,7 +640,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that action metadata for the given app has been deserialized
     static private checkActionMetadata(string app) {
-        checkDataIndex();
+        checkRawMetadataIndex();
         if (!initialized || action_metadata_initialized{app} || !checkMetadataContext()) {
             return;
         }
@@ -621,7 +686,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that all app metadata has been deserialized
     static private checkAllAppMetadata() {
-        checkDataIndex();
+        checkRawMetadataIndex();
         if (!initialized || !checkMetadataContext()) {
             return;
         }
@@ -670,7 +735,7 @@ public class ProviderIndexUtil {
 
     #! Ensures that all action metadata has been deserialized
     static private checkAllActionMetadata() {
-        checkDataIndex();
+        checkRawMetadataIndex();
         if (!initialized || !checkMetadataContext()) {
             return;
         }
@@ -748,12 +813,80 @@ public class ProviderIndexUtil {
     #! Writes the data provider index to the configured directory
     static hash<ProviderIndexInfo> writeDataProviderIndex(*hash<DataProviderIndexInfo> h, date delta,
             hash<auto> summary) {
-        return writeIndex(h, "data", delta, summary);
+        hash<ProviderIndexInfo> info = writeIndex(h, "data", delta, summary);
+        try {
+            writeRoutingDataProviderIndex(h, digest("sha256", File::readTextFile(info.path)).toHex());
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::LevelWarn, "Unable to write the optional data provider routing index: %s",
+                get_exception_string(ex));
+        }
+        return info;
     }
 
     #! Reads the data provider index from the configured directory
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
         return deserializeDataProviderIndex(readRawDataProviderIndex());
+    }
+
+    #! Reads a validated routing sidecar when available, otherwise reads the canonical index
+    static private *hash<DataProviderIndexInfo> readInitialDataProviderIndex() {
+        *hash<DataProviderIndexInfo> rv = readRoutingDataProviderIndex();
+        if (rv) {
+            raw_metadata_deferred = True;
+            return rv;
+        }
+        return readRawDataProviderIndex();
+    }
+
+    #! Writes the compact routing sidecar for a canonical data provider index
+    static private writeRoutingDataProviderIndex(*hash<DataProviderIndexInfo> h, string data_sha256) {
+        hash<auto> routing = getRoutingIndexPayload(h);
+        writeIndex(routing + {
+            "version": RoutingIndexVersion,
+            "data_sha256": data_sha256,
+            "routing_sha256": digest("sha256", make_yaml(routing, BlockStyle)).toHex(),
+        }, "routing", 0s, {});
+    }
+
+    #! Reads and validates the compact routing sidecar
+    static private *hash<DataProviderIndexInfo> readRoutingDataProviderIndex() {
+        try {
+            *hash<DataProviderRoutingIndexInfo> routing =
+                cast<*hash<DataProviderRoutingIndexInfo>>(readIndex("routing", True));
+            if (!routing || routing.version != RoutingIndexVersion) {
+                return;
+            }
+
+            hash<auto> routing_payload = getRoutingIndexPayload(routing);
+            if (routing.routing_sha256 != digest("sha256", make_yaml(routing_payload, BlockStyle)).toHex()) {
+                return;
+            }
+
+            string data_yaml = File::readTextFile(getIndexPath("data"));
+            if (routing.data_sha256 != digest("sha256", data_yaml).toHex()) {
+                return;
+            }
+
+            return <DataProviderIndexInfo>{
+                "factorymap": routing.factorymap ?? {},
+                "appmap": routing.appmap ?? {},
+                "schememap": routing.schememap ?? {},
+                "appinfomap": {},
+                "actioninfomap": {},
+                "top_actioninfomap": {},
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+    }
+
+    #! Returns the canonical routing payload for sidecar checksumming
+    static private hash<auto> getRoutingIndexPayload(*hash<auto> h) {
+        return {
+            "factorymap": h.factorymap ?? {},
+            "appmap": h.appmap ?? {},
+            "schememap": h.schememap ?? {},
+        };
     }
 
     #! Reads the serialized data provider index without reconstructing typed metadata
@@ -971,7 +1104,7 @@ public class ProviderIndexUtil {
     }
 
     #! Reads the index from the configured directory
-    static private *hash<auto> readIndex(string type) {
+    static private *hash<auto> readIndex(string type, bool quiet = False) {
 %ifdef NoYaml
         throw "PROVIDER-INDEX-ERROR", sprintf("YAML support is not available; cannot read %s provider index", type);
 %else
@@ -985,7 +1118,10 @@ public class ProviderIndexUtil {
             string path = getIndexPath(type);
             return parse_yaml(File::readTextFile(path));
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::LevelError, "Ignoring error reading data provider %s index: %s: %s", type, ex.err, ex.desc);
+            if (!quiet) {
+                log(LoggerLevel::LevelError, "Ignoring error reading data provider %s index: %s: %s",
+                    type, ex.err, ex.desc);
+            }
         }
 %endif
     }

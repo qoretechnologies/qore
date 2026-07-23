@@ -60,10 +60,23 @@ class ActionCatalogReentrantSchemeTest inherits QUnit::Test {
         hash<string, bool> modules = {};
         modules{normalize_dir(get_script_dir()) + DirSep + ReentrantModuleFile} = True;
         ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {},
+            "actioninfomap": {},
+            "top_actioninfomap": {},
+        }, 0s, {});
+
+        # Replace only the canonical index so the stale routing sidecar must be rejected.
+        File data_index();
+        data_index.open(ProviderIndexUtil::getIndexPath("data"), O_WRONLY | O_TRUNC);
+        data_index.write(make_yaml(<DataProviderIndexInfo>{
             "schememap": {
                 ReentrantScheme: modules,
             },
-        }, 0s, {});
+        }, BlockStyle));
+        data_index.close();
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": ReentrantOuterApp,

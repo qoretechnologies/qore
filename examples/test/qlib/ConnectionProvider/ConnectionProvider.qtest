@@ -71,6 +71,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         mkdir(dir);
         on_exit {
             unlink(dir + "/qore-data-index.yaml");
+            unlink(dir + "/qore-routing-index.yaml");
             rmdir(dir);
         }
 
@@ -82,6 +83,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
                 },
             },
         }, 0s, {});
+        unlink(dir + "/qore-routing-index.yaml");
 
         hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("rest");
         assertEq(True, exists info.schemes.rest, "built-in scheme module loaded after stale indexed module");
