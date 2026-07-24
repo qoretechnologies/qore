@@ -1489,6 +1489,30 @@ llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
     return builder->CreateAnd(is_pointer, ptr_not_null);
 }
 
+void QoreIRToLLVM::emitDecrefIfNode(llvm::Module& module, llvm::Value* val) {
+    if (std::getenv("QORE_DISABLE_AOT_INLINE_DECREF")) {
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref_fn, {val, xsink_arg});
+        return;
+    }
+
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* decref_bb =
+        llvm::BasicBlock::Create(ctx, "decref_node", func);
+    llvm::BasicBlock* continue_bb =
+        llvm::BasicBlock::Create(ctx, "decref_cont", func);
+    builder->CreateCondBr(hasNodeInline(val), decref_bb, continue_bb);
+
+    builder->SetInsertPoint(decref_bb);
+    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(decref_fn, {val, xsink_arg});
+    builder->CreateBr(continue_bb);
+
+    builder->SetInsertPoint(continue_bb);
+}
+
 llvm::Value* QoreIRToLLVM::emitIsBoxedInt48(llvm::Value* qv) {
     llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
     return builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_INT48));
@@ -3334,11 +3358,9 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     // Decref previous value before overwriting.  This is required even when
     // exception checks are deferred: ordinary AOT functions can contain loops,
     // so the same cleanup alloca may be reused many times before function exit.
-    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
     builder->CreateStore(result, cleanup_alloca);
-    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    emitDecrefIfNode(*current_module, old_val);
 
     registerInvokeCleanupAlloca(cleanup_alloca);
     invoke_alloca_map[result_id] = cleanup_alloca;
@@ -3857,14 +3879,12 @@ void QoreIRToLLVM::releaseCleanupForValueId(uint32_t value_id,
         return;
     }
 
-    auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     if (alloca_it->second) {
         llvm::Value* old_val = builder->CreateLoad(i64_type,
                 alloca_it->second);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 alloca_it->second);
-        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+        emitDecrefIfNode(module, old_val);
         invoke_alloca_map.erase(alloca_it);
         return;
     }
@@ -3876,7 +3896,7 @@ void QoreIRToLLVM::releaseCleanupForValueId(uint32_t value_id,
         return;
     }
     llvm::Value* val = val_it->second;
-    builder->CreateCall(decref_fn, {val, xsink_arg});
+    emitDecrefIfNode(module, val);
     for (auto pit = pending_ssa_cleanup.begin();
             pit != pending_ssa_cleanup.end(); ) {
         if (pit->value == val) {
