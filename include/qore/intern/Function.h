@@ -50,6 +50,7 @@
 class qore_class_private;
 class QoreIRFunction;
 struct QoreAOTContext;
+struct QoreAOTLazyClosureIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
 
@@ -894,6 +895,11 @@ protected:
     mutable std::unordered_map<std::string, std::unique_ptr<QoreIRFunction>> specialized_ir_cache;
     //! Protects lazy source-stripped AOT debug IR materialization.
     mutable std::mutex aot_debug_ir_mutex;
+    //! Serialized fallback IR installed before AOT publication and protected during materialization.
+    mutable std::shared_ptr<const QoreAOTLazyClosureIR> aot_lazy_closure_ir;
+    mutable std::mutex aot_lazy_closure_ir_mutex;
+    //! Lock-free closure-call guard; publishes aot_lazy_closure_ir before first invocation.
+    mutable std::atomic<bool> has_aot_lazy_closure_ir{false};
 
     DLLLOCAL QoreValue evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
             ExceptionSink* xsink) const;
@@ -927,6 +933,9 @@ protected:
     //! Materialize source-stripped AOT debug IR on demand when a debugger is attached.
     DLLLOCAL bool materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const;
 
+    //! Materialize source-stripped closure fallback IR if one is installed.
+    DLLLOCAL bool materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const;
+
     //! Attempt JIT compilation; called via std::call_once
     DLLLOCAL void attemptJITCompilation() const;
     //! Attempt JIT recompilation with updated type profiles after deopt
@@ -936,6 +945,20 @@ public:
     DLLLOCAL UserVariantBase(StatementBlock* b, int n_sig_first_line, int n_sig_last_line, QoreValue params,
             RetTypeInfo* rv, bool synced);
     DLLLOCAL virtual ~UserVariantBase();
+
+    /** Install serialized closure IR during single-threaded AOT registration, before publication.
+        @param lazy_ir immutable metadata required to reconstruct the fallback IR
+    */
+    DLLLOCAL void setLazyAOTClosureIR(std::shared_ptr<const QoreAOTLazyClosureIR> lazy_ir) const {
+        aot_lazy_closure_ir = std::move(lazy_ir);
+        has_aot_lazy_closure_ir.store(true, std::memory_order_release);
+    }
+
+    //! @return true when this closure has deferred fallback IR to materialize
+    DLLLOCAL bool hasLazyAOTClosureIR() const {
+        return has_aot_lazy_closure_ir.load(std::memory_order_acquire);
+    }
+
     /** Returns cached IR specialized for the concrete generic call context, creating it when needed.
         @param name call name used to label newly lowered IR
         @param receiver_type_info concrete parameterized receiver type

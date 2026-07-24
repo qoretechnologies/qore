@@ -14291,9 +14291,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         const char* compile_module, bool metadata_only,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>* aot_batch_callee_map,
         std::string* fatal_error) {
-    if (std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr) {
-        return true;
-    }
+    const bool disable_native_closures =
+        std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") != nullptr;
 
     const size_t num_exprs = compiled_funcs[owner_index].slot_ids.exprs.size();
     for (size_t expr_index = 0; expr_index < num_exprs; ++expr_index) {
@@ -14390,7 +14389,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                 BatchCalleeReturnKind::Boxed, dispatch_capture_kinds,
                 dispatch_guarded_captures);
         };
-        if (!variant) {
+        if (!variant || disable_native_closures) {
             if (!defineAOTClosureDispatch(ctx, module, dispatch, nullptr, 0)) {
                 setAOTCompileFatal(fatal_error, "closure", dispatch_name,
                     "fallback dispatch lowering", "cancelled");

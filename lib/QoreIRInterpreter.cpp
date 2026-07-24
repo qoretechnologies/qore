@@ -4055,6 +4055,7 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         const AbstractQoreFunctionVariant* variant = uf->first();
         uvb = variant ? variant->getUserVariantBase() : nullptr;
         if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
+                || uvb->hasLazyAOTClosureIR()
                 || !uvb->isStaticallyFastCallEligible()) {
             return false;
         }

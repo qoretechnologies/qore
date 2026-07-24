@@ -2903,9 +2903,21 @@ struct QoreAOTDebugMetadata {
     }
 };
 
+struct QoreAOTLazyClosureIR {
+    std::shared_ptr<const QoreAOTDebugMetadata> metadata;
+    uint32_t ir_offset = 0;
+    uint32_t ir_size = 0;
+    QoreProgram* pgm = nullptr;
+    std::vector<LocalVar*> parent_locals;
+    std::vector<Var*> globals;
+    std::unordered_map<std::string, LocalVar*> enclosing_locals;
+    std::vector<LocalVar*> body_locals;
+};
+
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len) {
-    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_DEBUG_IR) == 0
+    if ((reader.getHeader().feature_flags
+            & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0
             || !metadata || metadata_len <= 0) {
         return nullptr;
     }
@@ -5672,6 +5684,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
 
                 uint32_t ir_size = QoreAOTBinaryReader::readU32(ptr);
+                const uint8_t* ir_start_ptr = ptr;
+                const uint8_t* ir_boundary = entry_end ? entry_end : end;
+                if (ptr > ir_boundary
+                        || ir_size > static_cast<size_t>(ir_boundary - ptr)) {
+                    std::string msg = "closure expression slot " + std::to_string(i)
+                        + " IR range exceeds slot map entry boundary";
+                    setClosureIRError(msg);
+                    closure_ir_missing = true;
+                    ptr = ir_boundary;
+                    continue;
+                }
                 const uint8_t* ir_end_ptr = ptr + ir_size;
 
                 // Resolve class for method context
@@ -5802,9 +5825,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                     return readOneTopLevelIRExpr(rdr, p, e, err, pgm,
                         arr, cnt, ctx->globals, num_globals);
                 };
+                const bool native_metadata_only = closure_bindings
+                    && native_body_key && *native_body_key
+                    && std::getenv("QORE_DISABLE_AOT_NATIVE_CLOSURES") == nullptr;
+                const bool lazy_fallback = !native_metadata_only
+                    && debug_metadata && slot_maps_start
+                    && ir_start_ptr >= slot_maps_start
+                    && std::getenv("QORE_DISABLE_AOT_LAZY_CLOSURE_IR") == nullptr;
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error,
-                    ctx->locals, num_locals, &closure_locals_vec);
+                    ctx->locals, num_locals, &closure_locals_vec,
+                    false, nullptr, native_metadata_only || lazy_fallback);
                 ptr = ir_end_ptr;  // Ensure we advance past IR data
 
                 if (!closure_ir) {
@@ -5872,57 +5903,49 @@ static QoreAOTContext* buildContextFromSlotMap(
                     closure_sig->setSelfId(closure_selfid);
                 }
 
-                // Populate pre_instantiated_locals so the IR interpreter knows
-                // which locals belong to this closure (vs outer-scope variables).
-                // Without this, ensureLocalInstantiated() skips body locals.
-                // This set includes params + argvid + selfid + body locals.  For
-                // object closures, "self" can be the parent method's self local
-                // rather than a closure signature local, but it is still
-                // pre-instantiated by the closure dispatch frame.
-                for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
-                    if (closure_sig->lv[p]) {
-                        // The IR local resolver has already reused the closure
-                        // signature's LocalVar; restore analysis metadata.
-                        closure_ir->param_local_vars[static_cast<int>(p)] = closure_sig->lv[p];
-                        closure_ir->pre_instantiated_locals.insert(
-                            reinterpret_cast<const void*>(closure_sig->lv[p]));
+                if (lazy_fallback) {
+                    auto lazy_ir = std::make_shared<QoreAOTLazyClosureIR>();
+                    lazy_ir->metadata = debug_metadata;
+                    lazy_ir->ir_offset = static_cast<uint32_t>(ir_start_ptr - slot_maps_start);
+                    lazy_ir->ir_size = ir_size;
+                    lazy_ir->pgm = pgm;
+                    if (num_locals) {
+                        lazy_ir->parent_locals.assign(ctx->locals, ctx->locals + num_locals);
                     }
-                }
-                if (closure_sig->argvid) {
-                    closure_ir->pre_instantiated_locals.insert(
-                        reinterpret_cast<const void*>(closure_sig->argvid));
-                }
-                if (closure_selfid) {
-                    closure_ir->pre_instantiated_locals.insert(
-                        reinterpret_cast<const void*>(closure_selfid));
-                }
-                for (LocalVar* lv : closure_ir->all_body_locals) {
-                    closure_ir->pre_instantiated_locals.insert(
-                        reinterpret_cast<const void*>(lv));
-                }
-
-                // Build cached_pre_instantiated for the IR interpreter: only params
-                // + argvid + selfid are pre-instantiated by CodeEvaluationHelper.
-                // Body locals are NOT pre-instantiated — the IR interpreter lazily
-                // instantiates them via ensureLocalInstantiated().
-                auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
-                for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
-                    if (closure_sig->lv[p]) {
-                        cached_pre_inst->insert(closure_sig->lv[p]);
+                    if (num_globals) {
+                        lazy_ir->globals.assign(ctx->globals, ctx->globals + num_globals);
                     }
-                }
-                if (closure_sig->argvid) {
-                    cached_pre_inst->insert(closure_sig->argvid);
-                }
-                if (closure_selfid) {
-                    cached_pre_inst->insert(closure_selfid);
-                }
-                closure_ir->cached_pre_instantiated = cached_pre_inst;
+                    lazy_ir->enclosing_locals = std::move(enclosing_locals);
+                    lazy_ir->body_locals = closure_ir->all_body_locals;
+                    closure_variant->setLazyAOTClosureIR(std::move(lazy_ir));
+                } else if (!native_metadata_only) {
+                    // Restore the parameter mapping used by IR analysis.
+                    // setCachedIR() derives the pre-instantiated local sets once
+                    // after this mapping is complete.
+                    bool parameter_restore_cancelled = false;
+                    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+                        if (p && !(p % 100)
+                                && qore_check_cancel(nullptr,
+                                    "AOT closure parameter metadata restoration")) {
+                            parameter_restore_cancelled = true;
+                            break;
+                        }
+                        if (closure_sig->lv[p]) {
+                            closure_ir->param_local_vars[static_cast<int>(p)] = closure_sig->lv[p];
+                        }
+                    }
+                    if (parameter_restore_cancelled) {
+                        setClosureIRError("closure parameter metadata restoration was cancelled");
+                        delete ucf;
+                        closure_ir_missing = true;
+                        continue;
+                    }
 
-                // Set cached IR on variant and promote to TIER_IR
-                makeRuntimeDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
-                closure_ir->computeSlotIdsAndEmbed();
-                closure_variant->setCachedIR(closure_ir.release());
+                    // Set cached IR on variant and promote to TIER_IR
+                    makeRuntimeDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
+                    closure_ir->computeSlotIdsAndEmbed();
+                    closure_variant->setCachedIR(closure_ir.release());
+                }
                 closure_variant->pgm = pgm;
 
                 if (closure_bindings && native_body_key && *native_body_key) {
@@ -7933,7 +7956,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         int num_parent_locals,
         std::vector<LocalVar*>* extended_closure_locals,
         bool use_parent_locals_for_all_slots,
-        const std::vector<LocalVar*>* direct_body_locals) {
+        const std::vector<LocalVar*>* direct_body_locals,
+        bool metadata_only,
+        ExceptionSink* cancel_xsink) {
     const uint8_t* func_start = ptr;
     auto remaining = [&ptr, end]() -> size_t {
         return end >= ptr ? static_cast<size_t>(end - ptr) : 0;
@@ -7948,6 +7973,15 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             error += std::to_string(remaining());
             return false;
         }
+        return true;
+    };
+    size_t cancel_ordinal = 0;
+    auto checkCancel = [&cancel_ordinal, cancel_xsink, &error]() -> bool {
+        if (!cancel_xsink || ++cancel_ordinal % 100
+                || !qore_check_cancel(cancel_xsink, "AOT lazy closure IR materialization")) {
+            return false;
+        }
+        error = "lazy closure IR materialization was cancelled";
         return true;
     };
 
@@ -8043,6 +8077,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     if (enclosing_locals) {
         local_map = *enclosing_locals;
         for (const auto& i : *enclosing_locals) {
+            if (checkCancel()) {
+                return nullptr;
+            }
             if (i.second) {
                 enclosing_local_set.insert(i.second);
             }
@@ -8109,6 +8146,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         return pp->createLocalVar(lname, ti);
     };
     for (int i = 0; i < num_local_slots; ++i) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         if (!need(has_local_decl_ordinal ? 16 : 12, "local slot table entry")) {
             return nullptr;
         }
@@ -8234,6 +8274,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
     if (extended_closure_locals) {
         for (const auto& i : func->local_var_slots) {
+            if (checkCancel()) {
+                return nullptr;
+            }
             if (extended_closure_locals->size() <= i.second) {
                 extended_closure_locals->resize(i.second + 1, nullptr);
             }
@@ -8243,11 +8286,17 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
     std::unordered_map<uint32_t, LocalVar*> body_slot_to_local;
     for (auto& [lv, sid] : func->local_var_slots) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         body_slot_to_local[sid] = const_cast<LocalVar*>(lv);
     }
 
     // 3. Read body locals
     for (int i = 0; i < num_body_locals; ++i) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
         uint32_t bl_slot_id = UINT32_MAX;
@@ -8295,6 +8344,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     // multiple variables with the same name in different scopes.
     std::unordered_map<uint32_t, LocalVar*> slot_to_local;
     for (auto& [lv, sid] : func->local_var_slots) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         slot_to_local[sid] = const_cast<LocalVar*>(lv);
     }
 
@@ -8315,9 +8367,17 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     // buildContextFromSlotMap) to resolve through the parent ctx.
     const AOTExprReadFunc* effectiveReadExpr = &readExpr;
 
+    if (metadata_only) {
+        ptr = end;
+        return func;
+    }
+
     // 5. Pre-create all blocks (needed for forward references)
     func->blocks.reserve(num_blocks);
     for (int i = 0; i < num_blocks; ++i) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         func->blocks.push_back(std::make_unique<QoreIRBasicBlock>(""));
     }
 
@@ -8325,6 +8385,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     const bool disable_trace_cache = getenv("QORE_DISABLE_AOT_IR_TRACE_CACHE") != nullptr;
     const char* cached_trace = disable_trace_cache ? nullptr : getenv("QORE_AOT_TRACE_IR_DESER");
     for (int i = 0; i < num_blocks; ++i) {
+        if (checkCancel()) {
+            return nullptr;
+        }
         const char* block_name = reader.readStringRef(ptr);
         bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
         uint16_t num_insts = QoreAOTBinaryReader::readU16(ptr);
@@ -8333,6 +8396,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->is_loop_header = is_loop_header;
 
         for (int j = 0; j < num_insts; ++j) {
+            if (checkCancel()) {
+                return nullptr;
+            }
             const uint8_t* inst_start = ptr;
             if (const char* trace = disable_trace_cache
                     ? getenv("QORE_AOT_TRACE_IR_DESER") : cached_trace) {
@@ -8373,6 +8439,78 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     return func;
+}
+
+std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
+        const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
+        ExceptionSink* xsink, std::string& error) {
+    if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb) {
+        error = "incomplete lazy closure metadata";
+        return nullptr;
+    }
+    auto* closure_variant = dynamic_cast<UserClosureVariant*>(uvb);
+    if (!closure_variant) {
+        error = "lazy closure IR is attached to a non-closure variant";
+        return nullptr;
+    }
+
+    QoreAOTBinaryReader reader;
+    std::string open_error;
+    if (!reader.open(lazy_ir.metadata->metadata.data(),
+            static_cast<uint32_t>(lazy_ir.metadata->metadata.size()), open_error)) {
+        error = "metadata open failed: " + open_error;
+        return nullptr;
+    }
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    const uint8_t* section_data = sec ? reader.getSectionData(*sec) : nullptr;
+    if (!sec || !section_data) {
+        error = "metadata has no valid SLOT_MAPS section";
+        return nullptr;
+    }
+    if (lazy_ir.ir_offset > sec->size || lazy_ir.ir_size > sec->size - lazy_ir.ir_offset) {
+        error = "serialized closure IR range exceeds SLOT_MAPS section";
+        return nullptr;
+    }
+
+    std::vector<LocalVar*> closure_locals;
+    auto read_expr = [&lazy_ir, &closure_locals](
+            const QoreAOTBinaryReader& rdr, const uint8_t*& ptr,
+            const uint8_t* end, std::string& expr_error) -> QoreValue {
+        LocalVar** locals = closure_locals.empty() ? nullptr : closure_locals.data();
+        Var** globals = lazy_ir.globals.empty()
+            ? nullptr : const_cast<Var**>(lazy_ir.globals.data());
+        return readOneTopLevelIRExpr(rdr, ptr, end, expr_error, lazy_ir.pgm,
+            locals, static_cast<int>(closure_locals.size()),
+            globals, static_cast<int>(lazy_ir.globals.size()));
+    };
+
+    const uint8_t* ptr = section_data + lazy_ir.ir_offset;
+    const uint8_t* end = ptr + lazy_ir.ir_size;
+    LocalVar** parent_locals = lazy_ir.parent_locals.empty()
+        ? nullptr : const_cast<LocalVar**>(lazy_ir.parent_locals.data());
+    auto ir = deserializeIRFunction(reader, ptr, end, lazy_ir.pgm,
+        read_expr, &lazy_ir.enclosing_locals, error,
+        parent_locals, static_cast<int>(lazy_ir.parent_locals.size()),
+        &closure_locals, false, &lazy_ir.body_locals, false, xsink);
+    if (!ir) {
+        return nullptr;
+    }
+
+    UserSignature* sig = uvb->getUserSignature();
+    for (unsigned p = 0; p < sig->numParams(); ++p) {
+        if (p && !(p % 100)
+                && qore_check_cancel(xsink, "AOT lazy closure IR finalization")) {
+            error = "lazy closure IR finalization was cancelled";
+            return nullptr;
+        }
+        if (sig->lv[p]) {
+            ir->param_local_vars[static_cast<int>(p)] = sig->lv[p];
+        }
+    }
+
+    makeRuntimeDeserializedClosureIRNameUnique(*ir, closure_variant);
+    ir->computeSlotIdsAndEmbed();
+    return ir;
 }
 
 static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {

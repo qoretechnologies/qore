@@ -3476,7 +3476,12 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     bool use_parent_locals_for_all_slots = false,
     //! Optional body-local table already resolved by the surrounding AOT context.
     //! Indexed in serialized body-local order.
-    const std::vector<LocalVar*>* direct_body_locals = nullptr);
+    const std::vector<LocalVar*>* direct_body_locals = nullptr,
+    //! If true, reconstruct only the function header and local tables, then
+    //! advance ptr to end without deserializing blocks or instructions.
+    bool metadata_only = false,
+    //! Optional sink used for cooperative cancellation during lazy runtime materialization.
+    ExceptionSink* cancel_xsink = nullptr);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

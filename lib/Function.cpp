@@ -4841,24 +4841,23 @@ const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
 }
 
 void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const {
-    cached_ir = ir;
-    if (cached_ir) {
-        cached_ir->computeIROnlyLocals();
-        all_body_locals_ir_only = cached_ir->areAllBodyLocalsIROnly();
+    if (ir) {
+        ir->computeIROnlyLocals();
+        all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
         if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
             uses_argv = signature.argvid != nullptr;
             uses_self = signature.selfid != nullptr;
         } else {
             QoreIRFunction::ContextUsage usage =
-                cached_ir->getContextUsage(signature.argvid, signature.selfid);
+                ir->getContextUsage(signature.argvid, signature.selfid);
             uses_argv = usage.argv;
             uses_self = usage.self;
         }
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
-            if (!cached_ir->ir_only_locals.empty()) {
-                cached_ir->ir_only_locals.clear();
-                cached_ir->ast_visible_body_locals = cached_ir->all_body_locals;
+            if (!ir->ir_only_locals.empty()) {
+                ir->ir_only_locals.clear();
+                ir->ast_visible_body_locals = ir->all_body_locals;
                 all_body_locals_ir_only = false;
             }
         }
@@ -4866,43 +4865,46 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         // Keep deserialized cached IR aligned with source-lowered IR metadata:
         // IR-only body locals are owned by the LLVM/IR frame and must not be
         // treated as pre-instantiated runtime-stack locals.
-        for (LocalVar* lv : cached_ir->all_body_locals) {
+        for (LocalVar* lv : ir->all_body_locals) {
             const void* key = reinterpret_cast<const void*>(lv);
-            if (cached_ir->ir_only_locals.count(key)) {
-                cached_ir->pre_instantiated_locals.erase(key);
-                cached_ir->pre_instantiated_cache.erase(lv);
+            if (ir->ir_only_locals.count(key)) {
+                ir->pre_instantiated_locals.erase(key);
+                ir->pre_instantiated_cache.erase(lv);
             } else {
-                cached_ir->pre_instantiated_locals.insert(key);
-                cached_ir->pre_instantiated_cache.insert(lv);
+                ir->pre_instantiated_locals.insert(key);
+                ir->pre_instantiated_cache.insert(lv);
             }
         }
 
-        delete cached_ir->cached_pre_instantiated;
+        delete ir->cached_pre_instantiated;
         auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             if (signature.lv[i]) {
                 cached_pre_inst->insert(signature.lv[i]);
-                cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
-                cached_ir->pre_instantiated_cache.insert(signature.lv[i]);
+                ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
+                ir->pre_instantiated_cache.insert(signature.lv[i]);
             }
         }
         if (signature.argvid) {
             cached_pre_inst->insert(signature.argvid);
-            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
-            cached_ir->pre_instantiated_cache.insert(signature.argvid);
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
+            ir->pre_instantiated_cache.insert(signature.argvid);
         }
         if (signature.selfid) {
             cached_pre_inst->insert(signature.selfid);
-            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
-            cached_ir->pre_instantiated_cache.insert(signature.selfid);
+            ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
+            ir->pre_instantiated_cache.insert(signature.selfid);
         }
-        for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+        for (LocalVar* lv : ir->ast_visible_body_locals) {
             if (!lv->closureUse()) {
                 cached_pre_inst->insert(lv);
             }
         }
-        cached_ir->cached_pre_instantiated = cached_pre_inst;
+        ir->cached_pre_instantiated = cached_pre_inst;
     }
+    // Publish only fully initialized IR. The tier/ready release stores below
+    // provide the acquire edge used by runtime dispatch.
+    cached_ir = ir;
     std::call_once(ir_lower_once, []{});  // consume the flag safely
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
@@ -4928,6 +4930,35 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
     }
 
     setCachedIR(ir.release(), false);
+    return true;
+}
+
+bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lock(aot_lazy_closure_ir_mutex);
+    if (cached_ir || hasCachedAOT()) {
+        aot_lazy_closure_ir.reset();
+        has_aot_lazy_closure_ir.store(false, std::memory_order_release);
+        return true;
+    }
+    if (!aot_lazy_closure_ir) {
+        return statements != nullptr;
+    }
+
+    std::string error;
+    std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_closure_ir(
+        *aot_lazy_closure_ir, const_cast<UserVariantBase*>(this), xsink, error);
+    if (!ir) {
+        if (!*xsink) {
+            xsink->raiseException("AOT-CLOSURE-IR-ERROR",
+                "could not materialize source-stripped closure IR for '%s': %s",
+                name ? name : "<closure>", error.empty() ? "unknown error" : error.c_str());
+        }
+        return false;
+    }
+
+    setCachedIR(ir.release());
+    aot_lazy_closure_ir.reset();
+    has_aot_lazy_closure_ir.store(false, std::memory_order_release);
     return true;
 }
 
@@ -6764,6 +6795,11 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
     QORE_TRACE("UserClosureVariant::evalClosure()");
 
     assert(!self || ceh.getClass());
+
+    if (hasLazyAOTClosureIR()
+            && !materializeLazyAOTClosureIR("<anonymous closure>", xsink)) {
+        return QoreValue();
+    }
 
     UserVariantExecHelper uveh(this, &ceh, xsink);
     if (!uveh) {

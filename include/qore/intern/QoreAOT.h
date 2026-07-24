@@ -73,11 +73,23 @@ class QoreTypeInfo;
 class QoreValue;
 struct QoreModuleInitContext;
 struct QoreAOTDebugMetadata;
+struct QoreAOTLazyClosureIR;
 class StatementBlock;
 class TypedHashDecl;
 class UserVariantBase;
 class Var;
 class qore_class_private;
+
+/** Materialize a lazily retained source-stripped closure IR body.
+    @param lazy_ir immutable serialized IR metadata
+    @param uvb closure variant receiving the reconstructed IR
+    @param xsink exception sink
+    @param error output for structural deserialization errors
+    @return reconstructed IR, or nullptr on error
+*/
+std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
+    const QoreAOTLazyClosureIR& lazy_ir, UserVariantBase* uvb,
+    ExceptionSink* xsink, std::string& error);
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);

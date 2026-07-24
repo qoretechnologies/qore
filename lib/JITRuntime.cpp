@@ -5721,6 +5721,7 @@ static bool tryExecClosureNativeLeaf(const AbstractQoreNode* node,
     static const bool disabled =
         std::getenv("QORE_DISABLE_IR_NATIVE_CLOSURE_LEAF_INLINE") != nullptr;
     if (disabled || !uvb || arg_cleanups
+            || uvb->hasLazyAOTClosureIR()
             || !uvb->isStaticallyFastCallEligible()) {
         return false;
     }
@@ -5781,7 +5782,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, Exceptio
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+        if (uvb && !uvb->hasLazyAOTClosureIR()
+                && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && closureDirectArgsNeedNoBinding(uvb, nullptr, 0, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -5831,7 +5833,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+        if (uvb && !uvb->hasLazyAOTClosureIR()
+                && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && closureDirectArgsNeedNoBinding(uvb, &arg0_bits, 1, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -5889,7 +5892,8 @@ static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args
         assert(uf);
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
-        if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())
+        if (uvb && !uvb->hasLazyAOTClosureIR()
+                && (uvb->hasCachedFunction() || uvb->getCachedIR())
                 && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
             uint64_t leaf_result;
             if (!uvb->hasCachedAOT()
@@ -9268,6 +9272,7 @@ static uint64_t qore_rt_call_immediate_closure_impl(const QoreClosureParseNode* 
     const AbstractQoreFunctionVariant* variant = uf ? uf->first() : nullptr;
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     if (!cn->isInMethod() && (!vlist || vlist->empty()) && uvb
+            && !uvb->hasLazyAOTClosureIR()
             && uvb->isStaticallyFastCallEligible()
             && (uvb->hasCachedFunction() || uvb->getCachedIR())
             && closureDirectArgsNeedNoBinding(uvb, args, nargs, xsink)) {
