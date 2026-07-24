@@ -630,12 +630,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         try {
             if (conn instanceof Http1ClientConnection) {
                 stream = new Http1ClientStreamHandle(cast<Http1ClientConnection>(conn),
-                    opts.request_timeout, logger);
+                    opts.request_timeout, logger, opts.connect_timeout);
             } else if (conn instanceof Http2ClientConnection) {
                 stream = new Http2ClientStreamHandle(cast<Http2ClientConnection>(conn),
-                    opts.request_timeout, logger);
+                    opts.request_timeout, logger, opts.connect_timeout);
             } else {
-                stream = new Http3ClientStreamHandle(conn, opts.request_timeout, logger);
+                stream = new Http3ClientStreamHandle(conn, opts.request_timeout, logger,
+                    opts.connect_timeout);
             }
         } catch () {
             conn.releaseStreamReservation();

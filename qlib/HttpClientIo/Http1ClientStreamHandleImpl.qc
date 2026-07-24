@@ -72,7 +72,8 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Creates a new stream handle
     constructor(Http1ClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
-            *LoggerInterface logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
+            *LoggerInterface logger, timeout connect_timeout = DefaultConnectTimeout)
+            : HttpClientStreamHandle(conn, request_timeout, logger, connect_timeout) {
         h1conn = conn;
     }
 
