@@ -8325,11 +8325,12 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         return 1;
     }
 
-    int rv = s->submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, *body, xsink);
-    if (!rv && !*xsink) {
-        body.release();
-    }
-    return rv;
+    // submitQuicStreamingResponseWithStream() borrows the InputStream: the QUIC
+    // enqueue poll operation takes its own reference (ref_input_stream=true) and
+    // transfers it to the session's stream-input-stream map, so the argument
+    // reference held here must NOT be released (issue: 1 InputStream leaked per
+    // H3 streaming response)
+    return s->submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, *body, xsink);
 }
 
 //! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold

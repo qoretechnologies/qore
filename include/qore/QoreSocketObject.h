@@ -1018,7 +1018,10 @@ public:
         const QoreHashNode* headers, ExceptionSink* xsink);
 
     //! Submits a streaming HTTP/3 response and registers an InputStream body on the async I/O controller
-    /** @return 0 on success, 1 if the stream is not I/O-thread-safe, -1 on error
+    /** @note \a body is borrowed: this method takes its own reference for the I/O-thread streaming
+        registration; the caller retains (and must eventually release) its own reference
+
+        @return 0 on success, 1 if the stream is not I/O-thread-safe, -1 on error
 
         @since %Qore 3.0
     */
