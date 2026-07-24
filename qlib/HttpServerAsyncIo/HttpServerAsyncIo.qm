@@ -97,6 +97,9 @@ module HttpServerAsyncIo {
     - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
       and HTTP/3; callers can opt out with the stream's \c setHeartbeat(0)
       method.
+    - @ref HttpServerAsyncIo::HttpRequestResultInfo "HttpRequestResultInfo"
+      supports a protocol-neutral \c response_delay for non-blocking,
+      server-enforced overload backpressure.
 */
 
 #! Main namespace for HttpServerAsyncIo module
@@ -128,6 +131,17 @@ public namespace HttpServerAsyncIo {
 
         #! Return socket to idle pool for keep-alive
         bool return_to_idle = False;
+
+        #! Minimum non-blocking delay before the response is sent
+        /** The async HTTP controller holds the response until this delay expires without
+            occupying a callback-dispatcher or handler-pool thread. This is intended for
+            server-enforced overload backpressure: a client that ignores \c Retry-After
+            still cannot drive an immediate request/rejection loop on the same outstanding
+            request.
+
+            The field applies uniformly to HTTP/1.x, HTTP/2, and HTTP/3 responses.
+        */
+        *timeout response_delay;
 
         #! Enable streaming mode (SSE or WebSocket)
         bool streaming = False;

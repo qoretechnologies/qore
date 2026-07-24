@@ -55,6 +55,8 @@ public enum HttpConnectionState : string {
     SendStreamAndReadHeader = "send_stream_and_read_header",
     #! Sending HTTP/1.x InputStream response (no keep-alive, close after send)
     SendStreamResponse = "send_stream_response",
+    #! Waiting to send a delayed HTTP/1.x response
+    ResponseDelay = "response_delay",
     #! Reading HTTP/1.x request body (Content-Length or chunked)
     ReadBody = "read_body",
 }
@@ -168,6 +170,10 @@ public class HttpAsyncSocketIoController {
 
         #! Active connections: socket unique hash -> connection info
         hash<string, hash<HttpActiveConnectionInfo>> connections;
+
+        #! Non-blocking delayed responses pending on the shared controller timer
+        hash<string, hash<HttpDelayedResponseInfo>> delayed_responses = {};
+        int delayed_response_seq = 0;
 
         #! Listener accept operation counters
         hash<string, int> accept_counts;
@@ -344,6 +350,7 @@ public class HttpAsyncSocketIoController {
         *hash<string, hash<HttpListenerInfo>> detached_listeners;
         *hash<string, hash<HttpActiveConnectionInfo>> detached_connections;
         *hash<string, hash<HttpActiveConnectionInfo>> race_connections;
+        *list<int> delayed_response_timer_ids;
         # Snapshot stream_ops separately so we can call abort() on H2/H3 stream
         # poll operations whose handler-thread closure still holds a reference
         # (the controller's cancelByOwner / cancelAndClose below cancels only
@@ -381,10 +388,27 @@ public class HttpAsyncSocketIoController {
             }
             detached_listeners = listeners;
             detached_connections = connections;
+            if (delayed_responses) {
+                delayed_response_timer_ids = ();
+                foreach hash<HttpDelayedResponseInfo> delayed in (
+                        hash_values(delayed_responses)) {
+                    if (delayed.timer_id) {
+                        delayed_response_timer_ids += delayed.timer_id;
+                    }
+                }
+                delayed_responses = {};
+            }
             listeners = {};
             quic_listener_hash_by_http_listener = {};
             connections = {};
             accept_counts = {};
+        }
+        foreach int timer_id in (delayed_response_timer_ids) {
+            try {
+                controller.cancelTimer(timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling delayed response timer " + timer_id.toString(), ex);
+            }
         }
         # Abort each stream_op so its clearStreamQueues() fires immediately,
         # pushing NOTHING sentinels onto any registered body_queue and
@@ -909,6 +933,7 @@ public class HttpAsyncSocketIoController {
                 # ignore errors for already-cancelled ops
             }
         }
+        cancelDelayedResponses(conn_keys);
 
         if (linfo && linfo.http_version == HttpVersionMode::H3) {
             try {
@@ -1163,6 +1188,7 @@ public class HttpAsyncSocketIoController {
         return {
             "listeners": listeners.size(),
             "connections": connections.size(),
+            "delayed_responses": delayed_responses.size(),
             "running": !has_been_stopped && controller.running(),
         };
     }
@@ -2006,6 +2032,15 @@ public class HttpAsyncSocketIoController {
     */
     private handleHttp3MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int session_id, int stream_id, hash<HttpRequestResultInfo> result) {
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (deferRequestResult(uh, response_delay, sub () {
+                handleHttp3MultiplexedResult(uh, cinfo, session_id, stream_id,
+                    result);
+            })) {
+            return;
+        }
+
         if (result.close) {
             # For HTTP/3, don't close the entire connection — HTTP/3 is multiplexed,
             # so closing the connection would kill all active streams.  Instead, send
@@ -2312,6 +2347,94 @@ public class HttpAsyncSocketIoController {
     #! Submits a connection operation, skipping the stopping check (caller already verified)
     private submitConnectionOpUnlocked(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         submitConnectionOpIntern(uh, cinfo);
+    }
+
+    #! Defers response processing without occupying a worker thread
+    /** The timer is tagged with the connection owner and tracked independently so shutdown and
+        listener removal can cancel it before captured socket, target, and response objects are released.
+
+        @param owner connection/session owner
+        @param delay minimum delay before response processing
+        @param callback protocol-specific response handler
+        @return True when the response was deferred
+    */
+    private bool deferRequestResult(string owner, timeout delay,
+            code<nothing()> callback) {
+        if (delay <= 0ms) {
+            return False;
+        }
+        date deadline = now_us() + delay;
+        string delay_key;
+        {
+            AutoWriteLock al(m);
+            if (stopping || !connections.hasKey(owner)) {
+                return True;
+            }
+            delay_key = sprintf("%s:%d", owner, ++delayed_response_seq);
+            delayed_responses{delay_key} = <HttpDelayedResponseInfo>{
+                "owner": owner,
+                "timer_id": 0,
+            };
+            on_error remove delayed_responses{delay_key};
+            int timer_id = controller.addTimer(deadline, sub () {
+                bool dispatch;
+                {
+                    AutoWriteLock al(m);
+                    *hash<HttpDelayedResponseInfo> delayed =
+                        remove delayed_responses{delay_key};
+                    dispatch = exists delayed && !stopping
+                        && connections.hasKey(owner);
+                }
+                if (dispatch) {
+                    callback();
+                }
+            }, owner);
+            hash<HttpDelayedResponseInfo> delayed = delayed_responses{delay_key};
+            delayed.timer_id = timer_id;
+            delayed_responses{delay_key} = delayed;
+        }
+        return True;
+    }
+
+    #! Cancels delayed responses belonging to the given connection/session owners
+    private cancelDelayedResponses(*list<string> owners) {
+        if (!owners) {
+            return;
+        }
+        hash<string, bool> owner_set = {};
+        foreach string owner in (owners) {
+            owner_set{owner} = True;
+        }
+        list<int> timer_ids;
+        list<Socket> sockets;
+        {
+            AutoWriteLock al(m);
+            foreach string delay_key in (keys delayed_responses) {
+                hash<HttpDelayedResponseInfo> delayed = delayed_responses{delay_key};
+                if (owner_set{delayed.owner}) {
+                    if (delayed.timer_id) {
+                        timer_ids += delayed.timer_id;
+                    }
+                    remove delayed_responses{delay_key};
+                }
+            }
+            foreach string owner in (owners) {
+                *hash<HttpActiveConnectionInfo> cinfo = connections{owner};
+                if (cinfo && cinfo.state == HttpConnectionState::ResponseDelay) {
+                    sockets += cinfo.sock;
+                    remove connections{owner};
+                }
+            }
+        }
+        foreach int timer_id in (timer_ids) {
+            controller.cancelTimer(timer_id);
+        }
+        foreach string owner in (owners) {
+            controller.flushCallbacksByOwner(owner);
+        }
+        foreach Socket sock in (sockets) {
+            try { sock.close(); } catch () {}
+        }
     }
 
     #! Submits a connection operation based on connection state
@@ -3131,6 +3254,32 @@ public class HttpAsyncSocketIoController {
     private handleRequestResult(Socket sock, auto linfo, hash<auto> cx,
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
+
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (response_delay > 0ms) {
+            {
+                AutoWriteLock al(m);
+                if (stopping) {
+                    try { sock.close(); } catch () {}
+                    return;
+                }
+                connections{uh} = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::ResponseDelay,
+                    "ttl": result.ttl ?? DefaultIdleTimeout,
+                    "ssl": linfo.ssl,
+                };
+            }
+            if (deferRequestResult(uh, response_delay, sub () {
+                    handleRequestResult(sock, linfo, cx, result, target);
+                })) {
+                return;
+            }
+        }
 
         # NOTE: send_callback responses are NOT converted to InputStream here.
         # send_callback is a streaming producer (may block waiting for data)
@@ -4184,6 +4333,14 @@ public class HttpAsyncSocketIoController {
     */
     private handleHttp2MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int stream_id, hash<HttpRequestResultInfo> result) {
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (deferRequestResult(uh, response_delay, sub () {
+                handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
+            })) {
+            return;
+        }
+
         if (result.close) {
             # For HTTP/2, don't close the entire connection — HTTP/2 is multiplexed,
             # so closing the connection would kill all active streams.  Instead, send
@@ -4549,6 +4706,15 @@ hashdecl HttpActiveConnectionInfo {
     #! Header parsing info (saved during ReadBody state for dispatch after body is read)
     *hash<auto> pending_header_info;
 
+}
+
+#! Internal delayed-response timer info
+hashdecl HttpDelayedResponseInfo {
+    #! Timer ID on the shared async controller
+    int timer_id;
+
+    #! Connection/session owner used for cancellation and callback drain
+    string owner;
 }
 
 } # namespace Priv

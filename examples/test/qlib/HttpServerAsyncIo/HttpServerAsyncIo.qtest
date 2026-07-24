@@ -146,6 +146,34 @@ class BodyCaptureTarget inherits HttpAsyncTarget {
     }
 }
 
+#! Target that rejects during preparation with server-enforced response pacing
+class DelayedPreparationTarget inherits TestTarget {
+    public {
+        timeout response_delay = 200ms;
+        int preparation_count = 0;
+        Queue prepared();
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        ++preparation_count;
+        prepared.push(True);
+        timeout delay = info.header_info.path == "/pending-at-stop"
+            ? 5s : response_delay;
+        return <HttpRequestResultInfo>{
+            "code": 503,
+            "hdr": {
+                "Content-Length": "2",
+                "Connection": "keep-alive",
+                "Retry-After": "1",
+            },
+            "body": "NO".toBinary(),
+            "status_message": "Service Unavailable",
+            "return_to_idle": True,
+            "response_delay": delay,
+        };
+    }
+}
+
 public class HttpServerAsyncIoTest inherits QUnit::Test {
     public {
         # Test SSL certificate (self-signed for testing)
@@ -204,6 +232,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("Constants test", \constantsTest());
         addTestCase("Hashdecl test", \hashdeclTest());
         addTestCase("Target class test", \targetClassTest());
+        addTestCase("delayed preparation response", \delayedPreparationResponseTest());
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
         addTestCase("HttpKeepAlivePollOperation basic test", \keepAlivePollOperationBasicTest());
         addTestCase("HttpKeepAlivePollOperation header timeout test", \keepAliveHeaderTimeoutTest());
@@ -373,6 +402,89 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(result.close);
 
         sock.close();
+    }
+
+    delayedPreparationResponseTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        DelayedPreparationTarget target();
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Queue client_events();
+        Counter client_done(1);
+        background sub () {
+            on_exit client_done.dec();
+            try {
+                Socket client();
+                on_exit client.close();
+                client.connect("127.0.0.1:" + port, 2s);
+                foreach string path in (("/delayed", "/delayed-again")) {
+                    date started = now_us();
+                    client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n",
+                        path));
+                    string response = client.recv(0, 3s);
+                    client_events.push({
+                        "path": path,
+                        "response": response,
+                        "elapsed_ms":
+                            (now_us() - started).durationMilliseconds(),
+                    });
+                }
+                client.send("GET /pending-at-stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                client_events.push({"pending_sent": True});
+                try { client.recv(0, 10s); } catch () {}
+            } catch (hash<ExceptionInfo> ex) {
+                client_events.push({"error": ex{"err", "desc",}});
+            }
+        }();
+
+        for (int i = 0; i < 2; ++i) {
+            hash<auto> event = client_events.get(5s);
+            target.prepared.get(1s);
+            assertFalse(exists event.error,
+                sprintf("delayed client request succeeds: %y; controller stats: %y",
+                    event.error, ctrl.getStats()));
+            assertTrue(event.response =~ /503 Service Unavailable/,
+                i ? "delayed response preserves HTTP/1.1 keep-alive"
+                    : "pre-dispatch response is sent normally after its delay");
+            assertTrue(event.elapsed_ms >= 150,
+                sprintf("response %s is delayed independently (%d ms)",
+                    event.path, event.elapsed_ms));
+        }
+        assertFalse(target.request_received,
+            "a preparation response does not enter the handler pool");
+
+        # A long pending delay must be canceled promptly during controller shutdown.
+        hash<auto> pending = client_events.get(5s);
+        assertTrue(pending.pending_sent,
+            "the client submits a long-delay request before shutdown");
+        target.prepared.get(1s);
+        usleep(20ms);
+        assertEq(3, target.preparation_count,
+            "the long-delay request reaches preparation before shutdown");
+        assertEq(1, ctrl.getStats().delayed_responses,
+            "the long-delay response is tracked while pending");
+        date started = now_us();
+        ctrl.stop();
+        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        assertTrue(elapsed_ms < 2000,
+            sprintf("shutdown cancels pending delayed responses promptly (%d ms)",
+                elapsed_ms));
+        assertEq(0, ctrl.getStats().delayed_responses,
+            "shutdown removes every pending delayed response");
+        assertEq(0, client_done.waitForZero(2s),
+            "shutdown releases the client waiting for the delayed response");
+        assertEq(3, target.preparation_count,
+            "every test request reached preparation exactly once");
     }
 
     idlePollOperationBasicTest() {
