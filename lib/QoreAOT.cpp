@@ -2852,7 +2852,7 @@ static const AOTFnOutlineTunables& aotFnOutlineTunables() {
         };
         // Defaults chosen so ordinary functions are never touched: only
         // pathological bodies (thousands of IR instructions) trigger.
-        t.min_fn_insts = env_size("QORE_AOT_OUTLINE_FN_MIN_INSTS", 4000);
+        t.min_fn_insts = env_size("QORE_AOT_OUTLINE_FN_MIN_INSTS", 3000);
         t.min_fn_blocks = env_size("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
         t.target_region_insts = env_size("QORE_AOT_OUTLINE_FN_TARGET_INSTS", 1500);
         return t;
