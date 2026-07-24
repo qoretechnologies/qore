@@ -16881,8 +16881,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
             const BatchCalleeInfo* aot_object_set_get = nullptr;
+            const BatchCalleeInfo* aot_object_compound_get = nullptr;
             bool aot_object_getter_rejects_nothing = false;
             bool aot_object_set_get_rejects_nothing = false;
+            bool aot_object_compound_get_rejects_nothing = false;
             llvm::Function* aot_object_batch_fn = nullptr;
             bool aot_object_batch_requires_exact_class = false;
             bool object_target_non_overridable = direct_inst->variant
@@ -16938,6 +16940,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreTypeInfo* return_type =
                         direct_inst->variant->getReturnTypeInfo();
                     aot_object_set_get_rejects_nothing =
+                        QoreTypeInfo::hasType(return_type)
+                        && !QoreTypeInfo::parseAcceptsReturns(
+                            return_type, NT_NOTHING);
+                }
+                if (base_facts
+                        && base_facts->assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && base_facts->never_nothing
+                        && QoreTypeInfo::getUniqueReturnClass(
+                            base_facts->type_info) == direct_inst->qc
+                        && it != batch_callees->end()
+                        && !it->second.object_compound_get_member.empty()
+                        && it->second.object_compound_get_param >= 0
+                        && it->second.object_compound_get_param < nargs
+                        && !std::getenv(
+                            "QORE_DISABLE_AOT_OBJECT_COMPOUND_GET_IMPORT")
+                        && isFastMethodCallEligible(
+                            direct_inst->variant, true)
+                        && (object_target_non_overridable
+                            || !std::getenv(
+                                "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
+                        && qore_ir_fast_entry_operands_need_no_binding(
+                            direct_inst->variant, direct_inst->expr,
+                            current_ir_func, inst->operands, 1, nargs)) {
+                    aot_object_compound_get = &it->second;
+                    const QoreTypeInfo* return_type =
+                        direct_inst->variant->getReturnTypeInfo();
+                    aot_object_compound_get_rejects_nothing =
                         QoreTypeInfo::hasType(return_type)
                         && !QoreTypeInfo::parseAcceptsReturns(
                             return_type, NT_NOTHING);
@@ -17312,7 +17342,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
                     && QoreTypeInfo::parseReturns(base_facts->type_info, NT_OBJECT) == QTI_IDENT;
-                if (aot_object_set_get) {
+                if (aot_object_compound_get) {
+                    llvm::Value* member_name = builder->CreateGlobalString(
+                        aot_object_compound_get->object_compound_get_member,
+                        "object_compound_get_member");
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_object_member_compound_get_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, i32_type,
+                             ptr_type, i32_type, i32_type, i32_type, ptr_type},
+                            false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         base_boxed, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), member_name,
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get->object_compound_get_param),
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get->object_compound_get_op),
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get_rejects_nothing),
+                         xsink_arg});
+                    clear_fast_path_arg_cleanups();
+                    call_may_modify_runtime_locals = false;
+                    call_effect_info = aot_object_compound_get;
+                } else if (aot_object_set_get) {
                     llvm::Value* member_name = builder->CreateGlobalString(
                         aot_object_set_get->object_set_get_member,
                         "object_set_get_member");
@@ -17547,7 +17601,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && call_return_kind == BatchCalleeReturnKind::Boxed) {
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            const BatchCalleeInfo* object_summary = aot_object_set_get
+            const BatchCalleeInfo* object_summary = aot_object_compound_get
+                ? aot_object_compound_get : aot_object_set_get
                 ? aot_object_set_get : aot_object_getter
                     ? aot_object_getter : aot_object_batch_callee;
             if (object_summary && object_summary->never_returns_nothing) {
@@ -17573,8 +17628,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const BatchCalleeInfo* aot_object_batch_callee = nullptr;
             const BatchCalleeInfo* aot_object_getter = nullptr;
             const BatchCalleeInfo* aot_object_set_get = nullptr;
+            const BatchCalleeInfo* aot_object_compound_get = nullptr;
             bool aot_object_getter_rejects_nothing = false;
             bool aot_object_set_get_rejects_nothing = false;
+            bool aot_object_compound_get_rejects_nothing = false;
             llvm::Function* aot_object_batch_fn = nullptr;
             bool aot_object_batch_requires_exact_class = false;
             bool object_target_non_overridable = invoke_inst->variant
@@ -17630,6 +17687,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreTypeInfo* return_type =
                         invoke_inst->variant->getReturnTypeInfo();
                     aot_object_set_get_rejects_nothing =
+                        QoreTypeInfo::hasType(return_type)
+                        && !QoreTypeInfo::parseAcceptsReturns(
+                            return_type, NT_NOTHING);
+                }
+                if (base_facts
+                        && base_facts->assigned_state
+                            == QoreIRAssignedState::Assigned
+                        && base_facts->never_nothing
+                        && QoreTypeInfo::getUniqueReturnClass(
+                            base_facts->type_info) == invoke_inst->qc
+                        && it != batch_callees->end()
+                        && !it->second.object_compound_get_member.empty()
+                        && it->second.object_compound_get_param >= 0
+                        && it->second.object_compound_get_param < nargs
+                        && !std::getenv(
+                            "QORE_DISABLE_AOT_OBJECT_COMPOUND_GET_IMPORT")
+                        && isFastMethodCallEligible(
+                            invoke_inst->variant, true)
+                        && (object_target_non_overridable
+                            || !std::getenv(
+                                "QORE_DISABLE_AOT_SPECULATIVE_OBJECT_METHOD_FAST_ENTRY"))
+                        && qore_ir_fast_entry_operands_need_no_binding(
+                            invoke_inst->variant, invoke_inst->expr,
+                            current_ir_func, inst->operands, 1, nargs)) {
+                    aot_object_compound_get = &it->second;
+                    const QoreTypeInfo* return_type =
+                        invoke_inst->variant->getReturnTypeInfo();
+                    aot_object_compound_get_rejects_nothing =
                         QoreTypeInfo::hasType(return_type)
                         && !QoreTypeInfo::parseAcceptsReturns(
                             return_type, NT_NOTHING);
@@ -18004,7 +18089,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && base_facts->assigned_state == QoreIRAssignedState::Assigned
                     && base_facts->never_nothing
                     && QoreTypeInfo::parseReturns(base_facts->type_info, NT_OBJECT) == QTI_IDENT;
-                if (aot_object_set_get) {
+                if (aot_object_compound_get) {
+                    llvm::Value* member_name = builder->CreateGlobalString(
+                        aot_object_compound_get->object_compound_get_member,
+                        "object_compound_get_member");
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_object_member_compound_get_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, ptr_type, i32_type,
+                             ptr_type, i32_type, i32_type, i32_type, ptr_type},
+                            false));
+                    call_result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         base_boxed, args_array,
+                         llvm::ConstantInt::get(i32_type, nargs), member_name,
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get->object_compound_get_param),
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get->object_compound_get_op),
+                         llvm::ConstantInt::get(i32_type,
+                             aot_object_compound_get_rejects_nothing),
+                         xsink_arg});
+                    clear_fast_path_arg_cleanups();
+                    call_may_modify_runtime_locals = false;
+                    call_effect_info = aot_object_compound_get;
+                } else if (aot_object_set_get) {
                     llvm::Value* member_name = builder->CreateGlobalString(
                         aot_object_set_get->object_set_get_member,
                         "object_set_get_member");
@@ -18239,7 +18348,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && call_return_kind == BatchCalleeReturnKind::Boxed) {
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            const BatchCalleeInfo* object_summary = aot_object_set_get
+            const BatchCalleeInfo* object_summary = aot_object_compound_get
+                ? aot_object_compound_get : aot_object_set_get
                 ? aot_object_set_get : aot_object_getter
                     ? aot_object_getter : aot_object_batch_callee;
             if (object_summary && object_summary->never_returns_nothing) {

@@ -427,6 +427,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_load_object_getter_checked_aot) },
     { "qore_rt_object_member_set_get_aot",
         reinterpret_cast<void*>(&qore_rt_object_member_set_get_aot) },
+    { "qore_rt_object_member_compound_get_aot",
+        reinterpret_cast<void*>(&qore_rt_object_member_compound_get_aot) },
     { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
     { "qore_rt_call_static_method_direct_aot_consume_args",
         reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
@@ -15339,6 +15341,79 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
     if (*xsink) {
         return toBits(QoreValue());
     }
+    ValueHolder result(
+        value->needsEval() ? value->eval(xsink) : value.release(), xsink);
+    if (!*xsink && rejects_nothing && result->isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+    }
+    return toBits(*xsink ? QoreValue() : result.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        uint64_t* args, int nargs, const char* member_name,
+        int32_t value_param, int32_t compound_op, int32_t rejects_nothing,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreValue base = fromBits(base_bits);
+    if (!target.method || !target.qc || target.is_pseudo
+            || base.getType() != NT_OBJECT || !args
+            || !member_name || !*member_name
+            || value_param < 0 || value_param >= nargs
+            || compound_op < static_cast<int32_t>(LVCompoundOp::AddAssign)
+            || compound_op > static_cast<int32_t>(LVCompoundOp::ShrAssign)) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, args, nargs, xsink);
+    }
+
+    QoreObject* object = base.get<QoreObject>();
+    if (!object->isValid() || object->getClass() != target.qc) {
+        return qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, args, nargs, xsink);
+    }
+
+    const qore_class_private* class_ctx =
+        qore_class_private::get(*target.qc);
+    static const bool cache_member_info = !std::getenv(
+        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
+    const QoreMemberInfo* member_info = cache_member_info
+        ? target.object_member_info.load(std::memory_order_acquire) : nullptr;
+    if (cache_member_info && !member_info) {
+        const QoreMemberInfo* resolved =
+            class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
+        if (resolved) {
+            const QoreMemberInfo* expected = nullptr;
+            if (target.object_member_info.compare_exchange_strong(expected,
+                    resolved, std::memory_order_release,
+                    std::memory_order_acquire)) {
+                member_info = resolved;
+            } else {
+                member_info = expected;
+            }
+        }
+    }
+    qore_object_private* object_priv = qore_object_private::get(*object);
+
+    ValueHolder value(xsink);
+    {
+        LValueHelper helper(xsink);
+        int rc = member_info
+            ? object_priv->getLValueResolved(member_name, *member_info,
+                class_ctx, helper, false, xsink)
+            : qore_object_private::getLValue(*object, member_name, helper,
+                class_ctx, false, xsink);
+        if (rc) {
+            return toBits(QoreValue());
+        }
+        QoreValue rhs = fromBits(args[value_param]);
+        value = qore_rt_apply_lvalue_compound(helper,
+            static_cast<LVCompoundOp>(compound_op), rhs, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+    }
+
     ValueHolder result(
         value->needsEval() ? value->eval(xsink) : value.release(), xsink);
     if (!*xsink && rejects_nothing && result->isNothing()) {

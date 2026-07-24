@@ -1460,8 +1460,14 @@ uint64_t qore_rt_load_object_getter_checked_aot(QoreAOTContext* ctx, int32_t slo
 
 //! Assign an exact-class object member from one argument and return its resulting value.
 uint64_t qore_rt_object_member_set_get_aot(QoreAOTContext* ctx, int32_t slot,
-    uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,
-    int32_t value_param, int32_t rejects_nothing, ExceptionSink* xsink);
+        uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,
+        int32_t value_param, int32_t rejects_nothing, ExceptionSink* xsink);
+
+//! Apply a compound operation to an exact-class object member and return its resulting value.
+uint64_t qore_rt_object_member_compound_get_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, uint64_t* args, int nargs,
+        const char* member_name, int32_t value_param, int32_t compound_op,
+        int32_t rejects_nothing, ExceptionSink* xsink);
 
 //! AOT variant that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,

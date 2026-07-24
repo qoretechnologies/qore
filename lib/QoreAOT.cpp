@@ -1021,7 +1021,8 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             bool callable = info.approach_b_eligible
                 && !info.fast_name.empty();
             if (!variant || (!callable
-                    && info.object_set_get_member.empty())) {
+                    && info.object_set_get_member.empty()
+                    && info.object_compound_get_member.empty())) {
                 continue;
             }
             QoreAOTFastEntryIndexInfo entry;
@@ -1085,6 +1086,11 @@ static bool appendSymbolIndexSection(QoreAOTBinaryWriter& writer, qore_ns_privat
             entry.object_getter_member = info.object_getter_member;
             entry.object_set_get_member = info.object_set_get_member;
             entry.object_set_get_param = info.object_set_get_param;
+            entry.object_compound_get_member =
+                info.object_compound_get_member;
+            entry.object_compound_get_param =
+                info.object_compound_get_param;
+            entry.object_compound_get_op = info.object_compound_get_op;
             entry.string_op_kind = static_cast<uint8_t>(info.string_op.kind);
             entry.string_op_base_param = info.string_op.base_param;
             entry.string_op_arg0_param = info.string_op.arg0_param;
@@ -11424,9 +11430,9 @@ static bool resolveAOTBatchFunctionEffectSummaries(
     };
     auto get_object_set_get = [](const QoreIRFunction* func,
             const UserSignature* sig, std::string& member_name,
-            int8_t& value_param) -> bool {
-        if (std::getenv("QORE_DISABLE_AOT_OBJECT_SET_GET_IMPORT") || !func
-                || !sig || !sig->selfid || !sig->numParams()
+            int8_t& value_param, std::string& compound_member_name,
+            int8_t& compound_value_param, uint8_t& compound_op) -> bool {
+        if (!func || !sig || !sig->selfid || !sig->numParams()
                 || sig->numParams() > INT8_MAX || func->blocks.size() != 1
                 || func->blocks.front()->instructions.size() > 20) {
             return false;
@@ -11506,7 +11512,17 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     }
                     break;
                 }
-                case QoreIROpcode::LValuePathAssign: {
+                case QoreIROpcode::LValuePathAssign:
+                case QoreIROpcode::LValuePathCompound: {
+                    if ((inst->opcode == QoreIROpcode::LValuePathAssign
+                                && std::getenv(
+                                    "QORE_DISABLE_AOT_OBJECT_SET_GET_IMPORT"))
+                            || (inst->opcode
+                                    == QoreIROpcode::LValuePathCompound
+                                && std::getenv(
+                                    "QORE_DISABLE_AOT_OBJECT_COMPOUND_GET_IMPORT"))) {
+                        return false;
+                    }
                     const auto* assign =
                         static_cast<const QoreIRLValuePathInstruction*>(inst);
                     const std::string* assigned_member = nullptr;
@@ -11533,8 +11549,14 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                         return false;
                     }
                     assigned = true;
-                    member_name = *assigned_member;
-                    value_param = source->second;
+                    if (inst->opcode == QoreIROpcode::LValuePathAssign) {
+                        member_name = *assigned_member;
+                        value_param = source->second;
+                    } else {
+                        compound_member_name = *assigned_member;
+                        compound_value_param = source->second;
+                        compound_op = static_cast<uint8_t>(assign->compound_op);
+                    }
                     break;
                 }
                 case QoreIROpcode::HashKeyAccess: {
@@ -11543,7 +11565,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     if (!assigned || !inst->result.isValid()
                             || inst->operands.size() != 1
                             || !self_values.count(inst->operands[0].id)
-                            || load->key_name != member_name) {
+                            || load->key_name != (member_name.empty()
+                                ? compound_member_name : member_name)) {
                         return false;
                     }
                     member_values.insert(inst->result.id);
@@ -11553,7 +11576,8 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     const auto* load =
                         static_cast<const QoreIRSelfMemberInstruction*>(inst);
                     if (!assigned || !inst->result.isValid()
-                            || load->member_name != member_name) {
+                            || load->member_name != (member_name.empty()
+                                ? compound_member_name : member_name)) {
                         return false;
                     }
                     member_values.insert(inst->result.id);
@@ -11589,7 +11613,7 @@ static bool resolveAOTBatchFunctionEffectSummaries(
                     return false;
             }
         }
-        return returned && value_param >= 0;
+        return returned && (value_param >= 0 || compound_value_param >= 0);
     };
     for (const auto& [variant, func] : functions) {
         if (++check_count % 100 == 0
@@ -11613,9 +11637,22 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             ? method_variant->method() : nullptr;
         if (method && !method->isStatic()
                 && isAOTFastMethodCallEligible(variant, true)) {
-            get_object_set_get(func, sig,
-                callee_it->second.object_set_get_member,
-                callee_it->second.object_set_get_param);
+            std::string set_member;
+            int8_t set_param = -1;
+            std::string compound_member;
+            int8_t compound_param = -1;
+            uint8_t compound_op = 0;
+            if (get_object_set_get(func, sig, set_member, set_param,
+                    compound_member, compound_param, compound_op)) {
+                callee_it->second.object_set_get_member =
+                    std::move(set_member);
+                callee_it->second.object_set_get_param = set_param;
+                callee_it->second.object_compound_get_member =
+                    std::move(compound_member);
+                callee_it->second.object_compound_get_param =
+                    compound_param;
+                callee_it->second.object_compound_get_op = compound_op;
+            }
         }
         AOTStringOpInfo string_op;
         if (qore_aot_get_string_op(*func, *sig, string_op)) {
@@ -12749,7 +12786,8 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
                         std::unique_ptr<QoreIRFunction>(ir_func));
                     ir_func = nullptr;
                 }
-                if (ir_func && sig && sig->needsTypeParameterSubstitution()) {
+                if (ir_func && sig
+                        && !aot_batch_callee_map.count(variant)) {
                     BatchCalleeInfo info;
                     info.name = ir_func->name;
                     info.num_params = sig->numParams();
@@ -13024,7 +13062,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                 || !(rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)))
             || (summary_only && (!rec.native_symbol.empty()
                 || (rec.fast_entry_flags & QORE_AOT_FAST_ENTRY_PRESENT)
-                || rec.object_set_get_member.empty()))
+                || (rec.object_set_get_member.empty()
+                    && rec.object_compound_get_member.empty())))
             || rec.fast_param_kinds.size() != rec.fast_entry_num_params
             || rec.fast_param_rejects_nothing.size() != rec.fast_entry_num_params
             || rec.fast_param_noescape.size() > rec.fast_entry_num_params
@@ -13111,6 +13150,22 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             : (info.object_set_get_param < 0
                 || info.object_set_get_param
                     >= static_cast<int>(info.num_params))) {
+        return false;
+    }
+    info.object_compound_get_member = rec.object_compound_get_member;
+    info.object_compound_get_param = rec.object_compound_get_param;
+    info.object_compound_get_op = rec.object_compound_get_op;
+    if (info.object_compound_get_member.empty()
+            ? info.object_compound_get_param != -1
+            : (info.object_compound_get_param < 0
+                || info.object_compound_get_param
+                    >= static_cast<int>(info.num_params)
+                || info.object_compound_get_op
+                    > static_cast<uint8_t>(LVCompoundOp::ShrAssign))) {
+        return false;
+    }
+    if (!info.object_set_get_member.empty()
+            && !info.object_compound_get_member.empty()) {
         return false;
     }
     if (rec.string_op_kind > static_cast<uint8_t>(AOTStringOpKind::IntToString)

@@ -297,7 +297,7 @@ constexpr uint16_t QORE_AOT_SYMBOL_FLAG_NATIVE_DEFINED = 0x0001;
 constexpr uint16_t QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT = 0x0002;
 
 //! Version of the optional SYMBOL_INDEX section wire format.
-constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 28;
+constexpr uint16_t QORE_AOT_SYMBOL_INDEX_VERSION = 29;
 
 //! Maximum serialized nodes in a bounded pure native-integer expression summary.
 constexpr size_t QORE_AOT_WIRE_INT_EXPRESSION_MAX_NODES = 32;
@@ -388,6 +388,9 @@ struct QoreAOTSymbolIndexRecord {
     std::string object_getter_member;
     std::string object_set_get_member;
     int8_t object_set_get_param = -1;
+    std::string object_compound_get_member;
+    int8_t object_compound_get_param = -1;
+    uint8_t object_compound_get_op = 0;
     uint8_t string_op_kind = 0;
     int8_t string_op_base_param = -1;
     int8_t string_op_arg0_param = -1;
@@ -447,6 +450,9 @@ struct QoreAOTFastEntryIndexInfo {
     std::string object_getter_member;
     std::string object_set_get_member;
     int8_t object_set_get_param = -1;
+    std::string object_compound_get_member;
+    int8_t object_compound_get_param = -1;
+    uint8_t object_compound_get_op = 0;
     uint8_t string_op_kind = 0;
     int8_t string_op_base_param = -1;
     int8_t string_op_arg0_param = -1;

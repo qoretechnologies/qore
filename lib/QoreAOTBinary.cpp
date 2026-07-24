@@ -6973,6 +6973,9 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
     writer.writeStringRef(rec.object_set_get_member.c_str());
     writer.writeU8(static_cast<uint8_t>(rec.object_set_get_param));
     writer.writeU8(rec.boxed_return_kind);
+    writer.writeStringRef(rec.object_compound_get_member.c_str());
+    writer.writeU8(static_cast<uint8_t>(rec.object_compound_get_param));
+    writer.writeU8(rec.object_compound_get_op);
 }
 
 static bool writeSymbolIndexRecordVector(QoreAOTBinaryWriter& writer,
@@ -7013,7 +7016,9 @@ static void aotAddNativeRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
 static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
         const std::string& qore_path, const QoreAOTFastEntryIndexInfo& info) {
     bool callable = info.flags & QORE_AOT_FAST_ENTRY_PRESENT;
-    bool summary_only = !callable && !info.object_set_get_member.empty();
+    bool summary_only = !callable
+        && (!info.object_set_get_member.empty()
+            || !info.object_compound_get_member.empty());
     if ((!callable && !summary_only)
             || (callable && info.native_symbol.empty())) {
         return;
@@ -7049,6 +7054,9 @@ static void aotAddFastEntryRecord(std::vector<QoreAOTSymbolIndexRecord>& native,
     rec.object_getter_member = info.object_getter_member;
     rec.object_set_get_member = info.object_set_get_member;
     rec.object_set_get_param = info.object_set_get_param;
+    rec.object_compound_get_member = info.object_compound_get_member;
+    rec.object_compound_get_param = info.object_compound_get_param;
+    rec.object_compound_get_op = info.object_compound_get_op;
     rec.string_op_kind = info.string_op_kind;
     rec.string_op_base_param = info.string_op_base_param;
     rec.string_op_arg0_param = info.string_op_arg0_param;
@@ -8536,6 +8544,21 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         return false;
     }
     rec.boxed_return_kind = QoreAOTBinaryReader::readU8(ptr);
+    if (version < 29) {
+        return true;
+    }
+    if (!readSymbolIndexString(reader, ptr, end,
+            rec.object_compound_get_member, error,
+            "object_compound_get_member")
+            || static_cast<size_t>(end - ptr) < 2) {
+        if (static_cast<size_t>(end - ptr) < 2 && error.empty()) {
+            error = "truncated SYMBOL_INDEX object compound/get metadata";
+        }
+        return false;
+    }
+    rec.object_compound_get_param =
+        static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
+    rec.object_compound_get_op = QoreAOTBinaryReader::readU8(ptr);
     return true;
 }
 

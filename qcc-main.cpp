@@ -5076,6 +5076,11 @@ static void json_print_symbol_record(const QoreAOTSymbolIndexRecord& rec, unsign
     json_print_string(rec.object_set_get_member);
     printf(", \"object_set_get_param\": %d",
         rec.object_set_get_param);
+    printf(", \"object_compound_get_member\": ");
+    json_print_string(rec.object_compound_get_member);
+    printf(", \"object_compound_get_param\": %d"
+        ", \"object_compound_get_op\": %u",
+        rec.object_compound_get_param, rec.object_compound_get_op);
     printf(", \"string_op_kind\": %u, \"string_op_base_param\": %d"
         ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
         rec.string_op_kind, rec.string_op_base_param,
@@ -5728,6 +5733,11 @@ static bool json_file_symbol_array_for_index(FILE* f, const char* key,
         json_file_string(f, rec.object_set_get_member);
         fprintf(f, ", \"object_set_get_param\": %d",
             rec.object_set_get_param);
+        fputs(", \"object_compound_get_member\": ", f);
+        json_file_string(f, rec.object_compound_get_member);
+        fprintf(f, ", \"object_compound_get_param\": %d"
+            ", \"object_compound_get_op\": %u",
+            rec.object_compound_get_param, rec.object_compound_get_op);
         fprintf(f, ", \"string_op_kind\": %u, \"string_op_base_param\": %d"
             ", \"string_op_arg0_param\": %d, \"string_op_arg1_param\": %d",
             rec.string_op_kind, rec.string_op_base_param,

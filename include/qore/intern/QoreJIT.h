@@ -422,6 +422,9 @@ struct BatchCalleeInfo {
     std::string object_getter_member;     //!< Exact final-object getter member name
     std::string object_set_get_member;    //!< Exact guarded object member assignment-return name
     int8_t object_set_get_param = -1;     //!< Parameter assigned by object_set_get_member
+    std::string object_compound_get_member; //!< Exact guarded object member compound-return name
+    int8_t object_compound_get_param = -1;  //!< RHS parameter for object_compound_get_member
+    uint8_t object_compound_get_op = 0;      //!< LVCompoundOp value
 };
 
 //! Derive fast-entry parameter ABI kinds from lowered IR local metadata.
