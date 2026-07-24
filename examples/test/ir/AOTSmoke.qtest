@@ -394,6 +394,9 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
         # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
         addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        # Regression: exceptions escaping catch blocks must unwind catch scopes
+        # (leaked caught-exception trees + stale td->catchException before the fix)
+        addTestCase("AOT exception escaping catch block", \testExceptionEscapingCatchBlock());
         set_return_value(main());
     }
 
@@ -10852,5 +10855,71 @@ public namespace CorruptQmodTest {
             "corrupt-qmod-regression: process not killed by timeout: " + out);
         assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
             "corrupt-qmod-regression: saw module load error: " + out);
+    }
+
+    #! Exceptions escaping catch blocks must unwind catch scopes correctly
+    /** Covers the AOT codegen paths where an exception raised by a call inside
+        a catch block leaves the function (or lands in an outer catch of the
+        same function) without executing the catch block's CatchCleanup: the
+        shared exception-exit paths must pop the runtime catch stack back to
+        the entry watermark.  Before the fix, each escaped catch scope leaked
+        the caught exception's entire tree and left td->catchException stale,
+        so a subsequent rethrow could reference the wrong exception.
+    */
+    testExceptionEscapingCatchBlock() {
+        string code = "%modern
+sub thrower() {
+    throw \"NEW-ERROR\", \"from inside catch\";
+}
+
+sub f() {
+    try {
+        throw \"FIRST-ERROR\", \"first\", {\"a\": 1, \"b\": \"payload\"};
+    } catch (hash<ExceptionInfo> ex) {
+        # call raises; exception escapes f() with the catch scope active
+        thrower();
+    }
+}
+
+sub nested() {
+    try {
+        try {
+            throw \"INNER\", \"inner\";
+        } catch (hash<ExceptionInfo> ex1) {
+            # exception lands in the outer catch of the same function,
+            # stranding the inner catch scope
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex2) {
+        printf(\"outer caught: %s\\n\", ex2.err);
+        # rethrow must reference ex2, not a stale stranded inner exception
+        try {
+            rethrow;
+        } catch (hash<ExceptionInfo> ex3) {
+            printf(\"rethrown: %s: %s\\n\", ex3.err, ex3.desc);
+        }
+    }
+}
+
+for (int i = 0; i < 100; ++i) {
+    try {
+        f();
+    } catch (hash<ExceptionInfo> ex) {
+        if (!i) {
+            printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+        }
+    }
+}
+nested();
+# a subsequent normal try/catch still behaves after the unwinds above
+try {
+    throw \"LAST\", \"done\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"final: %s\\n\", ex.err);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT exception-escaping-catch output matches interpreter");
     }
 }

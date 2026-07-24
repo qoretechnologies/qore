@@ -542,6 +542,60 @@ public class AwsRestClientBase {
         return rv;
     }
 
+    #! Reads a small local file, returning @ref NOTHING instead of throwing on any error
+    /** Used for the sysfs/DMI probes in @ref isEc2Compute(); missing files,
+        permission errors, and FILESYSTEM-domain sandboxing violations are all
+        treated the same way: inconclusive.
+    */
+    private:internal static *string tryReadLocalFile(string path) {
+        try {
+            string data = ReadOnlyFile::readTextFile(path, NOTHING, 4096);
+            trim data;
+            if (data.val()) {
+                return data;
+            }
+        } catch () {
+        }
+    }
+
+    #! Cheaply and locally determines whether this process is running on real AWS EC2 compute
+    /** Reads local DMI/sysfs data only; no network round-trip is made, so this
+        is safe to call before deciding whether an IMDS probe (which, off AWS,
+        typically stalls for a full \c connect_timeout instead of failing
+        fast; see @ref applyInstanceCredentials()) is worth attempting.
+
+        Uses the methods documented by AWS itself
+        (<a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/identify_ec2_instances.html">Detect
+        whether a host is an EC2 instance</a>):
+        - instances built on the Nitro system (all current instance families)
+          expose their own instance ID via \c /sys/devices/virtual/dmi/id/board_asset_tag
+        - legacy Xen-based (PV) instance families instead expose a UUID
+          starting with \c "ec2" via \c /sys/hypervisor/uuid
+
+        Both files are plain world-readable sysfs entries (no \c dmidecode /
+        root privilege needed) present on essentially every Linux host,
+        virtualized or not, which is what makes a negative result trustworthy.
+
+        @return @ref True if EC2 hardware is positively detected; @ref False
+        if the \c board_asset_tag probe is readable and does \b not match an
+        EC2 instance ID (positive evidence this is not EC2 hardware); or
+        @ref NOTHING if neither probe is available (non-Linux, no DMI data,
+        FILESYSTEM domain restricted, etc.) -- callers should treat
+        @ref NOTHING the same as @ref True, to avoid a false negative
+        disabling credential auto-discovery on a real instance
+    */
+    static *bool isEc2Compute() {
+        *string asset_tag = AwsRestClientBase::tryReadLocalFile(
+            "/sys/devices/virtual/dmi/id/board_asset_tag");
+        if (asset_tag.val()) {
+            return asset_tag =~ /^i-[0-9a-f]+$/;
+        }
+        *string hv_uuid = AwsRestClientBase::tryReadLocalFile("/sys/hypervisor/uuid");
+        if (hv_uuid.val()) {
+            return hv_uuid.lwr() =~ /^ec2/;
+        }
+    }
+
     #! If \a opts has no static credentials, tries ECS then IMDS to fill them in
     /** Triggered after @ref applyEnvCredentials() but before the
         RequiredOptions check.  Honored only when:
@@ -553,6 +607,13 @@ public class AwsRestClientBase {
         set), then falls through to IMDSv2.  Failures are non-fatal: when
         both providers fail the function returns \a opts unchanged so the
         existing RequiredOptions check produces the canonical error.
+
+        Before probing the \b default IMDS endpoint (no \c aws_imds_url
+        override given), @ref isEc2Compute() is consulted: off AWS, \c
+        169.254.169.254 is normally routed like any other address rather than
+        rejected, so a doomed probe burns a full \c connect_timeout instead of
+        failing fast. An explicit \c aws_imds_url override is always honored
+        regardless (e.g. tests pointing at a fake IMDS server).
     */
     static hash<auto> applyInstanceCredentials(hash<auto> opts) {
         if (opts.aws_keyid.val()) {
@@ -575,6 +636,12 @@ public class AwsRestClientBase {
                 return opts;
             } catch () {
                 # fall through to IMDS
+            }
+        }
+        if (!opts.aws_imds_url.val()) {
+            *bool ec2 = AwsRestClientBase::isEc2Compute();
+            if (exists ec2 && !ec2) {
+                return opts;
             }
         }
         try {
