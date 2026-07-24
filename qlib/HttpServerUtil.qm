@@ -3640,10 +3640,18 @@ public class AbstractHttpSocketHandlerInterface {
         {
             m.lock();
             on_exit m.unlock();
-            if (!lh{lid})
-                return;
-
+            # Publish the listener-stop flag unconditionally, even when no connection has
+            # incremented lh{lid} yet.  A dedicated connection can be in the window between
+            # registerDedicatedSocket() (which increments the listener's dThreads WaitGroup)
+            # and start() (which increments lh{lid}); its startImpl() observes lsh{lid} and
+            # stops itself.  Returning here without setting the flag (the previous behavior)
+            # left such a connection blocked forever on its done Counter, hanging the
+            # listener's dThreads.wait() — startImpl() documents the invariant that a
+            # listener stop is always observable as lsh{lid}.
             lsh{lid} = True;
+            if (!lh{lid}) {
+                return;
+            }
         }
 
         stopImpl(lid);

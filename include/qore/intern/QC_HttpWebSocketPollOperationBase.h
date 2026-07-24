@@ -270,6 +270,14 @@ public:
     */
     DLLLOCAL void queueSendClose(uint16_t code, const char* reason, ExceptionSink* xsink);
 
+    //! Thread-safe entry point for queueSendClose() from another thread
+    /** Acquires the poll-op lock @ref m before mutating ws_state/send_queue so a
+        caller on a non-I/O thread (e.g. a listener stop) does not race with
+        continuePoll() on the I/O thread.  The internal idle-timeout / message-too-big
+        callers already hold @ref m and call queueSendClose() directly.
+    */
+    DLLLOCAL void queueSendCloseExternal(uint16_t code, const char* reason, ExceptionSink* xsink);
+
     //! Returns the next received frame from recv_queue (non-blocking)
     /** @param xsink exception sink
         @return the frame hash or QoreValue() if none available

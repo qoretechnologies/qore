@@ -2449,11 +2449,24 @@ public class HttpAsyncSocketIoController {
                 }
             }
         }
+        # each cleanup step is wrapped so a throw on one entry cannot abort the rest
+        # (leaking delayed_responses/timer state or leaving ResponseDelay sockets open),
+        # mirroring the exception handling in stop()
         foreach int timer_id in (timer_ids) {
-            controller.cancelTimer(timer_id);
+            try {
+                controller.cancelTimer(timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "failed to cancel delayed response timer %d: %s: %s",
+                    timer_id, ex.err, ex.desc);
+            }
         }
         foreach string owner in (owners) {
-            controller.flushCallbacksByOwner(owner);
+            try {
+                controller.flushCallbacksByOwner(owner);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "failed to flush delayed response callbacks for %y: %s: %s",
+                    owner, ex.err, ex.desc);
+            }
         }
         foreach Socket sock in (sockets) {
             try { sock.close(); } catch () {}

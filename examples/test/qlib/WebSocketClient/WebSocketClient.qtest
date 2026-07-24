@@ -252,6 +252,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
             });
         }
+        addTestCase("listener stop during WebSocket teardown", \listenerStopDuringTeardownTest());
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("wedged-state reconnect recovery", \wedgedReconnectRecoveryTest());
         addTestCase("data provider test", \dataProviderTest());
@@ -311,6 +312,60 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Stop the global async I/O controller's ThreadPool to allow clean exit
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         ctrl.stopClear();
+    }
+
+    #! Regression: a listener stop that lands while a WebSocket connection is still being
+    #! established must always complete instead of deadlocking.
+    /** Two cooperating fixes are exercised:
+        - \c AbstractHttpSocketHandlerInterface::stop() now publishes \c lsh{lid}
+          unconditionally, so a connection caught in the window between
+          \c registerDedicatedSocket() (which increments the listener's \c dThreads
+          WaitGroup) and \c start() (which increments \c lh{lid}) observes the flag in
+          \c startImpl() and stops itself; the previous early return left it blocked
+          forever on its \c done Counter, hanging the listener's \c dThreads.wait().
+        - \c HttpWebSocketPollOperation::forceClose() (invoked from
+          \c WebSocketConnection::stop()) releases the handler thread's \c done Counter
+          without depending on the async wake path, which can be lost during teardown.
+
+        The \c QORE_WS_PRESTART_DELAY_MS hook (debug builds only) widens the pre-start
+        window so the listener stop reliably lands in it; without the fixes the stop
+        deadlocks and the assertion below times out. */
+    listenerStopDuringTeardownTest() {
+        setenv("QORE_WS_PRESTART_DELAY_MS", "1000");
+        on_exit {
+            unsetenv("QORE_WS_PRESTART_DELAY_MS");
+        }
+
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        MyWsHandler h();
+        server.setDefaultHandler("ws-handler", h);
+        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        # the 101 is sent before the pre-start delay, so connect() returns while the
+        # server is parked in the window
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + tl.port, "logger": logger});
+        wsc.connect();
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+        }
+
+        # stop the listener from a background thread so the assertion can detect a
+        # deadlock via a bounded wait rather than hanging the suite
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            try {
+                server.stopListenerID(tl.id);
+            } catch () {}
+        }();
+        int rc = stopped.waitForZero(20s);
+        assertEq(0, rc,
+            "a listener stop during WebSocket connection setup completes without deadlock");
+        # only fully stop the server if the listener stop actually completed; otherwise
+        # server.stop() would block on the same deadlock and hang the test run
+        if (!rc) {
+            try { server.stop(); } catch () {}
+        }
     }
 
     private bool waitForReadyMessage(string log_path, int port, int retries = 50) {
