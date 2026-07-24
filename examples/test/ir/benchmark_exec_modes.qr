@@ -167,6 +167,33 @@ printf(\"%%d\\n\", a.compute());
 ", iterations / 10);
 
     # ==========================================================================
+    # Test 3a: implicit-self exact getter calls
+    # ==========================================================================
+    string self_getter_code = sprintf("%%modern
+
+final class SelfGetter {
+    private {
+        int value = 8;
+    }
+
+    int getValue() {
+        return value;
+    }
+
+    int compute() {
+        int result = 0;
+        for (int i = 0; i < %d; ++i) {
+            result += getValue();
+        }
+        return result;
+    }
+}
+
+SelfGetter getter();
+printf(\"%%d\\n\", getter.compute());
+", iterations / 10);
+
+    # ==========================================================================
     # Test 3b: final method in a non-final class
     # ==========================================================================
     string final_method_code = sprintf("%%modern
@@ -587,6 +614,7 @@ printf(\"%%d\\n\", run(%d, 2.5, \"abcd\"));
         "loop": loop_code,
         "fibonacci": fib_code,
         "self_method": self_method_code,
+        "self_getter": self_getter_code,
         "final_method": final_method_code,
         "dot_eval": dot_eval_code,
         "dot_eval_pure": dot_eval_pure_code,
