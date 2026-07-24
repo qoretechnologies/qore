@@ -154,6 +154,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot_throwing) },
     { "qore_rt_catch_exception", reinterpret_cast<void*>(&qore_rt_catch_exception) },
     { "qore_rt_catch_end", reinterpret_cast<void*>(&qore_rt_catch_end) },
+    { "qore_rt_catch_depth", reinterpret_cast<void*>(&qore_rt_catch_depth) },
+    { "qore_rt_catch_unwind", reinterpret_cast<void*>(&qore_rt_catch_unwind) },
     { "qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow) },
     { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
@@ -1105,6 +1107,21 @@ extern "C" DLLEXPORT void qore_rt_catch_end(ExceptionSink* xsink) {
     if (entry.caught) {
         catch_swap_exception(entry.saved);
         entry.caught->del(xsink);
+    }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_catch_depth() {
+    return catch_stack.size();
+}
+
+extern "C" DLLEXPORT void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink) {
+    // Pops catch scopes down to the depth captured at function entry,
+    // restoring td->catchException and deleting each caught exception.
+    // Called on exception-exit paths (error return, unwind landing pad,
+    // deopt) where a call inside a catch block raised and control leaves
+    // the function without reaching the catch block's CatchCleanup.
+    while (catch_stack.size() > depth) {
+        qore_rt_catch_end(xsink);
     }
 }
 
