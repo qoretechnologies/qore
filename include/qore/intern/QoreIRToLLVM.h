@@ -391,14 +391,20 @@ private:
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
-    // Saved catch-scope stack depth at function entry (qore_rt_catch_depth()).
-    // Only set for functions containing CatchException instructions.  The shared
-    // exception-exit paths (error_return_block, unwind LPs, deopt) pop the
-    // runtime catch stack back to this depth via qore_rt_catch_unwind() so
-    // catch scopes left active when an exception escapes a catch block (e.g., a
-    // call inside the catch block raising) are cleaned up and their caught
-    // exceptions deleted.
+    // Saved catch-scope stack depth.  With specialized tracking this is an i64
+    // alloca populated on the first dynamically entered catch scope; otherwise
+    // it is the legacy entry-time qore_rt_catch_depth() result.
     llvm::Value* catch_depth_saved = nullptr;
+
+    // Number of runtime catch scopes currently active in this native frame.
+    // Kept in an alloca so LLVM can promote it to SSA and remove unwind guards
+    // from exits statically known to be balanced.
+    llvm::AllocaInst* catch_scope_count = nullptr;
+
+    // LLVM blocks where this frame enters a runtime catch scope.  Final exit
+    // lowering uses forward reachability from these blocks to omit unwind
+    // guards on exits that cannot possibly own an active catch scope.
+    std::unordered_set<llvm::BasicBlock*> catch_entry_blocks;
 
     // True when the current function contains deferred on_block_exit handlers.
     bool has_on_block_exit_handlers = false;
@@ -926,9 +932,14 @@ private:
     void emitOnBlockExitExec(llvm::Module& module);
 
     // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
-    // point to pop catch scopes left active by an escaping exception; no-op for
-    // functions without catch blocks (catch_depth_saved == nullptr)
+    // point only when specialized tracking proves a runtime catch scope remains
+    // active; no-op for functions without catch blocks.
     void emitCatchUnwind(llvm::Module& module);
+
+    // Update specialized runtime catch-scope state around CatchException,
+    // CatchCleanup, and Rethrow lowering.
+    void emitCatchScopeEnter(llvm::Module& module);
+    void emitCatchScopeExit(unsigned count);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.

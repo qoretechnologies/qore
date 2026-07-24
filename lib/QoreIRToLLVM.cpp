@@ -3154,7 +3154,63 @@ void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
     }
     auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+    if (!catch_scope_count) {
+        builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+        return;
+    }
+
+    llvm::Instruction* term = builder->GetInsertBlock()->getTerminator();
+    assert(term && "catch unwind must be inserted before an exit terminator");
+    llvm::Value* active_count = builder->CreateLoad(i64_type, catch_scope_count);
+    llvm::Value* has_active_scope = builder->CreateICmpNE(active_count,
+            llvm::ConstantInt::get(i64_type, 0));
+
+    llvm::BasicBlock* current = builder->GetInsertBlock();
+    llvm::BasicBlock* continuation = current->splitBasicBlock(term,
+            "catch.unwind.cont");
+    current->getTerminator()->eraseFromParent();
+    llvm::BasicBlock* unwind = llvm::BasicBlock::Create(ctx, "catch.unwind",
+            current->getParent(), continuation);
+
+    builder->SetInsertPoint(current);
+    builder->CreateCondBr(has_active_scope, unwind, continuation);
+    builder->SetInsertPoint(unwind);
+    llvm::Value* saved_depth = builder->CreateLoad(i64_type,
+            llvm::cast<llvm::AllocaInst>(catch_depth_saved));
+    builder->CreateCall(helper, {saved_depth, xsink_arg});
+    builder->CreateBr(continuation);
+    builder->SetInsertPoint(term);
+}
+
+void QoreIRToLLVM::emitCatchScopeEnter(llvm::Module& module) {
+    if (!catch_scope_count) {
+        return;
+    }
+
+    // CatchException is already an exceptional/cold path, so obtaining the
+    // current depth here is cheaper than burdening every normal invocation.
+    // Preserve the first depth until all scopes entered by this frame balance.
+    llvm::Value* count = builder->CreateLoad(i64_type, catch_scope_count);
+    auto depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
+            llvm::FunctionType::get(i64_type, {}, false));
+    llvm::Value* current_depth = builder->CreateCall(depth_fn, {});
+    llvm::Value* saved_depth = builder->CreateLoad(i64_type,
+            llvm::cast<llvm::AllocaInst>(catch_depth_saved));
+    llvm::Value* first_scope = builder->CreateICmpEQ(count,
+            llvm::ConstantInt::get(i64_type, 0));
+    builder->CreateStore(builder->CreateSelect(first_scope, current_depth,
+            saved_depth), catch_depth_saved);
+    builder->CreateStore(builder->CreateAdd(count,
+            llvm::ConstantInt::get(i64_type, 1)), catch_scope_count);
+}
+
+void QoreIRToLLVM::emitCatchScopeExit(unsigned count) {
+    if (!catch_scope_count || !count) {
+        return;
+    }
+    llvm::Value* active_count = builder->CreateLoad(i64_type, catch_scope_count);
+    builder->CreateStore(builder->CreateSub(active_count,
+            llvm::ConstantInt::get(i64_type, count)), catch_scope_count);
 }
 
 void QoreIRToLLVM::emitPendingSsaCleanup(llvm::Module& module) {
@@ -8049,6 +8105,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
     catch_depth_saved = nullptr;
+    catch_scope_count = nullptr;
+    catch_entry_blocks.clear();
 
     // Every generated function entry must perform the same native stack guard
     // check as AST user-code entry.  Some optimized call paths invoke LLVM
@@ -8116,9 +8174,22 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
         if (has_catch) {
-            auto catch_depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
-                    llvm::FunctionType::get(i64_type, {}, false));
-            catch_depth_saved = builder->CreateCall(catch_depth_fn, {});
+            if (std::getenv("QORE_DISABLE_AOT_CATCH_UNWIND_SPECIALIZATION")) {
+                auto catch_depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
+                        llvm::FunctionType::get(i64_type, {}, false));
+                catch_depth_saved = builder->CreateCall(catch_depth_fn, {});
+            } else {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                catch_depth_saved = ab.CreateAlloca(i64_type, nullptr,
+                        "catch_depth");
+                catch_scope_count = ab.CreateAlloca(i64_type, nullptr,
+                        "catch_scope_count");
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, 0),
+                        catch_depth_saved);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, 0),
+                        catch_scope_count);
+            }
         }
 
         // Outlined-function coordinators: helpers mutate shared locals
@@ -9579,6 +9650,32 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // no-op on balanced paths.  stack_overflow_bb returns before
     // catch_depth_saved is defined and must be skipped (SSA dominance).
     if (catch_depth_saved) {
+        std::unordered_set<llvm::BasicBlock*> catch_reachable_blocks;
+        if (catch_scope_count) {
+            std::vector<llvm::BasicBlock*> worklist(catch_entry_blocks.begin(),
+                    catch_entry_blocks.end());
+            size_t visited_count = 0;
+            while (!worklist.empty()) {
+                if (++visited_count % 100 == 0
+                        && qore_check_cancel(nullptr,
+                            "AOT catch-unwind reachability analysis")) {
+                    error = "AOT catch-unwind reachability analysis cancelled";
+                    return false;
+                }
+                llvm::BasicBlock* bb = worklist.back();
+                worklist.pop_back();
+                if (!catch_reachable_blocks.insert(bb).second) {
+                    continue;
+                }
+                llvm::Instruction* term = bb->getTerminator();
+                if (!term) {
+                    continue;
+                }
+                for (unsigned i = 0; i < term->getNumSuccessors(); ++i) {
+                    worklist.push_back(term->getSuccessor(i));
+                }
+            }
+        }
         std::vector<llvm::Instruction*> exit_terms;
         for (llvm::BasicBlock& bb : *llvm_func) {
             if (&bb == stack_overflow_bb) {
@@ -9586,7 +9683,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             llvm::Instruction* term = bb.getTerminator();
             if (term && (llvm::isa<llvm::ReturnInst>(term)
-                    || llvm::isa<llvm::ResumeInst>(term))) {
+                    || llvm::isa<llvm::ResumeInst>(term))
+                    && (!catch_scope_count
+                        || catch_reachable_blocks.count(&bb))) {
                 exit_terms.push_back(term);
             }
         }
@@ -14850,6 +14949,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::CatchException: {
             // qore_rt_catch_exception: sets td->catchException for rethrow support,
             // returns NaN-boxed exception info hash
+            catch_entry_blocks.insert(builder->GetInsertBlock());
+            emitCatchScopeEnter(module);
             auto helper = module.getOrInsertFunction("qore_rt_catch_exception",
                     llvm::FunctionType::get(i64_type, {ptr_type}, false));
             llvm::Value* catch_result = builder->CreateCall(helper, {xsink_arg});
@@ -14865,6 +14966,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_catch_end",
                     llvm::FunctionType::get(void_type, {ptr_type}, false));
             builder->CreateCall(helper, {xsink_arg});
+            emitCatchScopeExit(1);
             return true;
         }
 
@@ -14933,6 +15035,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(catch_end_helper, {xsink_arg});
                 }
             }
+            emitCatchScopeExit(rethrow_inst->catch_depth);
             // Branch to outer exception handler if inside nested try/catch
             if (rethrow_inst->exception_target) {
                 auto it = block_map.find(rethrow_inst->exception_target);
