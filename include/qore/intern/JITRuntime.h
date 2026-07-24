@@ -1467,6 +1467,14 @@ uint64_t qore_rt_load_object_getter_checked_aot(QoreAOTContext* ctx, int32_t slo
     uint64_t base_bits, const char* member_name, int32_t rejects_nothing,
     ExceptionSink* xsink);
 
+//! Native scalar variants of exact-class object getter lowering.
+int64_t qore_rt_load_object_getter_int_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+double qore_rt_load_object_getter_float_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+int64_t qore_rt_load_object_getter_bool_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, const char* member_name, ExceptionSink* xsink);
+
 //! Assign an exact-class object member from one argument and return its resulting value.
 uint64_t qore_rt_object_member_set_get_aot(QoreAOTContext* ctx, int32_t slot,
         uint64_t base_bits, uint64_t* args, int nargs, const char* member_name,

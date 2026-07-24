@@ -4567,6 +4567,56 @@ llvm::Value* QoreIRToLLVM::emitAOTSelfGetter(const BatchCalleeInfo& info,
          xsink_arg});
 }
 
+llvm::Value* QoreIRToLLVM::emitAOTObjectGetter(const BatchCalleeInfo& info,
+        const AbstractQoreFunctionVariant* variant, int32_t slot,
+        llvm::Value* base, bool rejects_nothing, llvm::Module& module,
+        BatchCalleeReturnKind& return_kind) {
+    llvm::Value* member_name = builder->CreateGlobalString(
+        info.object_getter_member, "object_getter_member");
+    return_kind = !rejects_nothing
+            || std::getenv("QORE_DISABLE_AOT_NATIVE_OBJECT_GETTER")
+        ? BatchCalleeReturnKind::Boxed
+        : qore_ir_get_fast_entry_return_kind(
+            variant, rejects_nothing, current_ir_func);
+    llvm::Value* slot_value = llvm::ConstantInt::get(i32_type, slot);
+
+    if (return_kind == BatchCalleeReturnKind::NativeInt) {
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_load_object_getter_int_aot",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+        return builder->CreateCall(helper,
+            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+    }
+    if (return_kind == BatchCalleeReturnKind::NativeFloat) {
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_load_object_getter_float_aot",
+            llvm::FunctionType::get(double_type,
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+        return builder->CreateCall(helper,
+            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+    }
+    if (return_kind == BatchCalleeReturnKind::NativeBool) {
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_load_object_getter_bool_aot",
+            llvm::FunctionType::get(i64_type,
+                {ptr_type, i32_type, i64_type, ptr_type, ptr_type}, false));
+        llvm::Value* value = builder->CreateCall(helper,
+            {aot_ctx_arg, slot_value, base, member_name, xsink_arg});
+        return builder->CreateICmpNE(
+            value, llvm::ConstantInt::get(i64_type, 0));
+    }
+
+    auto helper = module.getOrInsertFunction(
+        "qore_rt_load_object_getter_checked_aot",
+        llvm::FunctionType::get(i64_type,
+            {ptr_type, i32_type, i64_type, ptr_type, i32_type, ptr_type},
+            false));
+    return builder->CreateCall(helper,
+        {aot_ctx_arg, slot_value, base, member_name,
+         llvm::ConstantInt::get(i32_type, rejects_nothing), xsink_arg});
+}
+
 bool QoreIRToLLVM::fastEntryParamRejectsNothing(
         const BatchCalleeInfo& info, unsigned index) const {
     return index < info.param_rejects_nothing.size()
@@ -17404,19 +17454,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_may_modify_runtime_locals = false;
                     call_effect_info = aot_object_set_get;
                 } else if (aot_object_getter) {
-                    llvm::Value* member_name = builder->CreateGlobalString(
-                        aot_object_getter->object_getter_member, "object_getter_member");
-                    auto helper = module.getOrInsertFunction(
-                        "qore_rt_load_object_getter_checked_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                             ptr_type}, false));
-                    call_result = builder->CreateCall(helper,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                         base_boxed, member_name,
-                         llvm::ConstantInt::get(i32_type,
-                             aot_object_getter_rejects_nothing), xsink_arg});
+                    call_result = emitAOTObjectGetter(*aot_object_getter,
+                        direct_inst->variant, slot, base_boxed,
+                        aot_object_getter_rejects_nothing, module,
+                        call_return_kind);
                     call_may_modify_runtime_locals = false;
+                    result_needs_cleanup =
+                        call_return_kind == BatchCalleeReturnKind::Boxed;
                 } else if (aot_object_batch_callee) {
                     call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
                         inst, slot, aot_object_batch_fn, *aot_object_batch_callee,
@@ -18151,19 +18195,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_may_modify_runtime_locals = false;
                     call_effect_info = aot_object_set_get;
                 } else if (aot_object_getter) {
-                    llvm::Value* member_name = builder->CreateGlobalString(
-                        aot_object_getter->object_getter_member, "object_getter_member");
-                    auto helper = module.getOrInsertFunction(
-                        "qore_rt_load_object_getter_checked_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, i64_type, ptr_type, i32_type,
-                             ptr_type}, false));
-                    call_result = builder->CreateCall(helper,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
-                         base_boxed, member_name,
-                         llvm::ConstantInt::get(i32_type,
-                             aot_object_getter_rejects_nothing), xsink_arg});
+                    call_result = emitAOTObjectGetter(*aot_object_getter,
+                        invoke_inst->variant, slot, base_boxed,
+                        aot_object_getter_rejects_nothing, module,
+                        call_return_kind);
                     call_may_modify_runtime_locals = false;
+                    result_needs_cleanup =
+                        call_return_kind == BatchCalleeReturnKind::Boxed;
                 } else if (aot_object_batch_callee) {
                     call_result = emitAotBatchFastEntryOrFallback(module, llvm_func,
                         inst, slot, aot_object_batch_fn, *aot_object_batch_callee,

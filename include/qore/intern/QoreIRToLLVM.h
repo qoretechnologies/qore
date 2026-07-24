@@ -748,6 +748,12 @@ private:
             const AbstractQoreFunctionVariant* variant, llvm::Module& module,
             BatchCalleeReturnKind& return_kind);
 
+    // Load an imported exact explicit-object getter in its declared scalar representation.
+    llvm::Value* emitAOTObjectGetter(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, int32_t slot,
+            llvm::Value* base, bool rejects_nothing, llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
     BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,

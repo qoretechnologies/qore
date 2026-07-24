@@ -431,6 +431,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_load_object_getter_aot) },
     { "qore_rt_load_object_getter_checked_aot",
         reinterpret_cast<void*>(&qore_rt_load_object_getter_checked_aot) },
+    { "qore_rt_load_object_getter_int_aot",
+        reinterpret_cast<void*>(&qore_rt_load_object_getter_int_aot) },
+    { "qore_rt_load_object_getter_float_aot",
+        reinterpret_cast<void*>(&qore_rt_load_object_getter_float_aot) },
+    { "qore_rt_load_object_getter_bool_aot",
+        reinterpret_cast<void*>(&qore_rt_load_object_getter_bool_aot) },
     { "qore_rt_object_member_set_get_aot",
         reinterpret_cast<void*>(&qore_rt_object_member_set_get_aot) },
     { "qore_rt_object_member_compound_get_aot",
@@ -15319,6 +15325,66 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_checked_aot(
         qore_rt_raise_return_nothing(xsink);
     }
     return *xsink ? toBits(QoreValue()) : result;
+}
+
+template <typename T, typename F>
+static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t base_bits, const char* member_name,
+        ExceptionSink* xsink, F&& convert) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreValue base = fromBits(base_bits);
+    ValueHolder value(xsink);
+    if (!target.method || !target.qc || target.is_pseudo
+            || base.getType() != NT_OBJECT) {
+        value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
+            ctx, slot, base_bits, nullptr, 0, xsink));
+    } else {
+        QoreObject* object = base.get<QoreObject>();
+        if (!object->isValid() || object->getClass() != target.qc) {
+            value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
+                ctx, slot, base_bits, nullptr, 0, xsink));
+        } else {
+            ValueHolder member(object->getReferencedMemberNoMethod(
+                member_name, target.qc, xsink), xsink);
+            if (!*xsink) {
+                value = member->needsEval()
+                    ? member->eval(xsink) : member.release();
+            }
+        }
+    }
+    if (*xsink) {
+        return T();
+    }
+    if (value->isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+        return T();
+    }
+    return convert(*value);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_load_object_getter_int_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_object_getter_native_aot<int64_t>(
+        ctx, slot, base_bits, member_name, xsink,
+        [](QoreValue value) { return value.getAsBigInt(); });
+}
+
+extern "C" DLLEXPORT double qore_rt_load_object_getter_float_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_object_getter_native_aot<double>(
+        ctx, slot, base_bits, member_name, xsink,
+        [](QoreValue value) { return value.getAsFloat(); });
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_load_object_getter_bool_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_object_getter_native_aot<int64_t>(
+        ctx, slot, base_bits, member_name, xsink,
+        [](QoreValue value) { return value.getAsBool(); });
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(

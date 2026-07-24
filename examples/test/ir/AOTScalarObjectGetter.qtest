@@ -29,11 +29,12 @@ final class ScalarGetter {
         int int_value;
         float float_value;
         bool bool_value;
+        *int optional_value;
     }
 
     constructor(bool assign_values) {
         if (assign_values) {
-            int_value = 7;
+            int_value = 9223372036854775807;
             float_value = 2.5;
             bool_value = True;
         }
@@ -42,6 +43,11 @@ final class ScalarGetter {
     int getInt() { return int_value; }
     float getFloat() { return float_value; }
     bool getBool() { return bool_value; }
+    *int getOptional() { return optional_value; }
+    int invalidate() {
+        delete self;
+        return 1;
+    }
 }
 ";
 string consumer_code = "%modern
@@ -49,13 +55,23 @@ string consumer_code = "%modern
 int sub main() {
     ScalarGetter getter(True);
     ScalarGetter missing(False);
+    ScalarGetter deleted(True);
     bool rejected = False;
+    bool deleted_rejected = False;
     try {
         missing.getInt();
     } catch (hash<auto> ex) {
         rejected = ex.err == \"RUNTIME-TYPE-ERROR\";
     }
-    printf(\"%d:%g:%y:%y\\n\", getter.getInt(), getter.getFloat(), getter.getBool(), rejected);
+    deleted.invalidate();
+    try {
+        deleted.getInt();
+    } catch (hash<auto> ex) {
+        deleted_rejected = ex.err == \"OBJECT-ALREADY-DELETED\";
+    }
+    printf(\"%d:%g:%y:%y:%y:%y\\n\", getter.getInt(), getter.getFloat(),
+        getter.getBool(), rejected, getter.getOptional() === NOTHING,
+        deleted_rejected);
     return 0;
 }
 ";
@@ -103,7 +119,16 @@ if (!is_file(aot_exe)) {
 }
 
 string aot = backquote(sprintf("%s %s 2>&1", env, aot_exe));
-if (ast != aot || ast != "7:2.5:True:True\n") {
+string symbols = backquote(sprintf("nm -D %s 2>&1", aot_exe));
+if (!symbols.regex("qore_rt_load_object_getter_int_aot")
+        || !symbols.regex("qore_rt_load_object_getter_float_aot")
+        || !symbols.regex("qore_rt_load_object_getter_bool_aot")
+        || !symbols.regex("qore_rt_load_object_getter_checked_aot")) {
+    printf("missing object getter helpers:\n%s", symbols);
+    exit(2);
+}
+if (ast != aot
+        || ast != "9223372036854775807:2.5:True:True:True:True\n") {
     printf("execution mismatch:\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }
