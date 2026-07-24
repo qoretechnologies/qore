@@ -2643,9 +2643,6 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
         temp_cleanup_marks.erase(temp_cleanup_marks.begin() + idx);
     }
 
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-
     for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
         llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
         if (persistent_cleanup_allocas.count(alloca_ptr)) {
@@ -2654,7 +2651,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
         llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
+        emitDecrefIfNode(module, val);
     }
 
     if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
@@ -2662,7 +2659,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
         for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
             const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
             if (e.def_bb == cur || dominates(e.def_bb, cur)) {
-                builder->CreateCall(helper, {e.value, xsink_arg});
+                emitDecrefIfNode(module, e.value);
             } else {
                 llvm::AllocaInst* alloca = promoteSsaEntryToAlloca(e.result_id,
                     module, builder->GetInsertBlock()->getParent());
@@ -2670,7 +2667,7 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id) {
                     llvm::Value* val = builder->CreateLoad(i64_type, alloca);
                     builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                         alloca);
-                    builder->CreateCall(helper, {val, xsink_arg});
+                    emitDecrefIfNode(module, val);
                 }
             }
         }
