@@ -36,6 +36,8 @@ class AOTFunctionOutliningTest inherits QUnit::Test {
         addTestCase("exceptions and on_exit inside regions", \testExceptions());
         addTestCase("static and instance methods", \testMethods());
         addTestCase("reference args and container locals", \testRefsAndContainers());
+        addTestCase("references to outer locals from exception paths",
+            \testExceptionPathSharedRefs());
         addTestCase("object lifetime across regions", \testObjectLifetime());
         addTestCase("outlining disabled equivalence", \testDisabledEquivalence());
         addTestCase("no safe partition fallback", \testNoSafePartition());
@@ -298,6 +300,63 @@ printf('%%s\n', work(12345));
         hash<auto> h = compileRunAndInterpret(src);
         assertTrue(outlined(h.compile_out),
             "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testExceptionPathSharedRefs() {
+        # A closure-use local owned by the coordinator must not be referenced
+        # from an outlined exception-path region.  Cleanup of a nested
+        # closure-use local can otherwise leave the helper without the outer
+        # CVV, which used to crash in thread_find_closure_var().
+        string src = "
+sub bump(reference<int> value, int amount) {
+    value += amount;
+}
+
+sub fill(reference<*hash<auto>> value, int turn) {
+    value = {'turn': turn};
+}
+
+string sub work(int n) {
+    int retries = 0;
+    int total = n;
+    for (int turn = 0; turn < 20; ++turn) {
+        try {
+            *hash<auto> guard_context;
+            fill(\\guard_context, turn);
+            if ((turn + n) % 2) {
+                throw 'TEST-ERROR', 'expected';
+            }
+            total += guard_context.turn;
+        } catch (hash<ExceptionInfo> ex) {
+            bump(\\retries, turn + 1);
+            total += ex.err.size();
+        }
+        if (total % 3) {
+            total += turn * 2;
+        } else {
+            total -= turn;
+        }
+        if (total > 1000) {
+            total %= 997;
+        }
+    }
+    return sprintf('%d|%d', retries, total);
+}
+
+printf('%s\\n', work(1));
+printf('%s\\n', work(12));
+";
+        hash<auto> h = compileRunAndInterpret(src,
+            "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=30");
+        assertTrue(outlined(h.compile_out),
+            "safe regions must still outline: " + h.compile_out.substr(0, 600));
+        assertTrue(h.compile_out.regex(
+            "closure-use local crosses exception-path region boundary"),
+            "unsafe exception region must be rejected: "
+                + h.compile_out.substr(0, 1000));
         assertEq(h.interp_out, h.run_out);
     }
 

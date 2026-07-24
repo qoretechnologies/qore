@@ -2891,14 +2891,15 @@ struct AOTOutlineLocalRef {
     const LocalVar* local = nullptr;
     bool lifecycle = false;   //!< InstantiateLocal / UninstantiateLocal
     bool weak_store = false;  //!< StoreLocal with weak (:=) semantics
+    bool parse_reference = false;  //!< CreateParseRef (\local) access
     bool unknown = false;     //!< unidentifiable local reference — poisons outlining
 };
 
 //! Enumerate every direct LocalVar reference of an instruction.
-//! Locals reached only through delegated AST expression subtrees are
-//! intentionally not reported: such locals are AST-visible (never IR-only)
-//! and are accessed through the TLS stack on both sides of an outline
-//! boundary, so they need no boundary classification.
+//! Identifiable locals reached through delegated parse-reference ASTs are
+//! included as well: exception-path outlining must classify those TLS-backed
+//! references before deciding that a region can safely share the
+//! coordinator's closure-variable stack.
 template <typename F>
 static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
     switch (inst->opcode) {
@@ -3000,6 +3001,38 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
             if (lv) {
                 AOTOutlineLocalRef ref;
                 ref.local = lv;
+                ref.parse_reference = true;
+                cb(ref);
+            }
+            break;
+        }
+        case QoreIROpcode::CreateParseRef: {
+            const auto* pri = static_cast<const QoreIRCreateParseRefInstruction*>(inst);
+            const LocalVar* lv = pri->node
+                ? aotOutlineLocalFromVarRef(extractLValueBaseVarRef(pri->node->getLVExp()))
+                : nullptr;
+            if (lv) {
+                AOTOutlineLocalRef ref;
+                ref.local = lv;
+                ref.parse_reference = true;
+                cb(ref);
+            }
+            break;
+        }
+        case QoreIROpcode::Invoke: {
+            const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+            if (inv->invoke_opcode != QoreIROpcode::CreateParseRef) {
+                break;
+            }
+            const auto* pri = dynamic_cast<const ParseReferenceNode*>(
+                inv->expr.getInternalNode());
+            const LocalVar* lv = pri
+                ? aotOutlineLocalFromVarRef(extractLValueBaseVarRef(pri->getLVExp()))
+                : nullptr;
+            if (lv) {
+                AOTOutlineLocalRef ref;
+                ref.local = lv;
+                ref.parse_reference = true;
                 cb(ref);
             }
             break;
@@ -3223,7 +3256,22 @@ public:
                     info.min_ref = std::min(info.min_ref, i);
                     info.max_ref = std::max(info.max_ref, i);
                     info.weak_store |= ref.weak_store;
+                    info.parse_reference |= ref.parse_reference;
                 });
+                if (inst->exception_target) {
+                    has_exception_paths = true;
+                }
+                if (auto* thr = dynamic_cast<const QoreIRThrowInstruction*>(inst)) {
+                    has_exception_paths |= thr->exception_target != nullptr;
+                } else if (auto* inv = dynamic_cast<const QoreIRInvokeInstruction*>(inst)) {
+                    has_exception_paths |= inv->exception_target != nullptr;
+                } else if (auto* inv_md =
+                        dynamic_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
+                    has_exception_paths |= inv_md->exception_target != nullptr;
+                } else if (auto* inv_de =
+                        dynamic_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
+                    has_exception_paths |= inv_de->exception_target != nullptr;
+                }
                 switch (inst->opcode) {
                     case QoreIROpcode::CreateClosure:
                         // Real closure captures make crossing closure-use
@@ -3231,6 +3279,10 @@ public:
                         // interact with the CVV stack in ways the helper
                         // boundary cannot preserve) — see validateRegion().
                         has_closure_create = true;
+                        break;
+                    case QoreIROpcode::LandingPad:
+                    case QoreIROpcode::CatchException:
+                        has_exception_paths = true;
                         break;
                     case QoreIROpcode::ScopeEnter:
                         scope_enter_idx[static_cast<const QoreIRScopeEnterInstruction*>(
@@ -3413,6 +3465,7 @@ private:
         size_t min_ref = SIZE_MAX;
         size_t max_ref = 0;
         bool weak_store = false;
+        bool parse_reference = false;
     };
 
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_idx;
@@ -3423,6 +3476,7 @@ private:
     std::unordered_map<uint32_t, size_t> temp_mark_idx;
     std::vector<std::pair<uint32_t, size_t>> temp_discard_ids;
     bool has_closure_create = false;
+    bool has_exception_paths = false;
 
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
@@ -3604,17 +3658,23 @@ private:
             };
             if (outside_refs || !is_body) {
                 // Shared with the coordinator (or lifecycle-owned outside).
-                // Reference-promoted closure-use locals are allowed when the
-                // function creates no closures: every access goes through
-                // the thread-global CVV stack, so the helper resolves the
-                // coordinator's CVV and stays coherent by construction (it
-                // never pushes its own — crossing locals are not helper
-                // body locals, so emitLocalInstantiation skips them).  With
-                // real closure captures in the function the CVV interplay
-                // (especially under recursion) is not preserved across the
-                // helper boundary — reject.
-                if (has_closure_create && lv->closureUse()) {
-                    return fail_local("captured local crosses region boundary");
+                // Reference-promoted closure-use locals are allowed through
+                // ordinary regions when the function creates no closures:
+                // every access goes through the thread-global CVV stack, so
+                // the helper resolves the coordinator's CVV and stays
+                // coherent by construction (it never pushes its own —
+                // crossing locals are not helper body locals, so
+                // emitLocalInstantiation skips them).  Exception-path
+                // cleanup can unwind nested closure-use locals before an
+                // outlined catch block creates a reference to an outer local;
+                // the helper then cannot recover the coordinator's CVV.
+                // Real closure captures have the same unsupported CVV
+                // boundary interaction (especially under recursion).
+                if ((has_closure_create && lv->closureUse())
+                        || (has_exception_paths && info.parse_reference)) {
+                    return fail_local(has_exception_paths && info.parse_reference
+                        ? "closure-use local crosses exception-path region boundary"
+                        : "captured local crosses region boundary");
                 }
                 if (info.weak_store) {
                     return fail_local("weak-assigned local crosses region boundary");
