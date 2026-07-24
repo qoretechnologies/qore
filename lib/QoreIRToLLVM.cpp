@@ -3309,6 +3309,13 @@ bool QoreIRToLLVM::dominates(llvm::BasicBlock* candidate, llvm::BasicBlock* targ
 
 void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id,
         llvm::Function* llvm_func) {
+    const QoreIRValueFacts* facts = current_ir_func
+        ? current_ir_func->getValueFacts(QoreIRValue(result_id)) : nullptr;
+    if (!std::getenv("QORE_DISABLE_AOT_REFERENCE_FREE_CLEANUP_ELISION")
+            && facts && facts->reference_free) {
+        return;
+    }
+
     // Phase 2B — SSA-direct path: when the just-emitted call went through
     // emitMaybeInvoke's EH path AND the current block is on the entry
     // single-pred chain, track the result as an SSA entry whose lifetime

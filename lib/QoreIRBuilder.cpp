@@ -44,6 +44,22 @@ static void qore_ir_set_native_value_facts(QoreIRFunction* func, QoreIRValue val
     facts.assigned_state = QoreIRAssignedState::Assigned;
     facts.representation = representation;
     facts.never_nothing = true;
+    facts.reference_free =
+        representation == QoreIRValueRepresentation::NativeBool;
+    func->setValueFacts(value, facts);
+}
+
+void QoreIRBuilder::setCallResultOwnership(QoreIRValue value,
+        const AbstractQoreFunctionVariant* variant) {
+    const QoreTypeInfo* type_info = variant ? variant->getReturnTypeInfo() : nullptr;
+    const QoreTypeInfo* value_type = type_info ? qore_get_value_type(type_info) : nullptr;
+    if (!QoreTypeInfo::isType(value_type, NT_BOOLEAN)) {
+        return;
+    }
+    QoreIRValueFacts facts;
+    facts.type_info = type_info;
+    facts.representation = QoreIRValueRepresentation::Boxed;
+    facts.reference_free = true;
     func->setValueFacts(value, facts);
 }
 
@@ -259,6 +275,13 @@ QoreIRConstInstruction* QoreIRBuilder::createConstChar(unsigned value, const Qor
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Char;
     inst->constant.char_value = value;
+    QoreIRValueFacts facts;
+    facts.type_info = charTypeInfo;
+    facts.assigned_state = QoreIRAssignedState::Assigned;
+    facts.representation = QoreIRValueRepresentation::Boxed;
+    facts.never_nothing = true;
+    facts.reference_free = true;
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 
@@ -268,6 +291,12 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNothing(const QoreProgramLocat
     inst->loc = loc;
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Nothing;
+    QoreIRValueFacts facts;
+    facts.type_info = nothingTypeInfo;
+    facts.assigned_state = QoreIRAssignedState::Unassigned;
+    facts.representation = QoreIRValueRepresentation::Boxed;
+    facts.reference_free = true;
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 
@@ -277,6 +306,13 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNull(const QoreProgramLocation
     inst->loc = loc;
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::Null;
+    QoreIRValueFacts facts;
+    facts.type_info = nullTypeInfo;
+    facts.assigned_state = QoreIRAssignedState::Assigned;
+    facts.representation = QoreIRValueRepresentation::Boxed;
+    facts.never_nothing = true;
+    facts.reference_free = true;
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 
@@ -982,6 +1018,7 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    setCallResultOwnership(inst->result, variant);
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
     // Self-recursion check: compare QoreFunction pointer identity when
@@ -1012,6 +1049,7 @@ QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const Q
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    setCallResultOwnership(inst->result, variant);
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
     return inst;
@@ -1026,6 +1064,7 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    setCallResultOwnership(inst->result, variant);
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
     inst->temp_scope_id = exception_temp_scope_id;
@@ -1039,6 +1078,7 @@ QoreIRCallStaticDirectInstruction* QoreIRBuilder::createCallStaticDirect(const Q
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
+    setCallResultOwnership(inst->result, variant);
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
     return inst;
@@ -1099,14 +1139,17 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
         bool assigned = first
             && first->assigned_state == QoreIRAssignedState::Assigned;
         bool never_nothing = first && first->never_nothing;
+        bool reference_free = first && first->reference_free;
         bool dense_list = first
             && first->list_density == QoreIRListDensity::Dense;
         const QoreTypeInfo* type_info = first ? first->type_info : nullptr;
         for (size_t i = 1; i < incoming.size()
-                && (assigned || never_nothing || dense_list || type_info); ++i) {
+                && (assigned || never_nothing || reference_free
+                    || dense_list || type_info); ++i) {
             if (!(i % 100) && qore_check_cancel(nullptr, "IR phi fact propagation")) {
                 assigned = false;
                 never_nothing = false;
+                reference_free = false;
                 dense_list = false;
                 type_info = nullptr;
                 break;
@@ -1115,13 +1158,15 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
             assigned = assigned && facts
                 && facts->assigned_state == QoreIRAssignedState::Assigned;
             never_nothing = never_nothing && facts && facts->never_nothing;
+            reference_free = reference_free && facts && facts->reference_free;
             dense_list = dense_list && facts
                 && facts->list_density == QoreIRListDensity::Dense;
             if (!facts || facts->type_info != type_info) {
                 type_info = nullptr;
             }
         }
-        if (assigned || never_nothing || dense_list || type_info) {
+        if (assigned || never_nothing || reference_free || dense_list
+                || type_info) {
             QoreIRValueFacts facts;
             facts.type_info = type_info;
             facts.assigned_state = assigned
@@ -1136,6 +1181,7 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
             facts.list_density = dense_list
                 ? QoreIRListDensity::Dense : QoreIRListDensity::Unknown;
             facts.never_nothing = assigned && never_nothing;
+            facts.reference_free = reference_free;
             func->setValueFacts(inst->result, facts);
         }
     }

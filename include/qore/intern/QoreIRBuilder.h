@@ -228,6 +228,11 @@ public:
     QoreIRInvokeInstruction* createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
+    //! Marks exact boolean call results as unable to own reference-counted nodes.
+    //! @param value SSA result value to annotate
+    //! @param variant resolved call variant providing the declared return type
+    void setCallResultOwnership(QoreIRValue value,
+        const AbstractQoreFunctionVariant* variant);
     QoreIRPhiInstruction* createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
         const QoreProgramLocation* loc = nullptr,
         QoreIRPhiValueKind value_kind = QoreIRPhiValueKind::QoreValue);

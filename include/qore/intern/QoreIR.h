@@ -891,6 +891,8 @@ struct QoreIRValueFacts {
     QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
     QoreIRListDensity list_density = QoreIRListDensity::Unknown;
     bool never_nothing = false;
+    //! True when every possible runtime representation is non-reference-counted.
+    bool reference_free = false;
 };
 
 struct QoreIRConstant {

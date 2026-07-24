@@ -12503,6 +12503,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
                     call->getVariant());
             inst->explicit_type_param_inst =
                 call->getExplicitTypeParamInstantiation();
+            builder.setCallResultOwnership(inst->result,
+                call->getVariant());
             builder.setBlock(normal_block);
             result = inst->result;
         } else {
@@ -12697,6 +12699,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             invoke_inst->receiver_type_info = call->getReceiverTypeInfo();
             invoke_inst->explicit_type_param_inst =
                 call->getExplicitTypeParamInstantiation();
+            builder.setCallResultOwnership(invoke_inst->result, variant);
             // Phase 3: Try to cache the callee IR for inlining
             auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
             if (call_static_inst) {
