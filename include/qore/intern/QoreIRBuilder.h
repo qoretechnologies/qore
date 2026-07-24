@@ -329,7 +329,7 @@ public:
     QoreIRInstruction* createRefForeachFinalize(QoreIRValue state, QoreIRValue fill_remaining,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createRefForeachCleanup(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
-    QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt,
+    QoreIROnBlockExitInstruction* createOnBlockExit(const OnBlockExitStatement* stmt, uint32_t owner_scope_id,
         const QoreProgramLocation* loc = nullptr);
     QoreIRScopeEnterInstruction* createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc = nullptr);
     QoreIRScopeExitInstruction* createScopeExit(uint32_t scope_id, bool is_error = false,

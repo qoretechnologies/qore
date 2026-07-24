@@ -2390,7 +2390,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
             // Phase 2a: Emit OnBlockExit instruction so handlers are registered for exception-path execution
-            auto* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+            if (scope_stack.empty()) {
+                error = "on-block-exit statement has no owning IR scope";
+                return false;
+            }
+            auto* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, scope_stack.back(), stmt->loc);
 
             // Register for inline lowering at exit points and handler IR compilation
             block_handlers.emplace_back(InlineHandler{

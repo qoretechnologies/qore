@@ -2500,8 +2500,10 @@ public:
 
 class QoreIROnBlockExitInstruction : public QoreIRInstruction {
 public:
-    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt)
-            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt) {
+    explicit QoreIROnBlockExitInstruction(const OnBlockExitStatement* n_stmt,
+            uint32_t n_owner_scope_id = 0)
+            : QoreIRInstruction(QoreIROpcode::OnBlockExit), stmt(n_stmt),
+              owner_scope_id(n_owner_scope_id) {
     }
 
     //! Constructor for deserialized case (no AST statement available)
@@ -2516,6 +2518,11 @@ public:
     //! Compiled handler body; required for IR/JIT/AOT execution.
     //! Missing handler IR is a lowering/metadata error, not an AST fallback.
     std::unique_ptr<QoreIRFunction> handler_ir;
+    //! Transient scope ownership used by transforms that may split a function.
+    /** A zero value means that ownership metadata is unavailable. This field
+     *  is intentionally not part of the persistent IR format.
+     */
+    uint32_t owner_scope_id = 0;
 };
 
 //! Marks the entry into a new scope that may have on_exit/on_success/on_error handlers

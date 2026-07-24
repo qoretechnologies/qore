@@ -1492,8 +1492,8 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachCleanup(QoreIRValue state, con
 }
 
 QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExitStatement* stmt,
-        const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt);
+        uint32_t owner_scope_id, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt, owner_scope_id);
     inst->loc = loc;
     return inst;
 }

@@ -34,6 +34,8 @@ class AOTFunctionOutliningTest inherits QUnit::Test {
 
         addTestCase("outlining fires and preserves behavior", \testSequentialGroups());
         addTestCase("exceptions and on_exit inside regions", \testExceptions());
+        addTestCase("function-scope on_exit remains coordinator-owned",
+            \testFunctionScopeOnExit());
         addTestCase("static and instance methods", \testMethods());
         addTestCase("reference args and container locals", \testRefsAndContainers());
         addTestCase("references to outer locals from exception paths",
@@ -197,6 +199,47 @@ printf('%%s\n', runcase(3, 108, False));
         hash<auto> h = compileRunAndInterpret(src);
         assertTrue(outlined(h.compile_out),
             "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testFunctionScopeOnExit() {
+        string body = "";
+        for (int g = 0; g < 20; ++g) {
+            body += sprintf("
+    if (total %% %d) {
+        total += %d;
+        lifecycle += 'g%d,';
+    } else {
+        total -= %d;
+    }
+", g + 2, g + 1, g, g + 1);
+        }
+        string src = sprintf("
+our string lifecycle = '';
+
+string sub work(int n) {
+    int total = n;
+    lifecycle += 'registered;';
+    on_exit lifecycle += 'exit;';
+%s
+    lifecycle += 'return;';
+    return sprintf('%%d|%%s', total, lifecycle);
+}
+
+printf('%%s\n', work(7));
+printf('after:%%s\n', lifecycle);
+", body);
+        hash<auto> h = compileRunAndInterpret(src,
+            "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=30");
+        assertTrue(outlined(h.compile_out),
+            "safe regions after the handler must still outline: "
+                + h.compile_out.substr(0, 800));
+        assertTrue(h.compile_out.regex(
+            "on-block-exit owner scope crosses region boundary"),
+            "handler registration must remain in its owning function scope: "
+                + h.compile_out.substr(0, 1200));
         assertEq(h.interp_out, h.run_out);
     }
 

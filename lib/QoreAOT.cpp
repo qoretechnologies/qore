@@ -3537,6 +3537,15 @@ private:
                     case QoreIROpcode::DiscardTemps:
                         ++temp_discard_count;
                         break;
+                    case QoreIROpcode::OnBlockExit: {
+                        const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst);
+                        auto it = scope_enter_idx.find(obe->owner_scope_id);
+                        if (!obe->owner_scope_id || it == scope_enter_idx.end()
+                                || !in_region(it->second)) {
+                            return fail("on-block-exit owner scope crosses region boundary");
+                        }
+                        break;
+                    }
                     default:
                         break;
                 }
