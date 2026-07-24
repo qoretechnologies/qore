@@ -412,6 +412,122 @@ class ListenerStartedServer inherits HttpServer {
     }
 }
 
+#! Async-target wrapper used to verify the pre-handler-pool request lifecycle
+class PreparationTestTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
+    private {
+        HttpServerAsyncIo::HttpAsyncTarget delegate;
+        Mutex m();
+        int prepared;
+        int completed;
+        int rejected;
+        int cancelled;
+    }
+
+    constructor(HttpServerAsyncIo::HttpAsyncTarget delegate) {
+        self.delegate = delegate;
+        prepared = 0;
+        completed = 0;
+        rejected = 0;
+        cancelled = 0;
+    }
+
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> prepareHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        AutoLock al(m);
+        if (info.hdr."x-reject-before-dispatch") {
+            ++rejected;
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "code": 429,
+                "hdr": {"content-type": "text/plain"},
+                "body": <70726570617265642d72656a656374696f6e>,
+                "status_message": "Too Many Requests",
+                "return_to_idle": True,
+            };
+        }
+        ++prepared;
+        return;
+    }
+
+    cancelPreparedHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        AutoLock al(m);
+        ++cancelled;
+    }
+
+    hash<HttpServerAsyncIo::HttpRequestResultInfo> onHttpRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        on_exit {
+            AutoLock al(m);
+            ++completed;
+        }
+        return delegate.onHttpRequest(info);
+    }
+
+    onIdleTimeout(Socket sock, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        delegate.onIdleTimeout(sock, listener, cx);
+    }
+
+    onError(Socket sock, hash<ExceptionInfo> ex,
+            *HttpServer::HttpListenerInterface listener, *hash<auto> cx) {
+        delegate.onError(sock, ex, listener, cx);
+    }
+
+    onSseDisconnect(Socket sock, *HttpServer::HttpListenerInterface listener,
+            hash<auto> cx) {
+        delegate.onSseDisconnect(sock, listener, cx);
+    }
+
+    onWebSocketFrame(Socket sock,
+            hash<HttpServerAsyncIo::WebSocketFrameInfo> frame,
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        delegate.onWebSocketFrame(sock, frame, listener, cx);
+    }
+
+    onWebSocketClose(Socket sock, int code, string reason,
+            *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        delegate.onWebSocketClose(sock, code, reason, listener, cx);
+    }
+
+    *hash<HttpServerAsyncIo::HttpRequestResultInfo> tryInlineRequest(
+            hash<HttpServerAsyncIo::HttpConnectionInfo> info) {
+        return delegate.tryInlineRequest(info);
+    }
+
+    auto saveDispatchContext() {
+        return delegate.saveDispatchContext();
+    }
+
+    restoreDispatchContext(auto save_data) {
+        delegate.restoreDispatchContext(save_data);
+    }
+
+    hash<string, int> getCounts() {
+        AutoLock al(m);
+        return {
+            "prepared": prepared,
+            "completed": completed,
+            "rejected": rejected,
+            "cancelled": cancelled,
+        };
+    }
+}
+
+#! HttpServer exposing a preparation-lifecycle target for tests
+class PreparationTestServer inherits HttpServer {
+    private {
+        PreparationTestTarget preparation_target;
+    }
+
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+        preparation_target = new PreparationTestTarget(asyncTarget);
+        asyncTarget = preparation_target;
+    }
+
+    hash<string, int> getPreparationCounts() {
+        return preparation_target.getCounts();
+    }
+}
+
 public class HttpServerTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -554,6 +670,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode accept restart on exception", \asyncAcceptRestartOnExceptionTest());
         addTestCase("async mode inline handler", \asyncModeInlineHandlerTest());
         addTestCase("async mode inline handler with body", \asyncModeInlineBodyTest());
+        addTestCase("async mode request preparation lifecycle",
+            \asyncModeRequestPreparationTest());
         addTestCase("async mode idle timeout", \asyncModeIdleTimeoutTest());
         addTestCase("async mode inline Connection: close", \asyncModeInlineConnectionCloseTest());
         addTestCase("async mode inline HTTP/1.0 close", \asyncModeInlineHttp10CloseTest());
@@ -2789,6 +2907,97 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<auto> resp2 = client.send(NOTHING, "GET", "/inline");
         assertEq(200, resp2.status_code, "GET after POST status");
         assertEq("inline-ok", resp2.body, "keep-alive intact after body request");
+    }
+
+    #! Verifies protocol-independent admission before handler-pool submission
+    asyncModeRequestPreparationTest() {
+        Logger logger("async-request-preparation-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        PreparationTestServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+            "enable_h3": False,
+        });
+        on_exit server.stop();
+        SimpleStringHandler handler("prepared-handler-response");
+        server.setHandler("prepared-handler", "", MimeTypeText, handler);
+        server.setDefaultHandler("prepared-handler", handler);
+
+        hash<auto> h1_listener = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "enable_h3": False,
+        });
+        assertTrue(server.waitForAsyncIo(5s),
+            "request-preparation HTTP/1 listener is ready");
+        HTTPClient h1({
+            "url": "http://localhost:" + h1_listener.port,
+            "timeout": 5s,
+            "error_passthru": True,
+        });
+        h1.connect();
+        on_exit h1.disconnect();
+        hash<auto> response = h1.send(NOTHING, "GET", "/accepted");
+        assertEq(200, response.status_code,
+            "accepted HTTP/1 request reaches the handler");
+        response = h1.send("body", "POST", "/accepted-body",
+            {"content-type": "text/plain"});
+        assertEq(200, response.status_code,
+            "accepted HTTP/1 body request reaches the handler");
+        assertEq(2, server.getPreparationCounts().prepared,
+            "HTTP/1 requests are prepared before handler dispatch");
+        response = h1.send(NOTHING, "GET", "/reject-before-dispatch",
+            {"x-reject-before-dispatch": "true"});
+        assertEq(429, response.status_code,
+            "HTTP/1 preparation can reject before dispatch");
+        assertEq("prepared-rejection", response.body,
+            "HTTP/1 preparation rejection body is returned");
+        assertEq({
+            "prepared": 2,
+            "completed": 2,
+            "rejected": 1,
+            "cancelled": 0,
+        }, server.getPreparationCounts(),
+            "HTTP/1 preparation lifecycle is balanced");
+
+        hash<auto> h2_listener = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": False,
+        });
+        HTTPClient h2({
+            "url": "https://localhost:" + h2_listener.port,
+            "timeout": 10s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "error_passthru": True,
+        });
+        if (!h2.isHttp2Enabled()) {
+            testSkip("HTTP/2 not compiled in");
+            return;
+        }
+        h2.connect();
+        on_exit h2.disconnect();
+        response = h2.send(NOTHING, "GET", "/accepted-h2");
+        assertEq(200, response.status_code,
+            "accepted HTTP/2 request reaches the handler");
+        response = h2.send(NOTHING, "GET", "/reject-before-dispatch",
+            {"x-reject-before-dispatch": "true"});
+        assertEq(429, response.status_code,
+            "HTTP/2 preparation can reject before dispatch");
+        assertEq("prepared-rejection", response.body,
+            "HTTP/2 preparation rejection body is returned");
+        assertTrue(h2.isHttp2Active(),
+            "request-preparation test negotiated HTTP/2");
+        assertEq({
+            "prepared": 3,
+            "completed": 3,
+            "rejected": 2,
+            "cancelled": 0,
+        }, server.getPreparationCounts(),
+            "HTTP/2 preparation lifecycle is balanced");
     }
 
     #! Verifies HTTP/2 keep-alive behaviour after the do_close refactor

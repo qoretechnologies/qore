@@ -95,12 +95,16 @@ public class HttpClientStreamHandle {
         #! Request timeout
         timeout request_timeout;
 
-        #! Connect timeout; bounds waiting for a fresh connection to become ready
-        /** Kept distinct from \c request_timeout so that, per the
+        #! Connect timeout configured for this stream's connection
+        /** Informational: the
             @ref HttpClientIo::HttpClientConnectionManagerOptions::connect_timeout
-            "connect_timeout option" contract, TCP/TLS establishment on a fresh
-            connection fails fast instead of sharing the (typically much longer)
-            overall request deadline.
+            "connect_timeout option" contract is enforced by the transport
+            connection's own connect-phase deadline (armed with this value at
+            connection creation), which fails the connection with a
+            protocol-specific error (e.g. \c QUIC-HANDSHAKE-TIMEOUT).  Readiness
+            waits in this class are deliberately NOT bounded by this value —
+            doing so races the transport's identical deadline and masks its
+            diagnosable error with a generic timeout (see request()).
         */
         timeout connect_timeout;
 
@@ -131,6 +135,32 @@ public class HttpClientStreamHandle {
     #! Releases any unreleased stream reservation
     destructor() {
         releaseReservationIfHeld();
+    }
+
+    #! Surfaces the connection's transport-level error after a failed readiness wait
+    /** Readiness waits are bounded by the request budget, and the transport's own
+        connect-phase deadline (armed with \c connect_timeout at connection
+        creation) normally fails the connection first, making
+        @ref HttpClientConnection::waitForReady() "waitForReady()" throw the
+        transport error directly.  This backstop only runs when the wait itself
+        expired; any transport error recorded before or during the caller's
+        synchronous close() is preserved (first error wins) and surfaced here so
+        protocol-specific connect failures (e.g. \c QUIC-HANDSHAKE-TIMEOUT) stay
+        diagnosable and keep driving the connection manager's connection-error
+        retry/fallback logic instead of being masked by a generic timeout.
+
+        @throw HTTPCLIENT-CONNECT-ERROR the connection failed with a transport-level
+        error
+        @throw HTTPCLIENT-TIMEOUT no transport error was recorded; the readiness wait
+        genuinely timed out
+    */
+    private throwConnectNotReady() {
+        *hash<auto> err = conn.getPollOperation().getError();
+        if (err) {
+            throw "HTTPCLIENT-CONNECT-ERROR",
+                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
+        }
+        throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
@@ -336,25 +366,19 @@ public class HttpClientStreamHandle {
 
         # Wait for connection to become ready
         if (!conn.isReady()) {
-            # Without an explicit caller timeout, TCP/TLS establishment on a
-            # fresh connection is bounded by connect_timeout, not the (usually
-            # longer) overall request_timeout -- an unresponsive peer must
-            # fail fast per the connect_timeout contract instead of silently
-            # sharing the full response-wait budget. An explicit caller
-            # timeout_ms still governs the whole call, connect phase included.
-            #
-            # connect_timeout must be copied into a local `timeout`-typed
-            # variable before use in date arithmetic: Qore's date+timeout
-            # millisecond semantics only apply when the addend is a local
-            # variable declared `timeout`; adding a `timeout`-typed class
-            # member directly (`now_us() + connect_timeout`) is silently
-            # treated as a plain integer add, i.e. seconds, not ms.
-            timeout local_connect_timeout = connect_timeout;
-            date connect_end_time = timeout_ms ? end_time : now_us() + local_connect_timeout;
-            if (connect_end_time > end_time) {
-                connect_end_time = end_time;
-            }
-            date remaining = connect_end_time - now_us();
+            # The connect_timeout contract is enforced by the transport itself:
+            # every protocol connection arms its own connect-phase deadline with
+            # connect_timeout at creation (e.g. the QUIC handshake deadline that
+            # raises QUIC-HANDSHAKE-TIMEOUT in continuePoll()), closes itself,
+            # and waitForReady() then throws HTTPCLIENT-CONNECT-ERROR carrying
+            # the transport error.  This wait must therefore be bounded only by
+            # the overall request budget: bounding it by connect_timeout races
+            # the transport's identical deadline, and winning that race aborts
+            # the poll op before it can generate its diagnosable error --
+            # protocol-specific connect failures would be masked by a generic
+            # timeout and the connection manager's connection-error
+            # retry/fallback logic would never fire.
+            date remaining = end_time - now_us();
             if (remaining <= 0us) {
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
@@ -364,7 +388,7 @@ public class HttpClientStreamHandle {
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
                 releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                throwConnectNotReady();
             }
         }
 
@@ -460,13 +484,13 @@ public class HttpClientStreamHandle {
             state = HttpClientStreamState::Open;
         }
 
-        # Wait for connection to become ready if not already. Bounded by
-        # connect_timeout (not request_timeout): these entry points take no
-        # caller timeout override, so a fresh, unresponsive connection must
-        # fail fast per the connect_timeout contract rather than sharing the
-        # (usually longer) default request_timeout.
+        # Wait for connection to become ready if not already.  The
+        # connect_timeout contract is enforced by the transport's own
+        # connect-phase deadline (see request()); bounding this wait by
+        # connect_timeout instead would race that identical deadline and
+        # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: connect_timeout)) {
+            if (!conn.waitForReady(timeout_ms: request_timeout)) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -477,7 +501,7 @@ public class HttpClientStreamHandle {
                     }
                 }
                 releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                throwConnectNotReady();
             }
         }
 
@@ -666,13 +690,13 @@ public class HttpClientStreamHandle {
             state = HttpClientStreamState::Open;
         }
 
-        # Wait for connection to become ready if not already. Bounded by
-        # connect_timeout (not request_timeout): these entry points take no
-        # caller timeout override, so a fresh, unresponsive connection must
-        # fail fast per the connect_timeout contract rather than sharing the
-        # (usually longer) default request_timeout.
+        # Wait for connection to become ready if not already.  The
+        # connect_timeout contract is enforced by the transport's own
+        # connect-phase deadline (see request()); bounding this wait by
+        # connect_timeout instead would race that identical deadline and
+        # mask its diagnosable error with a generic timeout.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(timeout_ms: connect_timeout)) {
+            if (!conn.waitForReady(timeout_ms: request_timeout)) {
                 # Close the stale connect operation through the connection so
                 # the controller cancels the poll op and closes its socket.
                 try { conn.close(); } catch () {}
@@ -683,7 +707,7 @@ public class HttpClientStreamHandle {
                     }
                 }
                 releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+                throwConnectNotReady();
             }
         }
 

@@ -329,6 +329,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("default value", \testDefaultValue());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
+            addTestCase("concurrent multi-event trigger introspection", \concurrentTriggerIntrospectionTest());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
             addTestCase("pgvector extension alignment SQL", \pgvectorExtensionAlignmentSqlTest());
             addTestCase("pgvector type support", \pgvectorTest());
@@ -562,6 +563,72 @@ class PgsqlTest inherits SqlTestBase {
         # 1 = drop trigger
         # 2 = drop function
         assertEq(2, res, "2 actions must be performed");
+    }
+
+    private concurrentTriggerIntrospectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        const int Workers = 32;
+        const int Iterations = 200;
+        const string TableName = "pgsql_trigger_concurrency";
+        const string FunctionName = "pgsql_trigger_concurrency_func";
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+            on_error ds.rollback();
+            ds.execRaw("drop table if exists " + TableName);
+            ds.execRaw("drop function if exists " + FunctionName + "()");
+            ds.commit();
+        }
+
+        ds.execRaw("drop table if exists " + TableName);
+        ds.execRaw("drop function if exists " + FunctionName + "()");
+        ds.execRaw("create table " + TableName + " (id int)");
+        ds.execRaw("create function " + FunctionName + "() returns trigger language plpgsql as "
+            "$function$ begin return new; end; $function$");
+        ds.execRaw("create trigger " + FunctionName + " before insert or update on " + TableName
+            + " for each row execute function " + FunctionName + "()");
+        ds.commit();
+
+        string connstr = m_options.connstr;
+        Counter ready(Workers);
+        Counter gate(1);
+        Counter done(Workers);
+        Queue errors();
+        for (int i = 0; i < Workers; ++i) {
+            background sub (string worker_connstr, string table_name,
+                    Counter worker_ready, Counter start_gate,
+                    Counter worker_done, Queue worker_errors) {
+                on_exit worker_done.dec();
+                worker_ready.dec();
+                start_gate.waitForZero();
+                try {
+                    Datasource worker_ds(worker_connstr);
+                    for (int j = 0; j < Iterations; ++j) {
+                        PgsqlTable trigger_table(worker_ds, table_name);
+                        trigger_table.cache();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    worker_errors.push(ex);
+                }
+            }(connstr, TableName, ready, gate, done, errors);
+        }
+
+        ready.waitForZero();
+        gate.dec();
+        done.waitForZero();
+
+        list<hash<ExceptionInfo>> failures;
+        while (!errors.empty()) {
+            failures += errors.get();
+        }
+        assertEq(0, failures.size(), sprintf("concurrent trigger introspection failures: %y", failures));
+
+        PgsqlTable trigger_table(ds, TableName);
+        assertEq(1, trigger_table.getTriggers().size(), "multi-event trigger is represented once");
     }
 
     private temporaryTableResolutionTest() {
