@@ -15284,11 +15284,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
         *arg_list, xsink);
 }
 
+static const QoreMemberInfo* qore_rt_get_aot_object_member_info(
+        QoreAOTCallTarget& target, const char* member_name,
+        const qore_class_private* class_ctx) {
+    static const bool cache_member_info = !std::getenv(
+        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
+    if (!cache_member_info) {
+        return nullptr;
+    }
+    const QoreMemberInfo* member_info =
+        target.object_member_info.load(std::memory_order_acquire);
+    if (member_info) {
+        return member_info;
+    }
+    const QoreMemberInfo* resolved =
+        class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
+    if (!resolved) {
+        return nullptr;
+    }
+    const QoreMemberInfo* expected = nullptr;
+    if (target.object_member_info.compare_exchange_strong(expected, resolved,
+            std::memory_order_release, std::memory_order_acquire)) {
+        return resolved;
+    }
+    return expected;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         const char* member_name, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     if (!target.method || !target.qc || target.is_pseudo
             || base.getType() != NT_OBJECT) {
@@ -15300,8 +15326,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
         return qore_rt_dot_eval_object_method_direct_aot(
             ctx, slot, base_bits, nullptr, 0, xsink);
     }
-    ValueHolder value(object->getReferencedMemberNoMethod(
-        member_name, target.qc, xsink), xsink);
+    const qore_class_private* class_ctx =
+        qore_class_private::get(*target.qc);
+    const QoreMemberInfo* member_info =
+        qore_rt_get_aot_object_member_info(target, member_name, class_ctx);
+    qore_object_private* object_priv = qore_object_private::get(*object);
+    ValueHolder value(member_info
+        ? object_priv->getReferencedMemberNoMethodResolved(member_name,
+            member_info->getClassContext(class_ctx), xsink)
+        : object->getReferencedMemberNoMethod(
+            member_name, target.qc, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -15332,7 +15366,7 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t base_bits, const char* member_name,
         ExceptionSink* xsink, F&& convert) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
-    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    QoreAOTCallTarget& target = ctx->call_targets[slot];
     QoreValue base = fromBits(base_bits);
     ValueHolder value(xsink);
     if (!target.method || !target.qc || target.is_pseudo
@@ -15345,8 +15379,18 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
             value = fromBits(qore_rt_dot_eval_object_method_direct_aot(
                 ctx, slot, base_bits, nullptr, 0, xsink));
         } else {
-            ValueHolder member(object->getReferencedMemberNoMethod(
-                member_name, target.qc, xsink), xsink);
+            const qore_class_private* class_ctx =
+                qore_class_private::get(*target.qc);
+            const QoreMemberInfo* member_info =
+                qore_rt_get_aot_object_member_info(
+                    target, member_name, class_ctx);
+            qore_object_private* object_priv =
+                qore_object_private::get(*object);
+            ValueHolder member(member_info
+                ? object_priv->getReferencedMemberNoMethodResolved(member_name,
+                    member_info->getClassContext(class_ctx), xsink)
+                : object->getReferencedMemberNoMethod(
+                    member_name, target.qc, xsink), xsink);
             if (!*xsink) {
                 value = member->needsEval()
                     ? member->eval(xsink) : member.release();
