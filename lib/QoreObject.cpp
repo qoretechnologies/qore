@@ -991,6 +991,25 @@ QoreValue qore_object_private::getReferencedMemberNoMethodResolved(
     return rv;
 }
 
+QoreValue qore_object_private::getReferencedMemberNoMethodResolvedPrehashed(
+        const char* mem, size_t hash,
+        const qore_class_private* member_class_ctx,
+        ExceptionSink* xsink) const {
+    QoreSafeVarRWReadLocker sl(rml);
+
+    if (status == OS_DELETED) {
+        makeAccessDeletedObjectException(xsink, mem, theclass->getName());
+        return QoreValue();
+    }
+
+    const QoreHashNode* odata =
+        member_class_ctx ? getInternalData(member_class_ctx) : data;
+    return odata
+        ? qore_hash_private::get(*odata)
+            ->getReferencedKeyValuePrehashedIntern(mem, hash)
+        : QoreValue();
+}
+
 void qore_object_private::setValue(const char* key, QoreValue val, ExceptionSink* xsink) {
     // get the current class context
     const qore_class_private* class_ctx = runtime_get_class();

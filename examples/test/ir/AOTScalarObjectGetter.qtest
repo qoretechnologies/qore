@@ -141,6 +141,12 @@ if (!is_file(aot_exe)) {
 }
 
 string aot = backquote(sprintf("%s %s 2>&1", env, aot_exe));
+string aot_no_prehash = backquote(sprintf(
+    "QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH=1 %s %s 2>&1",
+    env, aot_exe));
+string aot_no_descriptor = backquote(sprintf(
+    "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE=1 %s %s 2>&1",
+    env, aot_exe));
 string symbols = backquote(sprintf("nm -D %s 2>&1", aot_exe));
 if (!symbols.regex("qore_rt_load_object_getter_int_aot")
         || !symbols.regex("qore_rt_load_object_getter_float_aot")
@@ -149,8 +155,10 @@ if (!symbols.regex("qore_rt_load_object_getter_int_aot")
     printf("missing object getter helpers:\n%s", symbols);
     exit(2);
 }
-if (ast != aot
+if (ast != aot || ast != aot_no_prehash || ast != aot_no_descriptor
         || ast != "9223372036854775807:2.5:True:True:True:True:8000\n") {
-    printf("execution mismatch:\nAST:\n%sAOT:\n%s", ast, aot);
+    printf("execution mismatch:\nAST:\n%sAOT:\n%s"
+        + "AOT without prehash:\n%sAOT without descriptor:\n%s",
+        ast, aot, aot_no_prehash, aot_no_descriptor);
     exit(2);
 }

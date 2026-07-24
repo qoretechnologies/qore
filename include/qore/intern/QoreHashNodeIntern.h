@@ -201,6 +201,18 @@ public:
         return QoreValue();
     }
 
+    DLLLOCAL QoreValue getReferencedKeyValuePrehashedIntern(
+            const char* key, size_t hash) const {
+        assert(key);
+#ifdef HAVE_QORE_HASH_MAP
+        hm_hm_t::const_iterator i = hm.find(qore_prehashed_str{key, hash});
+#else
+        (void)hash;
+        hm_hm_t::const_iterator i = hm.find(key);
+#endif
+        return i != hm.end() ? (*(i->second))->val.refSelf() : QoreValue();
+    }
+
     DLLLOCAL int64 getKeyAsBigInt(const char* key, bool &found) const {
         assert(key);
         hm_hm_t::const_iterator i = hm.find(key);

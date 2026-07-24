@@ -413,6 +413,11 @@ public:
             const qore_class_private* member_class_ctx,
             ExceptionSink* xsink) const;
 
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolvedPrehashed(
+            const char* mem, size_t hash,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL int getLValueResolved(const char* key,
             const QoreMemberInfo& info,
             const qore_class_private* class_ctx, LValueHelper& lvh,

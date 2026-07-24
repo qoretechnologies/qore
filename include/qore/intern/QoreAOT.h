@@ -121,6 +121,13 @@ struct QoreAOTHashDeclPathCacheKeyHash {
     }
 };
 
+//! Immutable object-member metadata resolved for one AOT call site.
+struct QoreAOTObjectMemberDescriptor {
+    const QoreMemberInfo* info = nullptr;
+    const qore_class_private* member_class_ctx = nullptr;
+    size_t key_hash = 0;
+};
+
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
     const QoreFunction* func = nullptr;
@@ -136,14 +143,19 @@ struct QoreAOTCallTarget {
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution
     const qore_class_private* class_ctx = nullptr; //!< class context for self/base method calls
-    //! lazily resolved immutable metadata for object set/get summary lowering
-    std::atomic<const QoreMemberInfo*> object_member_info{nullptr};
+    //! Lazily resolved immutable metadata for object member summary lowering.
+    std::atomic<const QoreAOTObjectMemberDescriptor*> object_member_descriptor{
+        nullptr};
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
     bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
     bool self_ns_single = false;           //!< unqualified self call; false for explicit base/namespace call
     bool self_is_copy = false;             //!< implicit self copy() call
     bool self_is_abstract = false;         //!< abstract self call requiring virtual dispatch
+
+    ~QoreAOTCallTarget() {
+        delete object_member_descriptor.load(std::memory_order_relaxed);
+    }
 };
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.

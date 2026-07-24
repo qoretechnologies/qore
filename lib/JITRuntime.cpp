@@ -15301,7 +15301,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_object_method_direct_aot(
         *arg_list, xsink);
 }
 
-static const QoreMemberInfo* qore_rt_get_aot_object_member_info(
+static const QoreAOTObjectMemberDescriptor*
+qore_rt_get_aot_object_member_descriptor(
         QoreAOTCallTarget& target, const char* member_name,
         const qore_class_private* class_ctx) {
     static const bool cache_member_info = !std::getenv(
@@ -15309,22 +15310,48 @@ static const QoreMemberInfo* qore_rt_get_aot_object_member_info(
     if (!cache_member_info) {
         return nullptr;
     }
-    const QoreMemberInfo* member_info =
-        target.object_member_info.load(std::memory_order_acquire);
-    if (member_info) {
-        return member_info;
+    const QoreAOTObjectMemberDescriptor* descriptor =
+        target.object_member_descriptor.load(std::memory_order_acquire);
+    if (descriptor) {
+        return descriptor;
     }
-    const QoreMemberInfo* resolved =
-        class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
-    if (!resolved) {
+    std::unique_ptr<QoreAOTObjectMemberDescriptor> resolved(
+        new QoreAOTObjectMemberDescriptor);
+    resolved->info = class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
+    if (!resolved->info) {
         return nullptr;
     }
-    const QoreMemberInfo* expected = nullptr;
-    if (target.object_member_info.compare_exchange_strong(expected, resolved,
-            std::memory_order_release, std::memory_order_acquire)) {
-        return resolved;
+    resolved->member_class_ctx =
+        resolved->info->getClassContext(class_ctx);
+#ifdef HAVE_QORE_HASH_MAP
+    resolved->key_hash = qore_hash_str()(member_name);
+#endif
+    const QoreAOTObjectMemberDescriptor* expected = nullptr;
+    if (target.object_member_descriptor.compare_exchange_strong(expected,
+            resolved.get(), std::memory_order_release,
+            std::memory_order_acquire)) {
+        return resolved.release();
     }
     return expected;
+}
+
+static QoreValue qore_rt_get_aot_object_member(
+        QoreObject* object, qore_object_private* object_priv,
+        const QoreClass* target_class, const char* member_name,
+        const QoreAOTObjectMemberDescriptor* descriptor,
+        ExceptionSink* xsink) {
+    if (!descriptor || !descriptor->info) {
+        return object->getReferencedMemberNoMethod(
+            member_name, target_class, xsink);
+    }
+    static const bool use_prehash = !std::getenv(
+        "QORE_DISABLE_AOT_OBJECT_MEMBER_PREHASH");
+    return use_prehash
+        ? object_priv->getReferencedMemberNoMethodResolvedPrehashed(
+            member_name, descriptor->key_hash,
+            descriptor->member_class_ctx, xsink)
+        : object_priv->getReferencedMemberNoMethodResolved(
+            member_name, descriptor->member_class_ctx, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
@@ -15345,14 +15372,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_object_getter_aot(
     }
     const qore_class_private* class_ctx =
         qore_class_private::get(*target.qc);
-    const QoreMemberInfo* member_info =
-        qore_rt_get_aot_object_member_info(target, member_name, class_ctx);
+    const QoreAOTObjectMemberDescriptor* descriptor =
+        qore_rt_get_aot_object_member_descriptor(
+            target, member_name, class_ctx);
     qore_object_private* object_priv = qore_object_private::get(*object);
-    ValueHolder value(member_info
-        ? object_priv->getReferencedMemberNoMethodResolved(member_name,
-            member_info->getClassContext(class_ctx), xsink)
-        : object->getReferencedMemberNoMethod(
-            member_name, target.qc, xsink), xsink);
+    ValueHolder value(qore_rt_get_aot_object_member(object, object_priv,
+        target.qc, member_name, descriptor, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -15398,16 +15423,14 @@ static T qore_rt_load_object_getter_native_aot(QoreAOTContext* ctx,
         } else {
             const qore_class_private* class_ctx =
                 qore_class_private::get(*target.qc);
-            const QoreMemberInfo* member_info =
-                qore_rt_get_aot_object_member_info(
+            const QoreAOTObjectMemberDescriptor* descriptor =
+                qore_rt_get_aot_object_member_descriptor(
                     target, member_name, class_ctx);
             qore_object_private* object_priv =
                 qore_object_private::get(*object);
-            ValueHolder member(member_info
-                ? object_priv->getReferencedMemberNoMethodResolved(member_name,
-                    member_info->getClassContext(class_ctx), xsink)
-                : object->getReferencedMemberNoMethod(
-                    member_name, target.qc, xsink), xsink);
+            ValueHolder member(qore_rt_get_aot_object_member(object,
+                object_priv, target.qc, member_name, descriptor, xsink),
+                xsink);
             if (!*xsink) {
                 value = member->needsEval()
                     ? member->eval(xsink) : member.release();
@@ -15472,24 +15495,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
 
     const qore_class_private* class_ctx =
         qore_class_private::get(*target.qc);
-    static const bool cache_member_info = !std::getenv(
-        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
-    const QoreMemberInfo* member_info = cache_member_info
-        ? target.object_member_info.load(std::memory_order_acquire) : nullptr;
-    if (cache_member_info && !member_info) {
-        const QoreMemberInfo* resolved =
-            class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
-        if (resolved) {
-            const QoreMemberInfo* expected = nullptr;
-            if (target.object_member_info.compare_exchange_strong(expected,
-                    resolved, std::memory_order_release,
-                    std::memory_order_acquire)) {
-                member_info = resolved;
-            } else {
-                member_info = expected;
-            }
-        }
-    }
+    const QoreAOTObjectMemberDescriptor* descriptor =
+        qore_rt_get_aot_object_member_descriptor(
+            target, member_name, class_ctx);
+    const QoreMemberInfo* member_info =
+        descriptor ? descriptor->info : nullptr;
     qore_object_private* object_priv = qore_object_private::get(*object);
 
     {
@@ -15509,11 +15519,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         }
     }
 
-    ValueHolder value(member_info
-        ? object_priv->getReferencedMemberNoMethodResolved(member_name,
-            member_info->getClassContext(class_ctx), xsink)
-        : object->getReferencedMemberNoMethod(
-            member_name, target.qc, xsink), xsink);
+    ValueHolder value(qore_rt_get_aot_object_member(object, object_priv,
+        target.qc, member_name, descriptor, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
@@ -15551,24 +15558,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_compound_get_aot(
 
     const qore_class_private* class_ctx =
         qore_class_private::get(*target.qc);
-    static const bool cache_member_info = !std::getenv(
-        "QORE_DISABLE_AOT_OBJECT_MEMBER_METADATA_CACHE");
-    const QoreMemberInfo* member_info = cache_member_info
-        ? target.object_member_info.load(std::memory_order_acquire) : nullptr;
-    if (cache_member_info && !member_info) {
-        const QoreMemberInfo* resolved =
-            class_ctx->runtimeGetMemberInfo(member_name, class_ctx);
-        if (resolved) {
-            const QoreMemberInfo* expected = nullptr;
-            if (target.object_member_info.compare_exchange_strong(expected,
-                    resolved, std::memory_order_release,
-                    std::memory_order_acquire)) {
-                member_info = resolved;
-            } else {
-                member_info = expected;
-            }
-        }
-    }
+    const QoreAOTObjectMemberDescriptor* descriptor =
+        qore_rt_get_aot_object_member_descriptor(
+            target, member_name, class_ctx);
+    const QoreMemberInfo* member_info =
+        descriptor ? descriptor->info : nullptr;
     qore_object_private* object_priv = qore_object_private::get(*object);
 
     ValueHolder value(xsink);
