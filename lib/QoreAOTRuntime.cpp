@@ -2899,7 +2899,84 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm);
 struct QoreAOTDebugMetadata {
     std::vector<uint8_t> metadata;
 
-    QoreAOTDebugMetadata(const uint8_t* data, uint32_t size) : metadata(data, data + size) {
+    QoreAOTDebugMetadata(const QoreAOTBinaryReader& reader, const uint8_t* data, uint32_t size) {
+        if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE) {
+            metadata.assign(data, data + size);
+            return;
+        }
+
+        std::vector<const QoreAOTSectionHeader*> retained_sections;
+        auto retainSection = [&reader, &retained_sections](QoreAOTSectionType type) {
+            if (const QoreAOTSectionHeader* sec = reader.findSection(type)) {
+                retained_sections.push_back(sec);
+            }
+        };
+        retainSection(QoreAOTSectionType::SLOT_MAPS);
+        retainSection(QoreAOTSectionType::DEBUG_IR);
+        // Serialized plugin values resolve their module through this section.
+        retainSection(QoreAOTSectionType::PLUGIN_IMPORTS);
+
+        uint64_t pool_size_offset = QORE_AOT_HEADER_SIZE
+            + static_cast<uint64_t>(reader.getSectionCount()) * sizeof(QoreAOTSectionHeader);
+        if (pool_size_offset > size || size - pool_size_offset < sizeof(uint32_t)) {
+            metadata.assign(data, data + size);
+            return;
+        }
+        const uint8_t* pool_size_ptr = data + pool_size_offset;
+        const uint8_t* pool_size_read_ptr = pool_size_ptr;
+        uint32_t pool_size = QoreAOTBinaryReader::readU32(pool_size_read_ptr);
+        uint64_t pool_end_offset = pool_size_offset + sizeof(uint32_t) + pool_size;
+        if (pool_end_offset > size) {
+            metadata.assign(data, data + size);
+            return;
+        }
+
+        uint64_t compact_size = QORE_AOT_HEADER_SIZE + sizeof(uint32_t) + pool_size
+            + retained_sections.size() * sizeof(QoreAOTSectionHeader);
+        for (const QoreAOTSectionHeader* sec : retained_sections) {
+            compact_size += sec->size;
+        }
+        if (compact_size >= size || compact_size > UINT32_MAX) {
+            metadata.assign(data, data + size);
+            return;
+        }
+
+        metadata.reserve(static_cast<size_t>(compact_size));
+        metadata.insert(metadata.end(), data, data + QORE_AOT_HEADER_SIZE);
+        uint32_t section_count = static_cast<uint32_t>(retained_sections.size());
+        metadata[16] = static_cast<uint8_t>(section_count);
+        metadata[17] = static_cast<uint8_t>(section_count >> 8);
+        metadata[18] = static_cast<uint8_t>(section_count >> 16);
+        metadata[19] = static_cast<uint8_t>(section_count >> 24);
+
+        auto writeU16 = [this](uint16_t value) {
+            metadata.push_back(static_cast<uint8_t>(value));
+            metadata.push_back(static_cast<uint8_t>(value >> 8));
+        };
+        auto writeU32 = [this](uint32_t value) {
+            metadata.push_back(static_cast<uint8_t>(value));
+            metadata.push_back(static_cast<uint8_t>(value >> 8));
+            metadata.push_back(static_cast<uint8_t>(value >> 16));
+            metadata.push_back(static_cast<uint8_t>(value >> 24));
+        };
+        uint32_t offset = 0;
+        for (const QoreAOTSectionHeader* sec : retained_sections) {
+            writeU16(sec->type);
+            writeU16(0);
+            writeU32(offset);
+            writeU32(sec->size);
+            offset += sec->size;
+        }
+        metadata.insert(metadata.end(), pool_size_ptr, pool_size_read_ptr + pool_size);
+        for (const QoreAOTSectionHeader* sec : retained_sections) {
+            const uint8_t* section_data = reader.getSectionData(*sec);
+            if (!section_data) {
+                metadata.assign(data, data + size);
+                return;
+            }
+            metadata.insert(metadata.end(), section_data, section_data + sec->size);
+        }
+        assert(metadata.size() == compact_size);
     }
 };
 
@@ -2921,7 +2998,15 @@ static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
             || !metadata || metadata_len <= 0) {
         return nullptr;
     }
-    return std::make_shared<QoreAOTDebugMetadata>(metadata, static_cast<uint32_t>(metadata_len));
+    auto retained = std::make_shared<QoreAOTDebugMetadata>(
+        reader, metadata, static_cast<uint32_t>(metadata_len));
+    if (std::getenv("QORE_AOT_TRACE_RETAINED_METADATA")) {
+        fprintf(stderr,
+            "[aot-retained-metadata] label=%s blob=%d retained=%zu compression=%u\n",
+            reader.getLabel() ? reader.getLabel() : "<unknown>", metadata_len,
+            retained->metadata.size(), reader.getHeader().compression);
+    }
+    return retained;
 }
 
 static std::unique_ptr<QoreIRFunction> deserializeDebugIRForContext(
