@@ -1700,10 +1700,15 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program
@@ -2136,10 +2141,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program
@@ -2240,10 +2250,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program

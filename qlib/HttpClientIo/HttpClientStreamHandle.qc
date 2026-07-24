@@ -342,7 +342,15 @@ public class HttpClientStreamHandle {
             # fail fast per the connect_timeout contract instead of silently
             # sharing the full response-wait budget. An explicit caller
             # timeout_ms still governs the whole call, connect phase included.
-            date connect_end_time = timeout_ms ? end_time : now_us() + connect_timeout;
+            #
+            # connect_timeout must be copied into a local `timeout`-typed
+            # variable before use in date arithmetic: Qore's date+timeout
+            # millisecond semantics only apply when the addend is a local
+            # variable declared `timeout`; adding a `timeout`-typed class
+            # member directly (`now_us() + connect_timeout`) is silently
+            # treated as a plain integer add, i.e. seconds, not ms.
+            timeout local_connect_timeout = connect_timeout;
+            date connect_end_time = timeout_ms ? end_time : now_us() + local_connect_timeout;
             if (connect_end_time > end_time) {
                 connect_end_time = end_time;
             }

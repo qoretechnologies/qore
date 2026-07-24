@@ -2762,6 +2762,32 @@ public:
      */
     DLLLOCAL static void inheritParseImports(QoreProgram& child, QoreProgram& parent, ExceptionSink* xsink);
 
+    //! Copies parent's %prepend-module-path / %append-module-path lists into `child`, deduped.
+    /** Called by ModuleManager's child-Program creation paths
+        (\ref loadSeparatedModule / \ref loadUserModuleFromPath /
+        \ref loadUserModuleFromSource), alongside \ref inheritParseDefines and
+        \ref inheritParseImports, right after the module's own Program is
+        constructed and before its own source is parsed.
+
+        Without this, a required module's own nested \c %requires (including
+        \c %requires(reexport) of its own dependencies) resolve against an
+        empty per-Program prepend/append list, since the module gets a fresh
+        \c QoreProgram unrelated to the importer's.  The module's own
+        \c %prepend-module-path / \c %append-module-path directives (if any)
+        still take effect afterward and win, since prepends are inserted at
+        the front of the list: this call only backfills the importer's lists
+        as a fallback ahead of \c QORE_MODULE_DIR / compiled-in defaults, it
+        does not override anything the module declares for itself.
+
+        The AOT deserialization path already does the equivalent via
+        \c inheritAOTModulePathLists() in QoreAOTRuntime.cpp; this is the
+        same fix for the source/interpreted module-loading path.  See
+        design/parse-directive-prepend-module-path.md, "Search-path layering".
+
+        @since %Qore 3.0
+     */
+    DLLLOCAL static void inheritModulePathLists(QoreProgram& child, QoreProgram& parent);
+
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);
     }
