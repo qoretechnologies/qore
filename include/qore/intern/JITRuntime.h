@@ -577,6 +577,15 @@ uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink)
 uint64_t qore_rt_load_self_getter_checked(const char* member_name, int32_t rejects_nothing,
         ExceptionSink* xsink);
 
+//! Load an exact required int getter from self, convert it to native form, and release the owned value.
+int64_t qore_rt_load_self_getter_int(const char* member_name, ExceptionSink* xsink);
+
+//! Load an exact required float getter from self, convert it to native form, and release the owned value.
+double qore_rt_load_self_getter_float(const char* member_name, ExceptionSink* xsink);
+
+//! Load an exact required bool getter from self, convert it to native form, and release the owned value.
+int64_t qore_rt_load_self_getter_bool(const char* member_name, ExceptionSink* xsink);
+
 //! Load a member for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink);
 

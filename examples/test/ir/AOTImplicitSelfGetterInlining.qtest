@@ -22,10 +22,17 @@ final class Holder {
     private {
         string value;
         string missing;
+        int scalar;
+        float ratio;
+        bool enabled;
+        int missing_int;
     }
 
     constructor(string value) {
         self.value = value;
+        scalar = 9223372036854775807;
+        ratio = 1.25;
+        enabled = True;
     }
 
     string getValue() {
@@ -48,6 +55,26 @@ final class Holder {
         return missing;
     }
 
+    int getScalar() {
+        return scalar;
+    }
+
+    float getRatio() {
+        return ratio;
+    }
+
+    bool getEnabled() {
+        return enabled;
+    }
+
+    int getMissingInt() {
+        return missing_int;
+    }
+
+    string readScalars() {
+        return sprintf(\"%d:%.2f:%y\", getScalar(), getRatio(), getEnabled());
+    }
+
     bool missingRejected() {
         try {
             getMissing();
@@ -60,12 +87,22 @@ final class Holder {
     bool optionalAbsent() {
         return getOptional() === NOTHING;
     }
+
+    bool missingIntRejected() {
+        try {
+            getMissingInt();
+        } catch (hash<auto> ex) {
+            return ex.err == \"RUNTIME-TYPE-ERROR\";
+        }
+        return False;
+    }
 }
 
 Holder first(\"first\");
 Holder second(\"second\");
-printf(\"%s:%s:%y:%y\\n\", first.read(), first.readOther(second),
-    first.missingRejected(), first.optionalAbsent());
+printf(\"%s:%s:%s:%y:%y:%y\\n\", first.read(), first.readOther(second),
+    first.readScalars(), first.missingRejected(), first.optionalAbsent(),
+    first.missingIntRejected());
 ";
 
 File source_file();
@@ -83,14 +120,19 @@ if (!is_file(executable_path)) {
     exit(2);
 }
 if (!(compile_output =~ /inlined implicit-self getter 'value'/)
-        || !(compile_output =~ /inlined implicit-self getter 'missing'/)) {
+        || !(compile_output =~ /inlined implicit-self getter 'missing'/)
+        || !(compile_output =~ /inlined implicit-self getter 'scalar'/)
+        || !(compile_output =~ /inlined implicit-self getter 'ratio'/)
+        || !(compile_output =~ /inlined implicit-self getter 'enabled'/)
+        || !(compile_output =~ /inlined implicit-self getter 'missing_int'/)) {
     printf("missing inlined implicit-self getter:\n%s", compile_output);
     exit(2);
 }
 
 string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, executable_path));
-if (ast != "first:second:first:True:True\n" || aot != ast) {
+if (ast != "first:second:first:9223372036854775807:1.25:True:True:True:True\n"
+        || aot != ast) {
     printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
     exit(2);
 }

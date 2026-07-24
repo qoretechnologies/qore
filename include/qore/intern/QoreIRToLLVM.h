@@ -743,6 +743,11 @@ private:
             llvm::Value* boxed_arg, int32_t slot, llvm::Module& module,
             llvm::Function* llvm_func, const QoreIRInstruction* inst);
 
+    // Load an imported exact self getter in its declared scalar representation.
+    llvm::Value* emitAOTSelfGetter(const BatchCalleeInfo& info,
+            const AbstractQoreFunctionVariant* variant, llvm::Module& module,
+            BatchCalleeReturnKind& return_kind);
+
     BatchCalleeParamKind getFastEntryParamKind(const BatchCalleeInfo& info,
             unsigned index) const;
     bool fastEntryParamRejectsNothing(const BatchCalleeInfo& info,
@@ -851,9 +856,6 @@ private:
     // Phase 4: LLVM IR helper inlining helpers
     // Check if value has a node (inline NaN-boxing check) - returns bool (i1)
     llvm::Value* hasNodeInline(llvm::Value* qv);
-
-    // Discard a boxed value only when its NaN-box representation contains a node.
-    void emitDecrefIfNode(llvm::Module& module, llvm::Value* val);
 
     // Inline qore_rt_ref - reference count a value if it's a node
     // Returns the value unchanged if not a node, or qore_rt_refself result if node

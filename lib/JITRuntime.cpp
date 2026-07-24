@@ -179,6 +179,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_load_self_getter_checked",
         reinterpret_cast<void*>(&qore_rt_load_self_getter_checked) },
+    { "qore_rt_load_self_getter_int",
+        reinterpret_cast<void*>(&qore_rt_load_self_getter_int) },
+    { "qore_rt_load_self_getter_float",
+        reinterpret_cast<void*>(&qore_rt_load_self_getter_float) },
+    { "qore_rt_load_self_getter_bool",
+        reinterpret_cast<void*>(&qore_rt_load_self_getter_bool) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
@@ -2129,6 +2135,49 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_getter_checked(
         qore_rt_raise_return_nothing(xsink);
     }
     return *xsink ? toBits(QoreValue()) : result;
+}
+
+template <typename T, typename F>
+static T qore_rt_load_self_getter_native(const char* member_name,
+        ExceptionSink* xsink, F&& convert) {
+    QoreObject* obj = runtime_get_stack_object();
+    assert(obj);
+    if (qore_rt_check_closure_self_valid(obj, xsink)) {
+        return T();
+    }
+    ValueHolder member(
+        obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+    if (*xsink) {
+        return T();
+    }
+    ValueHolder value(
+        member->needsEval() ? member->eval(xsink) : member.release(), xsink);
+    if (*xsink) {
+        return T();
+    }
+    if (value->isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+        return T();
+    }
+    return convert(*value);
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_int(
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
+        [](QoreValue value) { return value.getAsBigInt(); });
+}
+
+extern "C" DLLEXPORT double qore_rt_load_self_getter_float(
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<double>(member_name, xsink,
+        [](QoreValue value) { return value.getAsFloat(); });
+}
+
+extern "C" DLLEXPORT int64_t qore_rt_load_self_getter_bool(
+        const char* member_name, ExceptionSink* xsink) {
+    return qore_rt_load_self_getter_native<int64_t>(member_name, xsink,
+        [](QoreValue value) { return value.getAsBool(); });
 }
 
 // Variant that does NOT evaluate needsEval() values (e.g., WeakReferenceNode).
