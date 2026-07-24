@@ -44,22 +44,133 @@ static void qore_ir_set_native_value_facts(QoreIRFunction* func, QoreIRValue val
     facts.assigned_state = QoreIRAssignedState::Assigned;
     facts.representation = representation;
     facts.never_nothing = true;
-    facts.reference_free =
-        representation == QoreIRValueRepresentation::NativeBool;
+    facts.ownership = representation == QoreIRValueRepresentation::NativeBool
+        ? QoreIRValueOwnership::ReferenceFree
+        : QoreIRValueOwnership::Unknown;
     func->setValueFacts(value, facts);
+}
+
+static void qore_ir_set_int_range(QoreIRValueFacts& facts, __int128 min,
+        __int128 max) {
+    if (min < std::numeric_limits<int64_t>::min()
+            || max > std::numeric_limits<int64_t>::max() || min > max) {
+        return;
+    }
+    facts.int_range_known = true;
+    facts.int_range_min = static_cast<int64_t>(min);
+    facts.int_range_max = static_cast<int64_t>(max);
+    if (facts.hasInlineIntRange()) {
+        facts.ownership = QoreIRValueOwnership::ReferenceFree;
+    }
+}
+
+static void qore_ir_refine_binary_int_range(QoreIRFunction* func,
+    QoreIRValue result, QoreIROpcode opcode, QoreIRValue lhs,
+        QoreIRValue rhs) {
+    const QoreIRValueFacts* result_facts = func->getValueFacts(result);
+    const QoreIRValueFacts* left = func->getValueFacts(lhs);
+    const QoreIRValueFacts* right = func->getValueFacts(rhs);
+    if (!result_facts || !left || !right) {
+        return;
+    }
+
+    QoreIRValueFacts facts = *result_facts;
+    bool both_known = left->int_range_known && right->int_range_known;
+    switch (opcode) {
+        case QoreIROpcode::AddInt:
+            if (!both_known) {
+                return;
+            }
+            qore_ir_set_int_range(facts,
+                static_cast<__int128>(left->int_range_min)
+                    + right->int_range_min,
+                static_cast<__int128>(left->int_range_max)
+                    + right->int_range_max);
+            break;
+        case QoreIROpcode::SubInt:
+            if (!both_known) {
+                return;
+            }
+            qore_ir_set_int_range(facts,
+                static_cast<__int128>(left->int_range_min)
+                    - right->int_range_max,
+                static_cast<__int128>(left->int_range_max)
+                    - right->int_range_min);
+            break;
+        case QoreIROpcode::MulInt: {
+            if (!both_known) {
+                return;
+            }
+            __int128 products[] = {
+                static_cast<__int128>(left->int_range_min)
+                    * right->int_range_min,
+                static_cast<__int128>(left->int_range_min)
+                    * right->int_range_max,
+                static_cast<__int128>(left->int_range_max)
+                    * right->int_range_min,
+                static_cast<__int128>(left->int_range_max)
+                    * right->int_range_max,
+            };
+            auto bounds = std::minmax_element(std::begin(products),
+                    std::end(products));
+            qore_ir_set_int_range(facts, *bounds.first, *bounds.second);
+            break;
+        }
+        case QoreIROpcode::AndInt:
+            if (both_known && left->int_range_min >= 0
+                    && right->int_range_min >= 0) {
+                qore_ir_set_int_range(facts, 0,
+                    std::min(left->int_range_max, right->int_range_max));
+            } else if (left->int_range_known
+                    && left->int_range_min == left->int_range_max
+                    && left->int_range_min >= 0) {
+                qore_ir_set_int_range(facts, 0, left->int_range_max);
+            } else if (right->int_range_known
+                    && right->int_range_min == right->int_range_max
+                    && right->int_range_min >= 0) {
+                qore_ir_set_int_range(facts, 0, right->int_range_max);
+            }
+            break;
+        case QoreIROpcode::OrInt:
+        case QoreIROpcode::XorInt:
+            if (both_known && left->int_range_min >= 0
+                    && right->int_range_min >= 0
+                    && left->int_range_max <= QoreValue::InlineIntMax
+                    && right->int_range_max <= QoreValue::InlineIntMax) {
+                qore_ir_set_int_range(facts, 0, QoreValue::InlineIntMax);
+            }
+            break;
+        case QoreIROpcode::CmpInt:
+            qore_ir_set_int_range(facts, -1, 1);
+            break;
+        case QoreIROpcode::ModInt:
+            if (right->int_range_known
+                    && right->int_range_min == right->int_range_max
+                    && right->int_range_min
+                    && right->int_range_min
+                        != std::numeric_limits<int64_t>::min()) {
+                int64_t divisor = std::abs(right->int_range_min);
+                qore_ir_set_int_range(facts,
+                    -static_cast<__int128>(divisor) + 1,
+                    static_cast<__int128>(divisor) - 1);
+            }
+            break;
+        default:
+            return;
+    }
+    func->setValueFacts(result, facts);
 }
 
 void QoreIRBuilder::setCallResultOwnership(QoreIRValue value,
         const AbstractQoreFunctionVariant* variant) {
     const QoreTypeInfo* type_info = variant ? variant->getReturnTypeInfo() : nullptr;
     const QoreTypeInfo* value_type = type_info ? qore_get_value_type(type_info) : nullptr;
-    if (!QoreTypeInfo::isType(value_type, NT_BOOLEAN)) {
-        return;
-    }
     QoreIRValueFacts facts;
     facts.type_info = type_info;
     facts.representation = QoreIRValueRepresentation::Boxed;
-    facts.reference_free = true;
+    facts.ownership = QoreTypeInfo::isType(value_type, NT_BOOLEAN)
+        ? QoreIRValueOwnership::ReferenceFree
+        : QoreIRValueOwnership::Owned;
     func->setValueFacts(value, facts);
 }
 
@@ -243,6 +354,9 @@ QoreIRConstInstruction* QoreIRBuilder::createConstInt(int64_t value, const QoreP
     inst->constant.kind = QoreIRConstant::Kind::Int;
     inst->constant.int_value = value;
     qore_ir_set_native_value_facts(func, inst->result, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
+    QoreIRValueFacts facts = *func->getValueFacts(inst->result);
+    qore_ir_set_int_range(facts, value, value);
+    func->setValueFacts(inst->result, facts);
     return inst;
 }
 
@@ -280,7 +394,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstChar(unsigned value, const Qor
     facts.assigned_state = QoreIRAssignedState::Assigned;
     facts.representation = QoreIRValueRepresentation::Boxed;
     facts.never_nothing = true;
-    facts.reference_free = true;
+    facts.ownership = QoreIRValueOwnership::ReferenceFree;
     func->setValueFacts(inst->result, facts);
     return inst;
 }
@@ -295,7 +409,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNothing(const QoreProgramLocat
     facts.type_info = nothingTypeInfo;
     facts.assigned_state = QoreIRAssignedState::Unassigned;
     facts.representation = QoreIRValueRepresentation::Boxed;
-    facts.reference_free = true;
+    facts.ownership = QoreIRValueOwnership::ReferenceFree;
     func->setValueFacts(inst->result, facts);
     return inst;
 }
@@ -311,7 +425,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNull(const QoreProgramLocation
     facts.assigned_state = QoreIRAssignedState::Assigned;
     facts.representation = QoreIRValueRepresentation::Boxed;
     facts.never_nothing = true;
-    facts.reference_free = true;
+    facts.ownership = QoreIRValueOwnership::ReferenceFree;
     func->setValueFacts(inst->result, facts);
     return inst;
 }
@@ -329,6 +443,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& valu
     facts.assigned_state = QoreIRAssignedState::Assigned;
     facts.representation = QoreIRValueRepresentation::Boxed;
     facts.never_nothing = true;
+    facts.ownership = QoreIRValueOwnership::Owned;
     func->setValueFacts(inst->result, facts);
     return inst;
 }
@@ -369,6 +484,7 @@ QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>&
     facts.representation = QoreIRValueRepresentation::Boxed;
     facts.list_density = QoreIRListDensity::Dense;
     facts.never_nothing = true;
+    facts.ownership = QoreIRValueOwnership::Owned;
     for (size_t i = 0; i < values.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR list density analysis")) {
             facts.list_density = QoreIRListDensity::Unknown;
@@ -549,6 +665,7 @@ QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lh
     inst->operands.push_back(lhs);
     inst->operands.push_back(rhs);
     qore_ir_set_opcode_value_facts(func, inst->result, op);
+    qore_ir_refine_binary_int_range(func, inst->result, op, lhs, rhs);
     return inst;
 }
 
@@ -1139,17 +1256,23 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
         bool assigned = first
             && first->assigned_state == QoreIRAssignedState::Assigned;
         bool never_nothing = first && first->never_nothing;
-        bool reference_free = first && first->reference_free;
+        QoreIRValueOwnership ownership = first
+            ? first->ownership : QoreIRValueOwnership::Unknown;
+        bool int_range_known = first && first->int_range_known;
+        int64_t int_range_min = int_range_known ? first->int_range_min : 0;
+        int64_t int_range_max = int_range_known ? first->int_range_max : 0;
         bool dense_list = first
             && first->list_density == QoreIRListDensity::Dense;
         const QoreTypeInfo* type_info = first ? first->type_info : nullptr;
         for (size_t i = 1; i < incoming.size()
-                && (assigned || never_nothing || reference_free
-                    || dense_list || type_info); ++i) {
+                && (assigned || never_nothing
+                    || ownership != QoreIRValueOwnership::Unknown
+                    || int_range_known || dense_list || type_info); ++i) {
             if (!(i % 100) && qore_check_cancel(nullptr, "IR phi fact propagation")) {
                 assigned = false;
                 never_nothing = false;
-                reference_free = false;
+                ownership = QoreIRValueOwnership::Unknown;
+                int_range_known = false;
                 dense_list = false;
                 type_info = nullptr;
                 break;
@@ -1158,15 +1281,26 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
             assigned = assigned && facts
                 && facts->assigned_state == QoreIRAssignedState::Assigned;
             never_nothing = never_nothing && facts && facts->never_nothing;
-            reference_free = reference_free && facts && facts->reference_free;
+            if (!facts || facts->ownership != ownership) {
+                ownership = QoreIRValueOwnership::Unknown;
+            }
+            if (int_range_known && facts && facts->int_range_known) {
+                int_range_min = std::min(int_range_min,
+                        facts->int_range_min);
+                int_range_max = std::max(int_range_max,
+                        facts->int_range_max);
+            } else {
+                int_range_known = false;
+            }
             dense_list = dense_list && facts
                 && facts->list_density == QoreIRListDensity::Dense;
             if (!facts || facts->type_info != type_info) {
                 type_info = nullptr;
             }
         }
-        if (assigned || never_nothing || reference_free || dense_list
-                || type_info) {
+        if (assigned || never_nothing
+                || ownership != QoreIRValueOwnership::Unknown || dense_list
+                || int_range_known || type_info) {
             QoreIRValueFacts facts;
             facts.type_info = type_info;
             facts.assigned_state = assigned
@@ -1181,7 +1315,13 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
             facts.list_density = dense_list
                 ? QoreIRListDensity::Dense : QoreIRListDensity::Unknown;
             facts.never_nothing = assigned && never_nothing;
-            facts.reference_free = reference_free;
+            facts.ownership = ownership;
+            facts.int_range_known = int_range_known;
+            facts.int_range_min = int_range_min;
+            facts.int_range_max = int_range_max;
+            if (facts.hasInlineIntRange()) {
+                facts.ownership = QoreIRValueOwnership::ReferenceFree;
+            }
             func->setValueFacts(inst->result, facts);
         }
     }
@@ -1315,7 +1455,11 @@ QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QorePro
     inst->operands.push_back(value);
     inst->result = func->createValue();
     if (const QoreIRValueFacts* facts = func->getValueFacts(value)) {
-        func->setValueFacts(inst->result, *facts);
+        QoreIRValueFacts result_facts = *facts;
+        if (result_facts.ownership != QoreIRValueOwnership::ReferenceFree) {
+            result_facts.ownership = QoreIRValueOwnership::Owned;
+        }
+        func->setValueFacts(inst->result, result_facts);
     }
     return inst;
 }

@@ -3377,7 +3377,8 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     const QoreIRValueFacts* facts = current_ir_func
         ? current_ir_func->getValueFacts(QoreIRValue(result_id)) : nullptr;
     if (!std::getenv("QORE_DISABLE_AOT_REFERENCE_FREE_CLEANUP_ELISION")
-            && facts && facts->reference_free) {
+            && facts
+            && facts->ownership == QoreIRValueOwnership::ReferenceFree) {
         return;
     }
 
@@ -4323,13 +4324,29 @@ llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id) {
         return val;  // Already NaN-boxed
     }
     if (val->getType() == i64_type) {
-        llvm::Value* result = boxInt(val);
+        const QoreIRValueFacts* facts = current_ir_func
+            ? current_ir_func->getValueFacts(QoreIRValue(id)) : nullptr;
+        bool known_inline = !std::getenv(
+                "QORE_DISABLE_AOT_IMMEDIATE_NUMERIC_FACTS")
+            && facts && facts->hasInlineIntRange();
+        llvm::Value* result;
+        if (known_inline) {
+            llvm::Value* masked = builder->CreateAnd(val,
+                llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+            result = builder->CreateOr(masked,
+                llvm::ConstantInt::get(i64_type, TAG_INT48));
+        } else {
+            result = boxInt(val);
+        }
         // boxInt for runtime values calls qore_rt_box_big_int which may allocate
         // a QoreBigIntNode (refcount=1).  Track the result for cleanup at function
         // exit so the temp ref is released.  For compile-time constants in the
         // 48-bit range, boxInt returns inline encoding (no allocation, no tracking
         // needed).  For all other cases (runtime values or out-of-range constants),
         // the result may hold a heap-allocated ref that must be released.
+        if (known_inline) {
+            return result;
+        }
         if (auto* ci = llvm::dyn_cast<llvm::ConstantInt>(val)) {
             int64_t v = ci->getSExtValue();
             if (v >= INT48_MIN && v <= INT48_MAX) {

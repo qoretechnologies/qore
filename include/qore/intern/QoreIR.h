@@ -884,15 +884,34 @@ enum class QoreIRListDensity : uint8_t {
     Dense,
 };
 
+//! Reference ownership known for an SSA value.
+enum class QoreIRValueOwnership : uint8_t {
+    Unknown,
+    //! The SSA value owns a reference that must eventually be consumed.
+    Owned,
+    //! The SSA value aliases storage owned elsewhere and must not be consumed.
+    Borrowed,
+    //! Every possible runtime representation is non-reference-counted.
+    ReferenceFree,
+};
+
 //! Parse- and IR-derived facts attached to an SSA value.
 struct QoreIRValueFacts {
     const QoreTypeInfo* type_info = nullptr;
     QoreIRAssignedState assigned_state = QoreIRAssignedState::Unknown;
     QoreIRValueRepresentation representation = QoreIRValueRepresentation::Unknown;
     QoreIRListDensity list_density = QoreIRListDensity::Unknown;
+    QoreIRValueOwnership ownership = QoreIRValueOwnership::Unknown;
     bool never_nothing = false;
-    //! True when every possible runtime representation is non-reference-counted.
-    bool reference_free = false;
+    bool int_range_known = false;
+    int64_t int_range_min = 0;
+    int64_t int_range_max = 0;
+
+    bool hasInlineIntRange() const {
+        return int_range_known
+            && int_range_min >= QoreValue::InlineIntMin
+            && int_range_max <= QoreValue::InlineIntMax;
+    }
 };
 
 struct QoreIRConstant {
