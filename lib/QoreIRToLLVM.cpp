@@ -16030,6 +16030,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* direct_inst = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
 
             int nargs = static_cast<int>(inst->operands.size());
+            const BatchCalleeInfo* aot_self_getter = nullptr;
             const BatchCalleeInfo* aot_self_batch_callee = nullptr;
             llvm::Function* aot_self_batch_fn = nullptr;
             if (aot_mode && batch_callees && direct_inst->variant
@@ -16044,6 +16045,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && qore_ir_generic_fast_entry_matches(
                         it->second, direct_inst->expr);
                 if (it != batch_callees->end()
+                        && it->second.implicit_self_method
+                        && nargs == 0
+                        && !it->second.object_getter_member.empty()
+                        && direct_inst->aot_string_consumer
+                            == QoreIRCallDirectInstruction::AOTStringConsumerKind::None
+                        && !std::getenv(
+                            "QORE_DISABLE_AOT_SELF_GETTER_IMPORT")) {
+                    aot_self_getter = &it->second;
+                }
+                if (!aot_self_getter && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
@@ -16087,7 +16098,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             BatchCalleeReturnKind call_return_kind = aot_self_batch_callee
                 ? aot_self_batch_callee->return_kind
                 : BatchCalleeReturnKind::Boxed;
-            if (fused_string_consumer && aot_self_batch_callee) {
+            if (aot_self_getter) {
+                llvm::Value* member_name = builder->CreateGlobalString(
+                    aot_self_getter->object_getter_member,
+                    "self_getter_member");
+                const QoreTypeInfo* return_type =
+                    direct_inst->variant->getReturnTypeInfo();
+                bool rejects_nothing = QoreTypeInfo::hasType(return_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(
+                        return_type, NT_NOTHING);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_load_self_getter_checked",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {member_name,
+                     llvm::ConstantInt::get(i32_type, rejects_nothing),
+                     xsink_arg});
+                call_may_modify_runtime_locals = false;
+                call_effect_info = aot_self_getter;
+                if (std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: inlined implicit-self getter '%s' in '%s'\n",
+                        aot_self_getter->object_getter_member.c_str(),
+                        current_ir_func ? current_ir_func->name.c_str()
+                                        : "<unknown>");
+                }
+            } else if (fused_string_consumer && aot_self_batch_callee) {
                 call_result = emitAOTStringProducerConsumer(
                     *aot_self_batch_callee, raw_args, *direct_inst, module);
                 if (!call_result) {
@@ -16249,8 +16286,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            if (aot_self_batch_callee
-                    && aot_self_batch_callee->never_returns_nothing) {
+            const BatchCalleeInfo* self_summary = aot_self_getter
+                ? aot_self_getter : aot_self_batch_callee;
+            if (self_summary && self_summary->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
             emitExceptionCheck(module, llvm_func, inst);
@@ -16262,6 +16300,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* invoke_inst = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
 
             int nargs = static_cast<int>(inst->operands.size());
+            const BatchCalleeInfo* aot_self_getter = nullptr;
             const BatchCalleeInfo* aot_self_batch_callee = nullptr;
             llvm::Function* aot_self_batch_fn = nullptr;
             if (aot_mode && batch_callees && invoke_inst->variant
@@ -16276,6 +16315,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     && qore_ir_generic_fast_entry_matches(
                         it->second, invoke_inst->expr);
                 if (it != batch_callees->end()
+                        && it->second.implicit_self_method
+                        && nargs == 0
+                        && !it->second.object_getter_member.empty()
+                        && !std::getenv(
+                            "QORE_DISABLE_AOT_SELF_GETTER_IMPORT")) {
+                    aot_self_getter = &it->second;
+                }
+                if (!aot_self_getter && it != batch_callees->end()
                         && (!it->second.generic_specialized_fast_entry
                             || generic_specialization_matches)
                         && it->second.approach_b_eligible
@@ -16314,7 +16361,33 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
             bool call_may_modify_runtime_locals = true;
             const BatchCalleeInfo* call_effect_info = nullptr;
-            if (aot_mode && invoke_inst->expr) {
+            if (aot_self_getter) {
+                llvm::Value* member_name = builder->CreateGlobalString(
+                    aot_self_getter->object_getter_member,
+                    "self_getter_member");
+                const QoreTypeInfo* return_type =
+                    invoke_inst->variant->getReturnTypeInfo();
+                bool rejects_nothing = QoreTypeInfo::hasType(return_type)
+                    && !QoreTypeInfo::parseAcceptsReturns(
+                        return_type, NT_NOTHING);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_load_self_getter_checked",
+                    llvm::FunctionType::get(i64_type,
+                        {ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {member_name,
+                     llvm::ConstantInt::get(i32_type, rejects_nothing),
+                     xsink_arg});
+                call_may_modify_runtime_locals = false;
+                call_effect_info = aot_self_getter;
+                if (std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: inlined implicit-self getter '%s' in '%s'\n",
+                        aot_self_getter->object_getter_member.c_str(),
+                        current_ir_func ? current_ir_func->name.c_str()
+                                        : "<unknown>");
+                }
+            } else if (aot_mode && invoke_inst->expr) {
                 // AOT mode: use expression slot to look up the class and method at runtime
                 QoreValue expr_val = invoke_inst->expr;
                 uint64_t expr_bits;
@@ -16452,13 +16525,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
 
             values[inst->result.id] = call_result;
-            if (!aot_self_batch_callee
-                    || aot_self_batch_callee->return_kind == BatchCalleeReturnKind::Boxed) {
+            if (aot_self_getter || !aot_self_batch_callee
+                    || aot_self_batch_callee->return_kind
+                        == BatchCalleeReturnKind::Boxed) {
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
-            if (aot_self_batch_callee
-                    && aot_self_batch_callee->never_returns_nothing) {
+            const BatchCalleeInfo* self_summary = aot_self_getter
+                ? aot_self_getter : aot_self_batch_callee;
+            if (self_summary && self_summary->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
             // Check for exception and branch accordingly (like Invoke)

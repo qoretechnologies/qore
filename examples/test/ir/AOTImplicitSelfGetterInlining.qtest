@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-implicit-self-getter-" + string(getpid());
+mkdir(root);
+string source_path = root + "/self-getter.qr";
+string executable_path = root + "/self-getter";
+string source = "%modern
+
+final class Holder {
+    private {
+        string value;
+        string missing;
+    }
+
+    constructor(string value) {
+        self.value = value;
+    }
+
+    string getValue() {
+        return value;
+    }
+
+    string read() {
+        return getValue();
+    }
+
+    string readOther(Holder other) {
+        return other.getValue() + \":\" + getValue();
+    }
+
+    string getMissing() {
+        return missing;
+    }
+
+    *string getOptional() {
+        return missing;
+    }
+
+    bool missingRejected() {
+        try {
+            getMissing();
+        } catch (hash<auto> ex) {
+            return ex.err == \"RUNTIME-TYPE-ERROR\";
+        }
+        return False;
+    }
+
+    bool optionalAbsent() {
+        return getOptional() === NOTHING;
+    }
+}
+
+Holder first(\"first\");
+Holder second(\"second\");
+printf(\"%s:%s:%y:%y\\n\", first.read(), first.readOther(second),
+    first.missingRejected(), first.optionalAbsent());
+";
+
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string ast = backquote(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string compile_output = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DEBUG=1 %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, executable_path, source_path));
+if (!is_file(executable_path)) {
+    printf("AOT compile failed:\n%s", compile_output);
+    exit(2);
+}
+if (!(compile_output =~ /inlined implicit-self getter 'value'/)
+        || !(compile_output =~ /inlined implicit-self getter 'missing'/)) {
+    printf("missing inlined implicit-self getter:\n%s", compile_output);
+    exit(2);
+}
+
+string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, executable_path));
+if (ast != "first:second:first:True:True\n" || aot != ast) {
+    printf("unexpected output\nAST:\n%sAOT:\n%s", ast, aot);
+    exit(2);
+}

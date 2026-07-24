@@ -177,6 +177,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing) },
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_load_self_getter_checked",
+        reinterpret_cast<void*>(&qore_rt_load_self_getter_checked) },
     { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
     { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
     { "qore_rt_list_index_dynamic", reinterpret_cast<void*>(&qore_rt_list_index_dynamic) },
@@ -2116,6 +2118,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, 
         return toBits(QoreValue());
     }
     return toBits(val->needsEval() ? val->eval(xsink) : val.release());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_self_getter_checked(
+        const char* member_name, int32_t rejects_nothing, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_self_member(member_name, xsink);
+    if (!*xsink && rejects_nothing && fromBits(result).isNothing()) {
+        qore_rt_raise_return_nothing(xsink);
+    }
+    return *xsink ? toBits(QoreValue()) : result;
 }
 
 // Variant that does NOT evaluate needsEval() values (e.g., WeakReferenceNode).

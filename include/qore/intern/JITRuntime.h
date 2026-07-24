@@ -573,6 +573,10 @@ uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSi
 //! Load a member from the current runtime object; returns NaN-boxed QoreValue.
 uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink);
 
+//! Load an exact getter member from self and enforce its declared return contract.
+uint64_t qore_rt_load_self_getter_checked(const char* member_name, int32_t rejects_nothing,
+        ExceptionSink* xsink);
+
 //! Load a member for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink);
 
