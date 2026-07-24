@@ -81,6 +81,10 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         #! True when onComplete has run — prevents new onPollComplete dispatches
         bool completed = False;
 
+        #! True once the done Counter has been decremented — guards against a
+        #! double decrement across onComplete(), forceClose(), and setDone()
+        bool done_signaled = False;
+
         #! True while a handler-pool drainer is running for this connection
         /** Protected by @ref dispatch_mutex.  When True, additional
             @ref onPollComplete() calls observe the flag and return without
@@ -122,10 +126,44 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         handler setup), signals immediately.
     */
     public setDone(Counter done) {
-        AutoLock al(dispatch_mutex);
-        self.done = done;
-        if (completed) {
-            # onComplete() already ran before we set the counter — signal now
+        bool do_dec = False;
+        {
+            AutoLock al(dispatch_mutex);
+            self.done = done;
+            # onComplete()/forceClose() already ran before we set the counter — signal now
+            if (completed && !done_signaled) {
+                done_signaled = True;
+                do_dec = True;
+            }
+        }
+        if (do_dec) {
+            done.dec();
+        }
+    }
+
+    #! Idempotently completes the operation so the handler thread's done Counter
+    #! is released during teardown without depending on the async wake path
+    /** Called from @ref WebSocketHandler::WebSocketConnection::stop() ->
+        signalTransportClose() on the async HTTP/1.1 path.  A server-initiated
+        close relies on a \c wakeSocket() re-driving \c continuePoll(), which can be
+        lost when the socket hash the controller routes on has gone stale during
+        teardown; force-completing here guarantees the handler thread (blocked on
+        \c done.waitForZero()) and the listener stop (blocked on \c dThreads.wait())
+        are always released.  The shared @ref done_signaled guard decrements the
+        counter exactly once even when the controller later runs @ref onComplete();
+        setting @ref completed stops further frame dispatch and makes a later
+        @ref setDone() release the counter if this races the setup window. */
+    public forceClose() {
+        bool do_dec = False;
+        {
+            AutoLock al(dispatch_mutex);
+            completed = True;
+            if (exists done && !done_signaled) {
+                done_signaled = True;
+                do_dec = True;
+            }
+        }
+        if (do_dec) {
             done.dec();
         }
     }
@@ -308,8 +346,17 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             wsc = NOTHING;
             handler = NOTHING;
         }
-        # Signal the handler thread to wake up and run cleanup
-        if (done) {
+        # Signal the handler thread to wake up and run cleanup — exactly once
+        # across onComplete()/forceClose()/setDone()
+        bool do_dec = False;
+        {
+            AutoLock al(dispatch_mutex);
+            if (exists done && !done_signaled) {
+                done_signaled = True;
+                do_dec = True;
+            }
+        }
+        if (do_dec) {
             done.dec();
         }
         # Call base class to trigger handleConnectionResult() → handleWebSocketClose(),

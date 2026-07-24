@@ -140,6 +140,9 @@
       access logs use this information for HTTP/3 requests when available
     - server-side HTTP/2 \c Socket methods are now async-safe and integrate with the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" body-streaming queue model
+    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" now provides protocol-independent
+      pre-handler-pool request preparation and cancellation callbacks, allowing applications to reject or reserve
+      HTTP/1.x, HTTP/2, and HTTP/3 work before it enters the shared handler queue
     - @ref Qore::HTTPClient "HTTPClient" automatically uses HTTP/2 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> and HTTP/3 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a>; per-instance and

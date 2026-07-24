@@ -988,6 +988,20 @@ public class WebSocketConnection {
                     async_ctrl.wakeSocket(sock);
                 } catch () {}
             }
+            # Deterministically release the handler thread's done Counter.  The
+            # wakeSocket() above re-drives the poll op's continuePoll() to run the
+            # close handshake and complete the op, but that wake can be lost during
+            # teardown (the controller routes wakes by a socket hash that may have
+            # gone stale), leaving startImpl() blocked forever on done.waitForZero()
+            # and the listener stop blocked on dThreads.wait().  Force-completing the
+            # poll op here guarantees teardown always makes progress; it is
+            # idempotent with the poll op's normal onComplete().  (Only the async H1
+            # HttpWebSocketPollOperation implements forceClose(); guard accordingly.)
+            if (async_ws_poll_op.hasCallableMethod("forceClose")) {
+                try {
+                    call_object_method(async_ws_poll_op, "forceClose");
+                } catch () {}
+            }
         }
         # For async H2/H3 WebSocket: force-close the stream processor.
         # forceClose() is a pure atomic signal — no I/O, no delay — so shutdown

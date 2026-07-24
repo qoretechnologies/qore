@@ -224,6 +224,14 @@ uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
 //! Called at the end of each catch block (try.merge) and before function return from within catch.
 void qore_rt_catch_end(ExceptionSink* xsink);
 
+//! Return the current catch-scope stack depth; called at entry of functions containing catch blocks.
+uint64_t qore_rt_catch_depth();
+
+//! Pop catch scopes down to the given depth (captured at function entry via qore_rt_catch_depth()).
+//! Called on exception-exit paths (error return block, unwind landing pads, deopt) so catch scopes
+//! left active when an exception escapes a catch block are cleaned up and their exceptions deleted.
+void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink);
+
 //! Rethrow the current catch exception: copies exception into xsink and cleans up catch scope.
 void qore_rt_rethrow(ExceptionSink* xsink);
 

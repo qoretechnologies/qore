@@ -3821,6 +3821,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private Triggers getTriggersImpl() {
         hash<string, PgsqlTrigger> rv;
+        hash<string, string> trigger_sources;
 
         # get trigger description
         *hash<auto> qh = ds.select("select * from information_schema.triggers where event_object_schema = %v and "
@@ -3840,13 +3841,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             if (!native_case)
                 map row.$1 = row.$1.lwr(), ("event_manipulation", "action_statement", "action_timing",
                     "action_orientation");
-            if (rv{row.trigger_name}) {
+            *string trigger_src = trigger_sources{row.trigger_name};
+            if (trigger_src) {
                 # add event to trigger
-                *string px = (rv{row.trigger_name}.src =~ x/(.+) on/i)[0];
+                *string px = (trigger_src =~ x/(.+) on/i)[0];
                 if (!px)
                     throw "PGSQL-TRIGGER-ERROR", sprintf("cannot find beginning of trigger source: %s",
-                        rv{row.trigger_name}.src);
-                splice rv{row.trigger_name}.src, px.size(), 0, " or " + row.event_manipulation;
+                        trigger_src);
+                splice trigger_src, px.size(), 0, " or " + row.event_manipulation;
+                trigger_sources{row.trigger_name} = trigger_src;
                 continue;
             }
 
@@ -3859,8 +3862,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 src += foldl $1 + ", " + $2, cols.event_object_column;
             }
             src += sprintf(" on %s for each %s %s", name, row.action_orientation, row.action_statement);
-            rv{row.trigger_name} = new PgsqlTrigger(row.trigger_name, src);
+            trigger_sources{row.trigger_name} = src;
         }
+
+        map rv{$1.key} = new PgsqlTrigger($1.key, $1.value), trigger_sources.pairIterator();
 
         if (fl) {
             hash<auto> fh;

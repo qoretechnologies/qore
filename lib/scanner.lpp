@@ -1825,9 +1825,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
+   \#[^\n]*                            // skip line comments (must not misread quotes/parens in comment text)
+   \/\*([^*]|\*+[^*/])*\*+\/            // skip block comments (same reason)
    \"([^\"\\]|\\.)*\"                   // skip string literals (to handle parens in strings)
    \'([^\'\\]|\\.)*\'                   // skip single-quoted strings
-   [^()\"\'\n]+                         // skip other characters
+   [^()\"\'\#\/\n]+                     // skip other characters (leave # and / to the comment rules above)
+   \/                                   // skip a lone slash that is not the start of a block comment
    \n                                   // skip newlines
    <<EOF>>                              {
                                             parse_error(*get_loc(yylloc), "unexpected end of file in @assert expression");
@@ -1847,9 +1850,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                 }
                                             }
                                         }
+   \#[^\n]*                            // skip line comments (must not misread quotes/braces in comment text)
+   \/\*([^*]|\*+[^*/])*\*+\/            // skip block comments (same reason)
    \"([^\"\\]|\\.)*\"                   // skip string literals (to handle braces in strings)
    \'([^\'\\]|\\.)*\'                   // skip single-quoted strings
-   [^{}\"\'\n]+                         // skip other characters
+   [^{}\"\'\#\/\n]+                     // skip other characters (leave # and / to the comment rules above)
+   \/                                   // skip a lone slash that is not the start of a block comment
    \n                                   // skip newlines
    <<EOF>>                              {
                                             parse_error(*get_loc(yylloc), "unexpected end of file in @debug block");

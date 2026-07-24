@@ -1784,6 +1784,25 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     (void)xsink;
 }
 
+void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
+    auto append_unique = [](std::vector<std::string>& target, const std::vector<std::string>& source) {
+        for (const std::string& path : source) {
+            bool seen = false;
+            for (const std::string& existing : target) {
+                if (existing == path) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) {
+                target.push_back(path);
+            }
+        }
+    };
+    append_unique(child.priv->prepended_module_paths, parent.priv->prepended_module_paths);
+    append_unique(child.priv->appended_module_paths, parent.priv->appended_module_paths);
+}
+
 void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u, const qore_ns_private& oldns, const char* new_name, bool inject) {
     // get exclusive access to program object for parsing
     ProgramRuntimeParseContextHelper pch(xsink, pgm);

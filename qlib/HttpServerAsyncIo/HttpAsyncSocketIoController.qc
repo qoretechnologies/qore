@@ -55,6 +55,8 @@ public enum HttpConnectionState : string {
     SendStreamAndReadHeader = "send_stream_and_read_header",
     #! Sending HTTP/1.x InputStream response (no keep-alive, close after send)
     SendStreamResponse = "send_stream_response",
+    #! Waiting to send a delayed HTTP/1.x response
+    ResponseDelay = "response_delay",
     #! Reading HTTP/1.x request body (Content-Length or chunked)
     ReadBody = "read_body",
 }
@@ -168,6 +170,10 @@ public class HttpAsyncSocketIoController {
 
         #! Active connections: socket unique hash -> connection info
         hash<string, hash<HttpActiveConnectionInfo>> connections;
+
+        #! Non-blocking delayed responses pending on the shared controller timer
+        hash<string, hash<HttpDelayedResponseInfo>> delayed_responses = {};
+        int delayed_response_seq = 0;
 
         #! Listener accept operation counters
         hash<string, int> accept_counts;
@@ -344,6 +350,7 @@ public class HttpAsyncSocketIoController {
         *hash<string, hash<HttpListenerInfo>> detached_listeners;
         *hash<string, hash<HttpActiveConnectionInfo>> detached_connections;
         *hash<string, hash<HttpActiveConnectionInfo>> race_connections;
+        *list<int> delayed_response_timer_ids;
         # Snapshot stream_ops separately so we can call abort() on H2/H3 stream
         # poll operations whose handler-thread closure still holds a reference
         # (the controller's cancelByOwner / cancelAndClose below cancels only
@@ -381,10 +388,27 @@ public class HttpAsyncSocketIoController {
             }
             detached_listeners = listeners;
             detached_connections = connections;
+            if (delayed_responses) {
+                delayed_response_timer_ids = ();
+                foreach hash<HttpDelayedResponseInfo> delayed in (
+                        hash_values(delayed_responses)) {
+                    if (delayed.timer_id) {
+                        delayed_response_timer_ids += delayed.timer_id;
+                    }
+                }
+                delayed_responses = {};
+            }
             listeners = {};
             quic_listener_hash_by_http_listener = {};
             connections = {};
             accept_counts = {};
+        }
+        foreach int timer_id in (delayed_response_timer_ids) {
+            try {
+                controller.cancelTimer(timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling delayed response timer " + timer_id.toString(), ex);
+            }
         }
         # Abort each stream_op so its clearStreamQueues() fires immediately,
         # pushing NOTHING sentinels onto any registered body_queue and
@@ -909,6 +933,7 @@ public class HttpAsyncSocketIoController {
                 # ignore errors for already-cancelled ops
             }
         }
+        cancelDelayedResponses(conn_keys);
 
         if (linfo && linfo.http_version == HttpVersionMode::H3) {
             try {
@@ -1163,6 +1188,7 @@ public class HttpAsyncSocketIoController {
         return {
             "listeners": listeners.size(),
             "connections": connections.size(),
+            "delayed_responses": delayed_responses.size(),
             "running": !has_been_stopped && controller.running(),
         };
     }
@@ -1892,6 +1918,35 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result = target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                on_exit if (request.hdr) {
+                    try {
+                        listener.cleanupQuicStream(session_id, stream_id);
+                    } catch () {}
+                }
+                handleHttp3MultiplexedResult(uh, new_cinfo, session_id, stream_id,
+                    prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/3 request session=%d stream=%d: %s: %s",
+                session_id, stream_id, ex.err, ex.desc);
+            try {
+                listener.submitQuicResponse(session_id, stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(listener, uh, "HTTP/3 preparation error response");
+            if (request.hdr) {
+                try {
+                    listener.cleanupQuicStream(session_id, stream_id);
+                } catch () {}
+            }
+            return;
+        }
+
         # Dispatch to handler thread pool
         # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
         # header-info) as an *early* resume right after the framework finishes reading the
@@ -1939,6 +1994,13 @@ public class HttpAsyncSocketIoController {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/3 handler for session=%d stream=%d: %s: %s",
                 session_id, stream_id, ex.err, ex.desc);
             try {
+                target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/3 request preparation for session=%d "
+                    "stream=%d: %s: %s", session_id, stream_id, cancel_ex.err,
+                    cancel_ex.desc);
+            }
+            try {
                 listener.submitQuicResponse(session_id, stream_id, 503,
                     {"content-type": "text/plain"},
                     "Service Unavailable");
@@ -1970,6 +2032,21 @@ public class HttpAsyncSocketIoController {
     */
     private handleHttp3MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int session_id, int stream_id, hash<HttpRequestResultInfo> result) {
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for HTTP/3 session=%d "
+                "stream=%d on %y: streaming/blocking responses cannot be paced on the "
+                "dispatcher pool", response_delay, session_id, stream_id, uh);
+            response_delay = 0ms;
+        }
+        if (deferRequestResult(uh, response_delay, sub () {
+                handleHttp3MultiplexedResult(uh, cinfo, session_id, stream_id,
+                    result);
+            })) {
+            return;
+        }
+
         if (result.close) {
             # For HTTP/3, don't close the entire connection — HTTP/3 is multiplexed,
             # so closing the connection would kill all active streams.  Instead, send
@@ -2276,6 +2353,124 @@ public class HttpAsyncSocketIoController {
     #! Submits a connection operation, skipping the stopping check (caller already verified)
     private submitConnectionOpUnlocked(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         submitConnectionOpIntern(uh, cinfo);
+    }
+
+    #! Returns @ref True "True" if the result body must be produced on a handler-pool thread
+    /** Streaming responses (SSE/WebSocket), \c send_callback producers, and non-I/O-thread-safe
+        @ref Qore::InputStream "InputStream" bodies all block the sending thread while user code
+        produces data.  These must never be deferred: the delayed-response timer callback fires on
+        the callback-dispatcher pool, and blocking there would stall the dispatcher — for an SSE
+        stream, indefinitely.  \c response_delay is intended only for fixed-body overload
+        backpressure responses, which submit without blocking.
+
+        @param result the request result to inspect
+        @return @ref True "True" if the result cannot be safely paced on the dispatcher pool
+    */
+    private bool responseRequiresHandlerThread(hash<HttpRequestResultInfo> result) {
+        return result.streaming
+            || exists result.send_callback
+            || (exists result.input_stream && !result.input_stream.isIoThreadSafe());
+    }
+
+    #! Defers response processing without occupying a worker thread
+    /** The timer is tagged with the connection owner and tracked independently so shutdown and
+        listener removal can cancel it before captured socket, target, and response objects are released.
+
+        @param owner connection/session owner
+        @param delay minimum delay before response processing
+        @param callback protocol-specific response handler
+        @return True when the response was deferred
+    */
+    private bool deferRequestResult(string owner, timeout delay,
+            code<nothing()> callback) {
+        if (delay <= 0ms) {
+            return False;
+        }
+        date deadline = now_us() + delay;
+        string delay_key;
+        {
+            AutoWriteLock al(m);
+            if (stopping || !connections.hasKey(owner)) {
+                return True;
+            }
+            delay_key = sprintf("%s:%d", owner, ++delayed_response_seq);
+            delayed_responses{delay_key} = <HttpDelayedResponseInfo>{
+                "owner": owner,
+                "timer_id": 0,
+            };
+            on_error remove delayed_responses{delay_key};
+            int timer_id = controller.addTimer(deadline, sub () {
+                bool dispatch;
+                {
+                    AutoWriteLock al(m);
+                    *hash<HttpDelayedResponseInfo> delayed =
+                        remove delayed_responses{delay_key};
+                    dispatch = exists delayed && !stopping
+                        && connections.hasKey(owner);
+                }
+                if (dispatch) {
+                    callback();
+                }
+            }, owner);
+            hash<HttpDelayedResponseInfo> delayed = delayed_responses{delay_key};
+            delayed.timer_id = timer_id;
+            delayed_responses{delay_key} = delayed;
+        }
+        return True;
+    }
+
+    #! Cancels delayed responses belonging to the given connection/session owners
+    private cancelDelayedResponses(*list<string> owners) {
+        if (!owners) {
+            return;
+        }
+        hash<string, bool> owner_set = {};
+        foreach string owner in (owners) {
+            owner_set{owner} = True;
+        }
+        list<int> timer_ids;
+        list<Socket> sockets;
+        {
+            AutoWriteLock al(m);
+            foreach string delay_key in (keys delayed_responses) {
+                hash<HttpDelayedResponseInfo> delayed = delayed_responses{delay_key};
+                if (owner_set{delayed.owner}) {
+                    if (delayed.timer_id) {
+                        timer_ids += delayed.timer_id;
+                    }
+                    remove delayed_responses{delay_key};
+                }
+            }
+            foreach string owner in (owners) {
+                *hash<HttpActiveConnectionInfo> cinfo = connections{owner};
+                if (cinfo && cinfo.state == HttpConnectionState::ResponseDelay) {
+                    sockets += cinfo.sock;
+                    remove connections{owner};
+                }
+            }
+        }
+        # each cleanup step is wrapped so a throw on one entry cannot abort the rest
+        # (leaking delayed_responses/timer state or leaving ResponseDelay sockets open),
+        # mirroring the exception handling in stop()
+        foreach int timer_id in (timer_ids) {
+            try {
+                controller.cancelTimer(timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "failed to cancel delayed response timer %d: %s: %s",
+                    timer_id, ex.err, ex.desc);
+            }
+        }
+        foreach string owner in (owners) {
+            try {
+                controller.flushCallbacksByOwner(owner);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "failed to flush delayed response callbacks for %y: %s: %s",
+                    owner, ex.err, ex.desc);
+            }
+        }
+        foreach Socket sock in (sockets) {
+            try { sock.close(); } catch () {}
+        }
     }
 
     #! Submits a connection operation based on connection state
@@ -2922,7 +3117,28 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # tryInlineRequest returned NOTHING — dispatch to the handler_pool.
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
+                    prepared_result, dispatch_target);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing request for %y: %s: %s",
+                dispatch_uh, ex.err, ex.desc);
+            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
+                dispatch_cx, dispatch_uh, "request preparation");
+            if (dispatch_state != HttpConnectionState::Http3
+                    && dispatch_state != HttpConnectionState::Http3Sending) {
+                try { dispatch_sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # The inline and preparation callbacks returned NOTHING — dispatch to the handler_pool.
         # onHttpRequest / processNativeRequest may read the request body or
         # block while waiting for controller-backed socket I/O, so it must run
         # on a handler thread, not the call_dispatcher worker.
@@ -2948,6 +3164,12 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel request preparation for %y: %s: %s",
+                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
+            }
             if (dispatch_state != HttpConnectionState::Http3
                     && dispatch_state != HttpConnectionState::Http3Sending) {
                 try { dispatch_sock.close(); } catch () {}
@@ -3013,6 +3235,24 @@ public class HttpAsyncSocketIoController {
             remove connections{dispatch_uh};
         }
 
+        # Give the target the same pre-dispatch admission point as a bodyless request.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleRequestResult(dispatch_sock, dispatch_cinfo, dispatch_cx,
+                    prepared_result, dispatch_target);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing request after body read for %y: %s: %s",
+                dispatch_uh, ex.err, ex.desc);
+            dispatchOnError(dispatch_target, dispatch_sock, ex, dispatch_listener,
+                dispatch_cx, dispatch_uh, "request preparation after body read");
+            try { dispatch_sock.close(); } catch () {}
+            return;
+        }
+
         # Dispatch to handler pool (same as handleHeaderComplete)
         code<nothing()> request_handler = sub () {
             try {
@@ -3033,6 +3273,12 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
                 dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel request preparation after body read for %y: %s: %s",
+                    dispatch_uh, cancel_ex.err, cancel_ex.desc);
+            }
             try { dispatch_sock.close(); } catch () {}
         }
     }
@@ -3044,6 +3290,37 @@ public class HttpAsyncSocketIoController {
     private handleRequestResult(Socket sock, auto linfo, hash<auto> cx,
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
+
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for %y: streaming/blocking "
+                "responses cannot be paced on the dispatcher pool", response_delay, uh);
+            response_delay = 0ms;
+        }
+        if (response_delay > 0ms) {
+            {
+                AutoWriteLock al(m);
+                if (stopping) {
+                    try { sock.close(); } catch () {}
+                    return;
+                }
+                connections{uh} = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::ResponseDelay,
+                    "ttl": result.ttl ?? DefaultIdleTimeout,
+                    "ssl": linfo.ssl,
+                };
+            }
+            if (deferRequestResult(uh, response_delay, sub () {
+                    handleRequestResult(sock, linfo, cx, result, target);
+                })) {
+                return;
+            }
+        }
 
         # NOTE: send_callback responses are NOT converted to InputStream here.
         # send_callback is a streaming producer (may block waiting for data)
@@ -3765,6 +4042,35 @@ public class HttpAsyncSocketIoController {
         # request reaches the live loop and is recognised generically via
         # AbstractHttpRequestHandler::isPersistentSessionEndRequest().
 
+        # Give the target a protocol-independent admission point before the shared handler queue.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                if (body_streaming) {
+                    resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
+                        HttpConnectionState::Http2);
+                }
+                handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                    dispatch_stream_id, prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/2 request stream=%d on %y: %s: %s",
+                dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            if (body_streaming) {
+                resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
+                    HttpConnectionState::Http2);
+            }
+            try {
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                "HTTP/2 preparation error response");
+            return;
+        }
+
         # Dispatch to handler thread pool
         # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
         # header-info) as an *early* resume right after the framework finishes reading the
@@ -3806,6 +4112,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 multiplexed handler for stream=%d "
                 "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/2 request preparation for stream=%d "
+                    "on %y: %s: %s", dispatch_stream_id, dispatch_uh,
+                    cancel_ex.err, cancel_ex.desc);
+            }
             if (body_streaming) {
                 # Resume h2op — it was not resumed before submit in body_streaming mode
                 try {
@@ -3985,6 +4298,27 @@ public class HttpAsyncSocketIoController {
             "ssl": dispatch_ssl,
         };
 
+        # Apply the same pre-dispatch admission contract to extended CONNECT requests.
+        try {
+            *hash<HttpRequestResultInfo> prepared_result =
+                dispatch_target.prepareHttpRequest(conn_info);
+            if (prepared_result) {
+                handleHttp2MultiplexedResult(dispatch_uh, dispatch_cinfo,
+                    dispatch_stream_id, prepared_result);
+                return;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Error preparing HTTP/2 extended CONNECT stream=%d: %s: %s",
+                dispatch_stream_id, ex.err, ex.desc);
+            try {
+                dispatch_sock.submitHttp2Response(dispatch_stream_id, 500,
+                    {"content-type": "text/plain"}, "Internal Server Error");
+            } catch () {}
+            wakeSocketIfPresent(dispatch_sock, dispatch_uh,
+                "HTTP/2 extended CONNECT preparation error response");
+            return;
+        }
+
         # Dispatch to handler thread pool
         try {
             submitToHandlerPool(dispatch_target, sub () {
@@ -4010,6 +4344,13 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit HTTP/2 extended CONNECT handler for stream=%d "
                 "on %y: %s: %s", dispatch_stream_id, dispatch_uh, ex.err, ex.desc);
+            try {
+                dispatch_target.cancelPreparedHttpRequest(conn_info);
+            } catch (hash<ExceptionInfo> cancel_ex) {
+                log(LoggerLevel::ERROR, "Failed to cancel HTTP/2 extended CONNECT preparation for stream=%d "
+                    "on %y: %s: %s", dispatch_stream_id, dispatch_uh,
+                    cancel_ex.err, cancel_ex.desc);
+            }
             # Send error for this stream only — other streams continue
             try {
                 dispatch_sock.submitHttp2Response(dispatch_stream_id, 503,
@@ -4033,6 +4374,20 @@ public class HttpAsyncSocketIoController {
     */
     private handleHttp2MultiplexedResult(string uh, hash<HttpActiveConnectionInfo> cinfo,
             int stream_id, hash<HttpRequestResultInfo> result) {
+        timeout response_delay = result.response_delay ?? 0ms;
+        remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for HTTP/2 stream=%d "
+                "on %y: streaming/blocking responses cannot be paced on the dispatcher "
+                "pool", response_delay, stream_id, uh);
+            response_delay = 0ms;
+        }
+        if (deferRequestResult(uh, response_delay, sub () {
+                handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
+            })) {
+            return;
+        }
+
         if (result.close) {
             # For HTTP/2, don't close the entire connection — HTTP/2 is multiplexed,
             # so closing the connection would kill all active streams.  Instead, send
@@ -4398,6 +4753,15 @@ hashdecl HttpActiveConnectionInfo {
     #! Header parsing info (saved during ReadBody state for dispatch after body is read)
     *hash<auto> pending_header_info;
 
+}
+
+#! Internal delayed-response timer info
+hashdecl HttpDelayedResponseInfo {
+    #! Timer ID on the shared async controller
+    int timer_id;
+
+    #! Connection/session owner used for cancellation and callback drain
+    string owner;
 }
 
 } # namespace Priv

@@ -391,6 +391,15 @@ private:
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
 
+    // Saved catch-scope stack depth at function entry (qore_rt_catch_depth()).
+    // Only set for functions containing CatchException instructions.  The shared
+    // exception-exit paths (error_return_block, unwind LPs, deopt) pop the
+    // runtime catch stack back to this depth via qore_rt_catch_unwind() so
+    // catch scopes left active when an exception escapes a catch block (e.g., a
+    // call inside the catch block raising) are cleaned up and their caught
+    // exceptions deleted.
+    llvm::Value* catch_depth_saved = nullptr;
+
     // True when the current function contains deferred on_block_exit handlers.
     bool has_on_block_exit_handlers = false;
 
@@ -915,6 +924,11 @@ private:
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
+
+    // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
+    // point to pop catch scopes left active by an escaping exception; no-op for
+    // functions without catch blocks (catch_depth_saved == nullptr)
+    void emitCatchUnwind(llvm::Module& module);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.

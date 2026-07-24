@@ -117,7 +117,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
 
     #! Creates a new stream handle
     constructor(HttpClientConnection conn, timeout request_timeout = DefaultRequestTimeout,
-            *LoggerInterface logger) : HttpClientStreamHandle(conn, request_timeout, logger) {
+            *LoggerInterface logger, timeout connect_timeout = DefaultConnectTimeout)
+            : HttpClientStreamHandle(conn, request_timeout, logger, connect_timeout) {
         h3conn = cast<Http3ClientConnection>(conn);
     }
 

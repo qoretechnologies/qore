@@ -3148,6 +3148,15 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
+    if (!catch_depth_saved) {
+        return;
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+}
+
 void QoreIRToLLVM::emitPendingSsaCleanup(llvm::Module& module) {
     if (pending_ssa_cleanup.empty()) {
         return;
@@ -8039,15 +8048,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     dbg_last_line_slot = nullptr;
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
+    catch_depth_saved = nullptr;
 
     // Every generated function entry must perform the same native stack guard
     // check as AST user-code entry.  Some optimized call paths invoke LLVM
     // functions directly and bypass runtime helpers such as qore_rt_call_fast().
+    llvm::BasicBlock* stack_overflow_bb = nullptr;
     if (!func.blocks.empty()) {
         llvm::BasicBlock* first_ir_bb = block_map[func.blocks.front().get()];
         llvm::BasicBlock* stack_check_bb = llvm::BasicBlock::Create(ctx,
                 "stack_check", llvm_func, first_ir_bb);
-        llvm::BasicBlock* stack_overflow_bb = llvm::BasicBlock::Create(ctx,
+        stack_overflow_bb = llvm::BasicBlock::Create(ctx,
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
@@ -8087,6 +8098,28 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
                 llvm::FunctionType::get(i64_type, {}, false));
         obe_saved_count = builder->CreateCall(obe_count_fn, {});
+
+        // Save the catch-scope stack depth at entry for functions containing
+        // catch blocks.  The shared exception-exit paths pop back to this
+        // depth so catch scopes left active when an exception escapes a catch
+        // block are cleaned up (qore_rt_catch_unwind()).
+        bool has_catch = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr && inst_ptr->opcode == QoreIROpcode::CatchException) {
+                    has_catch = true;
+                    break;
+                }
+            }
+            if (has_catch) {
+                break;
+            }
+        }
+        if (has_catch) {
+            auto catch_depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
+                    llvm::FunctionType::get(i64_type, {}, false));
+            catch_depth_saved = builder->CreateCall(catch_depth_fn, {});
+        }
 
         // Outlined-function coordinators: helpers mutate shared locals
         // through the TLS stack, so every cached-local read needs its
@@ -9535,6 +9568,38 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     emitLateExitCleanup(llvm_func, module);
+
+    // Pop stranded catch scopes at every function exit (mirrors the IR
+    // interpreter's function-exit CatchStackCleanup RAII).  An exception
+    // escaping a catch block — a call inside the catch raising, or the
+    // exception landing in an outer catch of the same function — leaves
+    // catch scopes pushed with no CatchCleanup executed; without this the
+    // caught exceptions (and their arg/desc/callstack trees) leak.
+    // qore_rt_catch_unwind() pops down to the entry watermark, so it is a
+    // no-op on balanced paths.  stack_overflow_bb returns before
+    // catch_depth_saved is defined and must be skipped (SSA dominance).
+    if (catch_depth_saved) {
+        std::vector<llvm::Instruction*> exit_terms;
+        for (llvm::BasicBlock& bb : *llvm_func) {
+            if (&bb == stack_overflow_bb) {
+                continue;
+            }
+            llvm::Instruction* term = bb.getTerminator();
+            if (term && (llvm::isa<llvm::ReturnInst>(term)
+                    || llvm::isa<llvm::ResumeInst>(term))) {
+                exit_terms.push_back(term);
+            }
+        }
+        llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+        auto saved_ip = builder->GetInsertPoint();
+        for (llvm::Instruction* term : exit_terms) {
+            builder->SetInsertPoint(term);
+            emitCatchUnwind(module);
+        }
+        if (saved_insert) {
+            builder->SetInsertPoint(saved_insert, saved_ip);
+        }
+    }
 
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {

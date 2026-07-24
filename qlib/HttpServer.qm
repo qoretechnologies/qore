@@ -4100,6 +4100,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         ws_cx."header-info".async_target = asyncTarget;
                     }
 
+                    # test hook: deterministically widen the pre-start window between
+                    # registerDedicatedSocket() (which incremented the listener's dThreads
+                    # WaitGroup) and start() (which increments the handler's lh{lid}) so a
+                    # regression test can force a listener stop into it; compiled out of
+                    # release builds
+                    @debug {
+                        if (*string prestart_delay_ms = getenv("QORE_WS_PRESTART_DELAY_MS")) {
+                            usleep(prestart_delay_ms.toInt() * 1000);
+                        }
+                    }
                     try {
                         sockhandler.start(listener.getID(), ws_cx, hdr, s);
                     } catch (hash<ExceptionInfo> ex) {
