@@ -27,10 +27,19 @@ class UdpPollTest inherits QUnit::Test {
     }
 
     #! Create a bound UDP socket on loopback, return the socket and bound port
+    /** reuseaddr must be False: with SO_REUSEADDR set, a UDP bind to port 0 can
+        legally be assigned a port that another SO_REUSEADDR socket already has
+        bound (UDP has no TIME_WAIT, so the kernel's conflict check waives such
+        ports entirely).  Two test sockets then share one port and the kernel
+        delivers each datagram to only one of them — the intermittent
+        QUEUE-TIMEOUT in testAsyncIoControllerIntegration in CI was datagrams
+        landing in the sending socket's own receive queue after it collided
+        with the receiver's ephemeral port.
+    */
     private hash<auto> createBoundUdpSocket(int family = AF_INET) {
         Socket sock();
         string iface = family == AF_INET6 ? "::1" : "127.0.0.1";
-        sock.bindINET(iface, "0", True, family, SOCK_DGRAM);
+        sock.bindINET(iface, "0", False, family, SOCK_DGRAM);
         hash<auto> info = sock.getSocketInfo();
         return {
             "sock": sock,
