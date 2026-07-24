@@ -300,6 +300,20 @@ function(QORE_QCC_APPEND_CONTEXT _out_var _key)
     set(${_out_var} "${_qore_qcc_context}" PARENT_SCOPE)
 endfunction()
 
+function(QORE_QCC_LOAD_MODULE_TARGET_DEPS _out_var)
+    set(_qore_qcc_load_module_target_deps)
+    foreach(_qore_qcc_module ${ARGN})
+        if (_qore_qcc_module MATCHES "^[A-Za-z0-9_.+-]+$")
+            # The generator expression is resolved after all CMakeLists have
+            # been read, so it also finds qmod targets declared after the qcc
+            # consumer.  External modules simply contribute no dependency.
+            list(APPEND _qore_qcc_load_module_target_deps
+                "$<TARGET_NAME_IF_EXISTS:${_qore_qcc_module}-qmod>")
+        endif ()
+    endforeach()
+    set(${_out_var} ${_qore_qcc_load_module_target_deps} PARENT_SCOPE)
+endfunction()
+
 function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(options WARNINGS_ARE_ERRORS)
     set(oneValueArgs GROUP OUTPUT_DIR SCRIPT_DIR INCLUDE_DIR MODULE_DIR METADATA_COMPRESSION
@@ -431,6 +445,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     foreach(_qore_qcc_module ${_QORE_QCO_LOAD_MODULES})
         list(APPEND _qore_qcc_load_flags -l ${_qore_qcc_module})
     endforeach()
+    QORE_QCC_LOAD_MODULE_TARGET_DEPS(_qore_qcc_load_module_target_deps
+        ${_QORE_QCO_LOAD_MODULES})
     set(_qore_qcc_define_flags)
     foreach(_qore_qcc_define ${_QORE_QCO_PARSE_DEFINES})
         list(APPEND _qore_qcc_define_flags "--define=${_qore_qcc_define}")
@@ -515,6 +531,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_context_path}
                     ${_QORE_QCO_STUBS}
                     ${_QORE_QCO_DEPENDS}
+                    ${_qore_qcc_load_module_target_deps}
                     ${_qore_qcc_deps}
                     ${_qore_qcc_direct_dep_order_targets}
                     ${_qore_qcc_direct_dep_content_stamps}
@@ -707,6 +724,8 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
     foreach(_qore_qsa_module ${_QORE_QSA_LOAD_MODULES})
         list(APPEND _qore_qsa_load_flags -l ${_qore_qsa_module})
     endforeach()
+    QORE_QCC_LOAD_MODULE_TARGET_DEPS(_qore_qsa_load_module_target_deps
+        ${_QORE_QSA_LOAD_MODULES})
     set(_qore_qsa_define_flags)
     foreach(_qore_qsa_define ${_QORE_QSA_PARSE_DEFINES})
         list(APPEND _qore_qsa_define_flags "--define=${_qore_qsa_define}")
@@ -780,6 +799,7 @@ function(QORE_QCC_SCRIPT_AGGREGATE _out_var)
             ${_QORE_QSA_INPUT_CONTENT_STAMPS}
             ${_QORE_QSA_STUBS}
             ${_qore_qsa_context}
+            ${_qore_qsa_load_module_target_deps}
             ${_qore_qcc_deps}
             ${_QORE_QSA_DEPENDS}
             ${_QORE_QSA_MANIFEST_INPUTS}

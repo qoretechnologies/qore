@@ -151,6 +151,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         string constinit_consumer = snippets_dir + "/constinitconsumer.qc";
         string const_hashdecl_provider = snippets_dir + "/consthashdeclprovider.qc";
         string const_hashdecl_consumer = snippets_dir + "/consthashdeclconsumer.qc";
+        string late_object_module = src_dir + "/LateObjectModule.qm";
+        string late_aggregate_module = src_dir + "/LateAggregateModule.qm";
         write(provider,
 "%new-style
 class CMakeQoProvider {
@@ -290,16 +292,34 @@ class CMakeQoConstHashConsumer {
     }
 }
 ");
+        write(late_object_module,
+"%new-style
+module LateObjectModule {
+    version = \"1.0\";
+    desc = \"late-defined qcc object dependency\";
+    author = \"Qore\";
+}
+");
+        write(late_aggregate_module,
+"%new-style
+module LateAggregateModule {
+    version = \"1.0\";
+    desc = \"late-defined qcc aggregate dependency\";
+    author = \"Qore\";
+}
+");
 
         write(src_dir + "/CMakeLists.txt",
 "cmake_minimum_required(VERSION 3.16)
 project(QoreQoHelperSmoke NONE)
 find_package(Qore REQUIRED)
 
+set(LATE_MODULE_DIR \"${CMAKE_BINARY_DIR}/late-modules\")
 set(QORE_QCC_MODULE_PATH \"${QORE_BUILDTREE_USER_MODULE_PATH}\")
 if(NOT QORE_QCC_MODULE_PATH)
     set(QORE_QCC_MODULE_PATH \"${QORE_MODULES_DIR}\")
 endif()
+set(QORE_QCC_MODULE_PATH \"${LATE_MODULE_DIR}:${QORE_QCC_MODULE_PATH}\")
 
 set(QO_SOURCES
     \"${CMAKE_SOURCE_DIR}/srcs/provider.qc\"
@@ -328,6 +348,7 @@ qore_qcc_compile_objects(QO_OBJECTS
     INCLUDE_DIR \"${QORE_INCLUDE_DIR}\"
     MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
+    LOAD_MODULES LateObjectModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
     STAMPS_VAR QO_STAMPS
@@ -350,14 +371,36 @@ add_custom_target(qo-link ALL DEPENDS ${QO_LINK_STAMP})
 qore_qcc_script_aggregate(QO_SCRIPT_AGG
     OUTPUT \"${CMAKE_BINARY_DIR}/script-aggregate.qo\"
     AGGREGATE QORE_CMAKE_SCRIPT_SMOKE
+    MODULE_DIR \"${QORE_QCC_MODULE_PATH}\"
     SOURCES ${QO_SOURCES}
     INPUT_CONTENT_STAMPS ${QO_CONTENT_STAMPS}
     INPUT_ORDER_TARGETS ${QO_ORDER_TARGETS}
+    LOAD_MODULES LateAggregateModule
     PARSE_OPTIONS PO_MODERN
     WARNINGS_ARE_ERRORS
     NATIVE_REGISTERS
     STAMP_VAR QO_SCRIPT_AGG_STAMP)
 add_custom_target(qo-script-aggregate ALL DEPENDS ${QO_SCRIPT_AGG_STAMP})
+
+set(LATE_OBJECT_QMOD \"${LATE_MODULE_DIR}/LateObjectModule.qmod\")
+add_custom_command(
+    OUTPUT \"${LATE_OBJECT_QMOD}\"
+    COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${LATE_MODULE_DIR}\"
+    COMMAND \"${QORE_QCC_EXECUTABLE}\" --warnings-are-errors -m
+        \"${CMAKE_SOURCE_DIR}/LateObjectModule.qm\" -o \"${LATE_OBJECT_QMOD}\"
+    DEPENDS \"${CMAKE_SOURCE_DIR}/LateObjectModule.qm\"
+    VERBATIM)
+add_custom_target(LateObjectModule-qmod DEPENDS \"${LATE_OBJECT_QMOD}\")
+
+set(LATE_AGGREGATE_QMOD \"${LATE_MODULE_DIR}/LateAggregateModule.qmod\")
+add_custom_command(
+    OUTPUT \"${LATE_AGGREGATE_QMOD}\"
+    COMMAND \"${CMAKE_COMMAND}\" -E make_directory \"${LATE_MODULE_DIR}\"
+    COMMAND \"${QORE_QCC_EXECUTABLE}\" --warnings-are-errors -m
+        \"${CMAKE_SOURCE_DIR}/LateAggregateModule.qm\" -o \"${LATE_AGGREGATE_QMOD}\"
+    DEPENDS \"${CMAKE_SOURCE_DIR}/LateAggregateModule.qm\"
+    VERBATIM)
+add_custom_target(LateAggregateModule-qmod DEPENDS \"${LATE_AGGREGATE_QMOD}\")
 
 file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"objects=${QO_OBJECTS}\\n\"
@@ -403,6 +446,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
             "linked .qo map built: " + build1);
         assertTrue(is_file(build_dir + "/script-aggregate.qo"),
             "script aggregate .qo built: " + build1);
+        assertTrue(is_file(build_dir + "/late-modules/LateObjectModule.qmod"),
+            "late-defined object module dependency built: " + build1);
+        assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
+            "late-defined aggregate module dependency built: " + build1);
         string source_symbols = read(build_dir + "/qo-scripts/source-symbols.manifest");
         assertTrue(source_symbols.find("class\tCMakeQoProvider\t") != -1
                 && source_symbols.find("function\tcmakeQoFreeFunction\t") != -1
