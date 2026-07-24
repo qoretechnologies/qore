@@ -341,6 +341,36 @@ string sub work(int n) {
             total %= 997;
         }
     }
+    if (total % 5) {
+        total += 11;
+    } else {
+        total -= 3;
+    }
+    if (total % 7) {
+        total += 13;
+    } else {
+        total -= 5;
+    }
+    if (total % 11) {
+        total += 17;
+    } else {
+        total -= 7;
+    }
+    if (total % 13) {
+        total += 19;
+    } else {
+        total -= 11;
+    }
+    if (total % 17) {
+        total += 23;
+    } else {
+        total -= 13;
+    }
+    if (total % 19) {
+        total += 29;
+    } else {
+        total -= 17;
+    }
     return sprintf('%d|%d', retries, total);
 }
 
