@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbSelectBulkRecordInterface class definition
 
-/** DbSelectBulkRecordInterface.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbSelectBulkRecordInterface.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,7 +46,7 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
     */
     constructor(int block_size, AbstractDatasource ds, *hash<auto> where_cond, hash<auto> select_options)
             : AbstractDataProviderBulkRecordInterface(block_size, select_options.requires_result,
-                select_options.max_records) {
+                select_options.max_records, select_options.limit) {
         if (where_cond) {
             throw "DBSELECT-BULK-ERROR", sprintf("where_cond must be empty for %s; value provided: %y",
                 self.className(), where_cond);
@@ -63,11 +63,15 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
 
     #! Creates the iterator
     /** @param block_size The number of records in a read block; must be a positive number
-        @param release_transaction Should the transaction be release in the destructor
+        @param release_transaction Should the transaction be released in the destructor
         @param stmt The SQL statement to iterate; must be already prepared
+        @param requires_result if True, an empty result raises an exception
+        @param max_records optional maximum number of records to return
+        @param limit optional record limit
     */
-    constructor(int block_size, bool release_transaction, AbstractSQLStatement stmt) {
-        self.block_size = block_size;
+    constructor(int block_size, bool release_transaction, AbstractSQLStatement stmt, *bool requires_result,
+            *int max_records, *int limit)
+            : AbstractDataProviderBulkRecordInterface(block_size, requires_result, max_records, limit) {
         self.release_transaction = release_transaction;
         self.stmt = stmt;
     }
@@ -114,6 +118,15 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
     */
     *hash<string, AbstractDataField> getRecordType() {
         return DbDataProvider::getRecordTypeFromDescribeHash(stmt.describe());
+    }
+
+    #! Releases an implicit transaction as soon as iteration reaches the end
+    private markInvalid() {
+        AbstractDataProviderBulkRecordInterface::markInvalid();
+        if (release_transaction) {
+            stmt.rollback();
+            release_transaction = False;
+        }
     }
 }
 }

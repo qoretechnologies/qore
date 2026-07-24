@@ -262,9 +262,9 @@ public const DataSchemaJsonSchema = {
             "properties": {
                 "method": {
                     "type": "string",
-                    "enum": ("range",),
+                    "enum": ("range", "list", "hash"),
                     "default": "range",
-                    "description": "Partitioning method; Phase 1 supports range partitioning",
+                    "description": "Portable partitioning method, subject to driver capabilities",
                 },
                 "columns": {
                     "type": "array",
@@ -280,6 +280,10 @@ public const DataSchemaJsonSchema = {
                     "type": "object",
                     "description": "Driver-specific partition strategy overrides",
                 },
+                "subpartition": {
+                    "$ref": "#/$defs/partitionStrategy",
+                    "description": "Recursive child partition strategy",
+                },
             },
         },
         "partitionSpec": {
@@ -291,7 +295,7 @@ public const DataSchemaJsonSchema = {
                 },
                 "method": {
                     "type": "string",
-                    "enum": ("range",),
+                    "enum": ("range", "list", "hash"),
                     "default": "range",
                 },
                 "columns": {
@@ -317,6 +321,25 @@ public const DataSchemaJsonSchema = {
                     "type": "string",
                     "description": "Complete driver-native partition bound SQL",
                 },
+                "values": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Typed values assigned to a list partition",
+                },
+                "values_sql": {
+                    "type": "string",
+                    "description": "Driver-native list values when typed values cannot be reconstructed",
+                },
+                "modulus": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Explicit hash bucket modulus",
+                },
+                "remainder": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Explicit hash bucket remainder",
+                },
                 "is_default": {
                     "type": "boolean",
                     "default": False,
@@ -333,6 +356,13 @@ public const DataSchemaJsonSchema = {
                 "driver": {
                     "type": "object",
                     "description": "Driver-specific partition overrides",
+                },
+                "subpartitions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/partitionSpec",
+                    },
+                    "description": "Nested partition definitions keyed by canonical child name",
                 },
             },
         },
@@ -446,6 +476,146 @@ public const DataSchemaJsonSchema = {
                 },
             },
         },
+        "tableReconciliationColumn": {
+            "type": "object",
+            "required": ("name", "type"),
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string"},
+                "type": {
+                    "type": "string",
+                    "enum": ("date", "number", "int", "float", "bool",
+                        "string", "binary"),
+                },
+                "notnull": {"type": "boolean"},
+                "primary_key": {"type": "boolean"},
+                "missing_live": {"type": "boolean"},
+                "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000,
+                },
+                "scale": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000,
+                },
+                "default_value": {},
+            },
+        },
+        "tableReconciliationMapping": {
+            "type": "object",
+            "required": ("target", "source_kind"),
+            "additionalProperties": False,
+            "properties": {
+                "target": {"type": "string"},
+                "source": {"type": "string"},
+                "source_kind": {
+                    "type": "string",
+                    "enum": ("existing_column", "legacy_column",
+                        "constant_null", "schema_default",
+                        "empty_table_initialization"),
+                },
+                "conversion": {
+                    "type": "string",
+                    "enum": ("identity", "to_timestamp",
+                        "numeric_compatible", "to_number",
+                        "string_size_validation", "to_string",
+                        "validated_cast", "none", "schema_default"),
+                },
+            },
+        },
+        "tableReconciliationIndex": {
+            "type": "object",
+            "required": ("name", "columns"),
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string"},
+                "columns": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                },
+                "unique": {"type": "boolean"},
+            },
+        },
+        "tableReconciliationContract": {
+            "type": "object",
+            "required": ("contract_version", "migration_id", "table",
+                "canonical_columns", "column_mappings", "backfill",
+                "constraints_and_indexes"),
+            "additionalProperties": False,
+            "properties": {
+                "contract_version": {
+                    "type": "integer",
+                    "enum": (1,),
+                },
+                "migration_id": {"type": "string"},
+                "table": {"type": "string"},
+                "canonical_columns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/tableReconciliationColumn",
+                    },
+                    "minItems": 1,
+                    "maxItems": 128,
+                },
+                "column_mappings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/tableReconciliationMapping",
+                    },
+                    "minItems": 1,
+                    "maxItems": 128,
+                },
+                "backfill": {
+                    "type": "object",
+                    "required": ("batch_size", "quarantine_table"),
+                    "additionalProperties": False,
+                    "properties": {
+                        "batch_size": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 10000,
+                        },
+                        "quarantine_table": {"type": "string"},
+                        "preserve_legacy_columns": {
+                            "type": "boolean",
+                            "enum": (True,),
+                        },
+                    },
+                },
+                "constraints_and_indexes": {
+                    "type": "object",
+                    "required": ("primary_key",),
+                    "additionalProperties": False,
+                    "properties": {
+                        "primary_key": {
+                            "type": "object",
+                            "required": ("columns",),
+                            "additionalProperties": False,
+                            "properties": {
+                                "name": {"type": "string"},
+                                "columns": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "minItems": 1,
+                                    "maxItems": 1,
+                                },
+                            },
+                        },
+                        "indexes": {
+                            "type": "array",
+                            "items": {
+                                "$ref":
+                                    "#/$defs/tableReconciliationIndex",
+                            },
+                            "maxItems": 64,
+                        },
+                    },
+                },
+            },
+        },
         "migrationAction": {
             "type": "object",
             "required": ("action",),
@@ -478,6 +648,7 @@ public const DataSchemaJsonSchema = {
                         "add_index", "drop_index",
                         "add_constraint", "drop_constraint",
                         "add_trigger", "drop_trigger",
+                        "reconcile_table",
                         "sql", "script",
                     ),
                 },
@@ -538,6 +709,11 @@ public const DataSchemaJsonSchema = {
                 "expression": {
                     "type": "string",
                     "description": "Check constraint expression",
+                },
+                "contract": {
+                    "$ref": "#/$defs/tableReconciliationContract",
+                    "description": "Closed data-preserving table reconciliation contract for "
+                        "the reconcile_table action",
                 },
             },
         },

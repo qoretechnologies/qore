@@ -5,11 +5,11 @@
 %allow-injection
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires Logger
-%requires Mime
-%requires DataProvider
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
 
 %requires reflection
 
@@ -5217,6 +5217,10 @@ public class DpqlTest inherits QUnit::Test {
 
             # Test without template_context - should get all contexts including env
             hash<auto> tc = {"sandboxed": False};
+            assertEq(("static", "config", "env"), map $1.name, DataProvider::getTemplateContexts(tc),
+                "public DataProvider facade exposes template contexts");
+            assertEq(("account.id",), map $1.name, DataProvider::getTemplateValues("static", "", tc),
+                "public DataProvider facade exposes template values");
             list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('$', 1, fields,
                 NOTHING, tc);
             assertEq(tc, received_ctx_context,
@@ -5251,7 +5255,7 @@ public class DpqlTest inherits QUnit::Test {
 
             # Test template_context passed to resolve_type
             tc = {"sandboxed": False};
-            *AbstractDataProviderType env_type = AbstractDataProvider::resolveTemplateType("env", "HOME", tc);
+            *AbstractDataProviderType env_type = DataProvider::resolveTemplateType("env", "HOME", tc);
             assertEq(tc, received_type_context,
                 "template_context passed to resolve_type callback");
             assertTrue(exists env_type, "resolve_type returns type when not sandboxed");

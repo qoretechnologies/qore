@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file BulkSqlUtil.qm module for performing bulk DML operations with SqlUtil
 
-/*  BulkSqlUtil.qm Copyright 2015 - 2024 Qore Technologies, s.r.o.
+/*  BulkSqlUtil.qm Copyright 2015 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,6 +69,11 @@ module BulkSqlUtil {
     @section bulksqlutil_relnotes Release Notes
 
     @subsection bulksqlutil_v1_4 BulkSqlUtil v1.4
+    - bulk inserts now forward caller-requested \c returning columns through every flush block and deliver each
+      returned row to the configured row callback
+    - bulk queues now validate record field sets and list or buffer column lengths before initializing or modifying
+      the queue, preventing malformed input from shifting values between rows; record field order is no longer
+      significant
     - added @ref BulkSqlUtil::AbstractBulkOperation::queueData() "AbstractBulkOperation::queueData()" support for
       @ref Qore::SQL::ColumnarResult "ColumnarResult", hash-of-\c buffer<T> column blocks, and \c DataFrame input
       for bulk insert and upsert operations

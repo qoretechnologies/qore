@@ -1,0 +1,497 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/DbDataProvider
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class DbRecordMutationTest
+
+#! SQLite table variant used to exercise metadata-only expression fallback
+class MetadataOnlySqliteTable inherits Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    hash<auto> getExpressionMap() {
+        return Sqlite3Table::getExpressionMap() + {
+            DP_OP_REGEX_MATCH: SqlUtil::DefaultExpressionMap{DP_OP_REGEX_MATCH},
+            DP_OP_REGEX_NMATCH: SqlUtil::DefaultExpressionMap{DP_OP_REGEX_NMATCH},
+        };
+    }
+}
+
+class DbRecordMutationTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        *Sqlite3Table table;
+        *DbTableDataProvider provider;
+
+        const TableName = "db_record_mutation_test";
+    }
+
+    constructor() : Test("DbRecordMutation", "1.0") {
+%ifndef NoSqlite3
+        ds = new Datasource("sqlite3:@:memory:");
+        ds.open();
+        ds.execRaw("create table " + TableName
+            + " (id integer primary key, group_name text not null, value integer not null)");
+        ds.commit();
+        table = new Sqlite3Table(ds, TableName);
+        provider = new DbTableDataProvider(table);
+%endif
+
+        addTestCase("single update rollback", \testSingleUpdateRollback());
+        addTestCase("bounded update rollback", \testBoundedUpdateRollback());
+        addTestCase("bounded delete rollback", \testBoundedDeleteRollback());
+        addTestCase("mutation affected row counts", \testMutationAffectedRowCounts());
+        addTestCase("caller transaction preservation", \testCallerTransactionPreservation());
+        addTestCase("exec SQL transaction ownership", \testExecSqlTransactionOwnership());
+        addTestCase("bound record iterators", \testBoundRecordIterators());
+        addTestCase("row to bulk iterator adapter", \testRowToBulkIteratorAdapter());
+        addTestCase("raw SQL provider metadata", \testRawSqlProviderMetadata());
+        addTestCase("raw SQL record typing", \testRawSqlRecordTyping());
+        addTestCase("residual expression filtering", \testResidualExpressionFiltering());
+        addTestCase("SQLite string expression semantics", \testSqliteStringExpressionSemantics());
+        addTestCase("field rename preserves data", \testFieldRenamePreservesData());
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+    }
+
+    private requireSqlite() {
+        if (!provider) {
+            testSkip("no sqlite3 module");
+        }
+    }
+
+    private resetRows() {
+        ds.execRaw("delete from " + TableName);
+        ds.execRaw("insert into " + TableName + " values "
+            "(1, 'a', 10), (2, 'a', 20), (3, 'b', 30)");
+        ds.commit();
+    }
+
+    private list<hash<auto>> getRows() {
+        return table.selectRows({"orderby": "id"});
+    }
+
+    private list<int> getIteratorIds(AbstractDataProviderRecordIterator<hash<auto>> i) {
+        list<int> ids;
+        while (i.next()) {
+            ids += i.getValue().id;
+        }
+        return ids;
+    }
+
+    private testSingleUpdateRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", "the update has been rolled back", sub () {
+            provider.updateSingleRecord({"value": 99}, {"group_name": "a"});
+        });
+        assertEq((10, 20, 30), map $1.value, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testBoundedUpdateRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the update has been rolled back", sub () {
+            provider.updateRecords({"value": 99}, {}, {"max_records": 2});
+        });
+        assertEq((10, 20, 30), map $1.value, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq(2, provider.updateRecords({"value": 88}, {"group_name": "a"}, {"max_records": 2}));
+        assertEq((88, 88, 30), map $1.value, getRows());
+    }
+
+    private testBoundedDeleteRollback() {
+        requireSqlite();
+        resetRows();
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the delete has been rolled back", sub () {
+            provider.deleteRecords({}, {"max_records": 2});
+        });
+        assertEq((1, 2, 3), map $1.id, getRows());
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq(2, provider.deleteRecords({"group_name": "a"}, {"max_records": 2}));
+        assertEq((3,), map $1.id, getRows());
+    }
+
+    private testMutationAffectedRowCounts() {
+        requireSqlite();
+        resetRows();
+
+        assertEq(2, provider.updateRecords({"value": 88}, {"group_name": "a"}));
+        assertEq(0, provider.updateRecords({"value": 99}, {"group_name": "missing"}));
+        assertEq(2, provider.deleteRecords({"group_name": "a"}));
+        assertEq(0, provider.deleteRecords({"group_name": "missing"}));
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testCallerTransactionPreservation() {
+        requireSqlite();
+        resetRows();
+
+        ds.execRaw("insert into " + TableName + " values (4, 'c', 40)");
+        assertTrue(ds.currentThreadInTransaction());
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", sub () {
+            provider.updateSingleRecord({"value": 99}, {"group_name": "a"});
+        });
+        assertTrue(ds.currentThreadInTransaction());
+        assertEq((10, 20, 30, 40), map $1.value, getRows());
+
+        ds.rollback();
+        assertEq((1, 2, 3), map $1.id, getRows());
+    }
+
+    private testExecSqlTransactionOwnership() {
+        requireSqlite();
+        resetRows();
+        DbExecSqlDataProvider exec_provider(ds);
+
+        ds.execRaw("insert into " + TableName + " values (4, 'c', 40)");
+        assertTrue(ds.currentThreadInTransaction());
+        exec_provider.doRequest({
+            "sql": "insert into " + TableName + " values (5, 'd', 50)",
+            "args": (),
+        });
+        assertTrue(ds.currentThreadInTransaction());
+        ds.rollback();
+        assertEq((1, 2, 3), map $1.id, getRows());
+
+        exec_provider.doRequest({
+            "sql": "insert into " + TableName + " values (6, 'e', 60)",
+            "args": (),
+        });
+        assertFalse(ds.currentThreadInTransaction());
+        ds.rollback();
+        assertEq((1, 2, 3, 6), map $1.id, getRows());
+    }
+
+    private testBoundRecordIterators() {
+        requireSqlite();
+        resetRows();
+
+        assertEq((1, 2), map $1.id, table.selectRows({"where": {"group_name": "a"}, "orderby": "id"}));
+        hash<SqlResultInfo> statement_info = table.getStatementWithInfo({"where": {"group_name": "a"},
+            "orderby": "id"});
+        assertEq(("a",), statement_info.args);
+        assertEq((1, 2), map $1.id, statement_info.result.fetchRows());
+        statement_info.result.rollback();
+
+        hash<SqlResultInfo> no_exec_info = table.getStatementNoExecWithInfo({"where": {"group_name": "a"},
+            "orderby": "id"});
+        no_exec_info.result.exec("a");
+        assertEq((1, 2), map $1.id, no_exec_info.result.fetchRows());
+        no_exec_info.result.rollback();
+
+        AbstractSQLStatement constant_stmt = ds.getSQLStatement();
+        constant_stmt.prepare("select * from " + TableName + " where group_name = 'a' order by id");
+        constant_stmt.exec();
+        assertEq((1, 2), map $1.id, constant_stmt.fetchRows());
+        constant_stmt.rollback();
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({"group_name": "a"}, {"orderby": "id"});
+        hash<string, AbstractDataField> record_type = iter.getRecordType();
+        assertTrue(exists record_type.id);
+        list<int> row_ids;
+        while (iter.next()) {
+            push row_ids, iter.getValue().id;
+        }
+        assertEq((1, 2), row_ids);
+
+        AbstractDataProviderBulkRecordInterface bulk = provider.searchRecordsBulk(1, {"group_name": "a"},
+            {"orderby": "id", "limit": 2});
+        assertEq(2, bulk.getLimit());
+        list<int> bulk_ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            bulk_ids += block.id;
+        }
+        assertEq((1, 2), bulk_ids);
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testRowToBulkIteratorAdapter() {
+        requireSqlite();
+        resetRows();
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({}, {"orderby": "id", "limit": 2,
+            "max_records": 3});
+        assertThrows("INVALID-BLOCK-SIZE", sub () {
+            iter.getBulkApi(0);
+        });
+        AbstractDataProviderBulkRecordInterface bulk = iter.getBulkApi(1);
+        assertThrows("INVALID-ITERATOR", sub () {
+            iter.getBulkApi(1);
+        });
+        assertThrows("INVALID-ITERATOR", sub () {
+            iter.next();
+        });
+        assertEq(1, bulk.getBlockSize());
+        assertEq(2, bulk.getLimit());
+        assertEq(3, bulk.getMaxRecords());
+
+        list<int> ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            ids += block.id;
+        }
+        assertEq((1, 2), ids);
+        assertFalse(iter.valid());
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testRawSqlProviderMetadata() {
+        requireSqlite();
+
+        DbDataProvider raw_provider(ds, NOTHING);
+        hash<DataProviderInfo> info = raw_provider.getInfo();
+        assertFalse(raw_provider.supportsSearchExpressions());
+        assertFalse(info.supports_search_expressions);
+        assertFalse(exists info.expressions);
+
+        # SQLite has no INSERT RETURNING support in Sqlite3SqlUtil; do not publish or accept that option.
+        assertFalse(provider.getCreateOptions().hasKey("returning"));
+        assertFalse(provider.getInfo().create_options.hasKey("returning"));
+        assertThrows("CREATE-RECORD-ERROR", "CREATE-OPTION-ERROR", sub () {
+            provider.createRecord({"id": 100, "group_name": "metadata", "value": 1}, {"returning": "id"});
+        });
+    }
+
+    private testRawSqlRecordTyping() {
+        requireSqlite();
+        resetRows();
+
+        hash<string, AbstractDataField> synthetic = DbDataProvider::getRecordTypeFromDescribeHash({
+            "driver_key": {
+                "name": "MixedAlias",
+                "native_type": "VARCHAR",
+                "maxsize": 20,
+                "type": NT_STRING,
+                "nullable": True,
+            },
+            "RequiredId": {
+                "native_type": "INTEGER",
+                "type": NT_INT,
+                "nullable": False,
+            },
+        });
+        assertEq(("MixedAlias", "RequiredId"), sort(synthetic.keys()));
+        assertEq("*string", synthetic.MixedAlias.getType().getName());
+        assertEq("int", synthetic.RequiredId.getType().getName());
+
+        DbDataProvider raw_provider(ds, NOTHING);
+        hash<auto> search_options = {
+            "sql": "select id as RecordID, group_name as MixedAlias, value + 1 as ComputedValue from "
+                + TableName + " where group_name = %v order by id",
+            "args": ("a",),
+        };
+        hash<string, AbstractDataField> record_type = raw_provider.getRecordType(search_options);
+        assertEq(("ComputedValue", "MixedAlias", "RecordID"), sort(record_type.keys()));
+        assertEq("*int", record_type.RecordID.getType().getName());
+        assertEq("*string", record_type.MixedAlias.getType().getName());
+
+        AbstractDataProviderRecordIterator iter = raw_provider.searchRecords(NOTHING, search_options);
+        list<hash<auto>> rows;
+        while (iter.next()) {
+            push rows, iter.getValue();
+        }
+        assertEq((1, 2), map $1.RecordID, rows);
+        assertEq(("a", "a"), map $1.MixedAlias, rows);
+        assertEq((11, 21), map $1.ComputedValue, rows);
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertThrows("DBSELECT-ERROR", sub () {
+            raw_provider.searchRecords({"RecordID": 1}, search_options);
+        });
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testResidualExpressionFiltering() {
+        requireSqlite();
+        resetRows();
+        ds.execRaw("update " + TableName + " set group_name = 'Alpha' where id = 3");
+        ds.commit();
+
+        MetadataOnlySqliteTable metadata_table(ds, TableName);
+        DbTableDataProvider metadata_provider(metadata_table);
+        hash<string, hash<DataProviderExpressionInfo>> expressions = metadata_provider.getExpressionsWithOptions();
+        assertFalse(expressions{DP_OP_REGEX_MATCH}.supports_pushdown);
+        assertTrue(expressions{DP_SEARCH_OP_GT}.supports_pushdown);
+
+        assertThrows("CLIENT-SIDE-FILTER-DISABLED", sub () {
+            metadata_provider.searchRecords('@group_name =~ /a/i', {"orderby": "id"});
+        });
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertEq((1, 2, 3), getIteratorIds(metadata_provider.searchRecords('@group_name =~ /a/i', {
+            "orderby": "id",
+            "allow_client_side_filter": True,
+        })));
+        assertFalse(ds.currentThreadInTransaction());
+
+        # The native id predicate is pushed down, while paging and projection occur after the residual regex.
+        AbstractDataProviderRecordIterator<hash<auto>> paged = metadata_provider.searchRecords(
+            '@id > 0 && @group_name =~ /a/i', {
+                "orderby": "id",
+                "offset": 1,
+                "limit": 1,
+                "columns": ("id",),
+                "allow_client_side_filter": True,
+            });
+        assertTrue(paged.next());
+        assertEq({"id": 2}, paged.getValue());
+        assertFalse(paged.next());
+        assertFalse(ds.currentThreadInTransaction());
+
+        AbstractDataProviderBulkRecordInterface bulk = metadata_provider.searchRecordsBulk(2,
+            '@group_name =~ /a/i', {
+                "orderby": "id",
+                "allow_client_side_filter": True,
+            });
+        assertEq(DataProviderShape::HashOfLists, bulk.getValueShape());
+        list<int> bulk_ids;
+        while (*hash<auto> block = bulk.getValue()) {
+            bulk_ids += block.id;
+        }
+        assertEq((1, 2, 3), bulk_ids);
+        assertFalse(ds.currentThreadInTransaction());
+
+        assertThrows("MULTIPLE-RECORDS-ERROR", sub () {
+            metadata_provider.searchSingleRecord('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+            });
+        });
+        assertThrows("CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED", sub () {
+            metadata_provider.searchRecords('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+                "groupby": "group_name",
+            });
+        });
+        assertThrows("CLIENT-SIDE-FILTER-OPTIONS-UNSUPPORTED", sub () {
+            hash<DataProviderFieldReference> field = <DataProviderFieldReference>{"field": "group_name"};
+            metadata_provider.searchRecords('@group_name =~ /a/i', {
+                "allow_client_side_filter": True,
+                "columns": (<DataProviderExpression>{"exp": DP_OP_TO_UPPER, "args": (field,)}),
+            });
+        });
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testSqliteStringExpressionSemantics() {
+        requireSqlite();
+        resetRows();
+        ds.execRaw("update " + TableName + " set group_name = 'Alpha' where id = 3");
+        ds.execRaw("insert into " + TableName + " values (4, 'a*literal', 40)");
+        ds.commit();
+
+        hash<DataProviderFieldReference> field = <DataProviderFieldReference>{"field": "group_name"};
+        hash<DataProviderExpression> like_sensitive = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a%", False),
+        };
+        hash<DataProviderExpression> like_insensitive = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a%", True),
+        };
+        hash<DataProviderExpression> literal_glob = <DataProviderExpression>{
+            "exp": DP_OP_LIKE,
+            "args": (field, "a*%", False),
+        };
+        hash<DataProviderExpression> contains_sensitive = <DataProviderExpression>{
+            "exp": DP_OP_CONTAINS,
+            "args": (field, "A", False),
+        };
+        hash<DataProviderExpression> contains_insensitive = <DataProviderExpression>{
+            "exp": DP_OP_CONTAINS,
+            "args": (field, "A", True),
+        };
+        hash<DataProviderExpression> ends_empty = <DataProviderExpression>{
+            "exp": DP_OP_ENDS_WITH,
+            "args": (field, "", False),
+        };
+
+        assertEq((1, 2, 4), getIteratorIds(provider.searchRecords(like_sensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4), getIteratorIds(provider.searchRecords(like_insensitive, {"orderby": "id"})));
+        assertEq((4,), getIteratorIds(provider.searchRecords(literal_glob, {"orderby": "id"})));
+        assertEq((3,), getIteratorIds(provider.searchRecords(contains_sensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4),
+            getIteratorIds(provider.searchRecords(contains_insensitive, {"orderby": "id"})));
+        assertEq((1, 2, 3, 4), getIteratorIds(provider.searchRecords(ends_empty, {"orderby": "id"})));
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
+    private testFieldRenamePreservesData() {
+        requireSqlite();
+        Datasource rename_ds = new Datasource("sqlite3:@:memory:");
+        rename_ds.open();
+        rename_ds.execRaw("create table field_rename_test "
+            "(id integer primary key, group_name text not null)");
+        rename_ds.execRaw("insert into field_rename_test values (1, 'a'), (2, 'b')");
+        rename_ds.commit();
+        Sqlite3Table rename_table = new Sqlite3Table(rename_ds, "field_rename_test");
+        DbTableDataProvider rename_provider = new DbTableDataProvider(rename_table);
+
+        rename_provider.updateField("group_name", new QoreDataField("category", NOTHING, StringType));
+        assertEq(("a", "b"), map $1.category, rename_table.selectRows({"orderby": "id"}),
+            "renaming a provider field preserves existing values");
+        hash<auto> desc = rename_table.getDescriptionHash();
+        assertFalse(desc.columns.hasKey("group_name"));
+        assertTrue(desc.columns.hasKey("category"));
+        assertFalse(rename_ds.currentThreadInTransaction());
+
+        Sqlite3Column current("value", "integer", "int", False, NOTHING);
+        Sqlite3Column changed("value", "integer", "int", False, NOTHING, True, True);
+        assertThrows("UNSUPPORTED", \current.getModifySql(), (rename_table, changed),
+            "a real SQLite column definition change is not mistaken for an unchanged column");
+    }
+}

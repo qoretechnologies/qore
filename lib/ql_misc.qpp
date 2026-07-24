@@ -2735,6 +2735,51 @@ load_module("mysql");
 nothing load_module() [flags=RUNTIME_NOOP;dom=MODULES] {
 }
 
+//! Calls the given @ref call_reference "call reference" or @ref closure "closure" and returns the result
+/** This function historically wrapped the call in libqore's process-global module-load lock so that
+    a module could order that lock before its own private locks.  That global lock has been
+    <b>retired</b> (holding it across a nested module load reformed a process-wide deadlock), so this
+    function now simply calls \a callable directly and returns its result.  It is retained for
+    backwards compatibility.
+
+    A module that previously used this to avoid a lock-order inversion should instead ensure its own
+    private locks are <b>never held across a module load</b> (directly via @ref load_module(), or
+    indirectly via lazy provider/schema loading or a callback from a foreign runtime).  libqore now
+    detects genuine cross-thread module dependency cycles and raises a
+    \c CIRCULAR-MODULE-DEPENDENCY exception instead of relying on a global serialization lock.
+
+    @param callable The @ref call_reference "call reference" or @ref closure "closure" to call
+    @param ... Any optional arguments to the @ref call_reference "call reference" or @ref closure
+    "closure"
+
+    @return the value returned by \a callable
+
+    @par Example:
+    @code{.py}
+return call_with_module_load_lock(\initIntern(), app);
+    @endcode
+
+    @note The @ref call_reference "call reference" or @ref closure "closure" called could also throw
+    other exceptions
+
+    @see
+    - load_module()
+    - call_function()
+
+    @since %Qore 3.0
+*/
+auto call_with_module_load_lock(code callable, ...) [dom=MODULES] {
+    ReferenceHolder<QoreListNode> vargs(xsink);
+    // if there are arguments to pass, create argument list by copying the current list after the
+    // callable
+    if (num_args(args) > 1) {
+        vargs = args->copyListFrom(1);
+    }
+    // the process-global module-load lock has been retired (see QoreModuleLoadLockHelper); this is
+    // now a direct pass-through call retained for backwards compatibility
+    return callable->execValue(*vargs, xsink);
+}
+
 //! Loads in a %Qore user module at run-time with using the given @ref Qore::Program "Program" object as the container for the user module code
 /** This function allows a user module to be loaded with a custom API already present in the user module's @ref Qore::Program "Program" container
 

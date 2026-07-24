@@ -46,7 +46,7 @@ auto sub parse_json(string val) {
 %endif
 
 module QoreLlmUtils {
-    version = "1.1.0";
+    version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
         "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
     author = "Qore Technologies, s.r.o.";
@@ -121,15 +121,6 @@ printf("Structured output: %s\n", result.content);
     @endcode
 
     @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
-
-    @subsection qorellmutils_1_1 QoreLlmUtils Module Version 1.1
-    - Added @ref QoreLlmUtils::LlmRequestClassifier "LlmRequestClassifier",
-      a language-independent semantic classifier for application-defined
-      request policies.
-    - Added @ref QoreLlmUtils::CitationValidator "CitationValidator" and
-      @ref QoreLlmUtils::GroundedAnswerVerifier "GroundedAnswerVerifier" for
-      generic grounded-answer and citation validation workflows using
-      caller-supplied source references.
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
     - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting

@@ -4,10 +4,10 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Schema
-%requires SqlUtil
+%requires ../../../../qlib/Schema/Schema.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
 
-%requires QUnit
+%requires ../../../../qlib/QUnit.qmod
 
 %exec-class DataSchemaTest
 
@@ -15,6 +15,8 @@ class DataSchemaTest inherits QUnit::Test {
     constructor() : Test("DataSchema", "1.0") {
         addTestCase("meta-schema structure", \metaSchemaTests());
         addTestCase("meta-schema migration action fields", \metaSchemaMigrationFieldTests());
+        addTestCase("table reconciliation contract validation",
+            \tableReconciliationContractTests());
         addTestCase("column normalization", \columnNormalizationTests());
         addTestCase("table normalization", \tableNormalizationTests());
         addTestCase("partition normalization", \partitionNormalizationTests());
@@ -118,6 +120,12 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(ms."$defs".hasKey("referenceData"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partition_strategy"));
         assertTrue(ms."$defs".tableDefinition.properties.hasKey("partitions"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("list"));
+        assertTrue(ms."$defs".partitionStrategy.properties.method."enum".contains("hash"));
+        assertTrue(ms."$defs".partitionStrategy.properties.hasKey("subpartition"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("values"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("modulus"));
+        assertTrue(ms."$defs".partitionSpec.properties.hasKey("subpartitions"));
     }
 
     columnNormalizationTests() {
@@ -277,6 +285,30 @@ class DataSchemaTest inherits QUnit::Test {
         assertEq(("id",), result.partition_strategy.columns);
         assertEq(100, result.partitions.test_p1.bound_to);
 
+        hash<auto> method_families = Schema::DataSchemaLoader::normalizeTable("method_families", {
+            "columns": {
+                "id": {"type": "int"},
+                "region": {"type": "varchar", "size": 8},
+            },
+            "partition_strategy": {
+                "method": "list",
+                "columns": ("region",),
+                "subpartition": {"method": "hash", "columns": ("id",)},
+            },
+            "partitions": {
+                "eu": {
+                    "values": ("eu", "uk"),
+                    "subpartitions": {
+                        "eu_h0": {"method": "hash", "modulus": 2, "remainder": 0},
+                    },
+                },
+            },
+        });
+        assertEq("list", method_families.partition_strategy.method);
+        assertEq("hash", method_families.partition_strategy.subpartition.method);
+        assertEq(("eu", "uk"), method_families.partitions.eu.values);
+        assertEq(0, method_families.partitions.eu.subpartitions.eu_h0.remainder);
+
         # Auto triggers preserved (expanded later)
         assertTrue(result.auto_triggers.created);
 
@@ -316,10 +348,9 @@ class DataSchemaTest inherits QUnit::Test {
         };
 
         hash<auto> result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
-        assertEq(Type::Date, result.partitions.events_p202601.bound_from.type());
-        assertEq(Type::Date, result.partitions.events_p202601.bound_to.type());
-        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from));
-        assertEq("2026-02-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_to));
+        assertEq("2026-01-01", result.partitions.events_p202601.bound_from,
+            "loader preserves typed-bound candidates until a datasource driver is known");
+        assertEq("2026-02-01", result.partitions.events_p202601.bound_to);
         assertEq("date '2026-03-01'", result.partitions.events_psql.bound_from_sql);
         assertEq("date '2026-04-01'", result.partitions.events_psql.bound_to_sql);
         assertTrue(result.partitions.events_default.is_default);
@@ -330,32 +361,16 @@ class DataSchemaTest inherits QUnit::Test {
         };
         result = Schema::DataSchemaLoader::normalizeTable("events", table_def);
         assertEq(1, result.partitions.events_p202601.bound_from[0]);
-        assertEq(Type::Date, result.partitions.events_p202601.bound_from[1].type());
-        assertEq("2026-01-01", format_date("YYYY-MM-DD", result.partitions.events_p202601.bound_from[1]));
+        assertEq("2026-01-01", result.partitions.events_p202601.bound_from[1]);
 
-        assertThrows("DATA-SCHEMA-ERROR", "cannot be parsed as a date", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("created",)},
-                "partitions": {"bad": {"bound_from": "not-a-date", "bound_to": "2026-02-01"}},
-            });
+        # Validation and coercion require final driver overrides and therefore belong to AbstractTable::setupTable().
+        result = Schema::DataSchemaLoader::normalizeTable("events", {
+            "columns": {"created": {"type": "date"}},
+            "partition_strategy": {"method": "range", "columns": ("created",)},
+            "partitions": {"raw": {"bound_from": "not-a-date", "bound_to": "2026-02-30"}},
         });
-
-        assertThrows("DATA-SCHEMA-ERROR", "has 1 values for 2 partition columns", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("id", "created")},
-                "partitions": {"bad": {"bound_from": (1,), "bound_to": (2,)}},
-            });
-        });
-
-        assertThrows("DATA-SCHEMA-ERROR", "must be a list", sub () {
-            Schema::DataSchemaLoader::normalizeTable("events", {
-                "columns": {"id": {"type": "int"}, "created": {"type": "date"}},
-                "partition_strategy": {"method": "range", "columns": ("id", "created")},
-                "partitions": {"bad": {"bound_from": 1, "bound_to": 2}},
-            });
-        });
+        assertEq("not-a-date", result.partitions.raw.bound_from);
+        assertEq("2026-02-30", result.partitions.raw.bound_to);
     }
 
     referenceDataTests() {
@@ -488,6 +503,16 @@ class DataSchemaTest inherits QUnit::Test {
         # Reference data normalized to list-of-lists
         assertEq(3, result.reference_data.strict.roles.size());
         assertEq(2, result.reference_data.normal.app_version.size());
+
+        hash<auto> normalized_column = {
+            "qore_type": Type::String,
+            "native_type": "varchar",
+            "size": 42,
+            "notnull": True,
+            "default_value_native": True,
+        };
+        assertEq(normalized_column,
+            Schema::DataSchemaLoader::normalizeColumn("users", "already_normalized", normalized_column));
     }
 
     validationTests() {
@@ -560,9 +585,30 @@ class DataSchemaTest inherits QUnit::Test {
         assertTrue(action_enum.contains("add_trigger"));
         assertTrue(action_enum.contains("drop_trigger"));
         assertTrue(action_enum.contains("add_constraint"));
+        assertTrue(action_enum.contains("reconcile_table"));
         assertTrue(action_enum.contains("sql"));
         assertTrue(action_enum.contains("script"));
-        assertEq(17, action_enum.size());  # 15 unrestricted + 2 restricted
+        assertEq(18, action_enum.size());  # 16 unrestricted + 2 restricted
+        assertTrue(action_def.properties.hasKey("contract"));
+        assertEq("#/$defs/tableReconciliationContract",
+            action_def.properties.contract."$ref");
+
+        hash<auto> reconcile_schema = {
+            "schema": {"name": "Reconcile", "version": "1.1"},
+            "migrations": ({
+                "version": "1.1",
+                "post_align": ({
+                    "action": "reconcile_table",
+                    "contract": tableReconciliationContract(),
+                },),
+            },),
+        };
+        Schema::DataSchemaLoader::validate(reconcile_schema);
+        reconcile_schema.migrations[0].post_align[0].contract
+            .unsupported_field = True;
+        assertThrows("DATA-SCHEMA-VALIDATION-ERROR", sub () {
+            Schema::DataSchemaLoader::validate(reconcile_schema);
+        });
 
         # Verify source-version gating fields exist on both migration and migrationAction
         assertTrue(action_def.properties.hasKey("min_source_version"),
@@ -592,6 +638,103 @@ class DataSchemaTest inherits QUnit::Test {
         };
         hash<auto> loaded = Schema::DataSchemaLoader::loadHash(gated, True);
         assertEq("0.22", loaded.migrations[0].min_source_version);
+    }
+
+    private hash<auto> tableReconciliationContract() {
+        return {
+            "contract_version": 1,
+            "migration_id": "canonical-payment-id",
+            "table": "payments",
+            "canonical_columns": ({
+                "name": "payment_id",
+                "type": "int",
+                "notnull": True,
+                "primary_key": True,
+                "missing_live": True,
+            },),
+            "column_mappings": ({
+                "target": "payment_id",
+                "source": "id",
+                "source_kind": "legacy_column",
+                "conversion": "numeric_compatible",
+            },),
+            "backfill": {
+                "batch_size": 500,
+                "quarantine_table": "payments_schema_quarantine",
+            },
+            "constraints_and_indexes": {
+                "primary_key": {
+                    "name": "pk_payments",
+                    "columns": ("payment_id",),
+                },
+                "indexes": (),
+            },
+        };
+    }
+
+    tableReconciliationContractTests() {
+        hash<auto> normalized =
+            Schema::DataSchemaTableMigration::validate_contract(
+                tableReconciliationContract());
+        assertEq("payments", normalized.table);
+        assertEq("payment_id",
+            normalized.constraints_and_indexes.primary_key.columns[0]);
+        assertEq(500, normalized.backfill.batch_size);
+        assertTrue(normalized.backfill.preserve_legacy_columns);
+        assertEq(normalized,
+            Schema::DataSchemaTableMigration::validate_contract(normalized),
+            "the normalized closed contract is valid input");
+
+        hash<auto> invalid = tableReconciliationContract();
+        invalid.table = "unsafe.table";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "table must be a safe identifier",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.column_mappings[0].source_kind = "raw_sql";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "mapping for \"payment_id\" has unsupported source_kind "
+                "\"raw_sql\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.batch_size = 0;
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill.batch_size must be between 1 and 10000",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.preserve_legacy_columns = False;
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill.preserve_legacy_columns must be true",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,),
+            "the normalized safety invariant cannot be disabled");
+
+        invalid = tableReconciliationContract();
+        invalid.canonical_columns[0].type = "hash<auto>";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "unsupported canonical column type \"hash<auto>\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.column_mappings[0].expression = "unsafe SQL";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "column mapping contains unsupported field \"expression\"",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
+
+        invalid = tableReconciliationContract();
+        invalid.backfill.batch_size = "500";
+        assertThrows("DATA-SCHEMA-TABLE-MIGRATION-ARG-ERROR",
+            "backfill field \"batch_size\" has an invalid type",
+            \Schema::DataSchemaTableMigration::validate_contract(),
+            (invalid,));
     }
 
     loaderErrorPathTests() {

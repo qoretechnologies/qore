@@ -3,7 +3,7 @@
 
     Qore programming language exception handling support
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -733,13 +733,12 @@ void QoreExternalProgramLocationWrapper::set(const char* file, int start_line, i
         lang_str = lang;
     }
     loc->setLanguage(lang_str.c_str());
-    // the internal storage for start_line is currently 16 bits
-    assert(start_line <= 0xffff);
+    // -1 is the "unknown location" sentinel
+    assert(start_line >= -1);
     loc->start_line = start_line;
-    // the internal storage for end_line is currently 16 bits
-    assert(end_line <= 0xffff);
+    assert(end_line >= -1);
     loc->end_line = end_line;
-    assert(offset <= 0xffff);
+    assert(offset >= -1);
     loc->offset = offset;
 }
 

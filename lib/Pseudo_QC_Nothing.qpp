@@ -81,7 +81,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().pairIterator();
     @since %Qore 0.8.6.2
  */
 SingleValueIterator <nothing>::pairIterator() [const;flags=CONSTANT] {
-   return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
+   return qore_new_single_value_iterator_object(getProgram(), QoreValue(), autoTypeInfo);
 }
 
 //! Returns an empty @ref Qore::SingleValueIterator "SingleValueIterator" object
@@ -97,7 +97,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().keyIterator();
     @since %Qore 0.8.6.2
  */
 SingleValueIterator <nothing>::keyIterator() [const;flags=CONSTANT] {
-   return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
+   return qore_new_single_value_iterator_object(getProgram(), QoreValue(), autoTypeInfo);
 }
 
 //! Returns an empty @ref Qore::SingleValueIterator "SingleValueIterator" object
@@ -113,7 +113,7 @@ map printf("+ %y\n", $1), get_hash_or_nothing().contextIterator();
     @since %Qore 0.8.6.2
  */
 SingleValueIterator <nothing>::contextIterator() [const;flags=CONSTANT] {
-   return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
+   return qore_new_single_value_iterator_object(getProgram(), QoreValue(), autoTypeInfo);
 }
 
 //! Returns an empty list
@@ -273,5 +273,5 @@ map printf("+ %y\n", $1), get_list_or_nothing().rangeIterator();
     @since %Qore 0.8.8
  */
 SingleValueIterator <nothing>::rangeIterator() [const;flags=CONSTANT] {
-   return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
+   return qore_new_single_value_iterator_object(getProgram(), QoreValue(), autoTypeInfo);
 }

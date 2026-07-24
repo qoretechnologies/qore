@@ -155,6 +155,17 @@ public:
         return aot_loc_table;
     }
 
+    //! Offset added to every AOT location index emitted by this lowerer.
+    //! Outlined function-body helpers execute with the coordinator's
+    //! runtime ctx, whose ctx->locs table is the concatenation of the
+    //! helpers' and the coordinator's location tables; each lowerer gets
+    //! the running total of previously-emitted entries as its base so the
+    //! emitted indices address the merged table (see
+    //! aotLowerOutlinedFnHelpers() in QoreAOT.cpp).
+    void setAOTLocTableBase(int32_t base) {
+        aot_loc_base = base;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -310,6 +321,15 @@ private:
 
     // Saved on_block_exit handler count at function entry (for LIFO cleanup)
     llvm::Value* obe_saved_count = nullptr;
+
+    // Saved catch-scope stack depth at function entry (qore_rt_catch_depth()).
+    // Only set for functions containing CatchException instructions.  The shared
+    // exception-exit paths (error_return_block, unwind LPs, deopt) pop the
+    // runtime catch stack back to this depth via qore_rt_catch_unwind() so
+    // catch scopes left active when an exception escapes a catch block (e.g., a
+    // call inside the catch block raising) are cleaned up and their caught
+    // exceptions deleted.
+    llvm::Value* catch_depth_saved = nullptr;
 
     // True when the current function contains deferred on_block_exit handlers.
     bool has_on_block_exit_handlers = false;
@@ -582,6 +602,10 @@ private:
     //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).
     //! The pointer is used only as a dedup key during the single LLVM codegen pass.
     std::unordered_map<const QoreProgramLocation*, int32_t> aot_loc_slots;
+
+    //! Base offset for emitted AOT location indices (outlined helpers index
+    //! the coordinator's merged ctx->locs table) — see setAOTLocTableBase()
+    int32_t aot_loc_base = 0;
     //! AOT location table: owns location data captured during LLVM codegen.
     std::vector<AOTLocEntry> aot_loc_table;
 
@@ -665,6 +689,11 @@ private:
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
+
+    // Emit qore_rt_catch_unwind(catch_depth_saved, xsink) at the current insert
+    // point to pop catch scopes left active by an escaping exception; no-op for
+    // functions without catch blocks (catch_depth_saved == nullptr)
+    void emitCatchUnwind(llvm::Module& module);
 
     // Publish current LLVM local allocas to the runtime local stack before
     // deferred handlers execute through AST/IR and read parent locals.

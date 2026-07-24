@@ -117,6 +117,12 @@ populate: {exp: now}
 populate: {exp: coalesce, args: [{field: legacy_status}, "unknown"]}
 # → UPDATE t SET status = coalesce(legacy_status, 'unknown') WHERE status IS NULL
 
+# Cryptographic digest — portable DPQL expression that renders to each database's native
+# hashing functions; args are (value, algorithm, output-encoding).  The output encoding is
+# "hex" (the default), "base64", or "binary"; use "binary" to fill a binary/bytea column.
+populate: {exp: digest, args: [{field: name}, "sha256", "binary"]}
+# → UPDATE t SET name_sha256 = sha256(convert_to(name, 'UTF8')) WHERE name_sha256 IS NULL  (on pgsql)
+
 # Per-driver SQL escape hatch — for DB-specific functions not in the expression map
 populate:
   sql:
@@ -125,6 +131,18 @@ populate:
     mysql: "UNHEX(SHA2(name, 256))"
 # → UPDATE t SET name_sha256 = digest(name, 'sha256') WHERE name_sha256 IS NULL  (on pgsql)
 ```
+
+The `digest` expression maps to native server-side hashing per driver, raising `DIGEST-ERROR` for
+combinations a database cannot support:
+
+| Driver | Algorithms | Output encodings |
+| --- | --- | --- |
+| PostgreSQL | md5, sha224, sha256, sha384, sha512 | hex, base64, binary |
+| Oracle | md5, sha1, sha256, sha384, sha512 | hex, binary |
+| MySQL | md5, sha1, sha224, sha256, sha384, sha512 | hex, base64, binary |
+| MS SQL Server | md5, sha1, sha256, sha512 | hex, binary |
+| Firebird (4+) | md5, sha1, sha256, sha512 | hex, base64, binary |
+| SQLite | *(none — no built-in hash functions)* | — |
 
 `populate` works with or without `notnull`. If `notnull: true` is set, the constraint is applied
 after the backfill. If `notnull` is not set, the backfill runs but no NOT NULL constraint is added.
@@ -187,8 +205,9 @@ tables:
 
 ## Table Partitioning
 
-Tables can declare range partitioning with `partition_strategy` and optional initial physical
-partitions with `partitions`. Phase 1 partition support covers range partitioning.
+Tables can declare portable range, list, or explicit hash partitioning with `partition_strategy`
+and optional initial physical partitions with `partitions`. A recursive `subpartition` strategy and
+matching `subpartitions` definitions are supported when the database advertises equivalent semantics.
 
 ```yaml
 tables:
@@ -226,9 +245,37 @@ tables:
 `partition_strategy.columns` defines the partition key. `partitions` is keyed by partition name;
 each partition can also set `name`, but it must match the hash key. `bound_from` is inclusive and
 `bound_to` is exclusive. Use scalar bounds for single-column keys and lists for multi-column keys.
-When the partition key column has type `date` or `timestamp`, string `bound_from` and `bound_to`
-values are normalized to typed dates by `DataSchemaLoader`; SQL expressions are not parsed and must
-use `bound_from_sql`, `bound_to_sql`, or `bound_sql`.
+When the effective driver-specific partition key column has type `date` or `timestamp`, string
+`bound_from` and `bound_to` values in `YYYY-MM-DD` or ISO datetime form
+(`YYYY-MM-DD[T ]HH:mm:SS[.ffffff][Z|+/-HH:mm]`) are normalized to typed dates when the table is set up.
+Other strings remain strings. SQL expressions are never parsed and must use `bound_from_sql`,
+`bound_to_sql`, or `bound_sql`.
+
+List specs use exactly one of `values` (a nonempty typed list) or `values_sql`; a default list
+partition uses only `is_default: true`. Explicit hash specs use `modulus` and `remainder`, with
+`modulus > 0` and `0 <= remainder < modulus`. For example, PostgreSQL list-to-hash partitioning can
+be described as:
+
+```yaml
+partition_strategy:
+  method: list
+  columns: [region]
+  subpartition:
+    method: hash
+    columns: [customer_id]
+
+partitions:
+  region_eu:
+    values: [eu, uk]
+    subpartitions:
+      region_eu_h0: {method: hash, modulus: 2, remainder: 0}
+      region_eu_h1: {method: hash, modulus: 2, remainder: 1}
+```
+
+Portable method support is capability-gated: PostgreSQL supports range/list/hash and recursive
+subpartitions; Oracle and MySQL/MariaDB support range and list at the top level; SQL Server supports
+range only. Native hash algorithms on Oracle/MySQL are not treated as equivalent to explicit
+modulus/remainder placement.
 
 Partition metadata supports the same `driver` override pattern used elsewhere in schema hashes:
 
@@ -405,6 +452,7 @@ where that column already exists.
 | `rename_table` | `table`, `to` | Rename a table |
 | `add_trigger` | `table`, `name`, `source` | Add a trigger |
 | `drop_trigger` | `table`, `name` | Drop a trigger |
+| `reconcile_table` | `contract` | Apply a closed, additive, data-preserving table reconciliation with bounded backfill, quarantine, indexes, and verification |
 
 **Restricted actions** (require `trusted` or `admin` access level):
 
@@ -412,6 +460,105 @@ where that column already exists.
 |--------|----------------|-------------|
 | `sql` | `statements` | Execute raw SQL |
 | `script` | `file` | Execute a .qr migration script |
+
+#### Additive table reconciliation
+
+`reconcile_table` is a closed, database-independent migration action for
+reconciling an existing table with a reviewed canonical definition without
+dropping or renaming live data. It is designed for migrations that need more
+control than normal table alignment: a complete conversion preflight, bounded
+restartable backfill, quarantine of rows that cannot be converted, and
+deterministic post-migration verification.
+
+The action accepts one `contract`:
+
+```yaml
+- action: reconcile_table
+  contract:
+    contract_version: 1
+    migration_id: users-canonical-id
+    table: users
+    canonical_columns:
+      - name: user_id
+        type: int
+        notnull: true
+        primary_key: true
+        missing_live: true
+      - name: display_name
+        type: string
+        size: 240
+        notnull: true
+        missing_live: true
+    column_mappings:
+      - target: user_id
+        source: id
+        source_kind: legacy_column
+        conversion: numeric_compatible
+      - target: display_name
+        source: name
+        source_kind: legacy_column
+        conversion: to_string
+    backfill:
+      batch_size: 1000
+      quarantine_table: users_schema_quarantine
+    constraints_and_indexes:
+      primary_key:
+        name: pk_users
+        columns: [user_id]
+      indexes:
+        - name: idx_users_display_name
+          columns: [display_name]
+          unique: false
+```
+
+The contract fields are:
+
+| Field | Meaning |
+|-------|---------|
+| `contract_version` | Must be `1` |
+| `migration_id` | Stable identifier used to make quarantine handling idempotent |
+| `table` | Existing table to reconcile |
+| `canonical_columns` | Closed list of canonical column definitions; supported logical types are `date`, `number`, `int`, `float`, `bool`, `string`, and `binary` |
+| `canonical_columns[].missing_live` | Records that the reviewed evidence found the column absent; only these columns may be added or have their nullability tightened |
+| `column_mappings` | Exactly one source mapping for every canonical column |
+| `backfill.batch_size` | Number of rows processed per restartable transaction, from 1 through 10,000 |
+| `backfill.quarantine_table` | Separate table that preserves rows that fail conversion before removing them from active processing |
+| `backfill.preserve_legacy_columns` | Optional safety invariant; when present it must be `true`. Normalized contracts always include it so they can be validated and executed again without weakening legacy-column preservation |
+| `constraints_and_indexes.primary_key` | One canonical key column and its reviewed constraint name |
+| `constraints_and_indexes.indexes` | Optional bounded list of reviewed secondary indexes |
+
+Mapping `source_kind` values are `existing_column`, `legacy_column`,
+`constant_null`, `schema_default`, and `empty_table_initialization`.
+`empty_table_initialization` is accepted only when the table is still empty at
+execution time. Supported conversion labels are `identity`, `to_timestamp`,
+`numeric_compatible`, `to_number`, `string_size_validation`, `to_string`,
+`validated_cast`, `none`, and `schema_default`; all conversions still use the
+closed target type and size checks.
+
+Before its first material change, the action validates identifiers and bounds,
+checks the current table and source columns, requires a unique single-column
+cursor for non-empty tables, validates existing index definitions, and scans
+every active row for conversion safety. DML is committed in bounded,
+restartable batches. A row that cannot be converted is first copied to the
+quarantine table with the migration ID and reason, then removed from the
+active table in the same transaction. Existing columns are never dropped or
+narrowed, and legacy columns are retained.
+
+Successful execution returns bounded aggregate evidence: material change
+count, before/after active and quarantine row counts, and deterministic
+verification results. It does not return row values. Re-executing the same
+contract is idempotent.
+
+Embedding applications can pass `ddl_change_callback` in
+`SchemaOptionInfo`, or to `Schema::execute_migration_action()`. The callback
+receives the actual datasource object and the affected table names after
+committed DDL. This lets an application associate the change with its own
+named datasource without putting application-specific names in the
+DataSchema. An empty affected-table list means that all cached metadata for
+that datasource must be invalidated; this is used for raw SQL and scripts
+whose exact DDL targets cannot be determined. If a DDL operation fails, the
+callback is invoked conservatively because some database drivers auto-commit
+DDL before reporting a later error.
 
 ### Step Dependencies
 

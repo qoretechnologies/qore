@@ -30,11 +30,13 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
 
+#include <limits>
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
@@ -403,6 +405,19 @@ int QoreListNode::merge(const QoreListNode* list, ExceptionSink* xsink) {
 
 int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
     assert(reference_count() == 1);
+    // a negative index cast to size_t arrives here as SIZE_MAX; "index + 1" would then wrap to 0, resize(0) would
+    // be a no-op, and "priv->entry[index]" would address memory before the start of the entry array.  Callers must
+    // resolve negative indices themselves (see PO_NEGATIVE_OFFSETS handling in the lvalue, JIT, AOT, and IR paths),
+    // so reaching this with SIZE_MAX is a caller bug, but never corrupt the heap because of one
+    assert(index != std::numeric_limits<size_t>::max());
+    if (index == std::numeric_limits<size_t>::max()) {
+        val.discard(xsink);
+        if (xsink) {
+            xsink->raiseException("LIST-INDEX-ERROR", "cannot set a list entry at an index equal to the maximum "
+                "value of the index type; the list cannot be resized to hold it");
+        }
+        return -1;
+    }
     if (index >= priv->length) {
         priv->resize(index + 1);
     }
@@ -1001,6 +1016,13 @@ QoreListNode* QoreListNode::reverse() const {
 }
 
 int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) const {
+    // applies any format bounds active in this thread; when bounds are active, a recursive reference is rendered
+    // as an alias to the anchor rendered with the container, so this check is made before the recursion check
+    QoreFormatBoundsHelper fbh(str, this, empty() ? "[]" : "[...]");
+    if (fbh.elided()) {
+        return 0;
+    }
+
     QoreContainerHelper cch(this);
     if (!cch) {
         str.sprintf("[ERROR: recursive reference to list %p]", this);
@@ -1010,13 +1032,18 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     if (foff == FMT_YAML_SHORT) {
         str.concat('[');
         ConstListIterator li(this);
+        size_t count = 0;
         while (li.next()) {
+            if (fbh.elideElements(str, count, size())) {
+                break;
+            }
             QoreValue n = li.getValue();
             if (n.getAsString(str, foff, xsink))
                 return -1;
             if (!li.last()) {
                 str.concat(", ");
             }
+            ++count;
         }
         str.concat(']');
         return 0;
@@ -1032,7 +1059,12 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
             return 0;
         }
         ConstListIterator li(this);
+        size_t count = 0;
         while (li.next()) {
+            if (fbh.elideElements(str, count, size())) {
+                break;
+            }
+            ++count;
             if (indent > 0)
                 str.addch(' ', indent);
             str.concat('-');
@@ -1123,6 +1155,9 @@ int QoreListNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink) c
     }
 
     for (size_t i = 0; i < priv->length; ++i) {
+        if (fbh.elideElements(str, i, priv->length)) {
+            break;
+        }
         if (foff != FMT_NONE) {
             str.addch(' ', foff + 2);
             str.sprintf("[%lu]=", i);

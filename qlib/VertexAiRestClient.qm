@@ -41,7 +41,7 @@
 module VertexAiRestClient {
     version = "1.0";
     desc = "REST client and LLM provider for Google Vertex AI — Gemini-on-Vertex "
-        "via the regional generateContent endpoint with service-account/ADC auth";
+        "via regional, multi-region, or global endpoints with service-account/ADC auth";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
@@ -80,10 +80,14 @@ module VertexAiRestClient {
 
     @par Endpoint shape
 
-    Vertex AI publishes Gemini models at:
+    Vertex AI publishes Gemini models at regional endpoints such as:
     @verbatim
 POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent
     @endverbatim
+
+    The \c us and \c eu multi-region locations and the \c global location use
+    \c https://aiplatform.googleapis.com; the selected location remains in the
+    resource path.
 
     Streaming uses \c :streamGenerateContent.  Embeddings use the
     \c :predict endpoint on text-embedding publisher models (Gecko / Text
@@ -92,7 +96,8 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     @par Connection options
 
     - \c gcp_project_id (required): GCP project ID
-    - \c gcp_region (optional): default \c "us-central1"
+    - \c gcp_region (optional): a region, the \c us or \c eu multi-region, or
+      \c global; default \c "us-central1"
     - \c gcp_sa_json_path (optional): service-account JSON key file path; when
       omitted, ADC resolution runs
     - \c gcp_scopes (optional): OAuth2 scopes (default
@@ -147,6 +152,11 @@ hash<ChatResponse> r = p.chat((
       to Vertex's \c toolConfig, \c response_format \c json_schema is routed to the
       request output schema, and passthrough \c generationConfig options are
       deep-merged — matching GeminiRestClient
+    - provider registry metadata now advertises the same Gemini-specific tool
+      catalogue, dispatch, and payload-shaping preferences as GeminiRestClient;
+      both providers use the same GeminiBodyShape request implementation
+    - endpoint selection supports Google Vertex AI regional, \c us / \c eu
+      multi-region, and \c global locations
 */
 
 #! Contains all public definitions in the VertexAiRestClient module
@@ -156,6 +166,28 @@ public const DefaultRegion = "us-central1";
 
 #! Default OAuth2 scope for Vertex AI calls
 public const DefaultScopes = ("https://www.googleapis.com/auth/cloud-platform",);
+
+#! Returns the official Vertex AI API base URL for a location
+/** @param location a regional location such as \c us-central1 or
+        \c europe-west4, a multi-region location (\c us or \c eu), or
+        \c global
+
+    @return the Vertex AI API base URL for the location
+*/
+public string sub vertexApiUrl(string location) {
+    if (!location.val()) {
+        throw "VERTEX-AI-CONFIG-ERROR",
+            "Vertex AI location must not be empty";
+    }
+    switch (location) {
+        case "global":
+        case "us":
+        case "eu":
+            return "https://aiplatform.googleapis.com";
+        default:
+            return sprintf("https://%s-aiplatform.googleapis.com", location);
+    }
+}
 
 #! Builds Vertex AI request headers: the bearer token plus an optional quota project
 /** @param token the OAuth2 access token (without the \c "Bearer " prefix)
@@ -199,7 +231,8 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                     "display_name": "GCP Region",
                     "short_desc": "Vertex AI region",
                     "type": "string",
-                    "desc": "Vertex AI region (e.g. us-central1, europe-west4)",
+                    "desc": "Vertex AI region (e.g. us-central1, europe-west4), "
+                        "multi-region (us or eu), or global location",
                     "default_value": DefaultRegion,
                 },
                 "gcp_sa_json_path": <ConnectionOptionInfo>{
@@ -253,7 +286,7 @@ string sub ensureVertexUrl(string url, *hash<auto> options) {
         return url;
     }
     string region = options.gcp_region ?? DefaultRegion;
-    return sprintf("https://%s-aiplatform.googleapis.com", region);
+    return vertexApiUrl(region);
 }
 
 #! Vertex AI LLM provider — Gemini-on-Vertex via :generateContent
@@ -345,7 +378,7 @@ public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelPr
     RestClientIo::RestClientIo createRestClient() {
         hash<auto!> opts;
         opts.url = getConfig().url
-            ?? sprintf("https://%s-aiplatform.googleapis.com", region);
+            ?? vertexApiUrl(region);
         opts.data = "json";
         if (getConfig().connect_timeout_ms) {
             opts.connect_timeout = getConfig().connect_timeout_ms;
@@ -382,6 +415,10 @@ public class VertexAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "supports_structured_output": True,
             "supports_multimodal": True,
             "supports_reasoning_token_budget": True,
+            "prefers_narrow_tool_catalogue": True,
+            "preferred_max_tool_count": 8,
+            "prefers_single_tool_dispatch": True,
+            "prefers_stringified_tool_payloads": True,
         };
     }
 }
@@ -505,7 +542,7 @@ public class VertexAiEmbedder inherits QoreRagUtils::AbstractEmbedder {
             if (!rest_client) {
                 hash<auto!> opts;
                 opts.url = config.url
-                    ?? sprintf("https://%s-aiplatform.googleapis.com", region);
+                    ?? vertexApiUrl(region);
                 opts.data = "json";
                 rest_client = new RestClientIo::RestClientIo(opts);
             }

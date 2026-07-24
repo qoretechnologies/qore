@@ -557,6 +557,26 @@ hashdecl Qore::RegexMatchInfo {
     *hash<string, *string> named_groups;
 }
 
+//! Bounds applied when formatting values with the bounded string formatting functions
+/** @see
+    - @ref format_bounded()
+    - @ref sprintf_bounded()
+    - @ref vsprintf_bounded()
+
+    @since %Qore 3.0
+*/
+hashdecl Qore::FormatBounds {
+    //! The maximum number of bytes of output generated for each value formatted; 0 means unlimited
+    /** This is a soft limit; delimiters and truncation markers can add a small bounded amount of output after the
+        limit is reached
+    */
+    int max_bytes = 16384;
+    //! The maximum container nesting depth expanded; 0 means unlimited
+    int max_depth = 8;
+    //! The maximum number of elements expanded in any single container; 0 means unlimited
+    int max_elements = 128;
+}
+
 /** @defgroup string_functions String Functions
 
     @section string_formatting String Formatting
@@ -614,6 +634,12 @@ hashdecl Qore::RegexMatchInfo {
     |\c X|Integer, output in base 16 (hexadecimal) format with upper-case A-F
     |\c y|Any %Qore value, formatted as a pseudo-YAML string, without any line breaks; this format option is similar to \c "%n", but uses a YAML-like format.  Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
     |\c Y|Any %Qore value, formatted as a multi-line pseudo-YAML string with proper indentation for nested structures; similar to \c "%y" but with line breaks and indentation for readability. Note that the output is not guaranteed to be parsed by the yaml module's parseYAML() function; it is for display purposes only; to get real YAML functionality, use the yaml module.
+
+    @note The value format specifications (\c "%n", \c "%N", \c "%y", and \c "%Y") expand containers with no limit
+    on the size of the output, and a container shared by more than one reference path in the value is expanded once
+    for every path leading to it, so the output can be much larger than the value itself. Use
+    @ref format_bounded(), @ref sprintf_bounded(), or @ref vsprintf_bounded() to format values whose size is not
+    known in advance, such as when logging values that reach live internal data structures.
 
     <b>String Escape Characters</b>
     |!Escape Characters|!Description
@@ -2247,6 +2273,114 @@ string vsprintf(string[doc] format, auto[doc] values) [flags=CONSTANT,NAMED_ARGS
  */
 string vsprintf() [flags=NOOP] {
    return null_string();
+}
+
+//! Returns a string with the value formatted as with the \c "%y" @ref string_formatting "format specification", subject to the given bounds
+/** The \c "%n", \c "%N", \c "%y", and \c "%Y" @ref string_formatting "format specifications" expand containers
+    with no limit on the size of the output, and a container shared by more than one reference path in the value is
+    expanded once for every path leading to it, which can make the cost of formatting a value exponential in the
+    depth of the value; this function bounds the output while it is generated, so that the memory and the time used
+    are bounded by the \c max_bytes limit no matter how large the value is.
+
+    Containers referenced more than once (including recursive references) are expanded only once; they are
+    formatted with a YAML anchor (ex: \c "&1 {a: 1}"), and any further reference to the same container is formatted
+    as a YAML alias (ex: \c "*1").
+
+    Any output elided due to the bounds is marked in the string returned:
+    - \c "...<truncated>": the \c max_bytes limit was reached
+    - \c "{...}", \c "[...]", \c "{<Class object>...}": the \c max_depth limit was reached
+    - \c "...<n more>": the \c max_elements limit was reached
+
+    @param value the value to format
+    @param bounds the bounds to apply; if not present, the default bounds in @ref Qore::FormatBounds "FormatBounds" are used
+
+    @return the formatted value, bounded as given
+
+    @par Example:
+    @code{.py}
+string str = format_bounded(h, <FormatBounds>{"max_bytes": 4096});
+    @endcode
+
+    @throw FORMAT-BOUNDS-ERROR a bounds value is negative
+
+    @see
+    - @ref vsprintf_bounded()
+    - @ref sprintf_bounded()
+
+    @since %Qore 3.0
+*/
+string format_bounded(auto value, *hash<FormatBounds> bounds) [flags=RET_VALUE_ONLY] {
+    QoreFormatBounds fb;
+    if (q_get_format_bounds(fb, bounds, xsink)) {
+        return QoreValue();
+    }
+    return q_format_bounded(value, FMT_YAML_SHORT, fb, xsink);
+}
+
+//! Returns a formatted string as with @ref sprintf(), where all value @ref string_formatting "format specifications" are bounded
+/** The \c "%n", \c "%N", \c "%y", and \c "%Y" @ref string_formatting "format specifications" are formatted as with
+    @ref format_bounded() using the default bounds in @ref Qore::FormatBounds "FormatBounds"; all other format
+    specifications are formatted as with @ref sprintf().
+
+    Use this function instead of @ref sprintf() when formatting values that can be arbitrarily large, such as when
+    logging values that can reach live internal data structures.
+
+    @param fmt the @ref string_formatting "format string"
+    @param ... the argument(s) corresponding to format specifiers in the format string
+
+    @return a formatted string corresponding to the arguments given, where all values are bounded
+
+    @par Example:
+    @code{.py}
+string str = sprintf_bounded("context: %y", ctx);
+    @endcode
+
+    @note Each value format specification is formatted in its own output format, as with @ref sprintf()
+
+    @see
+    - @ref format_bounded()
+    - @ref vsprintf_bounded()
+
+    @since %Qore 3.0
+*/
+string sprintf_bounded(string[doc] fmt, ...) [flags=RET_VALUE_ONLY] {
+    QoreFormatBounds fb;
+    return q_sprintf_bounded(args, 0, 0, fb, xsink);
+}
+
+//! Returns a formatted string as with @ref vsprintf(), where all value @ref string_formatting "format specifications" are bounded
+/** The \c "%n", \c "%N", \c "%y", and \c "%Y" @ref string_formatting "format specifications" are formatted as with
+    @ref format_bounded() subject to the bounds given; all other format specifications are formatted as with
+    @ref vsprintf().
+
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
+    @param bounds the bounds to apply to each value formatted; if not present, the default bounds in
+    @ref Qore::FormatBounds "FormatBounds" are used
+
+    @return a formatted string corresponding to the arguments given, where all values are bounded
+
+    @par Example:
+    @code{.py}
+string str = vsprintf_bounded("context: %y arg: %y", (ctx, arg), <FormatBounds>{"max_bytes": 4096});
+    @endcode
+
+    @note Each value format specification is formatted in its own output format, as with @ref vsprintf()
+
+    @throw FORMAT-BOUNDS-ERROR a bounds value is negative
+
+    @see
+    - @ref format_bounded()
+    - @ref sprintf_bounded()
+
+    @since %Qore 3.0
+*/
+string vsprintf_bounded(string format, softlist<auto> values, *hash<FormatBounds> bounds) [flags=RET_VALUE_ONLY] {
+    QoreFormatBounds fb;
+    if (q_get_format_bounds(fb, bounds, xsink)) {
+        return QoreValue();
+    }
+    return q_vsprintf_bounded(*format, values, 0, fb, xsink);
 }
 
 //! Outputs the string passed to standard output, using the first argument as a @ref string_formatting "format string"; enforces field widths on arguments larger than the given field width

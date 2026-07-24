@@ -1,0 +1,523 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Tests for automatic AOT function-body outlining
+# (see design/aot-function-outlining.md).
+#
+# The outlining thresholds are forced low through the QORE_AOT_OUTLINE_FN_*
+# environment variables so moderately-sized generated functions trigger the
+# pass; every behavioral test compares the outlined compiled output against
+# the interpreted output of the identical source.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class AOTFunctionOutliningTest
+
+class AOTFunctionOutliningTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        # env forcing the outliner to fire on small functions
+        const ForceEnv = "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=100 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=100";
+    }
+
+    constructor() : QUnit::Test("AOTFunctionOutliningTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("outlining fires and preserves behavior", \testSequentialGroups());
+        addTestCase("exceptions and on_exit inside regions", \testExceptions());
+        addTestCase("static and instance methods", \testMethods());
+        addTestCase("reference args and container locals", \testRefsAndContainers());
+        addTestCase("references to outer locals from exception paths",
+            \testExceptionPathSharedRefs());
+        addTestCase("object lifetime across regions", \testObjectLifetime());
+        addTestCase("outlining disabled equivalence", \testDisabledEquivalence());
+        addTestCase("no safe partition fallback", \testNoSafePartition());
+        addTestCase("loop bodies with early returns", \testLoopEarlyReturns());
+        addTestCase("deterministic helper naming", \testDeterministicNaming());
+        set_return_value(main());
+    }
+
+    private hash<auto> writeTempScript(string code) {
+        # .qr implies %modern for standalone scripts.
+        string base = sprintf("%s%saot_outline_test_%d_%d", tmp_location(), DirSep,
+            getpid(), rand());
+        string src_path = base + ".qr";
+        string out_path = base;
+
+        File f();
+        f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+
+        return {
+            "src": src_path,
+            "out": out_path,
+        };
+    }
+
+    #! compile with the forced-outlining env + run; also run interpreted; return all outputs
+    private hash<auto> compileRunAndInterpret(string code, string env = ForceEnv) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_cmd = sprintf("QORE_LIBDIR=%s %s %s -b --compile --output %s %s 2>&1",
+            libqore_dir, env, qore_bin, paths.out, paths.src);
+        string compile_out = backquote(compile_cmd);
+
+        string run_out = "COMPILE_FAILED";
+        if (is_file(paths.out)) {
+            run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1",
+                libqore_dir, paths.out));
+        }
+
+        # reference: interpreted execution of the identical source
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1",
+            libqore_dir, qore_bin, paths.src));
+
+        return {
+            "compile_out": compile_out,
+            "run_out": run_out,
+            "interp_out": interp_out,
+        };
+    }
+
+    private bool outlined(string compile_out) {
+        return compile_out.regex("AOT-OUTLINE-FN: .* outlined [0-9]+ regions");
+    }
+
+    #! a function with many self-contained sequential statement groups
+    private string sequentialGroupsSource(int groups) {
+        string body = "";
+        for (int g = 0; g < groups; ++g) {
+            body += sprintf("
+    if (total %% %d == 0) {
+        total += %d;
+        s += 'g%da';
+    } else {
+        total -= 1;
+        s += 'g%db';
+    }
+    for (int i%d = 0; i%d < (n %% %d) + 2; ++i%d) {
+        total += i%d;
+    }
+    if (total > %d) {
+        total = total %% %d;
+        s += 'w%d';
+    }
+", g + 2, g, g, g, g, g, g + 3, g, g, 1000 + g * 10, 1000 + g * 10, g);
+        }
+        return sprintf("
+string sub work(int n) {
+    int total = n;
+    string s = 'start';
+%s
+    return s + '|' + total.toString();
+}
+
+printf('%%s\n', work(7));
+printf('%%s\n', work(42));
+printf('%%s\n', work(1234567));
+", body);
+    }
+
+    testSequentialGroups() {
+        hash<auto> h = compileRunAndInterpret(sequentialGroupsSource(24));
+        assertTrue(outlined(h.compile_out),
+            "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testExceptions() {
+        string body = "";
+        for (int g = 0; g < 10; ++g) {
+            body += sprintf("
+    if (total %% %d == 0) {
+        total += %d;
+        log += 'g%d,';
+    }
+    try {
+        if (mode == %d) {
+            throw 'ERR%d', sprintf('boom %%d', total);
+        }
+        total += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        log += sprintf('caught:%%s;', ex.err);
+        if (mode == %d && rethrow_mode) {
+            rethrow;
+        }
+    }
+    {
+        on_exit log += 'x%d,';
+        total += 2;
+        if (mode == %d) {
+            throw 'HARD%d', 'unhandled';
+        }
+    }
+    for (int i%d = 0; i%d < 3; ++i%d) {
+        total += i%d;
+    }
+", g + 2, g, g, g, g, g, g, g + 100, g, g, g, g, g);
+        }
+        string src = sprintf("
+string sub work(int n, int mode, bool rethrow_mode) {
+    int total = n;
+    string log = '';
+%s
+    return sprintf('%%s|%%d', log, total);
+}
+
+string sub runcase(int n, int mode, bool rm) {
+    try {
+        return work(n, mode, rm);
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf('EXC:%%s:%%s', ex.err, ex.desc);
+    }
+}
+
+printf('%%s\n', runcase(7, -1, False));
+for (int m = 0; m < 10; ++m) {
+    printf('%%s\n', runcase(3, m, False));
+}
+printf('%%s\n', runcase(3, 5, True));
+printf('%%s\n', runcase(3, 103, False));
+printf('%%s\n', runcase(3, 108, False));
+", body);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertTrue(outlined(h.compile_out),
+            "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    #! per-method bodies for a class exercising receiver state across regions
+    private string methodBody(int groups) {
+        string body = "";
+        for (int g = 0; g < groups; ++g) {
+            body += sprintf("
+        if (acc %% %d == 0) {
+            acc += n + %d;
+            trace += 'm%d,';
+        } else {
+            acc -= 1;
+        }
+        for (int i%d = 0; i%d < 3; ++i%d) {
+            acc += i%d;
+        }
+", g + 2, g, g, g, g, g, g);
+        }
+        return body;
+    }
+
+    testMethods() {
+        string src = sprintf("
+class OutlineCounter {
+    public {
+        int member = 5;
+        string mtrace = '';
+    }
+
+    string run(int n) {
+        int acc = n + member;
+        string trace = '';
+%s
+        member = acc %% 97;
+        mtrace += trace;
+        return sprintf('%%d/%%s', acc, trace);
+    }
+
+    static string srun(int n) {
+        int acc = n;
+        string trace = '';
+%s
+        return sprintf('%%d/%%s', acc, trace);
+    }
+}
+
+OutlineCounter c();
+printf('%%s\n', c.run(3));
+printf('%%s\n', c.run(9));
+printf('%%d %%s\n', c.member, c.mtrace);
+printf('%%s\n', OutlineCounter::srun(3));
+printf('%%s\n', OutlineCounter::srun(1000));
+", methodBody(20), methodBody(20));
+        hash<auto> h = compileRunAndInterpret(src);
+        # both the instance and the static method must be outlined
+        assertTrue(h.compile_out.regex("AOT-OUTLINE-FN: 'OutlineCounter::run.*' outlined"),
+            "instance method must outline: " + h.compile_out.substr(0, 600));
+        assertTrue(h.compile_out.regex("AOT-OUTLINE-FN: 'OutlineCounter::_static_srun.*' outlined"),
+            "static method must outline: " + h.compile_out.substr(0, 600));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testRefsAndContainers() {
+        string body = "";
+        for (int g = 0; g < 16; ++g) {
+            body += sprintf("
+    h{'k%d'} = g%d(total);
+    l += h{'k%d'};
+    bump(\\total, %d);
+    if (total > %d) {
+        h{'w%d'} = l.size();
+    }
+", g, g % 4, g, g + 1, 500 + g * 7, g);
+        }
+        string funcs = "";
+        for (int i = 0; i < 4; ++i) {
+            funcs += sprintf("
+int sub g%d(int x) {
+    return x * %d + %d;
+}
+", i, i + 2, i);
+        }
+        string src = sprintf("
+%s
+sub bump(reference<int> r, int amount) {
+    r += amount;
+}
+
+string sub work(int n) {
+    int total = n;
+    hash<auto> h = {};
+    list<int> l = ();
+%s
+    return sprintf('%%d|%%d|%%d', total, h.size(), l.size());
+}
+
+printf('%%s\n', work(1));
+printf('%%s\n', work(12345));
+", funcs, body);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertTrue(outlined(h.compile_out),
+            "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testExceptionPathSharedRefs() {
+        # A closure-use local owned by the coordinator must not be referenced
+        # from an outlined exception-path region.  Cleanup of a nested
+        # closure-use local can otherwise leave the helper without the outer
+        # CVV, which used to crash in thread_find_closure_var().
+        string src = "
+sub bump(reference<int> value, int amount) {
+    value += amount;
+}
+
+sub fill(reference<*hash<auto>> value, int turn) {
+    value = {'turn': turn};
+}
+
+string sub work(int n) {
+    int retries = 0;
+    int total = n;
+    for (int turn = 0; turn < 20; ++turn) {
+        try {
+            *hash<auto> guard_context;
+            fill(\\guard_context, turn);
+            if ((turn + n) % 2) {
+                throw 'TEST-ERROR', 'expected';
+            }
+            total += guard_context.turn;
+        } catch (hash<ExceptionInfo> ex) {
+            bump(\\retries, turn + 1);
+            total += ex.err.size();
+        }
+        if (total % 3) {
+            total += turn * 2;
+        } else {
+            total -= turn;
+        }
+        if (total > 1000) {
+            total %= 997;
+        }
+    }
+    return sprintf('%d|%d', retries, total);
+}
+
+printf('%s\\n', work(1));
+printf('%s\\n', work(12));
+";
+        hash<auto> h = compileRunAndInterpret(src,
+            "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 "
+            "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=30");
+        assertTrue(outlined(h.compile_out),
+            "safe regions must still outline: " + h.compile_out.substr(0, 600));
+        assertTrue(h.compile_out.regex(
+            "closure-use local crosses exception-path region boundary"),
+            "unsafe exception region must be rejected: "
+                + h.compile_out.substr(0, 1000));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testObjectLifetime() {
+        string body = "";
+        for (int g = 0; g < 16; ++g) {
+            body += sprintf("
+    o.add(%d);
+    if (o.total() %% %d == 0) {
+        o.add(1);
+        log += 'a%d,';
+    }
+    for (int i%d = 0; i%d < 2; ++i%d) {
+        o.add(i%d);
+    }
+", g, g + 2, g, g, g, g, g);
+        }
+        string src = sprintf("
+our string dtor_log = '';
+
+class Acc {
+    private {
+        int sum = 0;
+        string name;
+    }
+
+    constructor(string n) {
+        name = n;
+    }
+
+    destructor() {
+        dtor_log += sprintf('%%s=%%d;', name, sum);
+    }
+
+    add(int x) {
+        sum += x;
+    }
+
+    int total() {
+        return sum;
+    }
+}
+
+string sub work(int n) {
+    string log = '';
+    Acc o('inner');
+    o.add(n);
+%s
+    return sprintf('%%d|%%s', o.total(), log);
+}
+
+printf('%%s\n', work(3));
+printf('%%s\n', work(17));
+printf('dtors:%%s\n', dtor_log);
+", body);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertTrue(outlined(h.compile_out),
+            "outliner must fire: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+        # the destructor must have run exactly twice, at function exit
+        assertTrue(h.run_out.regex("dtors:inner=[0-9]+;inner=[0-9]+;"));
+    }
+
+    testDisabledEquivalence() {
+        string src = sequentialGroupsSource(24);
+        hash<auto> enabled = compileRunAndInterpret(src);
+        hash<auto> disabled = compileRunAndInterpret(src,
+            "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN=0");
+        assertTrue(outlined(enabled.compile_out));
+        assertFalse(outlined(disabled.compile_out));
+        assertEq(enabled.interp_out, enabled.run_out);
+        assertEq(enabled.run_out, disabled.run_out);
+    }
+
+    testNoSafePartition() {
+        # a single giant switch: every case block is entered directly from
+        # the switch dispatch, so no contiguous range has a single entry
+        # point — no safe partition exists and the function must compile
+        # un-outlined and behave identically
+        string cases = "";
+        for (int g = 0; g < 60; ++g) {
+            cases += sprintf("
+        case %d:
+            return sprintf('case%d:%%d', n * %d);
+", g, g, g + 2);
+        }
+        string src = sprintf("
+string sub work(int n) {
+    switch (n %% 60) {
+%s
+    }
+    return 'default';
+}
+
+printf('%%s\n', work(3));
+printf('%%s\n', work(59));
+printf('%%s\n', work(120));
+", cases);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertFalse(outlined(h.compile_out),
+            "giant switch must not outline: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testLoopEarlyReturns() {
+        # loop bodies with early `return` statements outline through the
+        # return token: the helper signals the return and the coordinator
+        # re-executes it through its own epilogue; fused int counters
+        # (++turn / count += / while condition) stay coherent through the
+        # TLS stack
+        string body = "";
+        for (int g = 0; g < 20; ++g) {
+            body += sprintf("
+        if (helper(state, %d) > %d) {
+            state{'k%d'} = sprintf('g%%d:%%d', %d, state.size());
+            count += helper(state, %d);
+        } else if (helper(state, %d) < 0) {
+            log += 'neg%d,';
+            if (count > %d) {
+                return {'early': %d, 'log': log, 'count': count};
+            }
+        } else {
+            state{'m%d'} = log.size();
+        }
+", g, g * 3, g, g, g + 1, g + 2, g, g * 100 + 500, g, g);
+        }
+        string src = sprintf("
+int sub helper(hash<auto> h, int n) {
+    return h.size() + n %% 7;
+}
+
+hash<auto> sub work(int turns) {
+    hash<auto!> state = {'count': 0};
+    string log = '';
+    int count = 0;
+    int turn = 0;
+    while (turn < turns) {
+        ++turn;
+%s
+    }
+    return {'log': log.size(), 'count': count, 'turns': turn};
+}
+
+hash<auto> r1 = work(2);
+printf('%%d %%d %%d\n', r1.log ?? -1, r1.count, r1.turns ?? -1);
+hash<auto> r2 = work(40);
+printf('%%d %%d %%y\n', r2.count, r2.early ?? -1, r2.turns);
+", body);
+        hash<auto> h = compileRunAndInterpret(src);
+        assertTrue(outlined(h.compile_out),
+            "loop with early returns must outline: " + h.compile_out.substr(0, 400));
+        assertEq(h.interp_out, h.run_out);
+    }
+
+    testDeterministicNaming() {
+        string src = sequentialGroupsSource(24);
+        hash<auto> a = compileRunAndInterpret(src);
+        hash<auto> b = compileRunAndInterpret(src);
+        # identical region/helper diagnostics on identical input
+        *list<string> la = (a.compile_out =~ x/(AOT-OUTLINE-FN: '.*' outlined [0-9]+ regions)/g);
+        *list<string> lb = (b.compile_out =~ x/(AOT-OUTLINE-FN: '.*' outlined [0-9]+ regions)/g);
+        assertTrue(exists la && la.size() > 0);
+        assertEq(la, lb);
+    }
+}

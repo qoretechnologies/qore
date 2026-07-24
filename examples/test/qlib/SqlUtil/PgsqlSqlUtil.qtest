@@ -4,21 +4,21 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires PgsqlSqlUtilBase
-%requires PgsqlSqlUtil
-%requires SchemaReverse
-%requires Schema
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/PgsqlSqlUtilBase.qmod
+%requires ../../../../qlib/PgsqlSqlUtil.qmod
+%requires ../../../../qlib/SchemaReverse.qmod
+%requires ../../../../qlib/Schema/Schema.qmod
 
 %try-module yaml
 %define NoYaml
 %endtry
 
 %prepend-module-path "${SCRIPT_DIR}"
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -329,6 +329,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("default value", \testDefaultValue());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
+            addTestCase("concurrent multi-event trigger introspection", \concurrentTriggerIntrospectionTest());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
             addTestCase("pgvector extension alignment SQL", \pgvectorExtensionAlignmentSqlTest());
             addTestCase("pgvector type support", \pgvectorTest());
@@ -338,8 +339,16 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("tables populate FK ordering", \tablesPopulateFkOrderingTest());
             addTestCase("foreign key column order introspection", \foreignKeyColumnOrderIntrospectionTest());
             addTestCase("temporary table resolution", \temporaryTableResolutionTest());
+            addTestCase("search_path schema resolution", \searchPathSchemaResolutionTest());
+            addTestCase("sequence schema resolution", \sequenceSchemaResolutionTest());
+            addTestCase("partition schema coercion and validation", \partitionSchemaCoercionAndValidationTest());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("concurrent partition detach", \concurrentPartitionDetachTest());
+            addTestCase("partition lifecycle callbacks", \partitionLifecycleCallbackTest());
+            addTestCase("insert-select callback forwarding", \insertFromSelectCallbackForwardingTest());
+            addTestCase("structured aggregate selection", \structuredAggregateSelectionTest());
             addTestCase("partition enhancements", \partitionEnhancementsTest());
+            addTestCase("partition method families", \partitionMethodFamiliesTest());
             addTestCase("partition child not listed as table", \partitionChildExclusionTest());
             addTestCase("PK not backed by non-unique index", \pkNonUniqueIndexTest());
             addTestCase("drop PK constraint without backing index", \dropPkConstraintNoBackingIndexTest());
@@ -556,6 +565,72 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(2, res, "2 actions must be performed");
     }
 
+    private concurrentTriggerIntrospectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        const int Workers = 32;
+        const int Iterations = 200;
+        const string TableName = "pgsql_trigger_concurrency";
+        const string FunctionName = "pgsql_trigger_concurrency_func";
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+            on_error ds.rollback();
+            ds.execRaw("drop table if exists " + TableName);
+            ds.execRaw("drop function if exists " + FunctionName + "()");
+            ds.commit();
+        }
+
+        ds.execRaw("drop table if exists " + TableName);
+        ds.execRaw("drop function if exists " + FunctionName + "()");
+        ds.execRaw("create table " + TableName + " (id int)");
+        ds.execRaw("create function " + FunctionName + "() returns trigger language plpgsql as "
+            "$function$ begin return new; end; $function$");
+        ds.execRaw("create trigger " + FunctionName + " before insert or update on " + TableName
+            + " for each row execute function " + FunctionName + "()");
+        ds.commit();
+
+        string connstr = m_options.connstr;
+        Counter ready(Workers);
+        Counter gate(1);
+        Counter done(Workers);
+        Queue errors();
+        for (int i = 0; i < Workers; ++i) {
+            background sub (string worker_connstr, string table_name,
+                    Counter worker_ready, Counter start_gate,
+                    Counter worker_done, Queue worker_errors) {
+                on_exit worker_done.dec();
+                worker_ready.dec();
+                start_gate.waitForZero();
+                try {
+                    Datasource worker_ds(worker_connstr);
+                    for (int j = 0; j < Iterations; ++j) {
+                        PgsqlTable trigger_table(worker_ds, table_name);
+                        trigger_table.cache();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    worker_errors.push(ex);
+                }
+            }(connstr, TableName, ready, gate, done, errors);
+        }
+
+        ready.waitForZero();
+        gate.dec();
+        done.waitForZero();
+
+        list<hash<ExceptionInfo>> failures;
+        while (!errors.empty()) {
+            failures += errors.get();
+        }
+        assertEq(0, failures.size(), sprintf("concurrent trigger introspection failures: %y", failures));
+
+        PgsqlTable trigger_table(ds, TableName);
+        assertEq(1, trigger_table.getTriggers().size(), "multi-event trigger is represented once");
+    }
+
     private temporaryTableResolutionTest() {
         if (!table) {
             testSkip("no DB connection");
@@ -583,6 +658,159 @@ class PgsqlTest inherits SqlTestBase {
 
         assertEq(2, ds.selectRow(sprintf("select count(*) c from %s", tname)).c,
             "temporary table inserts use the resolved table object");
+    }
+
+    #! Tests that unqualified table names are resolved with the connection's search_path
+    /** PostgreSQL resolves an unqualified name against the connection's search_path, so an unqualified
+        table name must not be assumed to be in the \c public schema.
+    */
+    #! Sequences must resolve in the schema the name resolves in, not in any schema that happens to have one
+    /** A database holding one schema per tenant has the same sequence name in every schema. Matching a
+        sequence on its name alone finds another schema's, which made getSequence() report a sequence that
+        does not exist on this connection's search_path (and then fail reading it), and listSequences()
+        report sequences that unqualified SQL here cannot reach. Aligning a schema in such a database
+        failed outright once a second schema existed.
+    */
+    private sequenceSchemaResolutionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+        }
+
+        # two schemas, each with a sequence of the SAME name: the case a schema-blind lookup gets wrong
+        string mine = ("qore_pgsql_sqm_" + get_random_string()).lwr();
+        string other = ("qore_pgsql_sqo_" + get_random_string()).lwr();
+        string seq_name = ("qore_pgsql_seq_" + get_random_string()).lwr();
+        string other_only = ("qore_pgsql_seqo_" + get_random_string()).lwr();
+        ds.exec(sprintf("create schema %s", mine));
+        ds.exec(sprintf("create schema %s", other));
+        on_exit {
+            ds.exec(sprintf("drop schema if exists %s cascade", mine));
+            ds.exec(sprintf("drop schema if exists %s cascade", other));
+            ds.exec("set search_path to public");
+            ds.commit();
+        }
+        ds.exec(sprintf("create sequence %s.%s start with 1", mine, seq_name));
+        ds.exec(sprintf("create sequence %s.%s start with 1", other, seq_name));
+        # exists ONLY in the other schema: unreachable from our search_path
+        ds.exec(sprintf("create sequence %s.%s start with 1", other, other_only));
+        ds.commit();
+
+        ds.exec(sprintf("set search_path to %s", mine));
+        ds.commit();
+
+        Database db(ds);
+
+        # the sequence in our own schema resolves
+        assertTrue(exists db.getSequence(seq_name), "a sequence in the search_path schema is found");
+
+        # ... and the one that exists only in another schema must NOT: this is the regression. A
+        # name-only match found it and then read it unqualified, which cannot resolve here
+        assertNothing(db.getSequence(other_only),
+            "a sequence that exists only in another schema is not reported as existing");
+
+        # listing must be confined to the search path for the same reason
+        list<string> seqs = db.listSequences();
+        assertTrue(seqs.contains(seq_name), "listSequences() lists the search_path schema's sequence");
+        assertFalse(seqs.contains(other_only), "listSequences() does not list another schema's sequences");
+
+        # an explicit schema must still reach the other schema's sequence
+        assertTrue(exists db.getSequence(other + "." + other_only),
+            "an explicitly qualified sequence in another schema is found");
+    }
+
+    private searchPathSchemaResolutionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit {
+            ds.rollback();
+        }
+
+        string sname = ("qore_pgsql_sp_" + get_random_string()).lwr();
+        string tname = ("qore_pgsql_spt_" + get_random_string()).lwr();
+        ds.exec(sprintf("create schema %s", sname));
+        on_exit {
+            ds.exec(sprintf("drop schema if exists %s cascade", sname));
+            ds.exec("set search_path to public");
+            ds.commit();
+        }
+        ds.exec(sprintf("create table %s.%s (id int, name text)", sname, tname));
+        ds.commit();
+
+        # the default search_path must continue to resolve to "public"
+        assertEq("public", get_pgsql_default_schema(ds), "default search_path resolves to public");
+
+        ds.exec(sprintf("set search_path to %s", sname));
+        ds.commit();
+
+        assertEq(sname, get_pgsql_default_schema(ds), "search_path is reported as the default schema");
+
+        Table unqualified(ds, tname);
+        assertEq(sname, unqualified.getSchemaName(), "unqualified name resolves via search_path");
+        assertEq(sname + "." + tname, unqualified.getSqlName(), "resolved SQL name is schema-qualified");
+        assertTrue(unqualified.checkExistence(), "search_path-resolved table exists");
+        assertTrue(unqualified.describe().hasKey("id"), "search_path-resolved table can be described");
+
+        # DML through the resolved object must reach the table in the search_path schema
+        unqualified.insert({"id": 1, "name": "one"});
+        ds.commit();
+        assertEq(1, ds.selectRow(sprintf("select count(*) c from %s.%s", sname, tname)).c,
+            "insert through the resolved object writes to the search_path schema");
+
+        # an explicit schema in the name must still win over search_path
+        Table qualified(ds, "public." + table.getName());
+        assertEq("public", qualified.getSchemaName(), "an explicit schema overrides search_path");
+
+        # a foreign key whose target this connection resolves without a schema must be reported without
+        # one, so that it matches an unqualified schema description instead of being dropped and re-added
+        # on every alignment
+        string parent_name = ("qore_pgsql_spp_" + get_random_string()).lwr();
+        string child_name = ("qore_pgsql_spc_" + get_random_string()).lwr();
+        string fk_name = ("fk_" + child_name).lwr();
+        ds.exec(sprintf("create table %s.%s (id int primary key)", sname, parent_name));
+        ds.exec(sprintf("create table %s.%s (id int, pid int, constraint %s foreign key (pid) "
+            "references %s.%s (id))", sname, child_name, fk_name, sname, parent_name));
+        ds.commit();
+
+        PgsqlTable child(ds, child_name);
+        AbstractForeignConstraint fk = child.getForeignConstraints().memberGate(fk_name);
+        assertEq(parent_name, fk.target.table,
+            "a foreign key target in the search_path schema is reported unqualified");
+
+        # the same table reached by a qualified name on a connection whose search_path does not name its
+        # schema must report the target qualified, as the caller cannot resolve it otherwise
+        ds.exec("set search_path to public");
+        ds.commit();
+        PgsqlTable child_qualified(ds, sname + "." + child_name);
+        AbstractForeignConstraint qualified_fk =
+            child_qualified.getForeignConstraints().memberGate(fk_name);
+        assertEq(sname + "." + parent_name, qualified_fk.target.table,
+            "a foreign key target outside the connection's default schema is reported qualified");
+
+        ds.exec(sprintf("set search_path to %s", sname));
+        ds.commit();
+
+        # a name with no schema must still resolve to a temporary table when search_path names a
+        # schema other than "public"
+        string temp_name = ("qore_pgsql_sptmp_" + get_random_string()).lwr();
+        ds.exec(sprintf("create temp table %s (id int)", temp_name));
+        Table temp_table(ds, temp_name);
+        assertRegex("^pg_temp", temp_table.getSchemaName(),
+            "temporary table resolves under a non-public search_path");
+        assertTrue(temp_table.checkExistence(), "temporary table exists under a non-public search_path");
+
+        # a search_path naming no existing schema must fall back to public rather than throw
+        ds.exec("set search_path to qore_pgsql_nonexistent_schema");
+        ds.commit();
+        assertEq("public", get_pgsql_default_schema(ds),
+            "an unresolvable search_path falls back to public");
     }
 
     #! Tests that bulk upsert UNNEST works with non-DatasourcePool AbstractDatasource subclasses
@@ -1099,7 +1327,7 @@ class PgsqlTest inherits SqlTestBase {
         string child_name  = "pgsql_fk_order_child";
 
         # clean slate
-        code drop_if_exists = sub (string n) {
+        code<nothing(string)> drop_if_exists = sub (string n) {
             PgsqlTable t(ds, n);
             if (t.checkExistence()) {
                 t.dropCommit();
@@ -1256,6 +1484,135 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(joined =~ /fk_pgsql_fk_column_order_child_parent/, joined);
     }
 
+    partitionSchemaCoercionAndValidationTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        hash<auto> loaded = Schema::DataSchemaLoader::normalizeTable("pgsql_partition_coercion", {
+            "columns": {
+                "id": {"type": "int", "notnull": True},
+                "event_ts": {"type": "int", "notnull": True,
+                    "driver": {"pgsql": {"native_type": "date"}}},
+            },
+            "primary_key": {"name": "pk_pgsql_partition_coercion", "columns": ("id", "event_ts")},
+            "partition_strategy": {"method": "range", "columns": ("id",),
+                "driver": {"pgsql": {"columns": ("event_ts",)}}},
+            "partitions": {
+                "p1": {"bound_from": "2026-01-01", "bound_to": "2026-01-02T12:34:56.123456Z"},
+            },
+        });
+        assertEq(Type::String, loaded.partitions.p1.bound_from.type(),
+            "data schema loader leaves coercion until driver setup");
+
+        PgsqlTable coerced(ds, "pgsql_partition_coercion");
+        coerced.setupTable(loaded);
+        assertEq(("event_ts",), coerced.getPartitionStrategy().columns,
+            "driver override selects the effective partition key");
+        hash<string, PartitionInfo> parts = coerced.listPartitions();
+        assertEq(Type::Date, parts.p1.bound_from.type(), "generic date shorthand is coerced after driver overrides");
+        assertEq(Type::Date, parts.p1.bound_to.type(), "ISO datetime is coerced");
+        assertEq("2026-01-01 00:00:00.000000", parts.p1.bound_from.format("YYYY-MM-DD HH:mm:SS.us"));
+        assertEq("2026-01-02 12:34:56.123456", parts.p1.bound_to.format("YYYY-MM-DD HH:mm:SS.us"));
+
+        PgsqlTable composite(ds, "pgsql_partition_composite_coercion");
+        composite.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "event_ts": {"native_type": "timestamp", "notnull": True},
+            },
+            "primary_key": {"name": "pk_pgsql_partition_composite_coercion",
+                "columns": ("id", "event_ts")},
+            "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+            "partitions": {
+                "p1": {"bound_from": (1, "2026-02-01 01:02:03"),
+                    "bound_to": (2, "2026-02-02T01:02:03+01:00")},
+            },
+        });
+        parts = composite.listPartitions();
+        assertEq(1, parts.p1.bound_from[0], "non-date composite element remains unchanged");
+        assertEq(Type::Date, parts.p1.bound_from[1].type(),
+            "driver-native timestamp metadata coerces its composite element");
+        assertEq(Type::Date, parts.p1.bound_to[1].type());
+
+        PgsqlTable strings(ds, "pgsql_partition_string_bounds");
+        strings.setupTable({
+            "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+            "primary_key": {"name": "pk_pgsql_partition_string_bounds", "columns": "event_ts"},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+            "partitions": {"p1": {"bound_from": "alpha", "bound_to": "omega"}},
+        });
+        parts = strings.listPartitions();
+        assertEq("alpha", parts.p1.bound_from, "non-ISO string lower bound remains a string");
+        assertEq("omega", parts.p1.bound_to, "non-ISO string upper bound remains a string");
+
+        PgsqlTable native_sql(ds, "pgsql_partition_native_sql_bounds");
+        native_sql.setupTable({
+            "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+            "primary_key": {"name": "pk_pgsql_partition_native_sql_bounds", "columns": "event_ts"},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+            "partitions": {"p1": {"bound_from_sql": "date '2026-03-01'",
+                "bound_to_sql": "date '2026-04-01'"}},
+        });
+        parts = native_sql.listPartitions();
+        assertEq("date '2026-03-01'", parts.p1.bound_from_sql, "native lower SQL is never coerced");
+        assertEq("date '2026-04-01'", parts.p1.bound_to_sql, "native upper SQL is never coerced");
+
+        assertThrows("DESCRIPTION-ERROR", "not a valid ISO date", sub () {
+            PgsqlTable malformed(ds, "pgsql_partition_malformed_date");
+            malformed.setupTable({
+                "columns": {"event_ts": {"native_type": "date", "notnull": True}},
+                "primary_key": {"name": "pk_pgsql_partition_malformed_date", "columns": "event_ts"},
+                "partition_strategy": {"method": "range", "columns": "event_ts"},
+                "partitions": {"p1": {"bound_from": "2026-02-30", "bound_to": "2026-03-01"}},
+            });
+        });
+
+        assertThrows("DESCRIPTION-ERROR", "must be a list", sub () {
+            PgsqlTable bad_scalar(ds, "pgsql_partition_bad_scalar");
+            bad_scalar.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}, "event_ts": {"native_type": "date"}},
+                "primary_key": {"name": "pk_pgsql_partition_bad_scalar", "columns": ("id", "event_ts")},
+                "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+                "partitions": {"p1": {"bound_from": 1, "bound_to": 2}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "has 1 value", sub () {
+            PgsqlTable bad_list(ds, "pgsql_partition_bad_list");
+            bad_list.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}, "event_ts": {"native_type": "date"}},
+                "primary_key": {"name": "pk_pgsql_partition_bad_list", "columns": ("id", "event_ts")},
+                "partition_strategy": {"method": "range", "columns": ("id", "event_ts")},
+                "partitions": {"p1": {"bound_from": (1,), "bound_to": (2,)}},
+            });
+        });
+
+        hash<auto> unique_base = {
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True},
+                "event_ts": {"native_type": "date", "notnull": True}},
+            "partition_strategy": {"method": "range", "columns": "event_ts"},
+        };
+        assertThrows("DESCRIPTION-ERROR", "primary key", sub () {
+            PgsqlTable bad_pk(ds, "pgsql_partition_bad_pk");
+            bad_pk.setupTable(unique_base + {
+                "primary_key": {"name": "pk_pgsql_partition_bad_pk", "columns": "id"},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "unique index", sub () {
+            PgsqlTable bad_ix(ds, "pgsql_partition_bad_ix");
+            bad_ix.setupTable(unique_base + {
+                "indexes": {"uk_pgsql_partition_bad_ix": {"columns": "id", "unique": True}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "unique constraint", sub () {
+            PgsqlTable bad_uk(ds, "pgsql_partition_bad_uk");
+            bad_uk.setupTable(unique_base + {
+                "unique_constraints": {"uk_pgsql_partition_bad_uk": {"columns": "id"}},
+            });
+        });
+    }
+
     rangePartitionLifecycleTest() {
         if (!table) {
             testSkip("no DB connection");
@@ -1288,7 +1645,10 @@ class PgsqlTest inherits SqlTestBase {
                 "id": {"qore_type": Type::Int, "notnull": True},
                 "name": {"qore_type": SqlUtil::VARCHAR, "size": 80},
             },
-            "primary_key": {"name": "pk_" + parent, "columns": ("id",)},
+            "primary_key": {"name": "pk_" + parent, "columns": ("id",), "partition_aligned": True},
+            "indexes": {
+                (parent + "_name_idx"): {"columns": ("name",), "partition_aligned": True},
+            },
             "partition_strategy": {"method": "range", "columns": ("name",),
                 "driver": {"pgsql": {"columns": ("id",)}}},
             "partitions": {
@@ -1299,6 +1659,27 @@ class PgsqlTest inherits SqlTestBase {
             },
         };
 
+        assertThrows("INDEX-OPTION-ERROR", "requires a partitioned table", sub () {
+            PgsqlTable nonpartitioned(ds, "pgsql_partition_aligned_invalid");
+            nonpartitioned.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "indexes": {"bad_ix": {"columns": "id", "partition_aligned": True}},
+            });
+        });
+
+        PgsqlTable direct_aligned(ds, "pgsql_partition_aligned_direct");
+        direct_aligned.setupTable({
+            "columns": desc.columns,
+            "partition_strategy": {"method": "range", "columns": "id"},
+        });
+        assertTrue(direct_aligned.getAddPrimaryKeySql("pgsql_partition_aligned_direct_pk", "id",
+            {"partition_aligned": True}) =~ /primary key \(id\)/i,
+            "direct primary-key SQL accepts portable partition alignment");
+        string aligned_uk_sql = direct_aligned.getAddUniqueConstraintSql("pgsql_partition_aligned_direct_uk",
+            ("name", "id"), {"partition_aligned": True});
+        assertTrue(aligned_uk_sql =~ /add constraint .* unique/i,
+            "direct unique-constraint SQL accepts portable partition alignment: " + aligned_uk_sql);
+
         PgsqlTable tmpl(ds, parent);
         tmpl.setupTable(desc);
         string create_sql = tmpl.getCreateSqlString();
@@ -1308,7 +1689,55 @@ class PgsqlTest inherits SqlTestBase {
 
         PgsqlTable t(ds, parent);
         assertTrue(t.supportsPartitions(), "pgsql supports partitions");
+        assertFalse(t.supportsPartitionRead(), "pgsql child-table reads are not generic partition qualification");
+        assertTrue(t.supportsTargetedPartitionLookup(), "pgsql supports targeted partition catalog lookup");
         assertTrue(t.supportsPartitionDetach(), "pgsql supports partition detach");
+        assertFalse(t.supportsPartitionExchange(), "pgsql does not expose non-equivalent partition exchange");
+        assertEq("I", ds.selectRow("select relkind from pg_catalog.pg_class where oid = %v::regclass",
+            parent + "_name_idx").relkind,
+            "secondary index fixture is a PostgreSQL partitioned parent index");
+        Indexes partition_indexes = t.getIndexes();
+        assertTrue(partition_indexes.hasKey(parent + "_name_idx"),
+            "partitioned parent index is exposed by portable index introspection");
+        assertEq(("name",), partition_indexes{parent + "_name_idx"}.columns.keys(),
+            "partitioned parent index columns are introspected");
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support exchanging partitions", sub () {
+            t.getExchangePartitionSql(parent + "_p1", t);
+        });
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            t.getSelectSql({"partition": p1});
+        });
+        DbTableDataProvider partition_dp(t);
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            partition_dp.searchSingleRecord(NOTHING, {"partition": p1});
+        });
+
+        *hash<PartitionInfo> targeted_p1 = t.getPartition(p1);
+        assertTrue(exists targeted_p1, "pgsql targeted lookup returns the named child partition");
+        assertEq(-1, targeted_p1.ordinal, "pgsql marks targeted order unknown without loading the full catalog");
+        assertEq(0, targeted_p1.bound_from, "pgsql targeted lookup parses the lower bound");
+        assertEq(10, targeted_p1.bound_to, "pgsql targeted lookup parses the upper bound");
+        assertTrue(exists targeted_p1.estimated_row_count,
+            "pgsql targeted lookup exposes the catalog-estimated row count");
+        assertTrue(targeted_p1.size_bytes > 0, "pgsql targeted lookup exposes allocated partition bytes");
+        assertNothing(t.getPartition(parent + "_missing"),
+            "pgsql targeted lookup returns nothing for a relation outside the partition set");
+        hash<PartitionLookupResult> targeted_lookup = t.findPartitionBySpec({
+            "name": p1,
+            "bound_from": 0,
+            "bound_to": 10,
+        });
+        assertEq(PartitionLookupStatus::Found, targeted_lookup.status,
+            "pgsql verifies name-bearing comparable specs with targeted metadata");
+        hash<PartitionLookupResult> fallback_lookup = t.findPartitionBySpec({
+            "name": p1,
+            "bound_from": 10,
+            "bound_to": 20,
+        });
+        assertEq(PartitionLookupStatus::Found, fallback_lookup.status,
+            "pgsql falls back to the complete scan when targeted name and bounds disagree");
+        assertEq(p2, fallback_lookup.partition.name,
+            "pgsql deterministic fallback resolves the partition matching the requested bounds");
 
         *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
         assertTrue(exists strategy, "partition strategy introspected");
@@ -1317,6 +1746,9 @@ class PgsqlTest inherits SqlTestBase {
 
         hash<string, PartitionInfo> partitions = t.listPartitions();
         assertEq(2, partitions.size(), "initial partition count");
+        assertEq(0, partitions{p1}.ordinal, "full pgsql listing replaces the partial targeted cache");
+        assertEq(p1, t.getPartition("public." + p1).name,
+            "pgsql targeted lookup preserves explicitly qualified lifecycle names after a full listing");
         assertTrue(partitions.hasKey(p1), "partition p1 introspected");
         assertEq(0, partitions{p1}.bound_from, "p1 lower bound parsed");
         assertEq(10, partitions{p1}.bound_to, "p1 upper bound parsed");
@@ -1327,10 +1759,40 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(desc_no_parts.hasKey("partitions"), "description omits partitions by default");
         hash<auto> desc_parts = t.getDescriptionHash({"with_partitions": True});
         assertTrue(desc_parts.partitions.hasKey(p1), "description includes partitions when requested");
+        assertFalse(exists desc_parts.partitions{p1}.name,
+            sprintf("partition key is the canonical name: %y", desc_parts.partitions{p1}));
+        assertFalse(desc_parts.partitions{p1}.hasKey("ordinal"), "description excludes catalog ordinal");
+        assertFalse(desc_parts.partitions{p1}.hasKey("sql_name"), "description excludes diagnostic SQL name");
+        assertFalse(desc_parts.partitions{p1}.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc_parts.partitions{p1}.hasKey("size_bytes"),
+            "description excludes runtime storage statistics");
+        assertFalse(desc_parts.partitions{p1}.hasKey("bound_sql"),
+            "typed bounds take precedence over native SQL bounds");
+        assertEq(0, desc_parts.partitions{p1}.bound_from, "description preserves typed lower bound");
+        assertEq(10, desc_parts.partitions{p1}.bound_to, "description preserves typed upper bound");
+
+        assertEq((), t.getAlignSql(tmpl), "table aligns with the schema used to create it");
+        PgsqlTable reverse_template(ds, parent);
+        reverse_template.setupTable(desc_parts);
+        assertEq((), t.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        hash<auto> changed_strategy_desc = {} + desc_parts;
+        changed_strategy_desc.partition_strategy = {} + desc_parts.partition_strategy;
+        changed_strategy_desc.partition_strategy.auto = {"policy": "different"};
+        PgsqlTable changed_strategy(ds, parent);
+        changed_strategy.setupTable(changed_strategy_desc);
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            t.getAlignSql(changed_strategy);
+        });
 
         hash<PartitionLookupResult> lookup = t.findPartitionBySpec({"bound_from": 0, "bound_to": 10});
         assertEq(PartitionLookupStatus::Found, lookup.status, "find partition by typed bounds");
         assertEq(p1, lookup.partition.name, "lookup returned p1");
+        lookup = t.findPartitionBySpec({"bound_from": 30, "bound_to": 40});
+        assertEq(PartitionLookupStatus::NotFound, lookup.status, "missing typed range returns NotFound");
+        lookup = t.findPartitionBySpec({"bound_sql": "from (30) to (40)"});
+        assertEq(PartitionLookupStatus::Uncomparable, lookup.status, "native-only range returns Uncomparable");
 
         hash<PartitionEnsureResult> ensure_existing = t.ensurePartition({
             "name": p1,
@@ -1348,6 +1810,8 @@ class PgsqlTest inherits SqlTestBase {
         });
         assertTrue(ensure_created.created, "ensure new creates");
         assertTrue(ensure_created.materialized, "ensure new is materialized");
+        assertEq(p3, ensure_created.partition.name, "ensure returns re-introspected partition metadata");
+        assertTrue(exists ensure_created.partition.sql_name, "created partition includes its actual SQL name");
         ds.commit();
 
         t.clear();
@@ -1373,6 +1837,514 @@ class PgsqlTest inherits SqlTestBase {
         hash<auto> reversed = (new SchemaReverse::TableReverse(ds, parent, {"with_partitions": True})).toQore();
         assertTrue(reversed.hasKey("partition_strategy"), "SchemaReverse includes partition strategy");
         assertTrue(reversed.partitions.hasKey(p1), "SchemaReverse includes partitions with option");
+        assertFalse(reversed.partitions{p1}.hasKey("ordinal"), "SchemaReverse excludes partition runtime metadata");
+        hash<auto> loaded = Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "PartitionRoundTrip", "version": "1.0"},
+            "tables": {(parent): reversed},
+        }, False);
+        PgsqlTable loaded_table(ds, parent + "_loaded");
+        loaded_table.setupTable(loaded.tables{parent});
+        assertTrue(loaded_table.getCreateSqlString() =~ /partition by range \(id\)/i,
+            "SchemaReverse output passes through DataSchemaLoader and setupTable");
+
+        # prove that the emitted table description can recreate the physical table without manual filtering
+        t.dropCommit();
+        PgsqlTable recreated(ds, parent);
+        recreated.setupTable(desc_parts);
+        recreated.createCommit();
+        hash<string, PartitionInfo> recreated_parts = recreated.listPartitions();
+        assertEq(2, recreated_parts.size(), "description recreates all exported partitions");
+        assertEq(0, recreated_parts{p1}.bound_from, "recreated partition has the exported lower bound");
+        assertEq(20, recreated_parts{p2}.bound_to, "recreated partition has the exported upper bound");
+    }
+
+    concurrentPartitionDetachTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        PgsqlTable capability_table(ds, "pgsql_test");
+        if (!capability_table.supportsConcurrentPartitionDetach()) {
+            testSkip("PostgreSQL server older than 14");
+        }
+
+        string parent = "pgsql_concurrent_detach";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string pdef = parent + "_default";
+        code drop_if_exists = sub (string n) {
+            PgsqlTable drop_table(ds, n);
+            if (drop_table.checkExistence()) {
+                drop_table.dropCommit();
+            }
+        };
+        code<nothing()> cleanup = sub () {
+            drop_if_exists(p1);
+            drop_if_exists(p2);
+            drop_if_exists(pdef);
+            drop_if_exists(parent);
+        };
+        cleanup();
+        on_exit cleanup();
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "value": {"qore_type": SqlUtil::VARCHAR, "size": 40},
+            },
+            "partition_strategy": {"method": "range", "columns": "id"},
+            "partitions": {
+                (p1): {"bound_from": 0, "bound_to": 10},
+                (p2): {"bound_from": 10, "bound_to": 20},
+            },
+        });
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+        assertTrue(t.supportsConcurrentPartitionDetach(), "PostgreSQL 14+ supports concurrent partition detach");
+        hash<string, PartitionInfo> parts = t.listPartitions();
+        assertFalse(parts{p1}.driver.pgsql.detach_pending,
+            "ordinary PostgreSQL partition is not pending concurrent detach");
+
+        list<hash<auto>> events = ();
+        list<string> callback_sql = ();
+        code<nothing(string, int, *string, *string, *string, *string, *string)> info_cb = sub (
+                string str, int ac, *string type, *string nm, *string tbl, *string nn, *string info) {
+            events += {"action": ac, "type": type, "name": nm, "table": tbl, "info": info};
+        };
+        code<nothing(string)> sql_cb = sub (string statement) {
+            callback_sql += statement;
+        };
+        string preview_sql = t.getDetachPartitionConcurrentlySql({"bound_from": 0, "bound_to": 10}, {
+            "info_callback": info_cb,
+            "sql_callback": sql_cb,
+        });
+        assertTrue(preview_sql =~ /detach partition .*pgsql_concurrent_detach_p1 concurrently/i,
+            "concurrent detach generator emits PostgreSQL syntax for a specification");
+        assertEq(1, events.size(), "concurrent detach preview emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action,
+            "concurrent detach preview uses the modify action");
+        assertEq("concurrent detach", events[0].info, "concurrent detach preview identifies the operation");
+        assertEq(1, callback_sql.size(), "concurrent detach preview emits one SQL callback");
+        assertTrue(t.listPartitions().hasKey(p1), "concurrent detach preview does not mutate the table");
+
+        ds.beginTransaction();
+        assertThrows("PARTITION-TRANSACTION-ERROR", "cannot run while the calling thread is in a transaction", sub () {
+            t.detachPartitionConcurrently(p1);
+        });
+        ds.rollback();
+        assertTrue(t.listPartitions().hasKey(p1), "rejected transactional detach leaves the partition attached");
+
+        t.addPartitionCommit({"name": pdef, "is_default": True});
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            t.getDetachPartitionConcurrentlySql(p1);
+        });
+        t.dropPartitionCommit(pdef);
+
+        assertThrows("PARTITION-ERROR", "is not pending concurrent detach", sub () {
+            t.getFinalizePartitionDetachSql({"bound_from": 0, "bound_to": 10});
+        });
+        assertThrows("PARTITION-ERROR", "is not pending concurrent detach", sub () {
+            t.finalizePartitionDetach(p1);
+        });
+
+        t.insertCommit({"id": 1, "value": "kept"});
+        t.insertCommit({"id": 11, "value": "callback kept"});
+        assertFalse(ds.currentThreadInTransaction(), "caller datasource is outside a transaction before detach");
+        AbstractTable detached = t.detachPartitionConcurrently({"bound_from": 0, "bound_to": 10});
+        assertEq(p1, detached.getName(), "concurrent detach returns the standalone partition table");
+        assertFalse(ds.currentThreadInTransaction(), "concurrent detach does not acquire the caller datasource");
+        assertFalse(t.listPartitions().hasKey(p1), "concurrently detached partition is removed from the parent");
+        assertEq("kept", detached.selectRow().value, "concurrently detached table keeps its data");
+
+        int executing_callback_count = 0;
+        code<nothing(string)> executing_cb = sub (string statement) {
+            ++executing_callback_count;
+            Datasource exec_ds(ds.getConfigHash());
+            exec_ds.setAutoCommit(True);
+            exec_ds.open();
+            exec_ds.execRaw(statement);
+        };
+        AbstractTable callback_detached = t.detachPartitionConcurrently(p2, {
+            "sql_callback": executing_cb,
+            "sql_callback_executed": True,
+        });
+        assertEq(1, executing_callback_count,
+            "executing concurrent detach callback is not followed by duplicate execution");
+        assertFalse(t.listPartitions().hasKey(p2),
+            "executing concurrent detach callback invalidates structural metadata");
+        assertEq("callback kept", callback_detached.selectRow().value,
+            "externally executed concurrent detach keeps partition data");
+    }
+
+    partitionLifecycleCallbackTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string parent = "pgsql_partition_callback_test";
+        string p1 = parent + "_p1";
+        string p2 = parent + "_p2";
+        string p3 = parent + "_p3";
+        string p4 = parent + "_p4";
+
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s cascade", table_name));
+            ds.commit();
+        };
+        drop_if_exists(parent);
+        drop_if_exists(p1);
+        on_exit {
+            drop_if_exists(p1);
+            drop_if_exists(parent);
+        }
+
+        PgsqlTable tmpl(ds, parent);
+        tmpl.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "partition_strategy": {"method": "range", "columns": "id"},
+            "partitions": {(p1): {"bound_from": 0, "bound_to": 10}},
+        });
+        tmpl.createCommit();
+
+        PgsqlTable t(ds, parent);
+        t.listPartitions();
+        list<hash<auto>> events = ();
+        list<string> callback_sql = ();
+        code info_cb = sub (string str, int ac, *string type, *string nm, *string tbl, *string nn, *string info) {
+            events += {"action": ac, "type": type, "name": nm, "table": tbl};
+        };
+        code sql_cb = sub (string statement) {
+            callback_sql += statement;
+        };
+        hash<auto> preview_opt = {"info_callback": info_cb, "sql_callback": sql_cb};
+
+        t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20}, preview_opt);
+        assertEq(1, events.size(), "add generator emits one info callback");
+        assertEq(1, callback_sql.size(), "add generator emits one SQL callback");
+        assertEq({"action": AbstractDatabase::AC_Add, "type": "partition", "name": p2, "table": parent},
+            events[0], "add generator callback metadata");
+        assertFalse(t.listPartitions().hasKey(p2), "add SQL preview does not mutate the partition cache");
+
+        events = ();
+        callback_sql = ();
+        t.getDropPartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "drop generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Drop, events[0].action, "drop generator action code");
+        assertEq(1, callback_sql.size(), "drop generator emits one SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.getTruncatePartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "truncate generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Truncate, events[0].action, "truncate generator action code");
+        assertEq(1, callback_sql.size(), "truncate generator emits one SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.getDetachPartitionSql(p1, preview_opt);
+        assertEq(1, events.size(), "detach generator emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action, "detach generator action code");
+        assertEq(1, callback_sql.size(), "detach generator emits one SQL callback");
+
+        t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20},
+            {"sql_callback_executed": True});
+        assertFalse(t.listPartitions().hasKey(p2),
+            "sql_callback_executed without a callback does not mark preview SQL as executed");
+
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getAddPartitionSql({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getDropPartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getTruncatePartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.getDetachPartitionSql(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.addPartition({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.ensurePartition({"name": p2, "bound_from": 10, "bound_to": 20}, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.dropPartition(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.truncatePartition(p1, {"force": True});
+        });
+        assertThrows("OPTION-ERROR", "unknown key \"force\"", sub () {
+            t.detachPartition(p1, {"force": True});
+        });
+
+        events = ();
+        callback_sql = ();
+        hash<PartitionInfo> added = t.addPartitionCommit({
+            "name": p2,
+            "bound_from": 10,
+            "bound_to": 20,
+        }, preview_opt);
+        assertEq(p2, added.name, "direct add returns the created partition");
+        assertEq(1, events.size(), "direct add emits one info callback");
+        assertEq(AbstractDatabase::AC_Add, events[0].action, "direct add action code");
+        assertEq(1, callback_sql.size(), "direct add emits one SQL callback while executing directly");
+
+        ds.execRaw(sprintf("insert into %s values (11)", parent));
+        ds.commit();
+        int cached_partition_count = t.listPartitions().size();
+        events = ();
+        callback_sql = ();
+        t.truncatePartitionCommit(p2, preview_opt);
+        assertEq(1, events.size(), "direct truncate emits one info callback");
+        assertEq(AbstractDatabase::AC_Truncate, events[0].action, "direct truncate action code");
+        assertEq(1, callback_sql.size(), "direct truncate emits one SQL callback");
+        assertEq(cached_partition_count, t.listPartitions().size(),
+            "truncate refreshes statistics without changing structural partition metadata");
+        assertEq(0, ds.selectRow(sprintf("select count(*) c from %s", p2)).c, "truncate executed exactly once");
+
+        events = ();
+        callback_sql = ();
+        hash<PartitionEnsureResult> ensured = t.ensurePartitionCommit({
+            "name": p3,
+            "bound_from": 20,
+            "bound_to": 30,
+        }, preview_opt);
+        assertTrue(ensured.created, "ensure creates the missing partition");
+        assertEq(1, events.size(), "creating ensure emits one add callback");
+        events = ();
+        callback_sql = ();
+        ensured = t.ensurePartition({"name": p3, "bound_from": 20, "bound_to": 30}, preview_opt);
+        assertFalse(ensured.created, "ensure recognizes the existing partition");
+        assertEq(0, events.size(), "non-creating ensure emits no DDL callback");
+        assertEq(0, callback_sql.size(), "non-creating ensure emits no SQL callback");
+
+        events = ();
+        callback_sql = ();
+        t.dropPartitionCommit(p3, preview_opt);
+        assertEq(1, events.size(), "direct drop emits one info callback");
+        assertEq(AbstractDatabase::AC_Drop, events[0].action, "direct drop action code");
+        assertEq(1, callback_sql.size(), "direct drop emits one SQL callback");
+        assertFalse(t.listPartitions().hasKey(p3), "drop reloads structural metadata after success");
+
+        int external_calls = 0;
+        code executing_cb = sub (string statement) {
+            ++external_calls;
+            ds.execRaw(statement);
+        };
+        hash<auto> executing_opt = {
+            "sql_callback": executing_cb,
+            "sql_callback_executed": True,
+        };
+        t.addPartitionCommit({"name": p4, "bound_from": 20, "bound_to": 30}, executing_opt);
+        assertEq(1, external_calls, "executing add callback is not followed by duplicate direct execution");
+        assertTrue(t.listPartitions().hasKey(p4), "executing add callback clears and reloads partition metadata");
+        external_calls = 0;
+        t.dropPartitionCommit(p4, executing_opt);
+        assertEq(1, external_calls, "executing drop callback is not followed by duplicate direct execution");
+
+        code failing_cb = sub (string statement) {
+            throw "PARTITION-CALLBACK-ERROR", "intentional callback failure";
+        };
+        int error_callback_count = 0;
+        code error_cb = sub (int ac, string type, string nm, *string tbl, *string nn, *string info,
+                string statement, hash<ExceptionInfo> ex) {
+            ++error_callback_count;
+            assertEq(AbstractDatabase::AC_Add, ac, "error callback action code");
+            assertEq("partition", type, "error callback object type");
+            assertEq(p4, nm, "error callback object name");
+            assertEq(parent, tbl, "error callback table name");
+            assertEq("PARTITION-CALLBACK-ERROR", ex.err, "error callback receives the callback exception");
+        };
+        int before_failure = t.listPartitions().size();
+        assertThrows("PARTITION-CALLBACK-ERROR", "intentional callback failure", sub () {
+            t.addPartition({"name": p4, "bound_from": 20, "bound_to": 30}, {
+                "sql_callback": failing_cb,
+                "error_callback": error_cb,
+            });
+        });
+        assertEq(1, error_callback_count, "failing SQL callback invokes the error callback exactly once");
+        assertEq(before_failure, t.listPartitions().size(), "failed callback leaves the old partition cache valid");
+        assertFalse(t.listPartitions().hasKey(p4), "failed callback does not create or cache a partition");
+
+        code execute_then_fail_cb = sub (string statement) {
+            ds.execRaw(statement);
+            throw "PARTITION-CALLBACK-ERROR", "failure after execution";
+        };
+        assertThrows("PARTITION-CALLBACK-ERROR", "failure after execution", sub () {
+            t.addPartition({"name": p4, "bound_from": 20, "bound_to": 30}, {
+                "sql_callback": execute_then_fail_cb,
+                "sql_callback_executed": True,
+            });
+        });
+        assertTrue(t.listPartitions().hasKey(p4),
+            "executing callback failure invalidates cache before reloading uncertain database state");
+        ds.commit();
+        t.dropPartitionCommit(p4);
+
+        events = ();
+        callback_sql = ();
+        AbstractTable detached = t.detachPartitionCommit(p1, preview_opt);
+        assertEq(p1, detached.getName(), "direct detach returns the standalone relation");
+        assertEq(1, events.size(), "direct detach emits one info callback");
+        assertEq(AbstractDatabase::AC_Modify, events[0].action, "direct detach action code");
+        assertEq(1, callback_sql.size(), "direct detach emits one SQL callback");
+        assertFalse(t.listPartitions().hasKey(p1), "detach reloads structural metadata after success");
+    }
+
+    insertFromSelectCallbackForwardingTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string source_name = "pgsql_insert_select_source";
+        string target_name = "pgsql_insert_select_target";
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.commit();
+        };
+        drop_if_exists(target_name);
+        drop_if_exists(source_name);
+        on_exit {
+            drop_if_exists(target_name);
+            drop_if_exists(source_name);
+        }
+
+        ds.execRaw(sprintf("create table %s (id integer not null)", source_name));
+        ds.execRaw(sprintf("create table %s (id integer not null)", target_name));
+        ds.execRaw(sprintf("insert into %s values (1), (2)", source_name));
+        ds.commit();
+
+        PgsqlTable source(ds, source_name);
+        PgsqlTable target(ds, target_name);
+        int callback_count = 0;
+        *string callback_sql;
+        *softlist<auto> callback_args;
+        code sqlarg_cb = sub (string statement, *softlist<auto> args) {
+            ++callback_count;
+            callback_sql = statement;
+            callback_args = args;
+        };
+
+        list<auto> preview_args;
+        string preview_sql = target.getInsertFromSelectSql(("id",), source, {"where": {"id": 2}},
+            \preview_args, {"sqlarg_callback": sqlarg_cb});
+        assertTrue(preview_sql =~ /^insert into .*pgsql_insert_select_target.*\(id\) select/i,
+            "insert-select preview returns SQL without executing it");
+        assertEq((2,), preview_args, "insert-select preview returns ordered bind arguments");
+        assertEq(0, callback_count, "non-executing insert-select preview does not invoke execution callbacks");
+        assertEq(0, ds.selectRow(sprintf("select count(*) c from %s", target_name)).c,
+            "insert-select preview does not modify the target");
+
+        hash<SqlResultInfo> preview_info = target.getInsertFromSelectSqlWithInfo(("id",), source,
+            {"columns": "id", "where": {"id": 2}});
+        assertTrue(preview_info.sql =~ /\(id\) select id from/i,
+            "WithInfo preview returns the generated projection SQL");
+        assertEq((2,), preview_info.args, "WithInfo preview returns ordered bind arguments");
+
+        int tablecode_count = 0;
+        code<AbstractTable(AbstractDatasource, string)> tablecode = AbstractTable sub (
+                AbstractDatasource resolved_ds, string resolved_name) {
+            ++tablecode_count;
+            assertEq(ds, resolved_ds, "insert-select tablecode receives the source datasource");
+            return new PgsqlTable(resolved_ds, resolved_name);
+        };
+        target.getInsertFromSelectSql(("id",), source, {
+            "alias": "s1",
+            "columns": "s1.id",
+            "join": join_inner(source_name, "s2", {"id": "id"}),
+        }, NOTHING, {"tablecode": tablecode});
+        assertEq(1, tablecode_count, "insert-select forwards tablecode while resolving source joins");
+
+        assertThrows("COLUMN-ERROR", "2 source select expressions", sub () {
+            target.getInsertFromSelectSql(("id",), source, {"columns": ("id", cop_value(1))});
+        });
+        assertThrows("COLUMN-ERROR", "duplicate insert-select target column", sub () {
+            target.getInsertFromSelectSql(("id", "id"), source, {"columns": ("id", "id")});
+        });
+        assertThrows("COLUMN-ERROR", "at least one target column", sub () {
+            target.getInsertFromSelectSql((), source, {"columns": "id"});
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            target.getInsertFromSelectSql(("id",), source, {"columns": "id"}, NOTHING,
+                {"unsupported": True});
+        });
+
+        AbstractDatasource other_ds = getDatasource();
+        PgsqlTable other_source(other_ds, source_name);
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            target.getInsertFromSelectSql(("id",), other_source, {"columns": "id"});
+        });
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            target.insertFromSelect(("id",), other_source, {"columns": "id"});
+        });
+        PgsqlTable ctas_target(ds, "pgsql_ctas_identity_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            ctas_target.getCreateAsSelectSql(other_source, {"columns": "id"});
+        });
+
+        string sql;
+        int inserted = target.insertFromSelectCommit(("id",), source, {"where": {"id": 1}}, \sql,
+            {"sqlarg_callback": sqlarg_cb});
+        assertEq(1, inserted, "insert-select commit returns the inserted row count");
+        assertEq(1, callback_count, "insert-select commit forwards the callback option exactly once");
+        assertEq(sql, callback_sql, "insert-select callback receives the returned SQL");
+        assertEq((1,), callback_args, "insert-select callback receives bound select arguments");
+        assertEq(1, ds.selectRow(sprintf("select id from %s", target_name)).id,
+            "insert-select commit inserts the selected row");
+    }
+
+    structuredAggregateSelectionTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        string parent_name = "pgsql_aggregate_parent";
+        string child_name = "pgsql_aggregate_child";
+        code drop_if_exists = sub (string table_name) {
+            ds.execRaw(sprintf("drop table if exists %s", table_name));
+            ds.commit();
+        };
+        drop_if_exists(child_name);
+        drop_if_exists(parent_name);
+        on_exit {
+            drop_if_exists(child_name);
+            drop_if_exists(parent_name);
+        }
+
+        ds.execRaw(sprintf("create table %s (id integer primary key, region text not null)", parent_name));
+        ds.execRaw(sprintf("create table %s (parent_id integer not null, amount integer not null)", child_name));
+        ds.execRaw(sprintf("insert into %s values (1, 'A'), (2, 'B')", parent_name));
+        ds.execRaw(sprintf("insert into %s values (1, 5), (1, 15), (2, 3)", child_name));
+        ds.commit();
+
+        PgsqlTable parent(ds, parent_name);
+        PgsqlTable child(ds, child_name);
+        hash<SqlResultInfo> info = parent.selectRowsWithInfo({
+            "alias": "p",
+            "columns": (
+                "p.region",
+                cop_as(cop_min("c.amount"), "min_amount"),
+                cop_as(cop_max("c.amount"), "max_amount"),
+            ),
+            "join": join_inner(child, "c", {"id": "parent_id"}),
+            "groupby": "p.region",
+            "having": {"c.amount": (COP_MAX, op_gt(10))},
+        });
+        assertEq(1, info.result.size(), "aggregate having filter returns one grouped row");
+        assertEq("A", info.result[0].region, "aggregate query preserves the grouped join column");
+        assertEq(5, info.result[0].min_amount, "cop_min computes the grouped minimum over the join");
+        assertEq(15, info.result[0].max_amount, "cop_max computes the grouped maximum over the join");
+        assertEq((10,), info.args, "aggregate WithInfo result exposes the having bind argument");
+        assertTrue(info.sql =~ / join .* group by .* having /i,
+            "aggregate WithInfo result exposes structured join/group/having SQL");
     }
 
     partitionEnhancementsTest() {
@@ -1415,7 +2387,19 @@ class PgsqlTest inherits SqlTestBase {
         t.addPartitionCommit({"name": parent + "_b", "bound_from": 200, "bound_to": 300});
         t.addPartitionCommit({"name": parent + "_a", "bound_from": 0, "bound_to": 100});
         t.addPartitionCommit({"name": parent + "_c", "bound_from": 100, "bound_to": 200});
+        assertThrows("PARTITION-ERROR", "bounds overlap existing partition", sub () {
+            t.getAddPartitionSql({"name": parent + "_overlap", "bound_from": 50, "bound_to": 150});
+        });
+        assertThrows("PARTITION-ERROR", "lower bound must be less than upper bound", sub () {
+            t.getAddPartitionSql({"name": parent + "_reversed", "bound_from": 500, "bound_to": 400});
+        });
+        assertThrows("PARTITION-ERROR", "already exists", sub () {
+            t.getAddPartitionSql({"name": parent + "_a", "bound_from": 300, "bound_to": 400});
+        });
         t.addPartitionCommit({"name": parent + "_def", "is_default": True});
+        assertThrows("PARTITION-ERROR", "default partition", sub () {
+            t.getAddPartitionSql({"name": parent + "_def2", "is_default": True});
+        });
         t.clear();
 
         hash<string, PartitionInfo> parts = t.listPartitions();
@@ -1424,6 +2408,16 @@ class PgsqlTest inherits SqlTestBase {
         assertEq(0, parts{parent + "_a"}.bound_from, "zero lower bound parsed (not discarded as false)");
         assertTrue(parts{parent + "_def"}.is_default, "default partition flagged is_default");
         assertFalse(parts{parent + "_a"}.is_default, "range partition not flagged is_default");
+        hash<auto> partition_desc = t.getDescriptionHash({"with_partitions": True});
+        assertTrue(partition_desc.partitions{parent + "_def"}.is_default,
+            "default partition description preserves is_default");
+        assertFalse(exists partition_desc.partitions{parent + "_def"}.bound_from,
+            "default partition description has no typed bounds");
+        assertFalse(exists partition_desc.partitions{parent + "_def"}.bound_sql,
+            "default partition description has no native bounds");
+        assertThrows("OPTION-ERROR", "unknown key \"unknown\"", sub () {
+            t.getDescriptionHash({"unknown": True});
+        });
 
         # --- detachPartition() returns the standalone table and keeps its data ---
         ds.execRaw(sprintf("insert into %s (id, val) values (5, 50)", parent));
@@ -1469,6 +2463,173 @@ class PgsqlTest inherits SqlTestBase {
         assertFalse(raced.created, "ensurePartition() race resolves the duplicate without creating");
         assertTrue(raced.materialized, "ensurePartition() race resolves to a materialized partition");
         assertEq(PartitionVerifiedBy::Bounds, raced.verified_by, "ensurePartition() race resolved by bounds");
+    }
+
+    partitionMethodFamiliesTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = schema.getDatasource();
+        on_exit ds.rollback();
+
+        list<string> names = ("pgsql_part_methods", "pgsql_part_methods_eu", "pgsql_part_methods_eu_h0",
+            "pgsql_part_methods_eu_h1", "pgsql_part_methods_us", "pgsql_part_methods_us_h0",
+            "pgsql_part_methods_us_h1", "pgsql_part_hash", "pgsql_part_hash_h0", "pgsql_part_hash_h1");
+        code cleanup = sub () {
+            # pgsql_part_mixed intentionally cannot be represented by PgsqlTable, so remove it natively
+            ds.execRaw("drop table if exists pgsql_part_mixed cascade");
+            ds.commit();
+            foreach string n in (names) {
+                PgsqlTable t(ds, n);
+                if (t.checkExistence()) {
+                    t.dropCommit();
+                }
+            }
+        };
+        cleanup();
+        on_exit cleanup();
+
+        PgsqlTable list_table(ds, "pgsql_part_methods");
+        list_table.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "region": {"qore_type": SqlUtil::VARCHAR, "size": 8, "notnull": True},
+            },
+            "partition_strategy": {
+                "method": "list",
+                "columns": "region",
+                "subpartition": {"method": "hash", "columns": "id"},
+            },
+            "partitions": {
+                "pgsql_part_methods_eu": {
+                    "values": ("eu", "e,u", "o'k"),
+                    "subpartitions": {
+                        "pgsql_part_methods_eu_h0": {"modulus": 2, "remainder": 0},
+                        "pgsql_part_methods_eu_h1": {"modulus": 2, "remainder": 1},
+                    },
+                },
+                "pgsql_part_methods_us": {
+                    "values": ("us",),
+                    "subpartitions": {
+                        "pgsql_part_methods_us_h0": {"modulus": 2, "remainder": 0},
+                        "pgsql_part_methods_us_h1": {"modulus": 2, "remainder": 1},
+                    },
+                },
+            },
+        });
+        assertTrue(list_table.supportsPartitionMethod("list"), "PostgreSQL supports portable list partitioning");
+        assertTrue(list_table.supportsPartitionMethod("hash", True),
+            "PostgreSQL supports portable hash subpartitioning");
+        assertThrows("DESCRIPTION-ERROR", "duplicate value", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_invalid_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {"p": {"values": ("eu", "eu")}},
+            });
+        });
+        assertThrows("PARTITION-ERROR", "already assigned", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_overlapping_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {
+                    "p1": {"values": ("eu",)},
+                    "p2": {"values": ("eu", "us")},
+                },
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "values cannot be empty", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_empty_list");
+            invalid.setupTable({
+                "columns": {"region": {"qore_type": Type::String}},
+                "partition_strategy": {"method": "list", "columns": "region"},
+                "partitions": {"p": {"values": ()}},
+            });
+        });
+        assertThrows("DESCRIPTION-ERROR", "0 <= remainder < modulus", sub () {
+            PgsqlTable invalid(ds, "pgsql_part_invalid_hash");
+            invalid.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "hash", "columns": "id"},
+                "partitions": {"p": {"modulus": 2, "remainder": 2}},
+            });
+        });
+        assertTrue(list_table.getCreateSqlString() =~ /partition by list \(region\).*partition by hash \(id\)/is,
+            "nested list/hash DDL includes both partitioning levels");
+        list_table.createCommit();
+
+        PgsqlTable live(ds, "pgsql_part_methods");
+        hash<PartitionStrategy> strategy = live.getPartitionStrategy();
+        assertEq("list", strategy.method, "list strategy round-trips");
+        assertEq("hash", strategy.subpartition.method, "subpartition strategy round-trips");
+        hash<string, PartitionInfo> parts = live.listPartitions();
+        assertEq(("eu", "e,u", "o'k"), parts.pgsql_part_methods_eu.values,
+            "typed list values, including SQL punctuation, are introspected");
+        assertEq(2, parts.pgsql_part_methods_eu.subpartitions.size(), "nested partitions are introspected");
+        assertTrue(exists parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.size_bytes,
+            "nested partition storage metadata is introspected recursively");
+        assertEq(0, parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.remainder,
+            "hash remainder is introspected");
+        assertEq(2, parts.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h0.modulus,
+            "hash modulus is introspected");
+
+        live.insert({"id": 1, "region": "eu"});
+        live.insert({"id": 2, "region": "us"});
+        ds.commit();
+        assertEq(2, live.rowCount(), "nested partitions route inserted rows");
+        hash<PartitionLookupResult> lookup = live.findPartitionBySpec({"values": ("o'k", "eu", "e,u")});
+        assertEq(PartitionLookupStatus::Found, lookup.status, "list partition lookup compares typed values");
+        assertEq("pgsql_part_methods_eu", lookup.partition.name, "list lookup returns the expected partition");
+        hash<PartitionEnsureResult> ensured = live.ensurePartition({
+            "name": "pgsql_part_methods_eu",
+            "values": ("eu", "e,u", "o'k"),
+        });
+        assertEq(PartitionVerifiedBy::Definition, ensured.verified_by,
+            "list ensure reports definition verification");
+
+        hash<auto> desc = live.getDescriptionHash({"with_partitions": True});
+        assertEq(("eu", "e,u", "o'k"), desc.partitions.pgsql_part_methods_eu.values,
+            "list values are recreatable in table descriptions");
+        assertEq(1, desc.partitions.pgsql_part_methods_eu.subpartitions.pgsql_part_methods_eu_h1.remainder,
+            "nested hash definitions are recreatable");
+        PgsqlTable roundtrip(ds, "pgsql_part_methods_copy");
+        roundtrip.setupTable(desc);
+        assertTrue(roundtrip.getCreateSqlString() =~ /for values with \(modulus 2, remainder 1\)/i,
+            "round-tripped descriptions regenerate hash bucket DDL");
+
+        PgsqlTable hash_table(ds, "pgsql_part_hash");
+        hash_table.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "partition_strategy": {"method": "hash", "columns": "id"},
+            "partitions": {
+                "pgsql_part_hash_h0": {"modulus": 2, "remainder": 0},
+                "pgsql_part_hash_h1": {"modulus": 2, "remainder": 1},
+            },
+        });
+        hash_table.createCommit();
+        PgsqlTable live_hash(ds, "pgsql_part_hash");
+        hash<PartitionLookupResult> hash_lookup = live_hash.findPartitionBySpec({"modulus": 2, "remainder": 1});
+        assertEq(PartitionLookupStatus::Found, hash_lookup.status, "hash bucket lookup is semantic");
+        assertEq("pgsql_part_hash_h1", hash_lookup.partition.name, "hash lookup returns the expected bucket");
+        assertThrows("PARTITION-ERROR", "modulus", sub () {
+            live_hash.getAddPartitionSql({"name": "pgsql_part_hash_h2", "modulus": 4, "remainder": 2});
+        });
+        assertThrows("PARTITION-ERROR", "duplicates existing partition", sub () {
+            live_hash.getAddPartitionSql({"name": "pgsql_part_hash_dup", "modulus": 2, "remainder": 1});
+        });
+
+        ds.execRaw("create table pgsql_part_mixed (id int, region text) partition by range (id)");
+        ds.execRaw("create table pgsql_part_mixed_p0 partition of pgsql_part_mixed "
+            "for values from (0) to (100) partition by hash (region)");
+        ds.execRaw("create table pgsql_part_mixed_p1 partition of pgsql_part_mixed "
+            "for values from (100) to (200)");
+        ds.commit();
+        PgsqlTable mixed(ds, "pgsql_part_mixed");
+        assertThrows("PARTITION-ERROR", "non-uniform native subpartition hierarchy", sub () {
+            mixed.getPartitionStrategy();
+        });
     }
 
     partitionChildExclusionTest() {

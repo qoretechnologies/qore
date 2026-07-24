@@ -4100,6 +4100,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         ws_cx."header-info".async_target = asyncTarget;
                     }
 
+                    # test hook: deterministically widen the pre-start window between
+                    # registerDedicatedSocket() (which incremented the listener's dThreads
+                    # WaitGroup) and start() (which increments the handler's lh{lid}) so a
+                    # regression test can force a listener stop into it; compiled out of
+                    # release builds
+                    @debug {
+                        if (*string prestart_delay_ms = getenv("QORE_WS_PRESTART_DELAY_MS")) {
+                            usleep(prestart_delay_ms.toInt() * 1000);
+                        }
+                    }
                     try {
                         sockhandler.start(listener.getID(), ws_cx, hdr, s);
                     } catch (hash<ExceptionInfo> ex) {
@@ -4297,16 +4307,17 @@ class HttpPersistentHandlerInfo {
 
     clear() {
         if (handler) {
-            if (handler.isPersistent()) {
-                handler.persistentClosed();
-                # Clear the per-thread persistence state so that subsequent
-                # requests on this thread do not appear persistent on the
-                # handler.  persistentClosed() calls the notification callback
-                # but does not clear _persistent_threads, which would cause
-                # the next request on this thread to incorrectly opt into
-                # persistence.
-                handler.clearPersistentThread();
-            }
+            # This object is assigned only after the handler has opted into
+            # persistence.  Always deliver its close notification: thread
+            # resource cleanup or a final request can clear the handler's
+            # transient persistence flag before this owner-thread teardown
+            # runs, but that must not suppress the already-registered cleanup
+            # callback.  persistentClosed() is a no-op when the notification
+            # was explicitly removed.
+            handler.persistentClosed();
+            # Clear any remaining per-thread persistence map entry so a reused
+            # pool thread cannot appear persistent on this handler.
+            handler.clearPersistentThread();
             remove handler;
             remove dhh;
         }
@@ -4937,7 +4948,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         persistent loop then exits and its @c on_exit runs the normal
         cleanup path (@c removeUserThreadContext() + @c persistentClosed()),
         releasing any handler-attached user thread context on the correct
-        (listener) thread.
+        (listener) thread.  This method returns only after that cleanup
+        completes, preventing the close-notification program or its resources
+        from being unloaded while the callback is still queued.
 
         Safe to call from any thread; idempotent (no-op if no queue is
         registered under @c uh, e.g. when the dedicated thread has already
@@ -4950,7 +4963,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = serv
             ? serv.getHttpAsyncIo() : NOTHING;
         if (ctrl) {
-            ctrl.signalPersistentQueuesForConnection(uh);
+            Queue close_ack(1);
+            if (ctrl.signalPersistentQueuesForConnection(uh, close_ack)) {
+                close_ack.get();
+            }
         }
     }
 
@@ -5334,21 +5350,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             sock_key = header_info.http3
                 ? s.uniqueHash() + ":quic:" + header_info.session_id
                 : s.uniqueHash();
+        } else {
+            # HTTP/1.x persistent handlers need this key while the initial
+            # request is being dispatched, before the queued persistent loop
+            # is registered below.  Deferring uniqueHash() until after
+            # handleRequest() left cx.sock_key unset for handler-created
+            # thread-affine resources, so an external abort could not signal
+            # their owner queue and had to wait for connection close.
+            sock_key = s.uniqueHash();
         }
 
         # Expose the per-connection unique hash on @c cx so handler code can
         # match against the framework's persistent-queue key (e.g. to pass to
         # @ref HttpListenerInterface::signalPersistentSessionClose()).  For
         # HTTP/3 this includes the QUIC session_id suffix matching the
-        # multiplexed sock_key derivation above; for HTTP/2 it is the
-        # underlying socket's uniqueHash; for HTTP/1.x the value is set
-        # below at the H1 sock_key derivation site.  Computed and assigned
-        # here so any handler reading cx after dispatch sees the same key
-        # the framework uses to key the per-connection persistent queue,
-        # regardless of which downstream branch the request takes.
-        if (sock_key.val()) {
-            cx.sock_key = sock_key;
-        }
+        # multiplexed sock_key derivation above; for HTTP/1.x and HTTP/2 it
+        # is the underlying socket's uniqueHash().  Computed and assigned
+        # before dispatch so every handler sees the same key the framework
+        # uses for its persistent queue.
+        cx.sock_key = sock_key;
 
         # Get peer info for handleRequest
         hash<auto> info = cx."peer-info";
@@ -5535,11 +5555,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 header_info.register_persistent_queue;
             code<nothing(string)> deregister_fn =
                 header_info.deregister_persistent_queue;
-            sock_key = s.uniqueHash();
-            # Mirror the multiplexed branch: expose the H1 sock_key on cx
-            # so handlers can pass it to
-            # @ref HttpListenerInterface::signalPersistentSessionClose().
-            cx.sock_key = sock_key;
             register_fn(sock_key, pq);
             on_exit deregister_fn(sock_key);
             if (!cx.close && s.isOpen()) {
@@ -6045,12 +6060,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
+        *Queue close_ack;
 
         # Clean up persistent handler state and thread-local data on exit
         on_exit {
+            # Register all remaining cleanup as exception-safe on-exit actions.
+            # The acknowledgement is deliberately registered first so it runs
+            # last: signalPersistentSessionClose() must not return until the
+            # close callback and both thread-local removals have completed.
+            on_exit if (close_ack) {
+                close_ack.push(True);
+            }
+            on_exit remove_thread_data("svc_listener");
+            on_exit removeUserThreadContext();
             phi.clear();
-            removeUserThreadContext();
-            remove_thread_data("svc_listener");
         }
 
         # Some handlers report persistence that legitimately toggles
@@ -6104,7 +6127,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         "dedicated mode immediately", cx.id);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info);
+                        \cx, cx_listener, phi, info, \close_ack);
                     return;
                 }
                 # Wait for next request from Queue with idle timeout
@@ -6125,7 +6148,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                                 "exiting dedicated mode", cx.id);
                             deregister_fn(sock_key);
                             drainOrphanedPersistentRequests(request_helper, pq,
-                                s, \cx, cx_listener, phi, info);
+                                s, \cx, cx_listener, phi, info, \close_ack);
                             return;
                         }
                         continue;
@@ -6135,6 +6158,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Check for close signal or empty entry
                 if (!entry || entry.type == "close") {
+                    if (entry) {
+                        close_ack = entry.close_ack;
+                    }
                     log("cid %d: queued persistent connection closed", cx.id);
                     return;
                 }
@@ -6174,7 +6200,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     resumeQueuedPersistentEntry(entry);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
-                        \cx, cx_listener, phi, info);
+                        \cx, cx_listener, phi, info, \close_ack);
                     if (!is_multiplexed && !end_cx.close && s.isOpen()) {
                         serv.returnConnectionToAsyncIo(s, end_cx, self);
                     }
@@ -6325,7 +6351,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # Process any requests that were pushed to the queue during the
                     # brief window between the last pq.get() and the deregistration
                     drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                        cx_listener, phi, info);
+                        cx_listener, phi, info, \close_ack);
                     if (!is_multiplexed && !cx.close && s.isOpen()) {
                         serv.returnConnectionToAsyncIo(s, cx, self);
                     }
@@ -6353,7 +6379,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # fresh connection.
             deregister_fn(sock_key);
             drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
-                cx_listener, phi, info);
+                cx_listener, phi, info, \close_ack);
         }
     }
 
@@ -6376,7 +6402,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     private drainOrphanedPersistentRequests(RequestHelper request_helper, Queue pq,
             Socket s, reference<hash<auto>> cx, hash<auto> cx_listener,
-            HttpPersistentHandlerInfo phi, hash<auto> info) {
+            HttpPersistentHandlerInfo phi, hash<auto> info,
+            reference<*Queue> close_ack) {
         while (True) {
             *hash<auto> entry;
             try {
@@ -6385,7 +6412,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # QUEUE-TIMEOUT — queue is empty
                 break;
             }
-            if (!entry || entry.type == "close") {
+            if (!entry) {
+                break;
+            }
+            if (entry.type == "close") {
+                close_ack = entry.close_ack;
                 break;
             }
 

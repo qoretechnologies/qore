@@ -575,15 +575,12 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             }
 
             if (t.supportsPartitions()) {
-                *hash<PartitionStrategy> strategy = t.getPartitionStrategy();
-                if (strategy) {
-                    ret.partition_strategy = strategy;
+                hash<auto> partition_desc = t.getDescriptionHash({"with_partitions": withPartitions()});
+                if (partition_desc.partition_strategy) {
+                    ret.partition_strategy = partition_desc.partition_strategy;
                 }
-                if (withPartitions()) {
-                    hash<string, PartitionInfo> partitions = t.listPartitions();
-                    if (partitions) {
-                        ret.partitions = partitions;
-                    }
+                if (partition_desc.partitions) {
+                    ret.partitions = partition_desc.partitions;
                 }
             }
 

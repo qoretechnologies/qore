@@ -167,6 +167,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT .qo debugger regex extract keeps global flag",
             \testQoDebuggerRegexExtractGlobal());
+        addTestCase("AOT batch --parse-option=PO_ENABLE_DEBUG enables @assert",
+            \testQoBatchParseOptionEnableDebug());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
@@ -192,6 +194,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT object member store private access checks",
             \testObjectMemberStorePrivateAccessChecks());
         addTestCase("AOT hash operations", \testHashOps());
+        addTestCase("AOT narrowed container COW store", \testNarrowedContainerCowStore());
         addTestCase("AOT list operations", \testListOps());
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
@@ -391,6 +394,9 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
         # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
         addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        # Regression: exceptions escaping catch blocks must unwind catch scopes
+        # (leaked caught-exception trees + stale td->catchException before the fix)
+        addTestCase("AOT exception escaping catch block", \testExceptionEscapingCatchBlock());
         set_return_value(main());
     }
 
@@ -4151,6 +4157,89 @@ switch (s) {
         assertEq(interp_out, aot_out, "AOT regex switch output matches interpreter");
     }
 
+    #! Multi-source batch compiles must accept PO_ENABLE_DEBUG and keep @assert live
+    /** @assert and @debug are resolved at parse time, so an AOT build can only enable them at compile
+        time; there is no runtime switch once qcc has compiled them out. Batch mode (two or more sources
+        with --output-dir) resolves --parse-option names through a different table than a single-source
+        compile, so a name the single-source path accepts can still be rejected here — which is exactly
+        how PO_ENABLE_DEBUG was missed. Both the compile and the resulting behavior are asserted, with a
+        no-flag control, so neither "the flag is accepted" nor "the flag does anything" can regress alone.
+    */
+    testQoBatchParseOptionEnableDebug() {
+        string tmp_dir = sprintf("/tmp/aot_enable_debug_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/EnableDebugMain.qr";
+        string src2_path = tmp_dir + "/EnableDebugOther.qr";
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub main() {
+    @assert(False, \"assert is live\");
+    printf(\"NO-FIRE\\n\");
+}
+main();
+");
+            f.close();
+        }
+        # a second source is what puts qcc in batch mode, the mode Qorus builds with
+        {
+            File f();
+            f.open2(src2_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+
+sub enable_debug_other() {
+    printf(\"other\\n\");
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -c --parse-option=PO_ENABLE_DEBUG --output-dir=%s %s %s "
+            "2>&1; echo EXIT=$?", libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path, src2_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch accepts --parse-option=PO_ENABLE_DEBUG: " + compile_out);
+        assertFalse(compile_out.regex("unknown --parse-option name"),
+            "PO_ENABLE_DEBUG resolves in batch mode: " + compile_out);
+
+        string app_path = tmp_dir + "/enable-debug";
+        # the batch names each .qo after the full source path, so find it rather than assume the name
+        *list<string> qos = glob(qo_dir + "/*EnableDebugMain*.qo");
+        assertEq(1, qos.size(), "batch emitted the main source's .qo: " + qo_dir);
+        string qo_path = qos[0];
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"), "qcc links the debug-enabled .qo: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, app_path));
+        assertTrue(run_out.regex("ASSERTION-ERROR"),
+            "PO_ENABLE_DEBUG keeps @assert live in the AOT binary: " + run_out);
+        assertFalse(run_out.regex("NO-FIRE"), "@assert aborted before the following statement: " + run_out);
+
+        # control: without the flag the same source must compile with @assert stripped, so the assertion
+        # above is proving the flag's effect and not merely that @assert exists
+        string plain_app = tmp_dir + "/enable-debug-off";
+        string plain_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, plain_app, src_path));
+        assertTrue(plain_out.regex("EXIT=0"), "qcc compiles the probe without the flag: " + plain_out);
+        string plain_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, plain_app));
+        assertTrue(plain_run.regex("NO-FIRE"),
+            "without PO_ENABLE_DEBUG @assert is compiled out: " + plain_run);
+        assertFalse(plain_run.regex("ASSERTION-ERROR"),
+            "without PO_ENABLE_DEBUG @assert does not fire: " + plain_run);
+    }
+
     testQoDebuggerRegexExtractGlobal() {
         string tmp_dir = sprintf("/tmp/aot_regex_global_%d_%d", getpid(), rand());
         string qo_dir = tmp_dir + "/qo";
@@ -4725,6 +4814,72 @@ printf(\"first key: %s\\n\", key_list[0]);
         assertTrue(result.all_precompiled, "hash ops: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "hash operations output matches interpreter");
+    }
+
+    testNarrowedContainerCowStore() {
+        # Regression test: a COW key/index store into a container whose runtime
+        # value type has narrowed (hash<string, int> / list<int>) but that is
+        # held through an auto! (no-narrow) parameter.  The COW helpers must
+        # transfer the fresh copy's reference into the local-variable
+        # assignment so LValueHelper::assign's auto!-strip retypes the unique
+        # node in place; the previous refSelf-then-assign pattern made the
+        # coercion store a stripped copy while the helper deref'd and then
+        # mutated the original copy (use-after-free SIGSEGV in
+        # QoreHashNode::setKeyValue).
+        string code = "%modern
+class Base {
+    private { hash<auto> m_cfg; }
+    constructor(hash<auto> cfg) { m_cfg = cfg; }
+    hash<auto> getCfg() { return m_cfg; }
+}
+
+class HashDerived inherits Base {
+    constructor(*hash<auto> opts) : Base(HashDerived::resolveOpts(opts)) {
+    }
+
+    static hash<auto> resolveOpts(*hash<auto!> opts) {
+        if (!opts.url) {
+            # COW key store of a string into a hash narrowed to hash<string, int>
+            opts.url = \"http://localhost:8001\";
+        }
+        return opts;
+    }
+}
+
+class ListDerived inherits Base {
+    constructor(*list<auto> vals) : Base(ListDerived::resolveVals(vals)) {
+    }
+
+    private static hash<auto> resolveVals(*list<auto!> vals) {
+        if (vals[0] != \"x\") {
+            # COW index store of a string into a list narrowed to list<int>
+            vals[1] = \"converted\";
+        }
+        return {\"vals\": vals};
+    }
+}
+
+# all-int literals narrow to hash<string, int> / list<int>
+HashDerived hd({\"timeout\": 30000});
+printf(\"hash cfg: %y\\n\", hd.getCfg());
+ListDerived ld((10, 20, 30));
+printf(\"list cfg: %y\\n\", ld.getCfg());
+
+# unique container (rvalue argument): no COW copy is made, so the store
+# exercises the direct setKeyValue path — the parameter-boundary strip
+# must make it succeed identically
+hash<auto> ur = HashDerived::resolveOpts({\"timeout\": 1});
+printf(\"unique cfg: %y (%s)\\n\", ur, ur.fullType());
+printf(\"OK\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "narrowed container COW store: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "narrowed container COW store output matches interpreter");
+        assertTrue(result.run_out.regex("OK"),
+            "narrowed container COW store must complete: " + result.run_out);
     }
 
     testListOps() {
@@ -10700,5 +10855,71 @@ public namespace CorruptQmodTest {
             "corrupt-qmod-regression: process not killed by timeout: " + out);
         assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
             "corrupt-qmod-regression: saw module load error: " + out);
+    }
+
+    #! Exceptions escaping catch blocks must unwind catch scopes correctly
+    /** Covers the AOT codegen paths where an exception raised by a call inside
+        a catch block leaves the function (or lands in an outer catch of the
+        same function) without executing the catch block's CatchCleanup: the
+        shared exception-exit paths must pop the runtime catch stack back to
+        the entry watermark.  Before the fix, each escaped catch scope leaked
+        the caught exception's entire tree and left td->catchException stale,
+        so a subsequent rethrow could reference the wrong exception.
+    */
+    testExceptionEscapingCatchBlock() {
+        string code = "%modern
+sub thrower() {
+    throw \"NEW-ERROR\", \"from inside catch\";
+}
+
+sub f() {
+    try {
+        throw \"FIRST-ERROR\", \"first\", {\"a\": 1, \"b\": \"payload\"};
+    } catch (hash<ExceptionInfo> ex) {
+        # call raises; exception escapes f() with the catch scope active
+        thrower();
+    }
+}
+
+sub nested() {
+    try {
+        try {
+            throw \"INNER\", \"inner\";
+        } catch (hash<ExceptionInfo> ex1) {
+            # exception lands in the outer catch of the same function,
+            # stranding the inner catch scope
+            thrower();
+        }
+    } catch (hash<ExceptionInfo> ex2) {
+        printf(\"outer caught: %s\\n\", ex2.err);
+        # rethrow must reference ex2, not a stale stranded inner exception
+        try {
+            rethrow;
+        } catch (hash<ExceptionInfo> ex3) {
+            printf(\"rethrown: %s: %s\\n\", ex3.err, ex3.desc);
+        }
+    }
+}
+
+for (int i = 0; i < 100; ++i) {
+    try {
+        f();
+    } catch (hash<ExceptionInfo> ex) {
+        if (!i) {
+            printf(\"caught: %s: %s\\n\", ex.err, ex.desc);
+        }
+    }
+}
+nested();
+# a subsequent normal try/catch still behaves after the unwinds above
+try {
+    throw \"LAST\", \"done\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"final: %s\\n\", ex.err);
+}
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT exception-escaping-catch output matches interpreter");
     }
 }

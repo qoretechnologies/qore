@@ -27,12 +27,12 @@
 %enable-all-warnings
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires DataProvider
-%requires SqlUtil
-%requires BulkSqlUtil
-%requires DbDataProvider
-%requires Schema
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/BulkSqlUtil
+%requires ../../../../qlib/DbDataProvider
+%requires ../../../../qlib/Schema
 
 %exec-class DbTableDataProviderUpsertBulkTest
 
@@ -49,6 +49,7 @@ class TestSchema inherits AbstractSchema {
                 "id": c_number(15, True, "PK column"),
                 "name": c_varchar(200, True, "name column"),
                 "value": c_number(15, True, "value column"),
+                "generated": c_number(15, True, "server default column") + {"default_value": 42},
             },
             "primary_key": {"name": "pk_" + TestTableName, "columns": "id"},
         };
@@ -87,7 +88,10 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         addTestCase("upsertRecordsBulk default strategy", \testUpsertBulkDefaultStrategy());
         addTestCase("upsertRecordsBulk explicit strategy", \testUpsertBulkExplicitStrategy());
         addTestCase("upsertRecordsBulk insert then upsert", \testUpsertBulkInsertThenUpsert());
+        addTestCase("upsertRecordsBulk exact results", \testUpsertBulkExactResults());
+        addTestCase("createRecordsBulk returning", \testCreateBulkReturning());
         addTestCase("columnar bulk shapes", \testColumnarBulkShapes());
+        addTestCase("transactional mutation limits", \testTransactionalMutationLimits());
 
         set_return_value(main());
     }
@@ -100,7 +104,8 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
     private Datasource getDatasource() {
         string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL ?? "";
         if (!connstr) {
-            throw "SKIP", "no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL";
+            # skip the calling test case cleanly (throws TEST-SKIPPED-EXCEPTION); every test method needs a DB
+            testSkip("no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL");
         }
         Datasource ds(connstr);
         ds.open();
@@ -112,15 +117,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         which expected an integer constant.
     */
     private testUpsertBulkDefaultStrategy() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -158,15 +155,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
 
     #! Test that upsertRecordsBulk works with an explicit string strategy
     private testUpsertBulkExplicitStrategy() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -198,15 +187,7 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
 
     #! Test insert then upsert: records are inserted first, then upserted with updated values
     private testUpsertBulkInsertThenUpsert() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);
@@ -247,17 +228,89 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
         assertEq(300, rows[2].value, "carol value should be correct");
     }
 
+    private testUpsertBulkExactResults() {
+        Datasource ds = getDatasource();
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        list<hash<auto>> rows = (
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+        );
+        assertEq((UpsertResultInserted, UpsertResultInserted),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+        assertEq((UpsertResultUnchanged, UpsertResultUnchanged),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+        rows[0].value = 101;
+        assertEq((UpsertResultUpdated, UpsertResultUnchanged),
+            provider.upsertRecordsBulk(rows, {"upsert_strategy": "UpsertSelectFirst"}));
+    }
+
+    private testCreateBulkReturning() {
+        Datasource ds = getDatasource();
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        *hash<auto> created = provider.createRecordsBulk((
+            {"id": 1, "name": "alice", "value": 100},
+            {"id": 2, "name": "bob", "value": 200},
+            {"id": 3, "name": "carol", "value": 300},
+        ), {"returning": "generated", "block_size": 2});
+        assertEq((42, 42, 42), created.generated,
+            "bulk returning preserves every row across flush blocks");
+    }
+
+    private testTransactionalMutationLimits() {
+        Datasource ds = getDatasource();
+
+        TestSchema schema(ds);
+        schema.align(False, m_options.verbose);
+        on_exit schema.drop(False, m_options.verbose);
+
+        AbstractTable table = (new Table(ds, TestTableName)).getTable();
+        DbTableDataProvider provider(table);
+        provider.upsertRecordsBulk((
+            {"id": 1, "name": "same", "value": 10},
+            {"id": 2, "name": "same", "value": 20},
+            {"id": 3, "name": "other", "value": 30},
+        ));
+
+        assertThrows("UPDATE-SINGLE-RECORD-ERROR", "the update has been rolled back", sub () {
+            provider.updateSingleRecord({"value": 99}, {"name": "same"});
+        });
+        assertEq((10, 20, 30), map $1.value, table.selectRows({"orderby": "id"}));
+
+        assertThrows("MAX-RECORDS-EXCEEDED", "the delete has been rolled back", sub () {
+            provider.deleteRecords({}, {"max_records": 2});
+        });
+        assertEq((1, 2, 3), map $1.id, table.selectRows({"orderby": "id"}));
+
+        AbstractDataProviderRecordIterator iter = provider.searchRecords({"name": "same"}, {"orderby": "id",
+            "limit": 2});
+        assertTrue(exists iter.getRecordType().id);
+        AbstractDataProviderBulkRecordInterface bulk = iter.getBulkApi(1);
+        assertEq(2, bulk.getLimit());
+        list<int> ids;
+        while (True) {
+            *hash<auto> block = bulk.getValue();
+            if (!exists block) {
+                break;
+            }
+            ids += block.id;
+        }
+        assertEq((1, 2), ids);
+        assertFalse(ds.currentThreadInTransaction());
+    }
+
     #! Test that DB providers expose and consume native columnar bulk shapes
     private testColumnarBulkShapes() {
-        Datasource ds;
-        try {
-            ds = getDatasource();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SKIP") {
-                testSkip(ex.desc);
-            }
-            rethrow;
-        }
+        Datasource ds = getDatasource();
 
         TestSchema schema(ds);
         schema.align(False, m_options.verbose);

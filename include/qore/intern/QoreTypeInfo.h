@@ -470,7 +470,11 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static const char* getName(const QoreTypeInfo* ti) {
-        return ti ? ti->tname.c_str() : NO_TYPE_INFO;
+        if (!ti) {
+            return NO_TYPE_INFO;
+        }
+        const char* name = ti->tname.c_str();
+        return name && *name ? name : NO_TYPE_INFO;
     }
 
     // static version of method, checking for null pointer
@@ -483,7 +487,8 @@ public:
         if (!ti) {
             return NO_TYPE_INFO;
         }
-        return ti->getPathImpl();
+        const char* path = ti->getPathImpl();
+        return path && *path ? path : getName(ti);
     }
 
     // static version of method, checking for null pointer
@@ -537,6 +542,24 @@ public:
             stripTypeInfo(n, xsink, lvhelper);
         }
     }
+
+    //! Returns true for the hash<auto!>/list<auto!> (no-narrow) marker types
+    DLLLOCAL static bool isNoNarrowContainer(const QoreTypeInfo* ti) {
+        return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo
+            || ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo;
+    }
+
+    //! Applies the auto! (no-narrow) container coercion to a value entering an
+    //! auto!-typed slot: strips a narrowed complex type or top-level hashdecl
+    //! from the outer hash/list (copy-if-shared) so later heterogeneous
+    //! key/element stores remain valid.  No-op for other type infos and value
+    //! types.  When lvhelper is given, the replaced original is released via
+    //! saveTemp() (lvalue locks may be held); otherwise it is dereferenced
+    //! directly.  Implemented in Variable.cpp; shared by LValueHelper::assign()
+    //! and parameter binding (UserVariantBase::setupCall()) so the value a
+    //! function observes in an auto! parameter is engine-independent.
+    DLLLOCAL static void applyNoNarrowCoercion(const QoreTypeInfo* ti, QoreValue& n,
+            ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
 
     //! Re-applies declared hash/list/hashdecl container metadata to a value.
     DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
@@ -675,6 +698,15 @@ public:
             return false;
         }
         return ti->return_vec[0].spec.getType() == NT_LIST;
+    }
+
+    //! Returns true if the type is a softlist type, including nullable and complex variants
+    DLLLOCAL static bool isSoftListType(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        return ti == softListTypeInfo || ti == softListOrNothingTypeInfo
+            || ti->return_vec[0].spec.getComplexSoftList() != nullptr;
     }
 
     //! returns true if the type is an explicit hash type

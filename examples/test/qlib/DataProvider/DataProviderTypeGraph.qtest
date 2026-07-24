@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+
+%exec-class DataProviderTypeGraphTest
+
+#! A type whose element type can be set after construction, so that cyclic element-type graphs can be built
+class SettableElementType inherits AbstractDataProviderType {
+    private {
+        *AbstractDataProviderType elem;
+        string myname;
+    }
+
+    constructor(string n) : AbstractDataProviderType() {
+        myname = n;
+    }
+
+    setElementType(AbstractDataProviderType e) {
+        elem = e;
+    }
+
+    string getName() {
+        return myname;
+    }
+
+    *AbstractDataProviderType getElementType() {
+        return elem;
+    }
+
+    *hash<string, AbstractDataField> getFields() {
+    }
+
+    hash<string, bool> getAcceptTypeHash(*bool simple) {
+        return {"hash": True};
+    }
+
+    hash<string, bool> getReturnTypeHash(*bool simple) {
+        return {"hash": True};
+    }
+
+    auto acceptsValue(auto value) {
+        return value;
+    }
+
+    string getBaseTypeName() {
+        return "hash";
+    }
+
+    hash<string, bool> getDirectTypeHash() {
+        return {"hash": True};
+    }
+
+    AbstractDataProviderType getSoftType() {
+        return self;
+    }
+
+    AbstractDataProviderType getOrNothingType() {
+        return self;
+    }
+
+    *Type getValueType() {
+    }
+}
+
+#! Tests that type-graph traversals are bounded in time and memory
+/** Type graphs are traversed as live objects, so they are not necessarily trees:
+    - a type object reachable from more than one parent (a shared subtype in a DAG) must be expanded once, not
+      once per path, otherwise the traversal is exponential in the depth of the graph
+    - a cyclic element-type graph must terminate
+*/
+public class DataProviderTypeGraphTest inherits QUnit::Test {
+    public {
+        #! Fan-out per level in the shared-subtype DAG
+        const Fanout = 3;
+
+        #! Depth of the shared-subtype DAG
+        /** Every level references the same child type object @ref Fanout times, so a traversal that re-expands
+            shared subtypes performs Fanout ** Depth (3 ** 14 = 4,782,969) leaf expansions, which neither
+            terminates in reasonable time nor fits in memory; a traversal that expands each distinct type object
+            once performs Depth + 1 (15) of them
+        */
+        const Depth = 14;
+
+        #! Upper bound on the traversal; the unbounded implementation needs many minutes and many GB at this depth
+        const MaxTraversalTime = 30s;
+    }
+
+    constructor() : Test("DataProviderTypeGraphTest", "1.0") {
+        addTestCase("shared subtypes are not re-expanded per path", \sharedSubtypeDagTest());
+        addTestCase("shared subtype info is identical at every occurrence", \sharedSubtypeInfoTest());
+        addTestCase("cyclic element types terminate", \cyclicElementTypeTest());
+        addTestCase("cyclic field types terminate", \cyclicFieldTypeTest());
+
+        set_return_value(main());
+    }
+
+    #! Builds an acyclic type DAG where every level shares the same child type object Fanout times
+    private AbstractDataProviderType getSharedSubtypeDag(int depth) {
+        HashDataType leaf();
+        leaf.addField(new QoreDataField("str", "a string field", StringType));
+        leaf.addField(new QoreDataField("num", "an int field", IntType));
+
+        AbstractDataProviderType rv = leaf;
+        for (int i = 0; i < depth; ++i) {
+            HashDataType t();
+            # all three fields reference the *same* child type object
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            rv = t;
+        }
+        return rv;
+    }
+
+    #! A shared subtype must be expanded once per distinct type object, not once per path to it
+    sharedSubtypeDagTest() {
+        AbstractDataProviderType t = getSharedSubtypeDag(Depth);
+
+        date start = now_us();
+        hash<DataTypeInfo> info = t.getInfo();
+        date elapsed = now_us() - start;
+
+        assertLt(MaxTraversalTime, elapsed, "getInfo() on a shared-subtype DAG must not re-expand shared subtypes");
+
+        # the graph is intact: Depth levels of "a"/"b"/"c" above the leaf
+        hash<auto> node = info;
+        for (int i = 0; i < Depth; ++i) {
+            assertEq(("a", "b", "c"), sort(keys node.fields), sprintf("level %d fields", i));
+            node = node.fields.a.type;
+        }
+        assertEq(("num", "str"), sort(keys node.fields), "leaf fields");
+        assertEq("string", node.fields.str.type.base_type, "leaf field type");
+    }
+
+    #! Memoizing the traversal must not change the result: every occurrence of a shared subtype is identical
+    sharedSubtypeInfoTest() {
+        # keep this shallow so that the *unmemoized* result is also comparable
+        AbstractDataProviderType t = getSharedSubtypeDag(3);
+        hash<DataTypeInfo> info = t.getInfo();
+
+        # all three fields reference the same type object, so all three must report the same type info
+        assertEq(info.fields.a.type, info.fields.b.type, "shared subtype info must not depend on the path");
+        assertEq(info.fields.a.type, info.fields.c.type, "shared subtype info must not depend on the path");
+
+        # ... and the same holds one level down
+        hash<auto> child = info.fields.a.type;
+        assertEq(child.fields.a.type, child.fields.c.type, "nested shared subtype info must not depend on the path");
+
+        # the shared subtype is a real expansion, not an empty placeholder
+        assertEq("hash", info.fields.a.type.base_type, "shared subtype is expanded");
+        assertTrue(info.fields.a.type.fields.hasKey("a"), "shared subtype retains its fields");
+    }
+
+    #! A cyclic element-type graph must terminate, with the cycle marked rather than followed
+    cyclicElementTypeTest() {
+        SettableElementType a("a");
+        SettableElementType b("b");
+        a.setElementType(b);
+        b.setElementType(a);
+
+        date start = now_us();
+        hash<DataTypeInfo> info = a.getInfo();
+        date elapsed = now_us() - start;
+
+        assertLt(MaxTraversalTime, elapsed, "getInfo() on a cyclic element-type graph must terminate");
+
+        # "a" contains "b"; "b" would contain "a" again, so the cycle is truncated there and marked
+        assertEq("b", info.element_type.name, "the element type is reported");
+        assertTrue(info.element_type.element_type.recursive, "the cycle is marked as recursive");
+        assertNothing(info.element_type.element_type.element_type,
+            "the cycle is truncated rather than followed");
+    }
+
+    #! A cyclic field graph must terminate, with the cycle marked rather than followed
+    cyclicFieldTypeTest() {
+        HashDataType t();
+        # a field of the type itself: t.self -> t -> t.self -> ...
+        t.addField(new QoreDataField("self", "self-referencing field", t));
+        t.addField(new QoreDataField("str", "a string field", StringType));
+
+        date start = now_us();
+        hash<DataTypeInfo> info = t.getInfo();
+        date elapsed = now_us() - start;
+
+        assertLt(MaxTraversalTime, elapsed, "getInfo() on a cyclic field graph must terminate");
+
+        hash<auto> child = info.fields.self.type;
+        assertTrue(child.recursive, "the cycle is marked as recursive");
+        assertNothing(child.fields, "the cycle is truncated rather than followed");
+    }
+}

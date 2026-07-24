@@ -2176,6 +2176,15 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
     }
 }
 
+void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
+    if (!catch_depth_saved) {
+        return;
+    }
+    auto helper = module.getOrInsertFunction("qore_rt_catch_unwind",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    builder->CreateCall(helper, {catch_depth_saved, xsink_arg});
+}
+
 void QoreIRToLLVM::emitPendingSsaCleanup(llvm::Module& module) {
     if (pending_ssa_cleanup.empty()) {
         return;
@@ -3123,7 +3132,10 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         if (it != aot_loc_slots.end()) {
             loc_index = it->second;
         } else {
-            loc_index = static_cast<int32_t>(aot_loc_table.size());
+            // aot_loc_base offsets outlined-helper indices into the
+            // coordinator's merged ctx->locs table (helpers share the
+            // coordinator's runtime ctx — see aotLowerOutlinedFnHelpers()).
+            loc_index = aot_loc_base + static_cast<int32_t>(aot_loc_table.size());
             aot_loc_slots[inst->loc] = loc_index;
             // Copy location data by value immediately — the table owns the data,
             // eliminating any dependency on inst->loc pointer lifetime.
@@ -4606,15 +4618,17 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     dbg_last_line_slot = nullptr;
     landingpad_blocks.clear();
     has_on_block_exit_handlers = false;
+    catch_depth_saved = nullptr;
 
     // Every generated function entry must perform the same native stack guard
     // check as AST user-code entry.  Some optimized call paths invoke LLVM
     // functions directly and bypass runtime helpers such as qore_rt_call_fast().
+    llvm::BasicBlock* stack_overflow_bb = nullptr;
     if (!func.blocks.empty()) {
         llvm::BasicBlock* first_ir_bb = block_map[func.blocks.front().get()];
         llvm::BasicBlock* stack_check_bb = llvm::BasicBlock::Create(ctx,
                 "stack_check", llvm_func, first_ir_bb);
-        llvm::BasicBlock* stack_overflow_bb = llvm::BasicBlock::Create(ctx,
+        stack_overflow_bb = llvm::BasicBlock::Create(ctx,
                 "stack_overflow", llvm_func, first_ir_bb);
 
         builder->SetInsertPoint(stack_check_bb);
@@ -4654,6 +4668,55 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto obe_count_fn = module.getOrInsertFunction("qore_rt_get_on_block_exit_count",
                 llvm::FunctionType::get(i64_type, {}, false));
         obe_saved_count = builder->CreateCall(obe_count_fn, {});
+
+        // Save the catch-scope stack depth at entry for functions containing
+        // catch blocks.  The shared exception-exit paths pop back to this
+        // depth so catch scopes left active when an exception escapes a catch
+        // block are cleaned up (qore_rt_catch_unwind()).
+        bool has_catch = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr && inst_ptr->opcode == QoreIROpcode::CatchException) {
+                    has_catch = true;
+                    break;
+                }
+            }
+            if (has_catch) {
+                break;
+            }
+        }
+        if (has_catch) {
+            auto catch_depth_fn = module.getOrInsertFunction("qore_rt_catch_depth",
+                    llvm::FunctionType::get(i64_type, {}, false));
+            catch_depth_saved = builder->CreateCall(catch_depth_fn, {});
+        }
+
+        // Outlined-function coordinators: helpers mutate shared locals
+        // through the TLS stack, so every cached-local read needs its
+        // stale check from the very first lowered block.  The reload
+        // epoch is otherwise created lazily by the first call-site
+        // lowering — but block layout order does not follow control flow
+        // (a loop condition lowers before the helper-call block that
+        // bumps the epoch), which would silently skip the check.  Create
+        // it eagerly when the function calls outlined helpers.
+        if (aot_mode) {
+            bool has_helper_calls = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& inst_ptr : block->instructions) {
+                    if (inst_ptr
+                            && inst_ptr->opcode == QoreIROpcode::CallAOTHelper) {
+                        has_helper_calls = true;
+                        break;
+                    }
+                }
+                if (has_helper_calls) {
+                    break;
+                }
+            }
+            if (has_helper_calls) {
+                getOrCreateLocalReloadEpoch(llvm_func);
+            }
+        }
     }
 
     // Initialize runtime location tracking: cache TLS pointers for per-line updates.
@@ -5141,6 +5204,38 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     emitLateExitCleanup(llvm_func, module);
+
+    // Pop stranded catch scopes at every function exit (mirrors the IR
+    // interpreter's function-exit CatchStackCleanup RAII).  An exception
+    // escaping a catch block — a call inside the catch raising, or the
+    // exception landing in an outer catch of the same function — leaves
+    // catch scopes pushed with no CatchCleanup executed; without this the
+    // caught exceptions (and their arg/desc/callstack trees) leak.
+    // qore_rt_catch_unwind() pops down to the entry watermark, so it is a
+    // no-op on balanced paths.  stack_overflow_bb returns before
+    // catch_depth_saved is defined and must be skipped (SSA dominance).
+    if (catch_depth_saved) {
+        std::vector<llvm::Instruction*> exit_terms;
+        for (llvm::BasicBlock& bb : *llvm_func) {
+            if (&bb == stack_overflow_bb) {
+                continue;
+            }
+            llvm::Instruction* term = bb.getTerminator();
+            if (term && (llvm::isa<llvm::ReturnInst>(term)
+                    || llvm::isa<llvm::ResumeInst>(term))) {
+                exit_terms.push_back(term);
+            }
+        }
+        llvm::BasicBlock* saved_insert = builder->GetInsertBlock();
+        auto saved_ip = builder->GetInsertPoint();
+        for (llvm::Instruction* term : exit_terms) {
+            builder->SetInsertPoint(term);
+            emitCatchUnwind(module);
+        }
+        if (saved_insert) {
+            builder->SetInsertPoint(saved_insert, saved_ip);
+        }
+    }
 
     // Phase 5c: Finalize debug info before verification
     if (shared_di_builder) {
@@ -7854,6 +7949,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitPendingSsaCleanup(module);
             // Uninstantiate locals before returning (pre-instantiated locals are skipped internally)
             emitLocalUninstantiation(module);
+            // Outlined-helper return token: set immediately before the ret so
+            // no user code (destructors/handlers above) can run between the
+            // signal and the coordinator's consume after the call returns.
+            if (aot_mode && ret->outline_signal) {
+                auto signal_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_signal_return",
+                    llvm::FunctionType::get(void_type, {}, false));
+                builder->CreateCall(signal_fn, {});
+            }
             if (boxed_ret) {
                 builder->CreateRet(boxed_ret);
             } else {
@@ -7887,6 +7991,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitInvokeCleanup(module);
             emitPendingSsaCleanup(module);
             emitLocalUninstantiation(module);
+            // Outlined-helper return token — see the Return case above
+            if (aot_mode && static_cast<const QoreIRReturnInstruction*>(
+                    inst)->outline_signal) {
+                auto signal_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_signal_return",
+                    llvm::FunctionType::get(void_type, {}, false));
+                builder->CreateCall(signal_fn, {});
+            }
             builder->CreateRet(llvm::ConstantInt::get(i64_type, VAL_NOTHING));
             return true;
         }
@@ -15793,10 +15905,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction(cah->helper_name, helper_ft);
             llvm::Value* result = builder->CreateCall(helper,
                     {aot_ctx_arg, xsink_arg});
-            emitExceptionCheck(module, llvm_func, inst);
+            // Outlined function-body helpers execute with this function's
+            // runtime frame and can assign shared (non-IR-only) locals
+            // through the TLS stack — mark all reloadable local allocas
+            // stale (no-op for init-expression helpers, which reference no
+            // locals).
+            reloadAllLocalsFromRuntime(module, llvm_func);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            // In-region `return` token: when the helper signalled a return,
+            // branch to the synthesized coordinator block that returns the
+            // helper's result value through this function's own epilogue.
+            if (cah->return_target) {
+                auto take_fn = module.getOrInsertFunction(
+                    "qore_rt_outline_take_return",
+                    llvm::FunctionType::get(i64_type, {}, false));
+                llvm::Value* take = builder->CreateCall(take_fn, {});
+                llvm::Value* do_ret = builder->CreateICmpNE(take,
+                    llvm::ConstantInt::get(i64_type, 0));
+                llvm::BasicBlock* ret_bb = block_map[cah->return_target];
+                llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx,
+                    "outline.cont", llvm_func);
+                builder->CreateCondBr(do_ret, ret_bb, cont);
+                builder->SetInsertPoint(cont);
+            }
             return true;
         }
 

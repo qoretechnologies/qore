@@ -286,6 +286,70 @@ public:
 //! the global ModuleManager object
 DLLEXPORT extern ModuleManager MM;
 
+//! RAII helper that acquires the outermost lock in the module-loading lock hierarchy.
+/** Cold runtime module loads (ModuleManager::runTimeLoadModule() and friends) acquire this lock
+    before taking a target QoreProgram's parse lock, and hold it while applying AOT module
+    commands and running module initializers.  It therefore sits above every other lock that
+    module loading can reach.
+
+    Binary modules must acquire this lock <b>before</b> any module-private lock that is held
+    across a call back into libqore's module loading, whether directly (e.g.
+    ModuleManager::runTimeLoadModule()) or indirectly (e.g. a callback from a foreign runtime
+    such as a JVM classloader).  Failing to do so inverts the hierarchy and deadlocks against
+    a concurrent module load that is applying AOT module commands into the module.
+
+    The lock is recursive, so re-acquiring it on a nested module load in the same thread is
+    safe and cheap; taking it defensively on a path that already holds it costs nothing.
+
+    This lock is intended for <b>cold</b> paths only.  runTimeLoadModule() deliberately keeps a
+    lock-free fast path for already-committed features so that steady-state operation does not
+    serialize here; callers should preserve that property by not acquiring this lock on cache-hit
+    paths that cannot reach module loading.
+
+    Modules that take a private lock which is inner to this one should mark it with
+    QoreModuleInnerLockHelper, which enables a debug-build assertion that the hierarchy is
+    respected.
+
+    @since %Qore 3.0
+*/
+class QoreModuleLoadLockHelper {
+public:
+    //! Acquires the module-load lock; in debug builds, asserts that the lock order is respected
+    DLLEXPORT QoreModuleLoadLockHelper();
+
+    //! Releases the module-load lock
+    DLLEXPORT ~QoreModuleLoadLockHelper();
+
+    QoreModuleLoadLockHelper(const QoreModuleLoadLockHelper&) = delete;
+    QoreModuleLoadLockHelper& operator=(const QoreModuleLoadLockHelper&) = delete;
+};
+
+//! RAII helper marking that the current thread holds a lock that is inner to the module-load lock.
+/** Modules use this to declare their own lock's position in the module-loading lock hierarchy.
+    While such a lock is held, acquiring the module-load lock (whether directly via
+    QoreModuleLoadLockHelper or indirectly by triggering a module load anywhere in libqore) is a
+    lock-order inversion and deadlocks against a concurrent module load; in debug builds
+    QoreModuleLoadLockHelper asserts that this does not happen.
+
+    A module may hold a marked lock and still load modules if it took the module-load lock
+    <i>first</i> — that is the correct order and is explicitly allowed.
+
+    In non-debug builds this is inert.
+
+    @since %Qore 3.0
+*/
+class QoreModuleInnerLockHelper {
+public:
+    //! Marks a module-inner lock as held by the current thread
+    DLLEXPORT QoreModuleInnerLockHelper();
+
+    //! Marks a module-inner lock as released by the current thread
+    DLLEXPORT ~QoreModuleInnerLockHelper();
+
+    QoreModuleInnerLockHelper(const QoreModuleInnerLockHelper&) = delete;
+    QoreModuleInnerLockHelper& operator=(const QoreModuleInnerLockHelper&) = delete;
+};
+
 static inline bool is_module_api_supported(int major, int minor) {
     for (unsigned i = 0; i < qore_mod_api_list_len; ++i)
         if (qore_mod_api_list[i].major == major && qore_mod_api_list[i].minor == minor)

@@ -44,7 +44,7 @@
 # enable all warnings
 
 module OracleSqlUtilBase {
-    version = "1.6";
+    version = "1.7";
     desc = "user module for working with Oracle SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -121,10 +121,10 @@ ds.vselectRows("select * from schema.table where type = %v order by type offset 
 
     @subsection ora_partitioning_select Partition Support in Selects
 
-    It's possible to select from a particular partition of a table with %OracleSqlUtilBase;
-    @ref OracleSqlUtilBase::OracleTable::OracleSelectOptions "OracleSelectOptions" defines the \c "partition" key which
-    can be added to a @ref select_option_hash "select option hash" to specify the partition to select from as in the
-    following example:
+    The generic @ref SqlUtil::AbstractTable::SelectOptions "select options" define the \c "partition" key;
+    %OracleSqlUtilBase advertises support through
+    @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()" and validates the canonical
+    partition name before generating Oracle's partition extension:
     @code{.py}
 *list<auto> rows = $table.selectRows(("created": op_gt(2012-05-01), "partition": "p1"));
     @endcode
@@ -273,9 +273,26 @@ hash schema = (
 
     @section ora_relnotes Release Notes
 
+    @subsection oracle17 OracleSqlUtilBase v1.7
+    - added temporary-table support: pre-created global temporary tables (the \c "precreated" option; no runtime
+      DDL, supported on all Oracle versions) and, on Oracle 18c and later, runtime private temporary tables
+      (\c "ORA$PTT_" name prefix; \c NOT \c NULL column constraints are not supported and are dropped); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+
+    @subsection oracle161 OracleSqlUtilBase v1.6.1
+    - fixed a bug where a select combining \c forupdate with \c limit or \c offset and an \c orderby failed with
+      \c ORA-02014; the rows of the page are now located and locked in the base table with their \c ROWIDs, as
+      Oracle cannot lock rows selected through an inline view
+    - fixed a bug where the \c first_rows optimizer hint used with \c limit was placed after the \c "from" clause,
+      where Oracle ignores it as a plain comment
+
     @subsection oracle16 OracleSqlUtilBase v1.6
+    - added portable list-partition creation, introspection, lookup, lifecycle, and schema round-trip support
+    - added statistics-dependent estimated partition row counts to partition introspection
     - implemented range-partitioned table DDL, introspection, and lifecycle operations through the generic
       @ref SqlUtil::AbstractTable "AbstractTable" partition APIs
+    - implemented the generic validated named-partition select qualifier for primary and joined table references
+    - added targeted canonical-name partition metadata lookup with the preceding range bound
     - fixed a bug in the IN operator
       (<a href="https://github.com/qoretechnologies/qore/issues/4901">issue 4901</a>)
     - fixed space management on Oracle
@@ -555,8 +572,91 @@ public class OracleNumberColumn inherits OracleColumn {
     }
 }
 
+#! shared Oracle partition-scope state for indexes and index-backed constraints
+class OraclePartitionScopeSupport inherits Qore::Serializable {
+    public {
+        #! physical partition scope: \c "default", \c "local", or \c "global"
+        string partition_scope;
+
+        #! emit \c COMPUTE \c STATISTICS when creating the index
+        bool compute_statistics;
+    }
+
+    private {
+        list<string> partition_columns;
+    }
+
+    constructor() {
+        partition_scope = "default";
+    }
+
+    constructor(*string scope, bool compute, *softlist<string> pcols) {
+        partition_scope = scope.val() ? scope.lwr() : "default";
+        compute_statistics = compute;
+        if (pcols) {
+            partition_columns = pcols;
+        }
+    }
+
+    #! validates and returns the effective Oracle index partition scope
+    /** @param requested_scope an optional operation-specific override
+        @param unique whether the index enforces uniqueness
+        @param key_columns the index or constraint key columns
+        @param method the optional Oracle index method
+        @param err the exception code to raise on invalid input
+        @param object_kind the object kind for diagnostic messages
+        @param object_name the object name for diagnostic messages
+
+        @return the normalized effective scope
+
+        @throw INDEX-OPTION-ERROR for invalid or unsupported index combinations
+        @throw CONSTRAINT-OPTION-ERROR for invalid or unsupported constraint combinations
+    */
+    string validatePartitionScope(*string requested_scope, bool unique, softlist<string> key_columns,
+            *string method, string err, string object_kind, string object_name) {
+        string scope = requested_scope.val() ? requested_scope.lwr() : partition_scope;
+        if (!inlist(scope, ("default", "local", "global"))) {
+            throw err, sprintf("Oracle %s %y has invalid partition_scope %y; expected one of %y", object_kind,
+                object_name, scope, ("default", "local", "global"));
+        }
+        if (scope != "default" && partition_columns.empty()) {
+            throw err, sprintf("Oracle %s %y cannot use partition_scope %y on a nonpartitioned table", object_kind,
+                object_name, scope);
+        }
+        if (scope == "local" && unique) {
+            hash<string, bool> key_hash = map {$1: True}, key_columns;
+            *hash<string, bool> missing = (map {$1: True}, partition_columns) - key_hash.keys();
+            if (missing) {
+                throw err, sprintf("Oracle local unique %s %y must include partition key column(s): %y",
+                    object_kind, object_name, missing.keys());
+            }
+        }
+        if (partition_columns && method && method.lwr() == "bitmap" && scope != "local") {
+            throw err, sprintf("Oracle bitmap index %y on a partitioned table requires partition_scope %y",
+                object_name, "local");
+        }
+        return scope;
+    }
+
+    #! returns whether the argument has the same physical local/global behavior
+    /** @param other the other partition-scope state
+
+        @return @ref True "True" if both objects have the same physical local/global behavior
+    */
+    bool equalPartitionScope(OraclePartitionScopeSupport other) {
+        return (partition_scope == "local") == (other.partition_scope == "local");
+    }
+
+    #! returns the effective physical scope, resolving \c "default" to \c "global" for a partitioned table
+    /** @return the effective physical scope
+    */
+    string getEffectivePartitionScope() {
+        return partition_scope == "default" && partition_columns ? "global" : partition_scope;
+    }
+}
+
 #! represents an Oracle index
-public class OracleIndex inherits SqlUtil::AbstractIndex {
+public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSupport {
     public {
         #! the native type of the index (if supported); mirrors \c ALL_INDEXES.INDEX_TYPE (e.g.
         #! \c "NORMAL", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
@@ -575,16 +675,22 @@ public class OracleIndex inherits SqlUtil::AbstractIndex {
     }
 
     #! creates the object from the arguments
-    constructor(string n, bool u, hash c, string nt, *string t, *string n_method, *hash<auto> n_with)
-            : AbstractIndex(n, u, c) {
+    constructor(string n, bool u, hash c, string nt, *string t, *string n_method, *hash<auto> n_with,
+            *string n_partition_scope = NOTHING, bool n_compute_statistics = False,
+            *softlist<string> n_partition_columns = NOTHING)
+            : AbstractIndex(n, u, c),
+                OraclePartitionScopeSupport(n_partition_scope, n_compute_statistics, n_partition_columns) {
         native_type = nt;
         tablespace = t;
         method = n_method;
         with_options = n_with;
+        validatePartitionScope(NOTHING, unique, columns.keys(), method, "INDEX-OPTION-ERROR", "index", name);
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
+        string scope = validatePartitionScope(opt.partition_scope, unique, columns.keys(), method,
+            "INDEX-OPTION-ERROR", "index", name);
         # determine method: explicit overrides native_type for emission
         *string m = method.val() ? method.lwr() : NOTHING;
 
@@ -618,8 +724,12 @@ public class OracleIndex inherits SqlUtil::AbstractIndex {
         if (ts)
             sql += sprintf(" tablespace %s", ts);
 
-        if (opt.compute_statistics)
+        if (opt.compute_statistics || compute_statistics)
             sql += " compute statistics";
+
+        if (scope == "local") {
+            sql += " local";
+        }
 
         return sql;
     }
@@ -641,6 +751,12 @@ public class OracleIndex inherits SqlUtil::AbstractIndex {
         }
         # unordered hash comparison for WITH options
         if (!AbstractIndex::hashesEqualUnordered(with_options, oix.with_options)) {
+            return False;
+        }
+        if (!equalPartitionScope(oix)) {
+            return False;
+        }
+        if (tablespace && oix.tablespace && tablespace.upr() != oix.tablespace.upr()) {
             return False;
         }
         return True;
@@ -715,7 +831,7 @@ public class OracleCheckConstraint inherits SqlUtil::AbstractCheckConstraint {
 }
 
 #! represents an Oracle unique constraint
-public class OracleUniqueConstraint inherits SqlUtil::AbstractUniqueConstraint {
+public class OracleUniqueConstraint inherits SqlUtil::AbstractUniqueConstraint, OraclePartitionScopeSupport {
     private {
         #! @ref True "True" if the constraint is enabled, @ref False "False" if not
         bool enabled;
@@ -724,9 +840,13 @@ public class OracleUniqueConstraint inherits SqlUtil::AbstractUniqueConstraint {
         *string tablespace;
     }
 
-    constructor(string n, hash n_cols, bool e = True, *string ts) : AbstractUniqueConstraint(n, n_cols) {
+    constructor(string n, hash n_cols, bool e = True, *string ts, *string n_partition_scope = NOTHING,
+            bool n_compute_statistics = False, *softlist<string> n_partition_columns = NOTHING)
+            : AbstractUniqueConstraint(n, n_cols),
+                OraclePartitionScopeSupport(n_partition_scope, n_compute_statistics, n_partition_columns) {
         enabled = e;
         tablespace = ts;
+        validatePartitionScope(NOTHING, True, self.keys(), NOTHING, "CONSTRAINT-OPTION-ERROR", "constraint", name);
     }
 
     #! returns the OracleColumn value of the given key if it exists, otherwise throws a \c KEY-ERROR exception
@@ -767,6 +887,8 @@ auto v = c.name;
     }
 
     string getCreateSql(string table_name, *hash opts) {
+        string scope = validatePartitionScope(opts.partition_scope, True, self.keys(), NOTHING,
+            "CONSTRAINT-OPTION-ERROR", "constraint", name);
         string sql = sprintf("alter table %s add constraint %s unique (%s)", table_name, name,
             (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         *string ix = opts.index ? opts.index : index;
@@ -774,10 +896,18 @@ auto v = c.name;
             sql += sprintf(" using index %s", ix);
         else {
             *string ts = opts.index_tablespace ? opts.index_tablespace : tablespace;
-            if (ts) {
-                sql += sprintf(" using index tablespace %s", ts);
-                if (opts.compute_statistics)
+            bool compute = opts.compute_statistics || compute_statistics;
+            if (ts || compute || scope == "local") {
+                sql += " using index";
+                if (ts) {
+                    sql += sprintf(" tablespace %s", ts);
+                }
+                if (compute) {
                     sql += " compute statistics";
+                }
+                if (scope == "local") {
+                    sql += " local";
+                }
             }
         }
 
@@ -807,20 +937,39 @@ auto v = c.name;
     *string getTablespace() {
         return tablespace;
     }
+
+    #! validates and sets the physical partition scope discovered for the constraint's supporting index
+    /** @param scope the physical partition scope
+
+        @throw CONSTRAINT-OPTION-ERROR if the scope is invalid for the constraint
+    */
+    setPartitionScope(string scope) {
+        partition_scope = validatePartitionScope(scope, True, self.keys(), NOTHING, "CONSTRAINT-OPTION-ERROR",
+            "constraint", name);
+    }
+
+    private bool equalImpl(AbstractConstraint c) {
+        OracleUniqueConstraint other = cast<OracleUniqueConstraint>(c);
+        return self.keys() == other.keys() && equalPartitionScope(other);
+    }
 }
 
 #! represents an Oracle primary key
-public class OraclePrimaryKey inherits SqlUtil::AbstractPrimaryKey {
+public class OraclePrimaryKey inherits SqlUtil::AbstractPrimaryKey, OraclePartitionScopeSupport {
     private {
         #! any tablespace for the primary key index
         *string tablespace;
     }
 
-    constructor() {
+    constructor() : OraclePartitionScopeSupport() {
     }
 
-    constructor(string n, *hash c, *string ts) : AbstractPrimaryKey(n, c) {
+    constructor(string n, *hash c, *string ts, *string n_partition_scope = NOTHING,
+            bool n_compute_statistics = False, *softlist<string> n_partition_columns = NOTHING)
+            : AbstractPrimaryKey(n, c),
+                OraclePartitionScopeSupport(n_partition_scope, n_compute_statistics, n_partition_columns) {
         tablespace = ts;
+        validatePartitionScope(NOTHING, True, self.keys(), NOTHING, "CONSTRAINT-OPTION-ERROR", "primary key", name);
     }
 
     #! returns the OracleColumn value of the given key if it exists, otherwise throws a \c KEY-ERROR exception
@@ -861,6 +1010,8 @@ auto v = c.name;
     }
 
     string getCreateSql(string table_name, *hash opts) {
+        string scope = validatePartitionScope(opts.partition_scope, True, self.keys(), NOTHING,
+            "CONSTRAINT-OPTION-ERROR", "primary key", name);
         string sql = sprintf("alter table %s add constraint %s primary key (%s)", table_name, name,
             (foldl $1 + ", " + $2, getSqlColumnNameIterator()));
         *string ix = opts.index ? opts.index : index;
@@ -868,10 +1019,18 @@ auto v = c.name;
             sql += sprintf(" using index %s", ix);
         } else {
             *string ts = opts.index_tablespace ? opts.index_tablespace : tablespace;
-            if (ts) {
-                sql += sprintf(" using index tablespace %s", ts);
-                if (opts.compute_statistics)
+            bool compute = opts.compute_statistics || compute_statistics;
+            if (ts || compute || scope == "local") {
+                sql += " using index";
+                if (ts) {
+                    sql += sprintf(" tablespace %s", ts);
+                }
+                if (compute) {
                     sql += " compute statistics";
+                }
+                if (scope == "local") {
+                    sql += " local";
+                }
             }
         }
 
@@ -897,6 +1056,26 @@ auto v = c.name;
     #! returns a string that can be used to enable the constraint in the database
     string getEnableSql(string table_name, *hash opt) {
         return sprintf("alter table %s enable constraint %s", table_name, name);
+    }
+
+    #! returns the tablespace for the primary-key index, if known
+    *string getTablespace() {
+        return tablespace;
+    }
+
+    #! validates and sets the physical partition scope discovered for the primary-key index
+    /** @param scope the physical partition scope
+
+        @throw CONSTRAINT-OPTION-ERROR if the scope is invalid for the primary key
+    */
+    setPartitionScope(string scope) {
+        partition_scope = validatePartitionScope(scope, True, self.keys(), NOTHING, "CONSTRAINT-OPTION-ERROR",
+            "primary key", name);
+    }
+
+    private bool equalImpl(AbstractConstraint c) {
+        OraclePrimaryKey other = cast<OraclePrimaryKey>(c);
+        return self.keys() == other.keys() && equalPartitionScope(other);
     }
 }
 
@@ -1739,6 +1918,41 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         return True;
     }
 
+    #! returns @ref True "True" as Oracle supports temporary tables (global temporary tables and, on 18c+, private temporary tables)
+    private bool supportsTempTablesImpl() {
+        return True;
+    }
+
+    #! returns the physical name for a temporary table
+    /** pre-created (schema-managed) global temporary tables use their name unchanged; runtime temporary tables use
+        Oracle 18c+ private temporary tables, which require the mandatory \c "ORA$PTT_" name prefix
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        if (precreated) {
+            return name;
+        }
+        # runtime temporary tables require Oracle 18c+ private temporary tables
+        int major = (ds.getServerVersion() =~ x/([0-9]+)/)[0].toInt();
+        if (major < 18) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y at runtime: the Oracle server "
+                "(major version %d) does not support private temporary tables (Oracle 18c or later is required); "
+                "use a pre-created global temporary table with the \"precreated\" option instead", name, major);
+        }
+        return name =~ /^ora\$ptt_/i ? name : "ora$ptt_" + name;
+    }
+
+    #! strips NOT NULL column constraints for runtime (private) temporary tables
+    /** Oracle private temporary tables (18c+) do not support \c NOT \c NULL column constraints (ORA-14451); runtime
+        temporary tables are transient scratch tables, so the \c "notnull" attribute is removed.  Pre-created global
+        temporary tables are schema-managed and support \c NOT \c NULL, so their column description is unchanged
+    */
+    private hash<auto> prepareTempTableColumnsImpl(hash<auto> columns, bool precreated) {
+        if (precreated) {
+            return columns;
+        }
+        return map {$1.key: $1.value - "notnull"}, columns.pairIterator();
+    }
+
     #! returns @ref True "True" if the database supports named types
     private bool supportsTypesImpl() {
         return True;
@@ -1925,6 +2139,12 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 */
 public class OracleTable inherits SqlUtil::AbstractTable {
     public {
+        #! The leading keyword of a select query; an optimizer hint is only recognized directly after it
+        const SelectKeyword = "select";
+
+        #! The keyword introducing the "from" clause of a select query
+        const FromKeyword = " from ";
+
         #! maps oracle type names to type descriptions
         const OraTypeMap = {
             "number": ("qore": Type::Number, "size": SZ_NUM, "size_range": (1, 38), "scale_range": (-84, 127)),
@@ -2061,9 +2281,12 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         #! Oracle-specific index options
         /** this constant extends @ref SqlUtil::AbstractTable::IndexOptions as returned by \c OracleSqlUtilBase::OracleTable::getIndexOptions() with the following keys:
             - \c compute_statistics: adds "compute statistics" to index creation strings
+            - \c partition_scope: physical index scope on a partitioned table; one of \c "local" or \c "global";
+              the internal value \c "default" selects Oracle's default behavior
         */
         const OracleIndexOptions = AbstractTable::IndexOptions + {
             "compute_statistics": Type::Boolean,
+            "partition_scope": Type::String,
         };
 
         #! Oracle-specific constraint options
@@ -2082,17 +2305,60 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         const OracleAlignTableOptions = AbstractTable::AlignTableOptions + OracleTableCreationOptions;
 
-        #! Oracle select options
-        /** This constant extends @ref SqlUtil::AbstractTable::SelectOptions with the following options as returned by
-            @ref OracleSqlUtilBase::OracleTable::getSelectOptions() :
-            - \c partition: the partition name to use in a query (see @ref ora_partitioning_select)
+        #! Oracle partition exchange options
+        /** This constant extends @ref SqlUtil::AbstractTable::PartitionExchangeOptions with:
+            - \c including_indexes: use Oracle's \c INCLUDING \c INDEXES mode; omitted or @ref False "False" uses
+              \c EXCLUDING \c INDEXES
+            - \c update_indexes: append \c UPDATE \c INDEXES so usable global indexes are maintained
+
+            @since OracleSqlUtilBase 3.0.0
         */
-        const OracleSelectOptions = AbstractTable::SelectOptions + {
-            "partition": Type::String,
+        const OraclePartitionExchangeOptions = AbstractTable::PartitionExchangeOptions + {
+            "including_indexes": Type::Boolean,
+            "update_indexes": Type::Boolean,
         };
+
+        #! Oracle select options
+        /** This compatibility constant includes the generic \c partition option from
+            @ref SqlUtil::AbstractTable::SelectOptions and is returned by
+            @ref OracleSqlUtilBase::OracleTable::getSelectOptions().
+        */
+        const OracleSelectOptions = AbstractTable::SelectOptions;
 
         #! Oracle Expression map
         const OracleExpressionMap = DefaultExpressionMap + {
+            # Oracle server-side digest via STANDARD_HASH (returns RAW); supports MD5, SHA1, SHA256,
+            # SHA384, and SHA512 (SHA224 is not supported by STANDARD_HASH).  base64 output is not
+            # available portably in pure SQL and is rejected.
+            DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                    string enc = sqlutil_normalize_digest_encoding(args[2]);
+                    string v = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    hash<string, string> algmap = {
+                        "md5": "MD5", "sha1": "SHA1", "sha256": "SHA256", "sha384": "SHA384",
+                        "sha512": "SHA512",
+                    };
+                    *string oalg = algmap{alg};
+                    if (!oalg) {
+                        throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                            "Oracle driver; supported algorithms: md5, sha1, sha256, sha384, sha512",
+                            alg);
+                    }
+                    string core = sprintf("standard_hash(%s, '%s')", v, oalg);
+                    switch (enc) {
+                        case "binary":
+                            return core;
+                        case "hex":
+                            return sprintf("lower(rawtohex(%s))", core);
+                        case "base64":
+                            throw "DIGEST-ERROR", "base64 digest output encoding is not supported by "
+                                "the Oracle driver";
+                    }
+                    throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                },
+            },
             OP_SUBSTR: DefaultExpressionMap{OP_SUBSTR} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
@@ -2973,8 +3239,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
             "dba_db_links"          : "all_db_links",
             "dba_ind_columns"       : "all_ind_columns",
             "dba_ind_expressions"   : "all_ind_expressions",
+            "dba_ind_partitions"    : "all_ind_partitions",
             "dba_indexes"           : "all_indexes",
             "dba_objects"           : "all_objects",
+            "dba_part_indexes"      : "all_part_indexes",
             "dba_part_key_columns"  : "all_part_key_columns",
             "dba_part_tables"       : "all_part_tables",
             "dba_sequences"         : "all_sequences",
@@ -3346,11 +3614,11 @@ public class OracleTable inherits SqlUtil::AbstractTable {
     }
 
     private insertLimitOptimizerHint(hash<auto> qh, reference<string> sql) {
-        # insert optimizer hint
-        int i = sql.find(" from ");
         # http://www.oracle.com/technetwork/issue-archive/2006/06-sep/o56asktom-086197.html
         # /*+ first_rows(n) */ is an optimizer hint that we want the first rows as fast as possible
-        splice sql, i + 5, 0, sprintf(" /*+ first_rows(%d) */", qh.limit);
+        # NOTE: an optimizer hint is only recognized directly after the leading SQL keyword; when placed anywhere
+        # else (such as after the "from" clause) Oracle silently treats it as a plain comment and ignores it
+        splice sql, SelectKeyword.size(), 0, sprintf(" /*+ first_rows(%d) */", qh.limit);
     }
 
     #! Oracle accepts non-unique orderby + offset/limit at the SQL level;
@@ -3385,6 +3653,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
 
         list<auto> ce = getOrderByListIntern(info, coll);
         string sort = foldl $1 + ", " + $2, ce;
+        string desc = info.query_hash.desc ? " desc" : "";
+
+        if (info.query_hash.forupdate) {
+            doSelectForUpdateWithLimitSqlIntern(\info, \sql, sort, desc, limit, offset);
+            return;
+        }
+
         # http://www.oracle.com/technetwork/issue-archive/2006/06-sep/o56asktom-086197.html
         # /*+ first_rows(n) */ is an optimizer hint that we want the first rows as fast as possible
         # NOTE: the subquery is necessary because the ORDER BY clause is enforced *after* the ROWNUM
@@ -3392,7 +3667,56 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         # - https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/ROWNUM-Pseudocolumn.html#GUID-2E40EC12-3FCF-4A4F-B5F2-6BC669021726
         # - https://stackoverflow.com/questions/15091849/how-to-use-oracle-order-by-and-rownum-correctly/15091900
         sql = sprintf("select * from (select /*+ first_rows(%d) */ a.*, rownum rnum from (%s order by %s%s) a "
-            "where rownum <= %v%s) where rnum > %v", limit, sql, sort, info.query_hash.desc ? " desc" : "");
+            "where rownum <= %v%s) where rnum > %v", limit, sql, sort, desc);
+        if (offset) {
+            limit += offset;
+        }
+        info.args += limit;
+        info.args += offset;
+    }
+
+    #! Rewrites an ordered, paged query so that the selected rows can be locked with \c FOR UPDATE
+    /** An ordered page has to be produced with an inline view, because \c ROWNUM is assigned before \c ORDER BY is
+        applied.  Oracle rejects \c FOR UPDATE against an inline view (\c ORA-02014), and also rejects it in
+        combination with <tt>FETCH NEXT ... ROWS ONLY</tt> (see @ref optimizedLimit()), so the rows of the page
+        cannot be locked by the query that selects them.
+
+        Instead the page is reduced to the \c ROWIDs of its rows in a subquery, and the rows of the page are then
+        located and locked in the base table itself, which Oracle does allow.
+
+        @param info the query being generated
+        @param sql the query SQL generated so far; the leading \c "select" keyword and the \c "from" clause are
+            reused as-is, so any bind arguments in the column list and in the \c where clause keep their positions
+        @param sort the \c ORDER BY expression list
+        @param desc \c " desc" if the sort order is descending, otherwise an empty string
+        @param limit the maximum number of rows in the page
+        @param offset the number of rows to skip before the page
+
+        @throw ORACLE-SELECT-ERROR the query selects from more than one table; the rows to lock cannot be
+            attributed to a single base table in that case
+    */
+    private doSelectForUpdateWithLimitSqlIntern(reference<hash<QueryInfo>> info, reference<string> sql, string sort,
+            string desc, softint limit, softint offset) {
+        int fpos = sql.find(FromKeyword);
+        if (fpos < 0) {
+            throw "ORACLE-SELECT-ERROR", sprintf("cannot generate a 'for update' query with 'limit' or 'offset' "
+                "from %y; no 'from' clause found", sql);
+        }
+        if (info.query_hash.join) {
+            throw "ORACLE-SELECT-ERROR", sprintf("%s: 'forupdate' cannot be combined with 'limit' or 'offset' in a "
+                "query with joins; Oracle cannot lock rows selected through an inline view (ORA-02014), and the "
+                "rows of the page cannot be attributed to a single base table", getDesc());
+        }
+
+        # the column list (with the leading "select" keyword) and the "from" clause are reused unchanged, so that
+        # any bind arguments they contain keep the same relative order as the arguments added for limit / offset
+        string collist = sql.substr(0, fpos);
+        string from = sql.substr(fpos);
+
+        sql = sprintf("%s from %s where rowid in (select rid from (select /*+ first_rows(%d) */ rid, rownum rnum "
+            "from (select rowid rid%s order by %s%s) where rownum <= %v) where rnum > %v) order by %s%s",
+            collist, getSqlName(), limit, from, sort, desc, sort, desc);
+
         if (offset) {
             limit += offset;
         }
@@ -3533,7 +3857,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         if (!native_case)
             pkname = pkname.lwr();
 
-        OraclePrimaryKey pk(pkname, rv);
+        OraclePrimaryKey pk(pkname, rv, NOTHING, NOTHING, False, getPartitionKeyColumns());
         # set the base index if present
         if (qh.index_name[0]) {
             if (!native_case)
@@ -3550,11 +3874,35 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         hash rv;
 
         # get index description
-        *hash qh = ds.select("select i.index_name, index_type, uniqueness, tablespace_name, constraint_name
+        *hash qh = ds.select("select i.index_name, i.index_type, i.uniqueness, i.tablespace_name, c.constraint_name,
+    pi.locality
 from " + systemView("dba_indexes") + (dblink ? "@" + dblink : "") + " i left join " + systemView("dba_constraints") + (dblink ? "@" + dblink : "") + " c on (i.index_name = c.index_name and i.owner = c.owner and i.table_name = c.table_name)
+left join " + systemView("dba_part_indexes") + (dblink ? "@" + dblink : "") + " pi on (i.index_name = pi.index_name and i.owner = pi.owner and i.table_name = pi.table_name)
 where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         if (qh.index_name) {
             hash<auto> ih;
+            softlist<string> partition_columns = getPartitionKeyColumns();
+
+            # A local index has no single physical tablespace in DBA_INDEXES.  Preserve the tablespace only when
+            # every physical index partition uses the same one, since that is the only value that can be recreated
+            # faithfully with a single table-description option.
+            hash<string, string> partition_tablespaces;
+            if (partition_columns) {
+                *hash<auto> ptqh = ds.select("select p.index_name, min(p.tablespace_name) min_tablespace_name,
+    max(p.tablespace_name) max_tablespace_name
+from " + systemView("dba_ind_partitions") + (dblink ? "@" + dblink : "") + " p, "
+                    + systemView("dba_indexes") + (dblink ? "@" + dblink : "") + " i
+where p.index_owner = i.owner and p.index_name = i.index_name and i.table_owner = %v and i.table_name = %v
+group by p.index_name", schema.upr(), name.upr());
+                foreach hash<auto> row in (ptqh.contextIterator()) {
+                    if (row.min_tablespace_name && row.min_tablespace_name == row.max_tablespace_name) {
+                        string index_name = native_case ? row.index_name : row.index_name.lwr();
+                        partition_tablespaces{index_name} = native_case
+                            ? row.min_tablespace_name
+                            : row.min_tablespace_name.lwr();
+                    }
+                }
+            }
 
             # get column info for all indexes in 1 query
             *hash<auto> iqh = ds.select("select c.index_name, c.column_name, e.column_expression from " + systemView("dba_ind_columns") + (dblink ? "@" + dblink : "") + " c left join " + systemView("dba_ind_expressions") + (dblink ? "@" + dblink : "") + " e on (c.table_owner = e.index_owner and c.index_name = e.index_name and c.table_name = e.table_name) where c.table_owner = %v and c.table_name = %v order by c.index_name, c.column_position", schema.upr(), name.upr());
@@ -3577,10 +3925,23 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
                 # skip system indexes
                 if (!ih{row.index_name})
                     continue;
-                rv.(row.index_name) = new OracleIndex(row.index_name, row.uniqueness == "UNIQUE", ih{row.index_name}, row.index_type, row.tablespace_name, NOTHING, NOTHING);
+                string scope = partition_columns
+                    ? (row.locality == "LOCAL" ? "local" : "global")
+                    : "default";
+                *string index_tablespace = scope == "local" && partition_tablespaces.hasKey(row.index_name)
+                    ? partition_tablespaces{row.index_name}
+                    : row.tablespace_name;
+                rv.(row.index_name) = new OracleIndex(row.index_name, row.uniqueness == "UNIQUE",
+                    ih{row.index_name}, row.index_type, index_tablespace, NOTHING, NOTHING, scope, False,
+                    partition_columns);
                 if (row.constraint_name) {
                     *AbstractUniqueConstraint uk = findUniqueConstraintUnlocked(row.constraint_name);
                     if (uk) {
+                        if (uk instanceof OraclePrimaryKey) {
+                            cast<OraclePrimaryKey>(uk).setPartitionScope(scope);
+                        } else {
+                            cast<OracleUniqueConstraint>(uk).setPartitionScope(scope);
+                        }
                         rv.(row.index_name).setSupportingConstraint(uk);
                         uk.setIndexBase(row.index_name);
                     }
@@ -3673,10 +4034,11 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         delete rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             if (!native_case)
-                map row.$1 = row.$1.lwr(), ("constraint_name", "column_name");
+                map row.$1 = row.$1.lwr(), ("constraint_name", "column_name", "index_name"), row.$1;
             reference<OracleUniqueConstraint> ch = \rv.(row.constraint_name);
             if (!ch) {
-                ch = new OracleUniqueConstraint(row.constraint_name, {}, row.status == "ENABLED");
+                ch = new OracleUniqueConstraint(row.constraint_name, {}, row.status == "ENABLED", NOTHING,
+                    NOTHING, False, getPartitionKeyColumns());
                 if (row.index_name)
                     ch.setIndexBase(row.index_name);
             }
@@ -3687,12 +4049,6 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         map c.add($1.key, $1.value), rv.pairIterator();
 
         return c;
-    }
-
-    private string getSelectSqlName(*hash qh) {
-        if (!qh.partition)
-            return getSqlName();
-        return sprintf("%s partition (%s)", getSqlName(), qh.partition);
     }
 
     private Triggers getTriggersImpl() {
@@ -3721,10 +4077,13 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     string getCreateTableSqlImpl(*hash opt) {
-        string sql = sprintf("create table %s (\n", name);
+        string sql = sprintf("%s (\n", getCreateTableStartSql());
 
         sql += foldl $1 + ",\n" + $2, (map sprintf("  %s", $1.getCreateSql(self)), columns.iterator());
         sql += "\n)";
+
+        # temporary-table "on commit ... definition" clause must precede any tablespace/partition clause
+        sql += getCreateTableTempClauseSql();
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts) {
@@ -3736,22 +4095,41 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return sql;
     }
 
+    #! returns \c "create private temporary table <name>" for runtime temporary tables, \c "create table <name>" otherwise
+    /** runtime temporary tables use Oracle 18c+ private temporary tables; pre-created (schema-managed) global
+        temporary tables never emit runtime DDL and so use the normal create prefix
+    */
+    private string getCreateTableStartSql() {
+        if (isTempTable() && !isPreCreatedTempTable()) {
+            return sprintf("create private temporary table %s", name);
+        }
+        return AbstractTable::getCreateTableStartSql();
+    }
+
+    #! returns the Oracle private-temporary-table \c "on commit ... definition" clause based on the scope
+    /** transaction-scoped private temporary tables use \c "on commit drop definition"; session-scoped ones use
+        \c "on commit preserve definition"
+    */
+    private string getCreateTableTempClauseSql() {
+        if (isTempTable() && !isPreCreatedTempTable()) {
+            return getTempScope() == SqlUtil::TT_Transaction
+                ? " on commit drop definition"
+                : " on commit preserve definition";
+        }
+        return "";
+    }
+
     private string getOraclePartitionCreateClause() {
         if (!partitionStrategy) {
             return "";
         }
-        if (partitionStrategy.method != "range") {
-            throw "PARTITION-ERROR", sprintf("%s: unsupported Oracle partition method %y", getDesc(),
-                partitionStrategy.method);
-        }
-
         getPartitionsUnlocked();
         if (partitions.empty()) {
-            throw "PARTITION-ERROR", sprintf("%s: Oracle range-partitioned tables require at least one partition "
-                "definition in the table description", getDesc());
+            throw "PARTITION-ERROR", sprintf("%s: Oracle %s-partitioned tables require at least one partition "
+                "definition in the table description", getDesc(), partitionStrategy.method);
         }
 
-        string sql = sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
+        string sql = sprintf(" partition by %s (%s)", partitionStrategy.method, (foldl $1 + ", " + $2,
             getColumnSqlNames(partitionStrategy.columns)));
         if (partitionStrategy.auto) {
             *string expr = partitionStrategy.auto.expression ?? partitionStrategy.auto.interval;
@@ -3797,8 +4175,41 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return new OracleColumn(cname, opt.native_type, opt.qore_type, opt.size, nullable, opt.default_value, opt.comment, opt.local_def.is_char, opt.character_semantics, 0);
     }
 
+    private softlist<string> getPartitionKeyColumns() {
+        *hash<PartitionStrategy> strategy = getPartitionStrategy();
+        return strategy ? strategy.columns : NOTHING;
+    }
+
+    private OracleIndex getConstraintIndex(string cname, hash<auto> ch, string iname, *string requested_scope) {
+        Indexes all_indexes = getIndexes();
+        if (!all_indexes.hasKey(iname)) {
+            throw "CONSTRAINT-OPTION-ERROR", sprintf("Oracle constraint %y references unknown index %y", cname,
+                iname);
+        }
+
+        OracleIndex ix = cast<OracleIndex>(all_indexes{iname});
+        if (!ix.columns.matchKeys(ch)) {
+            throw "CONSTRAINT-OPTION-ERROR", sprintf("Oracle constraint %y columns %y do not match index %y "
+                "columns %y", cname, ch.keys(), iname, ix.columns.keys());
+        }
+
+        if (requested_scope.val() && requested_scope.lwr() != "default"
+            && ((requested_scope.lwr() == "local") != (ix.getEffectivePartitionScope() == "local"))) {
+            throw "CONSTRAINT-OPTION-ERROR", sprintf("Oracle constraint %y partition_scope %y conflicts with "
+                "index %y partition_scope %y", cname, requested_scope, iname, ix.getEffectivePartitionScope());
+        }
+        return ix;
+    }
+
     private AbstractPrimaryKey addPrimaryKeyImpl(string cname, hash ch, *hash opt) {
-        return new OraclePrimaryKey(cname, ch, opt.index_tablespace);
+        OraclePrimaryKey pk(cname, ch, opt.index_tablespace, opt.partition_scope, opt.compute_statistics,
+            getPartitionKeyColumns());
+        if (opt.index) {
+            OracleIndex ix = getConstraintIndex(cname, ch, opt.index, opt.partition_scope);
+            pk.setPartitionScope(ix.getEffectivePartitionScope());
+            pk.setIndexBase(opt.index);
+        }
+        return pk;
     }
 
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
@@ -3813,7 +4224,8 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
             throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'with' option on Oracle requires "
                 "the 'method' option to name a domain indextype", iname);
         }
-        return new OracleIndex(iname, enabled, ch, "normal", opt.index_tablespace, opt.method, opt.with);
+        return new OracleIndex(iname, enabled, ch, "normal", opt.index_tablespace, opt.method, opt.with,
+            opt.partition_scope, opt.compute_statistics, getPartitionKeyColumns());
     }
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {
@@ -3826,7 +4238,14 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     private AbstractUniqueConstraint addUniqueConstraintImpl(string cname, hash ch, *hash opt) {
-        return new OracleUniqueConstraint(cname, ch, True, opt.index_tablespace);
+        OracleUniqueConstraint uk(cname, ch, True, opt.index_tablespace, opt.partition_scope,
+            opt.compute_statistics, getPartitionKeyColumns());
+        if (opt.index) {
+            OracleIndex ix = getConstraintIndex(cname, ch, opt.index, opt.partition_scope);
+            uk.setPartitionScope(ix.getEffectivePartitionScope());
+            uk.setIndexBase(opt.index);
+        }
+        return uk;
     }
 
     private AbstractTrigger addTriggerImpl(string tname, string src, *hash opt) {
@@ -3880,6 +4299,81 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
 
     private hash<auto> getTypeMapImpl() {
         return OraTypeMap;
+    }
+
+    private *hash<auto> getIndexDescriptionOptionsImpl(AbstractIndex index) {
+        OracleIndex ix = cast<OracleIndex>(index);
+        hash<auto> rv;
+        string scope = ix.getEffectivePartitionScope();
+        if (scope != "default") {
+            rv.partition_scope = scope;
+        }
+        if (ix.tablespace) {
+            rv.index_tablespace = ix.tablespace;
+        }
+        if (ix.compute_statistics) {
+            rv.compute_statistics = True;
+        }
+        if (ix.method) {
+            rv.method = ix.method;
+        } else if (ix.native_type.lwr() == "bitmap") {
+            rv.method = "bitmap";
+        }
+        if (ix.with_options) {
+            rv.with = ix.with_options;
+        }
+        return rv ? rv : NOTHING;
+    }
+
+    private *hash<auto> getPrimaryKeyDescriptionOptionsImpl(AbstractPrimaryKey primary_key) {
+        OraclePrimaryKey pk = cast<OraclePrimaryKey>(primary_key);
+        hash<auto> rv;
+        if (pk.getIndex()) {
+            rv.index = pk.getIndex();
+        } else {
+            string scope = pk.getEffectivePartitionScope();
+            if (scope != "default") {
+                rv.partition_scope = scope;
+            }
+            if (pk.getTablespace()) {
+                rv.index_tablespace = pk.getTablespace();
+            }
+            if (pk.compute_statistics) {
+                rv.compute_statistics = True;
+            }
+        }
+        return rv ? rv : NOTHING;
+    }
+
+    private *hash<auto> getUniqueConstraintDescriptionOptionsImpl(AbstractUniqueConstraint constraint) {
+        OracleUniqueConstraint uk = cast<OracleUniqueConstraint>(constraint);
+        hash<auto> rv;
+        if (uk.getIndex()) {
+            rv.index = uk.getIndex();
+        } else {
+            string scope = uk.getEffectivePartitionScope();
+            if (scope != "default") {
+                rv.partition_scope = scope;
+            }
+            if (uk.getTablespace()) {
+                rv.index_tablespace = uk.getTablespace();
+            }
+            if (uk.compute_statistics) {
+                rv.compute_statistics = True;
+            }
+        }
+        return rv ? rv : NOTHING;
+    }
+
+    #! maps the portable partition-aligned intent to an Oracle LOCAL index
+    private preparePartitionAlignedOptionsImpl(string err, string object_kind, string object_name, bool unique,
+            hash<auto> object_columns, reference<hash<auto>> opt) {
+        *string requested_scope = opt.partition_scope;
+        if (requested_scope.val() && requested_scope.lwr() != "default" && requested_scope.lwr() != "local") {
+            throw err, sprintf("Oracle %s %y cannot combine partition_aligned = True with partition_scope %y",
+                object_kind, object_name, requested_scope);
+        }
+        opt.partition_scope = "local";
     }
 
     private hash<auto> getIndexOptions() {
@@ -3952,6 +4446,22 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return getOracleServerMajorVersion() >= 12;
     }
 
+    private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+        return !subpartition && inlist(method, ("range", "list"));
+    }
+
+    private bool supportsPartitionReadImpl() {
+        return True;
+    }
+
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
+    private bool supportsPartitionExchangeImpl() {
+        return getOracleServerMajorVersion() >= 12;
+    }
+
     private bool supportsAutoPartitioningImpl() {
         # Oracle interval (auto-create) range partitioning, enabled from 12c onwards
         return getOracleServerMajorVersion() >= 12;
@@ -3975,7 +4485,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         if (!row) {
             return;
         }
-        if (row.partitioning_type != "RANGE") {
+        if (!inlist(row.partitioning_type, ("RANGE", "LIST"))) {
             return;
         }
 
@@ -3993,16 +4503,41 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         }
 
         hash<PartitionStrategy> rv({
-            "method": "range",
+            "method": row.partitioning_type.lwr(),
             "columns": cols,
         });
-        if (row.interval) {
+        if (row.partitioning_type == "RANGE" && row.interval) {
             rv.auto = {
                 "type": "interval",
                 "expression": row.interval,
             };
         }
         return rv;
+    }
+
+    private *hash<auto> normalizePartitionAutoPolicyForAlignmentImpl(*hash<auto> policy) {
+        if (!policy) {
+            return;
+        }
+
+        *string expression = policy.expression ?? policy.interval;
+        if (!expression) {
+            return {} + policy;
+        }
+        trim expression;
+        expression = regex_subst(expression, "\\s+", " ", RE_Global).upr();
+        expression = regex_subst(expression, "\\s*,\\s*", ",", RE_Global);
+        expression = regex_subst(expression, "\\(\\s+", "(", RE_Global);
+        expression = regex_subst(expression, "\\s+\\)", ")", RE_Global);
+        return {
+            "type": "interval",
+            "expression": expression,
+        };
+    }
+
+    #! Oracle interval configuration is represented by the normalized automatic-partition policy
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return;
     }
 
     private hash<string, PartitionInfo> getPartitionsImpl() {
@@ -4014,9 +4549,10 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         }
         getColumnsUnlocked();
 
-        *hash<auto> qh = ds.select("select partition_name, partition_position, high_value from "
-            + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
-            + " where table_owner = %v and table_name = %v order by partition_position",
+        string dblink_suffix = dblink ? "@" + dblink : "";
+        *hash<auto> qh = ds.select("select p.partition_name, p.partition_position, p.high_value, "
+            "p.num_rows estimated_row_count from " + systemView("dba_tab_partitions") + dblink_suffix
+            + " p where p.table_owner = %v and p.table_name = %v order by p.partition_position",
             schema.upr(), name.upr());
 
         *string prev_bound_sql;
@@ -4034,28 +4570,37 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
                 "schema": schema,
                 "relation_name": pname,
                 "sql_name": sprintf("%s partition (%s)", getSqlName(), pname),
-                "is_default": high_value =~ /^MAXVALUE$/i,
+                "is_default": strategy.method == "range" ? high_value =~ /^MAXVALUE$/i
+                    : high_value =~ /^DEFAULT$/i,
             });
+            if (exists row.estimated_row_count) {
+                info.estimated_row_count = row.estimated_row_count;
+            }
 
             if (!info.is_default) {
-                info.bound_to_sql = high_value;
-                if (exists prev_bound_sql) {
-                    info.bound_from_sql = prev_bound_sql;
-                }
-
-                *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
-                if (exists bound_to) {
-                    info.bound_to = bound_to;
-                }
-                if (exists prev_bound) {
-                    info.bound_from = prev_bound;
-                }
-
-                prev_bound_sql = high_value;
-                if (exists bound_to) {
-                    prev_bound = bound_to;
+                if (strategy.method == "list") {
+                    populateOracleListPartitionValues(\info, high_value);
                 } else {
-                    delete prev_bound;
+                    info.bound_sql = sprintf("values less than (%s)", high_value);
+                    info.bound_to_sql = high_value;
+                    if (exists prev_bound_sql) {
+                        info.bound_from_sql = prev_bound_sql;
+                    }
+
+                    *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+                    if (exists bound_to) {
+                        info.bound_to = bound_to;
+                    }
+                    if (exists prev_bound) {
+                        info.bound_from = prev_bound;
+                    }
+
+                    prev_bound_sql = high_value;
+                    if (exists bound_to) {
+                        prev_bound = bound_to;
+                    } else {
+                        delete prev_bound;
+                    }
                 }
             }
 
@@ -4065,28 +4610,210 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return rv;
     }
 
-    private hash<PartitionInfo> resolveOraclePartitionInfoUnlocked(string partition_name) {
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         string pname = native_case ? partition_name : partition_name.lwr();
-        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
-        if (!ph.hasKey(pname)) {
-            throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+        string dblink_suffix = dblink ? "@" + dblink : "";
+        *hash<auto> row = ds.selectRow("select p.partition_name, p.partition_position, p.high_value, "
+            "p.num_rows estimated_row_count from " + systemView("dba_tab_partitions") + dblink_suffix
+            + " p where p.table_owner = %v and p.table_name = %v and p.partition_name = %v",
+            schema.upr(), name.upr(), native_case ? pname : pname.upr());
+        if (!row) {
+            return;
         }
-        return ph{pname};
+
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        if (!strategy) {
+            return;
+        }
+        getColumnsUnlocked();
+
+        pname = native_case ? row.partition_name : row.partition_name.lwr();
+        string high_value = row.high_value;
+        trim high_value;
+        hash<PartitionInfo> info({
+            "name": pname,
+            "method": strategy.method,
+            "columns": strategy.columns,
+            "ordinal": row.partition_position - 1,
+            "schema": schema,
+            "relation_name": pname,
+            "sql_name": sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(pname)),
+            "is_default": strategy.method == "range" ? high_value =~ /^MAXVALUE$/i
+                : high_value =~ /^DEFAULT$/i,
+        });
+        if (exists row.estimated_row_count) {
+            info.estimated_row_count = row.estimated_row_count;
+        }
+
+        if (!info.is_default) {
+            if (strategy.method == "list") {
+                populateOracleListPartitionValues(\info, high_value);
+            } else {
+                info.bound_sql = sprintf("values less than (%s)", high_value);
+                info.bound_to_sql = high_value;
+                *auto bound_to = parseOraclePartitionBoundValues(high_value, info.columns);
+                if (exists bound_to) {
+                    info.bound_to = bound_to;
+                }
+
+                if (row.partition_position > 1) {
+                    *hash<auto> prev = ds.selectRow("select high_value from "
+                        + systemView("dba_tab_partitions") + (dblink ? "@" + dblink : "")
+                        + " where table_owner = %v and table_name = %v and partition_position = %v",
+                        schema.upr(), name.upr(), row.partition_position - 1);
+                    if (prev) {
+                        string prev_high_value = prev.high_value;
+                        trim prev_high_value;
+                        info.bound_from_sql = prev_high_value;
+                        *auto bound_from = parseOraclePartitionBoundValues(prev_high_value, info.columns);
+                        if (exists bound_from) {
+                            info.bound_from = bound_from;
+                        }
+                    }
+                }
+            }
+        }
+        return info;
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
+    private hash<PartitionInfo> resolveOraclePartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y does not exist", getDesc(), partition_name);
+        }
+        return info;
+    }
+
+    private string getPartitionReadSqlNameImpl(string partition_name) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        return sprintf("%s partition (%s)", getSqlName(), getColumnSqlName(info.name));
+    }
+
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
         assertNoOracleDefaultPartitionForAddUnlocked(spec);
         return sprintf("alter table %s add %s", getSqlName(), getOraclePartitionDefinitionSql(spec));
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private validatePartitionCreationImpl(hash<PartitionSpec> spec, string err) {
+        if (spec.method != "range" || spec.is_default) {
+            return;
+        }
+
+        hash<string, PartitionInfo> ph = getPartitionsUnlocked();
+        if (!ph) {
+            # Oracle's first RANGE partition starts at MINVALUE.  A finite typed lower bound would describe a
+            # logical range that Oracle does not physically create.
+            if (exists spec.bound_from) {
+                throw err, sprintf("%s: first Oracle range partition %y cannot declare finite lower bound %y; "
+                    "use a native %y expression so its physical lower bound is MINVALUE", getDesc(), spec.name,
+                    spec.bound_from, "bound_sql");
+            }
+            if (exists spec.bound_from_sql && !(spec.bound_from_sql =~ /^\s*minvalue(?:\s*,\s*minvalue)*\s*$/i)) {
+                throw err, sprintf("%s: first Oracle range partition %y must start at MINVALUE, got %y", getDesc(),
+                    spec.name, spec.bound_from_sql);
+            }
+            return;
+        }
+
+        if (exists spec.bound_from) {
+            *auto preceding;
+            foreach hash<PartitionInfo> pi in (ph.iterator()) {
+                if (pi.is_default) {
+                    continue;
+                }
+                *auto upper = getOraclePartitionTypedUpperBoundUnlocked(pi);
+                if (exists upper && (!exists preceding || preceding < upper)) {
+                    preceding = upper;
+                }
+            }
+            if (!exists preceding) {
+                throw err, sprintf("%s: cannot compare lower bound for Oracle partition %y with existing partition "
+                    "metadata", getDesc(), spec.name);
+            }
+            if (spec.bound_from != preceding) {
+                throw err, sprintf("%s: Oracle partition %y must start at the preceding upper bound %y; got %y",
+                    getDesc(), spec.name, preceding, spec.bound_from);
+            }
+            return;
+        }
+
+        if (exists spec.bound_from_sql) {
+            *string preceding_sql = getLastOraclePartitionUpperSqlUnlocked(ph);
+            string requested_sql = spec.bound_from_sql;
+            if (!preceding_sql) {
+                throw err, sprintf("%s: cannot resolve the preceding Oracle partition upper SQL bound for %y",
+                    getDesc(), spec.name);
+            }
+            trim preceding_sql;
+            trim requested_sql;
+            if (requested_sql != preceding_sql) {
+                throw err, sprintf("%s: Oracle partition %y must start at preceding upper SQL bound %y; got %y",
+                    getDesc(), spec.name, preceding_sql, requested_sql);
+            }
+            return;
+        }
+
+        throw err, sprintf("%s: cannot add Oracle partition %y with %y after existing partitions because the "
+            "logical lower bound cannot be verified", getDesc(), spec.name, "bound_sql");
+    }
+
+    private *auto getOraclePartitionTypedUpperBoundUnlocked(hash<PartitionInfo> pi) {
+        if (exists pi.bound_to) {
+            return pi.bound_to;
+        }
+        *string sql = getOraclePartitionUpperSqlUnlocked(pi);
+        return sql ? parseOraclePartitionBoundValues(sql, pi.columns) : NOTHING;
+    }
+
+    private *string getOraclePartitionUpperSqlUnlocked(hash<PartitionInfo> pi) {
+        if (exists pi.bound_to_sql) {
+            return pi.bound_to_sql;
+        }
+        if (exists pi.bound_sql) {
+            *string upper = (pi.bound_sql =~ x/^\s*values\s+less\s+than\s*\((.*)\)\s*$/i)[0];
+            return upper;
+        }
+        return;
+    }
+
+    private *string getLastOraclePartitionUpperSqlUnlocked(hash<string, PartitionInfo> ph) {
+        *hash<PartitionInfo> last;
+        foreach hash<PartitionInfo> pi in (ph.iterator()) {
+            if (!pi.is_default && (!last || pi.ordinal > last.ordinal)) {
+                last = pi;
+            }
+        }
+        return last ? getOraclePartitionUpperSqlUnlocked(last) : NOTHING;
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s drop partition %s", getSqlName(), getColumnSqlName(info.name));
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s truncate partition %s", getSqlName(), getColumnSqlName(info.name));
+    }
+
+    private string getExchangePartitionSqlImpl(string partition_name, AbstractTable exchange_table,
+            *hash<auto> opt) {
+        hash<PartitionInfo> info = resolveOraclePartitionInfoUnlocked(partition_name);
+        string sql = sprintf("alter table %s exchange partition %s with table %s", getSqlName(),
+            getColumnSqlName(info.name), exchange_table.getSqlName());
+        sql += opt.including_indexes ? " including indexes" : " excluding indexes";
+        sql += exists opt.validate && !opt.validate ? " without validation" : " with validation";
+        if (opt.update_indexes) {
+            sql += " update indexes";
+        }
+        return sql;
+    }
+
+    private hash<auto> getExchangePartitionOptionsImpl() {
+        return {
+            "including_indexes": Type::Boolean,
+            "update_indexes": Type::Boolean,
+        };
     }
 
     private bool partitionAutoStrategyCoversSpecImpl(hash<PartitionSpec> spec) {
@@ -4127,13 +4854,25 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     private string getOraclePartitionBoundSql(hash<PartitionSpec> spec) {
+        if (spec.method == "list") {
+            if (spec.is_default) {
+                return "values (default)";
+            }
+            if (spec.values_sql) {
+                string sql = spec.values_sql;
+                trim sql;
+                return sql =~ /^values\b/i ? sql : sprintf("values (%s)", sql);
+            }
+            return sprintf("values (%s)", (foldl $1 + ", " + $2,
+                map getOraclePartitionBoundValuesSql($1), spec.values));
+        }
         if (spec.is_default) {
             return "values less than (maxvalue)";
         }
         if (spec.bound_sql) {
             string sql = spec.bound_sql;
             trim sql;
-            if (sql =~ x/^values\s+less\s+than\b/i) {
+            if (sql =~ /^values\s+less\s+than\b/i) {
                 return sql;
             }
             return "values less than (" + sql + ")";
@@ -4151,12 +4890,33 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         return foldl $1 + ", " + $2, (map getSqlValue($1), value);
     }
 
+    private populateOracleListPartitionValues(reference<hash<PartitionInfo>> info, string sql) {
+        info.values_sql = sql;
+        list<auto> values = ();
+        foreach string part in (splitPartitionSqlValues(sql)) {
+            if (info.columns.size() > 1) {
+                trim part;
+                (*string tuple) = (part =~ x/^\((.*)\)$/);
+                if (!exists tuple) {
+                    return;
+                }
+                part = tuple;
+            }
+            *auto value = parseOraclePartitionBoundValues(part, info.columns);
+            if (!exists value) {
+                return;
+            }
+            values += value;
+        }
+        info.values = values;
+    }
+
     private *auto parseOraclePartitionBoundValues(string sql, softlist<string> pcols) {
         if (pcols.size() == 1) {
             return parseOraclePartitionBoundValue(sql, columns{pcols[0]});
         }
 
-        list<string> parts = sql.split(",");
+        list<string> parts = splitPartitionSqlValues(sql);
         if (parts.size() != pcols.size()) {
             return;
         }

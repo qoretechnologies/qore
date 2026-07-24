@@ -55,13 +55,18 @@ public:
     DLLLOCAL QoreDatagramDispatcher() = default;
     DLLLOCAL ~QoreDatagramDispatcher() = default;
 
-    //! Register a connection ID with a handler
+    //! Register a connection ID with a session
     /** @param cid the connection ID as a binary string
-        @param handler opaque pointer to the connection handler
+        @param session_id the QUIC session ID of the owning session
+
+        The map stores session IDs, never pointers: a dispatch hit must be
+        resolved (pinned) through an owning session map by the caller, so a
+        stale CID entry for a session that has already been removed can only
+        produce a lookup miss — never a dangling pointer.
     */
-    DLLLOCAL void registerConnectionId(const std::string& cid, void* handler) {
+    DLLLOCAL void registerConnectionId(const std::string& cid, int64_t session_id) {
         AutoLocker al(lock);
-        cid_map[cid] = handler;
+        cid_map[cid] = session_id;
     }
 
     //! Unregister a connection ID
@@ -72,35 +77,39 @@ public:
         cid_map.erase(cid);
     }
 
-    //! Look up handler for a connection ID
+    //! Look up the session ID for a connection ID
     /** @param cid the connection ID to look up
-        @return the handler pointer, or nullptr if not found
+        @return the session ID, or -1 if not found
     */
-    DLLLOCAL void* lookup(const std::string& cid) const {
+    DLLLOCAL int64_t lookup(const std::string& cid) const {
         AutoLocker al(lock);
         auto it = cid_map.find(cid);
-        return it != cid_map.end() ? it->second : nullptr;
+        return it != cid_map.end() ? it->second : -1;
     }
 
-    //! Dispatch a datagram to the appropriate handler
-    /** Extracts the connection ID from the datagram and looks up the handler.
+    //! Dispatch a datagram to the appropriate session
+    /** Extracts the connection ID from the datagram and looks up the session ID.
 
         @param data the datagram data
         @param len the datagram length
-        @return the handler pointer (a QuicSession* whose shared_ptr is held
-                in qore_socket_private::quic_sessions), or nullptr if the CID
-                is not registered.  The returned pointer is valid only while the
-                caller holds priv->m, which protects session removal.
+        @return the session ID, or -1 if the CID is not registered.  The caller
+                must pin the session by looking the ID up in an owning map
+                (SocketQuicServerPollOperation::sessions_ or
+                qore_socket_private::getQuicSession()) and drop the packet on a
+                miss; the ID may refer to a session that has since been removed,
+                which a map lookup detects safely — unlike the raw pointer this
+                method used to return, which could dangle when the session's
+                last reference was dropped on another thread after removal.
     */
-    DLLLOCAL void* dispatch(const uint8_t* data, size_t len) {
+    DLLLOCAL int64_t dispatch(const uint8_t* data, size_t len) {
         if (len < 1) {
-            return nullptr;
+            return -1;
         }
 
         ngtcp2_version_cid vc;
         int rv = ngtcp2_pkt_decode_version_cid(&vc, data, len, NGTCP2_MAX_CIDLEN);
         if (rv != 0) {
-            return nullptr;  // not a valid QUIC packet
+            return -1;  // not a valid QUIC packet
         }
 
         // Extract DCID (destination connection ID) for lookup.
@@ -114,7 +123,7 @@ public:
             return it->second;
         }
 
-        return nullptr;
+        return -1;
     }
 
     //! Returns the number of registered connection IDs
@@ -136,7 +145,7 @@ public:
     }
 
 private:
-    std::unordered_map<std::string, void*> cid_map;
+    std::unordered_map<std::string, int64_t> cid_map;
     mutable QoreThreadLock lock;
 };
 

@@ -224,6 +224,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *string ext_pidfile;
         *string ext_log;
         int ext_pid = 0;
+
+        # H1-fallback (nginx-like) external server state
+        *hash<auto> fb_info;
+        *TempFile fb_cert;
+        *TempFile fb_key;
+        *string fb_pidfile;
+        *string fb_log;
+        int fb_pid = 0;
     }
 
     private bool waitForConnectionState(WebSocketClientDelayedDataProvider prov, bool expected, date timeout = 5s) {
@@ -238,6 +246,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     constructor() : Test("WebSocketClientTest", "1.0") {
+        # Install signal handler early to debug hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
+        addTestCase("listener stop during WebSocket teardown", \listenerStopDuringTeardownTest());
         addTestCase("reconnect test", \reconnectTest());
         addTestCase("wedged-state reconnect recovery", \wedgedReconnectRecoveryTest());
         addTestCase("data provider test", \dataProviderTest());
@@ -248,6 +263,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HTTP/2 WebSocket tests", \http2WebSocketTests());
         addTestCase("HTTP/2 WebSocket multi-send tests", \http2WebSocketMultiSendTests());
         addTestCase("HTTP/2 WebSocket external server tests", \http2WebSocketExternalTests());
+        addTestCase("HTTP/1.1 fallback tests", \http1FallbackTests());
         addTestCase("cookie option", \testCookieOption());
         addTestCase("cookie option multiple", \testCookieOptionMultiple());
         addTestCase("cookie option absent", \testCookieOptionAbsent());
@@ -296,6 +312,60 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Stop the global async I/O controller's ThreadPool to allow clean exit
         AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
         ctrl.stopClear();
+    }
+
+    #! Regression: a listener stop that lands while a WebSocket connection is still being
+    #! established must always complete instead of deadlocking.
+    /** Two cooperating fixes are exercised:
+        - \c AbstractHttpSocketHandlerInterface::stop() now publishes \c lsh{lid}
+          unconditionally, so a connection caught in the window between
+          \c registerDedicatedSocket() (which increments the listener's \c dThreads
+          WaitGroup) and \c start() (which increments \c lh{lid}) observes the flag in
+          \c startImpl() and stops itself; the previous early return left it blocked
+          forever on its \c done Counter, hanging the listener's \c dThreads.wait().
+        - \c HttpWebSocketPollOperation::forceClose() (invoked from
+          \c WebSocketConnection::stop()) releases the handler thread's \c done Counter
+          without depending on the async wake path, which can be lost during teardown.
+
+        The \c QORE_WS_PRESTART_DELAY_MS hook (debug builds only) widens the pre-start
+        window so the listener stop reliably lands in it; without the fixes the stop
+        deadlocks and the assertion below times out. */
+    listenerStopDuringTeardownTest() {
+        setenv("QORE_WS_PRESTART_DELAY_MS", "1000");
+        on_exit {
+            unsetenv("QORE_WS_PRESTART_DELAY_MS");
+        }
+
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger, "debug": True});
+        MyWsHandler h();
+        server.setDefaultHandler("ws-handler", h);
+        hash<auto> tl = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        # the 101 is sent before the pre-start delay, so connect() returns while the
+        # server is parked in the window
+        WebSocketClient wsc(sub (*data msg) {}, {"url": "ws://localhost:" + tl.port, "logger": logger});
+        wsc.connect();
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+        }
+
+        # stop the listener from a background thread so the assertion can detect a
+        # deadlock via a bounded wait rather than hanging the suite
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            try {
+                server.stopListenerID(tl.id);
+            } catch () {}
+        }();
+        int rc = stopped.waitForZero(20s);
+        assertEq(0, rc,
+            "a listener stop during WebSocket connection setup completes without deadlock");
+        # only fully stop the server if the listener stop actually completed; otherwise
+        # server.stop() would block on the same deadlock and hang the test run
+        if (!rc) {
+            try { server.stop(); } catch () {}
+        }
     }
 
     private bool waitForReadyMessage(string log_path, int port, int retries = 50) {
@@ -401,6 +471,117 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         remove ext_cert;
         remove ext_key;
         remove ext_h2info;
+    }
+
+    # Starts a node server that negotiates HTTP/2 via ALPN but does NOT support
+    # RFC 8441 extended CONNECT (like nginx); it serves a plain HTTP/1.1
+    # WebSocket Upgrade so a client must fall back to H1 to connect.
+    private *hash<auto> startExternalH1FallbackWsServer() {
+        string node_bin = getenv("NODE_BIN") ?? "node";
+        if (system(node_bin + " -v > /dev/null 2>&1") != 0) {
+            return NOTHING;
+        }
+
+        string script = get_script_dir() + DirSep + "h1-fallback-ws-server.js";
+        if (!is_file(script)) {
+            return NOTHING;
+        }
+
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int port = s.getPort();
+        s.close();
+
+        fb_cert = new TempFile("h1fb-ws-cert-" + getpid() + ".pem", CertPem);
+        fb_key = new TempFile("h1fb-ws-key-" + getpid() + ".pem", KeyPem);
+
+        fb_log = tmp_location() + DirSep + "h1fb-ws-server-" + getpid() + ".log";
+        fb_pidfile = tmp_location() + DirSep + "h1fb-ws-server-" + getpid() + ".pid";
+
+        string cmd = sprintf("%s %s %d %s %s > %s 2>&1 & echo $! > %s",
+            node_bin, script, port, fb_cert.getPath(), fb_key.getPath(), fb_log, fb_pidfile);
+        if (system(cmd) != 0) {
+            stopExternalH1FallbackWsServer();
+            return NOTHING;
+        }
+
+        try {
+            fb_pid = trim(ReadOnlyFile::readTextFile(fb_pidfile)).toInt();
+        } catch (hash<ExceptionInfo> ex) {
+            stopExternalH1FallbackWsServer();
+            return NOTHING;
+        }
+
+        if (!fb_pid || !waitForReadyMessage(fb_log, port)) {
+            stopExternalH1FallbackWsServer();
+            return NOTHING;
+        }
+
+        return {"port": port};
+    }
+
+    private stopExternalH1FallbackWsServer() {
+        if (fb_pid) {
+            system("kill " + fb_pid + " > /dev/null 2>&1");
+            remove fb_pid;
+        }
+        if (fb_pidfile && is_file(fb_pidfile)) {
+            unlink(fb_pidfile);
+        }
+        remove fb_pidfile;
+        remove fb_log;
+        if (fb_cert) {
+            delete fb_cert;
+        }
+        if (fb_key) {
+            delete fb_key;
+        }
+        remove fb_cert;
+        remove fb_key;
+        remove fb_info;
+    }
+
+    # Regression test: in the default "auto" HTTP-version mode, a wss:// server
+    # that negotiates H2 but cannot tunnel WebSocket over it (no RFC 8441
+    # extended CONNECT) must transparently fall back to an HTTP/1.1 Upgrade
+    # rather than fail the connection.
+    http1FallbackTests() {
+        fb_info = startExternalH1FallbackWsServer();
+        if (!fb_info) {
+            testSkip("H1-fallback WebSocket server not available");
+            return;
+        }
+        on_exit stopExternalH1FallbackWsServer();
+
+        list<auto> l = ();
+        Counter c(1);
+        code cb = sub (*data msg) {
+            if (exists msg) {
+                l += msg;
+                if (l.size() == 1) {
+                    c.dec();
+                }
+            }
+        };
+        # default http_version is "auto": the client negotiates H2, the extended
+        # CONNECT handshake fails, and it must fall back to HTTP/1.1
+        hash<auto> opts = {
+            "url": "wss://localhost:" + fb_info.port,
+            "logger": logger,
+            "ssl_verify_cert": False,
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        on_exit delete wsc;
+
+        assertFalse(wsc.isHttp2(), "auto mode must fall back off HTTP/2 when extended CONNECT is unsupported");
+        assertFalse(wsc.isHttp3(), "auto mode must fall back off HTTP/3 when extended CONNECT is unsupported");
+
+        wsc.send("echo-test");
+        c.waitForZero(5s);
+        assertEq(list("echo-test"), l, "WebSocket must work after falling back to HTTP/1.1");
+
+        wsc.disconnect();
     }
 
     reconnectTest() {

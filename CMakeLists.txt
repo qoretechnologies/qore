@@ -912,6 +912,79 @@ endif()
 # Always defined since lz4 is now required
 set(HAVE_LZ4 TRUE)
 
+# musl's allocator (mallocng) releases freed memory to the kernel almost immediately, so allocation-heavy
+# workloads - above all LLVM, which every AOT compilation runs - spend most of their time in mmap/munmap/madvise
+# and page faults instead of in user code; an AOT batch that takes 12s with glibc takes 60s on musl, 165s of it
+# in the kernel.  jemalloc restores parity (11s, 0.6s system time) at the same peak RSS, so every musl build of
+# libqore links it in statically.
+#
+# it has to be linked into libqore itself and not just added as a DT_NEEDED dependency: musl resolves symbols
+# breadth-first, so libc is reached before any second-level dependency of libqore and keeps ownership of malloc.
+# libqore precedes libc in the DT_NEEDED list of every binary that links it, so when libqore defines malloc, that
+# definition is the one the whole process uses.
+OPTION(QORE_DISABLE_JEMALLOC "do not link jemalloc into libqore on musl targets" OFF)
+set(QORE_MUSL FALSE)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine
+        OUTPUT_VARIABLE QORE_TARGET_TRIPLE OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if (QORE_TARGET_TRIPLE MATCHES "musl")
+        set(QORE_MUSL TRUE)
+    endif()
+endif()
+
+set(QORE_JEMALLOC_LIBRARY)
+if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
+    # jemalloc is built from source rather than taken from the distribution, because it has to be built with
+    # --disable-initial-exec-tls.  Distribution packages compile jemalloc's thread-specific data (je_tsd_tls) with
+    # the initial-exec TLS model; linking that archive into libqore.so propagates an R_X86_64_TPOFF64 relocation
+    # into the library, and musl's dynamic linker refuses initial-exec TLS relocations in any object loaded with
+    # dlopen() ("initial-exec TLS resolves to dynamic definition").  libqore *is* dlopen()ed - that is how the
+    # Python module loads it, so a single such relocation makes "import qoreloader" fail outright and takes every
+    # embedded-Python user of Qore with it.  glibc absorbs this in its static TLS surplus; musl has no equivalent,
+    # so the model has to be ours to choose and not the distribution's.
+    #
+    # No --with-jemalloc-prefix: libqore must export the allocator under the standard names (see the whole-archive
+    # link below), so malloc/free/realloc/... have to stay unprefixed.
+    #
+    # --disable-cxx, for the same dlopen() reason: jemalloc's C++ integration defines operator new/delete, and
+    # those are the one part of the allocator that libqore can win when it is dlopen()ed instead of linked.  libc
+    # defines malloc/free and is always loaded before a dlopen()ed libqore, so musl keeps ownership of them; but
+    # no libc defines the C++ operators, so they resolve to the first object that does - the jemalloc inside
+    # libqore.  jemalloc's operators call je_malloc directly rather than going through the malloc symbol, so the
+    # process ends up allocating through jemalloc and freeing through musl, and the first free() of a
+    # new()ed pointer faults in musl's get_meta().  Without the operators, new/delete come from libstdc++, which
+    # is a plain wrapper around malloc/free and therefore always follows whichever allocator won: jemalloc when
+    # libqore is linked (the qore binary keeps the performance win intact), musl when it is dlopen()ed.  Either
+    # way the process has exactly one allocator, which is the only property that matters here.
+    include(ExternalProject)
+    set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
+    set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
+    # The source location may be overridden with a local path (e.g. a tarball vendored into a CI image) to avoid a
+    # network fetch at build time.  It must be jemalloc 5.3.0: the pinned SHA-256 below is verified whether the
+    # source is downloaded or taken from a local path, so an override cannot substitute a different tree.
+    set(QORE_JEMALLOC_URL "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2"
+        CACHE STRING "URL or local path to the jemalloc 5.3.0 source tarball linked into libqore on musl targets")
+    ExternalProject_Add(jemalloc_ext
+        URL ${QORE_JEMALLOC_URL}
+        URL_HASH SHA256=2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa
+        PREFIX ${QORE_JEMALLOC_PREFIX}
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure
+            --prefix=${QORE_JEMALLOC_PREFIX}
+            --disable-initial-exec-tls
+            --disable-cxx
+            --disable-shared
+            --enable-static
+            "CC=${CMAKE_C_COMPILER}"
+        BUILD_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) build_lib_static
+        INSTALL_COMMAND ${CMAKE_COMMAND} -E env $(MAKE) install_lib_static install_include
+        BUILD_BYPRODUCTS ${QORE_JEMALLOC_STATIC_LIBRARY}
+    )
+    message(STATUS "Building jemalloc from source for musl target (--disable-initial-exec-tls --disable-cxx): "
+        "${QORE_JEMALLOC_STATIC_LIBRARY}")
+    # the PIC archive is the only one that can be linked into a shared library
+    set(QORE_JEMALLOC_LIBRARY ${QORE_JEMALLOC_STATIC_LIBRARY})
+endif()
+
 if (NOT (WIN32 OR MINGW OR MSYS))
     find_package(Backtrace)
     if (Backtrace_FOUND)
@@ -2314,6 +2387,18 @@ string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
+
+# link jemalloc ahead of everything else and with --whole-archive, so that libqore exports the complete allocator
+# API (malloc/free/realloc/posix_memalign/...) and not just the members that satisfy its own undefined symbols;
+# a partially-exported allocator would let some allocations reach musl's malloc while their frees reach
+# jemalloc's.  The C++ operators are deliberately not part of that set (--disable-cxx above): exporting them is
+# what splits the allocator when libqore is dlopen()ed rather than linked
+if (QORE_JEMALLOC_LIBRARY)
+    add_dependencies(libqore jemalloc_ext)
+    set_property(TARGET libqore APPEND_STRING PROPERTY LINK_FLAGS
+        " -Wl,--whole-archive ${QORE_JEMALLOC_LIBRARY} -Wl,--no-whole-archive")
+endif()
+
 # Link LLVM libraries by explicit library path when available so installed
 # binaries do not inherit LLVM development directories in their RUNPATH.
 # Otherwise fall back to the imported LLVM target.
@@ -3102,7 +3187,7 @@ qore_user_module("qlib/FileDataProvider" "file-logo-white.svg;file-logo-black.sv
 qore_user_module("qlib/FtpClientDataProvider" "ftp-logo-white.svg;ftp-logo-black.svg")
 qore_user_module("qlib/HttpClientDataProvider")
 qore_user_module("qlib/ServerSentEventHandler")
-qore_user_module("qlib/SqlUtil" "SqlUtil-Full.svg")
+qore_user_module("qlib/SqlUtil" "../../doxygen/SqlUtil-Full.svg")
 qore_user_module("qlib/ConnectionProvider")
 qore_user_module("qlib/CsvUtil")
 qore_user_module("qlib/FixedLengthUtil")
@@ -3418,6 +3503,31 @@ add_custom_target(install-qore-qlib-aot
     COMMENT "Installing Qore qlib AOT qmods"
     USES_TERMINAL
     VERBATIM)
+
+# Keep the source-tree links available even when a previous cleanup removed
+# them without making the qmod output itself stale. CI test jobs also invoke
+# this script directly after unpacking the prebuilt build/ artifact.
+if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES)
+    add_custom_target(qore-ensure-source-qmod-symlinks ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+        DEPENDS qore-qlib-aot
+        COMMENT "Ensuring in-tree source qmod symlinks"
+        VERBATIM)
+
+    if (IS_DIRECTORY "${CMAKE_BINARY_DIR}/qlib-qmod")
+        execute_process(COMMAND ${CMAKE_COMMAND}
+            -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+            -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
+            RESULT_VARIABLE _qore_ensure_qmod_links_result)
+        if (NOT _qore_ensure_qmod_links_result EQUAL 0)
+            message(FATAL_ERROR "Could not ensure in-tree source qmod symlinks")
+        endif()
+    endif()
+endif()
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)

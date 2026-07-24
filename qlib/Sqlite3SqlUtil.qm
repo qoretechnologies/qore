@@ -8,7 +8,7 @@
     to deal in the Software without restriction, including without limitation
     the rights to use, copy, modify, merge, publish, distribute, sublicense,
     and/or sell copies of the Software, and to permit persons to whom the
-    Software is furnished to do so, subject to the following conditions:bool n_auto_increment = False, bool n_pk = False
+    Software is furnished to do so, subject to the following conditions:
 
     The above copyright notice and this permission notice shall be included in
     all copies or substantial portions of the Software.
@@ -36,7 +36,7 @@
 # enable all warnings
 
 module Sqlite3SqlUtil {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for working with Sqlite3 SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -83,6 +83,13 @@ module Sqlite3SqlUtil {
     |@ref SqlUtil::VARCHAR|\c text
 
     @section sqlite3_relnotes Release Notes
+
+    @subsection sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - added temporary-table support (\c "create temp table"); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+    - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
+      DataProvider case-sensitivity contract instead of inheriting SQLite's case-insensitive ASCII \c LIKE
+      behavior; SQL LIKE wildcard translation now also preserves literal SQLite GLOB metacharacters
 
     @subsection sqlite3sqlutilv11 Sqlite3SqlUtil_1_1 Sqlite3SqlUtil Module v1.1
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -277,7 +284,8 @@ string str = col.getRenameSql(t, "new_name");
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
         private bool equalImpl(AbstractColumn c) {
-            return True;
+            Sqlite3Column sc = c;
+            return auto_increment == sc.auto_increment && primary_key == sc.primary_key;
         }
     }
 
@@ -675,6 +683,11 @@ auto v = c.name;
             return False;
         }
 
+        #! returns @ref True "True" as SQLite3 supports temporary tables (\c "create temp table")
+        private bool supportsTempTablesImpl() {
+            return True;
+        }
+
         #! returns @ref True "True" if the database supports named types
         private bool supportsTypesImpl() {
             return False;
@@ -819,6 +832,57 @@ auto v = c.name;
                             AbstractDataProviderTypeMap."date");
                         string fmt = Sqlite3Table::convertDateFormat(args[1]);
                         return sprintf("strftime('%s', %s)", fmt, exp0);
+                    },
+                },
+                # SQLite LIKE is ASCII-case-insensitive by default. Use GLOB for case-sensitive LIKE semantics and
+                # explicit upper() normalization when ignore-case is requested so behavior matches generic DPQL.
+                DP_OP_LIKE: DefaultExpressionMap{DP_OP_LIKE} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string glob = sprintf(
+                            "replace(replace(replace(replace(replace(%s, '[', '[[]'), '*', '[*]'), "
+                            "'?', '[?]'), '%%', '*'), '_', '?')", exp1);
+                        return args[2]
+                            ? sprintf("upper(%s) glob upper(%s)", exp0, glob)
+                            : sprintf("%s glob %s", exp0, glob);
+                    },
+                },
+                DP_OP_CONTAINS: DefaultExpressionMap{DP_OP_CONTAINS} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        return args[2]
+                            ? sprintf("instr(upper(%s), upper(%s)) > 0", exp0, exp1)
+                            : sprintf("instr(%s, %s) > 0", exp0, exp1);
+                    },
+                },
+                DP_OP_STARTS_WITH: DefaultExpressionMap{DP_OP_STARTS_WITH} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        return args[2]
+                            ? sprintf("instr(upper(%s), upper(%s)) = 1", exp0, exp1)
+                            : sprintf("instr(%s, %s) = 1", exp0, exp1);
+                    },
+                },
+                DP_OP_ENDS_WITH: DefaultExpressionMap{DP_OP_ENDS_WITH} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string glob = sprintf(
+                            "replace(replace(replace(%s, '[', '[[]'), '*', '[*]'), '?', '[?]')", exp1);
+                        return args[2]
+                            ? sprintf("upper(%s) glob ('*' || upper(%s))", exp0, glob)
+                            : sprintf("%s glob ('*' || %s)", exp0, glob);
                     },
                 },
                 # --- Regex operators (SQLite REGEXP + regexp_replace UDFs are registered
@@ -1114,10 +1178,19 @@ auto v = c.name;
         }
 
         string getCreateTableSqlImpl(*hash<auto> opt) {
-            string sql = sprintf("create table %s (\n", name);
+            string sql = sprintf("%s (\n", getCreateTableStartSql());
             sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
             sql += "\n)";
+            sql += getCreateTableTempClauseSql();
             return sql;
+        }
+
+        #! returns \c "create temp table <name>" for temporary tables, \c "create table <name>" otherwise
+        private string getCreateTableStartSql() {
+            if (isTempTable()) {
+                return sprintf("create temp table %s", name);
+            }
+            return AbstractTable::getCreateTableStartSql();
         }
 
         #! returns @ref False "False" because the sqlite3 driver does not support array binds / bulk DML operations

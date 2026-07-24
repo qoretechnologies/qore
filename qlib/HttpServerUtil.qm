@@ -1177,7 +1177,10 @@ public class HttpListenerInterface inherits AbstractLogger {
         then exits the persistent loop and its @c on_exit block runs the
         normal cleanup path (@c removeUserThreadContext() +
         @c persistentClosed()), releasing any handler-attached user thread
-        context on the correct (listener) thread.
+        context on the correct (listener) thread.  Implementations must not
+        return until that cleanup is complete.  This completion barrier keeps
+        callback-owning programs and other owner objects alive while the
+        dedicated thread executes their close notifications.
 
         Intended for handlers that need to terminate a specific persistent
         session immediately from outside the dedicated thread — e.g. a
@@ -1189,7 +1192,7 @@ public class HttpListenerInterface inherits AbstractLogger {
         do not support dedicated persistent sessions can leave it
         unchanged; concrete subclasses backed by a persistent-queue
         controller override this and delegate to the controller's
-        per-connection close signal.
+        per-connection close signal and completion acknowledgement.
 
         @param uh the connection unique hash (e.g. @c cx.id) identifying
             the persistent session to close
@@ -2710,15 +2713,17 @@ public class AbstractHttpRequestHandler {
     }
 
     private {
-        #! Thread-safe persistence tracking by thread ID
-        /** This map tracks which threads have persistence enabled on this handler,
-            bypassing the per-QoreProgram thread-local data issue where
-            \c save_thread_data() / \c get_thread_data() use \c getProgram()->getThreadData()
-            which can be different across program context boundaries (e.g., closures vs
-            method dispatch in async I/O mode).
+        #! Thread-safe persistence and close-notification tracking by thread ID
+        /** These maps track which threads have persistence enabled on this handler
+            and the corresponding close callbacks, bypassing the per-QoreProgram
+            thread-local data issue where \c save_thread_data() /
+            \c get_thread_data() use \c getProgram()->getThreadData(), which can
+            be different across program context boundaries (e.g., a service
+            program registering state that the HTTP server program later closes).
         */
         Mutex _persistent_mutex();
         hash<string, bool> _persistent_threads;
+        hash<string, code> _persistent_notifications;
     }
 
     #! create the object optionally with the given AbstractAuthenticator
@@ -3012,6 +3017,16 @@ public class AbstractHttpRequestHandler {
 
     #! calls the argument when the persistent connection is closed
     notifyClosed(*code c) {
+        string tid = string(gettid());
+        {
+            _persistent_mutex.lock();
+            on_exit _persistent_mutex.unlock();
+            if (c) {
+                _persistent_notifications{tid} = c;
+            } else {
+                remove _persistent_notifications{tid};
+            }
+        }
         if (c) {
             save_thread_data((NotificationThreadKey: c));
             set_thread_resource(\AbstractHttpRequestHandler::staticNotificationCleanup());
@@ -3087,7 +3102,18 @@ public class AbstractHttpRequestHandler {
 
     #! called externally when a persistent connection is closed
     nothing persistentClosed() {
-        *code c = get_thread_data(NotificationThreadKey);
+        *code c;
+        {
+            _persistent_mutex.lock();
+            on_exit _persistent_mutex.unlock();
+            c = remove _persistent_notifications{string(gettid())};
+        }
+        # Retain the thread-local fallback for compatibility with handler
+        # subclasses compiled against older HttpServerUtil versions.
+        if (!c) {
+            c = get_thread_data(NotificationThreadKey);
+        }
+        remove_thread_data(NotificationThreadKey);
         if (c) {
             try {
                 c();
@@ -3614,10 +3640,18 @@ public class AbstractHttpSocketHandlerInterface {
         {
             m.lock();
             on_exit m.unlock();
-            if (!lh{lid})
-                return;
-
+            # Publish the listener-stop flag unconditionally, even when no connection has
+            # incremented lh{lid} yet.  A dedicated connection can be in the window between
+            # registerDedicatedSocket() (which increments the listener's dThreads WaitGroup)
+            # and start() (which increments lh{lid}); its startImpl() observes lsh{lid} and
+            # stops itself.  Returning here without setting the flag (the previous behavior)
+            # left such a connection blocked forever on its done Counter, hanging the
+            # listener's dThreads.wait() — startImpl() documents the invariant that a
+            # listener stop is always observable as lsh{lid}.
             lsh{lid} = True;
+            if (!lh{lid}) {
+                return;
+            }
         }
 
         stopImpl(lid);

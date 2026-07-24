@@ -36,7 +36,7 @@
 # enable all warnings
 
 module PgsqlSqlUtilBase {
-    version = "1.9";
+    version = "1.10";
     desc = "base user module for working with PostgreSQL SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -160,6 +160,10 @@ $function$
 
     @section pgsql_relnotes Release Notes
 
+    @subsection pgsqlsqlutilbasev110 PgsqlSqlUtilBase v1.10
+    - added temporary-table support (\c "create temporary table ... on commit drop"); see
+      @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
       at runtime to detect driver support (requires pgsql driver v3.3+)
@@ -177,8 +181,21 @@ $function$
       results (base class only returns the first row)
     - fixed \c PgsqlTable handling of session temporary tables so unqualified table names and the
       \c pg_temp schema alias resolve to the backend's active temporary schema
+    - fixed the resolution of unqualified table and view names, which were always assumed to be in the
+      \c public schema; they are now resolved with the connection's \c search_path, as PostgreSQL itself
+      resolves them, so table objects can be used in a schema other than \c public without qualifying
+      every name (\c listViews() already resolved names this way)
+    - fixed the resolution of sequence names, which were matched in any schema of the database rather
+      than in the schema the name resolves in; \c getSequence() reported a sequence that does not exist
+      on the connection's \c search_path (and then failed reading it, or raised an error when more than
+      one schema held the name), and \c listSequences() listed sequences that unqualified SQL on the
+      connection cannot reach. Aligning a schema in a database holding more than one schema with the
+      same sequence names therefore failed
     - implemented PostgreSQL range partition support for %SqlUtil table creation, introspection, lookup, ensure,
       add, drop, truncate, and detach operations
+    - added targeted canonical-name partition metadata lookup without loading the complete child-relation catalog
+    - added portable list and explicit modulus/remainder hash partitioning, recursive subpartition creation and
+      introspection, and catalog-estimated row-count / allocated-size metadata
 
     @subsection pgsqlsqlutilbasev18 PgsqlSqlUtilBase v1.8
     - updated to support \c jdbc and \c odbc drivers as well as the native \c pgsql driver
@@ -294,14 +311,32 @@ public class PgsqlNumberDataType inherits SqlUtil::AbstractNumericDataType {
     }
 }
 
-sub parse_schema_name(string nname, reference<string> schema, reference<string> name) {
+#! Returns the schema that resolves unqualified object names on the given connection
+/** @param ds the datasource to query
+
+    @return the first existing schema in the connection's \c search_path, or \c "public" if
+    \c search_path resolves to no existing schema
+
+    PostgreSQL resolves an unqualified object name against the connection's \c search_path, so the
+    schema for such a name is a property of the connection and cannot be assumed to be \c "public".
+
+    @since %PgsqlSqlUtilBase 1.9
+*/
+public string sub get_pgsql_default_schema(AbstractDatasource ds) {
+    # current_schema() returns NULL when search_path names no existing schema
+    *string schema = ds.selectRow("select current_schema() as \"schema\"").schema;
+    return schema ?? "public";
+}
+
+sub parse_schema_name(string nname, reference<string> schema, reference<string> name,
+        string default_schema = "public") {
     *string sstr = (nname =~ x/^(\w+)\.\w+/)[0];
     if (sstr) {
         schema = sstr;
         splice nname, 0, schema.size() + 1;
         name = nname;
     } else {
-        schema = "public";
+        schema = default_schema;
         name = nname;
     }
 }
@@ -1256,17 +1291,27 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private *AbstractSequence getSequenceImpl(string name) {
-        *hash<auto> row = ds.selectRow("select relname from pg_class where relkind = 'S' and relname = %v", name);
+        # the sequence must be looked up in the schema the name resolves in, exactly as the read below
+        # resolves it.  Matching on relname alone searches every schema in the database, so with the same
+        # sequence name present in another schema this reported a sequence that does not exist here and
+        # then failed reading it -- or, where the read succeeded, described the WRONG schema's sequence
+        string schema;
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
+
+        *hash<auto> row = ds.selectRow("select c.relname from pg_class c "
+            "join pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'S' and c.relname = %v and n.nspname = %v", name, schema);
         if (!row)
             return;
 
-        row = ds.selectRow("select * from %s", name);
+        # qualified, so it cannot resolve to a same-named sequence in another schema on the search path
+        row = ds.selectRow(sprintf("select * from %s.%s", schema, name));
         return new PgsqlSequence(name, row.start, row.increment, row.max == 9223372036854775807 ? NOTHING : row.max);
     }
 
     private *AbstractView getViewImpl(string name) {
         string schema;
-        parse_schema_name(name, \schema, \name);
+        parse_schema_name(name, \schema, \name, get_pgsql_default_schema(ds));
 
         *hash<auto> row = ds.selectRow("select * from pg_views where schemaname = %v and viewname = %v", schema, name);
         if (!row)
@@ -1588,7 +1633,11 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private list<string> listSequencesImpl() {
-        return ds.select("select relname from pg_class where relkind = 'S' order by 1").relname;
+        # only the sequences reachable on the search path, like listViewsImpl() below; matching on
+        # relkind alone lists every schema's sequences, so in a database holding more than one schema
+        # this reported sequences that unqualified SQL here cannot reach
+        return ds.select("select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+            "where c.relkind = 'S' and n.nspname = any (current_schemas(false)) order by 1").relname;
     }
 
     private list<string> listViewsImpl() {
@@ -1653,6 +1702,31 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     #! returns @ref True "True" if the database supports sequences
     private bool supportsSequencesImpl() {
         return True;
+    }
+
+    #! returns @ref True "True" as PostgreSQL supports temporary tables (\c "create temporary table")
+    private bool supportsTempTablesImpl() {
+        return True;
+    }
+
+    #! returns the physical name for a temporary table: a \c "pg_temp"-qualified name
+    /** PostgreSQL creates temporary tables in a session-private schema (\c "pg_temp_N") that is never the
+        connection's default schema, so an unqualified temporary-table name would be qualified with the
+        connection's default schema (e.g. \c "public") in generated SQL and fail to resolve; the \c "pg_temp"
+        alias always refers to the calling session's own temporary schema, so the physical name is qualified
+        with it explicitly.  Pre-created temporary tables are assumed to already carry the correct physical
+        name and are returned unchanged
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        if (precreated || name =~ /^pg_temp\./) {
+            return name;
+        }
+        if (name =~ /\./) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y: PostgreSQL temporary tables "
+                "cannot be created in an explicit schema; use an unqualified name (the table is created in the "
+                "session's temporary schema)", name);
+        }
+        return "pg_temp." + name;
     }
 
     #! returns @ref True "True" if the database supports named types
@@ -1860,6 +1934,43 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         #! Expression map for PostgreSQL
         const PgsqlExpressionMap = DefaultExpressionMap + {
+            # PostgreSQL server-side digest: sha2 family via the built-in shaNNN(bytea) functions
+            # (no pgcrypto required) and md5 via the built-in md5(text) function; sha1 is not a
+            # built-in (it requires the pgcrypto extension) so it is rejected here.
+            DP_FUNC_DIGEST: DefaultExpressionMap{DP_FUNC_DIGEST} + {
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string alg = sqlutil_normalize_digest_algorithm(args[1]);
+                    string enc = sqlutil_normalize_digest_encoding(args[2]);
+                    string v = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string core;
+                    switch (alg) {
+                        case "md5":
+                            core = sprintf("decode(md5(%s), 'hex')", v);
+                            break;
+                        case "sha224":
+                        case "sha256":
+                        case "sha384":
+                        case "sha512":
+                            core = sprintf("%s(convert_to(%s, 'UTF8'))", alg, v);
+                            break;
+                        default:
+                            throw "DIGEST-ERROR", sprintf("digest algorithm %y is not supported by the "
+                                "PostgreSQL driver; supported algorithms: md5, sha224, sha256, sha384, "
+                                "sha512", alg);
+                    }
+                    switch (enc) {
+                        case "binary":
+                            return core;
+                        case "hex":
+                            return sprintf("encode(%s, 'hex')", core);
+                        case "base64":
+                            # strip the newlines PostgreSQL inserts into base64 output every 76 chars
+                            return sprintf("translate(encode(%s, 'base64'), chr(10), '')", core);
+                    }
+                    throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y", enc);
+                },
+            },
             COP_CAST: {
                 "exp": <DataProviderExpressionInfo>{
                     "type": DET_Operator,
@@ -2475,6 +2586,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         #! schema name for the table
         string schema;
 
+        #! @ref True if the table was created with a name carrying no schema
+        /** such a name is resolved with the connection's \c search_path, which may name any schema, so
+            it cannot be recognized later by comparing @ref schema to \c "public"
+        */
+        bool name_unqualified = False;
+
         #! contains any trigger functions supporting triggers on the table
         Functions triggerFunctions;
 
@@ -2500,9 +2617,12 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! Creates the object from the arguments
     constructor(AbstractDatasource nds, string nname, *hash opts) : AbstractTable(nds, nname, opts) {
         bool explicit_schema = (nname =~ x/^(\w+)\.\w+/)[0] ? True : False;
+        name_unqualified = !explicit_schema;
 
-        # see if there is a schema in the name
-        parse_schema_name(nname, \schema, \name);
+        # see if there is a schema in the name; a name without one is resolved by the connection's
+        # search_path, which is not necessarily "public", so only query for it when it is needed
+        parse_schema_name(nname, \schema, \name,
+            explicit_schema ? "public" : get_pgsql_default_schema(nds));
 
         resolveTemporaryTableSchema(!explicit_schema);
 
@@ -3310,7 +3430,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private bool resolveTemporaryTableSchema(bool allow_unqualified) {
-        if (schema != "pg_temp" && !(allow_unqualified && schema == "public")) {
+        # a name with no schema can resolve to a temporary table whatever the connection's search_path
+        # reports as its default schema, so "public" alone no longer identifies such a name
+        if (schema != "pg_temp" && !(allow_unqualified && (name_unqualified || schema == "public"))) {
             return False;
         }
 
@@ -3435,7 +3557,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "pg_get_indexdef(i.oid, a.attnum, false) column_name, xs.tablespace, "
             "am.amname access_method, pg_get_indexdef(i.oid, 0, false) indexdef "
             "FROM pg_class t, pg_class i, pg_index d, pg_attribute a, pg_indexes xs, pg_am am "
-            "WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
+            # PostgreSQL uses relkind 'I' for partitioned parent indexes and
+            # 'i' for ordinary indexes. Both are logical indexes on the table
+            # and must round-trip through the portable SqlUtil API.
+            "WHERE i.relkind in ('i', 'I') and i.relname = xs.indexname AND "
             "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relam = am.oid AND "
             "i.relnamespace IN (SELECT oid FROM pg_namespace "
             "WHERE nspname IN (%v)) AND a.attrelid = i.oid AND t.relname = %v ORDER BY i.relname, attnum", schema,
@@ -3603,10 +3728,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "order by con.constraint_name, con.rn", name, schema);
         if (qh.constraint_name) {
             hash<auto> ch;
+            # a target is reported unqualified only when this connection resolves an unqualified name to
+            # its schema, so that the name reported here can be resolved by the caller; comparing to
+            # "public" instead would report the foreign keys of a table in the connection's own
+            # search_path schema as qualified, and so as differing from an unqualified description,
+            # making every alignment of that schema drop and re-add each foreign key
+            string default_schema = get_pgsql_default_schema(ds);
             foreach hash<auto> row in (qh.contextIterator()) {
                 reference<hash<auto>> c = \ch.(row.constraint_name);
                 c.columns.(row.source_column) = columns{row.source_column};
-                c.target.table = row.schema == "public" ? row.target_table : sprintf("%s.%s", row.schema, row.target_table);
+                c.target.table = row.schema == default_schema
+                    ? row.target_table
+                    : sprintf("%s.%s", row.schema, row.target_table);
                 c.target.columns.(row.target_column) = True;
             }
 
@@ -3688,6 +3821,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private Triggers getTriggersImpl() {
         hash<string, PgsqlTrigger> rv;
+        hash<string, string> trigger_sources;
 
         # get trigger description
         *hash<auto> qh = ds.select("select * from information_schema.triggers where event_object_schema = %v and "
@@ -3707,13 +3841,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             if (!native_case)
                 map row.$1 = row.$1.lwr(), ("event_manipulation", "action_statement", "action_timing",
                     "action_orientation");
-            if (rv{row.trigger_name}) {
+            *string trigger_src = trigger_sources{row.trigger_name};
+            if (trigger_src) {
                 # add event to trigger
-                *string px = (rv{row.trigger_name}.src =~ x/(.+) on/i)[0];
+                *string px = (trigger_src =~ x/(.+) on/i)[0];
                 if (!px)
                     throw "PGSQL-TRIGGER-ERROR", sprintf("cannot find beginning of trigger source: %s",
-                        rv{row.trigger_name}.src);
-                splice rv{row.trigger_name}.src, px.size(), 0, " or " + row.event_manipulation;
+                        trigger_src);
+                splice trigger_src, px.size(), 0, " or " + row.event_manipulation;
+                trigger_sources{row.trigger_name} = trigger_src;
                 continue;
             }
 
@@ -3726,8 +3862,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 src += foldl $1 + ", " + $2, cols.event_object_column;
             }
             src += sprintf(" on %s for each %s %s", name, row.action_orientation, row.action_statement);
-            rv{row.trigger_name} = new PgsqlTrigger(row.trigger_name, src);
+            trigger_sources{row.trigger_name} = src;
         }
+
+        map rv{$1.key} = new PgsqlTrigger($1.key, $1.value), trigger_sources.pairIterator();
 
         if (fl) {
             hash<auto> fh;
@@ -3754,18 +3892,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     #! returns a string that can be used to create the table in the database
     private string getCreateTableSqlImpl(*hash opt) {
-        string sql = sprintf("create table %s (\n", name);
+        string sql = sprintf("%s (\n", getCreateTableStartSql());
 
         sql += foldl $1 + ",\n" + $2, (map "  " + $1.getCreateSql(self), columns.iterator());
         sql += "\n)";
 
+        # temporary-table "on commit" clause must precede any partition/tablespace clause
+        sql += getCreateTableTempClauseSql();
+
         if (partitionStrategy) {
-            if (partitionStrategy.method != "range") {
-                throw "PARTITION-ERROR", sprintf("%s: unsupported PostgreSQL partition method %y", getDesc(),
-                    partitionStrategy.method);
-            }
-            sql += sprintf(" partition by range (%s)", (foldl $1 + ", " + $2,
-                getColumnSqlNames(partitionStrategy.columns)));
+            sql += " " + getPgPartitionStrategySql(partitionStrategy);
         }
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
@@ -3773,6 +3909,26 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             sql += sprintf(" tablespace %s", ts);
 
         return sql;
+    }
+
+    #! returns \c "create temporary table <name>" for temporary tables, \c "create table <name>" otherwise
+    private string getCreateTableStartSql() {
+        if (isTempTable()) {
+            return sprintf("create temporary table %s", name);
+        }
+        return AbstractTable::getCreateTableStartSql();
+    }
+
+    #! returns the PostgreSQL temporary-table \c "on commit" clause based on the temporary-table scope
+    /** transaction-scoped temporary tables use \c "on commit drop" so the table is removed automatically when the
+        transaction ends; session-scoped temporary tables use the PostgreSQL default (\c "on commit preserve rows")
+        and must be dropped explicitly
+    */
+    private string getCreateTableTempClauseSql() {
+        if (isTempTable() && getTempScope() == SqlUtil::TT_Transaction) {
+            return " on commit drop";
+        }
+        return "";
     }
 
     private *list getCreateMiscSqlImpl(*hash opt, bool cache) {
@@ -3963,20 +4119,44 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return server_version_major >= 10;
     }
 
+    private bool supportsPartitionMethodImpl(string method, bool subpartition) {
+        return inlist(method, ("range", "list", "hash"));
+    }
+
+    private bool supportsTargetedPartitionLookupImpl() {
+        return True;
+    }
+
+    private bool partitionUniqueKeysRequireAllColumnsImpl() {
+        return True;
+    }
+
     private bool supportsPartitionDetachImpl() {
         # ALTER TABLE ... DETACH PARTITION was introduced in PostgreSQL 10
         getServerVersion();
         return server_version_major >= 10;
     }
 
+    private bool supportsConcurrentPartitionDetachImpl() {
+        # ALTER TABLE ... DETACH PARTITION ... CONCURRENTLY was introduced in PostgreSQL 14
+        getServerVersion();
+        return server_version_major >= 14;
+    }
+
     private *hash<PartitionStrategy> getPartitionStrategyImpl() {
-        *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' else pt.partstrat::text end "
+        return getPgPartitionStrategyForRelation(schema, name, True);
+    }
+
+    private *hash<PartitionStrategy> getPgPartitionStrategyForRelation(string table_schema, string table_name,
+            bool include_subpartition) {
+        *hash<auto> row = ds.selectRow("select case pt.partstrat when 'r' then 'range' when 'l' then 'list' "
+            "when 'h' then 'hash' else pt.partstrat::text end "
             "method, string_agg(a.attname, ',' order by k.ord) columns from pg_catalog.pg_partitioned_table pt "
             "join pg_catalog.pg_class c on c.oid = pt.partrelid "
             "join pg_catalog.pg_namespace n on n.oid = c.relnamespace "
             "join unnest(pt.partattrs) with ordinality as k(attnum, ord) on true "
             "join pg_catalog.pg_attribute a on a.attrelid = c.oid and a.attnum = k.attnum "
-            "where n.nspname = %v and c.relname = %v group by pt.partstrat", schema, name);
+            "where n.nspname = %v and c.relname = %v group by pt.partstrat", table_schema, table_name);
         if (!row) {
             return;
         }
@@ -3986,26 +4166,91 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "method": row.method,
             "columns": cols,
         });
+        if (include_subpartition) {
+            *hash<auto> child = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+                "from pg_catalog.pg_inherits i "
+                "join pg_catalog.pg_class p on p.oid = i.inhparent "
+                "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+                "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+                "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+                "join pg_catalog.pg_partitioned_table cpt on cpt.partrelid = c.oid "
+                "where pn.nspname = %v and p.relname = %v order by i.inhseqno limit 1", table_schema,
+                table_name);
+            if (child) {
+                # The portable recursive model declares one child strategy for every direct partition.  PostgreSQL
+                # permits native hierarchies where only some children are partitioned or their strategies differ;
+                # do not silently reverse such a hierarchy into a materially different portable description.
+                *hash<auto> child_rows = ds.select("select cn.nspname as schema, c.relname as relation_name, "
+                    "cpt.partrelid is not null as is_partitioned from pg_catalog.pg_inherits i "
+                    "join pg_catalog.pg_class p on p.oid = i.inhparent "
+                    "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
+                    "join pg_catalog.pg_class c on c.oid = i.inhrelid "
+                    "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
+                    "left join pg_catalog.pg_partitioned_table cpt on cpt.partrelid = c.oid "
+                    "where pn.nspname = %v and p.relname = %v order by i.inhseqno", table_schema, table_name);
+                list<hash<auto>> partitioned_children = ();
+                bool has_leaf;
+                foreach hash<auto> child_row in (child_rows.contextIterator()) {
+                    if (child_row.is_partitioned) {
+                        partitioned_children += child_row;
+                    } else {
+                        has_leaf = True;
+                    }
+                }
+                if (has_leaf) {
+                    throw "PARTITION-ERROR", sprintf("PostgreSQL table %s.%s has a non-uniform native "
+                        "subpartition hierarchy: every direct partition must use the same recursive strategy",
+                        table_schema, table_name);
+                }
+
+                *hash<PartitionStrategy> substrategy;
+                foreach hash<auto> child_row in (partitioned_children) {
+                    hash<PartitionStrategy> candidate = getPgPartitionStrategyForRelation(child_row.schema,
+                        child_row.relation_name, True);
+                    if (!substrategy) {
+                        substrategy = candidate;
+                    } else if (substrategy != candidate) {
+                        throw "PARTITION-ERROR", sprintf("PostgreSQL table %s.%s has a non-uniform native "
+                            "subpartition hierarchy: direct partition strategies differ", table_schema,
+                            table_name);
+                    }
+                }
+                if (substrategy) {
+                    rv.subpartition = substrategy;
+                }
+            }
+        }
         return rv;
     }
 
-    private hash<string, PartitionInfo> getPartitionsImpl() {
-        hash<string, PartitionInfo> rv();
+    #! PostgreSQL has no driver-specific RANGE strategy configuration exposed by SqlUtil
+    private *hash<auto> normalizePartitionStrategyDriverForAlignmentImpl(hash<PartitionStrategy> strategy) {
+        return;
+    }
 
+    private hash<string, PartitionInfo> getPartitionsImpl() {
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
-        if (!strategy) {
-            return rv;
-        }
+        return strategy ? getPgPartitionsForRelation(schema, name, strategy) : {};
+    }
+
+    private hash<string, PartitionInfo> getPgPartitionsForRelation(string table_schema, string table_name,
+            hash<PartitionStrategy> strategy) {
+        hash<string, PartitionInfo> rv();
         getColumnsUnlocked();
 
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
         *hash<auto> qh = ds.select("select cn.nspname as schema, c.relname as relation_name, "
-            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
+            + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
             "join pg_catalog.pg_class c on c.oid = i.inhrelid "
             "join pg_catalog.pg_namespace cn on cn.oid = c.relnamespace "
-            "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", schema, name);
+            "where pn.nspname = %v and p.relname = %v order by i.inhseqno, cn.nspname, c.relname", table_schema,
+            table_name);
 
         # build the partition list in the catalog (inhseqno) order first
         list<hash<PartitionInfo>> all = ();
@@ -4021,8 +4266,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
                 "bound_sql": row.bound_sql,
                 "is_default": False,
+                "driver": {"pgsql": {"detach_pending": row.detach_pending}},
             });
+            info.estimated_row_count = row.estimated_row_count;
+            info.size_bytes = row.size_bytes;
             populatePgPartitionBounds(\info);
+            if (strategy.subpartition) {
+                hash<PartitionStrategy> child_strategy(strategy.subpartition);
+                info.subpartitions = getPgPartitionsForRelation(row.schema, row.relation_name, child_strategy);
+            }
             all += info;
         }
 
@@ -4031,7 +4283,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         list<hash<PartitionInfo>> ranged = ();
         list<hash<PartitionInfo>> other = ();
         foreach hash<PartitionInfo> info in (all) {
-            if (!info.is_default && exists info.bound_from && info.bound_from.typeCode() != NT_LIST) {
+            if (strategy.method == "range" && !info.is_default && exists info.bound_from
+                && info.bound_from.typeCode() != NT_LIST) {
                 ranged += info;
             } else {
                 other += info;
@@ -4088,9 +4341,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return getQuotedPartitionSqlName(rel.schema, rel.name);
     }
 
-    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+    private *hash<PartitionInfo> getPartitionByNameImpl(string partition_name) {
         hash<auto> rel = parsePartitionRelationName(partition_name);
-        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name "
+        getServerVersion();
+        string pending_expr = server_version_major >= 14 ? "i.inhdetachpending" : "false";
+        *hash<auto> row = ds.selectRow("select cn.nspname as schema, c.relname as relation_name, "
+            "pg_catalog.pg_get_expr(c.relpartbound, c.oid, true) as bound_sql, " + pending_expr
+            + " as detach_pending, greatest(c.reltuples, 0)::bigint as estimated_row_count, "
+            "pg_catalog.pg_total_relation_size(c.oid) as size_bytes "
             "from pg_catalog.pg_inherits i "
             "join pg_catalog.pg_class p on p.oid = i.inhparent "
             "join pg_catalog.pg_namespace pn on pn.oid = p.relnamespace "
@@ -4099,8 +4357,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "where pn.nspname = %v and p.relname = %v and cn.nspname = %v and c.relname = %v",
             schema, name, rel.schema, rel.name);
         if (!row) {
-            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
-                partition_name);
+            return;
         }
 
         *PartitionStrategy strategy = getPartitionStrategyUnlocked();
@@ -4108,32 +4365,104 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "name": getCanonicalPartitionName(row.schema, row.relation_name),
             "method": strategy ? strategy.method : "range",
             "columns": strategy ? strategy.columns : (),
-            "ordinal": 0,
+            # listPartitions() applies typed-bound ordering that cannot be reproduced cheaply by a targeted query
+            "ordinal": -1,
             "schema": row.schema,
             "relation_name": row.relation_name,
             "sql_name": getQuotedPartitionSqlName(row.schema, row.relation_name),
+            "bound_sql": row.bound_sql,
+            "is_default": False,
+            "driver": {"pgsql": {"detach_pending": row.detach_pending}},
         });
+        info.estimated_row_count = row.estimated_row_count;
+        info.size_bytes = row.size_bytes;
+        populatePgPartitionBounds(\info);
         return info;
     }
 
-    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec) {
-        return sprintf("create table %s partition of %s %s", getPartitionSqlName(spec), getSqlName(),
-            getPgPartitionBoundSql(spec));
+    private hash<PartitionInfo> resolvePartitionInfoUnlocked(string partition_name) {
+        *hash<PartitionInfo> info = getPartitionByNameUnlocked(partition_name);
+        if (!info) {
+            throw "PARTITION-ERROR", sprintf("%s: relation %y is not a partition of this table", getDesc(),
+                partition_name);
+        }
+        return info;
     }
 
-    private string getDropPartitionSqlImpl(string partition_name) {
+    private string getAddPartitionSqlImpl(hash<PartitionSpec> spec, *hash<auto> opt) {
+        *PartitionStrategy strategy = getPartitionStrategyUnlocked();
+        @assert(strategy);
+        string sql = getPgAddPartitionSql(spec, getSqlName(), strategy);
+        if (spec.subpartitions) {
+            return sprintf("do $qore_sqlutil$ begin\n%s;\nend $qore_sqlutil$", sql);
+        }
+        return sql;
+    }
+
+    private string getPgAddPartitionSql(hash<PartitionSpec> spec, string parent_sql,
+            hash<PartitionStrategy> strategy) {
+        string child_sql = getPartitionSqlName(spec);
+        string sql = sprintf("create table %s partition of %s %s", child_sql, parent_sql,
+            getPgPartitionBoundSql(spec));
+        if (strategy.subpartition) {
+            hash<PartitionStrategy> child_strategy(strategy.subpartition);
+            sql += " " + getPgPartitionStrategySql(child_strategy);
+            if (spec.subpartitions) {
+                foreach hash<auto> raw in (spec.subpartitions.iterator()) {
+                    hash<PartitionSpec> child(raw);
+                    sql += ";\n" + getPgAddPartitionSql(child, child_sql, child_strategy);
+                }
+            }
+        }
+        return sql;
+    }
+
+    private string getPgPartitionStrategySql(hash<PartitionStrategy> strategy) {
+        return sprintf("partition by %s (%s)", strategy.method,
+            (foldl $1 + ", " + $2, getColumnSqlNames(strategy.columns)));
+    }
+
+    private string getDropPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("drop table %s", info.sql_name);
     }
 
-    private string getTruncatePartitionSqlImpl(string partition_name) {
+    private string getTruncatePartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("truncate table %s", info.sql_name);
     }
 
-    private string getDetachPartitionSqlImpl(string partition_name) {
+    private string getDetachPartitionSqlImpl(string partition_name, *hash<auto> opt) {
         hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
         return sprintf("alter table %s detach partition %s", getSqlName(), info.sql_name);
+    }
+
+    private string getDetachPartitionConcurrentlySqlImpl(string partition_name, *hash<auto> opt) {
+        assertNoPgDefaultPartitionForConcurrentDetachUnlocked();
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is already pending detach; call "
+                "finalizePartitionDetach()", getDesc(), info.name);
+        }
+        return sprintf("alter table %s detach partition %s concurrently", getSqlName(), info.sql_name);
+    }
+
+    private string getFinalizePartitionDetachSqlImpl(string partition_name, *hash<auto> opt) {
+        hash<PartitionInfo> info = resolvePartitionInfoUnlocked(partition_name);
+        if (!info.driver.pgsql.detach_pending) {
+            throw "PARTITION-ERROR", sprintf("%s: partition %y is not pending concurrent detach", getDesc(),
+                info.name);
+        }
+        return sprintf("alter table %s detach partition %s finalize", getSqlName(), info.sql_name);
+    }
+
+    private assertNoPgDefaultPartitionForConcurrentDetachUnlocked() {
+        foreach hash<PartitionInfo> info in (getPartitionsUnlocked().iterator()) {
+            if (info.is_default) {
+                throw "PARTITION-ERROR", sprintf("%s: PostgreSQL cannot detach a partition concurrently while "
+                    "default partition %y exists", getDesc(), info.name);
+            }
+        }
     }
 
     #! returns the canonical name of the standalone table that the detached partition becomes
@@ -4150,6 +4479,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private string getPgPartitionBoundSql(hash<PartitionSpec> spec) {
         if (spec.is_default) {
             return "default";
+        }
+        if (spec.method == "list") {
+            if (spec.values_sql) {
+                string sql = spec.values_sql;
+                trim sql;
+                return sql =~ /^for\s+values\s+in\b/i ? sql : sprintf("for values in (%s)", sql);
+            }
+            return sprintf("for values in (%s)", (foldl $1 + ", " + $2,
+                map getPgPartitionBoundValuesSql($1), spec.values));
+        }
+        if (spec.method == "hash") {
+            return sprintf("for values with (modulus %d, remainder %d)", spec.modulus, spec.remainder);
         }
         if (spec.bound_sql) {
             string sql = spec.bound_sql;
@@ -4183,6 +4524,42 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return;
         }
 
+        if (info.method == "list") {
+            *string values_sql = (bound_sql =~ x/^for\s+values\s+in\s*\((.*)\)$/i)[0];
+            if (!exists values_sql) {
+                return;
+            }
+            info.values_sql = values_sql;
+            list<auto> values = ();
+            foreach string part in (splitPartitionSqlValues(values_sql)) {
+                if (info.columns.size() > 1) {
+                    trim part;
+                    (*string tuple) = (part =~ x/^\((.*)\)$/);
+                    if (!exists tuple) {
+                        return;
+                    }
+                    part = tuple;
+                }
+                *auto value = parsePgPartitionBoundValues(part, info.columns);
+                if (!exists value) {
+                    return;
+                }
+                values += value;
+            }
+            info.values = values;
+            return;
+        }
+
+        if (info.method == "hash") {
+            (*string modulus, *string remainder) = (bound_sql =~
+                x/^for\s+values\s+with\s*\(modulus\s+(\d+)\s*,\s*remainder\s+(\d+)\s*\)$/i);
+            if (exists modulus && exists remainder) {
+                info.modulus = modulus.toInt();
+                info.remainder = remainder.toInt();
+            }
+            return;
+        }
+
         (*string bound_from_sql, *string bound_to_sql) = (bound_sql =~ x/^for\s+values\s+from\s*\((.*)\)\s+to\s*\((.*)\)$/i);
         # NOTE: use "exists" rather than a boolean test; a bound value of "0" (or "") is a valid bound but is
         # false in a boolean context, so "!bound_from_sql" would incorrectly discard zero/empty bounds
@@ -4206,7 +4583,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return parsePgPartitionBoundValue(sql, columns{pcols[0]});
         }
 
-        list<string> parts = sql.split(",");
+        list<string> parts = splitPartitionSqlValues(sql);
         if (parts.size() != pcols.size()) {
             return;
         }

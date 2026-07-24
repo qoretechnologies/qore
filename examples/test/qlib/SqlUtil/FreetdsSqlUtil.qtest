@@ -4,15 +4,15 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MssqlSqlUtilBase
-%requires FreetdsSqlUtil
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/MssqlSqlUtilBase.qmod
+%requires ../../../../qlib/FreetdsSqlUtil.qmod
 
 %prepend-module-path "${SCRIPT_DIR}"
-%requires SqlUtilTestBase
+%requires ./SqlUtilTestBase.qm
 
 %exec-class FreetdsTest
 
@@ -151,6 +151,7 @@ class FreetdsTest inherits SqlTestBase {
 
             addTestCase("analytic/window functions", \testAnalyticFunctions());
             addTestCase("range partition lifecycle", \rangePartitionLifecycleTest());
+            addTestCase("partition switch", \partitionExchangeTest());
             addTestCase("create as select", \createAsSelectTest());
             addTestCase("drop table options", \dropTableOptionsTest());
         }
@@ -281,6 +282,19 @@ class FreetdsTest inherits SqlTestBase {
         if (!probe.supportsPartitions()) {
             testSkip("SQL Server partition lifecycle support requires SQL Server 2016 or newer");
         }
+        assertTrue(probe.supportsPartitionMethod("range"), "SQL Server supports portable range partitioning");
+        assertFalse(probe.supportsPartitionMethod("list"),
+            "SQL Server does not claim non-equivalent list partitioning");
+        assertFalse(probe.supportsPartitionMethod("hash"),
+            "SQL Server does not claim non-equivalent hash partitioning");
+        assertThrows("DESCRIPTION-ERROR", "does not support portable list partitioning", sub () {
+            AbstractTable bad_method = AbstractTable::getTable(ds, "mssql_partition_bad_method");
+            bad_method.setupTable({
+                "columns": {"id": {"qore_type": Type::Int}},
+                "partition_strategy": {"method": "list", "columns": "id"},
+                "partitions": {"p": {"values": (1,)}},
+            });
+        });
 
         cleanupRangePartitionLifecycleTest(ds);
         on_exit {
@@ -290,6 +304,67 @@ class FreetdsTest inherits SqlTestBase {
             }
         }
 
+        AbstractTable regular_clustered = AbstractTable::getTable(ds, "mssql_regular_clustered");
+        regular_clustered.setupTable({
+            "columns": {"id": {"qore_type": Type::Int, "notnull": True}},
+            "indexes": {"mssql_regular_clustered_uk": {
+                "columns": "id", "unique": True, "method": "clustered",
+            }},
+        });
+        assertTrue(regular_clustered.getCreateSqlString() =~ /create unique clustered index/i,
+            "nonpartitioned unique clustered index remains supported");
+
+        AbstractTable bad_clustered = AbstractTable::getTable(ds, "mssql_partition_bad_clustered");
+        bad_clustered.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime2", "notnull": True},
+            },
+            "indexes": {"mssql_partition_bad_clustered_uk": {
+                "columns": "id", "unique": True, "method": "clustered",
+            }},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {"pmax": {"bound_from": "2026-01-01", "bound_to": "2026-02-01"}},
+        });
+        assertThrows("OPTION-ERROR", "must include partition column", sub () {
+            bad_clustered.getCreateSql();
+        });
+
+        # SQL Server accepts nonaligned unique keys that omit the partition column.  Materialize this mode first;
+        # partition-level TRUNCATE requires every index to be aligned, so the lifecycle table below is recreated
+        # with aligned keys after this independent DDL check.
+        AbstractTable nonaligned = AbstractTable::getTable(ds, "mssql_partition_test");
+        nonaligned.setupTable({
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "d": {"native_type": "datetime2", "notnull": True},
+                "v": {"qore_type": Type::String, "size": 20},
+            },
+            "primary_key": {"name": "mssql_partition_test_pk", "columns": "id"},
+            "indexes": {"mssql_partition_test_uk": {"columns": ("id", "v"), "unique": True}},
+            "unique_constraints": {"mssql_partition_test_uc": {"columns": "v"}},
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"name": "p1", "bound_from": "2026-01-01", "bound_to": "2026-02-01"},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
+            },
+        });
+        list<auto> create_sql = nonaligned.getCreateSql();
+        string all_create_sql = create_sql.join("\n");
+        assertTrue(all_create_sql =~ /primary key nonclustered\s*\(id\) on \[primary\]/i,
+            "nonaligned primary key is explicitly nonclustered: " + all_create_sql);
+        assertTrue(all_create_sql =~ /create unique index mssql_partition_test_uk on mssql_partition_test \(id, v\) on \[primary\]/i,
+            "nonaligned unique index uses a regular filegroup");
+        assertTrue(all_create_sql =~ /constraint mssql_partition_test_uc unique\s+\(v\) on \[primary\]/i,
+            "nonaligned unique constraint uses a regular filegroup");
+        nonaligned.createCommit();
+        AbstractTable nonaligned_rt = AbstractTable::getTable(ds, "mssql_partition_test");
+        assertTrue(nonaligned_rt.getIndexes().hasKey("mssql_partition_test_uk"),
+            "nonaligned unique index is materialized");
+        assertTrue(nonaligned_rt.getConstraints().hasKey("mssql_partition_test_uc"),
+            "nonaligned unique constraint is materialized");
+        nonaligned_rt.dropCommit();
+
         AbstractTable t = AbstractTable::getTable(ds, "mssql_partition_test");
         t.setupTable({
             "columns": {
@@ -297,21 +372,60 @@ class FreetdsTest inherits SqlTestBase {
                 "d": {"native_type": "datetime2", "notnull": True},
                 "v": {"qore_type": Type::String, "size": 20},
             },
-            "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d")},
+            "primary_key": {"name": "mssql_partition_test_pk", "columns": ("id", "d"),
+                "partition_aligned": True},
+            "indexes": {"mssql_partition_test_aligned_uk": {
+                "columns": ("d", "id"), "unique": True, "partition_aligned": True,
+            }},
+            "unique_constraints": {"mssql_partition_test_aligned_uc": {
+                "columns": ("d", "v"), "partition_aligned": True,
+            }},
             "partition_strategy": {"method": "range", "columns": "d"},
             "partitions": {
-                "p1": {"name": "p1", "bound_from": 2026-01-01, "bound_to": 2026-02-01},
-                "p2": {"name": "p2", "bound_from": 2026-02-01, "bound_to": 2026-03-01},
+                "p1": {"name": "p1", "bound_from": "2026-01-01", "bound_to": "2026-02-01"},
+                "p2": {"name": "p2", "bound_from": "2026-02-01", "bound_to": "2026-03-01"},
             },
         });
-        list<auto> create_sql = t.getCreateSql();
+        create_sql = t.getCreateSql();
         assertTrue(create_sql[0] =~ /create partition function/i);
         assertTrue(create_sql[0] =~ /as range right/i);
+        all_create_sql = create_sql.join("\n");
+        assertTrue(all_create_sql =~ /create unique index mssql_partition_test_aligned_uk.*on qore_ps_/i,
+            "unique index containing the partition key is aligned");
+        assertTrue(all_create_sql =~ /constraint mssql_partition_test_aligned_uc unique.*on qore_ps_/i,
+            "unique constraint containing the partition key is aligned");
         t.createCommit();
 
         AbstractTable rt = AbstractTable::getTable(ds, "mssql_partition_test");
         assertEq(True, rt.supportsPartitions());
+        assertEq(False, rt.supportsPartitionRead());
+        assertEq(True, rt.supportsTargetedPartitionLookup());
         assertEq(False, rt.supportsPartitionDetach());
+        assertEq(False, rt.supportsConcurrentPartitionDetach());
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            rt.getSelectSql({"partition": "p1"});
+        });
+        DbTableDataProvider partition_dp(rt);
+        assertThrows("PARTITION-NOT-SUPPORTED", "does not support named partition qualification", sub () {
+            partition_dp.searchSingleRecord(NOTHING, {"partition": "p1"});
+        });
+
+        *hash<PartitionInfo> targeted_p2 = rt.getPartition("p2");
+        assertTrue(exists targeted_p2, "SQL Server targeted lookup returns the logical partition name");
+        assertEq(2026-02-01, targeted_p2.bound_from, "SQL Server targeted lookup resolves the lower boundary");
+        assertEq(2026-03-01, targeted_p2.bound_to, "SQL Server targeted lookup resolves the upper boundary");
+        assertTrue(exists targeted_p2.estimated_row_count,
+            "SQL Server targeted lookup exposes the catalog-estimated row count");
+        assertTrue(exists targeted_p2.size_bytes,
+            "SQL Server targeted lookup exposes allocated partition bytes");
+        assertNothing(rt.getPartition("p999"), "SQL Server targeted lookup returns nothing for missing boundaries");
+        hash<PartitionLookupResult> targeted_lookup = rt.findPartitionBySpec({
+            "name": "p2",
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        });
+        assertEq(PartitionLookupStatus::Found, targeted_lookup.status,
+            "SQL Server verifies name-bearing comparable specs with targeted metadata");
 
         hash<PartitionStrategy> strategy = rt.getPartitionStrategy();
         assertEq("range", strategy.method);
@@ -320,12 +434,55 @@ class FreetdsTest inherits SqlTestBase {
 
         hash<string, PartitionInfo> parts = rt.listPartitions();
         assertEq(2, parts.size());
+        assertEq(0, parts.p1.ordinal, "full SQL Server listing replaces the partial targeted cache");
+        assertEq("p2", rt.getPartition("2").name,
+            "SQL Server targeted lookup preserves numeric lifecycle aliases after a full listing");
         assertEq(2026-02-01, parts.p2.bound_from);
         assertEq(2026-03-01, parts.p2.bound_to);
         assertEq(3, parts.p2.driver.mssql.partition_number);
 
         hash<auto> desc = rt.getDescriptionHash({"with_partitions": True});
         assertEq(2, desc.partitions.size());
+        assertFalse(desc.partitions.p2.hasKey("ordinal"));
+        assertFalse(desc.partitions.p2.hasKey("sql_name"));
+        assertFalse(desc.partitions.p2.hasKey("estimated_row_count"),
+            "description excludes runtime row statistics");
+        assertFalse(desc.partitions.p2.hasKey("size_bytes"),
+            "description excludes runtime storage statistics");
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("partition_number"));
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("lower_boundary_id"));
+        assertFalse(desc.partitions.p2.driver.mssql.hasKey("upper_boundary_id"));
+        assertEq(strategy.driver.mssql.partition_function,
+            desc.partitions.p2.driver.mssql.partition_function);
+        assertEq(strategy.driver.mssql.partition_scheme, desc.partitions.p2.driver.mssql.partition_scheme);
+
+        assertEq((), rt.getAlignSql(t), "generated partition object names align with the creation schema");
+        AbstractTable reverse_template = AbstractTable::getTable(ds, "mssql_partition_test");
+        reverse_template.setupTable(desc);
+        assertEq((), rt.getAlignSql(reverse_template), "reverse-engineered partition schema aligns unchanged");
+
+        hash<auto> changed_strategy_desc = {} + desc;
+        changed_strategy_desc.partition_strategy = {} + desc.partition_strategy;
+        changed_strategy_desc.partition_strategy.driver = {
+            "mssql": {
+                "partition_function": "different_partition_function",
+                "partition_scheme": strategy.driver.mssql.partition_scheme,
+            },
+        };
+        assertEq("different_partition_function",
+            changed_strategy_desc.partition_strategy.driver.mssql.partition_function,
+            "changed SQL Server partition function is present in the input description");
+        AbstractTable changed_strategy = AbstractTable::getTable(ds, "mssql_partition_test");
+        changed_strategy.setupTable(changed_strategy_desc);
+        assertEq("different_partition_function",
+            changed_strategy.getPartitionStrategy().driver.mssql.partition_function,
+            "changed SQL Server partition function reaches the normalized strategy");
+        assertThrows("PARTITION-ERROR", "normalized desired", sub () {
+            rt.getAlignSql(changed_strategy);
+        });
+        assertThrows("PARTITION-ERROR", "does not support generic default partitions", sub () {
+            rt.getAddPartitionSql({"name": "pmax", "is_default": True});
+        });
 
         hash<PartitionLookupResult> lookup = rt.findPartitionBySpec({
             "bound_from": 2026-02-01,
@@ -389,6 +546,111 @@ class FreetdsTest inherits SqlTestBase {
                     },
                 });
             });
+    }
+
+    private cleanupPartitionExchangeTest(AbstractDatasource ds) {
+        string schema = ds.selectRow("select schema_name() as \"schema\"").schema;
+        foreach string table_name in (("mssql_partition_exchange_target", "mssql_partition_exchange")) {
+            ds.execRaw(sprintf("if object_id('%s.%s', 'U') is not null drop table %s.%s",
+                schema, table_name, schema, table_name));
+        }
+        string suffix = regex_subst(schema + "_mssql_partition_exchange", "[^A-Za-z0-9_]", "_", RE_Global);
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_schemes where name = 'qore_ps_%s') "
+            "drop partition scheme qore_ps_%s", suffix, suffix));
+        ds.execRaw(sprintf("if exists (select 1 from sys.partition_functions where name = 'qore_pf_%s') "
+            "drop partition function qore_pf_%s", suffix, suffix));
+        ds.commit();
+    }
+
+    private partitionExchangeTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = table.getDatasource();
+        AbstractTable probe = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        if (!probe.supportsPartitions()) {
+            testSkip("SQL Server partition switch support requires SQL Server 2016 or newer");
+        }
+
+        cleanupPartitionExchangeTest(ds);
+        on_exit cleanupPartitionExchangeTest(ds);
+
+        hash<auto> columns = {
+            "id": {"qore_type": Type::Int, "notnull": True},
+            "d": {"native_type": "datetime2", "notnull": True},
+            "v": {"qore_type": Type::String, "size": 20},
+        };
+        AbstractTable source = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        source.setupTable({
+            "columns": columns,
+            "partition_strategy": {"method": "range", "columns": "d"},
+            "partitions": {
+                "p1": {"bound_from": 2026-01-01, "bound_to": 2026-02-01},
+                "p2": {"bound_from": 2026-02-01, "bound_to": 2026-03-01},
+            },
+        });
+        source.createCommit();
+
+        AbstractTable target = AbstractTable::getTable(ds, "mssql_partition_exchange_target");
+        target.setupTable({"columns": columns});
+        target.createCommit();
+
+        AbstractTable actual_source = AbstractTable::getTable(ds, "mssql_partition_exchange");
+        AbstractTable actual_target = AbstractTable::getTable(ds, "mssql_partition_exchange_target");
+        assertTrue(actual_source.supportsPartitionExchange(), "SQL Server supports partition switch");
+        actual_source.validateTableShape(actual_target);
+
+        ds.execRaw("insert into mssql_partition_exchange values (2, cast('2026-02-15' as datetime2), 'source')");
+        ds.commit();
+
+        string sql = actual_source.getExchangePartitionSql({
+            "bound_from": 2026-02-01,
+            "bound_to": 2026-03-01,
+        }, actual_target);
+        assertTrue(sql =~ /alter table .*mssql_partition_exchange switch partition 3 to .*mssql_partition_exchange_target$/i,
+            "SQL Server switch SQL uses the resolved physical partition number");
+        assertThrows("OPTION-ERROR", "cannot disable validation", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"validate": False});
+        });
+
+        int executing_callback_count;
+        actual_source.exchangePartitionCommit("p2", actual_target, {
+            "sql_callback": sub (string callback_sql) {
+                ++executing_callback_count;
+                ds.execRaw(callback_sql);
+            },
+            "sql_callback_executed": True,
+        });
+        assertEq(1, executing_callback_count,
+            "executing SQL Server switch callback is invoked exactly once without duplicate execution");
+        assertEq(0, ds.selectRow("select count(*) c from mssql_partition_exchange where "
+            "d >= cast('2026-02-01' as datetime2) and d < cast('2026-03-01' as datetime2)").c,
+            "SQL Server switch leaves the source partition empty");
+        assertEq("source", actual_target.selectRow().v,
+            "SQL Server switch moves the partition rows to the standalone table");
+
+        assertThrows("PARTITION-ERROR", "must be empty", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target);
+        });
+
+        AbstractTable bad_target = AbstractTable::getTable(ds, "mssql_partition_exchange_bad");
+        bad_target.setupTable({"columns": columns + {"v": {"qore_type": Type::String, "size": 21}}});
+        assertThrows("PARTITION-ERROR", "not storage-compatible", sub () {
+            actual_source.getExchangePartitionSql("p2", bad_target);
+        });
+        assertThrows("PARTITION-ERROR", "cannot be exchanged with its parent", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_source);
+        });
+        assertThrows("OPTION-ERROR", "unknown key", sub () {
+            actual_source.getExchangePartitionSql("p2", actual_target, {"unsupported": True});
+        });
+
+        Datasource other_ds = getDatasource();
+        AbstractTable other_target = AbstractTable::getTable(other_ds, "mssql_partition_exchange_target");
+        assertThrows("DATASOURCE-ERROR", "same AbstractDatasource object", sub () {
+            actual_source.getExchangePartitionSql("p2", other_target);
+        });
     }
 
     private string getResultSetSql() {

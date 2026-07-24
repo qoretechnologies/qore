@@ -158,6 +158,94 @@ DLLEXPORT QoreStringNode* q_sprintf(const QoreListNode* params, int field, int o
 //! a string formatting function that works with Qore data structures
 DLLEXPORT QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, ExceptionSink* xsink);
 
+//! bounds applied when formatting a value with the bounded formatting functions
+/** the standard value-formatting conversions (\c "%n", \c "%N", \c "%y", and \c "%Y") expand containers without
+    any limit on the size of the output, and shared containers in a directed acyclic graph are expanded once for
+    every reference path leading to them, which can make the cost of formatting a value exponential in the depth
+    of the graph; the bounded formatting functions apply the bounds in this class while the output is being
+    generated, so that the cost of formatting a value is bounded by \a max_bytes no matter how large or how
+    densely-shared the value is
+
+    @see
+    - q_format_bounded()
+    - q_vsprintf_bounded()
+
+    @since %Qore 3.0
+*/
+struct QoreFormatBounds {
+    //! the maximum number of bytes of output generated for each value formatted; 0 means unlimited
+    /** this is a soft limit; delimiters and truncation markers can add a small bounded amount of output after
+        the limit is reached
+    */
+    size_t max_bytes = 16 * 1024;
+
+    //! the maximum container nesting depth expanded; 0 means unlimited
+    unsigned max_depth = 8;
+
+    //! the maximum number of elements expanded in any single container; 0 means unlimited
+    size_t max_elements = 128;
+};
+
+//! formats a value in the format given by the format offset, subject to the bounds given
+/** containers referenced more than once (including recursive references) are expanded only once and are rendered
+    with a YAML anchor (ex: \c "&1 {...}"); further references to the same container are rendered as YAML aliases
+    (ex: \c "*1")
+
+    @param val the value to format
+    @param foff the format offset; one of \c FMT_NONE, \c FMT_NORMAL, \c FMT_YAML_SHORT, or \c FMT_YAML_LONG, or
+    a format offset for the normal description format, as with the \c "%N" conversion
+    @param bounds the bounds to apply while generating the output
+    @param xsink Qore-language exceptions are raised here
+
+    @return the formatted string; nullptr if a Qore-language exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* q_format_bounded(const QoreValue val, int foff, const QoreFormatBounds& bounds,
+        ExceptionSink* xsink);
+
+//! a string formatting function like q_vsprintf() that bounds the value-formatting conversions
+/** the value-formatting conversions (\c "%n", \c "%N", \c "%y", and \c "%Y") are formatted as with
+    q_format_bounded() subject to the bounds given, each in its own output format; all other conversions are
+    formatted as with q_vsprintf()
+
+    @param fmt the format string
+    @param args the arguments corresponding to the conversions in the format string
+    @param field if non-zero then field widths are hard limits
+    @param bounds the bounds applied to each value formatted with a value-formatting conversion
+    @param xsink Qore-language exceptions are raised here
+
+    @return the formatted string; nullptr if a Qore-language exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* q_vsprintf_bounded(const QoreString& fmt, const QoreListNode* args, int field,
+        const QoreFormatBounds& bounds, ExceptionSink* xsink);
+
+//! a string formatting function like q_sprintf() that bounds the value-formatting conversions
+/** the format string is the argument at \a offset in \a params; the arguments for the conversions in the format
+    string follow it
+
+    @see q_vsprintf_bounded()
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* q_sprintf_bounded(const QoreListNode* params, int field, int offset,
+        const QoreFormatBounds& bounds, ExceptionSink* xsink);
+
+//! sets format bounds from a @ref Qore::FormatBounds "FormatBounds" hash
+/** @param bounds the bounds to set; keys missing from the hash are left unchanged
+    @param h the hash with the bounds; can be nullptr, in which case no bounds are changed
+    @param xsink Qore-language exceptions are raised here
+
+    @return 0 for OK, -1 if a Qore-language exception was raised
+
+    @throw FORMAT-BOUNDS-ERROR a bounds value is negative
+
+    @since %Qore 3.0
+*/
+DLLEXPORT int q_get_format_bounds(QoreFormatBounds& bounds, const QoreHashNode* h, ExceptionSink* xsink);
+
 //! thread-safe version of "localtime()"
 DLLEXPORT struct tm* q_localtime(const time_t* clock, struct tm* tms);
 

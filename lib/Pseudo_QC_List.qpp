@@ -225,7 +225,7 @@ map printf("+ %y\n", $1), l.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <list>::iterator() [flags=CONSTANT] {
-   return qore_new_list_iterator_object(0, l);
+   return qore_new_list_iterator_object(getProgram(), l);
 }
 
 //! Returns a @ref Qore::RangeIterator "RangeIterator" object for the list elements
@@ -244,13 +244,13 @@ map printf("+ %y\n", $1), l.ranegIterator();
  */
 AbstractIterator <list>::rangeIterator(auto value) [flags=CONSTANT,NAMED_ARGS] {
    if (l->empty())
-      return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
+      return qore_new_single_value_iterator_object(getProgram(), QoreValue(), autoTypeInfo);
 
    ReferenceHolder<RangeIterator> r(new RangeIterator(0, l->size(), 1, value, xsink), xsink);
    if (*xsink)
       return QoreValue();
 
-   return new QoreObject(QC_RANGEITERATOR, 0, r.release());
+   return new QoreObject(QC_RANGEITERATOR, getProgram(), r.release());
 }
 
 //! Returns @ref True since lists can return a non-zero size

@@ -97,6 +97,7 @@ class FirebirdExpressionTest inherits QUnit::Test {
         addTestCase("DP_OP_HAS_VALUE", \testDpOpHasValue());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
 
         set_return_value(main());
@@ -442,5 +443,36 @@ class FirebirdExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        string name = table.selectRow({"columns": "name", "where": {"id": 1}}).name;
+
+        # Firebird 4+ CRYPT_HASH supports MD5, SHA1, SHA256, and SHA512
+        foreach string alg in (("md5", "sha1", "sha256", "sha512")) {
+            assertEq(digest(alg, name),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "binary")), 1).d);
+            assertEq(digest(alg, name).toHex(),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "hex")), 1).d);
+            string b64 = selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "base64")), 1).d;
+            assertEq(make_base64_string(digest(alg, name)), b64);
+            assertEq(-1, b64.find("\n"));
+        }
+
+        # default output encoding is hex; algorithm names are case/separator-insensitive
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "SHA-256")), 1).d);
+
+        # SHA224/SHA384 are not available via CRYPT_HASH
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha224", "hex")), 1);
+        });
+        # invalid output encoding is rejected
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "bogus")), 1);
+        });
     }
 }

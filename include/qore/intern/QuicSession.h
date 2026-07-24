@@ -949,6 +949,19 @@ public:
         dispatcher_ = nullptr;
     }
 
+    //! Unregister all of this session's CIDs from the dispatcher and clear the dispatcher pointer
+    /** Idempotent (no-op once the dispatcher pointer is cleared); takes @c mtx_ so it
+        serializes with in-flight packet processing and the ngtcp2 CID callbacks.
+
+        Must be called when the session is removed from the owning session maps while
+        other threads may still hold transient @c shared_ptr references (e.g. session
+        reap in SocketQuicServerPollOperation::cleanupClosedSessions() or abort()):
+        the destructor — where this cleanup otherwise runs — executes on whatever
+        thread drops the last reference, which can be arbitrarily later, leaving the
+        CIDs routable to a removed session in the meantime.
+    */
+    DLLLOCAL void unregisterFromDispatcher();
+
     //! Submit an HTTP/3 GOAWAY shutdown notice (first phase: max stream ID)
     /** Sends a GOAWAY frame with the maximum stream ID, indicating that the
         server intends to shut down but hasn't decided on the final stream ID yet.

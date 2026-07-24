@@ -836,7 +836,10 @@ public:
     virtual ~QoreIRInstruction() = default;
 
     QoreIROpcode opcode;
-    int16_t cached_start_line;  // -1 = no loc, >=0 = loc->start_line (fills padding after opcode)
+    // -1 = no loc, >=0 = loc->start_line (fills the padding after the opcode, so 32 bits are free here); must be
+    // 32-bit to match QoreProgramLineLocation::start_line, or lines > 32767 wrap to negative values and the
+    // debug line-change gate below reports the wrong line
+    int32_t cached_start_line;
     const QoreProgramLocation* loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
@@ -1248,6 +1251,14 @@ public:
 
     bool has_value = false;
     QoreIRValue value{};
+
+    //! Transient (never serialized): set by the AOT function-body outliner on
+    //! returns moved into a helper.  The lowering emits
+    //! qore_rt_outline_signal_return() immediately before the ret so the
+    //! coordinator's CallAOTHelper can re-execute the return through its own
+    //! epilogue (see design/aot-function-outlining.md).  Cleared by
+    //! AOTFunctionOutliner::undo() before debug-IR serialization.
+    bool outline_signal = false;
 };
 
 class QoreIRThrowInstruction : public QoreIRInstruction {
@@ -2438,6 +2449,14 @@ public:
     }
 
     std::string helper_name;  //!< LLVM symbol name of the target helper fn
+
+    //! Transient (never serialized): when set, the outlined helper may signal
+    //! an in-region `return` via qore_rt_outline_signal_return(); after the
+    //! call (and its exception check) the lowering consumes the flag with
+    //! qore_rt_outline_take_return() and branches here — a synthesized
+    //! coordinator block returning the helper's result value through the
+    //! coordinator's own epilogue (see design/aot-function-outlining.md).
+    QoreIRBasicBlock* return_target = nullptr;
 };
 
 class QoreIRBasicBlock {

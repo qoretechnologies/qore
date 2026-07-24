@@ -167,8 +167,9 @@ constexpr uint64_t QORE_AOT_FEAT_CONST_METHODS = 1ULL << 55; //!< METHODS varian
 constexpr uint64_t QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS = 1ULL << 56; //!< Closure-call records preserve caller-cache invalidation metadata
 constexpr uint64_t QORE_AOT_FEAT_TYPED_PHI = 1ULL << 57; //!< Serialized Phi records preserve native/QoreValue representation metadata
 constexpr uint64_t QORE_AOT_FEAT_CALL_RELOCATIONS = 1ULL << 58; //!< CALL_RELOCATIONS section records safe direct-call link candidates
+constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_LINES = 1ULL << 59; //!< all serialized source line numbers are u32, not legacy u16 (which truncated files with more than 65535 lines and reported lines 32768 - 65535 as negative)
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x07FFFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x0FFFFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -705,6 +706,37 @@ class QoreAOTBinaryReader {
     std::vector<uint8_t> decompressed_body;
 
 public:
+    //! Releases the decompressed metadata pool and invalidates the reader
+    /** The AOT metadata blob is stored compressed in the binary and inflated into
+        @ref decompressed_body at open() time; every section pointer (@ref data,
+        @ref data_area, @ref string_pool) points INTO that buffer.  For a large
+        program the inflated pool is substantial (it dominates the process's heap
+        at startup), and it is only needed while the namespace tree, classes,
+        functions, and slot maps are being deserialized.
+
+        Once deserialization and function registration are complete, nothing may
+        reference the pool any more: string refs that outlive it (e.g.
+        QoreProgramLocation::file) are interned into the program's string pool at
+        deserialization time, and the debug metadata is copied by value.  Call this
+        once registration is done to return the pool to the allocator instead of
+        holding it for the life of the process.
+
+        The reader is unusable afterwards: all section pointers are cleared so that
+        any use-after-release faults immediately rather than reading recycled memory.
+    */
+    DLLLOCAL void releaseDecompressedBody() {
+        // free the buffer's storage (clear() alone would keep the capacity)
+        std::vector<uint8_t>().swap(decompressed_body);
+        data = nullptr;
+        total_size = 0;
+        data_area = nullptr;
+        data_area_size = 0;
+        string_pool = nullptr;
+        string_pool_size = 0;
+        sections.clear();
+        sections.shrink_to_fit();
+    }
+
     //! Controls the VT_CONST_REF reader return path.  When true (set by the
     //! hashdecl-member reader), VT_CONST_REF resolves to a fresh
     //! `RuntimeConstantRefNode` wrapping the ConstantEntry rather than
@@ -854,6 +886,41 @@ public:
             && (ptr + needed) <= (data_area + data_area_size);
     }
 };
+
+//! Serializes a source line number
+/** Source line numbers were originally written as u16, which silently truncated any file with more than 65535 lines
+    and made lines 32768 - 65535 deserialize as negative numbers (Qorus generates single source files well over
+    32767 lines).  Blobs advertising QORE_AOT_FEAT_WIDE_LOC_LINES use u32; the legacy encoding is retained for
+    reading blobs written before the feature existed.
+
+    -1 (unknown location) round-trips in both encodings.
+*/
+DLLLOCAL static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
+    if ((writer.feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0) {
+        writer.writeU32(static_cast<uint32_t>(line));
+    } else {
+        writer.writeU16(static_cast<uint16_t>(line));
+    }
+}
+
+//! Deserializes a source line number written by qore_aot_write_line()
+/** @param signed_legacy if true, the legacy u16 encoding is sign-extended (matching the call sites that stored the
+    value in an int16_t); if false, it is zero-extended (matching the call sites that stored it in a uint16_t).  The
+    distinction only affects legacy blobs; the wide encoding is always sign-preserving.
+*/
+DLLLOCAL static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
+        bool signed_legacy = true) {
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0) {
+        return static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
+    }
+    uint16_t v = QoreAOTBinaryReader::readU16(ptr);
+    return signed_legacy ? static_cast<int>(static_cast<int16_t>(v)) : static_cast<int>(v);
+}
+
+//! Returns the serialized size in bytes of a single source line number in the given blob
+DLLLOCAL static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
+    return (reader.getHeader().feature_flags & QORE_AOT_FEAT_WIDE_LOC_LINES) != 0 ? 4 : 2;
+}
 
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
 /** In batch mode (multiple AOT blobs registered into one Program),
@@ -1526,16 +1593,16 @@ struct AOTCompiledFuncWithSlots {
     const QoreIRFunction* debug_ir = nullptr;
     //! AOT location table entry (owns the file string copy)
     struct AOTLocEntry {
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         std::string file;
     };
     //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
     std::vector<AOTLocEntry> aot_locs;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         int64_t offset = 0;
         std::string file;
         std::string source;
@@ -1844,8 +1911,8 @@ class QoreAOTBinaryDeserializer {
     struct PendingBCAEntry {
         qore_classid_t classid;
         std::string base_path;
-        int16_t start_line = 0;
-        int16_t end_line = 0;
+        int32_t start_line = 0;
+        int32_t end_line = 0;
         size_t eval_result_size = 0;
         std::vector<size_t> source_to_param;
         std::vector<PendingBCAArgBlob> arg_blobs;
@@ -1926,7 +1993,7 @@ private:
     bool deserializeMethods(std::string& error);
     bool deserializeFallbackSources(std::string& error);
     bool commitDeserializedClasses(std::string& error);
-    const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
+    const QoreProgramLocation* getBlobLocation(int32_t start_line = 0, int32_t end_line = 0) const;
     bool deserializeShellsFromOpenReader(std::string& error);
 
 public:
@@ -2153,6 +2220,15 @@ public:
 
     //! Get the reader for access to header info after deserialization
     const QoreAOTBinaryReader& getReader() const { return reader; }
+
+    //! Releases the reader's decompressed metadata pool
+    /** Call once deserialization and function registration are complete and the
+        reader will not be used again; see
+        QoreAOTBinaryReader::releaseDecompressedBody().  The pool is a large,
+        process-lifetime allocation for big programs, so releasing it before the
+        program runs keeps it out of the steady-state footprint.
+    */
+    DLLLOCAL void releaseReaderBody() { reader.releaseDecompressedBody(); }
 
     //! Expose the session's type resolver so the slot-map register
     //! phase can reuse its warmed cache (populated during

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbDataProvider class definition
 
-/** DbDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** DbDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,8 +25,8 @@
 #! contains all public definitions in the DbDataProvider module
 public namespace DbDataProvider {
 #! The database data provider class, provides tables as children
-/** Generic post-SQL search is provided just for completeness sake, but record filtering should be done in the \c sql
-    search option and not in the generic post-SQL generic data provider search for performance reasons.
+/** Record filtering must be included in the \c sql search option.  Generic data provider search conditions and
+    expressions are intentionally not advertised because raw SQL result filtering is not implemented by this provider.
 */
 public class DbDataProvider inherits DbDataProviderBase {
     public {
@@ -42,8 +42,7 @@ public class DbDataProvider inherits DbDataProviderBase {
             "create_options": NOTHING,
             "upsert_options": NOTHING,
             "child_create_options": ChildCreateOptions,
-            "supports_search_expressions": True,
-            "expressions": AbstractDataProvider::GenericExpressions,
+            "supports_search_expressions": False,
             "transaction_management": True,
             "has_record": True,
             "record_requires_search_options": True,
@@ -161,11 +160,12 @@ public class DbDataProvider inherits DbDataProviderBase {
     static *hash<string, AbstractDataField> getRecordTypeFromDescribeHash(hash<auto> describe_hash) {
         HashDataType input_data();
         foreach hash<auto> i in (describe_hash.pairIterator()) {
-            # get input column name
-            string key = i.key.lwr();
-            string desc = i.value.native_type.lwr();
+            # Preserve the database driver's result-column name exactly; in particular, quoted and mixed-case aliases
+            # are part of the raw query's public record contract.
+            string key = i.value.name ?? i.key;
+            string desc = i.value.native_type ? i.value.native_type.lwr() : "unknown";
             # add DB maximum size to desc
-            if (i.value.maxsize) {
+            if (i.value.maxsize > 0) {
                 desc += sprintf("(%d)", i.value.maxsize);
             }
             #printf("i: %y\n", i);
@@ -177,6 +177,11 @@ public class DbDataProvider inherits DbDataProviderBase {
                 # maps standard types to auto types to avoid type stripping
                 if (type =~ /(hash|list)$/) {
                     type += "<auto>";
+                }
+                # Statement metadata is the only source of result nullability for raw SQL.  Keep nullable result
+                # columns nullable instead of silently publishing a stricter and unusable record type.
+                if (i.value.nullable && type !~ /^\*/) {
+                    type = "*" + type;
                 }
                 data_type = AbstractDataProviderType::get(type);
             }

@@ -37,7 +37,7 @@
 %requires Util
 
 module QUnit {
-    version = "0.4.3";
+    version = "0.5";
     desc = "User module for unit testing with dependency injection support";
     author = "Zdenek Behan <zdenek.behan@qoretechnologies.com>";
     url = "http://qore.org";
@@ -157,6 +157,18 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
     - junit - machine readable format for further processing
 
     @section qunit_relnotes Release Notes
+
+    @subsection qunit_v0_5 Version 0.5
+    - added an optional \a depends argument to @ref QUnit::Test::addTestCase() so
+      test cases can declare prerequisite test cases; when a prerequisite does
+      not pass, the dependent test case is skipped with an explanatory message
+      instead of failing opaquely
+    - added a \c --shard=i/K option (and \c QUNIT_SHARD environment variable) that
+      runs only shard \c i of \c K, splitting test cases across shards for
+      parallel execution while keeping each dependency component whole so
+      declared prerequisites always run in the same shard as their dependents
+    - skip reasons (failed prerequisite, filter exclusion, or a user
+      @ref QUnit::Test::testSkip() reason) are now shown on the test report line
 
     @subsection qunit_v0_4_3 Version 0.4.3
     - added constructors for use with languages that don't support lvalue references (ex: %Python)
@@ -502,13 +514,26 @@ public class TestCase {
 
         #! any saved test case
         auto saved_tc;
+
+        #! names of test cases this test case depends on (prerequisites)
+        /** When any listed prerequisite ends in failure, error, or skip - or
+            was not run at all - this test case is skipped with an explanatory
+            message instead of executed.  @ref nothing (the default) means no
+            dependencies, preserving legacy behavior. */
+        *list<string> m_depends;
     }
 
     #! creates the TestCase object from the given arguments
-    constructor(string name, code code, *softlist<auto> args) {
+    constructor(string name, code code, *softlist<auto> args, *softlist<string> depends) {
         m_name = name;
         m_code = code;
         m_args = args;
+        m_depends = depends;
+    }
+
+    #! returns the list of prerequisite test-case names (may be empty)
+    *list<string> getDepends() {
+        return m_depends;
     }
 
     #! runs the TestCase
@@ -698,6 +723,12 @@ public class TestReporter {
 
         #! blacklist patterns - matching tests are skipped
         list<string> m_exclude_patterns = ();
+
+        #! 0-based index of this shard when sharding is enabled (see @ref main())
+        int m_shard_index = 0;
+
+        #! total number of shards when sharding is enabled; 0/1 disables sharding
+        int m_shard_count = 0;
     }
 
     public {
@@ -711,6 +742,7 @@ public class TestReporter {
             "include" : "include=s@",
             "exclude" : "exclude=s@",
             "timestamps" : "T,timestamps",
+            "shard" : "shard=s",
         };
 
         #! Environment variable for whitelist patterns (comma-separated)
@@ -718,6 +750,9 @@ public class TestReporter {
 
         #! Environment variable for blacklist patterns (comma-separated)
         const string ENV_EXCLUDE = "QUNIT_EXCLUDE";
+
+        #! Environment variable for the shard selector (\c "i/K"), see @ref QUnit::Test::main()
+        const string ENV_SHARD = "QUNIT_SHARD";
 
         const int TEST_SUCCESS = 0;
         const int TEST_FAILURE = 1;
@@ -746,6 +781,7 @@ public class TestReporter {
         printOption("-l,--list", "list all test cases and exit", offset);
         printOption("   --include=PAT", "only run tests matching PAT (can repeat)", offset);
         printOption("   --exclude=PAT", "skip tests matching PAT (can repeat)", offset);
+        printOption("   --shard=i/K", "run only shard i of K (dependency-aware split)", offset);
         printOption("-T,--timestamps", "prefix assertions with timestamps (with -vv)", offset);
         print("\n    Environment variables:\n");
         printOption("QUNIT_INCLUDE", "comma-separated whitelist patterns", offset);
@@ -814,6 +850,25 @@ public class TestReporter {
         m_exclude_patterns = m_options.exclude ?? ();
         if (*string env_exclude = ENV{ENV_EXCLUDE}) {
             m_exclude_patterns += map trim($1), env_exclude.split(",");
+        }
+
+        # Handle shard selector "i/K" (command-line takes precedence over env var)
+        *string shard_spec = m_options.shard ?? ENV{ENV_SHARD};
+        if (shard_spec.val()) {
+            list<string> parts = shard_spec.split("/");
+            if (parts.size() != 2 || !parts[0].val() || !parts[1].val()) {
+                throw "UNIT-TEST-ERROR", sprintf("invalid --shard value %y: "
+                    "expected \"i/K\" (1-based index and shard count, e.g. \"1/4\")",
+                    shard_spec);
+            }
+            int idx = parts[0].toInt();
+            int cnt = parts[1].toInt();
+            if (cnt < 1 || idx < 1 || idx > cnt) {
+                throw "UNIT-TEST-ERROR", sprintf("invalid --shard value %y: "
+                    "require 1 <= i <= K and K >= 1", shard_spec);
+            }
+            m_shard_index = idx - 1;
+            m_shard_count = cnt;
         }
     }
 
@@ -920,6 +975,10 @@ public class TestReporter {
             printf(", %d succeeded", testcase.testcase.getAssertionOkCount());
         if (testcase.testcase.getAssertionSkipCount() > 0)
             printf(", %d skipped", testcase.testcase.getAssertionSkipCount());
+        # surface the skip reason (e.g. a failed prerequisite, a filter
+        # exclusion, or a user testSkip() reason) which is otherwise hidden
+        if (testcase.result == TEST_SKIPPED && testcase.detail.val())
+            printf(" (%s)", testcase.detail);
         print("\n");
         if (testcase.result != TEST_SUCCESS
                 && (testcase.result != TEST_SKIPPED || testcase.error || testcase.pos)) {
@@ -1092,9 +1151,15 @@ addTestCase("MyTest", \myTest());
         @param name the name of the test case
         @param call the code to call that executes the test case
         @param args any optional arguments to the test case call
+        @param depends optional list of prerequisite test-case names; if any
+        prerequisite ends in failure, error, or skip (or was not run), this
+        test case is skipped with an explanatory message instead of executed.
+        Omitting this argument (the default) preserves legacy behavior.
+
+        @since %QUnit 0.5 added the \a depends argument
     */
-    addTestCase(string name, code call, *softlist<auto> args) {
-        testCases += new TestCase(name, call, args);
+    addTestCase(string name, code call, *softlist<auto> args, *softlist<string> depends) {
+        testCases += new TestCase(name, call, args, depends);
     }
 
     #! adds a test case to run
@@ -2285,6 +2350,120 @@ fail("Unexpected code executed");
 
 ######### Main function and test running helpers
 
+    #! returns the first declared prerequisite of @a tc that did not pass
+    /** @param tc the test case whose declared dependencies are checked
+        @param result_by_name maps already-processed test-case names to their
+        @ref TestReporter result code
+
+        @return the name of the first prerequisite that did not end in
+        TestReporter::TEST_SUCCESS (failed, errored, skipped, or was not run),
+        or @ref nothing when every declared prerequisite passed or none are
+        declared
+
+        @since %QUnit 0.5
+    */
+    private *string getBlockingDependency(TestCase tc, hash<string, int> result_by_name) {
+        foreach string dep in (tc.getDepends() ?? ()) {
+            # a prerequisite blocks unless it ran and succeeded; note that
+            # result_by_name is typed <int>, so a missing key reads back as 0
+            # (== TEST_SUCCESS) - the hasKey() check distinguishes "not run"
+            if (!result_by_name.hasKey(dep) || result_by_name{dep} != TEST_SUCCESS) {
+                return dep;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! union-find: returns the representative root of @a name, with path compression
+    private string ufFind(reference<hash<string, string>> parent, string name) {
+        string root = name;
+        while (parent{root} != root) {
+            root = parent{root};
+        }
+        string cur = name;
+        while (parent{cur} != root) {
+            string nxt = parent{cur};
+            parent{cur} = root;
+            cur = nxt;
+        }
+        return root;
+    }
+
+    #! union-find: merges the components containing @a a and @a b
+    private ufUnion(reference<hash<string, string>> parent, string a, string b) {
+        string ra = ufFind(\parent, a);
+        string rb = ufFind(\parent, b);
+        if (ra != rb) {
+            parent{ra} = rb;
+        }
+    }
+
+    #! computes the set of test-case names assigned to this shard
+    /** Groups test cases into dependency components - a test case and every
+        test case it transitively depends on stay together - and distributes
+        whole components across the shards with a deterministic least-loaded
+        assignment, so a declared prerequisite always runs in the same shard as
+        its dependents.  Test cases in other shards are silently omitted from
+        this process's run so that the union of all shards equals the full
+        suite exactly once.
+
+        @return a hash whose keys are the names of the test cases that belong
+        to this shard, or @ref nothing when sharding is disabled (all test
+        cases run)
+
+        @since %QUnit 0.5
+    */
+    private *hash<string, bool> computeShardTestNames() {
+        if (m_shard_count <= 1) {
+            return NOTHING;
+        }
+        # every registered test case starts in its own component
+        hash<string, string> parent = {};
+        foreach TestCase tc in (testCases) {
+            parent{tc.getName()} = tc.getName();
+        }
+        # union each test case with each declared prerequisite that exists
+        foreach TestCase tc in (testCases) {
+            foreach string dep in (tc.getDepends() ?? ()) {
+                if (parent.hasKey(dep)) {
+                    ufUnion(\parent, tc.getName(), dep);
+                }
+            }
+        }
+        # collect component members in registration order
+        list<string> component_order = ();
+        hash<string, list<string>> members = {};
+        foreach TestCase tc in (testCases) {
+            string root = ufFind(\parent, tc.getName());
+            if (!members.hasKey(root)) {
+                component_order += root;
+                members{root} = ();
+            }
+            members{root} += tc.getName();
+        }
+        # deterministic least-loaded assignment of whole components to shards
+        list<int> shard_load = ();
+        for (int i = 0; i < m_shard_count; ++i) {
+            shard_load += 0;
+        }
+        hash<string, bool> mine = {};
+        foreach string root in (component_order) {
+            int best = 0;
+            for (int i = 1; i < m_shard_count; ++i) {
+                if (shard_load[i] < shard_load[best]) {
+                    best = i;
+                }
+            }
+            shard_load[best] += members{root}.size();
+            if (best == m_shard_index) {
+                foreach string nm in (members{root}) {
+                    mine{nm} = True;
+                }
+            }
+        }
+        return mine;
+    }
+
     #! Run the whole suite, report results
     int main() {
         if (!testCases) {
@@ -2310,19 +2489,52 @@ fail("Unexpected code executed");
             gtc.checkException(self, ex);
         }
 
+        # when sharding, restrict this process to its assigned test cases
+        # (dependency components are kept whole within a shard)
+        *hash<string, bool> shard_names = computeShardTestNames();
+
+        # tracks each test case's result by name so declared dependencies
+        # (prerequisites) can be evaluated as the suite runs
+        hash<string, int> result_by_name = {};
         foreach TestCase tc in (testCases) {
+            string tcname = tc.getName();
+            # skip test cases assigned to a different shard (run there instead)
+            if (exists shard_names && !shard_names{tcname}) {
+                continue;
+            }
             # Check if test should be skipped based on filters
-            if (!shouldRunTest(tc.getName())) {
+            if (!shouldRunTest(tcname)) {
                 # Add skipped result for filtered tests
                 addTestResult(tc, TEST_SKIPPED, NOTHING, NOTHING, "Excluded by filter");
+                result_by_name{tcname} = TEST_SKIPPED;
+                continue;
+            }
+
+            # Skip when a declared prerequisite did not pass, with an explicit
+            # message instead of an opaque cascade failure
+            *string blocking_dep = getBlockingDependency(tc, result_by_name);
+            if (exists blocking_dep) {
+                addTestResult(tc, TEST_SKIPPED, NOTHING, NOTHING,
+                    sprintf("prerequisite test case %y did not pass", blocking_dep));
+                result_by_name{tcname} = TEST_SKIPPED;
                 continue;
             }
 
             code tinit = sub () {tc.setupThread();};
             set_thread_init(tinit);
 
+            # in verbose mode announce the test case before running it, so a
+            # test that hangs before its first assertion is still identifiable
+            # (and the timestamp, with -T, marks when it started).  Write via
+            # stderr so the announcement is not lost in stdout block-buffering
+            # when a hung test never reaches a flush point.
+            if (m_output == PLAIN) {
+                stderr.printf("%sRunning: %s\n", getTimestampPrefix(), tcname);
+            }
+
             # run test case
             tc.run(self);
+            result_by_name{tcname} = m_results[m_results.size() - 1].result;
         }
 
         try {

@@ -3427,7 +3427,13 @@ const QoreTypeInfo* QoreTypeInfo::getHardReference(const QoreTypeInfo* ti) {
         }
     }
     const QoreComplexReferenceOrNothingTypeInfo* type = dynamic_cast<const QoreComplexReferenceOrNothingTypeInfo*>(ti);
-    assert(type);
+    // ti is not itself a reference type: a container with an "auto" element (e.g. softlist<auto>,
+    // list<auto>, hash<auto>) makes parseAcceptsReturns(ti, NT_REFERENCE) true because it accepts a
+    // reference as an element, even though ti is a list/hash type.  There is no hard-reference form to
+    // substitute for such a type, so return it unchanged rather than dereferencing a null cast.
+    if (!type) {
+        return ti;
+    }
     return type->getHardReference();
 }
 
@@ -5330,7 +5336,16 @@ const QoreTypeInfo* QoreTypeInfo::getComplexBufferValueType(const QoreTypeInfo* 
 
 bool QoreTypeInfo::retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
         ExceptionSink* xsink) {
-    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo) {
+    // retyping only mutates a value when the declared type can actually reshape the runtime value.  A soft
+    // complex-auto container (hash<auto>/list<auto> and their "*..." or-nothing variants) accepts any element
+    // type and preserves the runtime value type — it never mutates — so treat it like plain "auto" and return
+    // early.  This is what distinguishes soft hash<auto> (which preserves e.g. a runtime hash<string, string>)
+    // from hard hash<auto!> (a distinct hash<string, auto> type that widens the value type to auto).  Without
+    // this, a "const hash<auto>" initializer would be widened to hash<auto> under AST execution while IR/JIT
+    // (which re-evaluate the initializer) correctly preserved the narrow runtime type.
+    if (!v.hasNode() || !target_ti || target_ti == autoTypeInfo
+            || target_ti == autoHashTypeInfo || target_ti == autoHashOrNothingTypeInfo
+            || target_ti == autoListTypeInfo || target_ti == autoListOrNothingTypeInfo) {
         return true;
     }
 

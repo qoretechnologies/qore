@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
+%modern
 %enable-all-warnings
 %require-types
 %strict-args
@@ -79,8 +79,10 @@ public class SqlTestBase inherits QUnit::Test {
 
     constructor(string testName, string testVer, any args, *hash mopts) : Test(testName, testVer, \args, mopts) {
         addTestCase("BulkInsert", \bulkInsertTest());
+        addTestCase("BulkInsertRowCode", \bulkInsertRowCodeTest());
         addTestCase("BulkColumnarInsert", \bulkColumnarInsertTest());
         addTestCase("BulkHashOfBuffersInsert", \bulkHashOfBuffersInsertTest());
+        addTestCase("BulkInputValidation", \bulkInputValidationTest());
 %ifndef NoDataFrame
         addTestCase("BulkDataFrameInsert", \bulkDataFrameInsertTest());
 %endif
@@ -131,6 +133,35 @@ public class SqlTestBase inherits QUnit::Test {
         map assertEq(insert_data[$#] + crec + expect_data, $1), l;
     }
 
+    # issue: a BulkInsertOperation with a rowcode but no "returning" option must flush cleanly.
+    # Setting a rowcode makes flushImpl() pass a "returning" insert option built from the caller's
+    # returning_args combined with the auto-detected ret_args; an unset returning_args (softlist<auto>)
+    # is NOTHING, and "NOTHING + ret_args" yielded a spurious "returning" value of [null] that failed
+    # SqlUtil option validation with OPTION-ERROR.  This exercises the path the other insert tests miss.
+    bulkInsertRowCodeTest() {
+        if (!table) testSkip("no DB connection");
+
+        on_success table.commit();
+        on_error table.rollback();
+
+        table.del();
+
+        list<hash<auto>> row_results = ();
+        {
+            BulkInsertOperation insert(table, {"block_size": 3});
+            insert.setRowCode(sub (hash<auto> row) { row_results += row; });
+            on_success insert.flush();
+            on_error insert.discard();
+
+            foreach hash data in (insert_data)
+                assertEq(NOTHING, insert.queueData(data + crec));
+        }
+
+        # the rowcode must fire exactly once per inserted row, and all rows must be persisted
+        assertEq(insert_data.size(), row_results.size());
+        assertEq(insert_data.size(), table.rowCount());
+    }
+
     bulkColumnarInsertTest() {
         if (!table) testSkip("no DB connection");
         if (table.getDatasource().getDriverName() != "pgsql")
@@ -145,6 +176,54 @@ public class SqlTestBase inherits QUnit::Test {
             testSkip("covered by pgsql bulk tests");
 
         runSimpleColumnarInsert("qore_bulk_buffers_test", getSimpleBufferColumns());
+    }
+
+    bulkInputValidationTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "record 2/2 has a different field set", sub () {
+                insert.queueData(({"id": 1}, {"id": 2, "id_": 2}));
+            });
+            assertEq(0, insert.size());
+            assertEq(NOTHING, insert.queueData(({"id": 1, "id_": 2}, {"id_": 3, "id": 2})));
+            assertEq(2, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "field \"id_\" has 1 values", sub () {
+                insert.queueData({"id": (1, 2), "id_": (2,)});
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "field \"id_\" has 1 values", sub () {
+                insert.queueData({
+                    "id": new buffer<int64>((1, 2)),
+                    "id_": new buffer<int64>((2,)),
+                });
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
+        {
+            BulkInsertOperation insert(table, {"block_size": 10});
+            assertThrows("BULK-SQL-OPERATION-ERROR", "record 2/2 is type", sub () {
+                insert.queueData(({"id": 1}, 2));
+            });
+            assertEq(0, insert.size());
+            insert.discard();
+        }
+
     }
 
 %ifndef NoDataFrame

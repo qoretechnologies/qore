@@ -1180,6 +1180,10 @@ llm.chatStream(
                         "name": tc.function.name,
                         "arguments": parseOpenAiToolArguments(
                             tc.function.arguments),
+                        "thought_signature":
+                            tc.thought_signature.typeCode() == NT_STRING
+                                ? tc.thought_signature
+                                : NOTHING,
                     };
                     push tool_calls, tool_call;
                 }
@@ -1301,7 +1305,7 @@ llm.chatStream(
             *list<hash<ToolDefinition>> tools) {
         hash<auto> args = coerceToolArguments(tc.name, tc.arguments ?? {},
             tools);
-        return {
+        hash<auto!> rv = {
             "id": tc.id,
             "type": "function",
             "function": {
@@ -1309,6 +1313,13 @@ llm.chatStream(
                 "arguments": make_json(args),
             },
         };
+        # the OpenAI tool-call shape is this backend's neutral conversation format, so a provider
+        # reasoning signature has to survive the round trip through it: a Gemini call replayed
+        # without its signature is rejected outright.  OpenAI-family providers ignore the extra key.
+        if (tc.thought_signature.val()) {
+            rv.thought_signature = tc.thought_signature;
+        }
+        return rv;
     }
 
     private static *string getForcedOpenAiToolName(hash<auto> body,

@@ -146,6 +146,84 @@ class BodyCaptureTarget inherits HttpAsyncTarget {
     }
 }
 
+#! Target that rejects during preparation with server-enforced response pacing
+class DelayedPreparationTarget inherits TestTarget {
+    public {
+        timeout response_delay = 200ms;
+        int preparation_count = 0;
+        Queue prepared();
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        ++preparation_count;
+        prepared.push(True);
+        timeout delay = info.header_info.path == "/pending-at-stop"
+            ? 5s : response_delay;
+        return <HttpRequestResultInfo>{
+            "code": 503,
+            "hdr": {
+                "Content-Length": "2",
+                "Connection": "keep-alive",
+                "Retry-After": "1",
+            },
+            "body": "NO".toBinary(),
+            "status_message": "Service Unavailable",
+            "return_to_idle": True,
+            "response_delay": delay,
+        };
+    }
+}
+
+#! A non-I/O-thread-safe, memory-backed InputStream (Qore streams block the I/O thread)
+class QoreMemoryInputStream inherits Qore::InputStream {
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary d) {
+        data = d;
+    }
+
+    *binary read(int limit) {
+        if (pos >= data.size()) {
+            return NOTHING;
+        }
+        int n = min(limit, data.size() - pos);
+        binary chunk = data.substr(pos, n);
+        pos += n;
+        return chunk;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+}
+
+#! Target whose handler returns a blocking InputStream body together with response_delay
+/** The delay must be ignored: a non-I/O-thread-safe stream is sent inline while blocking,
+    so it can never be paced on the callback-dispatcher pool. */
+class DelayedStreamingTarget inherits TestTarget {
+    public {
+        timeout response_delay = 1s;
+        binary body = "streamed-ok".toBinary();
+        Queue handled();
+    }
+
+    hash<HttpRequestResultInfo> onHttpRequest(hash<HttpConnectionInfo> info) {
+        request_received = True;
+        handled.push(True);
+        return <HttpRequestResultInfo>{
+            "code": 200,
+            "hdr": {"Content-Length": body.size().toString()},
+            "status_message": "OK",
+            "input_stream": new QoreMemoryInputStream(body),
+            "response_delay": response_delay,
+            "close": True,
+        };
+    }
+}
+
 public class HttpServerAsyncIoTest inherits QUnit::Test {
     public {
         # Test SSL certificate (self-signed for testing)
@@ -204,10 +282,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("Constants test", \constantsTest());
         addTestCase("Hashdecl test", \hashdeclTest());
         addTestCase("Target class test", \targetClassTest());
+        addTestCase("delayed preparation response", \delayedPreparationResponseTest());
+        addTestCase("response delay guard for blocking bodies",
+            \delayedStreamingResponseGuardTest());
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
         addTestCase("HttpKeepAlivePollOperation basic test", \keepAlivePollOperationBasicTest());
         addTestCase("HttpKeepAlivePollOperation header timeout test", \keepAliveHeaderTimeoutTest());
         addTestCase("Controller start/stop test", \controllerStartStopTest());
+        addTestCase("persistent queue close completion signal",
+            \persistentQueueCloseCompletionTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
         # Binary search: comment out tests to find the hanging one
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
@@ -373,6 +456,143 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         sock.close();
     }
 
+    delayedPreparationResponseTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        DelayedPreparationTarget target();
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Queue client_events();
+        Counter client_done(1);
+        background sub () {
+            on_exit client_done.dec();
+            try {
+                Socket client();
+                on_exit client.close();
+                client.connect("127.0.0.1:" + port, 2s);
+                foreach string path in (("/delayed", "/delayed-again")) {
+                    date started = now_us();
+                    client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n",
+                        path));
+                    string response = client.recv(0, 3s);
+                    client_events.push({
+                        "path": path,
+                        "response": response,
+                        "elapsed_ms":
+                            (now_us() - started).durationMilliseconds(),
+                    });
+                }
+                client.send("GET /pending-at-stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                client_events.push({"pending_sent": True});
+                try { client.recv(0, 10s); } catch () {}
+            } catch (hash<ExceptionInfo> ex) {
+                client_events.push({"error": ex{"err", "desc",}});
+            }
+        }();
+
+        for (int i = 0; i < 2; ++i) {
+            hash<auto> event = client_events.get(5s);
+            target.prepared.get(1s);
+            assertFalse(exists event.error,
+                sprintf("delayed client request succeeds: %y; controller stats: %y",
+                    event.error, ctrl.getStats()));
+            assertTrue(event.response =~ /503 Service Unavailable/,
+                i ? "delayed response preserves HTTP/1.1 keep-alive"
+                    : "pre-dispatch response is sent normally after its delay");
+            assertTrue(event.elapsed_ms >= 150,
+                sprintf("response %s is delayed independently (%d ms)",
+                    event.path, event.elapsed_ms));
+        }
+        assertFalse(target.request_received,
+            "a preparation response does not enter the handler pool");
+
+        # A long pending delay must be canceled promptly during controller shutdown.
+        hash<auto> pending = client_events.get(5s);
+        assertTrue(pending.pending_sent,
+            "the client submits a long-delay request before shutdown");
+        target.prepared.get(1s);
+        usleep(20ms);
+        assertEq(3, target.preparation_count,
+            "the long-delay request reaches preparation before shutdown");
+        assertEq(1, ctrl.getStats().delayed_responses,
+            "the long-delay response is tracked while pending");
+        date started = now_us();
+        ctrl.stop();
+        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        assertTrue(elapsed_ms < 2000,
+            sprintf("shutdown cancels pending delayed responses promptly (%d ms)",
+                elapsed_ms));
+        assertEq(0, ctrl.getStats().delayed_responses,
+            "shutdown removes every pending delayed response");
+        assertEq(0, client_done.waitForZero(2s),
+            "shutdown releases the client waiting for the delayed response");
+        assertEq(3, target.preparation_count,
+            "every test request reached preparation exactly once");
+    }
+
+    delayedStreamingResponseGuardTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        DelayedStreamingTarget target();
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + port, 2s);
+        # use a monotonic clock so an NTP/VM wall-clock step cannot skew the elapsed check
+        int started = clock_get_monotonic_us();
+        client.send("GET /streamed HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        # the handler closes the connection after sending, so read until EOF (a closed
+        # socket surfaces as SOCKET-NOT-OPEN / END-OF-STREAM rather than NOTHING)
+        string response;
+        try {
+            while (True) {
+                *string chunk = client.recv(0, 3s);
+                if (!exists chunk) {
+                    break;
+                }
+                response += chunk;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-NOT-OPEN" && ex.err != "SOCKET-CLOSED"
+                    && ex.err != "END-OF-STREAM") {
+                rethrow;
+            }
+        }
+        int elapsed_ms = (clock_get_monotonic_us() - started) / 1000;
+
+        assertTrue(target.handled.get(1s),
+            "the blocking-body handler ran on the handler pool");
+        assertTrue(response =~ /200 OK/,
+            "the blocking-body response is sent");
+        assertTrue(response =~ /streamed-ok/,
+            "the streamed body is delivered intact");
+        # response_delay is 1s; the guard must skip it, so the response arrives well before
+        assertTrue(elapsed_ms < 500,
+            sprintf("response_delay is ignored for a blocking InputStream body (%d ms)",
+                elapsed_ms));
+        assertEq(0, ctrl.getStats().delayed_responses,
+            "a blocking-body response is never entered into the delayed-response table");
+    }
+
     idlePollOperationBasicTest() {
         # Create a socket pair for testing
         Socket server();
@@ -410,6 +630,38 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<auto> stats = ctrl.getStats();
         assertEq(0, stats.listeners);
         assertEq(0, stats.connections);
+    }
+
+    #! Verifies targeted persistent-close entries carry an exact completion channel
+    /** A service-stop caller uses this channel as a deterministic barrier against
+        unloading callback code before the dedicated persistent-handler thread has
+        finished its close notification and thread-local cleanup.
+    */
+    persistentQueueCloseCompletionTest() {
+        AsyncSocketIoController io_ctrl(False);
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+
+        Queue persistent_queue(1);
+        ctrl.registerPersistentQueue("persistent-close-test", persistent_queue, NOTHING);
+        on_exit ctrl.deregisterPersistentQueue("persistent-close-test");
+
+        Queue close_ack(1);
+        assertTrue(ctrl.signalPersistentQueuesForConnection(
+            "persistent-close-test", close_ack),
+            "registered persistent queue accepts targeted close");
+
+        hash<auto> entry = persistent_queue.get(1s);
+        assertEq("close", entry.type, "targeted signal queues a close entry");
+        assertTrue(entry.close_ack === close_ack,
+            "close entry carries the caller's exact completion queue");
+
+        entry.close_ack.push("cleanup-complete");
+        assertEq("cleanup-complete", close_ack.get(1s),
+            "caller observes owner-thread cleanup completion");
+
+        assertFalse(ctrl.signalPersistentQueuesForConnection(
+            "unknown-persistent-close-test", close_ack),
+            "unknown persistent queue is reported without blocking");
     }
 
     acceptPollHttp2ModeTest() {

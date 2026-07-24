@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires MysqlSqlUtil
-%requires QUnit
+%requires ../../../../qlib/Util.qmod
+%requires ../../../../qlib/Logger.qmod
+%requires ../../../../qlib/DataProvider/DataProvider.qmod
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/MysqlSqlUtil.qmod
+%requires ../../../../qlib/QUnit.qmod
 
 %try-module mysql
 %define NoMysql
@@ -106,6 +106,7 @@ class MysqlExpressionTest inherits QUnit::Test {
         addTestCase("convertDateFormat", \testConvertDateFormat());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
 
         set_return_value(main());
@@ -231,6 +232,20 @@ class MysqlExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
+        # the default table collation is case-insensitive; the operator must still enforce case sensitivity
+        rows = selectWhere(
+            expr(DP_OP_REGEX_MATCH, (fref("name"), "^hello")),
+        );
+        assertEq((), rows.id);
+
+        string sql = table.getSelectSql({
+            "columns": "id",
+            "where": expr(DP_OP_REGEX_MATCH, (fref("name"), "^Hello")),
+        });
+        assertTrue(sql =~ /convert\(name using utf8mb4\) collate utf8mb4_bin regexp/i,
+            "case-sensitive regex uses a text collation rather than a binary-character-set operand");
+        assertFalse(sql =~ /regexp\s+binary/i, "case-sensitive regex does not use MySQL-incompatible REGEXP BINARY");
+
         # case-insensitive regex
         rows = selectWhere(
             expr(DP_OP_REGEX_MATCH, (fref("name"), "^hello", ("i",))),
@@ -252,6 +267,11 @@ class MysqlExpressionTest inherits QUnit::Test {
             expr(DP_OP_REGEX_NMATCH, (fref("name"), "^Hello")),
         );
         assertEq((2, 3, 4), rows.id);
+
+        rows = selectWhere(
+            expr(DP_OP_REGEX_NMATCH, (fref("name"), "^hello")),
+        );
+        assertEq((1, 2, 3, 4), rows.id);
 
         # case-insensitive non-match
         rows = selectWhere(
@@ -550,5 +570,35 @@ class MysqlExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        string name = table.selectRow({"columns": "name", "where": {"id": 1}}).name;
+
+        # MySQL supports md5(), sha1(), and the SHA-2 family via sha2()
+        foreach string alg in (("md5", "sha1", "sha224", "sha256", "sha384", "sha512")) {
+            assertEq(digest(alg, name),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "binary")), 1).d);
+            assertEq(digest(alg, name).toHex(),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "hex")), 1).d);
+            string b64 = selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "base64")), 1).d;
+            assertEq(make_base64_string(digest(alg, name)), b64);
+            assertEq(-1, b64.find("\n"));  # to_base64() line wrapping must be stripped
+        }
+
+        # default output encoding is hex; algorithm names are case/separator-insensitive
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "SHA-256")), 1).d);
+
+        # unknown algorithm and invalid encoding are rejected
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha3-256", "hex")), 1);
+        });
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "bogus")), 1);
+        });
     }
 }

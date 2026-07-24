@@ -484,6 +484,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("error without passthru", \testErrorWithoutPassthru());
         addTestCase("missing url error", \testMissingUrlError());
         addTestCase("stats", \testStats());
+        addTestCase("negotiated http version h2", \testNegotiatedHttpVersion());
+        addTestCase("negotiated http version h1", \testNegotiatedHttpVersionH1());
+        addTestCase("connection info via manager", \testConnectionInfoManager());
+        addTestCase("persistent session pins one connection", \testPersistentSession());
+        addTestCase("persistent session abort/error discards connection", \testPersistentSessionAbort());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
         addTestCase("restGetAsync", \testRestGetAsync());
@@ -577,6 +582,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll oauth2 no deleted-object race", \testPingPollOAuth2NoDeletedRace());
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
         addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
+        addTestCase("ping poll non-oauth 401 no refresh", \testPingPollNonOAuth401NoRefresh());
+        addTestCase("ping poll 401 auto-refresh disabled", \testPingPoll401AutoRefreshDisabled());
+        addTestCase("ping poll incomplete oauth2 refresh", \testPingPollIncompleteOAuth2Refresh());
+        addTestCase("ping poll 401 refresh bounded", \testPingPoll401RefreshBounded());
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
         addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
@@ -967,6 +976,174 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<auto> stats = rest.getStats();
         assertEq(True, exists stats.total_connections);
         assertEq(True, exists stats.protocol);
+    }
+
+    testNegotiatedHttpVersion() {
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # before the first request there is no connection, so no negotiated protocol
+        assertEq(0, rest.getConnectionInfo().size());
+        assertEq(NOTHING, rest.getNegotiatedHttpVersion());
+        # getHttpVersion() reports the configured mode even without a connection
+        assertEq("2.0", rest.getHttpVersion());
+%ifndef NoJson
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # after the request the negotiated protocol (h2 via ALPN) is visible
+        assertEq("2.0", rest.getNegotiatedHttpVersion());
+
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = rest.getConnectionInfo();
+        assertEq(True, info.size() >= 1);
+        assertEq("h2", info[0].protocol);
+        assertEq("127.0.0.1", info[0].host);
+        assertEq(port, info[0].port);
+        assertEq(True, info[0].ssl);
+%endif
+    }
+
+    testNegotiatedHttpVersionH1() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # plain HTTP/1.1: negotiated version is "1.1"
+        assertEq("1.1", rest.getNegotiatedHttpVersion());
+
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = rest.getConnectionInfo();
+        assertEq(True, info.size() >= 1);
+        assertEq("h1", info[0].protocol);
+        assertEq(h1_port, info[0].port);
+%endif
+    }
+
+    testConnectionInfoManager() {
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # an invalid URL argument throws
+        assertThrows("HTTPCLIENT-URL-ERROR", sub () { mgr.getConnectionInfo(""); });
+
+        # a host that has never been contacted yields an empty list
+        assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
+%ifndef NoJson
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # unfiltered: at least the h1 connection just used is present
+        assertEq(True, mgr.getConnectionInfo().size() >= 1);
+
+        # filtered to the target URL: the h1 connection
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> info = mgr.getConnectionInfo(rest.getUrl());
+        assertEq(True, info.size() >= 1);
+        assertEq("h1", info[0].protocol);
+        assertEq(h1_port, info[0].port);
+
+        # filtered to an unrelated host: still empty
+        assertEq(0, mgr.getConnectionInfo("http://127.0.0.1:2").size());
+%endif
+    }
+
+    #! A persistent (connection-scoped) session pins one leased connection for all its requests
+    /** Verifies the HTTP/1.1 connection-scoped transaction primitive: every request issued inside
+        @ref RestClientIo::RestPersistentSession::pinned() rides the single leased connection, the
+        closure return value passes through, a clean @ref RestPersistentSession::close() returns the
+        connection to the pool for reuse, and using the session after close is rejected. */
+    testPersistentSession() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        string url = rest.getUrl();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # prime the pool with one idle connection so the lease reuses it (deterministic id)
+        assertEq(200, rest.restGet("/api/test").status_code);
+        int first_id = mgr.getConnectionInfo(url)[0].connection_id;
+
+        # opening a session leases + pins that connection
+        RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+        assertTrue(ps.isOpen());
+        assertFalse(ps.hasError());
+
+        # every request inside pinned() rides the one leased connection
+        auto r1 = ps.pinned(auto sub () { return rest.restGet("/api/one"); });
+        assertEq(200, r1.status_code);
+        # closure return value passes through
+        assertEq("GET", r1.body.method);
+        assertRegex("api/one", r1.body.path);
+        int c1 = mgr.getConnectionInfo(url)[0].connection_id;
+
+        auto r2 = ps.pinned(auto sub () { return rest.restPut("/api/two", {"k": 1}); });
+        assertEq(200, r2.status_code);
+        # exactly one connection exists for the host for the whole session
+        assertEq(1, mgr.getConnectionInfo(url).size());
+        int c2 = mgr.getConnectionInfo(url)[0].connection_id;
+        assertEq(first_id, c1);   # the lease reused the primed connection
+        assertEq(c1, c2);         # both session requests used the same connection
+
+        # a clean close returns the connection to the pool: the next request reuses it
+        ps.close();
+        assertFalse(ps.isOpen());
+        assertEq(200, rest.restGet("/api/after").status_code);
+        assertEq(first_id, mgr.getConnectionInfo(url)[0].connection_id);
+
+        # the session cannot be used after close, and close is idempotent
+        assertThrows("PERSISTENT-SESSION-CLOSED", sub () { ps.pinned(sub () {}); });
+        ps.close();
+        assertFalse(ps.isOpen());
+%endif
+    }
+
+    #! An aborted or error-tainted persistent session discards (closes) its leased connection
+    /** Closing a connection is the deterministic signal for the server to roll back and tear down a
+        connection-scoped transaction, so a session tainted by an exception inside
+        @ref RestClientIo::RestPersistentSession::pinned() — or explicitly aborted via
+        @ref RestPersistentSession::abort() — must NOT return its connection to the pool: the next
+        request must open a fresh connection (new id). */
+    testPersistentSessionAbort() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createH1Client();
+        on_exit rest.close();
+
+        string url = rest.getUrl();
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        assertEq(200, rest.restGet("/api/test").status_code);
+        int first_id = mgr.getConnectionInfo(url)[0].connection_id;
+
+        # an exception inside pinned() taints the session; on close the connection is discarded
+        {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            assertThrows("MY-ERROR", sub () {
+                ps.pinned(sub () { throw "MY-ERROR", "boom"; });
+            });
+            assertTrue(ps.hasError());
+            ps.close();
+        }
+        # the tainted connection was evicted; the next request opens a fresh connection
+        assertEq(200, rest.restGet("/api/again").status_code);
+        int after_error_id = mgr.getConnectionInfo(url)[0].connection_id;
+        assertNeq(first_id, after_error_id);
+
+        # explicit abort() also discards the connection even with no error in pinned()
+        {
+            RestClientIo::RestPersistentSession ps = rest.startPersistentSession();
+            auto r = ps.pinned(auto sub () { return rest.restGet("/api/x"); });
+            assertEq(200, r.status_code);
+            ps.abort();
+            assertTrue(ps.hasError());
+            assertFalse(ps.isOpen());
+        }
+        assertEq(200, rest.restGet("/api/z").status_code);
+        assertNeq(after_error_id, mgr.getConnectionInfo(url)[0].connection_id);
+%endif
     }
 
     testSharedManager() {
@@ -3107,6 +3284,159 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(exists ex, "non-2xx ping without retry should throw");
         assertEq("REST-PING-ERROR", ex.err);
         assertFalse(op.goalReached());
+%endif
+    }
+
+    #! Regression: a non-OAuth (API-key/static-token) connection that receives HTTP 401
+    #! on a polling ping must NOT enter the OAuth2 refresh path and must NOT raise a
+    #! RUNTIME-TYPE-ERROR; it must surface a normal REST-PING-ERROR.
+    /** Reproduces the live Deepgram monitoring failure: the connection supplies a static
+        Authorization header (no OAuth2 grant type, no token URL), so a 401 ping response
+        previously routed into startOAuth2PollRefreshToken(), where the absent token URL
+        was assigned to a non-nullable string, producing a RUNTIME-TYPE-ERROR ~once/min.
+    */
+    testPingPollNonOAuth401NoRefresh() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        # Static bearer token, rejected by the /auth401 handler; NO OAuth2 grant type,
+        # NO token URL.  oauth2_auto_refresh is left at its default (True) to prove the
+        # default no longer forces an OAuth2 refresh attempt.
+        string static_token = sprintf("deepgram-static-%d", clock_getmicros());
+        auth401_handler.addRejectToken(static_token);
+        on_exit auth401_handler.removeRejectToken(static_token);
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-nonoauth-401", "ping-nonoauth-401", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": static_token,
+            "token_type": "Bearer",
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "a non-OAuth 401 ping must throw");
+        assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
+        assertEq("REST-PING-ERROR", ex.err, "a non-OAuth 401 must surface a ping error");
+        assertFalse(op.goalReached());
+        # no OAuth2 token refresh must have been attempted
+        assertEq(0, token_handler.getRequestCount(), "no OAuth2 refresh must be attempted");
+%endif
+    }
+
+    #! Regression: a fully-configured OAuth2 connection with oauth2_auto_refresh=False
+    #! must NOT attempt a token refresh after a 401 ping response.
+    testPingPoll401AutoRefreshDisabled() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        string initial_token = sprintf("no-refresh-initial-%d", clock_getmicros());
+        auth401_handler.addRejectToken(initial_token);
+        on_exit auth401_handler.removeRejectToken(initial_token);
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-401-norefresh", "ping-401-norefresh", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": initial_token,
+            "token_type": "Bearer",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_refresh_token": "some-refresh-token",
+            "oauth2_auto_refresh": False,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "401 with auto-refresh disabled must throw");
+        assertEq("REST-PING-ERROR", ex.err);
+        assertFalse(op.goalReached());
+        assertEq(0, token_handler.getRequestCount(),
+            "auto-refresh disabled: no refresh must be attempted");
+%endif
+    }
+
+    #! Regression: startOAuth2PollRefreshToken() must raise a clear OAUTH2-ERROR (not a
+    #! RUNTIME-TYPE-ERROR) when it is reached without a configured token endpoint URL.
+    /** A connection seeded with a token, refresh token, and near expiry (so the ping
+        operation constructor's proactive-refresh path fires) but WITHOUT a token URL
+        exercises the defensive guard in startOAuth2PollRefreshToken().
+    */
+    testPingPollIncompleteOAuth2Refresh() {
+%ifndef NoJson
+        # token + refresh token + expiry-in-window makes tokenRequiresRefresh() True, so
+        # the ping operation constructor enters the proactive OAuth2 refresh path; the
+        # missing token URL must produce a clear configuration error, not a type error.
+        date near_expiry = now_us() + 5s;
+        RestConnection rc = createPingConnection("ping-incomplete-oauth2", {
+            "token": "incomplete-token",
+            "token_type": "Bearer",
+            "oauth2_refresh_token": "incomplete-refresh-token",
+            "oauth2_token_expiry": near_expiry,
+        });
+
+        # startPollConnect() constructs the poll operation, which triggers the proactive
+        # refresh in its constructor — the error may surface there or while driving.
+        *hash<ExceptionInfo> ex;
+        try {
+            AbstractPollOperation op = rc.startPollConnect();
+            ex = drivePingOp(op);
+        } catch (hash<ExceptionInfo> caught) {
+            ex = caught;
+        }
+        assertTrue(exists ex, "an incomplete OAuth2 refresh must throw");
+        assertNeq("RUNTIME-TYPE-ERROR", ex.err, "must not raise a runtime type error");
+        assertEq("OAUTH2-ERROR", ex.err, "incomplete OAuth2 config must raise a config error");
+%endif
+    }
+
+    #! Regression: repeated HTTP 401 responses on an OAuth2 ping must remain bounded —
+    #! at most one refresh + retry per poll operation, never a refresh loop.
+    testPingPoll401RefreshBounded() {
+%ifndef NoJson
+        token_handler.resetRequestCount();
+
+        # The refreshed token is ALSO rejected, so the retry after refresh still gets 401.
+        string initial_token = sprintf("bounded-initial-%d", clock_getmicros());
+        string refreshed_token = sprintf("bounded-refreshed-%d", clock_getmicros());
+        token_handler.setReturnToken(refreshed_token);
+        token_handler.setReturnRefreshToken("bounded-refresh-token");
+        auth401_handler.addRejectToken(initial_token);
+        auth401_handler.addRejectToken(refreshed_token);
+        on_exit {
+            auth401_handler.removeRejectToken(initial_token);
+            auth401_handler.removeRejectToken(refreshed_token);
+        }
+
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-401-bounded", "ping-401-bounded", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": initial_token,
+            "token_type": "Bearer",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_refresh_token": "bounded-refresh-token",
+            "oauth2_auto_refresh": True,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "persistent 401 must terminate with an error");
+        assertEq("REST-PING-ERROR", ex.err, "a bounded 401 retry must end with a ping error");
+        assertFalse(op.goalReached());
+        # exactly one refresh was attempted — the retry did not spin into a refresh loop
+        assertEq(1, token_handler.getRequestCount(), "exactly one refresh must be attempted");
 %endif
     }
 

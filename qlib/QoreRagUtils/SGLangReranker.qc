@@ -74,6 +74,13 @@ public class SGLangReranker inherits AbstractReranker {
     #! Re-ranks a list of documents against a query and returns the top-K
     /** @param opts ignored by the SGLang backend — the served model and
         endpoint are fixed at construction time
+
+        @note @ref AbstractReranker::rerankEx() reports a length-based token
+        estimate for this backend (\c token_source \c "estimated"): the
+        underlying @ref QoreTokenizerUtils::CrossEncoderReranker returns scores
+        only and does not surface the SGLang \c /v1/rerank \c usage block.  This
+        is sufficient for token accounting because a self-hosted SGLang reranker
+        is priced by infrastructure, not per token.
     */
     list<hash<RerankResult>> rerank(string query, list<string> documents, int top_k,
             *hash<auto> opts) {

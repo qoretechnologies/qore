@@ -40,6 +40,8 @@
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 
+#include <exception>
+
 /** @cond INTERNAL */
 
 static int materializeHttp3ServerDataBodyNode(const QoreValue& body, ValueHolder& holder,
@@ -246,8 +248,22 @@ QoreHashNode* Http3ServerPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     struct OnExit {
         Http3ServerPollOperationPriv* self;
         ~OnExit() {
-            self->checkStreamQueues();
-            self->deliverSessionLifecycleEvents();
+            // Both calls allocate (stream-key strings, the data_ready_streams
+            // vector), and a destructor is implicitly noexcept — letting
+            // std::bad_alloc escape here would call std::terminate rather than
+            // surface as an error.  Nothing above us on the I/O thread can act on
+            // an allocation failure anyway, so contain it: the poll simply
+            // reports no ready streams this cycle and the next one retries.
+            try {
+                self->checkStreamQueues();
+                self->deliverSessionLifecycleEvents();
+            } catch (const std::exception& e) {
+                printd(0, "Http3ServerPollOperationPriv::continuePoll(): exception delivering "
+                    "stream/lifecycle events: %s\n", e.what());
+            } catch (...) {
+                printd(0, "Http3ServerPollOperationPriv::continuePoll(): unknown exception "
+                    "delivering stream/lifecycle events\n");
+            }
         }
     } on_exit{this};
 
@@ -710,20 +726,19 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
 void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     // op_lock held (called from continuePoll() OnExit on the I/O thread).
     // read_op (a SocketQuicServerPollOperation) accumulates peer-reset and
-    // session-close events while processing QUIC packets; deliver a close to any
-    // persistent-session Queue bound to an affected session so a dedicated
-    // handler thread parked on the Queue is released (its teardown then runs on
-    // the binding thread).  The push is the same I/O-thread Queue-push path used
-    // for stream data; the Queue stays alive via the QoreObject ref held in the
-    // persistent_session_queue_objs member.
-    if (!read_op || persistent_session_queues_.empty()) {
-        // Still drain read_op so events do not accumulate unbounded when no
-        // persistent session is bound to this connection.
-        if (read_op) {
-            std::vector<std::pair<int64_t, int64_t>> resets;
-            std::vector<int64_t> closed;
-            read_op->takeSessionLifecycleEvents(resets, closed);
-        }
+    // session-close events while processing QUIC packets.  This is the only place
+    // a per-session close is delivered, and every owner of a stream on that
+    // session must hear about it or its handler thread parks forever:
+    //
+    //  - persistent-session Queues bound by a dedicated handler get a
+    //    {"type":"close"} entry, releasing a thread parked on the Queue (its
+    //    teardown then runs on the binding thread)
+    //  - every extended-CONNECT stream on the session is torn down by
+    //    closeSessionStreams()
+    //
+    // Both use the same I/O-thread Queue-push path used for stream data; Queues
+    // stay alive via the QoreObject refs held in the QPP member hashes.
+    if (!read_op) {
         return;
     }
     std::vector<std::pair<int64_t, int64_t>> resets;
@@ -733,33 +748,80 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     // A peer stream reset abandons the persistent exchange on its session; a
     // session close ends it outright.  Either releases the session's persistent
     // handler.  De-duplicate by session so we push at most one close per session.
-    std::unordered_set<int64_t> sessions_to_close;
-    for (auto& p : resets) {
-        sessions_to_close.insert(p.first);
+    if (!persistent_session_queues_.empty()) {
+        std::unordered_set<int64_t> sessions_to_close;
+        for (auto& p : resets) {
+            sessions_to_close.insert(p.first);
+        }
+        for (int64_t sid : closed) {
+            sessions_to_close.insert(sid);
+        }
+        for (int64_t sid : sessions_to_close) {
+            auto it = persistent_session_queues_.find(sid);
+            if (it == persistent_session_queues_.end()) {
+                continue;
+            }
+            Queue* q = it->second;
+            // Remove before pushing so a duplicate event in the same batch (or a
+            // later poll) does not double-deliver; the dedicated loop's deregister
+            // will be a no-op for this session.
+            persistent_session_queues_.erase(it);
+            ExceptionSink xs;
+            ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), &xs);
+            close_entry->setKeyValue("type", new QoreStringNode("close"), &xs);
+            if (xs) {
+                xs.clear();
+                continue;
+            }
+            ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
+                "pushing persistent close session=%lld\n", (long long)sid);
+            q->pushAndTakeRef(close_entry.release());
+        }
     }
+
+    // Tear down the extended-CONNECT streams (RFC 9220 WebSocket) owned by each
+    // closed session.  A persistent-session Queue is bound only by handlers that
+    // opt into that pattern, so without this every other stream owner on a dead
+    // session is never told, and its handler thread parks forever.
+    //
+    // A per-session close cannot ride the op-wide close path: one
+    // Http3ServerPollOperation serves the whole UDP listener (QUIC multiplexes
+    // every connection onto one socket), so h3_state / isClosed() are
+    // listener-wide and only fire on listener shutdown.  notifyStreamListenersClosed()
+    // is likewise an all-sessions broadcast.  Neither can express "session N died".
     for (int64_t sid : closed) {
-        sessions_to_close.insert(sid);
+        closeSessionStreams(sid);
     }
-    for (int64_t sid : sessions_to_close) {
-        auto it = persistent_session_queues_.find(sid);
-        if (it == persistent_session_queues_.end()) {
+}
+
+void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
+    // op_lock held (called from deliverSessionLifecycleEvents() on the I/O thread).
+    // The trailing ':' makes this an exact session match — "1:" cannot match "11:5".
+    const std::string prefix = std::to_string(session_id) + ":";
+    for (auto it = stream_queues.begin(); it != stream_queues.end();) {
+        if (it->first.compare(0, prefix.size(), prefix) != 0) {
+            ++it;
             continue;
         }
-        Queue* q = it->second;
-        // Remove before pushing so a duplicate event in the same batch (or a
-        // later poll) does not double-deliver; the dedicated loop's deregister
-        // will be a no-op for this session.
-        persistent_session_queues_.erase(it);
-        ExceptionSink xs;
-        ReferenceHolder<QoreHashNode> close_entry(new QoreHashNode(autoTypeInfo), &xs);
-        close_entry->setKeyValue("type", new QoreStringNode("close"), &xs);
-        if (xs) {
-            xs.clear();
-            continue;
+        if (it->second) {
+            // NOTHING sentinel: Http3StreamContext::readFrame() consumes it and
+            // latches its `closed` flag, so isOpen() goes false and the listener's
+            // notifyIo() reaps the stream.  Don't deref the Queue — the QoreObject
+            // ref lives in the QPP `stream_queue_objs` member.  Same contract as
+            // closeStreamQueues(), but scoped to one session, so `stream_queues_closed`
+            // stays clear: other live sessions must still be able to register.
+            it->second->pushAndTakeRef(QoreValue());
         }
-        ASYNC_IO_TRACE("Http3ServerPollOperationPriv::deliverSessionLifecycleEvents "
-            "pushing persistent close session=%lld\n", (long long)sid);
-        q->pushAndTakeRef(close_entry.release());
+        // Dispatch onStreamData() for this stream so the listener's notifyIo()
+        // runs on a worker and consumes the sentinel.  The I/O thread must never
+        // run Qore user code itself, so it can only queue the wakeup here; the
+        // controller drains this via getAndClearDataReadyStreams() after
+        // continuePoll() returns.  checkStreamQueues() clears data_ready_streams
+        // and runs before us in the same OnExit, so appending is safe.
+        ASYNC_IO_TRACE("Http3ServerPollOperationPriv::closeSessionStreams "
+            "closing stream skey='%s'\n", it->first.c_str());
+        data_ready_streams.push_back(it->first);
+        it = stream_queues.erase(it);
     }
 }
 
@@ -1274,7 +1336,24 @@ nothing Http3ServerPollOperation::registerPersistentSessionQueue(int session_id,
             return QoreValue();
         }
     }
-    priv->registerPersistentSessionQueue((int64_t)session_id, *queue);
+    if (!priv->registerPersistentSessionQueue((int64_t)session_id, *queue)) {
+        // The op is already CLOSED (aborted): the C++ layer refused the binding,
+        // so remove the owning ref stored above — leaving it parked in the
+        // member hash would defer its release to QoreObject destruction (the
+        // freed-program deref hazard abort() exists to avoid)
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder existing(self->getReferencedMemberNoMethod("persistent_session_queue_objs", xsink), xsink);
+        if (*xsink || existing->getType() != NT_HASH) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> queue_objs(existing->get<QoreHashNode>()->copy(), xsink);
+        queue_objs->removeKey(std::to_string((int64_t)session_id).c_str(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        self->setMemberValue("persistent_session_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+            queue_objs.release(), xsink);
+    }
 }
 
 //! Unbinds the persistent-session close Queue for a QUIC session

@@ -39,7 +39,7 @@
 # enable all warnings
 
 module SqlUtil {
-    version = "3.0.0";
+    version = "3.2.0";
     desc = "user module for working with SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -111,16 +111,42 @@ module SqlUtil {
       - @ref dba_indexes
       - @ref dba_statistics
       - @ref dba_space_management
+    - @ref SqlUtil::RestartableTransaction "RestartableTransaction": bounded,
+      driver-independent restart decisions for complete idempotent transaction
+      bodies
 
     @section sqlutil_relnotes Release Notes for the SqlUtil Module
 
+    @subsection sqlutilv3_2_0 SqlUtil v3.2.0
+    - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
+      bounded, driver-independent recovery of complete idempotent transaction
+      bodies after database failover and datasource-pool timeout errors
+
+    @subsection sqlutilv3_1_0 SqlUtil v3.1.0
+    - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
+      "AbstractDatabase::supportsTempTables()" and @ref SqlUtil::AbstractDatabase::createTempTable()
+      "AbstractDatabase::createTempTable()" create a temporary table from an in-memory column description (no
+      catalog introspection), with a @ref SqlUtil::TempTableHelper "TempTableHelper" scope guard for
+      exception-safe cleanup; see @ref temporary_tables for details and a worked fill-and-join example.  This
+      provides the temporary-table join mechanism recommended as an alternative to large \c "in" operator argument
+      lists.  Driver support: PostgreSQL, Oracle (pre-created global temporary tables on all versions, private
+      temporary tables on 18c+), MySQL, SQL Server, and SQLite3
+
     @subsection sqlutilv3_0_0 SqlUtil v3.0.0
+    - table alignment now skips driver-specific column modification for identical definitions and keeps logical and
+      quoted DDL names synchronized after column renames, allowing a rename and a definition change in one alignment
+      operation
+    - corrected the expression metadata for \c contains, \c startsWith, and \c endsWith so the optional
+      case-insensitive argument and its default case-sensitive behavior match the implementation
     - fixed the advanced-expression \c "in" and \c "not in" operators to bind each value to its own
       placeholder; previously a \c (field, list) value list was bound to a single placeholder, which
       failed or silently mismatched on backends without native list-bind support (for example numeric
       columns on PostgreSQL or any value on SQLite3).  Both the canonical \c (field, list) form and the
       variadic \c (field, v1, v2, ...) form produced by the DPQL parser are now accepted and generate
       correct SQL
+    - added DPQL helpers and execution wrappers for SQL select projections, search conditions, update
+      assignment expressions, and delete conditions in @ref SqlUtil::AbstractTable "AbstractTable";
+      canonical DPQL value and arithmetic expressions are now supported by the default SQL expression map
     - implemented support for specifying the columns to use for upserts separately from the row data
       (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
     - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
@@ -133,6 +159,27 @@ module SqlUtil {
     - added generic partition metadata hashdecls and @ref SqlUtil::AbstractTable "AbstractTable" partition
       lifecycle APIs for range-partitioned tables; driver support is advertised by
       @ref SqlUtil::AbstractTable::supportsPartitions() "supportsPartitions()"
+    - added the portable \c partition_aligned index and unique-constraint option; it validates partitioned table
+      state and complete unique partition keys centrally and maps to native partition-local/aligned indexes without
+      requiring application code to contain driver-specific DDL options
+    - added storage-shape validation and partition exchange APIs with equivalent empty-target semantics for
+      Oracle \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION
+    - added explicit nontransactional PostgreSQL 14+ concurrent partition detach APIs with pending-state
+      introspection and deterministic \c FINALIZE recovery
+    - added the generic \c partition select option and supportsPartitionRead() capability for validated
+      single-partition reads on Oracle and MySQL primary and joined table references
+    - added supportsTargetedPartitionLookup() and getPartition() for canonical-name metadata queries that avoid
+      loading complete high-cardinality partition catalogs on supported drivers
+    - added the discriminated list/hash/subpartition spec family and supportsPartitionMethod(); PostgreSQL supports
+      portable range, list, explicit modulus/remainder hash, and recursive subpartition strategies, while Oracle
+      and MySQL/MariaDB support portable list lifecycle operations in addition to range
+    - added optional introspection-only partition statistics with explicitly estimated row counts and allocated
+      byte sizes where equivalent catalog metadata is available
+    - enforced exact datasource object identity for create-as-select and insert-select operations; added
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSql() "AbstractTable::getInsertFromSelectSql()" and
+      @ref SqlUtil::AbstractTable::getInsertFromSelectSqlWithInfo()
+      "AbstractTable::getInsertFromSelectSqlWithInfo()" for non-executing SQL preview with bind arguments, and
+      added reliable target/source projection-cardinality validation
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -497,6 +544,8 @@ hash soh = (
     - @ref select_option_join "join": (@ref hash_type "hash") specifies any SQL join operations to return results from multiple tables
     - @ref select_option_groupby "groupby": (@ref list_type "list of strings") specifies grouping for aggregate column functions
     - @ref select_option_having "having": (@ref hash_type "hash") specifies filtering for results with aggregate column functions
+    - @ref select_option_partition "partition": a canonical physical-partition name restricting the primary table
+      reference on drivers advertising @ref SqlUtil::AbstractTable::supportsPartitionRead() "supportsPartitionRead()"
     - @ref select_option_superquery "superquery": (@ref hash_type "hash") specifies that the rest of the argument belong to a subquery and the hash arguments under this key will select from the subquery
     - @ref select_option_forupdate "forupdate": (\c bool_type "bool") adds a \c "for update" clause to a select query
 
@@ -743,6 +792,40 @@ hash<auto> sh = {
     @endcode
     The \c "having" option allows for query results with aggregate SQL column operator functions to be filtered by user-defined criteria.
     The \c "having" hash key should be assigned to a hash where each key is a column specifier (optionally in dot notation) and the values are lists with two elements; the first element must be a @ref sql_cops "column operator code", and the second element is a column operator description normally provided by using a @ref sql_cop_funcs "column operator function" as in the above example.
+
+    Joins, computed aggregate columns, grouping, and aggregate filters can be combined in the same structured
+    select.  The c WithInfo variants return the generated SQL and bind arguments together with the result:
+    @code{.py}
+hash<SqlResultInfo> info = accounts.selectRowsWithInfo({
+    "alias": "a",
+    "columns": (
+        "a.region",
+        cop_as(cop_min("t.amount"), "min_amount"),
+        cop_as(cop_max("t.amount"), "max_amount"),
+    ),
+    "join": join_inner(transactions, "t", {"id": "account_id"}),
+    "groupby": "a.region",
+    "having": {"t.amount": (COP_MAX, op_ge(1000))},
+});
+    @endcode
+    In this example, c info.result contains the grouped rows, while c info.sql and c info.args provide the
+    executed statement and its ordered bind values.  The same select hash can be passed to create-as-select or
+    insert-select APIs without using raw SQL.
+
+    @subsubsection select_option_partition Select Option "partition"
+    The \c "partition" option restricts a primary Oracle or MySQL table reference to one validated physical
+    partition. The same option can be passed in the \c opt argument to a join helper to qualify that joined table
+    independently:
+    @code{.py}
+*list<auto> rows = events.selectRows({
+    "partition": "events_2026_06",
+    "join": join_inner(details, "d", {"id": "event_id"}, NOTHING,
+        {"partition": "details_2026_06"}),
+});
+    @endcode
+    Call supportsPartitionRead() before using the option in portable code. Unsupported drivers raise
+    \c PARTITION-NOT-SUPPORTED; a missing or empty canonical name raises \c PARTITION-ERROR. The option cannot
+    qualify the derived table produced by \c "superquery".
 
     @subsubsection select_option_superquery Select Option "superquery"
     <b>Superquery Example:</b>
@@ -1917,6 +2000,65 @@ hash<auto> ix_desc = (
 );
     @endcode
 
+    @section temporary_tables Temporary Tables
+
+    SqlUtil provides a portable temporary-table abstraction that is useful for avoiding very large \c "in" operator
+    argument lists (which are slow to generate and to parse/plan, and which fail outright on some database servers,
+    for example Oracle's hard 1000-element \c IN limit).  Instead of passing tens of thousands of ids to an \c "in"
+    clause, the ids can be materialized into a temporary table and used in a join.
+
+    Temporary-table support is advertised per driver by
+    @ref SqlUtil::AbstractDatabase::supportsTempTables() "AbstractDatabase::supportsTempTables()" and the table is
+    created with @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()", which
+    builds the @ref SqlUtil::AbstractTable "AbstractTable" purely from the supplied
+    @ref column_desc_hash "column description hash" (never from catalog introspection).  Use
+    @ref SqlUtil::TempTableHelper "TempTableHelper" for exception-safe cleanup.
+
+    @par Example: fill a temporary table server-side and join against it
+    @code{.py}
+Database db(ds);
+
+# on a DatasourcePool a transaction must already be in progress on the calling thread so that the temporary
+# table is created on the same pooled connection that subsequent statements use
+dsp.beginTransaction();
+on_error dsp.rollback();
+on_success dsp.commit();
+
+# create a transaction-scoped temporary table (dropped automatically at commit where the backend supports it)
+AbstractTable tmp = db.createTempTable("tmp_ids", {"id": {"qore_type": "integer", "notnull": True}});
+TempTableHelper th(tmp);
+
+# fill the temporary table entirely in the database server (INSERT ... SELECT); the ids never leave the DB
+tmp.insertFromSelect(("id",), source_table, {"columns": "id", "where": filter_expression});
+
+# use a join against the temporary table instead of a large "in" clause
+list<auto> rows = source_table.selectRows({
+    "columns": ("id", "name"),
+    "join": join_inner(tmp, "t", {"id": "id"}),
+});
+    @endcode
+
+    @par Scope
+    The \c "scope" option controls the temporary table's lifetime:
+    - @ref SqlUtil::TT_Transaction (the default): the table exists only for the current transaction; on backends
+      that support it (PostgreSQL \c "on commit drop", Oracle private temporary tables \c "on commit drop
+      definition", Oracle global temporary tables \c "on commit delete rows") storage is released automatically
+      when the transaction ends
+    - @ref SqlUtil::TT_Session: the table persists for the database session and must be dropped explicitly (for
+      example, with @ref SqlUtil::TempTableHelper)
+
+    @par Driver notes
+    - <b>PostgreSQL</b>: emits \c "create temporary table ... on commit drop" (transaction scope)
+    - <b>Oracle</b>: with the \c "precreated" option a schema-managed global temporary table is used (no runtime
+      DDL; works on all supported Oracle versions and supports \c NOT \c NULL columns) — this is the recommended
+      approach for Oracle; without \c "precreated", a private temporary table (\c "ORA$PTT_" name prefix) is
+      created at runtime, which requires Oracle 18c or later and does not support \c NOT \c NULL column constraints
+      (they are dropped automatically)
+    - <b>MySQL</b>: emits \c "create temporary table"; session temporary tables are invisible to
+      \c information_schema, which is why the table object is built from the supplied column description
+    - <b>SQL Server</b>: uses a \c "#"-prefixed local temporary table name
+    - <b>SQLite3</b>: emits \c "create temp table"
+
     @section callbacks Callbacks
 
     Most of the SqlUtil methods that return SQL strings also accept an option hash where callbacks an be set.
@@ -2252,6 +2394,8 @@ public namespace SqlUtil {
     public enum PartitionVerifiedBy : string {
         #! The partition was verified by comparing partition bounds
         Bounds = "bounds",
+        #! The partition was verified by a non-range definition such as list values or a hash bucket
+        Definition = "definition",
         #! The partition was verified by canonical partition name
         Name = "name",
         #! The partition was covered by automatic partitioning
@@ -2262,7 +2406,7 @@ public namespace SqlUtil {
     /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionStrategy {
-        #! Partitioning method; Phase 1 supports \c "range"
+        #! Partitioning method: \c "range", \c "list", or \c "hash" when supported by the driver
         string method = "range";
         #! Partition key columns in declaration order
         softlist<string> columns;
@@ -2270,6 +2414,8 @@ public namespace SqlUtil {
         *hash<auto> auto;
         #! Optional driver-specific configuration
         *hash<auto> driver;
+        #! Optional recursively nested partition strategy
+        *hash<auto> subpartition;
     }
 
     #! Partition definition or lookup specification hash
@@ -2278,7 +2424,7 @@ public namespace SqlUtil {
     public hashdecl PartitionSpec {
         #! Canonical partition name
         *string name;
-        #! Partitioning method; Phase 1 supports \c "range"
+        #! Partitioning method: \c "range", \c "list", or \c "hash"
         string method = "range";
         #! Optional partition key columns; defaults to the table strategy columns
         *softlist<string> columns;
@@ -2292,8 +2438,18 @@ public namespace SqlUtil {
         *string bound_to_sql;
         #! Complete driver-native bound SQL expression
         *string bound_sql;
+        #! Discrete typed values assigned to a list partition
+        *list<auto> values;
+        #! Driver-native list value SQL when typed values cannot be reconstructed
+        *string values_sql;
+        #! Hash modulus for an explicitly mapped hash bucket
+        *int modulus;
+        #! Hash remainder for an explicitly mapped hash bucket
+        *int remainder;
         #! True if this is the default partition
         bool is_default = False;
+        #! Nested partition definitions keyed by canonical child name
+        *hash<string, hash<auto>> subpartitions;
         #! Schema name when available
         *string schema;
         #! Unqualified relation name when available
@@ -2308,8 +2464,12 @@ public namespace SqlUtil {
     /** @since SqlUtil 3.0.0
     */
     public hashdecl PartitionInfo inherits PartitionSpec {
-        #! Ordinal in the listPartitions() result
+        #! Ordinal in listPartitions(), or \c -1 for a targeted result when normalized list order is not known
         int ordinal;
+        #! Catalog-estimated row count when the driver exposes partition statistics
+        *int estimated_row_count;
+        #! Allocated partition storage in bytes when the driver exposes physical size metadata
+        *int size_bytes;
     }
 
     #! Partition lookup result hash
@@ -4651,6 +4811,97 @@ int rows_updated = t.update(("counter": uop_divide(2)));
     */
     public const string OP_IN_SELECT = "in_select";
 
+    #! Normalizes a digest algorithm name for the @ref DP_FUNC_DIGEST expression
+    /** Lower-cases the value and strips \c "-", \c "_", and space characters so that, for example,
+        \c "SHA-256" and \c "sha256" are treated identically.
+
+        @param alg the algorithm argument; must be a string literal
+
+        @return the normalized algorithm name (ex: \c "sha256")
+
+        @throw DIGEST-ERROR the algorithm argument is not a string literal
+
+        @par Example
+        A portable customer-data checksum can normalize \c "SHA-256" before selecting the database driver's
+        server-side digest implementation; this function returns \c "sha256".
+
+        @since %SqlUtil 1.9
+    */
+    public string sub sqlutil_normalize_digest_algorithm(auto alg) {
+        if (alg.typeCode() != NT_STRING) {
+            throw "DIGEST-ERROR", sprintf("the digest algorithm argument must be a string literal; got "
+                "%y (type %y)", alg, alg.type());
+        }
+        return regex_subst(alg.lwr(), "[-_ ]", "", RE_Global);
+    }
+
+    #! Normalizes and validates the digest output encoding for the @ref DP_FUNC_DIGEST expression
+    /** @param enc the encoding argument; must be missing or one of \c "hex", \c "base64", or
+        \c "binary" (case-insensitive)
+
+        @return the normalized encoding: \c "hex" (the default when missing), \c "base64", or
+        \c "binary"
+
+        @throw DIGEST-ERROR the encoding argument is not a valid string literal encoding value
+
+        @par Example
+        A reconciliation export can request \c "base64" so binary row digests remain safe in text-based files;
+        this function validates the request and returns the normalized encoding.
+
+        @since %SqlUtil 1.9
+    */
+    public string sub sqlutil_normalize_digest_encoding(auto enc) {
+        if (!exists enc) {
+            return "hex";
+        }
+        if (enc.typeCode() != NT_STRING) {
+            throw "DIGEST-ERROR", sprintf("the digest encoding argument must be a string literal; got "
+                "%y (type %y)", enc, enc.type());
+        }
+        switch (enc.lwr()) {
+            case "hex":
+            case "base64":
+            case "binary":
+                return enc.lwr();
+        }
+        throw "DIGEST-ERROR", sprintf("invalid digest output encoding %y; expected \"hex\", \"base64\", "
+            "or \"binary\"", enc);
+    }
+
+    #! Expands an IN/NOT IN value list into per-value SQL placeholder expressions
+    /** Each value is bound to its own placeholder (required for backends without native list-bind
+        support, e.g. numeric columns on PostgreSQL or any bind on SQLite3).
+
+        Performance: scalar bind values are accumulated in a local list and appended to
+        \c info.args in a single bulk operation rather than one value at a time via
+        getExpressionArg().  Appending to \c info.args one element at a time is pathological for
+        large IN lists: \a info is a \c reference<hash<QueryInfo>> and each append through the
+        reference copies the entire QueryInfo hash (which carries the full expression/operator
+        maps), making the bind step O(n * map-size).  Non-scalar elements (field references or
+        nested expressions) still go through getExpressionArg(); the local buffer is flushed
+        first so bind order is preserved. */
+    list<string> sub sqlutil_expand_in_placeholders(reference<hash<QueryInfo>> info, int role,
+            list<auto> in_vals) {
+        list<string> in_exprs = ();
+        list<auto> binds = ();
+        foreach auto v in (in_vals) {
+            if (v instanceof hash<DataProviderFieldReference> || v instanceof hash<DataProviderExpression>) {
+                if (binds) {
+                    info.args += binds;
+                    binds = ();
+                }
+                in_exprs += info.table.getExpressionArg(\info, role, v, AbstractDataProviderTypeMap."any");
+            } else {
+                binds += v;
+                in_exprs += "%v";
+            }
+        }
+        if (binds) {
+            info.args += binds;
+        }
+        return in_exprs;
+    }
+
     #! Default expressions to be supported by all SqlUtil modules
     public const hash<auto> DefaultExpressionMap = {
         # first the "AND" and "OR" "operators"
@@ -4670,6 +4921,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     + (foldl $1 + " or " + $2,
                         (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."bool"), args))
                     + ")";
+            },
+        },
+        DP_EXPR_VALUE: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_EXPR_VALUE},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
             },
         },
         OP_LT: {
@@ -4768,9 +5025,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals));
-                return exists ins ? sprintf("%s in (%s)", exp0, ins) : "1 != 1";
+                # bind each value to its own placeholder with a single bulk append + O(n) join();
+                # see sqlutil_expand_in_placeholders() for why per-value binding through the
+                # reference<hash<QueryInfo>> would make large IN clauses pathologically slow
+                list<string> in_exprs = sqlutil_expand_in_placeholders(\info, role, in_vals);
+                return in_exprs ? sprintf("%s in (%s)", exp0, join(",", in_exprs)) : "1 != 1";
             },
         },
         OP_NOT: {
@@ -4829,7 +5088,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 object subtable = info.table.getSubtableFromString(args[1], info.query_options);
                 list<auto> subargs;
                 string subsql = subtable.getSelectSql(args[2], \subargs);
-                args += subargs;
+                # the subquery's bind arguments must go to the query's argument list; appending to the
+                # local parameter silently dropped them, executing the subquery with NULL binds and
+                # returning wrong (typically empty) results
+                info.args += subargs;
                 return sprintf("%s in (%s)", exp0, subsql);
             },
         },
@@ -5151,6 +5413,40 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 return sprintf("%s * %s", exp0, exp1);
             },
         },
+        DP_OP_MINUS: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_MINUS},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
+                return sprintf("%s - %s", exp0, exp1);
+            },
+        },
+        DP_OP_PLUS: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_PLUS},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return "("
+                    + (foldl $1 + " + " + $2,
+                        (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args))
+                    + ")";
+            },
+        },
+        DP_OP_DIV: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_DIV},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                string exp1 = info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any");
+                return sprintf("%s / %s", exp0, exp1);
+            },
+        },
+        DP_OP_MULT: {
+            "exp": AbstractDataProvider::GenericExpressions{DP_OP_MULT},
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return "("
+                    + (foldl $1 + " * " + $2,
+                        (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args))
+                    + ")";
+            },
+        },
         COP_LENGTH: {
             "exp": <DataProviderExpressionInfo>{
                 "type": DET_Operator,
@@ -5450,9 +5746,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
                     in_vals = in_vals[0];
                 }
-                *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), in_vals));
-                return exists ins ? sprintf("%s not in (%s)", exp0, ins) : "1 = 1";
+                # single bulk append + O(n) join(); see sqlutil_expand_in_placeholders() and the
+                # DP_SEARCH_OP_IN "in" op above for details
+                list<string> in_exprs = sqlutil_expand_in_placeholders(\info, role, in_vals);
+                return in_exprs ? sprintf("%s not in (%s)", exp0, join(",", in_exprs)) : "1 = 1";
             },
         },
         # --- Math functions ---
@@ -5589,6 +5886,30 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                 return sprintf("coalesce(%s)", (foldl $1 + ", " + $2,
                     (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args)));
+            },
+        },
+        # --- Encryption and hashing functions ---
+        # Default: no portable ANSI SQL digest exists; drivers that support server-side digests
+        # override this entry with native code.  Unsupported drivers raise a clear error.
+        DP_FUNC_DIGEST: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_DIGEST,
+                "display_name": "digest",
+                "short_desc": "Computes a cryptographic digest",
+                "desc": "Returns the cryptographic digest of the input data in the requested output "
+                    "encoding: `hex` (the default) and `base64` return a string, `binary` returns "
+                    "the raw digest as a binary value",
+                "symbol": "get_digest()",
+                "groups": "Encryption and Hashing",
+                "role": ER_All,
+                "args": (DataProviderSignatureDataType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringType),
+                "return_type": AbstractDataProviderTypeMap."data",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                throw "DIGEST-ERROR", sprintf("the %y expression is not supported by the %y driver",
+                    DP_FUNC_DIGEST, info.table.getDriverName());
             },
         },
         # --- String functions ---
@@ -5991,11 +6312,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "contains",
                 "short_desc": "Returns True if the string contains the given substring",
                 "desc": "Returns True if the first argument contains the second as a substring; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "contains",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6016,11 +6337,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "starts with",
                 "short_desc": "Returns True if the string starts with the given characters",
                 "desc": "Returns True if the first argument starts with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "startsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6041,11 +6362,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "display_name": "ends with",
                 "short_desc": "Returns True if the string ends with the given characters",
                 "desc": "Returns True if the first argument ends with the second; "
-                    "optional third argument enables case-insensitive matching (default: True)",
+                    "optional third argument enables case-insensitive matching (default: False)",
                 "symbol": "endsWith",
                 "groups": "Comparison",
                 "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                    DataProviderSignatureBoolType),
+                    DataProviderSignatureOptionalBoolType),
                 "return_type": AbstractDataProviderTypeMap."bool",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -6418,8 +6739,10 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         ),
         OP_IN: AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN} + (
             "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
-                *string ins = (foldl $1 + "," + $2, (map info.table.getSqlValue($1), arg));
-                return exists ins ? sprintf("%s in (%s)", cn, ins) : "1 != 1";
+                # join() (single-pass, O(n)) rather than "foldl $1 + \",\" + $2" (O(n^2) in the size
+                # of the value list); large op_in() lists otherwise spin CPU generating the query
+                list<string> in_exprs = map info.table.getSqlValue($1), arg;
+                return in_exprs ? sprintf("%s in (%s)", cn, join(",", in_exprs)) : "1 != 1";
             },
         ),
         OP_IN_SELECT: {
@@ -6697,7 +7020,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
 
-        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table instead of passing a large number of arguments to this function
+        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table (see @ref temporary_tables) instead of passing a large number of arguments to this function
     */
     public hash<OperatorInfo> sub op_in() {
         return make_op(OP_IN, argv);
@@ -6758,7 +7081,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
 
-        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table instead of passing a large number of arguments to this function
+        @note The argument list size may be constrained depending on the database server / driver used; passing a large number of arguments to this function may be a sign of an improper application or query design; consider using a join with a temporary table (see @ref temporary_tables) instead of passing a large number of arguments to this function
     */
     public hash<OperatorInfo> sub op_in(list<auto> args) {
         return make_op(OP_IN, args);
@@ -6771,8 +7094,12 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         @endcode
 
         @return an @ref OperatorInfo hash for use in @ref where_clauses "where clauses"
+
+        @note the parameter is typed \c hash<auto> so the wrapped operator hash is passed through unchanged;
+        a plain \c hash parameter would coerce the argument, recursively stripping nested runtime types and
+        destroying hash<DataProviderExpression> sub-wheres in wrapped operators (e.g. @ref op_in_select())
     */
-    public hash<OperatorInfo> sub op_not(hash arg) {
+    public hash<OperatorInfo> sub op_not(hash<auto> arg) {
         return make_op(OP_NOT, arg);
     }
 
@@ -8033,6 +8360,21 @@ AbstractColumn c = cols.id;
             ddl_name = getDdlName(name);
         }
 
+        #! Updates both the logical and quoted DDL names
+        /** @par Example:
+            @code{.py}
+column.setDdlName("order");
+            @endcode
+
+            @param name the new object name
+
+            @since %SqlUtil 3.0.0
+        */
+        setDdlName(string name) {
+            self.name = name;
+            ddl_name = getDdlName(name);
+        }
+
         #! returns the column name with quoting in case the column name is a reserved word
         /** the name returned here will be used when executing DDL
         */
@@ -8163,6 +8505,9 @@ list l = col.getModifySql(t, newcol);
             @return a list of sql strings that can be used to modify the column to the new definition; if the column definitions are identical then an empty list is returned
          */
         list<auto> getModifySql(AbstractTable t, AbstractColumn c, *hash<auto> opt) {
+            if (equal(c)) {
+                return ();
+            }
             list l = getModifySqlImpl(t, c, opt);
 
             # update existing rows with the new default column value if:

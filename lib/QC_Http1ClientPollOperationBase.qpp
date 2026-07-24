@@ -99,7 +99,7 @@ void Http1ClientPollOperationPriv::initAdoptedReady(ExceptionSink* xsink) {
 }
 
 Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
-    if (current_op || sock_obj || error_info) {
+    if (current_op || send_op || sock_obj || error_info) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
@@ -170,6 +170,10 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     if (current_op) {
         current_op->deref(xsink);
         current_op = nullptr;
+    }
+    if (send_op) {
+        send_op->deref(xsink);
+        send_op = nullptr;
     }
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -501,15 +505,24 @@ void Http1ClientPollOperationPriv::startReady(ExceptionSink* xsink) {
 // --- Main reading/processing state handler ---
 
 QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
-    ASYNC_IO_TRACE("H1 handleReading: req_state=%d fd=%d\n", (int)req_state,
-        sock_obj ? sock_obj->getSocket() : -1);
+    ASYNC_IO_TRACE("H1 handleReading: req_state=%d send_state=%d fd=%d\n", (int)req_state,
+        (int)send_state, sock_obj ? sock_obj->getSocket() : -1);
+    // Full-duplex streaming send: drive the chunked request body send side
+    // concurrently with the response-receive machine (req_state is a RECV_*
+    // state here), so the server can reply while the request body is still
+    // open (the DataStream / RemoteSqlSession read-your-writes pattern).
+    if (send_state != SendState::INACTIVE) {
+        return handleFullDuplex(xsink);
+    }
+    return dispatchReqState(xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::dispatchReqState(ExceptionSink* xsink) {
     switch (req_state) {
         case ReqState::IDLE:
             return handleIdle(xsink);
         case ReqState::SENDING:
             return handleSending(xsink);
-        case ReqState::SEND_STREAMING_BODY:
-            return handleStreamingSendBody(xsink);
         case ReqState::RECV_HEADER:
             return handleRecvHeader(xsink);
         case ReqState::RECV_BODY_LENGTH:
@@ -527,6 +540,183 @@ QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
     setError("HTTP1-INTERNAL-ERROR", "unknown request sub-state", xsink);
     return nullptr;
+}
+
+// --- Full-duplex streaming (concurrent chunked request-body send + response
+//     receive on one socket, driven on the I/O thread) ---
+
+QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsink) {
+    // 1) Make progress on the chunked request-body send side.
+    int send_events = driveSendSide(xsink);
+    if (send_events < 0) {
+        // Error already surfaced (setError() closed the connection, or the
+        // send-op constructor left an exception on xsink); the pending stream
+        // is notified via setError()->notifyPendingStreams() / controller abort.
+        return nullptr;
+    }
+
+    // 2) Make progress on the response-receive side.  The RECV_* handlers drive
+    //    current_op and, on response completion, reset the response state and
+    //    tear down the send side (dispatchStreamingEnd / dispatchResponse ->
+    //    resetSendState), returning either the idle poll info or nullptr (close).
+    QoreHashNode* recv_info = dispatchReqState(xsink);
+    if (!recv_info) {
+        // Response completed with a connection close, or an error was raised.
+        return nullptr;
+    }
+
+    // 3) If a request-body chunk is still mid-send (partial write), fold its
+    //    desired POLLOUT into the receive poll info so the controller wakes us
+    //    for either direction.  If the response already completed above,
+    //    resetSendState() set send_state back to INACTIVE and there is nothing
+    //    to merge.
+    if (send_events && send_state != SendState::INACTIVE) {
+        int64_t ev = recv_info->getKeyValue("events").getAsBigInt();
+        recv_info->setKeyValue("events", ev | send_events, xsink);
+    }
+    return recv_info;
+}
+
+int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
+    while (true) {
+        // Poll an in-flight send op (a request-body chunk or the final terminator)
+        if (send_op) {
+            ExceptionSink poll_xsink;
+            QoreHashNode* poll_info = send_op->continuePoll(&poll_xsink);
+            if (poll_xsink) {
+                QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+                QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+                setError(*err_str ? err_str->c_str() : "HTTP1-SEND-ERROR",
+                    *desc_str ? desc_str->c_str() : "streaming request-body send failed", xsink);
+                poll_xsink.clear();
+                return -1;
+            }
+            if (poll_info) {
+                // Partial send: keep send_op and report the events it still wants
+                // (typically SOCK_POLLOUT) so the controller wakes us to finish.
+                int events = (int)poll_info->getKeyValue("events").getAsBigInt();
+                poll_info->deref(xsink);
+                return events;
+            }
+            if (!send_op->goalReached()) {
+                setError("HTTP1-SEND-ERROR", "streaming request-body chunk send failed", xsink);
+                return -1;
+            }
+            // Chunk fully sent
+            releaseSendOp(xsink);
+            if (send_final_pending) {
+                send_final_pending = false;
+                send_state = SendState::DONE;
+                ASYNC_IO_TRACE("H1 driveSendSide: final chunk sent, request body done fd=%d\n",
+                    sock_obj ? sock_obj->getSocket() : -1);
+            }
+        }
+
+        if (send_state == SendState::DONE) {
+            return 0;
+        }
+
+        // Pull the next queued request-body chunk (nullptr = end-of-body sentinel)
+        QoreStringNode* chunk = nullptr;
+        bool have_data = false;
+        {
+            AutoLocker al(stream_lock);
+            if (!send_body_queue.empty()) {
+                chunk = send_body_queue.front();
+                send_body_queue.pop_front();
+                have_data = true;
+            }
+        }
+
+        if (!have_data) {
+            // Nothing queued yet — wait for pushSendData() + wakeSocket().
+            send_state = SendState::IDLE;
+            return 0;
+        }
+
+        if (!chunk) {
+            // End-of-body sentinel: send the final "0\r\n" terminator plus any
+            // trailers, then "\r\n".
+            SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
+            final_chunk->append("0\r\n", 3);
+            QoreHashNode* trailers = nullptr;
+            {
+                AutoLocker al(stream_lock);
+                trailers = send_trailers;
+                send_trailers = nullptr;
+            }
+            if (trailers) {
+                ConstHashIterator hi(trailers);
+                while (hi.next()) {
+                    QoreStringValueHelper sv(hi.get());
+                    QoreString trailer_line;
+                    trailer_line.sprintf("%s: %s\r\n", hi.getKey(), sv->c_str());
+                    final_chunk->append(trailer_line.c_str(), trailer_line.size());
+                }
+                trailers->deref(xsink);
+            }
+            final_chunk->append("\r\n", 2);
+            ASYNC_IO_TRACE("H1 driveSendSide: sending final chunk fd=%d\n",
+                sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj->ref();
+            send_op = new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj);
+            if (*xsink) {
+                send_op->deref(xsink);
+                send_op = nullptr;
+                return -1;
+            }
+            send_op->setSelf(*self);
+            send_state = SendState::SENDING;
+            send_final_pending = true;
+            continue;  // loop to poll the new send op
+        }
+
+        // Normal chunk: HTTP/1.1 chunked TE frame "<hexsize>\r\n<data>\r\n"
+        ASYNC_IO_TRACE("H1 driveSendSide: sending chunk (%lu bytes) fd=%d\n",
+            (unsigned long)chunk->size(), sock_obj ? sock_obj->getSocket() : -1);
+        SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
+        QoreString size_line;
+        size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
+        chunk_data->append(size_line.c_str(), size_line.size());
+        chunk_data->append(chunk->c_str(), chunk->size());
+        chunk_data->append("\r\n", 2);
+        chunk->deref(xsink);
+
+        sock_obj->ref();
+        send_op = new SocketSendPollOperation(xsink, chunk_data.release(), sock_obj);
+        if (*xsink) {
+            send_op->deref(xsink);
+            send_op = nullptr;
+            return -1;
+        }
+        send_op->setSelf(*self);
+        send_state = SendState::SENDING;
+        continue;  // loop to poll the new send op
+    }
+}
+
+void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
+    if (send_op) {
+        send_op->deref(xsink);
+        send_op = nullptr;
+    }
+}
+
+void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
+    releaseSendOp(xsink);
+    send_state = SendState::INACTIVE;
+    send_final_pending = false;
+    AutoLocker al(stream_lock);
+    for (auto* s : send_body_queue) {
+        if (s) {
+            s->deref(xsink);
+        }
+    }
+    send_body_queue.clear();
+    if (send_trailers) {
+        send_trailers->deref(xsink);
+        send_trailers = nullptr;
+    }
 }
 
 // --- Request sub-state handlers ---
@@ -729,21 +919,32 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
     }
 
     if (current_op->goalReached()) {
-        // If this was a streaming send and we just finished sending headers
-        // (or a chunk), check if there's more body to send.
-        if (streaming_send_io && req_state == ReqState::SEND_STREAMING_BODY) {
-            // A chunk was sent - check for more queued data
-            releaseCurrentOp(xsink);
-            return handleStreamingSendBody(xsink);
-        }
-
+        // Streaming send: the request headers (Transfer-Encoding: chunked) have
+        // been written.  Restore full-duplex chunked streaming — start reading
+        // the response concurrently with sending the chunked request body, so a
+        // server can reply while the request body is still open (the DataStream
+        // / RemoteSqlSession read-your-writes pattern).  req_state now tracks
+        // only the response-receive direction; the request body send side runs
+        // on send_op driven by driveSendSide() (see handleFullDuplex()).
         if (streaming_send_io && req_state == ReqState::SENDING) {
-            // Headers sent - transition to streaming body state
             printd(5, "Http1ClientPollOperationPriv::handleSending() headers sent, "
-                "waiting for streaming body data\n");
+                "entering full-duplex streaming\n");
             releaseCurrentOp(xsink);
-            req_state = ReqState::SEND_STREAMING_BODY;
-            return handleStreamingSendBody(xsink);
+            sock_obj->ref();
+            current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+            if (*xsink) {
+                current_op->deref(xsink);
+                current_op = nullptr;
+                return nullptr;
+            }
+            current_op->setSelf(*self);
+            req_state = ReqState::RECV_HEADER;
+            send_state = SendState::IDLE;
+            send_final_pending = false;
+            ASYNC_IO_TRACE("H1 handleSending: headers sent -> full-duplex "
+                "(RECV_HEADER + concurrent send) fd=%d\n",
+                sock_obj ? sock_obj->getSocket() : -1);
+            return handleFullDuplex(xsink);
         }
 
         printd(5, "Http1ClientPollOperationPriv::handleSending() request sent, reading response header\n");
@@ -799,113 +1000,6 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
 
     setError("HTTP1-SEND-ERROR", "send failed", xsink);
     return nullptr;
-}
-
-QoreHashNode* Http1ClientPollOperationPriv::handleStreamingSendBody(ExceptionSink* xsink) {
-    // If there's an active send operation, continue polling it
-    if (current_op) {
-        ExceptionSink poll_xsink;
-        QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
-        if (poll_xsink) {
-            QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
-            QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
-            setError(*err_str ? err_str->c_str() : "HTTP1-SEND-ERROR",
-                *desc_str ? desc_str->c_str() : "streaming send failed", xsink);
-            poll_xsink.clear();
-            return nullptr;
-        }
-        if (poll_info) {
-            return poll_info;
-        }
-        if (current_op->goalReached()) {
-            releaseCurrentOp(xsink);
-            // Fall through to check for more data
-        } else {
-            setError("HTTP1-SEND-ERROR", "streaming chunk send failed", xsink);
-            return nullptr;
-        }
-    }
-
-    // Check the send queue for data
-    QoreStringNode* chunk = nullptr;
-    bool have_data = false;
-    {
-        AutoLocker al(stream_lock);
-        if (!send_body_queue.empty()) {
-            chunk = send_body_queue.front();
-            send_body_queue.pop_front();
-            have_data = true;
-        }
-    }
-
-    if (!have_data) {
-        // No data queued yet - wait for wake from pushSendData()
-        ASYNC_IO_TRACE("H1 handleStreamingSendBody: no data queued, waiting for wake fd=%d\n",
-            sock_obj ? sock_obj->getSocket() : -1);
-        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-    }
-
-    if (!chunk) {
-        // End sentinel - send final chunk with optional trailers
-        ASYNC_IO_TRACE("H1 handleStreamingSendBody: end sentinel, sending final chunk fd=%d\n",
-            sock_obj ? sock_obj->getSocket() : -1);
-        SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
-        final_chunk->append("0\r\n", 3);
-
-        // Append trailers if set
-        QoreHashNode* trailers = nullptr;
-        {
-            AutoLocker al(stream_lock);
-            trailers = send_trailers;
-            send_trailers = nullptr;
-        }
-        if (trailers) {
-            ConstHashIterator hi(trailers);
-            while (hi.next()) {
-                QoreStringValueHelper sv(hi.get());
-                QoreString trailer_line;
-                trailer_line.sprintf("%s: %s\r\n", hi.getKey(), sv->c_str());
-                final_chunk->append(trailer_line.c_str(), trailer_line.size());
-            }
-            trailers->deref(xsink);
-        }
-        final_chunk->append("\r\n", 2);
-        sock_obj->ref();
-        current_op = new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj);
-        if (*xsink) {
-            current_op->deref(xsink);
-            current_op = nullptr;
-            return nullptr;
-        }
-        current_op->setSelf(*self);
-        streaming_send_io = false;
-        // After this send completes, handleSending will transition to RECV_HEADER
-        // since streaming_send_io is now false
-        req_state = ReqState::SENDING;
-        return handleSending(xsink);
-    }
-
-    // Format the chunk in HTTP/1.1 chunked TE format: size\r\ndata\r\n
-    ASYNC_IO_TRACE("H1 handleStreamingSendBody: sending chunk (%lu bytes) fd=%d\n",
-        (unsigned long)chunk->size(), sock_obj ? sock_obj->getSocket() : -1);
-    SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
-    QoreString size_line;
-    size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
-    chunk_data->append(size_line.c_str(), size_line.size());
-    chunk_data->append(chunk->c_str(), chunk->size());
-    chunk_data->append("\r\n", 2);
-    chunk->deref(xsink);
-
-    sock_obj->ref();
-    current_op = new SocketSendPollOperation(xsink, chunk_data.release(), sock_obj);
-    if (*xsink) {
-        current_op->deref(xsink);
-        current_op = nullptr;
-        return nullptr;
-    }
-    current_op->setSelf(*self);
-    // Stay in SEND_STREAMING_BODY - handleSending knows to come back here
-    return handleSending(xsink);
 }
 
 void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, ExceptionSink* xsink) {
@@ -1692,9 +1786,16 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         stream_id, response_status_code);
 
     bool close = connection_close;
+    // Full-duplex streaming: a response delivered while the chunked request
+    // body is still open means the connection cannot be safely reused — force
+    // close (see dispatchStreamingEnd() for the same rationale).
+    if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
+        close = true;
+    }
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
+    resetSendState(xsink);
 
     // If the server requested connection close, mark the connection closed
     // BEFORE resolving the response Future.  Otherwise a consumer thread
@@ -1788,6 +1889,17 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     AbstractAsyncAction* action = nullptr;
     bool close = connection_close;
     bool keep_completed_channel = false;
+
+    // Full-duplex streaming: if the response completed while the chunked
+    // request body is still open (the server replied and closed its response
+    // before the client finished sending the request body), the connection
+    // cannot be safely reused as keep-alive — force close.
+    if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
+        ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response ended with request body still "
+            "open (send_state=%d) - forcing close fd=%d\n", (int)send_state,
+            sock_obj ? sock_obj->getSocket() : -1);
+        close = true;
+    }
     {
         AutoLocker al(stream_lock);
         stream_id = active_sid;
@@ -1812,6 +1924,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
+    resetSendState(xsink);
 
     // Mark the connection closed before completing the action — see
     // dispatchResponse() for the full race rationale (consumer thread
@@ -1966,6 +2079,9 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     h1_state.store(H1State::CLOSED, std::memory_order_release);
     if (current_op) {
         current_op->abort(xsink);
+    }
+    if (send_op) {
+        send_op->abort(xsink);
     }
     notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
     {

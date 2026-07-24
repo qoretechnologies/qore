@@ -186,6 +186,14 @@ else
     fi
 fi
 
+# Build artifacts contain build/qlib-qmod, while the source-tree symlinks made
+# by the build job are outside the artifact. Restore them before in-tree tests
+# use explicit qlib-relative qmod paths.
+cmake \
+    -DQORE_SOURCE_QLIB_DIR="${QORE_SRC_DIR}/qlib" \
+    -DQORE_BUILD_QMOD_DIR="${QORE_SRC_DIR}/build/qlib-qmod" \
+    -P "${QORE_SRC_DIR}/cmake/EnsureSourceQmodSymlinks.cmake"
+
 
 # add Qore user and group
 if ! grep -q "^qore:x:${QORE_GID}" /etc/group; then

@@ -848,8 +848,13 @@ void qore_program_private_base::newProgram() {
     // init thread local storage key
     thread_local_storage = new qpgm_thread_local_storage_t;
 
-    // save thread local storage hash
-    thread_local_storage->set(new QoreHashNode(autoTypeInfo));
+    // NOTE: the per-thread thread-local-storage hash is intentionally NOT created eagerly here.
+    // It is created lazily on first access (getThreadData()/startThread()) by the thread that
+    // actually runs code in this Program, which is also the point at which that thread is registered
+    // (ThreadProgramData::saveProgram) so that its data is finalized when the thread exits.  Creating
+    // it eagerly for the constructing thread leaks when that thread neither runs in the Program (e.g.
+    // an AOT module "shadow" Program with no init functions, constructed on a transient worker thread)
+    // nor is the thread that destroys it: the constructing thread's hash is then never finalized.
 
     //printd(5, "qore_program_private_base::newProgram() this: %p\n", this);
 
@@ -1735,6 +1740,25 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     }
 
     (void)xsink;
+}
+
+void qore_program_private::inheritModulePathLists(QoreProgram& child, QoreProgram& parent) {
+    auto append_unique = [](std::vector<std::string>& target, const std::vector<std::string>& source) {
+        for (const std::string& path : source) {
+            bool seen = false;
+            for (const std::string& existing : target) {
+                if (existing == path) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) {
+                target.push_back(path);
+            }
+        }
+    };
+    append_unique(child.priv->prepended_module_paths, parent.priv->prepended_module_paths);
+    append_unique(child.priv->appended_module_paths, parent.priv->appended_module_paths);
 }
 
 void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u, const qore_ns_private& oldns, const char* new_name, bool inject) {

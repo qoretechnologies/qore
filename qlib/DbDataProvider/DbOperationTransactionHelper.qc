@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore DbOperationTransactionHelper class definition
 
-/** DbOperationTransactionHelper.qc Copyright 2025 Qore Technologies, s.r.o.
+/** DbOperationTransactionHelper.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,7 +24,7 @@
 
 # private namespace
 namespace Priv {
-# private class; helps manage transactions in DbTableDataProvider methods
+# private class; commits or rolls back only transactions started by the current operation
 class DbOperationTransactionHelper {
     private {
         AbstractDatasource ds;
@@ -33,6 +33,11 @@ class DbOperationTransactionHelper {
 
     constructor(AbstractTable table) {
         ds = table.getDatasource();
+        in_trans = ds.currentThreadInTransaction();
+    }
+
+    constructor(AbstractDatasource ds) {
+        self.ds = ds;
         in_trans = ds.currentThreadInTransaction();
     }
 

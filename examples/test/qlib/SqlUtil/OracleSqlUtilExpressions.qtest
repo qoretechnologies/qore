@@ -106,6 +106,7 @@ class OracleExpressionTest inherits QUnit::Test {
         addTestCase("convertDateFormat", \testConvertDateFormat());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
 
         set_return_value(main());
@@ -549,5 +550,33 @@ class OracleExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        string name = table.selectRow({"columns": "name", "where": {"id": 1}}).name;
+
+        # Oracle STANDARD_HASH supports MD5, SHA1, SHA256, SHA384, and SHA512 (not SHA224)
+        foreach string alg in (("md5", "sha1", "sha256", "sha384", "sha512")) {
+            assertEq(digest(alg, name),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "binary")), 1).d);
+            assertEq(digest(alg, name).toHex(),
+                selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), alg, "hex")), 1).d);
+        }
+
+        # default output encoding is hex; algorithm names are case/separator-insensitive
+        assertEq(digest("sha256", name).toHex(),
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "SHA-256")), 1).d);
+
+        # SHA224 is not supported by STANDARD_HASH
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha224", "hex")), 1);
+        });
+        # base64 output is not supported on Oracle
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "base64")), 1);
+        });
     }
 }

@@ -356,7 +356,10 @@ DLLLOCAL AbstractQoreNode* missing_openssl_feature(const char* f, ExceptionSink*
 #include "qore/intern/ParseWarnOptions.h"
 
 struct QoreProgramLineLocation {
-    int16_t start_line = -1,
+    // NOTE: line numbers must be 32-bit; a 16-bit field silently wrapped to negative values in source files with
+    // more than 32767 lines, which produced negative line numbers in stack traces and exception locations and
+    // tripped assertions on any location derived from such a line
+    int32_t start_line = -1,
         end_line = -1;
 
     // source columns (0-based; end_column is exclusive); -1 means unknown (e.g. for programmatically-created
@@ -373,16 +376,16 @@ struct QoreProgramLineLocation {
 
     // if sline is 0 and eline is > 0 then set sline to 1
     DLLLOCAL QoreProgramLineLocation(int sline, int eline) : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline) {
-        assert(sline <= 0xffff);
-        assert(eline <= 0xffff);
+        assert(sline >= -1);
+        assert(eline >= -1);
     }
 
     // variant that also carries source column information
     DLLLOCAL QoreProgramLineLocation(int sline, int eline, int scol, int ecol)
             : start_line(sline ? sline : (eline ? 1 : 0)), end_line(eline),
             start_column(normalizeColumn(scol)), end_column(normalizeColumn(ecol)) {
-        assert(sline <= 0xffff);
-        assert(eline <= 0xffff);
+        assert(sline >= -1);
+        assert(eline >= -1);
     }
 
     DLLLOCAL QoreProgramLineLocation() {
@@ -513,7 +516,9 @@ protected:
     const char* lang = "Qore";
 
 public:
-    int16_t offset = 0;
+    // NOTE: must be 32-bit for the same reason as start_line/end_line above; this offset is added to line numbers
+    // for source blocks embedded in a larger file, so a 16-bit field wrapped for sufficiently large sources
+    int32_t offset = 0;
 };
 
 DLLLOCAL extern const QoreProgramLocation loc_builtin;

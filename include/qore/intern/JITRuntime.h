@@ -71,6 +71,16 @@ extern "C" {
 //! Check the current native stack guard for generated code entry points
 int qore_rt_check_stack(ExceptionSink* xsink);
 
+// --- Outlined function-body return token (design/aot-function-outlining.md) ---
+
+//! Signal that the outlined helper is executing an in-region `return`;
+//! called immediately before the helper's ret
+void qore_rt_outline_signal_return();
+
+//! Consume the return token right after a CallAOTHelper call; returns
+//! 1 when the coordinator must re-execute the return with the helper's value
+int64_t qore_rt_outline_take_return();
+
 // --- Arithmetic helpers (for .any ops that need dynamic dispatch) ---
 
 //! Add two QoreValues with dynamic type dispatch
@@ -205,6 +215,14 @@ uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
 //! Clean up catch scope: restore previous td->catchException and delete the caught exception.
 //! Called at the end of each catch block (try.merge) and before function return from within catch.
 void qore_rt_catch_end(ExceptionSink* xsink);
+
+//! Return the current catch-scope stack depth; called at entry of functions containing catch blocks.
+uint64_t qore_rt_catch_depth();
+
+//! Pop catch scopes down to the given depth (captured at function entry via qore_rt_catch_depth()).
+//! Called on exception-exit paths (error return block, unwind landing pads, deopt) so catch scopes
+//! left active when an exception escapes a catch block are cleaned up and their exceptions deleted.
+void qore_rt_catch_unwind(uint64_t depth, ExceptionSink* xsink);
 
 //! Rethrow the current catch exception: copies exception into xsink and cleans up catch scope.
 void qore_rt_rethrow(ExceptionSink* xsink);

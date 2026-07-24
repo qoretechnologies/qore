@@ -249,7 +249,8 @@ public class DataSchema inherits AbstractVersionedSchema {
     */
     private bool checkUpgrade(string current_version) {
         if (schema_data.migrations) {
-            MigrationExecutor executor(getDatasource(), access_level, align_verbose);
+            MigrationExecutor executor(getDatasource(), access_level,
+                align_verbose, NOTHING, ddl_change_callback);
             executor.executeMigrations(schema_data.migrations, current_version,
                 getVersion(), "pre_align");
         }
@@ -273,7 +274,8 @@ public class DataSchema inherits AbstractVersionedSchema {
         }
 
         if (schema_data.migrations && !first_time_install && initial_schema_info.current_version) {
-            MigrationExecutor executor(getDatasource(), access_level, verbose);
+            MigrationExecutor executor(getDatasource(), access_level,
+                verbose, NOTHING, ddl_change_callback);
             executor.executeMigrations(schema_data.migrations, initial_schema_info.current_version,
                 getVersion(), "post_align", table_cache, initial_schema_info);
         }
@@ -470,12 +472,16 @@ public class DataSchema inherits AbstractVersionedSchema {
                 }
             }
 
+            # convert plain field-reference / sub-expression hashes (as parsed from .ysm/.jsm)
+            # into the typed hashdecls the expression engine requires
+            list<auto> exp_args = map DataSchema::normalizeDpqlArg($1), (ph.args ?? ());
+
             if (sql_exp) {
                 # expression exists in the SQL expression map — use SqlUtil to render it
                 hash<auto> set_hash = {};
                 set_hash{col_name} = <DataProviderExpression>{
                     "exp": exp_name,
-                    "args": ph.args ?? (),
+                    "args": exp_args,
                 };
                 hash<auto> where_hash = {col_name: NULL};
                 # getUpdateSql returns {sql: "...", args: (...)}
@@ -487,7 +493,7 @@ public class DataSchema inherits AbstractVersionedSchema {
             auto result_val = AbstractDataProvider::evalGenericExpression({},
                 <DataProviderExpression>{
                     "exp": exp_name,
-                    "args": ph.args ?? (),
+                    "args": exp_args,
                 });
             return sprintf("update %s set %s = %s where %s is null",
                 tname, col_name, table.getSqlValue(result_val), col_name);
@@ -496,6 +502,33 @@ public class DataSchema inherits AbstractVersionedSchema {
         throw "POPULATE-ERROR", sprintf("table %y column %y: unrecognized populate format; "
             "expected a literal, {field: col}, {exp: name, args: [...]}, or {sql: {driver: '...'}}; "
             "got: %y", table.getName(), col_name, ph);
+    }
+
+    #! Converts a plain DPQL argument (as parsed from .ysm/.jsm) into a typed hashdecl
+    /** Field references (\c {field: ...}) and nested expressions (\c {exp: ..., args: [...]}) are
+        represented as plain hashes when a schema is loaded from YAML or JSON.  The SqlUtil
+        expression engine matches arguments by their concrete hashdecl type
+        (@ref DataProviderFieldReference / @ref DataProviderExpression), so this converts those
+        plain hashes to the typed form, recursing into nested expression arguments.  Any other value
+        (literal scalar, list, or hash without an \c "exp"/"field" key) is returned unchanged.
+
+        @param arg the plain populate argument to normalize
+
+        @return the argument with field references and sub-expressions converted to typed hashdecls
+    */
+    private static auto normalizeDpqlArg(auto arg) {
+        if (arg.typeCode() == NT_HASH) {
+            if (arg.hasKey("exp")) {
+                return <DataProviderExpression>{
+                    "exp": arg.exp,
+                    "args": map DataSchema::normalizeDpqlArg($1), (arg.args ?? ()),
+                };
+            }
+            if (arg.hasKey("field")) {
+                return <DataProviderFieldReference>{"field": arg.field};
+            }
+        }
+        return arg;
     }
 
     #! Evaluates DPQL expressions in reference data

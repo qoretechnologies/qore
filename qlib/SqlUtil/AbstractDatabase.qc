@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDatabase class definition
 
-/** AbstractDatabase.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDatabase.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -24,6 +24,27 @@
 
 #! contains all public definitions in the SqlUtil module
 public namespace SqlUtil {
+#! temporary-table scope: the table exists only for the duration of the current transaction
+/** with this scope, temporary-table storage is released when the transaction is committed or rolled back; maps to
+    the driver-specific transaction-scoped temporary-table behavior (e.g. \c "on commit drop" for PostgreSQL,
+    \c "on commit delete rows" for Oracle global temporary tables)
+
+    @see @ref SqlUtil::AbstractDatabase::createTempTable()
+
+    @since %SqlUtil 3.1
+*/
+public const TT_Transaction = "transaction";
+
+#! temporary-table scope: the table persists for the duration of the database session
+/** with this scope, temporary-table contents persist across transactions in the same session and must be dropped
+    explicitly (for example, with @ref SqlUtil::TempTableHelper)
+
+    @see @ref SqlUtil::AbstractDatabase::createTempTable()
+
+    @since %SqlUtil 3.1
+*/
+public const TT_Session = "session";
+
 #! the base abstract class for the database implementation
 public class AbstractDatabase inherits AbstractSqlUtilBase {
     public {
@@ -48,11 +69,13 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
             - \c info_callback: see @ref info_callback
             - \c sql_callback: see @ref sql_callback
             - \c sql_callback_executed: see @ref sql_callback_executed
+            - \c error_callback: see @ref error_callback
         */
         const hash<auto> CallbackOptions = (
             "info_callback": "code",
             "sql_callback": "code",
             "sql_callback_executed": Type::Boolean,
+            "error_callback": "code",
         );
 
         /** @defgroup info_actions Info Callback Action Codes
@@ -736,6 +759,132 @@ AbstractTable table = db.makeTable("table", th);
         }
         AbstractTable t = AbstractTable::getTable(ds, name, opts);
         t.setupTable(desc, opts);
+        return t;
+    }
+
+    #! returns @ref True "True" if the database driver supports temporary tables
+    /** @par Example:
+        @code{.py}
+if (db.supportsTempTables()) {
+    AbstractTable tmp = db.createTempTable("tmp_ids", cols);
+}
+        @endcode
+
+        @return @ref True "True" if the database driver supports temporary tables (i.e. supports
+        @ref createTempTable()), @ref False "False" if not
+
+        @since %SqlUtil 3.1
+    */
+    bool supportsTempTables() {
+        return supportsTempTablesImpl();
+    }
+
+    #! creates a temporary table from an in-memory column description and returns the corresponding AbstractTable
+    /** @par Example:
+        @code{.py}
+# on a DatasourcePool, a transaction must already be in progress on the calling thread
+dsp.beginTransaction();
+on_error dsp.rollback();
+on_success dsp.commit();
+
+AbstractTable tmp = db.createTempTable("tmp_ids", {"id": {"qore_type": "integer", "notnull": True}});
+TempTableHelper th(tmp);
+tmp.insertFromSelect(("id",), source, {"columns": "id", "where": wh});
+list<auto> rows = target.selectRows({"join": join_inner(tmp, NOTHING, {"id": "id"})});
+        @endcode
+
+        The returned @ref SqlUtil::AbstractTable "AbstractTable" is constructed purely from the supplied column
+        description (never from catalog introspection), so it works cleanly on database servers whose session
+        temporary tables are invisible to the system catalog (e.g. MySQL, SQL Server).
+
+        @param name the logical name of the temporary table; the driver applies any required name mangling (e.g. a
+        \c "#" prefix for SQL Server, an \c "ORA$PTT_" prefix for Oracle private temporary tables, a \c "pg_temp"
+        schema qualification for PostgreSQL), and the returned table object carries the physical name
+        @param columns a @ref column_desc_hash "column description hash" (keyed by column name) describing the
+        temporary table's columns
+        @param opts an optional hash of options:
+        - \c "scope": (@ref string_type "string") the temporary-table scope, either @ref SqlUtil::TT_Transaction
+          (the default) or @ref SqlUtil::TT_Session
+        - \c "precreated": (@ref bool_type "bool") if @ref True "True", the temporary table is assumed to already
+          exist (schema-managed, e.g. an Oracle global temporary table); no runtime DDL is issued and the returned
+          table is registered as already present in the database
+        - \c "primary_key": (@ref hash_type "*hash") an optional primary-key description for the temporary table
+        - \c "indexes": (@ref hash_type "*hash") an optional @ref index_desc_hash "index description hash" for the
+          temporary table
+        - \c "native_case": (@ref bool_type "bool") if @ref True "True", the name is not converted to lower case
+
+        @return the @ref SqlUtil::AbstractTable "AbstractTable" object for the temporary table; when not
+        \c "precreated", the temporary table has already been created in the database when this method returns
+
+        @throw TEMP-TABLE-ERROR the database driver does not support temporary tables, an invalid scope was given,
+        no columns were provided, or the datasource is a @ref Qore::SQL::DatasourcePool "DatasourcePool" and no
+        transaction is in progress on the calling thread
+        @throw OPTION-ERROR invalid or unsupported option passed
+
+        @note when using a @ref Qore::SQL::DatasourcePool "DatasourcePool", a transaction must already be in progress
+        on the calling thread (call @ref Qore::SQL::DatasourcePool::beginTransaction() first) so that the temporary
+        table is created on the same pooled connection that subsequent statements will use; otherwise a
+        \c TEMP-TABLE-ERROR exception is thrown immediately
+
+        @see
+        - @ref supportsTempTables()
+        - @ref SqlUtil::TempTableHelper
+
+        @since %SqlUtil 3.1
+    */
+    AbstractTable createTempTable(string name, hash<auto> columns, *hash<auto> opts) {
+        if (!supportsTempTables()) {
+            throw "TEMP-TABLE-ERROR", sprintf("the %y driver does not support temporary tables", getDriverName());
+        }
+        if (!columns) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y: no columns were provided", name);
+        }
+
+        string scope = opts.scope ?? TT_Transaction;
+        if (scope != TT_Transaction && scope != TT_Session) {
+            throw "TEMP-TABLE-ERROR", sprintf("invalid temporary table scope %y for table %y; expecting %y or %y",
+                scope, name, TT_Transaction, TT_Session);
+        }
+        bool precreated = opts.precreated ?? False;
+
+        # deterministic transaction guard: a pooled connection is pinned to the calling thread only while a
+        # transaction is in progress; without this the temporary table would be created on one pooled connection
+        # and be invisible to subsequent statements executed on a different pooled connection
+        if (ds instanceof DatasourcePool && !cast<DatasourcePool>(ds).currentThreadInTransaction()) {
+            throw "TEMP-TABLE-ERROR", sprintf("cannot create temporary table %y: a transaction must be in progress "
+                "on the calling thread when using a DatasourcePool; call DatasourcePool::beginTransaction() before "
+                "creating the temporary table", name);
+        }
+
+        # the physical (driver-mangled) name of the temporary table
+        string pname = getTempTableNameImpl(name, precreated);
+
+        # allow the driver to adjust the column description for temporary tables (e.g. Oracle private temporary
+        # tables do not support NOT NULL column constraints)
+        columns = prepareTempTableColumnsImpl(columns, precreated);
+
+        # build the table description from the in-memory column description (no catalog introspection)
+        hash<auto> desc = {"columns": columns};
+        if (opts.primary_key) {
+            desc.primary_key = opts.primary_key;
+        }
+        if (opts.indexes) {
+            desc.indexes = opts.indexes;
+        }
+
+        # options passed through to table creation (temporary-table control keys removed)
+        hash<auto> topts = (opts ?? {}) - ("scope", "precreated", "primary_key", "indexes");
+
+        AbstractTable t = makeTable(pname, desc, topts);
+        t.setTempScope(scope, precreated);
+
+        if (precreated) {
+            # schema-managed temporary table: no runtime DDL; register as already present in the database
+            t.setInDb(True);
+        } else {
+            map ds.execRaw($1), t.getCreateSql(topts);
+            t.setInDb(True);
+        }
         return t;
     }
 
@@ -1456,6 +1605,45 @@ string sql = t.getSqlFromList(list);
         return ReclaimSpaceOptions;
     }
 
+    #! returns @ref True "True" if the driver supports temporary tables; reimplement in temp-table-capable drivers
+    /** the default implementation returns @ref False "False"
+
+        @since %SqlUtil 3.1
+    */
+    private bool supportsTempTablesImpl() {
+        return False;
+    }
+
+    #! returns the physical (driver-specific) name for a temporary table; reimplement for driver-specific mangling
+    /** the default implementation returns the logical name unchanged; drivers that require a special naming
+        convention for temporary tables (e.g. SQL Server \c "#" prefix, Oracle private-temporary-table
+        \c "ORA$PTT_" prefix) reimplement this to return the physical name
+
+        @param name the logical temporary-table name
+        @param precreated @ref True "True" if the temporary table is pre-created / schema-managed
+
+        @since %SqlUtil 3.1
+    */
+    private string getTempTableNameImpl(string name, bool precreated) {
+        return name;
+    }
+
+    #! adjusts the column description for a temporary table before creation; reimplement for driver-specific limits
+    /** the default implementation returns the column description unchanged; drivers reimplement this to work around
+        temporary-table column limitations (e.g. Oracle private temporary tables do not support \c NOT \c NULL
+        column constraints, so the Oracle driver strips them for runtime temporary tables)
+
+        @param columns the @ref column_desc_hash "column description hash" for the temporary table
+        @param precreated @ref True "True" if the temporary table is pre-created / schema-managed
+
+        @return the (possibly adjusted) column description hash
+
+        @since %SqlUtil 3.1
+    */
+    private hash<auto> prepareTempTableColumnsImpl(hash<auto> columns, bool precreated) {
+        return columns;
+    }
+
     #! tries to execute a command so that if an error occurs the current transaction status is not lost
     private auto tryExecArgsImpl(string sql, *softlist<auto> args) {
         return ds.vexec(sql, args);
@@ -1501,5 +1689,87 @@ string sql = t.getSqlFromList(list);
     private abstract computeStatisticsImpl(*hash<auto> options);
     private abstract reclaimSpaceImpl(*hash<auto> options);
     private abstract int getPhysicalSizeImpl();
+}
+
+#! a scope helper that drops a temporary table when the object goes out of scope
+/** @par Example:
+    @code{.py}
+dsp.beginTransaction();
+on_error dsp.rollback();
+on_success dsp.commit();
+
+AbstractTable tmp = db.createTempTable("tmp_ids", cols);
+TempTableHelper th(tmp);
+# ... use tmp ...
+# the temporary table is dropped when "th" goes out of scope (best-effort)
+    @endcode
+
+    The drop performed by the destructor is best-effort and exception-safe: any error raised while dropping the
+    temporary table is swallowed (the underlying transaction may already be invalid, for example after a database
+    failover, or the table may already have been dropped automatically at transaction commit with
+    @ref SqlUtil::TT_Transaction scope).  Pre-created (schema-managed) temporary tables are never dropped.
+
+    @since %SqlUtil 3.1
+*/
+public class TempTableHelper {
+    private {
+        #! the temporary table to drop on scope exit, or @ref nothing "NOTHING" once dropped/released
+        *AbstractTable table;
+        #! an optional log closure called with a single string argument if a drop error occurs
+        *code logc;
+    }
+
+    #! creates the helper for the given temporary table
+    /** @param temp_table the temporary table to drop when this object goes out of scope
+        @param log an optional log closure/call reference taking a single string argument, called with a
+        descriptive message if an error occurs while dropping the temporary table
+    */
+    constructor(AbstractTable temp_table, *code log) {
+        table = temp_table;
+        logc = log;
+    }
+
+    #! drops the temporary table if it has not already been dropped or released
+    /** the drop is best-effort and exception-safe; see the class description
+    */
+    destructor() {
+        dropTempTable();
+    }
+
+    #! returns the temporary table managed by this helper
+    /** @return the temporary table, or @ref nothing "NOTHING" if it has already been dropped or released
+    */
+    *AbstractTable get() {
+        return table;
+    }
+
+    #! releases the temporary table from this helper without dropping it
+    /** after this call the destructor will not drop the table
+
+        @return the released temporary table, or @ref nothing "NOTHING" if none
+    */
+    *AbstractTable release() {
+        *AbstractTable rv = table;
+        remove table;
+        return rv;
+    }
+
+    #! drops the temporary table now (best-effort, exception-safe)
+    dropTempTable() {
+        if (!table) {
+            return;
+        }
+        # never drop a pre-created (schema-managed) temporary table
+        if (!table.isPreCreatedTempTable()) {
+            try {
+                table.drop();
+            } catch (hash<ExceptionInfo> ex) {
+                if (logc) {
+                    logc(sprintf("error dropping temporary table %y: %s: %s", table.getName(), ex.err, ex.desc));
+                }
+            }
+        }
+        remove table;
+    }
 }
 }

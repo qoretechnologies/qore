@@ -279,6 +279,45 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             never touches @c async_race_lock).
         */
         Mutex async_race_lock();
+
+        #! Persistent-session connection pin (session-scoped): the leased connection, or NOTHING
+        /** While set (via @ref pinConnection()), @ref getConnection() returns this connection for
+            every request/stream to the SAME host:port, bypassing the pool scan — so a
+            connection-scoped persistent transaction (HTTP/1.1) stays on the one leased socket
+            instead of scattering across pooled connections.  It is set for the lifetime of the
+            session (not per request), so it works regardless of which thread issues a request —
+            the async/multi-threaded request paths do not all run @ref getConnection() on the
+            caller's thread.  This manager is per remote connection, so the pin only affects that
+            connection's own traffic. */
+        *HttpClientConnection pinned_conn;
+
+        #! Serializes access to @ref pinned_conn
+        Mutex pin_lock();
+
+        #! Counts user threads currently executing inside a public entry point.
+        /** @anchor in_flight_drain
+            Teardown-coordination barrier.  The @ref pool_lock_pin idiom defers
+            destruction of the @c pool_lock @b RWLock while a concurrent caller
+            holds it, but it does @b not protect the plain @c Mutex members
+            (@ref create_mutex, @ref async_race_lock, @ref pin_lock): a
+            @c delete on this manager from another thread destroys those
+            mutexes as soon as the destructor returns, and if an in-flight
+            caller is still inside @ref getPinnedConnection() /
+            @ref getConnection() (e.g. re-entering the retry path after
+            @ref closeAll() cancelled its request) it is holding one of them,
+            producing @c "LOCK-ERROR: TID N deleted Mutex object while TID M
+            was holding the lock".
+
+            Every public entry point that may run concurrently with the
+            destructor increments this counter on entry and decrements it on
+            exit (via @c on_exit).  @ref closeAll() cancels all in-flight
+            requests (so blocked callers wake and unwind terminally — the
+            shutdown gate in @ref getConnection() throws the non-retryable
+            @c HTTPCLIENT-SHUTDOWN) and then waits here for the count to reach
+            zero before the object's mutex members are destroyed, so no caller
+            is inside the manager when teardown completes.
+        */
+        Counter in_flight();
     }
 
     #! Creates a new connection manager with the given options
@@ -421,6 +460,113 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         return cookie_jar;
     }
 
+    #! Leases an exclusive connection for a persistent (connection-scoped) session
+    /** The returned connection is marked leased: the pool reuse scan skips it so no other
+        request borrows it, and requests belonging to the session reach it via the session
+        pin (@ref pinConnection()).  This is required for the connection-scoped persistent
+        transaction protocol on HTTP/1.1, where the server binds a session to one physical
+        connection and reads subsequent requests off that same socket.
+
+        The caller MUST eventually call @ref releaseConnection() to return the connection to the
+        pool (clean) or close it (errored).
+
+        @param url the target URL (only scheme, host, and port are used)
+        @param non_blocking retained plumbing only (see @ref acquireStream())
+
+        @return the leased connection
+
+        @since HttpClientIo 1.0
+    */
+    HttpClientConnection leaseConnection(string url, *bool non_blocking) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
+        maybeCleanupIdle();
+        drainPendingAltSvc();
+
+        hash<UrlInfo> url_info;
+        try {
+            url_info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+        }
+        if (!url_info.host) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+        }
+        if (!url_info.protocol) {
+            url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+
+        bool from_pool = False;
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
+        # Exclude the connection from the pool reuse rotation for the session's lifetime.  The
+        # stream reservation held by getConnection() blocks concurrent reuse until leased is set
+        # (an HTTP/1.1 connection has exactly one stream slot), so there is no reuse window.
+        conn.setLeased(True);
+        conn.releaseStreamReservation();
+        log(LoggerLevel::DEBUG, "leased %s connection %d to %s:%d for a persistent session",
+            conn.getProtocol(), conn.getConnectionId(), url_info.host, url_info.port);
+        return conn;
+    }
+
+    #! Releases a connection previously obtained from @ref leaseConnection()
+    /** @param conn the leased connection
+        @param discard if @ref True the connection is closed and evicted from the pool (use on
+        error — a failed persistent op can leave the socket in an indeterminate state, and closing
+        is the deterministic signal for the server to roll back and tear down the transaction); if
+        @ref False (the default) the connection is returned to the pool for reuse
+
+        @since HttpClientIo 1.0
+    */
+    releaseConnection(HttpClientConnection conn, *bool discard) {
+        if (discard) {
+            log(LoggerLevel::DEBUG, "discarding leased %s connection %d",
+                conn.getProtocol(), conn.getConnectionId());
+            *string key = conn.getPoolKey();
+            if (key) {
+                evictConnections(key, (conn,));
+            } else {
+                try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+        } else {
+            conn.setLeased(False);
+            log(LoggerLevel::DEBUG, "released leased %s connection %d back to the pool",
+                conn.getProtocol(), conn.getConnectionId());
+        }
+    }
+
+    #! Pins a leased connection for the lifetime of a persistent session
+    /** While pinned, @ref getConnection() returns this connection for every request/stream to the
+        same host:port, so the requests ride the leased socket instead of pooled ones.  Set once
+        when the session opens and cleared with @ref unpinConnection() when it closes; it is
+        session-scoped (not per request) so it works no matter which thread issues a request.  This
+        manager is per remote connection, so the pin only affects that connection's own traffic.
+
+        @since HttpClientIo 1.0
+    */
+    pinConnection(HttpClientConnection conn) {
+        AutoLock al(pin_lock);
+        pinned_conn = conn;
+    }
+
+    #! Clears the persistent-session connection pin
+    /** @since HttpClientIo 1.0 */
+    unpinConnection() {
+        AutoLock al(pin_lock);
+        remove pinned_conn;
+    }
+
+    #! Returns the pinned persistent-session connection, or @ref nothing
+    private *HttpClientConnection getPinnedConnection() {
+        AutoLock al(pin_lock);
+        return pinned_conn;
+    }
+
     #! Acquires a stream handle for the given URL
     /** The \c url parameter is used only for connection pooling (host:port extraction
         and protocol selection). The URL's path component is \b not used for requests —
@@ -446,6 +592,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     HttpClientStreamHandle acquireStream(string url, *bool non_blocking) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Opportunistically evict idle connections on request entry so the pool
         # doesn't grow unboundedly under churn.  Throttled to at most once per
         # cleanup-interval window; see maybeCleanupIdle().
@@ -481,12 +630,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         try {
             if (conn instanceof Http1ClientConnection) {
                 stream = new Http1ClientStreamHandle(cast<Http1ClientConnection>(conn),
-                    opts.request_timeout, logger);
+                    opts.request_timeout, logger, opts.connect_timeout);
             } else if (conn instanceof Http2ClientConnection) {
                 stream = new Http2ClientStreamHandle(cast<Http2ClientConnection>(conn),
-                    opts.request_timeout, logger);
+                    opts.request_timeout, logger, opts.connect_timeout);
             } else {
-                stream = new Http3ClientStreamHandle(conn, opts.request_timeout, logger);
+                stream = new Http3ClientStreamHandle(conn, opts.request_timeout, logger,
+                    opts.connect_timeout);
             }
         } catch () {
             conn.releaseStreamReservation();
@@ -550,6 +700,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, bool body_streaming = False, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         int retries = 0;
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
@@ -627,6 +780,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -727,6 +883,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *hash<auto> headers, *data body) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         # Inject cookies from jar into request headers
         hash<UrlInfo> url_info;
         if (cookie_jar) {
@@ -829,6 +988,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *data body, *timeout timeout_ms) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         int redirect_count = 0;
 
         while (True) {
@@ -987,6 +1149,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
+                # A pinned persistent-session request must never retry on a fresh or evicted
+                # connection — that would break the connection-scoped transaction affinity and
+                # start a second transaction on another socket.  Surface the error so the caller
+                # discards the leased connection (which makes the server roll back and tear down).
+                if (getPinnedConnection()) {
+                    rethrow;
+                }
                 # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
                 # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
                 # benefit of acquireAndStartStreaming / submitRequestAsync where
@@ -1064,6 +1233,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     hash<auto> getStats() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         AutoReadLock al(pool_lock);
 
         int total_connections = 0;
@@ -1104,6 +1276,88 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             "per_host": per_host,
             "protocol": opts.protocol,
         };
+    }
+
+    #! Returns per-connection info for currently-pooled connections, including the negotiated protocol
+    /** Unlike @ref getStats(), which reports aggregate pool counters and the
+        <i>configured</i> protocol mode (@ref HttpClientConnectionManagerOptions::protocol),
+        this method returns one @ref HttpClientConnectionInfo hash for each
+        currently-pooled connection, each carrying the <i>negotiated</i> @c protocol
+        (\c "h1", \c "h2", or \c "h3") for that specific connection along with its
+        host, port, state, active-stream count, and TLS flag.
+
+        @param url if provided, only connections to this URL's \c host:port are
+        returned; the scheme defaults to \c "https" and the port to the scheme
+        default (443/80) when absent, matching connection routing.  If omitted,
+        connections to every pooled host are returned.
+
+        @return a list of @ref HttpClientConnectionInfo hashes; empty if no
+        matching connection is currently pooled (for example before the first
+        request, or for a host that has never been contacted)
+
+        @throw HTTPCLIENT-URL-ERROR the \a url argument is not a valid URL or is missing a host
+
+        @note A connection still in the @ref HttpClientConnectionState::Connecting
+        state reports the protocol it is negotiating; the value is authoritative
+        once the connection reaches @ref HttpClientConnectionState::Ready.
+
+        @par Example
+        @code{.py}
+# report the negotiated protocol of every live pooled connection
+foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
+    printf("%s:%d -> %s (%d active streams)\n", info.host, info.port,
+        info.protocol, info.active_streams);
+}
+        @endcode
+
+        @see @ref getStats() for aggregate pool statistics
+    */
+    list<hash<HttpClientConnectionInfo>> getConnectionInfo(*string url) {
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
+        *string filter_key;
+        if (exists url) {
+            hash<UrlInfo> url_info;
+            try {
+                url_info = parse_url(url);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+            }
+            if (!url_info.host) {
+                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+            }
+            if (!url_info.protocol) {
+                url_info.protocol = "https";
+            }
+            if (!url_info.port) {
+                url_info.port = url_info.protocol == "https" ? 443 : 80;
+            }
+            filter_key = sprintf("%s:%d", url_info.host, url_info.port);
+        }
+
+        # Snapshot the matching connections under the pool lock, then build the
+        # info list after releasing it: HttpClientConnection::getConnectionInfo()
+        # takes the connection's own lock, so we must not hold pool_lock across
+        # that call (avoids any pool_lock -> connection-lock nesting).
+        list<HttpClientConnection> conns = ();
+        {
+            # Pin @c pool_lock across this block: see @ref pool_lock_pin.
+            RWLock pool_lock_pin = pool_lock;
+            AutoReadLock al(pool_lock);
+            foreach string key in (keys pool) {
+                if (exists filter_key && key != filter_key) {
+                    continue;
+                }
+                conns += pool{key};
+            }
+        }
+
+        list<hash<HttpClientConnectionInfo>> rv = ();
+        foreach HttpClientConnection conn in (conns) {
+            rv += conn.getConnectionInfo();
+        }
+        return rv;
     }
 
     #! Closes all connections
@@ -1151,6 +1405,31 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Per-owner (not global) so a manager destructor doesn't block on
         # unrelated long-running callbacks on the shared controller.
         controller.flushCallbacksByOwner(owner: owner_id);
+
+        # Drain in-flight user-thread callers before this object's Mutex members
+        # are destroyed.  The @ref pool_lock_pin idiom protects only the
+        # @c pool_lock RWLock; the plain Mutex members (@ref create_mutex,
+        # @ref async_race_lock, @ref pin_lock) have no such lifetime guard, so a
+        # caller still inside a public entry point when @c delete finishes would
+        # be holding one of them, producing "LOCK-ERROR: TID N deleted Mutex
+        # object while TID M was holding the lock".  cancelByOwner() above
+        # rejected any blocked request Future, so callers parked in
+        # stream.request() have woken and are unwinding out of the manager; a
+        # retry hits the shutdown gate in getConnection() and exits terminally
+        # (HTTPCLIENT-SHUTDOWN is not retryable — see isConnectionError()).  This
+        # barrier waits for them all to leave before teardown continues.  See
+        # @ref in_flight_drain.
+        #
+        # The timeout is only a safety ceiling: the drain is guaranteed to
+        # complete because every blocked caller was cancelled and every retry
+        # fails fast under shutdown.  If it ever fires it means a caller did not
+        # observe the cancellation — logged rather than hung on.
+        int drain_timeout_ms = opts.connect_timeout + 5000;
+        if (in_flight.waitForZero(drain_timeout_ms)) {
+            log(LoggerLevel::WARN, "closeAll: timed out after %d ms waiting for %d "
+                "in-flight caller(s) to drain; proceeding with teardown",
+                drain_timeout_ms, in_flight.getCount());
+        }
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
@@ -1228,6 +1507,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     int migrateAll() {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         list<hash<auto>> to_migrate = ();
         {
             AutoReadLock al(pool_lock);
@@ -1343,6 +1625,22 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             *bool non_blocking) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
+        # Persistent-session pin: if a leased connection is pinned for this manager's remote, use it
+        # for every request/stream to that host:port (bypassing the pool scan) so a connection-scoped
+        # transaction stays on the one leased socket; see pinConnection() / leaseConnection().
+        *HttpClientConnection pinned = getPinnedConnection();
+        if (pinned && pinned.getPoolKey() == key) {
+            if (!pinned.tryReserveStream()) {
+                throw "HTTPCLIENT-CAPACITY-ERROR",
+                    sprintf("no free stream slot on the pinned persistent connection %d to %s",
+                        pinned.getConnectionId(), key);
+            }
+            from_pool = True;
+            log(LoggerLevel::DEBUG, "using pinned persistent %s connection %d for %s",
+                pinned.getProtocol(), pinned.getConnectionId(), key);
+            return pinned;
+        }
+
         while (True) {
             # Try to find an existing connection with capacity.
             # Dead connections discovered here are collected and evicted
@@ -1369,7 +1667,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                                 push dead_conns, conn;
                                 continue;
                             }
-                            if (!live_conn && conn.tryReserveStream()) {
+                            # skip connections exclusively leased for a persistent session:
+                            # only their owning thread (via the pin above) may use them
+                            if (!live_conn && !conn.isLeased() && conn.tryReserveStream()) {
                                 live_conn = conn;
                             }
                         }
@@ -1730,6 +2030,47 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         return h2_err.err == "SOCKET-CONNECT-ERROR";
     }
 
+    #! Internal: builds the happy-eyeballs connect-error description from both legs' errors
+    /** Pure formatter (no I/O, no side effects) so the message construction can
+        be unit-tested directly and shared by every happy-eyeballs terminal-error
+        site.
+
+        Happy eyeballs races H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel; when the
+        terminal error path is reached both legs have failed to become ready, so
+        the message must report BOTH underlying reasons.  Reporting only one — the
+        historical @code h2_err.desc ?? h3_err.desc @endcode — made a
+        total-endpoint outage look like a QUIC-specific problem whenever the H2
+        leg's error hash carried no @c desc: the message fell through to the
+        H3/QUIC handshake-timeout text and silently hid that TCP had also been
+        tried and had also failed.
+
+        Each present leg contributes a labelled reason (its @c desc, falling back
+        to its @c err, then to a placeholder).  A leg whose error is
+        @ref NOTHING — e.g. a still-pending H3 during the TCP-refused fast-fail —
+        is omitted rather than reported as a spurious failure.
+
+        @param h3_err the H3/QUIC poll-op error (may be @ref NOTHING)
+        @param h2_err the H2/TCP poll-op error (may be @ref NOTHING)
+        @param key the \c host:port pool key
+
+        @return a user-friendly @code could not connect to <key>[: <reasons>] @endcode
+        string, where \c reasons is the "; "-joined set of present, labelled legs
+    */
+    static string heBuildConnectErrorDesc(*hash<auto> h3_err, *hash<auto> h2_err, string key) {
+        list<string> reasons = ();
+        if (h3_err) {
+            reasons += sprintf("H3/QUIC: %s", h3_err.desc ?? h3_err.err ?? "no error reported");
+        }
+        if (h2_err) {
+            reasons += sprintf("H2/TCP: %s", h2_err.desc ?? h2_err.err ?? "no error reported");
+        }
+        string desc = sprintf("could not connect to %s", key);
+        if (reasons) {
+            desc += ": " + reasons.join("; ");
+        }
+        return desc;
+    }
+
     #! Internal: builds and throws the happy-eyeballs connect error, closing both conns
     /** Exact behavior of the synchronous race's terminal error path: collect the
         underlying H3/H2 poll-op errors, close both connections, and throw a
@@ -1740,8 +2081,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         This single helper also covers the synchronous race's earlier
         H2-fast-fail throw site: in that case @c h2_err.err is
-        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the message and
-        thrown error code are identical to the former inline block.
+        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the thrown error
+        code is unchanged and the message carries the labelled H2/TCP reason
+        (the still-pending H3 leg is omitted — see @ref heBuildConnectErrorDesc()).
+
+        The description reports every failed leg (not just one), so a message can
+        no longer surface the H3/QUIC handshake timeout while silently hiding that
+        the H2/TCP attempt also failed.
 
         @param h3conn the HTTP/3 candidate (closed here)
         @param h2conn the HTTP/2 candidate (closed here)
@@ -1757,13 +2103,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         try { h3conn.close(); } catch () {}
         try { h2conn.close(); } catch () {}
 
-        # Build a user-friendly error message with the underlying failure reasons
-        string desc = sprintf("could not connect to %s", key);
-        # Use the most informative underlying error (prefer H2 as it's TCP-based)
-        *string detail = h2_err.desc ?? h3_err.desc;
-        if (detail) {
-            desc += sprintf(": %s", detail);
-        }
+        # Build a user-friendly error message reporting BOTH legs' underlying
+        # failure reasons (see heBuildConnectErrorDesc()).  Reporting only one
+        # (the historical "h2_err.desc ?? h3_err.desc") made a total-endpoint
+        # outage look like a QUIC-specific problem whenever the H2 (TCP) leg's
+        # error carried no "desc" — the message then showed only the H3/QUIC
+        # handshake-timeout text even though TCP had been tried and had also
+        # failed.  Surfacing both makes it clear the happy-eyeballs race
+        # attempted (and lost) both protocols.
+        string desc = heBuildConnectErrorDesc(h3_err, h2_err, key);
 
         # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
         # the endpoint is definitively refused at the kernel level (ECONNREFUSED
@@ -1958,6 +2306,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     *EventNotifier acquireConnectionAsync(string url, reference<*HttpClientConnection> conn_out) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         maybeCleanupIdle();
         drainPendingAltSvc();
 
@@ -2051,6 +2402,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     abandonAsyncHEForUrl(string url) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
+        # Register as an in-flight caller so the destructor drains us: see @ref in_flight_drain.
+        in_flight.inc();
+        on_exit in_flight.dec();
         hash<UrlInfo> url_info;
         try {
             url_info = parse_url(url);

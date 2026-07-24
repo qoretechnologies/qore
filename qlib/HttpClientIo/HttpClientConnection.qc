@@ -90,6 +90,14 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
         #! Pool key in the connection manager
         *string pool_key;
+
+        #! True while this connection is exclusively leased for a persistent session
+        /** A leased connection is skipped by the pool reuse scan (see
+            @ref HttpClientConnectionManager::getConnection()), so no other request can
+            borrow it.  Requests belonging to the lease reach it via the session pin
+            (see @ref HttpClientConnectionManager::pinConnection()).  Used to keep a
+            connection-scoped persistent transaction (HTTP/1.1) on exactly one socket. */
+        bool leased = False;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -506,6 +514,25 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     close(*timeout close_timeout) {
         log(LoggerLevel::DEBUG, "closing connection");
         closeImpl(close_timeout);
+    }
+
+    #! Marks (or unmarks) the connection as exclusively leased for a persistent session
+    /** While leased, the pool reuse scan skips this connection so no other request borrows
+        it; see @ref HttpClientConnectionManager::leaseConnection(). */
+    setLeased(bool l) {
+        AutoLock al(lock);
+        leased = l;
+    }
+
+    #! Returns @ref True while the connection is exclusively leased out of the pool
+    bool isLeased() {
+        AutoLock al(lock);
+        return leased;
+    }
+
+    #! Returns the pool key ("host:port") this connection is stored under, or @ref nothing
+    *string getPoolKey() {
+        return pool_key;
     }
 
     #! Initiates connection migration (HTTP/3 only; default no-op for HTTP/2)

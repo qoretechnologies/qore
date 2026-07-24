@@ -198,12 +198,18 @@ static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_c
     @param local_addrlen local address length
     @param recv_buf fallback receive buffer (used on non-Linux platforms)
     @param recv_buf_size size of recv_buf
+    @param spriv the socket private data used to pin dispatched sessions: the
+           dispatcher returns session IDs, and each hit must be resolved to a
+           shared_ptr via spriv->getQuicSession() — a miss means the session was
+           removed (reaped/aborted) and the packet is dropped, so a session
+           whose destruction is pending on another thread can never be accessed
     @param xsink exception sink
     @return 0 on success, -1 on fatal error
 */
 static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher,
     const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
-    uint8_t* recv_buf, size_t recv_buf_size, ExceptionSink* xsink) {
+    uint8_t* recv_buf, size_t recv_buf_size, qore_socket_private* spriv,
+    ExceptionSink* xsink) {
 #ifdef __linux__
     // Batch receive with recvmmsg for reduced syscall overhead.
     // All large arrays are thread-local to avoid ~8.5KB of stack pressure per call
@@ -250,6 +256,8 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         // only accumulated, never added beyond what recvmmsg returned).
         int batch_count = 0;
         QuicSession* batch_target = nullptr;
+        // Pins batch_target for the lifetime of the accumulated batch
+        std::shared_ptr<QuicSession> batch_target_sp;
 
         for (int i = 0; i < nrecv; ++i) {
             // Discard truncated datagrams — ngtcp2 would reject partial packets
@@ -262,12 +270,18 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             }
 
             // Route to the correct session via dispatcher; drop packets
-            // with unrecognized DCIDs rather than misrouting them
-            void* handler = dispatcher.dispatch(bufs[i], pkt_len);
-            if (!handler) {
+            // with unrecognized DCIDs rather than misrouting them.  Pin the
+            // session through the owning map — a miss means the session was
+            // removed and the packet must be dropped (see function docs)
+            int64_t sid = dispatcher.dispatch(bufs[i], pkt_len);
+            if (sid < 0) {
                 continue;
             }
-            QuicSession* target = static_cast<QuicSession*>(handler);
+            std::shared_ptr<QuicSession> target_sp = spriv->getQuicSession(sid);
+            if (!target_sp) {
+                continue;
+            }
+            QuicSession* target = target_sp.get();
 
             // Per-packet local address from pktinfo
             assert(batch_count < QUIC_MAX_RECV_BATCH);
@@ -278,6 +292,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
             if (target == batch_target || !batch_target) {
                 // Same session (or first packet) — accumulate in batch
                 batch_target = target;
+                batch_target_sp = target_sp;
                 ngtcp2_path& path = batch[batch_count].path;
                 path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&pkt_locals[batch_count]);
                 path.local.addrlen = local_addrlen;
@@ -303,6 +318,7 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
                 // are already the same slot, so no copy is needed.
                 int saved_idx = batch_count;
                 batch_target = target;
+                batch_target_sp = target_sp;
                 batch_count = 0;
                 if (saved_idx != 0) {
                     memcpy(&pkt_locals[0], &pkt_locals[saved_idx], sizeof(pkt_locals[0]));
@@ -358,12 +374,18 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         }
 
         // Route to the correct session via dispatcher; drop packets
-        // with unrecognized DCIDs rather than misrouting them
-        void* handler = dispatcher.dispatch(recv_buf, static_cast<size_t>(nread));
-        if (!handler) {
+        // with unrecognized DCIDs rather than misrouting them.  Pin the session
+        // through the owning map — a miss means the session was removed and the
+        // packet must be dropped (see function docs)
+        int64_t sid = dispatcher.dispatch(recv_buf, static_cast<size_t>(nread));
+        if (sid < 0) {
             continue;
         }
-        QuicSession* target = static_cast<QuicSession*>(handler);
+        std::shared_ptr<QuicSession> target_sp = spriv->getQuicSession(sid);
+        if (!target_sp) {
+            continue;
+        }
+        QuicSession* target = target_sp.get();
 
         // Per-packet local address from pktinfo
         struct sockaddr_storage pkt_local;
@@ -1741,13 +1763,26 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     memcpy(&local_addr, &local_addr_, local_addrlen_);
     extractPktinfoAddr(cmsg_buf, cmsg_len, local_addr_.ss_family, &local_addr);
 
-    // Try to dispatch via DCID to an existing session
+    // Try to dispatch via DCID to an existing session.  The dispatcher returns a
+    // session ID, which must be pinned through the owning map: a session that was
+    // reaped (cleanupClosedSessions()) or aborted while another thread still held
+    // a transient shared_ptr can leave stale CID entries behind, and its
+    // destruction may be pending on that other thread — the map miss below is
+    // what makes such late packets safe to drop.
     QoreDatagramDispatcher& dispatcher = sock->priv->socket->priv->getQuicDispatcher();
-    void* handler = dispatcher.dispatch(recv_buf_, static_cast<size_t>(nread));
+    int64_t target_sid = dispatcher.dispatch(recv_buf_, static_cast<size_t>(nread));
 
+    // Pin the target session for the whole packet-processing call
+    std::shared_ptr<QuicSession> pinned;
     QuicSession* target_session = nullptr;
-    if (handler) {
-        target_session = static_cast<QuicSession*>(handler);
+    if (target_sid >= 0) {
+        auto sit = sessions_.find(target_sid);
+        if (sit == sessions_.end()) {
+            // Stale CID for a removed session — drop the packet
+            return 0;
+        }
+        pinned = sit->second;
+        target_session = pinned.get();
     } else {
         // Unknown DCID — check if this is an Initial packet for a new connection
         ngtcp2_pkt_hd hdr;
@@ -1899,9 +1934,11 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
 }
 
 // Remove sessions that are closed and have no pending completed streams.
-// This also removes CIDs from the dispatcher: QuicSession::~QuicSession()
-// unregisters all its CIDs via dispatcher_->unregisterConnectionId(), so
-// removing the last shared_ptr here triggers that cleanup automatically.
+// This also removes CIDs from the dispatcher — explicitly, via
+// unregisterFromDispatcher(), NOT by relying on ~QuicSession(): the destructor
+// runs on whatever thread drops the last shared_ptr, and a foreign thread's
+// transient reference can keep the session alive past this reap, which would
+// leave its CIDs routable to a removed session in the meantime.
 // Called periodically from continuePoll() to avoid unbounded session growth.
 // Note: idle sessions are handled by ngtcp2's built-in idle timeout
 // (QUIC_MAX_IDLE_TIMEOUT), which marks them as closed after inactivity.
@@ -1930,6 +1967,13 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
             if (it->second->reportCloseIfNew()) {
                 lifecycle_closed_sessions_.push_back(it->first);
             }
+            // Unregister the session's CIDs at reap time: destruction runs on
+            // whatever thread drops the last shared_ptr (a foreign thread's
+            // transient ref — e.g. cancelQuicStreamRead() during a service
+            // stop — can hold the session past this reap), so deferring CID
+            // cleanup to the destructor leaves late packets routable to the
+            // removed session in the meantime
+            it->second->unregisterFromDispatcher();
             sock->priv->socket->priv->removeQuicSession(it->first);
             it = sessions_.erase(it);
         } else {
@@ -1950,6 +1994,8 @@ void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
             lifecycle_peer_resets_.emplace_back(entry.first, stream_id);
         }
         if (entry.second->reportCloseIfNew()) {
+            ASYNC_IO_TRACE("SocketQuicServerPollOperation::collectSessionLifecycleEvents "
+                "session closed=%lld\n", (long long)entry.first);
             lifecycle_closed_sessions_.push_back(entry.first);
         }
     }
@@ -2390,7 +2436,7 @@ int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xs
         sock->priv->socket->getSocket(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
-        recv_buf_, sizeof(recv_buf_), xsink);
+        recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
 }
 
 QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
@@ -2715,7 +2761,7 @@ int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(Exceptio
         sock->priv->socket->getSocket(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
-        recv_buf_, sizeof(recv_buf_), xsink);
+        recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
 }
 
 QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(ExceptionSink* xsink) {

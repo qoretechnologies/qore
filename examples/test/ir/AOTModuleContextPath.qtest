@@ -32,6 +32,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \moduleConcurrentProgramLoadsWithReexport());
         addTestCase("AOT distinct modules load concurrently into Programs",
             \moduleConcurrentDistinctProgramLoads());
+        addTestCase("AOT distinct modules load concurrently into one Program",
+            \moduleConcurrentDistinctLoadsIntoSharedProgram());
 
         set_return_value(main());
     }
@@ -475,12 +477,16 @@ module AOTConcurrentReexportDep {
 }
 
 public namespace AOTConcurrentReexportDep {
+    public class StaticValue {
+        public static int get() {
+            return 42;
+        }
+    }
+
+    public const Value = StaticValue::get();
+
     public int sub value() {
-        int base = 40;
-        code<int(int)> add = int sub (int x) {
-            return base + x;
-        };
-        return add(2);
+        return Value;
     }
 }
 ");
@@ -517,8 +523,6 @@ public int sub concurrentReexportValue() {
 
         f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
         f.write("%modern
-%requires AOTConcurrentReexportMain
-
 const Threads = 16;
 
 Counter ready(Threads);
@@ -535,6 +539,10 @@ for (int i = 0; i < Threads; ++i) {
         try {
             Program p();
             p.loadModule(\"AOTConcurrentReexportMain\");
+            int value = p.callFunction(\"concurrentReexportValue\");
+            if (value != 42) {
+                throw \"VALUE-ERROR\", sprintf(\"expected 42, got %d\", value);
+            }
         } catch (hash<ExceptionInfo> ex) {
             error_lock.lock();
             on_exit error_lock.unlock();
@@ -544,7 +552,7 @@ for (int i = 0; i < Threads; ++i) {
 }
 
 done.waitForZero();
-printf(\"value=%d errors=%d\\n\", concurrentReexportValue(), errors.size());
+printf(\"errors=%d\\n\", errors.size());
 if (errors) {
     printf(\"%s\\n\", errors.join(\"\\n\"));
 }
@@ -552,11 +560,20 @@ if (errors) {
         f.close();
 
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
-        assertEq("value=42 errors=0\nEXIT=0\n", run_out,
-            "concurrent Program::loadModule() calls must not deadlock on AOT reexported modules");
+        assertEq("errors=0\nEXIT=0\n", run_out,
+            "concurrent Program::loadModule() calls must not deadlock while resolving deferred static calls "
+                + "in AOT reexported modules");
     }
 
     moduleConcurrentDistinctProgramLoads() {
+        moduleConcurrentDistinctProgramLoadsImpl(False);
+    }
+
+    moduleConcurrentDistinctLoadsIntoSharedProgram() {
+        moduleConcurrentDistinctProgramLoadsImpl(True);
+    }
+
+    private moduleConcurrentDistinctProgramLoadsImpl(bool shared_program) {
         string tmp_dir = make_tmp_dir();
         on_exit remove_tree(tmp_dir);
 
@@ -626,11 +643,21 @@ public int sub %s() {
 
         string script_path = tmp_dir + "/run-concurrent-distinct.qr";
         f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        string program_decl = shared_program ? "Program shared_program();\n" : "";
+        string load_and_call = shared_program
+            ? "            shared_program.loadModule(info.module);
+            int value = shared_program.callFunction(info.function);
+"
+            : "            Program p();
+            p.loadModule(info.module);
+            int value = p.callFunction(info.function);
+";
         f.write("%modern
 
 const Modules = " + modules_src + ";
 const Threads = Modules.size();
 
+" + program_decl + "
 Counter ready(Threads);
 Counter done(Threads);
 Mutex error_lock();
@@ -643,10 +670,7 @@ foreach hash<auto> info in (Modules) {
         ready.waitForZero();
 
         try {
-            Program p();
-            p.loadModule(info.module);
-            int value = p.callFunction(info.function);
-            if (value != info.expected) {
+" + load_and_call + "            if (value != info.expected) {
                 error_lock.lock();
                 on_exit error_lock.unlock();
                 errors += sprintf(\"%s: got %d expected %d\", info.module, value, info.expected);
@@ -669,6 +693,8 @@ if (errors) {
 
         string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
         assertEq("errors=0\nEXIT=0\n", run_out,
-            "concurrent Program::loadModule() calls for distinct AOT modules must not race AOT module state");
+            shared_program
+                ? "concurrent Program::loadModule() calls for distinct AOT modules into one Program must not deadlock"
+                : "concurrent Program::loadModule() calls for distinct AOT modules must not race AOT module state");
     }
 }

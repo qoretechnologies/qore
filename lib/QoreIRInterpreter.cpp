@@ -620,6 +620,124 @@ struct IROnBlockExitHandler {
     const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (required for IR/JIT/AOT execution)
 };
 
+//! Tracks value-slot ids holding owned (node) values for scope-exit cleanup
+/** Replaces a plain std::vector<uint32_t> that allowed duplicate ids.  Loops
+    whose bodies store a node value to the same slot every iteration (e.g. any
+    foreach loop variable) pushed one duplicate per iteration, so the vector
+    grew with the iteration count, and the per-store linear scans over it
+    (clearSlotForOverwrite() et al.) made every such loop O(N²) overall.
+
+    Overwriting a slot already discards its previous value (see
+    setValueSlot()), so a slot never needs more than one entry for scope-exit
+    cleanup.  Each in-range id is therefore stored at most once, bounding the
+    entry list by the number of distinct owned slots in the function.  A
+    per-slot push count preserves the historical duplicate arithmetic — Incref
+    pushes and Decref removes single entries as a reference ledger — so
+    removeOne() only drops an entry when its push count returns to zero.
+
+    Out-of-range ids (the PushTempMark UINT32_MAX statement sentinel) are not
+    counted and are always appended; they can only be removed by pop_back(),
+    which matches how DiscardTemps drains the statement temp region.
+ */
+class IRCleanupSlots {
+public:
+    //! clears all entries and resizes the per-slot counts to the value pool size
+    void reset(size_t slot_count) {
+        entries.clear();
+        counts.assign(slot_count, 0);
+    }
+
+    void push_back(uint32_t id) {
+        if (id < counts.size()) {
+            uint32_t& count = counts[id];
+            if (!count) {
+                entries.push_back(id);
+            }
+            // saturate rather than wrap; a slot pushed 2^32 times without an
+            // intervening remove is not a realistic ledger state
+            if (count != UINT32_MAX) {
+                ++count;
+            }
+            return;
+        }
+        entries.push_back(id);
+    }
+
+    //! removes one push for the id; drops its entry when no pushes remain
+    bool removeOne(uint32_t id) {
+        if (id >= counts.size() || !counts[id]) {
+            return false;
+        }
+        if (!--counts[id]) {
+            eraseEntry(id);
+        }
+        return true;
+    }
+
+    //! removes all pushes for the id
+    bool removeAll(uint32_t id) {
+        if (id >= counts.size() || !counts[id]) {
+            return false;
+        }
+        counts[id] = 0;
+        eraseEntry(id);
+        return true;
+    }
+
+    bool contains(uint32_t id) const {
+        return id < counts.size() && counts[id];
+    }
+
+    bool empty() const {
+        return entries.empty();
+    }
+
+    uint32_t back() const {
+        return entries.back();
+    }
+
+    //! pops the most recent entry, forgetting any remaining pushes for it
+    /** callers discard the slot's value and zero it, so any surviving push
+        count would only cover already-released storage */
+    void pop_back() {
+        uint32_t id = entries.back();
+        entries.pop_back();
+        if (id < counts.size()) {
+            counts[id] = 0;
+        }
+    }
+
+    void clear() {
+        for (uint32_t id : entries) {
+            if (id < counts.size()) {
+                counts[id] = 0;
+            }
+        }
+        entries.clear();
+    }
+
+    //! LIFO iteration for cleanup passes
+    std::vector<uint32_t>::const_reverse_iterator rbegin() const {
+        return entries.rbegin();
+    }
+
+    std::vector<uint32_t>::const_reverse_iterator rend() const {
+        return entries.rend();
+    }
+
+private:
+    //! insertion-ordered tracked slot ids (unique) and sentinels
+    std::vector<uint32_t> entries;
+    //! per-slot push counts indexed by slot id
+    std::vector<uint32_t> counts;
+
+    void eraseEntry(uint32_t id) {
+        auto it = std::find(entries.begin(), entries.end(), id);
+        assert(it != entries.end());
+        entries.erase(it);
+    }
+};
+
 // recycling all per-call data structures across function calls.
 // After warm-up (first visit to each recursion depth), subsequent calls at
 // that depth reuse the same vectors/sets with retained capacity → zero malloc.
@@ -627,7 +745,7 @@ struct IROnBlockExitHandler {
 // allocations that otherwise dominate execution time.
 struct IRCallFrame {
     std::vector<QoreValue> values;
-    std::vector<uint32_t> cleanup;
+    IRCleanupSlots cleanup;
     std::vector<QoreValue> locals_slot_cache;
     std::vector<LocalVarValue*> locals_lvar_cache;
     std::unordered_set<const LocalVar*> instantiated_locals;
@@ -700,7 +818,7 @@ struct IRCallFrame {
         // are already NOTHING.
         values.clear();
         values.resize(reserve_size);
-        cleanup.clear();
+        cleanup.reset(reserve_size);
         if (local_slot_count > 0) {
             for (auto& val : locals_slot_cache) {
                 val.discard(nullptr);
@@ -970,31 +1088,16 @@ static std::pair<bool, QoreValue> runBackgroundMetadata(
     return {false, QoreValue()};
 }
 
-static bool removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
-    for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
-        if (*it == id) {
-            cleanup.erase(std::next(it).base());
-            return true;
-        }
-    }
-    return false;
+static bool removeCleanupEntry(IRCleanupSlots& cleanup, uint32_t id) {
+    return cleanup.removeOne(id);
 }
 
-static bool removeAllCleanupEntries(std::vector<uint32_t>& cleanup, uint32_t id) {
-    bool removed = false;
-    for (auto it = cleanup.begin(); it != cleanup.end();) {
-        if (*it == id) {
-            it = cleanup.erase(it);
-            removed = true;
-        } else {
-            ++it;
-        }
-    }
-    return removed;
+static bool removeAllCleanupEntries(IRCleanupSlots& cleanup, uint32_t id) {
+    return cleanup.removeAll(id);
 }
 
-static bool hasCleanupEntry(const std::vector<uint32_t>& cleanup, uint32_t id) {
-    return std::find(cleanup.begin(), cleanup.end(), id) != cleanup.end();
+static bool hasCleanupEntry(const IRCleanupSlots& cleanup, uint32_t id) {
+    return cleanup.contains(id);
 }
 
 // Sets a value slot without discarding the previous value. Only use this for
@@ -1018,7 +1121,7 @@ static inline void setValueSlot(IRValueSlots& values,
     values[id] = new_val;
 }
 
-static inline void setOwnedValueSlot(IRValueSlots& values, std::vector<uint32_t>& cleanup,
+static inline void setOwnedValueSlot(IRValueSlots& values, IRCleanupSlots& cleanup,
         uint32_t id, QoreValue new_val, ExceptionSink* xsink) {
     setValueSlot(values, id, new_val, xsink);
     if (new_val.hasNode()) {
@@ -1026,11 +1129,9 @@ static inline void setOwnedValueSlot(IRValueSlots& values, std::vector<uint32_t>
     }
 }
 
-static void cleanupValues(IRValueSlots& values, std::vector<uint32_t>& cleanup,
+static void cleanupValues(IRValueSlots& values, IRCleanupSlots& cleanup,
         ExceptionSink* xsink, bool no_throw, std::vector<std::string>* cleanup_log) {
     // Iterate in reverse (LIFO) to clean up the latest values first.
-    // Duplicate IDs in cleanup are safe: after the first discard, values[id]
-    // is set to NOTHING, so subsequent discards are no-ops (no hash set needed).
     ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         uint32_t id = *it;
@@ -2671,7 +2772,7 @@ static void countCallArgOccurrences(const IRValueSlots& values,
     }
 }
 
-static void consumeLastUseCallArgSlots(IRValueSlots& values, std::vector<uint32_t>& cleanup,
+static void consumeLastUseCallArgSlots(IRValueSlots& values, IRCleanupSlots& cleanup,
         const std::vector<QoreIRValue>& operands, size_t start_index,
         const std::vector<uint32_t>& value_use_counts,
         const std::unordered_map<uint32_t, int32_t>* borrowed_slots, ExceptionSink* xsink) {
@@ -4314,8 +4415,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         for (uint32_t vid : local_load_slots[slot_id]) {
             // Skip if this value is still in cleanup (e.g., return value)
-            bool in_cleanup = std::find(cleanup.begin(), cleanup.end(), vid) != cleanup.end();
-            if (in_cleanup) {
+            if (hasCleanupEntry(cleanup, vid)) {
                 continue;  // Don't discard values that are in cleanup
             }
             if (vid < values.size()) {
@@ -4363,6 +4463,33 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (vid < load_slot_registered.size()) {
             load_slot_registered[vid] = false;
         }
+    };
+    // Releases this frame's own bookkeeping references to a container local
+    // (LoadLocal result slots, the locals slot cache entry, and the container
+    // operand slot) BEFORE a container-store opcode's uniqueness check.  These
+    // references are IR-execution artifacts — AST mode releases the equivalent
+    // expression temps at statement end — and leaving them held across the
+    // reference_count() check makes a container that is only stored in the
+    // target variable look shared, forcing a full copy-on-write on every
+    // store: a loop that reads and writes the same local container becomes
+    // O(N²) in the loop count.  Only valid for plain (non-closure) container
+    // locals: the frame's TLS slot owns the container and no alias can release
+    // that reference mid-instruction, so the container stays valid (and
+    // setKeyValue()/setEntry()'s reference_count() == 1 assertion holds)
+    // after the bookkeeping references are dropped.  Closure-bound containers
+    // must keep the conservative post-store release order: references held by
+    // concurrently-executing frames both keep the container alive and force
+    // the CoW here.
+    auto releaseContainerBookkeepingRefs = [&](uint32_t container_slot_id, uint32_t operand_slot_id) {
+        clearLoadSlots(container_slot_id);
+        if (container_slot_id != UINT32_MAX && container_slot_id < locals_slot_cache.size()) {
+            locals_slot_cache[container_slot_id].discard(xsink);
+            // reset to the cache-miss sentinel so the next load re-reads TLS;
+            // leaving the stale value would hand out a cache hit backed by a
+            // released reference
+            locals_slot_cache[container_slot_id] = QoreValue();
+        }
+        discardContainerValueSlot(operand_slot_id, container_slot_id, false);
     };
 
     struct LocalInstantiationCleanup {
@@ -6591,6 +6718,16 @@ load_local_done:
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
 
+                    // Drop this frame's bookkeeping refs to the container before the
+                    // uniqueness check so a read-then-write loop does not CoW on every
+                    // store; see releaseContainerBookkeepingRefs() for the rationale
+                    // and the non-closure restriction
+                    if ((hks_inst->container_lv || hks_inst->container)
+                            && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
+                        releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
+                            hks_inst->operands[0].id);
+                    }
+
                     // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
                     // This makes `h.b = h` copy the outer hash before storing the original.
                     if (h->reference_count() > 1) {
@@ -6735,6 +6872,17 @@ load_local_done:
                 QoreStringValueHelper key_str(key_val);
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
+
+                    // Drop this frame's bookkeeping refs to the container before the
+                    // uniqueness check so a read-then-write loop does not CoW on every
+                    // store; see releaseContainerBookkeepingRefs() for the rationale
+                    // and the non-closure restriction
+                    if ((hksd_inst->container_lv || hksd_inst->container)
+                            && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
+                        releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
+                            hksd_inst->operands[0].id);
+                    }
+
                     if (h->reference_count() > 1) {
                         // COW: see HashKeyStore above for rationale on *Transfer variants
                         QoreHashNode* new_h = h->copy();  // refcount 1, unique
@@ -6871,147 +7019,194 @@ load_local_done:
                 QoreValue idx_val  = getIRValue(values, lis_inst->operands[2]);
                 ValueHolder val_holder(val.refSelf(), xsink);
                 int64_t index = idx_val.getAsBigInt();
-                if (list_val.getType() == NT_LIST) {
-                    QoreListNode* l = list_val.get<QoreListNode>();
+                // NOTE: the do-while(false) wrapper lets every error path below break out to the common tail, which
+                // routes the exception to the instruction's exception target (i.e. the enclosing catch block).
+                // Returning directly from an error path here would make the exception bypass any enclosing
+                // try/catch in the same function
+                do {
+                    if (list_val.getType() == NT_LIST) {
+                        QoreListNode* l = list_val.get<QoreListNode>();
 
-                    // At this point, refcount = TLS (1) only (no artificial refs held).
-                    // Trigger COW if there are additional external references beyond TLS.
-                    if (l->reference_count() > 1) {
-                        // COW: see HashKeyStore above for rationale on *Transfer variants.
-                        // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
-                        QoreListNode* new_l = l->copy();  // refcount 1, unique
-                        // Prefer container_lv (resolved at AOT deser time) over
-                        // container->ref.id (fresh-parse path); the container
-                        // VarRefNode is not serialized, so AOT-loaded closure
-                        // bodies have container==nullptr and must use _lv.
+                        // Drop this frame's bookkeeping refs to the container before the
+                        // uniqueness check so a read-then-write loop does not CoW on every
+                        // store; see releaseContainerBookkeepingRefs() for the rationale
+                        // and the non-closure restriction
+                        if ((lis_inst->container_lv || lis_inst->container)
+                                && !isClosureContainer(lis_inst->container_lv, lis_inst->container)) {
+                            releaseContainerBookkeepingRefs(lis_inst->container_slot_id,
+                                lis_inst->operands[0].id);
+                        }
+
+                        // After the bookkeeping release, refcount = TLS (1) for an unshared
+                        // container; trigger COW if there are additional external references.
+                        if (l->reference_count() > 1) {
+                            // COW: see HashKeyStore above for rationale on *Transfer variants.
+                            // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
+                            QoreListNode* new_l = l->copy();  // refcount 1, unique
+                            // Prefer container_lv (resolved at AOT deser time) over
+                            // container->ref.id (fresh-parse path); the container
+                            // VarRefNode is not serialized, so AOT-loaded closure
+                            // bodies have container==nullptr and must use _lv.
+                            LocalVar* lv;
+                            bool is_closure;
+                            if (lis_inst->container_lv) {
+                                lv = lis_inst->container_lv;
+                                // Check at runtime: closureUse may be set after AOT
+                                // deser time when a later closure captures this var.
+                                is_closure = lv->closureUse();
+                            } else {
+                                lv = const_cast<LocalVar*>(
+                                    reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
+                                is_closure = (lis_inst->container->getType() == VT_CLOSURE);
+                            }
+                            if (is_closure) {
+                                assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
+                            } else {
+                                assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
+                            }
+                            // After COW, invalidate stale LoadClosure cache entry
+                            invalidateClosureCacheLv(lv);
+                            if (xsink && *xsink) {
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
+                            l = new_l;
+                        }
+
+                        // NOTE: the index resolution and the store below must not exit the instruction early on
+                        // error; they fall through to the container-slot cleanup that follows (exactly as
+                        // HashKeyStore does after setKeyValue()), and the common tail then routes the exception to
+                        // the enclosing catch block.  Skipping that cleanup leaves the borrowed container
+                        // reference in its value slot and it is released a second time by the generic value
+                        // cleanup at function exit
+
+                        // Resolve the index against the list; negative indices count from the end when
+                        // %negative-offsets is in effect, otherwise they are an error.  Without this check a
+                        // negative index reaches QoreListNode::setEntry() as a huge size_t and writes before the
+                        // start of the entry array, corrupting the heap.  Same semantics as
+                        // qore_rt_list_index_store_cow() (JIT) and qore_rt_list_index_store_cow_aot() (AOT).
+                        if (index < 0) {
+                            if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS)) {
+                                index += static_cast<int64_t>(l->size());
+                            }
+                            if (index < 0) {
+                                xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index "
+                                    "must evaluate to a non-negative integer)", idx_val.getAsBigInt());
+                            }
+                        }
+
+                        if (!(xsink && *xsink)) {
+                            // Apply element type coercion if the list has a typed value type
+                            // (e.g. list<softint> converts "50" → 50 before storing)
+                            const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+                            QoreValue entry = val.refSelf();
+                            if (QoreTypeInfo::hasType(vti)
+                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                QoreTypeInfo::acceptAssignment(vti,
+                                    "<list element assignment>", entry, xsink);
+                            }
+                            if (xsink && *xsink) {
+                                entry.discard(xsink);
+                            } else {
+                                // Make the update with already-referenced (and potentially coerced) value.
+                                // (list is already in TLS and will be cleaned up normally)
+                                l->setEntry(index, entry, xsink);
+                            }
+                        }
+
+                        // Cleanup must happen AFTER modification completes and locks are released.
+                        // Defer clearing refs that may trigger destructors.
+                        // Release any auto_ref=true LoadLocal result slots for this container variable.
+                        clearLoadSlots(lis_inst->container_slot_id);
+
+                        // Release the slot cache ref.
+                        uint32_t csid = lis_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
+                        }
+
+                        // Clear the container slot so cleanup doesn't try to discard it
+                        // (it's held by TLS and managed separately)
+                        discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
+                            isClosureContainer(lis_inst->container_lv, lis_inst->container));
+                    } else if (list_val.isNothing()) {
+                        // The list does not exist yet, so a negative index cannot be resolved from the end even with
+                        // %negative-offsets; matches the JIT and AOT auto-vivify paths.
+                        if (index < 0) {
+                            xsink->raiseException("NEGATIVE-LIST-INDEX", "list index " QLLD " is invalid (index must "
+                                "evaluate to a non-negative integer)", index);
+                            break;
+                        }
+                        // Auto-vivify: use container's declared type so the element
+                        // type comes out right (softlist<bool> → list<bool>, not list<auto>).
+                        // Use *Transfer so typed lvalues (list<auto!>) take the unique
+                        // in-place branch — no extra copy.
+                        // Prefer container_lv (resolved at AOT deser time) over container:
+                        // AOT-loaded bodies have container==nullptr (see COW branch above).
                         LocalVar* lv;
                         bool is_closure;
                         if (lis_inst->container_lv) {
                             lv = lis_inst->container_lv;
-                            // Check at runtime: closureUse may be set after AOT
-                            // deser time when a later closure captures this var.
                             is_closure = lv->closureUse();
                         } else {
                             lv = const_cast<LocalVar*>(
                                 reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
                             is_closure = (lis_inst->container->getType() == VT_CLOSURE);
                         }
+                        // Derive the declared lvalue type AOT-safely: from the container
+                        // VarRefNode on the fresh-parse path, else from the LocalVar
+                        // (resolving type parameters, as HashKeyStore auto-vivify does).
+                        const QoreTypeInfo* varTI = lis_inst->container
+                            ? lis_inst->container->getTypeInfo()
+                            : (lv ? qore_substitute_type_params_if_needed(lv->getTypeInfoForLValue())
+                                  : nullptr);
+                        const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
+                        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+                        {
+                            const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
+                            QoreValue entry = val.refSelf();
+                            if (QoreTypeInfo::hasType(vti)
+                                    && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                                QoreTypeInfo::acceptAssignment(vti,
+                                    "<list element assignment>", entry, xsink);
+                            }
+                            if (!(xsink && *xsink)) {
+                                new_l->setEntry(index, entry, xsink);
+                            } else {
+                                entry.discard(xsink);
+                            }
+                        }
+                        if (xsink && *xsink) {
+                            new_l->deref(xsink);
+                            break;
+                        }
                         if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                         }
-                        // After COW, invalidate stale LoadClosure cache entry
+                        // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
                         invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                            break;
                         }
-                        l = new_l;
-                    }
-
-                    // Apply element type coercion if the list has a typed value type
-                    // (e.g. list<softint> converts "50" → 50 before storing)
-                    const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
-                    QoreValue entry = val.refSelf();
-                    if (QoreTypeInfo::hasType(vti)
-                            && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                        QoreTypeInfo::acceptAssignment(vti,
-                            "<list element assignment>", entry, xsink);
-                        if (xsink && *xsink) {
-                            entry.discard(xsink);
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                        clearLoadSlots(lis_inst->container_slot_id);
+                        uint32_t csid = lis_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
                         }
+                        discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
+                            isClosureContainer(lis_inst->container_lv, lis_inst->container));
                     }
-                    // Make the update with already-referenced (and potentially coerced) value.
-                    // (list is already in TLS and will be cleaned up normally)
-                    l->setEntry(index, entry, xsink);
-
-                    // Cleanup must happen AFTER modification completes and locks are released.
-                    // Defer clearing refs that may trigger destructors.
-                    // Release any auto_ref=true LoadLocal result slots for this container variable.
-                    clearLoadSlots(lis_inst->container_slot_id);
-
-                    // Release the slot cache ref.
-                    uint32_t csid = lis_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-
-                    // Clear the container slot so cleanup doesn't try to discard it
-                    // (it's held by TLS and managed separately)
-                    discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
-                        isClosureContainer(lis_inst->container_lv, lis_inst->container));
-                } else if (list_val.isNothing()) {
-                    // Auto-vivify: use container's declared type so the element
-                    // type comes out right (softlist<bool> → list<bool>, not list<auto>).
-                    // Use *Transfer so typed lvalues (list<auto!>) take the unique
-                    // in-place branch — no extra copy.
-                    // Prefer container_lv (resolved at AOT deser time) over container:
-                    // AOT-loaded bodies have container==nullptr (see COW branch above).
-                    LocalVar* lv;
-                    bool is_closure;
-                    if (lis_inst->container_lv) {
-                        lv = lis_inst->container_lv;
-                        is_closure = lv->closureUse();
-                    } else {
-                        lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        is_closure = (lis_inst->container->getType() == VT_CLOSURE);
-                    }
-                    // Derive the declared lvalue type AOT-safely: from the container
-                    // VarRefNode on the fresh-parse path, else from the LocalVar
-                    // (resolving type parameters, as HashKeyStore auto-vivify does).
-                    const QoreTypeInfo* varTI = lis_inst->container
-                        ? lis_inst->container->getTypeInfo()
-                        : (lv ? qore_substitute_type_params_if_needed(lv->getTypeInfoForLValue())
-                              : nullptr);
-                    const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
-                    QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-                    {
-                        const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
-                        QoreValue entry = val.refSelf();
-                        if (QoreTypeInfo::hasType(vti)
-                                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
-                            QoreTypeInfo::acceptAssignment(vti,
-                                "<list element assignment>", entry, xsink);
-                        }
-                        if (!(xsink && *xsink)) {
-                            new_l->setEntry(index, entry, xsink);
-                        } else {
-                            entry.discard(xsink);
-                        }
-                    }
-                    if (xsink && *xsink) {
-                        new_l->deref(xsink);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    if (is_closure) {
-                        assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
-                    } else {
-                        assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
-                    }
-                    // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
-                    invalidateClosureCacheLv(lv);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    clearLoadSlots(lis_inst->container_slot_id);
-                    uint32_t csid = lis_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-                    discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
-                        isClosureContainer(lis_inst->container_lv, lis_inst->container));
-                }
+                } while (false);
                 if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;

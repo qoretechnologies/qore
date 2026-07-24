@@ -179,7 +179,9 @@ static bool qore_find_user_module_source(const std::string& dir, const char* nam
     return false;
 }
 
-static bool qore_find_explicit_qmod_source(const char* path, QoreString& source_path) {
+static bool qore_find_explicit_qmod_source(const char* path, const char* feature, QoreString& source_path,
+        QoreString& separated_path) {
+    separated_path.clear();
     size_t len = strlen(path);
     if (len <= 5 || strcasecmp(path + len - 5, ".qmod")) {
         return false;
@@ -190,7 +192,24 @@ static bool qore_find_explicit_qmod_source(const char* path, QoreString& source_
     source_path.concat(".qm");
 
     struct stat sb;
-    return !stat(source_path.c_str(), &sb) && S_ISREG(sb.st_mode);
+    if (stat(source_path.c_str(), &sb) || !S_ISREG(sb.st_mode)) {
+        return false;
+    }
+
+    // An explicit path such as `<module-dir>/<feature>/<feature>.qmod`
+    // refers to a separated module. The source fallback must load the parent
+    // directory so that all sibling .qc and .ql files are parsed as well.
+    // Loading only the sibling .qm entry file leaves the module incomplete.
+    const char* sep = q_find_last_path_sep(source_path.c_str());
+    if (sep) {
+        separated_path = source_path;
+        separated_path.terminate(sep - source_path.c_str());
+        if (strcmp(q_basenameptr(separated_path.c_str()), feature)
+                || !has_separated_module_main(separated_path.c_str(), feature)) {
+            separated_path.clear();
+        }
+    }
+    return true;
 }
 
 ModuleReExportHelper::ModuleReExportHelper(QoreAbstractModule* mi, bool reexp) : m(set_reexport(mi, reexp, reexport)) {
@@ -835,6 +854,14 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
         }
     }
 
+    // AOT module application can execute initializers that resolve committed
+    // methods in another Program and therefore take that Program's parse lock.
+    // Serialize cold runtime module loading before taking the target Program's
+    // parse lock so every participating thread observes the same lock order:
+    // AOT initialization, then Program parsing.  The committed-feature fast
+    // path above remains lock-free.
+    QoreModuleLoadLockHelper aot_init_al;
+
     // slow path: grab the exclusive parse lock for actual module loading
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
@@ -896,6 +923,10 @@ int QoreModuleManager::registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreP
         return 0;
     }
 
+    // Match runTimeLoadModule()'s AOT-before-Program lock order.  This path is
+    // AOT-specific and can otherwise participate in the same cross-Program
+    // initializer deadlock.
+    QoreModuleLoadLockHelper aot_init_al;
     ProgramRuntimeParseContextHelper pah(&xsink, tpgm);
     if (xsink) {
         return -1;
@@ -1121,19 +1152,59 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         return nullptr;
     }
 
-    // check for recursive loads
+    // check for recursive / concurrent loads
     while (true) {
         module_load_map_t::iterator i = module_load_map.find(name);
         if (i == module_load_map.end()) {
-            break;
+            break;                              // NOT_LOADED: we become the single writer
         }
-        if (i->second == q_gettid()) {
+        ModuleLoadEntry& e = i->second;
+        if (e.owner_tid == q_gettid()) {
+            // same thread already loading this feature: in-progress recursion, tolerated as before
             return nullptr;
         }
-        // otherwise wait for the load to complete in the other thread
-        ++module_load_waiting;
-        module_load_cond.wait(mutex);
-        --module_load_waiting;
+        if (e.state == MLS_INITIALIZING) {
+            // another thread is initializing this feature; detect a genuine cross-thread cycle
+            // before parking, so a real circular dependency raises instead of deadlocking silently
+            const int owner_tid = e.owner_tid;
+            if (checkModuleLoadCycle(name, owner_tid, xsink)) {
+                return nullptr;
+            }
+            ++e.waiters;
+            ++module_load_waiting;
+            int wait_rc = module_load_cond.waitWithInterrupt(mutex, &xsink);
+            --module_load_waiting;
+            // NOTE: the entry may have been erased while we were unlocked; re-find below.  Decrement
+            // the waiter count on the (possibly still-present) entry and drop our wait-for edge.
+            module_load_map_t::iterator wi = module_load_map.find(name);
+            if (wi != module_load_map.end() && wi->second.owner_tid == owner_tid) {
+                assert(wi->second.waiters);
+                --wi->second.waiters;
+            }
+            clearModuleLoadWaitEdge(q_gettid());
+            if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
+                return nullptr;
+            }
+            continue;                           // re-check terminal state / new owner
+        }
+        if (e.state == MLS_FAILED) {
+            // the owning thread's load failed; propagate rather than silently re-running a broken
+            // binary init in every waiter (thundering herd)
+            std::string err = e.err.empty() ? std::string("LOAD-MODULE-ERROR") : e.err;
+            std::string desc = e.desc;
+            if (e.waiters == 0) {
+                module_load_map.erase(i);       // last observer GCs the terminal entry
+            }
+            xsink.raiseException(err.c_str(), "module '%s' failed to load in another thread%s%s",
+                name, desc.empty() ? "" : ": ", desc.c_str());
+            return nullptr;
+        }
+        // MLS_LOADED: the module is registered; GC the terminal entry if we are the last observer and
+        // fall through to the module-map lookup below, which returns the loaded module
+        if (e.waiters == 0) {
+            module_load_map.erase(i);
+        }
+        break;
     }
 
     module_map_t::iterator mmi = map.find(name);
@@ -1308,10 +1379,16 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 load_opt, mod_desc_func);
             if (binary_xsink) {
                 QoreString source_path;
+                QoreString separated_path;
                 if (qore_binary_load_error_can_fallback_to_source(binary_xsink)
-                        && qore_find_explicit_qmod_source(raw_path, source_path)) {
-                    mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
-                        load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                        && qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path)) {
+                    if (separated_path.size()) {
+                        mi = loadSeparatedModule(xsink, wsink, separated_path.c_str(), name, pgm, reexport, nullptr,
+                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    } else {
+                        mi = loadUserModuleFromPath(xsink, wsink, source_path.c_str(), name, pgm, reexport, nullptr,
+                            load_opt & QMLO_REINJECT ? mpgm : nullptr, load_opt, warning_mask);
+                    }
                     if (mi && !xsink) {
                         qore_warn_binary_module_source_fallback(xsink, wsink, warning_mask, name, raw_path,
                             source_path.c_str(), binary_xsink);
@@ -1623,10 +1700,15 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program
@@ -1650,7 +1732,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
     {
-        ModuleLoadMapHelper mlmh(feature);
+        ModuleLoadMapHelper mlmh(feature, xsink);
 
         // issue #3212: warning sink
         userModule->getProgram()->parsePending(moduleCode.c_str(), path, &xsink, &xsink, warning_mask);
@@ -1925,7 +2007,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
 
     // issue #4254 do not run any initialization code while holding the global module lock
     if (qmd.hasInit()) {
-        ModuleLoadMapHelper mlmh(name);
+        ModuleLoadMapHelper mlmh(name, xsink);
 
         // init & run module initialization code if any
         if (qmd.init(*mi->getProgram(), xsink)) {
@@ -2059,10 +2141,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program
@@ -2106,7 +2193,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     QoreUserModuleDefContextHelper qmd(feature, path, mpgm, xsink);
 
     {
-        ModuleLoadMapHelper mlmh(feature);
+        ModuleLoadMapHelper mlmh(feature, xsink);
 
         // issue #3212: warning mask
         mi->getProgram()->parseFile(td, &xsink, &wsink, warning_mask);
@@ -2163,10 +2250,15 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
         // qore_program_private::inheritParseDefines for rationale).  Also
-        // inherit reexport-marked symbol imports.
+        // inherit reexport-marked symbol imports and the parent's
+        // %prepend-module-path / %append-module-path lists (see
+        // qore_program_private::inheritModulePathLists), so the module's own
+        // nested %requires(reexport) dependencies resolve against the same
+        // module search surface the importer established.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
             qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
+            qore_program_private::inheritModulePathLists(*mpgm, *p);
         }
     }
     // inherit execution mode from parent program
@@ -2189,7 +2281,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
 
     {
         // run initialization unlocked
-        ModuleLoadMapHelper mlmh(feature);
+        ModuleLoadMapHelper mlmh(feature, xsink);
 
         mi->getProgram()->parse(src, path, &xsink, &wsink, warning_mask);
     }
@@ -2389,7 +2481,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // while its init code runs; without this reservation, another thread can
     // start loading the same parent module before this thread reaches the
     // parent's own initialization.
-    ModuleLoadMapHelper mlmh(name, false);
+    ModuleLoadMapHelper mlmh(name, xsink, false);
 
     // Use path_pgm for search-path layering: AOT qmods expose source %requires
     // as binary-module dependencies, and those must honor the importing
@@ -2776,9 +2868,97 @@ char version_list_t::set(const char* v) {
     return '\0';
 }
 
-ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature, bool unlock_now) : unlocked(false) {
-    assert(QMM.module_load_map.find(feature) == QMM.module_load_map.end());
-    i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(feature, q_gettid())).first;
+bool QoreModuleManager::checkModuleLoadCycle(const char* feature, int owner_tid, ExceptionSink& xsink) {
+    // walk the wait-for chain starting from the owner we are about to block on; if it leads back to
+    // us, parking would deadlock -> a genuine circular module dependency across threads.  Called with
+    // mutex held; module_wait_for is guarded by the same mutex as module_load_map.
+    int me = q_gettid();
+    std::vector<int> chain;
+    chain.reserve(module_wait_for.size() + 2);
+    chain.push_back(me);
+    int cur = owner_tid;
+    size_t cancel_check = 0;
+    while (true) {
+        if (++cancel_check % 100 == 0
+                && qore_check_cancel(&xsink, "module dependency cycle check")) {
+            return true;
+        }
+        chain.push_back(cur);
+        if (cur == me) {
+            // format a readable chain, annotating each thread with the feature it is initializing
+            std::map<int, const std::string*> features_by_owner;
+            cancel_check = 0;
+            for (const auto& entry : module_load_map) {
+                if (++cancel_check % 100 == 0
+                        && qore_check_cancel(&xsink, "module dependency cycle report")) {
+                    return true;
+                }
+                features_by_owner.emplace(entry.second.owner_tid, &entry.first);
+            }
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker(
+                "circular module dependency detected while "
+                "loading feature '%s': ", feature));
+            cancel_check = 0;
+            for (size_t j = 0; j < chain.size(); ++j) {
+                if (++cancel_check % 100 == 0
+                        && qore_check_cancel(&xsink, "module dependency cycle report")) {
+                    return true;
+                }
+                if (j) {
+                    desc->concat(" -> ");
+                }
+                auto fi = features_by_owner.find(chain[j]);
+                if (fi != features_by_owner.end()) {
+                    desc->sprintf("'%s' (tid %d)", fi->second->c_str(), chain[j]);
+                } else {
+                    desc->sprintf("tid %d", chain[j]);
+                }
+            }
+            xsink.raiseException("CIRCULAR-MODULE-DEPENDENCY", desc.release());
+            return true;
+        }
+        std::map<int, int>::iterator it = module_wait_for.find(cur);
+        if (it == module_wait_for.end()) {
+            break;                      // owner is runnable (not itself parked) -> no cycle
+        }
+        cur = it->second;
+    }
+    // no cycle: commit our edge before waiting so a counterpart can observe it
+    module_wait_for[me] = owner_tid;
+    return false;
+}
+
+void QoreModuleManager::clearModuleLoadWaitEdge(int tid) {
+    module_wait_for.erase(tid);
+}
+
+ModuleLoadMapHelper::ModuleLoadMapHelper(const char* feature, ExceptionSink& xsink, bool unlock_now)
+        : xsink(xsink), unlocked(false) {
+    // Only a lingering terminal (LOADED/FAILED) entry, kept alive for waiters to observe, may still be
+    // present for this feature; an in-progress reservation on another thread must never reach here
+    // (the waiter loop in loadModuleIntern guarantees the feature is absent before we get here).  Such
+    // an entry is always this thread's own leftover from an earlier phase of the same load (e.g. the
+    // parse-phase reservation handing off to this init-phase reservation for the same feature).
+    //
+    // Re-open that same entry in place rather than erasing and re-inserting it.  A cross-thread waiter
+    // may be parked on it with its wait recorded in the entry's waiters count; erasing would silently
+    // discard that count, and a fresh entry that (as here) reuses this thread's TID as owner_tid would
+    // then fail the waiter's assert(waiters) on wake-up — it re-finds an owner-matching entry whose
+    // waiters count has been reset to 0.  Preserving waiters keeps the parse->init handoff a single
+    // continuous single-writer reservation as far as waiter accounting is concerned.
+    QoreModuleManager::module_load_map_t::iterator ex = QMM.module_load_map.find(feature);
+    if (ex != QMM.module_load_map.end()) {
+        assert(ex->second.state != QoreModuleManager::MLS_INITIALIZING);
+        // reset the entry to a fresh reservation owned by this thread, preserving its waiters count
+        ex->second.owner_tid = q_gettid();
+        ex->second.state = QoreModuleManager::MLS_INITIALIZING;
+        ex->second.err.clear();
+        ex->second.desc.clear();
+        i = ex;
+    } else {
+        i = QMM.module_load_map.insert(QoreModuleManager::module_load_map_t::value_type(
+            feature, QoreModuleManager::ModuleLoadEntry(q_gettid()))).first;
+    }
 
     // increment nested load depth counter
     ++module_load_depth;
@@ -2811,11 +2991,31 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
         QMM.mutex.lock();
     }
 
-    // remove module feature from map
-    QMM.module_load_map.erase(i);
+    // record the terminal state so waiters observe success/failure instead of racing the module map.
+    // Every failure path sets xsink before the reservation is released, so a pending exception means
+    // this load failed; a clean xsink means it succeeded.
+    if (xsink) {
+        i->second.state = QoreModuleManager::MLS_FAILED;
+        QoreValue err = xsink.getExceptionErr();
+        if (err.getType() == NT_STRING) {
+            i->second.err = err.get<const QoreStringNode>()->c_str();
+        }
+        QoreValue edesc = xsink.getExceptionDesc();
+        if (edesc.getType() == NT_STRING) {
+            i->second.desc = edesc.get<const QoreStringNode>()->c_str();
+        }
+    } else {
+        i->second.state = QoreModuleManager::MLS_LOADED;
+    }
 
-    // make sure and broadcast on the condition var inside the lock
+    // wake any waiters so they can observe the terminal state
     if (QMM.module_load_waiting) {
         QMM.module_load_cond.broadcast();
+    }
+
+    // if no cross-thread waiter is parked on this entry, GC it now (fast path, as before); otherwise
+    // leave it for the last waiter to erase after it has read the terminal state
+    if (i->second.waiters == 0) {
+        QMM.module_load_map.erase(i);
     }
 }

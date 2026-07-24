@@ -50,7 +50,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.5.1";
+    version = "3.6";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -73,9 +73,6 @@ module DataProvider {
 
         # register the data provider factory
         DataProvider::registerFactory(new NullDataProviderFactory());
-
-        # to workaround #4048 (circular initialization error)
-        AbstractDataProviderType::anyDataType = new QoreDataType(AutoType);
 
         # register the Qore processors data provider factory
         DataProvider::registerFactory(new QoreProcessorsDataProviderFactory());
@@ -1219,7 +1216,31 @@ if (errors) {
 
     @section dataprovider_relnotes Release Notes
 
+    @subsection dataprovider_v3_6 DataProvider v3.6
+    - added semantic string-backed data types (\c email, \c uri, \c uuid, \c hostname, \c ipv4, \c ipv6, and
+      \c phone) that carry a UI-renderable format identity while remaining string-compatible; Swagger and
+      OpenAPI schema \c format values are mapped to these types on import and emitted on schema generation
+    - @ref DataProvider::DataProviderActionCatalog::getActionOptionFromFields() "getActionOptionFromFields()"
+      now propagates a source field's \c ui_type into the derived application-action option
+    - class-backed named types (\c file, \c rgbcolor, and the new semantic string types) are now resolvable
+      by name through @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()",
+      so fields and options can reference them by name
+
     @subsection dataprovider_v3_5 DataProvider v3.5
+    - added explicit expression pushdown capability metadata so action sessions and database providers can
+      distinguish backend-native expressions from generic client implementations
+    - added template context, template value, and template type-resolution forwarding methods to the public
+      @ref DataProvider::DataProvider "DataProvider" facade
+    - made limited and exhausted @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" instances
+      release wrapped iterators immediately, including their database transaction resources
+    - update and delete implementations must return affected-row counts, ensuring the public mutation APIs always
+      return an integer and allowing uniform \c max_records and \c requires_result enforcement
+    - @ref DataProvider::DefaultRecordIterator "DefaultRecordIterator" now prepares typed expressions once at
+      construction for efficient repeated evaluation
+    - record update and delete APIs now enforce \c max_records against affected-row counts and preserve
+      \c MAX-RECORDS-EXCEEDED instead of wrapping it in a generic mutation error
+    - bulk record-shape validation now rejects heterogeneous record field sets and unequal list or buffer column
+      lengths before provider mutation; scalar hash-of-lists values remain supported as row broadcasts
     - fixed the generic \c "in" expression to accept both the canonical \c (field, list) form and the
       variadic \c (field, v1, v2, ...) form produced by the DPQL parser, and to compare each value
       individually; previously the variadic form was rejected as having too many arguments and the

@@ -676,6 +676,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         addTestCase("expression tests", \expressionTests());
         addTestCase("get display name", \getDisplayNameTest());
+        addTestCase("action option example determinism", \actionOptionExampleDeterminismTest());
+        addTestCase("action option semantic attributes", \actionOptionSemanticAttrTest());
+        addTestCase("semantic string format types", \semanticStringFormatTypesTest());
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
         addTestCase("pending app module context", \pendingAppModuleContextTest());
@@ -711,6 +714,18 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq(1, row.id);
         assertEq("alpha", row.name);
         assertFalse(i.next());
+
+        hash<DataProviderExpression> where_cond = <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (
+                <DataProviderFieldReference>{"field": "id"},
+                1,
+            ),
+        };
+        DefaultRecordIterator<hash<TypedRecordIteratorRow>> filtered(new TypedRecordIterator(), where_cond);
+        assertTrue(filtered.next());
+        assertEq(1, filtered.getValue().id);
+        assertFalse(filtered.next());
     }
 
     processorShapeApiTest() {
@@ -1008,6 +1023,190 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("Create TPS Reports", AbstractDataField::getDisplayName("createTPSReports"));
         assertEq("Create TPS Reports", AbstractDataField::getDisplayName("CreateTPSReports"));
         assertEq("FBI Code", AbstractDataField::getDisplayName("FBICode"));
+    }
+
+    semanticStringFormatTypesTest() {
+        # each semantic string format type is registered, string-backed, carries its format as the name and
+        # the "qore.external_name" tag (used by UIs to render an appropriate control), and accepts a valid
+        # value
+        hash<string, string> valid = {
+            "email": "a@b.com",
+            "uri": "https://example.com/x",
+            "uuid": "12345678-1234-1234-1234-123456789abc",
+            "hostname": "host.example.com",
+            "ipv4": "10.0.0.1",
+            "ipv6": "::1",
+            "phone": "+1 555 1234",
+        };
+        foreach hash<auto> i in (valid.pairIterator()) {
+            AbstractDataProviderType t = AbstractDataProviderTypeMap{i.key};
+            assertEq(i.key, t.getName(), i.key + " type name");
+            assertEq("string", t.getBaseTypeName(), i.key + " is string-backed");
+            assertEq(i.key, t.getTag("qore.external_name"), i.key + " external_name tag");
+            assertEq(i.value, t.acceptsValue(i.value), i.key + " accepts a valid value");
+
+            AbstractDataProviderType nt = AbstractDataProviderTypeMap{"*" + i.key};
+            assertEq("*" + i.key, nt.getName(), "*" + i.key + " nullable name");
+            assertNothing(nt.acceptsValue(NOTHING), "*" + i.key + " accepts no value");
+
+            # the type resolves by name via both get(string) and a name-only get(hash) descriptor, so
+            # fields/options may reference it by name (e.g. from metadata or the type builder)
+            assertEq(i.key, AbstractDataProviderType::get(i.key).getName(), i.key + " resolves by name");
+            assertEq(i.key, AbstractDataProviderType::get(<DataTypeInfo>{"name": i.key}).getName(),
+                i.key + " resolves from a name-only descriptor");
+        }
+
+        # invalid values are rejected server-side (backstop)
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            AbstractDataProviderTypeMap."email".acceptsValue("not-an-email");
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            AbstractDataProviderTypeMap."ipv4".acceptsValue("999.0.0.1");
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            AbstractDataProviderTypeMap."uuid".acceptsValue("not-a-uuid");
+        });
+
+        # the "qore.external_name" tag survives a getInfo()/get() round-trip so the UI label is preserved
+        # even though the reconstructed type degrades to its string base
+        AbstractDataProviderType rt =
+            AbstractDataProviderType::get((AbstractDataProviderTypeMap."email").getInfo());
+        assertEq("string", rt.getBaseTypeName(), "round-trip type is string-backed");
+        assertEq("email", rt.getTag("qore.external_name"), "external_name tag survives round-trip");
+    }
+
+    actionOptionSemanticAttrTest() {
+        # DataProviderOptionInfo (ConstructorOptions-style) options carry ui_type and sensitive (both
+        # BaseOptionInfo fields); these must survive conversion to ActionOptionInfo. ui_type was previously
+        # dropped on this (DataProviderOptionInfo) merge branch.
+        hash<string, hash<DataProviderOptionInfo>> cfields = {
+            "api_key": <DataProviderOptionInfo>{
+                "type": AbstractDataProviderTypeMap."string",
+                "display_name": "API Key",
+                "short_desc": "API key",
+                "desc": "The API key",
+                "ui_type": "password",
+                "sensitive": True,
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> copts =
+            DataProviderActionCatalog::getActionOptionFromFields(cfields);
+        assertEq("password", copts.api_key.ui_type,
+            "ui_type propagates from a DataProviderOptionInfo option");
+        assertTrue(copts.api_key.sensitive,
+            "sensitive propagates from a DataProviderOptionInfo option");
+
+        # AbstractDataField-sourced options (e.g. from a request/response record type) carry these via
+        # custom field attributes; getActionOptionFromFields must copy them into the ActionOptionInfo
+        QoreDataField email_field("email", "Email address", AbstractDataProviderTypeMap."string");
+        email_field.setAttributes({
+            "ui_type": "email",
+            "validation_regex": "^[^@]+@[^@]+$",
+        });
+        hash<string, AbstractDataField> efields = {"email": email_field};
+        hash<string, hash<ActionOptionInfo>> fopts =
+            DataProviderActionCatalog::getActionOptionFromFields(efields);
+        assertEq("email", fopts.email.ui_type,
+            "ui_type propagates from an AbstractDataField attribute");
+        assertEq("^[^@]+@[^@]+$", fopts.email.validation_regex,
+            "validation_regex propagates from an AbstractDataField attribute");
+
+        # a raw-hash field also carries an explicit ui_type through the raw-info merge path
+        hash<auto> rawfields = {
+            "website": {
+                "type": AbstractDataProviderTypeMap."string",
+                "display_name": "Website",
+                "short_desc": "Website",
+                "desc": "Website URL",
+                "ui_type": "url",
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> ropts =
+            DataProviderActionCatalog::getActionOptionFromFields(rawfields);
+        assertEq("url", ropts.website.ui_type,
+            "ui_type propagates from a raw-hash field");
+    }
+
+    actionOptionExampleDeterminismTest() {
+        hash<auto> implicit_example_field = {
+            "timestamp": {
+                "type": DateOrNothingType,
+                "display_name": "Timestamp",
+                "short_desc": "Timestamp",
+                "desc": "Timestamp",
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> implicit_options_a =
+            DataProviderActionCatalog::getActionOptionFromFields(implicit_example_field);
+        hash<string, hash<ActionOptionInfo>> implicit_options_b =
+            DataProviderActionCatalog::getActionOptionFromFields(implicit_example_field);
+        assertFalse(implicit_options_a.timestamp.hasKey("example_value"),
+            "raw fields do not acquire a generated example value");
+        assertFalse(implicit_options_b.timestamp.hasKey("example_value"),
+            "repeated conversion does not acquire a generated example value");
+
+        date example_a = 2026-01-02T03:04:05Z;
+        date example_b = 2027-02-03T04:05:06Z;
+        hash<auto> explicit_example_field_a = implicit_example_field + {
+            "timestamp": implicit_example_field.timestamp + {
+                "example_value": example_a,
+            },
+        };
+        hash<auto> explicit_example_field_b = implicit_example_field + {
+            "timestamp": implicit_example_field.timestamp + {
+                "example_value": example_b,
+            },
+        };
+        hash<string, hash<ActionOptionInfo>> explicit_options_a =
+            DataProviderActionCatalog::getActionOptionFromFields(explicit_example_field_a);
+        hash<string, hash<ActionOptionInfo>> explicit_options_b =
+            DataProviderActionCatalog::getActionOptionFromFields(explicit_example_field_b);
+        assertEq(example_a, explicit_options_a.timestamp.example_value,
+            "explicit raw-field examples are preserved");
+        assertEq(example_b, explicit_options_b.timestamp.example_value,
+            "different explicit raw-field examples are preserved");
+
+        string app = "option-example-" + get_random_string();
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Option Example Test",
+            "short_desc": "Option example test",
+            "desc": "Tests deterministic action option examples",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        hash<DataProviderActionInfo> implicit_action = <DataProviderActionInfo>{
+            "app": app,
+            "action": "implicit-example",
+            "path": "/implicit-example",
+            "display_name": "Implicit Example",
+            "short_desc": "Implicit example",
+            "desc": "Implicit example",
+            "action_code": DPAT_API,
+            "options": implicit_options_a,
+        };
+        DataProviderActionCatalog::registerAction(implicit_action);
+        implicit_action.options = implicit_options_b;
+        DataProviderActionCatalog::registerAction(implicit_action);
+
+        hash<DataProviderActionInfo> explicit_action = <DataProviderActionInfo>{
+            "app": app,
+            "action": "explicit-example",
+            "path": "/explicit-example",
+            "display_name": "Explicit Example",
+            "short_desc": "Explicit example",
+            "desc": "Explicit example",
+            "action_code": DPAT_API,
+            "options": explicit_options_a,
+        };
+        DataProviderActionCatalog::registerAction(explicit_action);
+        explicit_action.options = explicit_options_b;
+        assertThrows("ACTION-ERROR", \DataProviderActionCatalog::registerAction(), explicit_action);
     }
 
     actionCatalogTests() {
@@ -3161,6 +3360,30 @@ public class DataProviderTest inherits QUnit::Test {
             list<auto> records = ({"a": 1, "b": "x"}, {"a": 2, "b": "y"});
             hash<auto> hl = AbstractDataProcessor::recordsToHashList(records);
             assertEq({"a": (1, 2), "b": ("x", "y")}, hl);
+        }
+
+        # Reject heterogeneous rows before their values can be shifted into another record
+        {
+            list<auto> records = ({"id": 1}, {"id": 2, "value": "belongs-to-row-2"});
+            assertThrows("PROCESSOR-SHAPE-ERROR", "record 2/2 has a different field set",
+                \AbstractDataProcessor::recordsToHashList(), (records,));
+        }
+
+        # Hash key order is not significant; output order follows the first record
+        {
+            list<auto> records = ({"id": 1, "value": "a"}, {"value": "b", "id": 2});
+            assertEq({"id": (1, 2), "value": ("a", "b")}, AbstractDataProcessor::recordsToHashList(records));
+        }
+
+        # Reject jagged column blocks while retaining scalar broadcast values
+        {
+            assertThrows("PROCESSOR-SHAPE-ERROR", "field \"value\" has 1 values",
+                sub () {
+                    AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "value": ("a",)},
+                        DataProviderShape::HashOfLists);
+                });
+            assertEq(2, AbstractDataProcessor::validateShapeRecordCount({"id": (1, 2), "tenant": "acme"},
+                DataProviderShape::HashOfLists));
         }
 
         # Test hashListToRecords and recordsToHashList round-trip

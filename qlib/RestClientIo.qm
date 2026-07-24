@@ -147,36 +147,6 @@ resp = rc.restGet("/api/data");
 
     @section restclientio_relnotes Release Notes
 
-    @subsection restclientio_v1_2 Version 1.2
-    - Added Kerberos/SPNEGO HTTP Negotiate support for async request/response APIs,
-      SSE reader/stream/observable APIs, and polling pings
-    - Added \c getLogger() to expose the client's logger
-    - Added \c setAllowAnyResponse() / \c getAllowAnyResponse() for controlling deserialization
-      error handling
-    - Added \c setContentEncoding() for setting both send and accept encoding
-    - Added \c getValidator() / \c setValidator() for runtime schema validator access
-    - Added \c setConnectionPath() / \c getConnectionPath() / \c clearConnectionPath() for
-      connection path management (\c default_path constructor option)
-    - Added \c setUserPassword() / \c clearUserPassword() for HTTP Basic authentication
-      (\c username / \c password constructor options without OAuth2)
-    - Added \c doSignedRequest() / \c doSignedRequestAsync() for request signing support
-    - Added proxy support via \c proxy constructor option (passed through to
-      HttpClientConnectionManager)
-    - Constructor now accepts \c validator option for custom REST schema validators
-    - Constructor now accepts \c allow_any_response, \c content_encoding, \c default_path options
-    - added \c RestClientIoPingPollOperation class for async REST connection pings via startPollConnect()
-
-    @subsection restclientio_v1_1 Version 1.1
-    - OAuth2 support: \c client_credentials and \c password grant types
-    - Automatic token acquisition on first request via \c checkLogin()
-    - Proactive token refresh for stale tokens plus 401 retry for edge cases
-    - Concurrent refresh serialization — only one thread refreshes at a time
-    - Public API: \c setOAuth2Options(), \c getOAuth2Options(), \c getNewToken()
-    - Token URL can be absolute (different server) or relative (same server)
-    - Support for \c oauth2_token_use_basic_auth and \c oauth2_token_auth_secret_only
-    - Support for OAuth2 client assertion token-endpoint authentication
-    - \c bin/rest updated with OAuth2 CLI options
-
     @subsection restclientio_v1_0 Version 1.0
     - Initial release of RestClientIo module
     - Implements @ref RestClient::AbstractRestClient "AbstractRestClient" interface
@@ -273,7 +243,7 @@ hash<RestResponseInfo> resp = f.get(30s);
 
             @return True if the cancellation was initiated, False if already complete
 
-            @since %RestClientIo 1.3
+            @since %RestClientIo 1.0
         */
         bool cancel() {
             if (raw_future.isDone()) {
@@ -1213,6 +1183,32 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return mgr;
         }
 
+        #! Starts a persistent (connection-scoped) session that pins one connection
+        /** Leases an exclusive connection from the pool and returns a
+            @ref RestClientIo::RestPersistentSession handle.  Requests run inside
+            @ref RestPersistentSession::pinned() ride that one leased connection, so a
+            connection-scoped persistent transaction (HTTP/1.1) stays on a single socket instead
+            of scattering across pooled connections — required because the server binds the
+            transaction to one physical connection and reads subsequent requests off that socket.
+
+            The handle must be closed with @ref RestPersistentSession::close() (or
+            @ref RestPersistentSession::abort()); its destructor closes it defensively.  The
+            leased connection is excluded from the pool reuse rotation, so other traffic on this
+            client keeps using separate pooled connections concurrently.
+
+            @param non_blocking retained plumbing only (see @ref HttpClientConnectionManager::acquireStream())
+
+            @return a persistent-session handle bound to one leased connection
+
+            @note the connection-scoped persistent protocol is HTTP/1.1 only; on HTTP/2 / HTTP/3
+            use a single bidirectional stream instead
+
+            @since RestClientIo 1.0
+        */
+        RestPersistentSession startPersistentSession(*bool non_blocking) {
+            return new RestPersistentSession(mgr, mgr.leaseConnection(getUrl(), non_blocking));
+        }
+
         #! Returns a copy of the constructor options this instance was built with
         /** The returned hash is suitable for passing to the @ref RestClientIo
             constructor to build a sibling instance — for example with a different
@@ -1288,7 +1284,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @param timeout_ms new per-request timeout; 0 clears the override
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         nothing setTimeout(timeout timeout_ms = 0) {
             AutoWriteLock al(config_lock);
@@ -1300,7 +1296,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @c mgr.request() directly (e.g. \c DataStreamClientIo)
             should pass this value to honor @ref setTimeout().
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         private *timeout getRequestTimeoutOverride() {
             AutoReadLock al(config_lock);
@@ -1311,7 +1307,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         /** Returns the per-instance override if set, otherwise the connection
             manager's default.
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         int getTimeout() {
             AutoReadLock al(config_lock);
@@ -1327,7 +1323,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @param timeout_ms new connection timeout; 0 (the default) is a no-op
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         nothing setConnectTimeout(timeout timeout_ms = 0) {
             if (timeout_ms > 0) {
@@ -1336,7 +1332,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         }
 
         #! Returns the connection timeout in milliseconds
-        /** @since RestClientIo 1.1 */
+        /** @since RestClientIo 1.0 */
         int getConnectTimeout() {
             return mgr.getConnectTimeout();
         }
@@ -1349,7 +1345,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             Happy Eyeballs / Alt-Svc; this method reports the configured mode, not
             the last-negotiated protocol.
 
-            @since RestClientIo 1.1
+            @since RestClientIo 1.0
         */
         string getHttpVersion() {
             switch (mgr.getProtocolMode()) {
@@ -1358,6 +1354,83 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 case "h3": return "3.0";
                 default: return "auto";
             }
+        }
+
+        #! Returns per-connection info for this client's target host, including the negotiated protocol
+        /** Returns one @ref HttpClientIo::HttpClientConnectionInfo hash for each
+            connection to this client's target host that is currently pooled in the
+            underlying connection manager, each carrying the <i>negotiated</i>
+            @c protocol (\c "h1", \c "h2", or \c "h3") — the protocol actually
+            selected on the wire, in contrast to @ref getHttpVersion(), which
+            reports the configured mode.
+
+            @return a list of @ref HttpClientIo::HttpClientConnectionInfo hashes;
+            empty if no connection to the target host is currently pooled (for
+            example before the first request)
+
+            @see @ref getNegotiatedHttpVersion() for just the negotiated version string,
+            @ref getHttpVersion() for the configured mode, and
+            @ref HttpClientIo::HttpClientConnectionManager::getConnectionInfo()
+
+            @since RestClientIo 1.0
+        */
+        list<hash<HttpClientIo::HttpClientConnectionInfo>> getConnectionInfo() {
+            return mgr.getConnectionInfo(url);
+        }
+
+        #! Returns the HTTP protocol version negotiated for this client's target host
+        /** Returns the HTTP version actually negotiated on the wire for the
+            connection serving this client's target host — one of \c "1.1",
+            \c "2.0", or \c "3.0" — or @ref nothing if no connection has been
+            established yet (for example before the first request).
+
+            This differs from @ref getHttpVersion(), which reports the
+            <i>configured</i> mode and returns \c "auto" when the protocol is
+            selected per connection via ALPN / Happy Eyeballs / Alt-Svc.
+
+            When more than one connection to the target host is pooled (for
+            example after an Alt-Svc upgrade leaves both an older and a newer
+            connection alive), a connection in the
+            @ref HttpClientIo::HttpClientConnectionState::Ready state is preferred;
+            use @ref getConnectionInfo() for the full per-connection picture.
+
+            @return the negotiated HTTP version string (\c "1.1", \c "2.0", or
+            \c "3.0"), or @ref nothing if no connection is currently established
+
+            @par Example
+            @code{.py}
+rest.restGet("/api/status");
+*string ver = rest.getNegotiatedHttpVersion();
+printf("server negotiated HTTP/%s\n", ver ?? "unknown");
+            @endcode
+
+            @see @ref getConnectionInfo(), @ref getHttpVersion()
+
+            @since RestClientIo 1.0
+        */
+        *string getNegotiatedHttpVersion() {
+            *hash<HttpClientIo::HttpClientConnectionInfo> best;
+            foreach hash<HttpClientIo::HttpClientConnectionInfo> info in (getConnectionInfo()) {
+                if (info.state == HttpClientIo::HttpClientConnectionState::Closed) {
+                    continue;
+                }
+                if (!exists best) {
+                    best = info;
+                }
+                if (info.state == HttpClientIo::HttpClientConnectionState::Ready) {
+                    best = info;
+                    break;
+                }
+            }
+            if (!exists best) {
+                return NOTHING;
+            }
+            switch (best.protocol) {
+                case "h1": return "1.1";
+                case "h2": return "2.0";
+                case "h3": return "3.0";
+            }
+            return NOTHING;
         }
 
         #! Sets whether any response content type is allowed
@@ -1504,7 +1577,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             before a valid SSE stream is opened; the exception argument contains
             the response status, headers, and any collected response body
 
-            @since %RestClientIo 1.5
+            @since %RestClientIo 1.0
 
             @see restSseStream()
         */
@@ -1585,7 +1658,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             before a valid SSE stream is opened
             @throw SSE-STREAM-ERROR if the stream reported an error
 
-            @since %RestClientIo 1.5
+            @since %RestClientIo 1.0
 
             @see restSseReader()
         */
@@ -1620,7 +1693,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             HTTP response hash and supports
             @ref HttpClientIo::HttpCancellableFuture::cancel() "cancel()"
 
-            @since %RestClientIo 1.3
+            @since %RestClientIo 1.0
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
@@ -2103,7 +2176,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return hash with "future" (Future), "stream_id" (int), and "stream"
                 (HttpClientStreamHandle)
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
@@ -2126,7 +2199,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return hash with "future" (Future) and "stream_id" (int)
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
                 *data body, EventNotifier notifier) {
@@ -2199,10 +2272,50 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Returns True if the current OAuth2 token needs to be refreshed
         /** @return True if the token exists, has a refresh token, and is within the expiry window
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         bool tokenRequiresRefresh() {
             return requiresRefresh();
+        }
+
+        #! Returns True if an async polling ping may attempt an OAuth2 token refresh after a 401
+        /** Unlike the synchronous \c canRetryAuth() predicate, this one is specific to the
+            asynchronous polling refresh mechanism, which implements OAuth2 refresh only (it does not
+            support custom-token authentication).  It returns @ref True only when the
+            connection has a usable OAuth2 configuration that
+            @ref startOAuth2PollRefreshToken() can actually turn into a token request:
+
+            - a real OAuth2 grant type (not \c "none");
+            - automatic refresh enabled (\c oauth2_auto_refresh);
+            - a token endpoint URL (\c oauth2_token_url or \c oauth2_alt_token_url); and
+            - the minimum inter-refresh interval has elapsed.
+
+            This prevents a non-OAuth (e.g. API-key) connection that receives an HTTP 401
+            ping response from incorrectly entering the OAuth2 refresh path — the
+            divergence that previously produced a \c RUNTIME-TYPE-ERROR when the (absent)
+            token URL was assigned to a non-nullable string.
+
+            @return @ref True only if @ref startOAuth2PollRefreshToken() has enough
+            configuration to build and send a token refresh request
+
+            @since %RestClientIo 1.0
+        */
+        bool canPingOAuth2Refresh() {
+            AutoReadLock al(config_lock);
+            # the async polling refresh path implements OAuth2 only, not custom-token auth
+            if (!oauth2_grant_type.val() || oauth2_grant_type == "none") {
+                return False;
+            }
+            # automatic refresh must be enabled for a 401-triggered refresh
+            if (!oauth2_auto_refresh) {
+                return False;
+            }
+            # a token endpoint URL is required to build the refresh request
+            if (!oauth2_alt_token_url.val() && !oauth2_token_url.val()) {
+                return False;
+            }
+            # rate-limit refreshes so repeated 401s cannot drive a tight refresh loop
+            return (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
         }
 
         #! Starts an async OAuth2 token refresh poll operation
@@ -2212,7 +2325,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @return an AbstractPollOperation for the token refresh HTTP request
 
-            @since %RestClientIo 1.2
+            @throw OAUTH2-ERROR if no OAuth2 token endpoint URL (\c oauth2_token_url or
+            \c oauth2_alt_token_url) is configured for the connection
+
+            @since %RestClientIo 1.0
         */
         hash<auto> startOAuth2PollRefreshToken() {
             # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
@@ -2223,7 +2339,18 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             bool has_alt_token_url;
             {
                 AutoReadLock al(config_lock);
-                token_url_str = oauth2_alt_token_url ?? oauth2_token_url;
+                # a token endpoint URL is mandatory; without it there is nothing to POST
+                # to.  Guard the nullable-to-string assignment so a mis-routed refresh
+                # (e.g. a non-OAuth connection that reached here) raises a clear OAuth2
+                # configuration error instead of an opaque RUNTIME-TYPE-ERROR.
+                *string token_url = oauth2_alt_token_url ?? oauth2_token_url;
+                if (!token_url.val()) {
+                    throw "OAUTH2-ERROR", "cannot perform an OAuth2 token refresh: no token "
+                        "endpoint URL is configured (\"oauth2_token_url\" or "
+                        "\"oauth2_alt_token_url\"); this connection is not configured for "
+                        "OAuth2 authentication";
+                }
+                token_url_str = token_url;
                 has_alt_token_url = oauth2_alt_token_url.val();
                 use_basic_auth = oauth2_token_use_basic_auth;
                 auth_secret_only = oauth2_token_auth_secret_only;
@@ -2290,7 +2417,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             @param h the parsed OAuth2 token response hash
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         updateOAuth2Token(hash<auto> h) {
             gotOAuth2LoginInfo(h);
@@ -2309,7 +2436,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @return an EventNotifier to poll for connection readiness, or NOTHING if
             the connection is already ready
 
-            @since %RestClientIo 1.2
+            @since %RestClientIo 1.0
         */
         *EventNotifier startConnectionAsync() {
             return mgr.ensureConnectionAsync(url);
@@ -3912,7 +4039,7 @@ obs.registerObserver(sub (string event_type, auto data) {
 obs.observersReady();
             @endcode
 
-            @since %RestClientIo 2.3
+            @since %RestClientIo 1.0
         */
         HttpClientStreamingIo::SseObservable restObserveSse(string method, string path,
                 auto body, *hash<auto> hdr, *hash<auto> opts) {
@@ -4840,7 +4967,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     OAuth2 token refresh is attempted once before the first request (if the token is
     in the expiry window) and once after a 401 response (if not already retried).
 
-    @since %RestClientIo 1.2
+    @since %RestClientIo 1.0
 */
 public namespace RestClientIo {
 
@@ -5235,9 +5362,14 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     continue;
                 }
 
-                # 401: attempt OAuth2 token refresh + retry once
+                # 401: attempt OAuth2 token refresh + retry once, but only when the
+                # connection actually has a usable OAuth2 refresh configuration.
+                # canPingOAuth2Refresh() prevents a non-OAuth (e.g. API-key) connection
+                # from entering the OAuth2 refresh path merely because oauth2_auto_refresh
+                # defaults to True — the 401 is surfaced as a normal ping error instead.
                 if (status_code == 401 && !auth_retried
-                        && (ping_opts.oauth2_auto_refresh ?? True)) {
+                        && (ping_opts.oauth2_auto_refresh ?? True)
+                        && rcio.canPingOAuth2Refresh()) {
                     auth_retried = True;
                     doStartOAuth2Refresh();
                     continue;
@@ -5553,6 +5685,116 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
         }
         connection_ready_conn = NOTHING;
         oauth2_connection_ready_conn = NOTHING;
+    }
+}
+
+#! A persistent (connection-scoped) session bound to one leased connection
+/** Holds an exclusive lease on one connection from a @ref RestClientIo connection manager and runs a
+    sequence of requests over it, so a connection-scoped persistent transaction stays on a single
+    socket.  This is required on HTTP/1.1, where the server binds a transaction to one physical
+    connection (its dedicated-handler "queued persistent" loop reads that same socket for every
+    subsequent request); scattering requests across pooled connections orphans the server's handler
+    and can silently start a second transaction.
+
+    The leased connection is pinned on the connection manager for the whole lifetime of the session,
+    so every request to the leased host:port — on the owning client or any client sharing the same
+    connection manager, on any thread — rides the leased socket.  Requests are issued by the caller
+    through @ref pinned() (which also tracks errors).  The lease is released with @ref close()
+    (connection returned to the pool) or @ref abort() (connection closed); the destructor closes it
+    defensively.  An error inside @ref pinned() taints the session so it discards the connection on
+    close — a failed persistent op can leave the socket in an indeterminate state, and closing is the
+    deterministic signal for the server to roll back and tear down.
+
+    Create one with @ref RestClientIo::startPersistentSession().
+
+    @since RestClientIo 1.0
+*/
+public class RestPersistentSession {
+    private {
+        #! the connection manager owning the leased connection
+        HttpClientIo::HttpClientConnectionManager mgr;
+        #! the leased connection carrying the session
+        HttpClientIo::HttpClientConnection conn;
+        #! the session is open (not yet closed)
+        bool open = True;
+        #! an error tainted the session (or it was aborted) — discard the connection on close
+        bool errored = False;
+    }
+
+    #! creates the session; use @ref RestClientIo::startPersistentSession() rather than constructing directly
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, HttpClientIo::HttpClientConnection conn) {
+        self.mgr = mgr;
+        self.conn = conn;
+        # pin the leased connection for the whole session so every request to its host:port rides it,
+        # regardless of which thread issues the request (the async request paths do not all run the
+        # pool scan on the caller's thread)
+        mgr.pinConnection(conn);
+    }
+
+    #! defensively closes the session (as an error) if it was not closed explicitly
+    destructor() {
+        if (open) {
+            errored = True;
+            closeIntern();
+        }
+    }
+
+    #! runs the closure, tracking any error so the connection is discarded on close
+    /** The leased connection is pinned for the whole session (see the constructor), so every
+        request the closure makes on the owning client (or any client sharing the connection
+        manager) to the leased host:port rides the leased connection.  An exception from the closure
+        taints the session so the connection is discarded (closed) rather than returned to the pool
+        on @ref close().
+
+        @param op the closure to run
+        @return the closure's return value
+
+        @throw PERSISTENT-SESSION-CLOSED the session has already been closed
+    */
+    auto pinned(code<auto()> op) {
+        if (!open) {
+            throw "PERSISTENT-SESSION-CLOSED", "the persistent session has already been closed";
+        }
+        try {
+            return op();
+        } catch (hash<ExceptionInfo> ex) {
+            errored = True;
+            rethrow;
+        }
+    }
+
+    #! closes the session, returning the connection to the pool (or closing it if the session was tainted)
+    close() {
+        closeIntern();
+    }
+
+    #! aborts the session, closing (not reusing) the leased connection
+    /** Use when the connection must not be reused (e.g. after a transaction error): the server sees
+        the socket close and rolls back / tears down the transaction. */
+    abort() {
+        errored = True;
+        closeIntern();
+    }
+
+    #! returns @ref True while the session is open
+    bool isOpen() {
+        return open;
+    }
+
+    #! returns @ref True if the session has been tainted by an error (will discard the connection on close)
+    bool hasError() {
+        return errored;
+    }
+
+    #! internal idempotent close
+    private closeIntern() {
+        if (!open) {
+            return;
+        }
+        open = False;
+        # clear the pin before releasing so no further request routes to the connection
+        mgr.unpinConnection();
+        mgr.releaseConnection(conn, errored);
     }
 }
 

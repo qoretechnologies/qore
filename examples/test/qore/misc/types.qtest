@@ -40,6 +40,7 @@ class Issue3887_Child inherits Issue3887_Base { int test(softlist l) { return 1;
 class TypeTest inherits QUnit::Test {
     constructor() : QUnit::Test("TypeTest", "1.0") {
         addTestCase("-= test", \minusEqualsTest());
+        addTestCase("soft/auto-complex member init", \softComplexMemberInitTest());
         addTestCase("issue 4133 complex types", \issue4133());
         addTestCase("issue 3887", \issue3887());
         addTestCase("hashdecl types", \hashdeclTypeTest());
@@ -134,6 +135,38 @@ class TypeTest inherits QUnit::Test {
             h -= (1,);
             assertEq({}, h);
         }
+    }
+
+    # a class member (or static class variable) with a complex "soft" or "auto" container type and an
+    # initializer previously crashed the parser in QoreTypeInfo::getHardReference(): the "auto" element type
+    # made the type accept a reference, so getHardReference() took the reference-type path and asserted on a
+    # null hard-reference cast.  Such a type is not a reference type and must be returned unchanged.
+    softComplexMemberInitTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+            class C {
+                public {
+                    softlist<auto> sla = ();
+                    softlist<auto> sla2 = (1, 2);
+                    list<auto> la = ('a',);
+                    hash<auto> ha = {'k': 1};
+                }
+            }
+            hash<auto> sub get_members() {
+                C c();
+                return {
+                    'sla': c.sla,
+                    'sla2': c.sla2,
+                    'la': c.la,
+                    'ha': c.ha,
+                };
+            }
+        ", "soft-complex-member-init");
+        hash<auto> h = p.callFunction("get_members");
+        assertEq((), h.sla);
+        assertEq((1, 2), h.sla2);
+        assertEq(("a",), h.la);
+        assertEq({"k": 1}, h.ha);
     }
 
     issue4133() {

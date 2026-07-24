@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/ConstantList.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_list_private.h"
@@ -547,18 +548,30 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
         // initialize function or class immediately for possible error messages later (also in case of constant
         // expressions for immediate evaluation)
+        //
+        // While folding a constant value (qore_parse_in_constant_init()), do NOT eagerly parse-initialize the
+        // callee's BODY here: type-checking this call needs only the callee's signature (return type), already
+        // resolved above by resolvePendingSignatures().  Parse-initializing the body during constant folding
+        // would force value-initialization of every constant the body references - including on code paths not
+        // executed to build this constant - which manufactures spurious, commit-order (file-glob) dependent
+        // "recursive constant reference" cycles.  The body is parse-initialized in the normal function/class
+        // parse-init phase (qore_ns_private::parseInit), which runs before constant values are evaluated at
+        // parseCommitRuntimeInit, so deferral is safe.
+        const bool defer_body = qore_parse_in_constant_init();
         const QoreClass* qc = func->getClass();
         if (qc) {
             if (qore_class_private::get(*const_cast<QoreClass*>(qc))->parseInitPartial() && !err) {
                 err = -1;
             }
-            qore_ns_private* clsns = qore_class_private::get(*qc)->ns;
-            NamespaceParseContextHelper nspch(clsns);
-            QoreParseClassHelper qpch(const_cast<QoreClass*>(qc));
-            if (func->parseInit(clsns) && !err) {
-                err = -1;
+            if (!defer_body) {
+                qore_ns_private* clsns = qore_class_private::get(*qc)->ns;
+                NamespaceParseContextHelper nspch(clsns);
+                QoreParseClassHelper qpch(const_cast<QoreClass*>(qc));
+                if (func->parseInit(clsns) && !err) {
+                    err = -1;
+                }
             }
-        } else {
+        } else if (!defer_body) {
             func->parseInit(ns);
         }
 

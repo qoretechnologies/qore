@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires Logger
-%requires DataProvider
-%requires SqlUtil
-%requires Sqlite3SqlUtil
-%requires QUnit
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SqlUtil
+%requires ../../../../qlib/Sqlite3SqlUtil.qm
+%requires ../../../../qlib/QUnit.qm
 
 %try-module sqlite3
 %define NoSqlite3
@@ -97,6 +97,7 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         # Multi-value list membership tests
         addTestCase("DP_SEARCH_OP_IN", \testDpOpIn());
         addTestCase("DP_OP_NOT_IN", \testDpOpNotIn());
+        addTestCase("DP IN large + mixed", \testDpOpInLargeAndMixed());
 
         # Date/string function tests
         addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
@@ -106,15 +107,115 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         addTestCase("convertDateFormat", \testConvertDateFormat());
 
         # Verify expression map completeness
+        addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
         addTestCase("expression map keys", \testExpressionMapKeys());
+        addTestCase("DPQL select expressions", \testDpqlSelectExpressions());
+        addTestCase("DPQL update assignment expressions", \testDpqlUpdateAssignmentExpressions());
 
         # Generic SqlUtil CTAS API
         addTestCase("create as select", \testCreateAsSelect());
         addTestCase("drop table options", \testDropTableOptions());
         addTestCase("stats preferences unsupported", \testStatsPreferencesUnsupported());
         addTestCase("create constraints SQL", \testCreateConstraintsSql());
+        addTestCase("temporary tables", \testTempTable());
 
         set_return_value(main());
+    }
+
+    testTempTable() {
+        if (!ds) {
+            testSkip("no DB connection");
+        }
+        ds.commit();
+        Database db(ds);
+        assertTrue(db.supportsTempTables());
+
+        # negative: empty column description
+        assertThrows("TEMP-TABLE-ERROR", "no columns",
+            sub () { db.createTempTable("tt_ids", {}); });
+        # negative: invalid scope
+        assertThrows("TEMP-TABLE-ERROR", "invalid temporary table scope",
+            sub () { db.createTempTable("tt_ids", {"id": {"qore_type": "integer", "notnull": True}},
+                {"scope": "bogus"}); });
+
+        # source table with known data
+        string src_name = "tt_src";
+        db.dropTableIfExists(src_name);
+        ds.commit();
+        Sqlite3Table src(ds, src_name);
+        src.addColumn("id", {"qore_type": "integer", "notnull": True}, False);
+        src.addColumn("grp", {"qore_type": "integer", "notnull": True}, False);
+        src.create();
+        ds.commit();
+        on_exit {
+            db.dropTableIfExists(src_name);
+            ds.commit();
+        }
+        for (int i = 0; i < 30; ++i) {
+            src.insert({"id": i, "grp": i % 3});
+        }
+        ds.commit();
+
+        list<int> expected = map $1.id,
+            src.selectRows({"columns": ("id",), "where": {"grp": 1}, "orderby": "id"});
+        assertEq(10, expected.size());
+
+        {
+            AbstractTable tmp = db.createTempTable("tt_ids", {"id": {"qore_type": "integer", "notnull": True}});
+            assertTrue(tmp.isTempTable());
+            assertFalse(tmp.isPreCreatedTempTable());
+            assertEq(SqlUtil::TT_Transaction, tmp.getTempScope());
+            TempTableHelper th(tmp);
+
+            # join against empty temp table returns nothing
+            assertEq((), src.selectRows({"columns": ("id",), "join": join_inner(tmp, "t", {"id": "id"})}));
+
+            # server-side fill and enrichment join parity
+            int filled = tmp.insertFromSelect(("id",), src, {"columns": "id", "where": {"grp": 1}});
+            assertEq(expected.size(), filled);
+            list<int> got = map $1.id, src.selectRows({
+                "columns": ("id",),
+                "join": join_inner(tmp, "t", {"id": "id"}),
+                "orderby": "id",
+            });
+            assertEq(expected, got);
+
+            # describe-from-definition DML without introspection
+            tmp.insert({"id": 9999});
+            assertEq(filled + 1, tmp.selectRows({"columns": ("id",)}).size());
+            assertEq(1, tmp.del({"id": 9999}));
+
+            th.dropTempTable();
+            assertNothing(th.get());
+        }
+        ds.commit();
+
+        # large fill (>= 10k rows) exercises the bulk-fill path
+        {
+            Sqlite3Table big(ds, "tt_big");
+            big.addColumn("id", {"qore_type": "integer", "notnull": True}, False);
+            big.create();
+            ds.commit();
+            on_exit {
+                db.dropTableIfExists("tt_big");
+                ds.commit();
+            }
+            list<hash<auto>> rows = ();
+            for (int i = 0; i < 12000; ++i) {
+                rows += {"id": i};
+            }
+            big.insertFromIterator(rows.iterator());
+            ds.commit();
+
+            AbstractTable tmp = db.createTempTable("tt_big_ids", {"id": {"qore_type": "integer", "notnull": True}});
+            TempTableHelper th(tmp);
+            int filled = tmp.insertFromSelect(("id",), big, {"columns": "id"});
+            assertEq(12000, filled);
+            assertEq(12000, big.selectRows({"columns": ("id",),
+                "join": join_inner(tmp, "t", {"id": "id"})}).size());
+            th.dropTempTable();
+        }
+        ds.commit();
     }
 
     globalTearDown() {
@@ -178,6 +279,13 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
 
     private cleanupDropOptionsTest() {
         Sqlite3Table t(ds, "sqlite3_drop_options_test");
+        if (t.checkExistence()) {
+            t.dropCommit();
+        }
+    }
+
+    private cleanupDpqlUpdateAssignmentTest() {
+        Sqlite3Table t(ds, "sqlite3_dpql_update_test");
         if (t.checkExistence()) {
             t.dropCommit();
         }
@@ -313,12 +421,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # NOTE: SQLite LIKE is case-insensitive for ASCII by default, so
-        # "case-sensitive" LIKE still matches case-insensitively
+        # explicit case-sensitive behavior overrides SQLite's default ASCII behavior
         rows = selectWhere(
             expr(DP_OP_LIKE, (fref("name"), "%world%", False)),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
     }
 
     testDpOpContains() {
@@ -330,11 +437,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # SQLite LIKE is case-insensitive for ASCII — "world" matches "World"
+        # the case option is optional and defaults to case-sensitive matching
         rows = selectWhere(
-            expr(DP_OP_CONTAINS, (fref("name"), "world", False)),
+            expr(DP_OP_CONTAINS, (fref("name"), "world")),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
 
         # substring in middle
         rows = selectWhere(
@@ -358,11 +465,11 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         );
         assertEq((1,), rows.id);
 
-        # SQLite LIKE is case-insensitive for ASCII — "hello" matches "Hello"
+        # explicit case-sensitive behavior overrides SQLite's default ASCII behavior
         rows = selectWhere(
             expr(DP_OP_STARTS_WITH, (fref("name"), "hello", False)),
         );
-        assertEq((1,), rows.id);
+        assertEq((), rows.id);
     }
 
     testDpOpEndsWith() {
@@ -566,6 +673,41 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         assertEq((3, 4), selectWhere(varargs).id);
     }
 
+    # Regression: a large IN list must generate the right SQL (one placeholder per value, values
+    # bound in order) and must do so in linear time.  Historically the "in"/"not in" ops built the
+    # placeholder list with an O(n^2) foldl string concatenation and bound each value one at a time
+    # through the reference<hash<QueryInfo>> (each append copied the whole QueryInfo hash, making the
+    # bind step O(n * map-size)); both made large IN clauses spin CPU for seconds.
+    testDpOpInLargeAndMixed() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # large scalar IN list: one placeholder + one bind per value, in order
+        list<int> ids = map $1, xrange(1, 5001);
+        assertEq(5000, ids.size());
+        hash<DataProviderExpression> big_in = expr(DP_SEARCH_OP_IN, (fref("id"), ids));
+        list<auto> args;
+        string sql = table.getSelectSql({"columns": ("id",), "where": big_in}, \args);
+        assertEq(ids.size(), args.size());
+        assertEq(ids, args);
+        assertEq(ids.size(), sql.split("%v").size() - 1);
+        # same for "not in"
+        list<auto> nargs;
+        table.getSelectSql({"columns": ("id",),
+            "where": expr(DP_OP_NOT_IN, (fref("id"), ids))}, \nargs);
+        assertEq(ids, nargs);
+
+        # mixed IN list: scalars interleaved with a field reference and a nested expression must
+        # preserve bind order (scalar binds flushed before/after the non-scalar elements)
+        list<auto> margs;
+        string msql = table.getSelectSql({"columns": ("id",), "where":
+            expr(DP_SEARCH_OP_IN, (fref("id"),
+                (7, fref("id"), 9,
+                 expr(DP_OP_PLUS, (fref("id"), 100)), 11)))}, \margs);
+        # binds in source order: 7, 9, 100, 11 (the bare field reference binds nothing)
+        assertEq((7, 9, 100, 11), margs);
+        assertEq(4, msql.split("%v").size() - 1);
+    }
+
     # --- Date/string function tests ---
 
     testDpFuncFormatDate() {
@@ -633,8 +775,163 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         assertTrue(emap.hasKey(DP_OP_TERNARY));
         assertTrue(emap.hasKey(DP_OP_HAS_VALUE));
         assertTrue(emap.hasKey(DP_OP_AND));
+        assertTrue(emap.hasKey(DP_EXPR_VALUE));
+        assertTrue(emap.hasKey(DP_OP_PLUS));
+        assertTrue(emap.hasKey(DP_OP_MINUS));
+        assertTrue(emap.hasKey(DP_OP_MULT));
+        assertTrue(emap.hasKey(DP_OP_DIV));
         assertTrue(emap.hasKey(OP_LIKE));
         assertTrue(emap.hasKey(COP_UPPER));
         assertTrue(emap.hasKey(COP_LOWER));
+        assertTrue(emap.hasKey(DP_FUNC_DIGEST));
+    }
+
+    testDpqlSelectExpressions() {
+        if (!table) { testSkip("no DB connection"); }
+
+        list<auto> columns = table.parseDpqlSelectColumns({
+            "name_upper": "upr(@name)",
+        });
+        assertEq(1, columns.size());
+        assertEq(COP_AS, columns[0].exp);
+        assertEq(DP_OP_TO_UPPER, columns[0].args[0].exp);
+        assertEq("name_upper", columns[0].args[1]);
+
+        *hash<auto> row = table.selectRowDpql({
+            "columns_dpql": {
+                "name_upper": "upr(@name)",
+                "amount_plus": "@amount + 1",
+            },
+            "where_dpql": "@id == 1",
+        });
+        assertEq("HELLO WORLD", row.name_upper);
+        assertEqSoft(101.5, row.amount_plus);
+
+        hash<SqlResultInfo> rows_info = table.selectRowsDpqlWithInfo({
+            "columns_dpql": {
+                "name_upper": "upr(@name)",
+            },
+            "where_dpql": "@id in (1, 3)",
+            "orderby": "id",
+        });
+        assertEq(2, rows_info.result.size());
+        assertEq("HELLO WORLD", rows_info.result[0].name_upper);
+        assertEq("UPPER CASE", rows_info.result[1].name_upper);
+        assertTrue(rows_info.sql =~ /^select upper\(name\) as name_upper from /);
+        assertEq((1, 3), rows_info.args);
+
+        hash<SqlResultInfo> select_info = table.selectDpqlWithInfo({
+            "columns_dpql": {
+                "next_id": "@id + 1",
+            },
+            "where_dpql": "@id == 1",
+        });
+        assertEq((2,), select_info.result.next_id);
+
+        list<auto> args;
+        string sql = table.getSelectDpqlSql({
+            "columns_dpql": {
+                "amount_plus": "@amount + 1",
+            },
+            "where_dpql": "@id == 1",
+        }, \args);
+        assertTrue(sql =~ /^select \(amount \+ %v\) as amount_plus from /);
+        assertEq((1, 1), args);
+
+        assertThrows("OPTION-ERROR", "\"columns\" and \"columns_dpql\"", \table.prepareDpqlSelectHash(), {
+            "columns": "id",
+            "columns_dpql": {"x": "@id"},
+        });
+        assertThrows("OPTION-ERROR", "\"where\" and \"where_dpql\"", \table.prepareDpqlSelectHash(), {
+            "where": {"id": 1},
+            "where_dpql": "@id == 1",
+        });
+        assertThrows("COLUMN-ERROR", "query references unknown column", \table.parseDpqlSelectColumns(), {
+            "x": "@missing",
+        });
+    }
+
+    testDpqlUpdateAssignmentExpressions() {
+        if (!table) { testSkip("no DB connection"); }
+
+        cleanupDpqlUpdateAssignmentTest();
+        on_exit {
+            try {
+                cleanupDpqlUpdateAssignmentTest();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        ds.execRaw("create table sqlite3_dpql_update_test ("
+            "id integer primary key, "
+            "target integer, "
+            "source integer, "
+            "delta integer, "
+            "label text"
+            ")");
+        ds.execRaw("insert into sqlite3_dpql_update_test values "
+            "(1, 0, 10, 3, 'alpha'), "
+            "(2, 0, null, 5, 'beta')");
+        ds.commit();
+
+        Sqlite3Table t(ds, "sqlite3_dpql_update_test");
+
+        assertEq(DP_OP_PLUS, t.parseDpqlFieldExpression("@source + @delta", "target").exp);
+        assertEq(DP_SEARCH_OP_EQ, t.parseDpqlSearchExpression("@id == 1").exp);
+
+        # Bare DPQL field references parse to DP_EXPR_VALUE and must be usable as an update RHS.
+        hash<SqlCommandInfo> cmd = t.getUpdateSql({
+            "target": t.parseDpqlFieldExpression("@source", "target"),
+        }, {"id": 1});
+        assertEq("update sqlite3_dpql_update_test set target = source where id = %v", cmd.sql);
+        assertEq((1,), cmd.args);
+
+        # Canonical DPQL arithmetic operators must map to SqlUtil SQL expressions.
+        hash<SqlResultInfo> info = t.updateDpqlWithInfo({
+            "target": "@source + @delta",
+            "label": "upr(@label)",
+        }, "@id == 1");
+        ds.commit();
+        assertEq(1, info.result);
+        assertTrue(info.sql =~ /^update sqlite3_dpql_update_test set /);
+        assertEq((1,), info.args);
+
+        *hash<auto> row = t.selectRow({"where": {"id": 1}});
+        assertEq(13, row.target);
+        assertEq("ALPHA", row.label);
+
+        assertEq(1, t.updateDpqlCommit({
+            "target": "coalesce(@source, @delta, 0)",
+            "label": '"gamma"',
+        }, "@id == 2"));
+
+        row = t.selectRow({"where": {"id": 2}});
+        assertEq(5, row.target);
+        assertEq("gamma", row.label);
+
+        # Existing update() semantics are unchanged: plain strings are literal values, not DPQL.
+        t.updateCommit({"label": "@source"}, {"id": 2});
+        row = t.selectRow({"where": {"id": 2}});
+        assertEq("@source", row.label);
+
+        hash<SqlResultInfo> del_info = t.delDpqlWithInfo("@id == 2");
+        ds.commit();
+        assertEq(1, del_info.result);
+        assertEq("delete from sqlite3_dpql_update_test where id = %v", del_info.sql);
+        assertEq((2,), del_info.args);
+        assertEq(1, t.rowCount());
+
+        assertThrows("COLUMN-ERROR", "query references unknown column", \t.parseDpqlFieldExpression(),
+            ("@missing", "target"),
+            "unknown DPQL field in update assignment");
+    }
+
+    testDpFuncDigest() {
+        if (!table) { testSkip("no DB connection"); }
+
+        # SQLite has no built-in cryptographic hash functions, so digest must raise a clear error
+        assertThrows("DIGEST-ERROR", sub () {
+            selectExprRow("d", expr(DP_FUNC_DIGEST, (fref("name"), "sha256", "hex")), 1);
+        });
     }
 }

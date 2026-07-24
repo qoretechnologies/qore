@@ -43,7 +43,7 @@
 %requires FileLocationHandler
 
 module DataProviderML {
-    version = "1.5.0";
+    version = "1.0.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1948,119 +1948,6 @@ assert scaled.getColumn("event_type").toList() == ("standard-scaler", "standard-
 
     @section dataproviderml_relnotes Release Notes
 
-    @subsection dataproviderml_v1_5 DataProviderML v1.5
-    - the \c tokenizer_config_path option of the tokenization, chunking, embedding,
-      re-ranking, and semantic-chunking processors is now read as a
-      @ref filelocationhandlerintro "FileLocationHandler" location, so the
-      \c tokenizer.json may be a bare filesystem path or any registered scheme
-      (\c file://, \c http(s)://, \c sftp://, ...); the data-provider option is
-      tagged @ref DataProvider::DTT_FromLocation "DTT_FromLocation"
-
-    @subsection dataproviderml_v1_4 DataProviderML v1.4
-    - Tokenization, chunking, embedding, re-ranking, and semantic chunking processors
-      can load \c tokenizer.json, companion \c tokenizer_config.json settings, and
-      ONNX artifacts from QoreModelRegistry packages
-    - \c registry-model now uses QoreModelRegistry executable metadata so native Qore
-      ML and ONNX registry packages are supported with descriptive errors for
-      metadata-only PyTorch/HuggingFace packages
-    - \c onnx-model and registry-backed ONNX inference use tensor execution for
-      \c DataFrameBlock, \c BufferColumns, and \c HashOfLists windows,
-      preserving bulk pipeline shapes without per-row inference calls; dense
-      buffer inputs are sliced as tensor views across \c window_size batches
-      and row-aligned tensor outputs are concatenated before compact column
-      conversion so dense output buffers survive multi-window scoring
-    - \c onnx-model and registry-backed ONNX tensor execution reuse
-      \c ML::OnnxIoBinding for stable shaped windows, avoiding repeated output
-      binding setup and exposing binding diagnostics through
-      \c getDiagnostics()
-    - \c onnx-model and \c registry-model support compact \c output_mode values
-      \c "columns", \c "dataframe", and \c "tensor"; dense input columns with
-      the expected ONNX dtype use a direct tensor path to avoid row matrix
-      materialization across all windowed batches
-    - \c onnx-model and registry-backed ONNX \c registry-model processors accept
-      \c output_names to request selected ONNX outputs only; this avoids
-      materializing unused labels, scores, logits, or embeddings in multi-output
-      models
-    - multi-column dense ONNX inputs are packed with
-      @ref Qore::ML::Tensor::fromColumns() "ML::Tensor::fromColumns()" to avoid
-      row hash and nested list materialization
-    - shaped ONNX inputs smaller than \c window_size, or with a final remainder
-      window, are processed directly as tensor batches instead of falling back
-      through row buffering
-    - \c text-normalize, \c tokenize, \c schema-validation,
-      \c embed-text, and \c rerank-text preserve
-      \c DataFrameBlock, \c BufferColumns, and \c HashOfLists input shapes by
-      reading top-level columns directly; \c text-normalize appends a
-      normalized text column, \c tokenize appends a token-count column,
-      \c schema-validation appends \c _is_valid and \c _validation_errors or
-      filters invalid rows, \c embed-text appends an \c embedding column or
-      flat dense embedding dimension columns, and
-      \c rerank-text emits top-k rows with \c reranker_score and
-      \c reranker_rank columns without per-row hash materialization
-    - \c embed-text supports \c output_mode = "columns" to split ONNX embedding
-      tensors into dense \c embedding_N buffer columns for DataFrame and
-      BufferColumns pipelines
-    - \c embed-text and \c rerank-text accept \c onnx_session_config and inherit
-      QoreModelRegistry package execution config for ONNX Runtime provider,
-      threading, and graph-optimization settings
-    - \c embed-text and \c rerank-text accept \c output_names for local and
-      registry-backed ONNX execution, and inherit selected output names from
-      registry execution plans, so multi-output embedding and reranker models
-      do not materialize unused tensors
-    - \c embed-text and \c rerank-text can infer local ONNX mode from
-      QoreModelRegistry task-aware execution plans, so packages registered with
-      \c task = "embedding" or \c task = "reranker" do not require duplicate
-      processor mode options in pipeline definitions
-    - \c registry-model event output applies \c regression,
-      \c classification, and \c sequence-classification execution plans to
-      produce stable task fields such as \c value, \c label, and \c scores
-      while preserving raw ONNX outputs for diagnostics
-    - \c registry-model and registry-backed \c embed-text / \c rerank-text
-      consume normalized ONNX package execution plans with runtime,
-      entry-artifact, tokenizer, tensor-contract, output-shape,
-      preprocessing, and postprocessing metadata
-    - \c registry-model supports initial \c causal-lm execution plans for
-      registry ONNX packages, including registry tokenizer loading,
-      \c input_ids and \c attention_mask tensor construction, greedy decoding,
-      stop-token handling, generated token metadata, and KV-cache reuse for
-      matching ONNX \c past* input and \c present* output tensor pairs
-    - \c registry-model \c causal-lm packages support compact
-      \c output_mode = "columns" and \c output_mode = "dataframe" generation
-      output, returning prompt-aligned columns such as \c generated_text,
-      \c generated_token_ids, \c input_token_count,
-      \c generated_token_count, and \c finish_reason without materializing
-      per-row event or prediction hashes
-    - \c onnx-model and \c registry-model support \c input_map for ONNX models
-      that require multiple named input tensors; the action catalog no longer
-      requires \c fields when \c input_map is used
-    - Shared registry backend options support filesystem, database, and REST model
-      registry backends for AI pipeline artifacts
-    - \c onnx-model and \c registry-model expose ONNX Runtime provider,
-      inference-stat, and profile-summary diagnostics through \c getDiagnostics();
-      emitted events can include compact diagnostics when requested, and
-      registry-backed processors expose actionable package diagnostics from
-      QoreModelRegistry manifests
-
-    @subsection dataproviderml_v1_3 DataProviderML v1.3
-    - DataProviderML processors now accept \c DataFrameBlock,
-      \c BufferColumns, and \c HashOfLists input shapes through the DataProvider
-      shape API and preserve \c DataFrameBlock or \c BufferColumns output shapes
-      for bulk event outputs when possible
-    - StandardScaler, MinMaxScaler, KMeans, and PCA can emit flat DataFrame
-      output with dense buffer columns through \c output_mode = "dataframe";
-      optional slim output flags omit unchanged input columns and KMeans
-      centroid-distance columns for high-throughput analytics
-    - added \c AbstractDataProviderMLProcessor as the common shape-aware base
-      for DataProviderML processors
-
-    @subsection dataproviderml_v1_1 DataProviderML v1.1
-    - changed \c fields option type from \c string to \c softlist<string> for multi-select UI
-      support; all processors accept both comma-separated strings and string lists for backward
-      compatibility
-    - added \c input_field_names marker to \c fields and \c target_field options for dynamic
-      allowed value population from pipeline input types
-    - all field-name-based options now support dot-notation for nested field access
-
     @subsection dataproviderml_v1_0 DataProviderML v1.0
     - initial release with 9 core ML pipeline processors and optional ONNX inference processor
 */
@@ -2242,7 +2129,7 @@ public namespace DataProviderML {
     }
 
     #! Registry model inference event hashdecl
-    /** @since DataProviderML 1.2
+    /** @since DataProviderML 1.0
     */
     public hashdecl RegistryModelEventInfo {
         #! The type of analysis (always "registry-model")
@@ -2506,7 +2393,7 @@ public namespace DataProviderML {
     }
 
     #! Data profile field info hashdecl
-    /** @since DataProviderML 1.3
+    /** @since DataProviderML 1.0
     */
     public hashdecl DataProfileFieldInfo {
         #! The type of analysis that produced this result (always "data-profile")

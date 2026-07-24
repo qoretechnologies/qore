@@ -632,6 +632,12 @@ void HttpWebSocketPollOperationPriv::queueSendClose(uint16_t code, const char* r
     }
 }
 
+void HttpWebSocketPollOperationPriv::queueSendCloseExternal(uint16_t code, const char* reason,
+        ExceptionSink* xsink) {
+    AutoLocker al(m);
+    queueSendClose(code, reason, xsink);
+}
+
 QoreValue HttpWebSocketPollOperationPriv::getReceivedFrame(ExceptionSink* xsink) {
     if (recv_queue->empty()) {
         return QoreValue();
@@ -1005,7 +1011,17 @@ nothing HttpWebSocketPollOperationBase::sendPing(*binary payload) [flags=NAMED_A
     @param reason the close reason string (default empty)
 */
 nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") [flags=NAMED_ARGS] {
-    priv->queueSendClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
+    // Hold the poll-op lock while mutating ws_state / send_queue: queueSendClose()
+    // transitions ws_state to CLOSING and pushes the close frame, and continuePoll()
+    // (the I/O thread) reads/writes the same state under this lock.  Without it, a
+    // server-initiated close from another thread (e.g. a listener stop via
+    // WebSocketConnection::stop() -> signalTransportClose()) races with continuePoll:
+    // the CLOSING transition can be missed, so the op never reaches CLOSED, its
+    // onComplete() never fires, and the handler thread blocked on its done Counter
+    // (and the listener's dThreads.wait()) deadlocks.  The internal callers
+    // (idle-timeout / message-too-big in continuePoll) already hold m and call
+    // queueSendClose() directly, so this is the only entry point that must lock.
+    priv->queueSendCloseExternal(static_cast<uint16_t>(code), reason->c_str(), xsink);
 }
 
 //! Sets the maximum frame/message size in bytes

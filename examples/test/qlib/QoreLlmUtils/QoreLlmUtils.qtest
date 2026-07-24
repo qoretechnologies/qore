@@ -160,6 +160,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiChatRequestAndTextResponseTest());
         addTestCase("LlmBackend gemini tool call response",
             \geminiToolCallResponseTest());
+        addTestCase("LlmBackend gemini tool call reasoning signature round trip",
+            \geminiToolCallThoughtSignatureTest());
+        addTestCase("LlmBackend gemini streamed tool call keeps reasoning signature",
+            \geminiStreamedToolCallThoughtSignatureTest());
         addTestCase("LlmBackend OpenAI chat facade routes Gemini requests",
             \geminiOpenAiChatCompletionsFacadeTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
@@ -1076,6 +1080,207 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             gemini_handler.requests[0].path);
         assertEq("lookup customer",
             gemini_handler.requests[0].body.contents[0].parts[0].text);
+    }
+
+    #! Gemini 3.x rejects a replayed function call that lost its reasoning signature
+    /** The signature arrives as a sibling of `functionCall` on the response part and must be echoed
+        back verbatim on the `functionCall` part of the follow-up request, or the API answers
+        HTTP 400 "Function call is missing a thought_signature in functionCall parts".  It has to
+        survive the round trip through the backend's neutral OpenAI-shaped conversation format.
+    */
+    geminiToolCallThoughtSignatureTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "sequence": ({
+                    "code": 200,
+                    "body": {
+                        "candidates": ({
+                            "finishReason": "STOP",
+                            "content": {
+                                "parts": ({
+                                    "thoughtSignature": "sig-abc-123",
+                                    "functionCall": {
+                                        "name": "lookup",
+                                        "args": {"key": "customer"},
+                                    },
+                                }, {
+                                    "thoughtSignature": "sig-def-456",
+                                    "functionCall": {
+                                        "name": "lookup",
+                                        "args": {"key": "order"},
+                                    },
+                                },),
+                            },
+                        },),
+                        "usageMetadata": {"totalTokenCount": 4},
+                    },
+                }, {
+                    "code": 200,
+                    "body": {
+                        "candidates": ({
+                            "finishReason": "STOP",
+                            "content": {"parts": ({"text": "done"},)},
+                        },),
+                        "usageMetadata": {"totalTokenCount": 6},
+                    },
+                }),
+            },
+        });
+
+        LlmBackend llm = makeGeminiBackend();
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "lookup customer"},
+        ), (
+            <ToolDefinition>{"name": "lookup"},
+        ));
+
+        assertEq("tool_use", rv.stop_reason);
+        assertEq("sig-abc-123", rv.tool_calls[0].thought_signature,
+            "the reasoning signature is parsed from the response part");
+        assertEq("sig-def-456", rv.tool_calls[1].thought_signature,
+            "each function call carries its own reasoning signature");
+
+        # replay the tool calls with their results, exactly as an agent loop does
+        hash<ChatResponse> rv2 = llm.chat((
+            <ChatMessage>{"role": "user", "content": "lookup customer"},
+            <ChatMessage>{
+                "role": "assistant",
+                "tool_calls": rv.tool_calls,
+            },
+            <ChatMessage>{
+                "role": "tool",
+                "name": "lookup",
+                "tool_call_id": rv.tool_calls[0].id,
+                "content": "{\"result\":\"ok\"}",
+            },
+        ), (
+            <ToolDefinition>{"name": "lookup"},
+        ));
+        assertEq("done", rv2.content);
+
+        list<auto> replayed =
+            gemini_handler.requests[1].body.contents[1].parts;
+        assertEq("lookup", replayed[0].functionCall.name,
+            "the assistant turn replays the function call");
+        assertEq("sig-abc-123", replayed[0].thoughtSignature,
+            "the replayed function call carries its reasoning signature back");
+        assertEq("sig-def-456", replayed[1].thoughtSignature,
+            "every replayed function call carries its own signature back");
+    }
+
+    #! A STREAMED Gemini tool call must keep its reasoning signature exactly like a non-streamed one
+    /** The streaming path assembles tool calls through the OpenAI stream-state harvest
+        (getOpenAiToolCallDeltas()) instead of parseChatResponse(); before the fix the harvest
+        dropped the part's \c thoughtSignature, so every streamed tool call poisoned the
+        conversation and the follow-up request was rejected with HTTP 400 "Function call is
+        missing a thought_signature in functionCall parts".
+    */
+    geminiStreamedToolCallThoughtSignatureTest() {
+        checkGeminiModule();
+        # harvest a raw streamed chunk exactly as chatCompletionsStream() does
+        object provider = create_object("GeminiLlmProvider",
+            <LlmBackendConfig>{
+                "mode": "gemini",
+                "url": "http://localhost:" + port,
+                "model": "gemini-2.5-flash",
+                "api_key": "gemini-test-key",
+            });
+        hash<auto> state = {
+            "id": NOTHING,
+            "model": "gemini-2.5-flash",
+            "content": "",
+            "tool_calls": (),
+            "finish_reason": NOTHING,
+            "usage": NOTHING,
+        };
+        hash<auto> raw_chunk = {
+            "candidates": ({
+                "content": {
+                    "parts": ({
+                        "thoughtSignature": "sig-stream-abc",
+                        "functionCall": {
+                            "name": "lookup",
+                            "args": {"key": "customer"},
+                        },
+                    }, {
+                        "thoughtSignature": "sig-stream-def",
+                        "functionCall": {
+                            "name": "lookup",
+                            "args": {"key": "order"},
+                        },
+                    },),
+                },
+            },),
+        };
+        list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
+            raw_chunk);
+
+        assertEq(2, streamed.size(),
+            "the streamed harvest assembles both tool calls");
+        assertEq("sig-stream-abc", streamed[0].thought_signature,
+            "streamed tool-call deltas carry the reasoning signature");
+        assertEq("sig-stream-def", streamed[1].thought_signature,
+            "every streamed delta carries its own reasoning signature");
+        assertEq("sig-stream-abc", state.tool_calls[0].thought_signature,
+            "the accumulated stream state keeps the first call's signature");
+        assertEq("sig-stream-def", state.tool_calls[1].thought_signature,
+            "the accumulated stream state keeps every call's own signature");
+        assertEq("lookup", state.tool_calls[0]."function".name,
+            "the harvest still produces the OpenAI tool-call shape");
+        # a part without a signature must not create the key at all
+        hash<auto> plain_state = {"tool_calls": ()};
+        provider.getOpenAiToolCallDeltas(\plain_state, {
+            "candidates": ({
+                "content": {
+                    "parts": ({
+                        "functionCall": {"name": "lookup", "args": {}},
+                    },),
+                },
+            },),
+        });
+        assertFalse(plain_state.tool_calls[0].hasKey("thought_signature"),
+            "a signature-less part yields a tool call without the key");
+
+        # replay the harvested tool calls through the OpenAI facade exactly as
+        # an agent loop does and verify the signatures reach the wire again
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {"parts": ({"text": "done"},)},
+                    },),
+                    "usageMetadata": {"totalTokenCount": 6},
+                },
+            },
+        });
+        LlmBackend llm = makeGeminiBackend();
+        hash<auto> rv = llm.chatCompletions({
+            "messages": (
+                {"role": "user", "content": "lookup customer"},
+                {"role": "assistant", "tool_calls": state.tool_calls},
+                {
+                    "role": "tool",
+                    "name": "lookup",
+                    "tool_call_id": state.tool_calls[0].id,
+                    "content": "{\"result\":\"ok\"}",
+                },
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {"name": "lookup"},
+            },),
+        });
+        assertEq("done", rv.choices[0].message.content);
+
+        list<auto> replayed =
+            gemini_handler.requests[0].body.contents[1].parts;
+        assertEq("sig-stream-abc", replayed[0].thoughtSignature,
+            "the replayed streamed call carries its reasoning signature back");
+        assertEq("sig-stream-def", replayed[1].thoughtSignature,
+            "every replayed streamed call carries its own signature back");
     }
 
     geminiOpenAiChatCompletionsFacadeTest() {

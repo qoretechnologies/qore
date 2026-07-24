@@ -48,6 +48,21 @@
 class qore_ns_private;
 class qore_class_private;
 
+//! parse-time thread-local depth of constant value initialization currently in progress
+/** Incremented for the duration of each ConstantEntry::parseInit() (via ConstantEntryInitHelper).  While this
+    is non-zero the parser is folding a constant value, and callee function/method BODIES must not be eagerly
+    parse-initialized at call sites (only their signatures) - see FunctionCallBase::parseArgsVariant().  A
+    constant's value only ever needs the callee's signature (return type) at parse time; its value is computed
+    later at parseCommitRuntimeInit.  Eagerly parse-initializing a callee body during constant folding forces
+    value-initialization of every constant that body references, which manufactures spurious, commit-order
+    (file-glob) dependent "recursive constant reference" cycles. */
+extern thread_local unsigned qore_constant_init_depth;
+
+//! returns true if the parser is currently folding a constant value (qore_constant_init_depth != 0)
+static inline bool qore_parse_in_constant_init() {
+    return qore_constant_init_depth != 0;
+}
+
 // tricky structure that holds 2 types of pointers and a flag in the space of 1 pointer
 // the flag is in the low bit since memory has to be aligned anyway we have at a few bits of space for flags
 struct ClassNs {
@@ -112,7 +127,8 @@ public:
         saved_val_set : 1, // saved_val contains a runtime value or preserved init expression
         aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
         external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
-        external_stub_dependent : 1 // initializer references an external stub constant
+        external_stub_dependent : 1, // initializer references an external stub constant
+        rt_in_init : 1 // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
         ;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
@@ -276,10 +292,15 @@ public:
         assert(!ce.in_init);
         assert(!ce.init);
         ce.in_init = true;
+        // mark that we are folding a constant value so callee bodies are not eagerly parse-initialized at
+        // call sites reached from this constant's initializer (see qore_constant_init_depth)
+        ++qore_constant_init_depth;
         //printd(5, "ConstantEntryInitHelper::ConstantEntryInitHelper() '%s'\n", ce.getName());
     }
 
     DLLLOCAL ~ConstantEntryInitHelper() {
+        assert(qore_constant_init_depth > 0);
+        --qore_constant_init_depth;
         ce.in_init = false;
         ce.init = true;
         //printd(5, "ConstantEntryInitHelper::~ConstantEntryInitHelper() '%s'\n", ce.getName());
@@ -518,6 +539,18 @@ protected:
         // case so AOT init functions referencing builtin constants get the
         // correct value instead of NOTHING.
         if (ce->saved_val_set) {
+            // Genuine runtime constant-value cycle: this constant's value is currently being evaluated (in
+            // ConstantEntry::parseCommitRuntimeInit) and its computation references itself, typically via a
+            // function/method body that reads the constant.  The parse-time detector cannot see such indirect
+            // back-edges, so detect them here and report deterministically instead of recursing until the stack
+            // overflows.  (When the referenced constant is deferred but not yet committed, ce->saved_val still
+            // holds its initializer expression, which is evaluated inline here - correct and order-independent
+            // for the pure expressions constants must be.)
+            if (ce->rt_in_init) {
+                xsink->raiseException("RECURSIVE-CONSTANT-REFERENCE", "recursive reference detected while "
+                    "initializing the runtime value of constant '%s'", ce->getName());
+                return QoreValue();
+            }
             return ce->saved_val.eval(needs_deref, xsink);
         }
         // AOT pending shell: ce->val is a self-referential RuntimeConstantRefNode

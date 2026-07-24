@@ -44,6 +44,9 @@ public namespace Schema {
             #! Summary map for data changes; upsert action code -> count
             hash<string, int> data_change_map;
 
+            #! Exact table names whose metadata changed
+            hash<string, bool> changed_tables = {};
+
             #! Set to True if only creations / additions were made
             /** If not assigned after a schema alignment action, then no actions were taken
             */
@@ -76,6 +79,16 @@ public namespace Schema {
             };
         }
 
+        #! Returns the exact table names whose metadata changed
+        /** @return sorted table names; an empty list means that no table
+            metadata change was reported
+
+            @since Schema 1.7
+        */
+        list<string> getChangedTables() {
+            return sort(keys changed_tables);
+        }
+
         #! this is the informational callback method for schema operations
         infoCallback(string str, int ac, *string type, *string name, *string table, *string new_name, *string info) {
             # maintain change map
@@ -93,6 +106,14 @@ public namespace Schema {
             int t = 0;
             if (ac != AbstractDatabase::AC_Unchanged && ac != AbstractDatabase::AC_NotFound) {
                 ++change_count;
+                if (table.val()) {
+                    changed_tables{table} = True;
+                } else if (type == "table" && name.val()) {
+                    changed_tables{name} = True;
+                }
+                if (type == "table" && new_name.val()) {
+                    changed_tables{new_name} = True;
+                }
             } else {
                 t = 1;
             }

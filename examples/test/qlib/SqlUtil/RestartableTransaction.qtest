@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
+%requires ../../../../qlib/QUnit.qmod
+
+%exec-class RestartableTransactionTest
+
+class RestartableTransactionTest inherits QUnit::Test {
+    constructor() : Test("RestartableTransaction", "1.0") {
+        addTestCase("driver error classification",
+            \driverErrorClassificationTest());
+        addTestCase("bounded restart policy", \boundedRestartPolicyTest());
+        addTestCase("invalid policy arguments", \invalidArgumentsTest());
+        set_return_value(main());
+    }
+
+    private hash<ExceptionInfo> exception(string err, string desc,
+            hash<auto> arg = {}) {
+        return <ExceptionInfo>{
+            "err": err,
+            "desc": desc,
+            "arg": arg,
+        };
+    }
+
+    driverErrorClassificationTest() {
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:CONNECTION-ERROR", "connection lost")));
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:ERROR", "server disconnected",
+                {"alterr": "08006"})));
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:ERROR", "unique violation",
+                {"alterr": "23505"})));
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("oracle",
+            exception("DBI:ORACLE:ERROR",
+                "ORA-03114: not connected to ORACLE")));
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("mysql",
+            exception("DBI:MYSQL:ERROR", "duplicate entry")));
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason(
+            "unsupported", exception("DBI:ERROR", "failure")));
+    }
+
+    boundedRestartPolicyTest() {
+        list<string> logs = ();
+        code<nothing(string)> logger = sub (string message) {
+            logs += message;
+        };
+        SqlUtil::RestartableTransaction policy("pgsql", 1, 0s, 1,
+            logger);
+        hash<ExceptionInfo> recoverable = exception(
+            "DBI:PGSQL:CONNECTION-ERROR", "connection lost");
+        assertTrue(exists policy.restartTransaction(recoverable));
+        assertEq(1, policy.getCount());
+        assertEq(1, logs.size());
+        assertEq(NOTHING, policy.restartTransaction(recoverable),
+            "the configured bound prevents another restart");
+        assertEq(1, policy.getCount());
+
+        policy.reset();
+        assertEq(0, policy.getCount());
+        assertEq(NOTHING, policy.restartTransaction(
+            exception("DBI:PGSQL:ERROR", "syntax error",
+                {"alterr": "42601"})));
+        assertEq(0, policy.getCount());
+    }
+
+    invalidArgumentsTest() {
+        assertThrows("RESTARTABLE-TRANSACTION-ARG-ERROR",
+            "driver must not be empty",
+            \invalidEmptyDriver(), ());
+        assertThrows("RESTARTABLE-TRANSACTION-ARG-ERROR",
+            "max_retries must be between 0 and 1000",
+            \invalidRetryCount(), ());
+        assertThrows("RESTARTABLE-TRANSACTION-ARG-ERROR",
+            "retry_delay must not be negative",
+            \invalidRetryDelay(), ());
+        assertThrows("RESTARTABLE-TRANSACTION-ARG-ERROR",
+            "immediate_retries must be between 0 and max_retries",
+            \invalidImmediateRetries(), ());
+    }
+
+    private invalidEmptyDriver() {
+        SqlUtil::RestartableTransaction policy("");
+    }
+
+    private invalidRetryCount() {
+        SqlUtil::RestartableTransaction policy("pgsql", -1);
+    }
+
+    private invalidRetryDelay() {
+        SqlUtil::RestartableTransaction policy("pgsql", 1, -1s);
+    }
+
+    private invalidImmediateRetries() {
+        SqlUtil::RestartableTransaction policy("pgsql", 1, 0s, 2);
+    }
+}

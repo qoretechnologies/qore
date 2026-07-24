@@ -219,9 +219,21 @@ public:
         @param session_id the QUIC session ID
         @param queue the C++ QoreQueue pointer (not ref'd here)
     */
-    DLLLOCAL void registerPersistentSessionQueue(int64_t session_id, Queue* queue) {
+    /** @return false if the op is already CLOSED (aborted) and the binding was
+        refused — the caller must then drop the owning ref it holds for the
+        queue instead of leaving it parked in the QPP member hash.  CLOSED is
+        terminal, so continuePoll() could never deliver the close signal for a
+        binding registered after abort(); accepting it would defer the owning
+        ref's release to QoreObject destruction, the deferred-deref path that
+        Http3ServerPollOperationPriv::abort() exists to avoid.
+    */
+    DLLLOCAL bool registerPersistentSessionQueue(int64_t session_id, Queue* queue) {
         AutoLocker al(op_lock);
+        if (h3_state.load(std::memory_order_acquire) == H3State::CLOSED) {
+            return false;
+        }
         persistent_session_queues_[session_id] = queue;
+        return true;
     }
 
     //! Deregisters the persistent-session close Queue for a session
@@ -274,6 +286,25 @@ public:
         directly to its caller's Queue (without inserting into the map).
     */
     DLLLOCAL void closeStreamQueues();
+
+    //! Closes the extended-CONNECT stream queues owned by one QUIC session
+    /** Pushes the NOTHING sentinel to every @c stream_queues entry keyed
+        "<session_id>:<stream_id>", erases them, and queues each stream key in
+        @c data_ready_streams so the controller dispatches @c onStreamData() to a
+        worker — that runs the listener's @c notifyIo(), which observes the
+        sentinel-latched closed context and unblocks the handler thread.
+
+        Unlike @ref closeStreamQueues() this does NOT set @c stream_queues_closed:
+        the H3 poll operation serves every QUIC session on the listener's shared
+        UDP socket, so one session dying must not stop the others from
+        registering.
+
+        @param session_id the QUIC session whose streams are being torn down
+
+        @note op_lock must be held; called on the I/O thread from
+        @ref deliverSessionLifecycleEvents().
+    */
+    DLLLOCAL void closeSessionStreams(int64_t session_id);
 
     //! Starts the read request operation (creates a new SocketQuicServerPollOperation)
     /** Called from the QPP constructor and from startReadNextRequest().

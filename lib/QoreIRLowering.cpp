@@ -6026,6 +6026,12 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
 
     const AbstractQoreNode* left_node = assign->getLeft().getInternalNode();
     auto* left_var = dynamic_cast<const VarRefNode*>(left_node);
+    // Softlist assignment can coerce a scalar into a one-element list.  Route it
+    // through lvalue semantics so the declared assignment type performs that
+    // coercion before the value is cached by the IR/JIT engines.
+    if (left_var && QoreTypeInfo::isSoftListType(assign->ti)) {
+        left_var = nullptr;
+    }
     QoreValue right_expr(assign->getRight());
     QoreIRValue right = lowerExpression(right_expr, error);
     if (!right.isValid()) {
@@ -10256,6 +10262,11 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     // Store value to list element (COW-safe via QoreIRListIndexStoreInstruction)
     auto* store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
     store_inst->loc = loc;
+    // the store can throw (element type coercion, invalid index), so it must unwind to the enclosing catch block,
+    // exactly as the equivalent hash store does in emitHashKeyDirectStore()
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(list_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(index_val);

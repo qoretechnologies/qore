@@ -38,6 +38,9 @@
     - standard user modules are now built and installed as AOT-compiled <tt>.qmod</tt>
       artifacts by default for better startup and runtime performance (see
       @ref exec_mode_aot "AOT Compilation")
+    - explicit <tt>.qmod</tt> paths now fall back to the complete separated source module directory when the binary
+      artifact is missing or cannot be loaded, ensuring sibling <tt>.qc</tt> and <tt>.ql</tt> component files are
+      parsed along with the main <tt>.qm</tt> file
     - <a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> reduces value-storage
       overhead from 16 to 8 bytes (50% smaller) with small-string optimisation for short strings
       stored inline
@@ -137,6 +140,9 @@
       access logs use this information for HTTP/3 requests when available
     - server-side HTTP/2 \c Socket methods are now async-safe and integrate with the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" body-streaming queue model
+    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" now provides protocol-independent
+      pre-handler-pool request preparation and cancellation callbacks, allowing applications to reject or reserve
+      HTTP/1.x, HTTP/2, and HTTP/3 work before it enters the shared handler queue
     - @ref Qore::HTTPClient "HTTPClient" automatically uses HTTP/2 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> and HTTP/3 via
       <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a>; per-instance and
@@ -1166,11 +1172,22 @@ cargo install tree-sitter-cli@0.26.5
     - new functions:
       - @ref Qore::call_async() "call_async()": spawns a background thread to execute a callable and returns a
         @ref Qore::Thread::Future "Future" for the result
+      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable while holding the
+        global module-load lock, so that %Qore code (for example a module performing lazy initialization that can
+        load further modules) can establish a consistent lock order with its own locks and avoid the ABBA deadlock
+        described in @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
       - @ref Qore::clear_thread_cancel() "clear_thread_cancel()": clears the cancellation flag for the current thread
       - @ref Qore::clock_getseconds() "clock_getseconds()"
+      - @ref Qore::format_bounded() "format_bounded()", @ref Qore::sprintf_bounded() "sprintf_bounded()", and
+        @ref Qore::vsprintf_bounded() "vsprintf_bounded()": format values subject to
+        @ref Qore::FormatBounds "FormatBounds" limits on the size, the nesting depth, and the number of elements
+        expanded, where each container is expanded at most once and further references to it are rendered as YAML
+        aliases; use these functions instead of @ref Qore::sprintf() "sprintf()" and
+        @ref Qore::vsprintf() "vsprintf()" when formatting values that can be arbitrarily large, such as when
+        logging values that reach live internal data structures
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::getaddrinfo_async() "getaddrinfo_async()": Future-returning async DNS address lookup backed by
@@ -1539,6 +1556,32 @@ foreach string module_name in (registry.getProcessModules()) {
     - \c plugin-type-verify-dataframe - CMake target for the in-tree dataframe consumer.
     @endparblock
 
+    @par Module-Loading Lock Hierarchy
+    @parblock
+    Cold runtime module loads serialize on a process-global lock while applying AOT module commands
+    and running module initializers.  Because applying a module's commands can call into that
+    module (for example to import Java classes), a binary module that holds a private lock while
+    triggering a module load could invert the lock order and deadlock against a concurrent load.
+
+    Binary modules can now participate in that hierarchy explicitly:
+    - \c QoreModuleLoadLockHelper acquires the module-load lock, which must be taken <i>before</i>
+      any module-private lock that is held across a call back into module loading &mdash; whether
+      directly via \c ModuleManager::runTimeLoadModule(), or indirectly through a callback from a
+      foreign runtime such as a JVM classloader
+    - \c QoreModuleInnerLockHelper marks a module-private lock as inner to the module-load lock;
+      debug builds then assert that the order is respected rather than deadlocking in the field
+
+    The lock is recursive, so nested module loads are safe.  It is intended for cold paths only:
+    already-loaded modules keep a lock-free fast path, and module authors should avoid taking the
+    module-load lock on cache-hit paths that cannot reach module loading.
+
+    %Qore-language modules can participate in the same hierarchy with the new
+    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" function, which runs a callable while
+    holding the module-load lock; a module that performs lazy initialization under its own lock (and whose
+    initialization can load further modules) should acquire the module-load lock first via this function so the
+    global order remains "module-load lock &rarr; module-private lock".
+    @endparblock
+
     @par RFC 7231 / RFC 2822 Date Parsing
     The @ref Qore::date(string) "date(string)" function and @ref Qore::TimeZone::date(string) "TimeZone::date(string)"
     method now support parsing HTTP and email date formats in addition to ISO-8601:
@@ -1714,6 +1757,29 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref sqlutilintro "SqlUtil" module
       - added @ref SqlUtil::generate_auto_triggers() "generate_auto_triggers()" (and the all-drivers variant)
         for standard created/modified-timestamp and sequence-ID triggers across PostgreSQL, Oracle, MySQL, MSSQL
+      - added portable range-partition strategy, introspection, lookup, add, ensure, drop, truncate, and detach APIs
+        with schema-description round-trip for PostgreSQL, Oracle, MySQL/MariaDB, and SQL Server; lifecycle APIs
+        include SQL generators, transaction-managing variants, callback support, deterministic concurrent-create
+        handling, and driver-aware key validation
+      - added a portable \c partition_aligned option for indexes, primary keys, and unique constraints, mapping
+        application-level partition alignment to native local/aligned index placement without driver-specific DDL
+      - added Oracle local/global partitioned index and constraint placement with tablespace and statistics options
+      - added reusable table storage-shape validation and no-data-movement partition exchange APIs for Oracle
+        \c EXCHANGE \c PARTITION and SQL Server \c SWITCH \c PARTITION, with exact datasource identity and an
+        equivalent empty-target contract
+      - added explicit nontransactional PostgreSQL 14+ \c DETACH \c PARTITION \c CONCURRENTLY APIs with
+        pending-state introspection and deterministic \c FINALIZE recovery without retries or polling
+      - added a generic named-partition select qualifier for primary and joined Oracle/MySQL table references,
+        with explicit capability checks and unsupported errors for non-equivalent backend mechanisms
+      - added targeted canonical-name partition metadata lookup for PostgreSQL, Oracle, MySQL/MariaDB, and SQL
+        Server without loading complete high-cardinality partition catalogs
+      - added portable list partitions on PostgreSQL, Oracle, and MySQL/MariaDB, explicit modulus/remainder hash
+        partitions and recursive subpartitions on PostgreSQL, plus capability-gated rejection on drivers without
+        equivalent semantics
+      - added introspection-only estimated row counts and allocated partition sizes where driver catalogs expose
+        equivalent metadata; recreatable descriptions exclude these runtime statistics
+      - hardened create-as-select and insert-select operations with exact datasource identity, validated projections,
+        structured-select option forwarding, and non-executing SQL/argument preview APIs
       - support for specifying upsert key columns separately from row data
         (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
       - fixed a foreign-key ordering bug in @ref SqlUtil::Tables::populate() "Tables::populate()" that left the
@@ -2446,6 +2512,9 @@ foreach string module_name in (registry.getProcessModules()) {
 
     - @ref vertexairestclientintro "VertexAiRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://cloud.google.com/vertex-ai">Google Vertex AI</a>
+      - provider registry metadata advertises the same Gemini-specific tool-catalogue, dispatch, and payload-shaping
+        preferences as @ref geminirestclientintro "GeminiRestClient", matching their shared
+        @ref geminibodyshapeintro "GeminiBodyShape" request implementation
 
     - @ref voyagedataproviderintro "VoyageDataProvider" module
       - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
@@ -2490,6 +2559,19 @@ foreach string module_name in (registry.getProcessModules()) {
       - new module providing a REST client for <a href="https://www.zoho.com/invoice/">Zoho Invoice</a>'s invoicing API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - Build
+      - fixed \c libqore being unloadable with \c dlopen() on musl targets (Alpine Linux), which broke embedding
+        Qore in Python (\c "import qoreloader" failed with \c "initial-exec TLS resolves to dynamic definition").
+        jemalloc, which musl builds link into \c libqore in place of musl's much slower allocator, is now built
+        from source with \c --disable-initial-exec-tls: distribution packages compile jemalloc's thread-specific
+        data with the initial-exec TLS model, which musl's dynamic linker refuses in any library opened with
+        \c dlopen()
+
+    - @ref mysqlsqlutilintro "MysqlSqlUtil" module
+      - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
+        expressions no longer pass binary-character-set operands to MySQL's ICU regular-expression engine and
+        remain compatible with MySQL 5.7 and current MariaDB releases
+
     - Core language
       - improved @ref Qore::system() "system()" on Linux to use \c posix_spawn(), restore an unblocked signal mask
         in child processes, and terminate the entire process group on sandbox interrupts

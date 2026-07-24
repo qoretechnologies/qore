@@ -16,6 +16,7 @@
 %requires QoreLlmUtils
 %requires GcpAuth
 %requires GeminiBodyShape
+%requires GeminiRestClient
 %requires VertexAiRestClient
 
 %try-module json >= 1.11
@@ -103,11 +104,13 @@ public class VertexAiTest inherits QUnit::Test {
 
     constructor() : Test("VertexAi Test", "1.0") {
         addTestCase("factory + getInfo",                  \factoryTest());
+        addTestCase("registry Gemini shaping metadata",  \registryShapingMetadataTest());
         addTestCase("Gemini-on-Vertex chat round-trip",   \chatTest());
         addTestCase("OpenAI tool_choice maps to toolConfig", \toolChoiceConversionTest());
         addTestCase("complete() helper",                  \completeTest());
         addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
         addTestCase("URL path includes project/region/model", \pathTest());
+        addTestCase("API URL follows location kind",        \apiUrlTest());
         addTestCase("missing project_id throws",          \missingProjectTest());
         addTestCase("embedder factory + round-trip",      \embedderTest());
         addTestCase("VertexAiRestConnection constructs",  \connectionTest());
@@ -168,6 +171,39 @@ public class VertexAiTest inherits QUnit::Test {
         assertTrue(info.supports_structured_output);
         assertTrue(info.supports_multimodal);
         assertTrue(info.supports_reasoning_token_budget);
+    }
+
+    #! The Vertex and native Gemini providers share GeminiBodyShape, so registry
+    #! consumers must receive identical Gemini-specific shaping preferences.
+    private registryShapingMetadataTest() {
+        QoreLlmUtils::AbstractLlmProviderFactory vertex_factory =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("vertex-ai");
+        QoreLlmUtils::AbstractLlmProviderFactory gemini_factory =
+            QoreLlmUtils::LlmProviderRegistry::getFactoryEx("gemini");
+        hash<QoreLlmUtils::LlmProviderInfo> vertex = vertex_factory.getInfo();
+        hash<QoreLlmUtils::LlmProviderInfo> gemini = gemini_factory.getInfo();
+
+        assertTrue(vertex.prefers_narrow_tool_catalogue,
+            "Vertex advertises the Gemini narrow tool-catalogue preference");
+        assertEq(8, vertex.preferred_max_tool_count,
+            "Vertex advertises the Gemini conservative tool-count cap");
+        assertTrue(vertex.prefers_single_tool_dispatch,
+            "Vertex advertises the Gemini single-dispatch preference");
+        assertTrue(vertex.prefers_stringified_tool_payloads,
+            "Vertex advertises the Gemini stringified-payload preference");
+
+        assertEq(gemini.prefers_narrow_tool_catalogue,
+            vertex.prefers_narrow_tool_catalogue,
+            "Vertex and Gemini narrow-catalogue metadata match");
+        assertEq(gemini.preferred_max_tool_count,
+            vertex.preferred_max_tool_count,
+            "Vertex and Gemini tool-count metadata match");
+        assertEq(gemini.prefers_single_tool_dispatch,
+            vertex.prefers_single_tool_dispatch,
+            "Vertex and Gemini dispatch metadata match");
+        assertEq(gemini.prefers_stringified_tool_payloads,
+            vertex.prefers_stringified_tool_payloads,
+            "Vertex and Gemini payload metadata match");
     }
 
     #! Regression: the OpenAI-compatible adapter path must translate tool_choice
@@ -278,6 +314,28 @@ public class VertexAiTest inherits QUnit::Test {
         string path = p.getVertexPath();
         assertEq("/v1/projects/fake-project/locations/us-central1/"
             "publishers/google/models/gemini-2.0-flash:generateContent", path);
+    }
+
+    private apiUrlTest() {
+        assertEq("https://us-central1-aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("us-central1"),
+            "regional locations use the regional hostname");
+        assertEq("https://europe-west4-aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("europe-west4"),
+            "European regional locations use the regional hostname");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("us"),
+            "US multi-region uses the general hostname with location in the path");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("eu"),
+            "EU multi-region uses the general hostname with location in the path");
+        assertEq("https://aiplatform.googleapis.com",
+            VertexAiRestClient::vertexApiUrl("global"),
+            "global uses the unprefixed hostname");
+        assertThrows("VERTEX-AI-CONFIG-ERROR",
+            "Vertex AI location must not be empty",
+            \VertexAiRestClient::vertexApiUrl(), ("",),
+            "an empty location is rejected before an invalid hostname is built");
     }
 
     private missingProjectTest() {

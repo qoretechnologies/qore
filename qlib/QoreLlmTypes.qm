@@ -234,6 +234,14 @@ public hashdecl ChatToolCall {
     string name;
     #! Parsed arguments hash to pass to the tool
     *hash<auto> arguments;
+    #! Opaque provider reasoning signature that must be echoed back with the call
+    /** Gemini 3.x returns a \c thoughtSignature on each \c functionCall part and rejects any
+        follow-up request that replays the call without it (HTTP 400, "Function call is missing a
+        thought_signature in functionCall parts").  The value is provider-opaque: it is never
+        inspected, only carried through the conversation and returned verbatim.  Providers that do
+        not use reasoning signatures leave this unset.
+    */
+    *string thought_signature;
 }
 
 #! A content part in a multimodal message (text, image, or file)
