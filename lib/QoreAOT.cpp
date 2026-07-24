@@ -9855,7 +9855,8 @@ static bool qore_aot_collect_int_expression_summaries(
         }
         size_t instruction_count = 0;
         for (const auto& block : func->blocks) {
-            if (!block || (instruction_count += block->instructions.size()) > 32) {
+            if (!block || (instruction_count += block->instructions.size())
+                    > QORE_AOT_INT_EXPRESSION_MAX_NODES) {
                 state = VisitState::Failed;
                 return false;
             }

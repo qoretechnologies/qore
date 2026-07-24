@@ -155,7 +155,7 @@ enum class AOTIntExpressionNodeKind : uint8_t {
     HashKeyInt = 29,
 };
 
-constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 32;
+constexpr size_t QORE_AOT_INT_EXPRESSION_MAX_NODES = 64;
 
 //! One topologically ordered node in a bounded pure native-integer or boolean expression.
 struct AOTIntExpressionNodeInfo {
