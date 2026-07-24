@@ -140,6 +140,12 @@ public namespace HttpServerAsyncIo {
             request.
 
             The field applies uniformly to HTTP/1.x, HTTP/2, and HTTP/3 responses.
+
+            @note Pacing is only applied to fixed-body responses, which submit without
+            blocking. It is ignored (with a logged warning) for streaming responses
+            (\c streaming, \c send_callback, or a non-I/O-thread-safe \c input_stream),
+            because those produce their body inline while blocking the sending thread and
+            so cannot be deferred onto the callback-dispatcher pool.
         */
         *timeout response_delay;
 

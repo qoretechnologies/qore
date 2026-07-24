@@ -445,6 +445,7 @@ class PreparationTestTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
             };
         }
         ++prepared;
+        return;
     }
 
     cancelPreparedHttpRequest(hash<HttpServerAsyncIo::HttpConnectionInfo> info) {

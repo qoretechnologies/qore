@@ -2034,6 +2034,12 @@ public class HttpAsyncSocketIoController {
             int session_id, int stream_id, hash<HttpRequestResultInfo> result) {
         timeout response_delay = result.response_delay ?? 0ms;
         remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for HTTP/3 session=%d "
+                "stream=%d on %y: streaming/blocking responses cannot be paced on the "
+                "dispatcher pool", response_delay, session_id, stream_id, uh);
+            response_delay = 0ms;
+        }
         if (deferRequestResult(uh, response_delay, sub () {
                 handleHttp3MultiplexedResult(uh, cinfo, session_id, stream_id,
                     result);
@@ -2347,6 +2353,23 @@ public class HttpAsyncSocketIoController {
     #! Submits a connection operation, skipping the stopping check (caller already verified)
     private submitConnectionOpUnlocked(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         submitConnectionOpIntern(uh, cinfo);
+    }
+
+    #! Returns @ref True "True" if the result body must be produced on a handler-pool thread
+    /** Streaming responses (SSE/WebSocket), \c send_callback producers, and non-I/O-thread-safe
+        @ref Qore::InputStream "InputStream" bodies all block the sending thread while user code
+        produces data.  These must never be deferred: the delayed-response timer callback fires on
+        the callback-dispatcher pool, and blocking there would stall the dispatcher — for an SSE
+        stream, indefinitely.  \c response_delay is intended only for fixed-body overload
+        backpressure responses, which submit without blocking.
+
+        @param result the request result to inspect
+        @return @ref True "True" if the result cannot be safely paced on the dispatcher pool
+    */
+    private bool responseRequiresHandlerThread(hash<HttpRequestResultInfo> result) {
+        return result.streaming
+            || exists result.send_callback
+            || (exists result.input_stream && !result.input_stream.isIoThreadSafe());
     }
 
     #! Defers response processing without occupying a worker thread
@@ -3257,6 +3280,11 @@ public class HttpAsyncSocketIoController {
 
         timeout response_delay = result.response_delay ?? 0ms;
         remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for %y: streaming/blocking "
+                "responses cannot be paced on the dispatcher pool", response_delay, uh);
+            response_delay = 0ms;
+        }
         if (response_delay > 0ms) {
             {
                 AutoWriteLock al(m);
@@ -4335,6 +4363,12 @@ public class HttpAsyncSocketIoController {
             int stream_id, hash<HttpRequestResultInfo> result) {
         timeout response_delay = result.response_delay ?? 0ms;
         remove result.response_delay;
+        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+            log(LoggerLevel::WARN, "ignoring response_delay=%y for HTTP/2 stream=%d "
+                "on %y: streaming/blocking responses cannot be paced on the dispatcher "
+                "pool", response_delay, stream_id, uh);
+            response_delay = 0ms;
+        }
         if (deferRequestResult(uh, response_delay, sub () {
                 handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);
             })) {
