@@ -1,0 +1,306 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ImapClient.qm Qore user module providing an IMAP4rev1 client
+
+/*  ImapClient.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+%requires Mime >= 1.7
+%requires Util
+%requires(reexport) MailMessage >= 1.5
+%requires(reexport) ConnectionProvider >= 1.4
+%requires(reexport) Logger
+
+# assume local var scope, do not use "$" for vars, members, and method calls
+%modern
+
+module ImapClient {
+    version = "1.0";
+    desc = "IMAP4rev1 client support module";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("imap", ImapConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("imaps", ImapConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ImapClient Module
+
+    @tableofcontents
+
+    @section imapclientintro ImapClient Module Introduction
+
+    The %ImapClient module provides an <a href="https://datatracker.ietf.org/doc/html/rfc3501">IMAP4rev1</a>
+    client with full asynchronous I/O and OAuth2 bearer-token authentication.
+
+    Unlike POP3, IMAP keeps messages on the server and exposes the whole mailbox: messages can be searched
+    server-side, retrieved whole or one MIME part at a time, flagged, moved between folders, and appended.
+    That makes it the right protocol for reacting to mail without downloading and deleting it, and it is the
+    only mailbox protocol offered by providers that do not publish a proprietary REST API.
+
+    Key capabilities:
+    - server-side search with the full \c SEARCH criteria grammar, over message sequence numbers or UIDs
+    - whole-message retrieval as a @ref MailMessage::Message "Message" object, or retrieval of a single
+      MIME part so an attachment can be fetched without downloading the entire message
+    - flag manipulation, \c EXPUNGE, \c COPY, and \c MOVE (with a capability-gated fallback for servers
+      without <a href="https://datatracker.ietf.org/doc/html/rfc6851">RFC 6851</a>)
+    - message upload with \c APPEND
+    - SASL \c XOAUTH2 and \c OAUTHBEARER
+      (<a href="https://datatracker.ietf.org/doc/html/rfc7628">RFC 7628</a>) bearer-token authentication as
+      well as \c PLAIN and \c LOGIN, selected from the mechanisms the server advertises
+    - all I/O is non-blocking and runs through the async I/O controller; no dedicated thread is held per
+      connection
+
+    @section imapclient_example Example
+
+    @code{.py}
+%requires ImapClient
+
+# OAuth2 bearer-token login
+ImapClient imap("imaps://imap.example.com", {
+    "username": "user@example.com",
+    "token": access_token,
+});
+
+hash<ImapMailboxStatus> status = imap.selectMailbox("INBOX");
+printf("INBOX: %d message%s\n", status.message_count,
+    status.message_count == 1 ? "" : "s");
+
+# server-side search, then retrieve only what matched
+foreach int uid in (imap.uidSearch("UNSEEN FROM \"boss@example.com\"")) {
+    MailMessage::Message msg = imap.getMessage(uid);
+    printf("%s: %s\n", msg.getFrom(), msg.getSubject());
+    imap.markSeen(uid);
+}
+    @endcode
+
+    @section imapclient_auth Authentication
+
+    The mechanism is always selected from the list the server advertises in its \c CAPABILITY response;
+    it is never inferred from the hostname. The \c CAPABILITY list is re-read after \c STARTTLS and again
+    after a successful login, because servers may only advertise \c AUTH mechanisms on a secure connection
+    and may return an updated list once authenticated.
+
+    Set the \c token option to authenticate with an OAuth2 bearer token, or \c password to authenticate
+    with a password; the two are mutually exclusive. Use
+    @ref ImapClient::ImapClient::setToken() "ImapClient::setToken()" to install a refreshed access token on
+    an existing object.
+
+    A specific mechanism can be forced with the \c auth_mechanism option for servers that advertise a
+    mechanism they cannot actually complete.
+
+    @section imapclient_connections Connections
+
+    The @ref ImapClient::ImapConnection "ImapConnection" class provides connections with the \c imap and
+    \c imaps schemes, supports the polling API, and can be used with the
+    @ref connectionproviderintro "ConnectionProvider" infrastructure.
+
+    @section imapclient_relnotes ImapClient Release Notes
+
+    @subsection imapclient_v1_0 ImapClient 1.0
+    - initial release of the module
+*/
+
+#! the main namespace for the ImapClient module
+/** To use this module, use \c "%requires ImapClient" in your code.
+
+    All the public symbols in the module are defined in this namespace.
+*/
+public namespace ImapClient {
+#! default IMAP port
+public const ImapPort = 143;
+
+#! default IMAPS port
+public const ImapsPort = 993;
+
+#! 15 second I/O timeout
+public const DefaultIoTimeout = 15s;
+
+#! 30 second connect timeout
+public const DefaultConnectTimeout = 30s;
+
+#! Maximum accepted size for a single IMAP response
+/** Bounds allocation when talking to a broken or hostile server; raise it with the \c max_response_size
+    option when retrieving very large messages.
+*/
+public const DefaultMaxResponseSize = 64 * 1024 * 1024;
+
+#! Encoding used to read IMAP protocol text
+/** IMAP protocol syntax is ASCII; \c ISO-8859-1 is used because it is byte-preserving, so a
+    standards-violating server cannot make the response undecodable. Literal payloads are never decoded
+    with this encoding — they are kept as binary and decoded by the caller.
+*/
+public const ProtocolEncoding = "ISO-8859-1";
+
+#! Information about a mailbox returned by a \c LIST or \c LSUB response
+public hashdecl ImapMailboxInfo {
+    #! the mailbox name
+    string name;
+
+    #! the hierarchy delimiter, or an empty string if the server reported \c NIL
+    string delimiter = "";
+
+    #! mailbox attribute flags (ex: \c "\\HasNoChildren", \c "\\Noselect")
+    list<string> flags = ();
+}
+
+#! The state of a mailbox after \c SELECT or \c EXAMINE
+public hashdecl ImapMailboxStatus {
+    #! the mailbox name
+    string mailbox;
+
+    #! the number of messages in the mailbox, from the \c EXISTS response
+    int message_count = 0;
+
+    #! the number of messages with the \c "\\Recent" flag
+    int recent = 0;
+
+    #! the message sequence number of the first unseen message, if reported
+    *int unseen;
+
+    #! the UID that will be assigned to the next message, if reported
+    *int uidnext;
+
+    #! the mailbox's UID validity value, if reported
+    *int uidvalidity;
+
+    #! flags defined in the mailbox
+    list<string> flags = ();
+
+    #! flags that can be changed permanently
+    list<string> permanent_flags = ();
+
+    #! @ref True if the mailbox was opened read-only (\c EXAMINE or a \c "[READ-ONLY]" response code)
+    bool read_only = False;
+}
+
+#! An email address as returned in an \c ENVELOPE
+public hashdecl ImapAddressInfo {
+    #! the display name, if any
+    *string name;
+
+    #! the source route (obsolete; almost always @ref nothing)
+    *string adl;
+
+    #! the local part of the address
+    *string mailbox;
+
+    #! the domain part of the address
+    *string host;
+
+    #! the full address in \c "mailbox@host" form, if both parts are present
+    *string address;
+}
+
+#! Message envelope information as returned by a \c FETCH \c ENVELOPE
+public hashdecl ImapEnvelopeInfo {
+    #! the message date
+    *date date;
+
+    #! the subject
+    *string subject;
+
+    #! the \c From addresses
+    *list<hash<ImapAddressInfo>> from;
+
+    #! the \c Sender addresses
+    *list<hash<ImapAddressInfo>> sender;
+
+    #! the \c Reply-To addresses
+    *list<hash<ImapAddressInfo>> reply_to;
+
+    #! the \c To addresses
+    *list<hash<ImapAddressInfo>> to;
+
+    #! the \c Cc addresses
+    *list<hash<ImapAddressInfo>> cc;
+
+    #! the \c Bcc addresses
+    *list<hash<ImapAddressInfo>> bcc;
+
+    #! the \c In-Reply-To header value
+    *string in_reply_to;
+
+    #! the \c Message-ID header value
+    *string message_id;
+}
+
+#! Information about a message returned by \c FETCH
+public hashdecl ImapMessageInfo {
+    #! the message sequence number
+    int seqnum;
+
+    #! the message UID, if requested
+    *int uid;
+
+    #! the message flags, if requested
+    *list<string> flags;
+
+    #! the message size in bytes (\c RFC822.SIZE), if requested
+    *int size;
+
+    #! the server-side arrival time (\c INTERNALDATE), if requested
+    *date internal_date;
+
+    #! the parsed envelope, if requested
+    *hash<ImapEnvelopeInfo> envelope;
+
+    #! body sections keyed by the section specifier, if requested
+    /** The key is the section as requested without the \c ".PEEK" suffix (ex: \c "BODY[]",
+        \c "BODY[1]", \c "BODY[HEADER]"); the value is the raw payload as received.
+    */
+    *hash<string, binary> body;
+}
+
+#! A raw IMAP response split into protocol text and literal payloads
+/** Literal payloads are kept as binary and never decoded, so message and attachment content survives
+    byte-exact regardless of what a server puts on the wire.
+*/
+public hashdecl ImapRawResponse {
+    #! the protocol text with literal payloads removed; literal introducers (\c "{N}") remain in place
+    string text;
+
+    #! the literal payloads in the order they appear in @ref text
+    list<binary> literals = ();
+}
+
+#! A parsed IMAP response
+public hashdecl ImapResponse {
+    #! the untagged response lines, each parsed into a list of values
+    list<list<auto>> untagged = ();
+
+    #! the tagged completion status (\c "OK", \c "NO", \c "BAD"), or an empty string for a continuation
+    string status = "";
+
+    #! the text following the tagged completion status
+    string text = "";
+
+    #! the response code in the tagged line's \c "[...]" section, if any, parsed into a list of values
+    *list<auto> code;
+
+    #! @ref True if the response ended with a command continuation request rather than a tagged line
+    bool continuation = False;
+}
+}

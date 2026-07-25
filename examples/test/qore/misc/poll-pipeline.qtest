@@ -121,6 +121,7 @@ public class PollPipelineTest inherits QUnit::Test {
         addTestCase("IMAP response: premature close", \imapPrematureClose());
         addTestCase("IMAP response: tag matching", \imapTagMatching());
         addTestCase("branch on context int", \branchOnContextInt());
+        addTestCase("check contains on binary values", \checkContainsBinary());
         set_return_value(main());
     }
 
@@ -401,5 +402,35 @@ public class PollPipelineTest inherits QUnit::Test {
         PollPipeline p3(sock3);
         assertEq(0, p3.addBranchOnContextInt("nonexistent", 1, 1, 2),
             "branch step added at index 0");
+    }
+
+    checkContainsBinary() {
+        # addRecvImapResponse stores its result as a binary, so the capability checks that drive
+        # protocol decisions have to search binary values, not just strings
+        string raw = "* CAPABILITY IMAP4rev1 SASL-IR AUTH=XOAUTH2\r\na001 OK done\r\n";
+        MockLineServer server((raw,));
+        server.start();
+        on_exit server.wait();
+
+        Socket sock();
+        PollPipeline p = makeImapPipeline(sock, server.getTarget(), "a001", "a001 CAPABILITY\r\n");
+        # the response is a binary; both hits and misses must be reported correctly
+        p.addCheckContains("response", "AUTH=XOAUTH2", "has_xoauth2");
+        p.addCheckContains("response", "sasl-ir", "has_sasl_ir");
+        p.addCheckContains("response", "AUTH=OAUTHBEARER", "has_oauthbearer");
+        on_exit sock.close();
+        drivePollOp(p);
+
+        hash<auto> extra = p.getResult().extra;
+        assertTrue(extra.has_xoauth2, "substring found in a binary value");
+        assertTrue(extra.has_sasl_ir, "binary search is case-insensitive");
+        assertFalse(extra.has_oauthbearer, "absent substring reported as absent");
+
+        # a binary containing NUL bytes must be searched in full rather than stopping at the NUL
+        Socket sock2();
+        PollPipeline p2(sock2);
+        p2.addSetContextBinary("data", <004e4545444c4500>);   # NUL "NEEDLE" NUL
+        p2.addCheckContains("data", "NEEDLE", "found");
+        assertEq(2, p2.getStepCount(), "steps added");
     }
 }

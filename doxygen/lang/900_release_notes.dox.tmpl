@@ -2185,6 +2185,14 @@ foreach string module_name in (registry.getProcessModules()) {
     - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
       - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
 
+    - @ref imapclientintro "ImapClient" module
+      - new module providing an
+        <a href="https://datatracker.ietf.org/doc/html/rfc3501">IMAP4rev1</a> client with full asynchronous I/O,
+        server-side search, whole-message and single-MIME-part retrieval, flag manipulation, \c MOVE with a
+        capability-gated fallback, \c APPEND, and SASL \c XOAUTH2 / \c OAUTHBEARER
+        (<a href="https://datatracker.ietf.org/doc/html/rfc7628">RFC 7628</a>) bearer-token authentication
+        selected from the mechanisms the server advertises
+
     - @ref insightlydataproviderintro "InsightlyDataProvider" module
       - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
 

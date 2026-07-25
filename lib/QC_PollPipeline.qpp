@@ -772,6 +772,42 @@ int PollPipelinePriv::addMakePop3ApopCommand(const char* command_key, const char
     });
 }
 
+// Case-insensitive substring search over a buffer that may contain NUL bytes; strcasestr()
+// requires NUL-terminated input, so it cannot be used on binary payloads such as raw protocol
+// responses
+static bool bufferContainsCaseInsensitive(const char* hay, size_t hlen, const char* needle,
+        size_t nlen) {
+    if (!nlen) {
+        return true;
+    }
+    if (!hay || nlen > hlen) {
+        return false;
+    }
+    const size_t last = hlen - nlen;
+    for (size_t i = 0; i <= last; ++i) {
+        if (!strncasecmp(hay + i, needle, nlen)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Checks a context value of any supported type for a case-insensitive substring
+static bool valueContainsCaseInsensitive(const QoreValue& v, const std::string& sub) {
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        return bufferContainsCaseInsensitive(str->c_str(), str->size(), sub.c_str(), sub.size());
+    }
+    if (v.getType() == NT_BINARY) {
+        const BinaryNode* b = v.get<const BinaryNode>();
+        if (b) {
+            return bufferContainsCaseInsensitive(static_cast<const char*>(b->getPtr()), b->size(),
+                sub.c_str(), sub.size());
+        }
+    }
+    return false;
+}
+
 int PollPipelinePriv::addCheckContains(const char* source_key, const char* substring,
         const char* result_key) {
     std::string src(source_key);
@@ -781,16 +817,10 @@ int PollPipelinePriv::addCheckContains(const char* source_key, const char* subst
         if (!ctx.extra) {
             ctx.extra = new QoreHashNode(autoTypeInfo);
         }
-        bool found = false;
-        QoreValue v = ctx.extra->getKeyValue(src.c_str());
-        if (v.getType() == NT_STRING) {
-            QoreStringValueHelper str(v);
-            found = strcasestr(str->c_str(), sub.c_str()) != nullptr;
-        }
+        bool found = valueContainsCaseInsensitive(ctx.extra->getKeyValue(src.c_str()), sub);
         // Also check ctx.last_output if source not in extra
-        if (!found && ctx.last_output.getType() == NT_STRING) {
-            QoreStringValueHelper str(ctx.last_output);
-            found = strcasestr(str->c_str(), sub.c_str()) != nullptr;
+        if (!found) {
+            found = valueContainsCaseInsensitive(ctx.last_output, sub);
         }
         ctx.extra->setKeyValue(res.c_str(), found, xsink);
     });
@@ -2591,12 +2621,15 @@ int PollPipeline::addSetContextBinary(string context_key, data value) [flags=NAM
     return priv->addSetContextBinary(context_key->c_str(), bin);
 }
 
-//! Adds a transform step that checks if a context string contains a substring
+//! Adds a transform step that checks if a context value contains a substring
 /** Performs a case-insensitive search for @a substring in the value at
     ctx.extra[source_key] (or ctx.last_output as fallback). Stores the
     boolean result in ctx.extra[result_key].
 
-    @param source_key the context extra key containing the string to search
+    Both string and binary values are searched; binary values may contain NUL bytes, which are treated
+    as ordinary data rather than terminating the search. Values of any other type never match.
+
+    @param source_key the context extra key containing the value to search
     @param substring the substring to search for (case-insensitive)
     @param result_key the context extra key for the boolean result
     @return the step index
