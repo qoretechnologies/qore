@@ -115,9 +115,36 @@ public hashdecl LlmBackendConfig {
     *int max_output_tokens;
     #! Optional hidden-reasoning / thinking token budget
     /** Providers that support a numeric hidden-reasoning budget map this to
-        their native field.  Providers without such a control ignore it. */
+        their native field.  Providers without such a control ignore it.
+
+        @note Newer model families have removed numeric reasoning budgets in
+        favor of a qualitative effort level; see @ref reasoning_effort.  On
+        Anthropic this applies from Claude Opus 4.7 on, where sending a
+        numeric budget is rejected outright, so the Anthropic provider
+        ignores this field and uses @ref reasoning_effort instead. */
     *int reasoning_token_budget;
+    #! Optional qualitative hidden-reasoning effort level
+    /** One of \c "low", \c "medium", \c "high", \c "xhigh", or \c "max".
+        Providers that expose a qualitative reasoning control map this to
+        their native field (Anthropic \c output_config.effort); providers
+        without such a control ignore it.  Replaces
+        @ref reasoning_token_budget on model families that removed numeric
+        budgets. */
+    *string reasoning_effort;
+    #! Disable hidden reasoning entirely when the provider supports it
+    /** Some model families reason by default when no reasoning control is
+        sent, and that reasoning is billed against the same output budget
+        that must carry the visible response.  Set this to @ref True to ask
+        the provider to turn reasoning off.
+
+        Providers that cannot disable reasoning ignore this field.  Leaving
+        it unset sends no reasoning control at all, so the model's own
+        default applies. */
+    *bool disable_reasoning;
     #! Sampling temperature; default 0.0 (deterministic)
+    /** @note Not every provider accepts sampling parameters.  Anthropic
+        removed \c temperature from Claude Opus 4.7 on, and the Anthropic
+        provider never sends it. */
     float temperature = 0.0;
     #! HTTP connect timeout in milliseconds; default 10000
     int connect_timeout_ms = 10000;
@@ -196,6 +223,12 @@ public hashdecl LlmRequestOptions {
     #! Optional hidden-reasoning / thinking token budget for this call
     /** Overrides @ref LlmBackendConfig::reasoning_token_budget. */
     *int reasoning_token_budget;
+    #! Optional qualitative hidden-reasoning effort for this call
+    /** Overrides @ref LlmBackendConfig::reasoning_effort. */
+    *string reasoning_effort;
+    #! Disable hidden reasoning for this call when the provider supports it
+    /** Overrides @ref LlmBackendConfig::disable_reasoning. */
+    *bool disable_reasoning;
     #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
     *float temperature;
     #! JSON schema to request structured output when the backend supports it
@@ -275,6 +308,17 @@ public hashdecl ChatMessage {
     *string tool_call_id;
     #! Tool name (when role is "tool")
     *string name;
+    #! Opaque provider reasoning content that must be replayed with this turn
+    /** Anthropic thinking models reject a follow-up request that replays an
+        assistant turn without the \c thinking blocks the model produced,
+        because each block carries a signature the API verifies.  Copy
+        @ref ChatResponse::reasoning_blocks here when appending an assistant
+        turn to a conversation so tool loops keep working.
+
+        The value is provider-opaque: it is never inspected or rewritten,
+        only carried through the conversation and returned verbatim.
+        Providers that do not use reasoning blocks leave this unset. */
+    *list<auto> reasoning_blocks;
 }
 
 #! Definition of a tool the LLM can call
@@ -308,6 +352,12 @@ public hashdecl ChatResponse {
     *hash<auto> raw;
     #! Provider-specific diagnostics suitable for surfacing through facade APIs
     *hash<auto> provider_diagnostics;
+    #! Opaque provider reasoning content produced with this response
+    /** Copy this to @ref ChatMessage::reasoning_blocks on the assistant turn
+        appended to the conversation; Anthropic thinking models reject a
+        replayed turn whose reasoning blocks were dropped.  Unset for
+        providers and models that produce no reasoning blocks. */
+    *list<auto> reasoning_blocks;
 }
 
 #! Provider-neutral token usage counters
@@ -784,6 +834,21 @@ public class AbstractLlmProvider {
     *int getRequestReasoningTokenBudget(*hash<LlmRequestOptions> opts) {
         return opts.reasoning_token_budget
             ?? config_h.reasoning_token_budget;
+    }
+
+    #! Resolves the provider-neutral hidden-reasoning effort for a single call
+    *string getRequestReasoningEffort(*hash<LlmRequestOptions> opts) {
+        return opts.reasoning_effort ?? config_h.reasoning_effort;
+    }
+
+    #! Resolves whether hidden reasoning should be disabled for a single call
+    /** @return @ref True to disable, @ref False to force it on where the
+        provider supports that, or @ref NOTHING when the caller expressed no
+        preference and the model's own default should apply */
+    *bool getRequestDisableReasoning(*hash<LlmRequestOptions> opts) {
+        return exists opts.disable_reasoning
+            ? opts.disable_reasoning
+            : config_h.disable_reasoning;
     }
 
     #! Resolves the sampling temperature for a single call
