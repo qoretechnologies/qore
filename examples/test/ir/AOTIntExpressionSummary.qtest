@@ -157,6 +157,21 @@ int sub nested_hash_value_expr(hash<string, int> row, int adjustment) {
     return hash_value_expr(row, adjustment) * 2 + 1;
 }
 
+int sub multi_hash_value_expr(hash<string, int> row, int adjustment) {
+    return row.a * 3 + row.b * 5 + row.c * 7 + row.d * 11
+        + adjustment;
+}
+
+int sub nested_multi_hash_value_expr(
+        hash<string, int> row, int adjustment) {
+    return multi_hash_value_expr(row, adjustment) * 2 + 1;
+}
+
+int sub two_hash_value_expr(
+        hash<string, int> left, hash<string, int> right) {
+    return left.a + left.b + right.c + right.d;
+}
+
 int sub divide_expr(int left, int right) {
     return left / right;
 }
@@ -432,6 +447,36 @@ string sub consumerCode() {
         nested_hash_value_expr(hash_present, 2),
         hash_value_expr(hash_missing, 2),
         hash_value_expr(hash_removed, 3));
+    hash<string, int> multi_present = {
+        \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
+    hash<string, int> multi_missing = {\"a\": 1, \"b\": 2, \"d\": 4};
+    hash<string, int> multi_removed = {
+        \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
+    remove multi_removed.d;
+    hash<string, int> multi_unassigned;
+    bool multi_unassigned_rejected = False;
+    try {
+        multi_hash_value_expr(multi_unassigned, 5);
+    } catch (hash<auto> ex) {
+        multi_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, int> multi_removed_lvalue = multi_present;
+    remove multi_removed_lvalue;
+    bool multi_removed_lvalue_rejected = False;
+    try {
+        multi_hash_value_expr(multi_removed_lvalue, 5);
+    } catch (hash<auto> ex) {
+        multi_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"multi-hash-expr:%d:%d:%d:%d:%d:%d:%d\\n\",
+        multi_hash_value_expr(multi_present, 5),
+        nested_multi_hash_value_expr(multi_present, 5),
+        two_hash_value_expr(multi_present, multi_present),
+        multi_hash_value_expr(multi_missing, 5),
+        multi_hash_value_expr(multi_removed, 5),
+        multi_unassigned_rejected, multi_removed_lvalue_rejected);
     printf(\"bool-side-effect:%d:%d\\n\",
         side_effect_bool_expr(-4), side_effect_value);
     return 0;
@@ -512,6 +557,9 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"30\"/)
         || !(provider_index =~ /\"qore_path\": \"list_measure_expr\(list<int>,list<int>,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_multi_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"two_hash_value_expr\([^\"]*\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"kind\": 29[^\n]*\"key\": \"value\"/)
         || !(provider_index =~ /\"qore_path\": \"divide_expr\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
@@ -555,6 +603,16 @@ string disabled_qo = disabled_dir + "/consumer.qo";
 if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
     printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
         enabled_compile, disabled_compile);
+    exit(2);
+}
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_hash_key_access_int_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_int_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_key_access_int_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_int_prehashed/) {
+    printf("hash projection import mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
     exit(2);
 }
 

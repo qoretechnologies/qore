@@ -9516,10 +9516,13 @@ static bool qore_aot_collect_int_expression_summaries(
             if (!is_fallible_node(existing.kind)) {
                 continue;
             }
-            return existing.kind == node.kind
-                    && existing.param == node.param
-                    && existing.key == node.key
-                ? static_cast<int>(i) : -1;
+            if (existing.kind != AOTIntExpressionNodeKind::HashKeyInt) {
+                return -1;
+            }
+            if (existing.param == node.param
+                    && existing.key == node.key) {
+                return static_cast<int>(i);
+            }
         }
         return append_node(expression, node);
     };
@@ -13678,11 +13681,13 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
         info.int_expression.nodes.reserve(rec.int_expression_nodes.size());
         std::vector<uint8_t> node_is_bool;
         node_is_bool.reserve(rec.int_expression_nodes.size());
-        bool have_fallible_operation = false;
+        bool have_hash_source = false;
+        bool have_non_hash_fallible_operation = false;
         for (size_t i = 0; i < rec.int_expression_nodes.size(); ++i) {
             const auto& input = rec.int_expression_nodes[i];
             if (input.kind < static_cast<uint8_t>(AOTIntExpressionNodeKind::Param)
-                    || input.kind > static_cast<uint8_t>(AOTIntExpressionNodeKind::Neg)) {
+                    || input.kind > static_cast<uint8_t>(
+                        AOTIntExpressionNodeKind::HashKeyInt)) {
                 return false;
             }
             AOTIntExpressionNodeInfo node;
@@ -13732,7 +13737,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     return false;
                 }
             } else if (is_hash_source) {
-                if (have_fallible_operation
+                if (have_non_hash_fallible_operation
                         || node.param < 0 || node.param >= static_cast<int>(info.num_params)
                         || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
                         || node.third != UINT8_MAX || node.constant
@@ -13740,9 +13745,9 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             != BatchCalleeParamKind::Boxed) {
                     return false;
                 }
-                have_fallible_operation = true;
+                have_hash_source = true;
             } else if (is_string_operation) {
-                if (have_fallible_operation
+                if (have_hash_source || have_non_hash_fallible_operation
                         || node.param < 0 || node.param >= static_cast<int>(info.num_params)
                         || node.lhs >= info.num_params || node.third != UINT8_MAX
                         || node.constant
@@ -13754,7 +13759,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                             && (node.rhs >= i || node_is_bool[node.rhs]))) {
                     return false;
                 }
-                have_fallible_operation = true;
+                have_non_hash_fallible_operation = true;
             } else if (node.kind == AOTIntExpressionNodeKind::Neg) {
                 if (node.param != -1 || node.constant || node.lhs >= i
                         || node.rhs != UINT8_MAX || node.third != UINT8_MAX
@@ -13765,10 +13770,10 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                     || node.lhs >= i || node.rhs >= i) {
                 return false;
             } else if (is_fallible_operation) {
-                if (have_fallible_operation) {
+                if (have_hash_source || have_non_hash_fallible_operation) {
                     return false;
                 }
-                have_fallible_operation = true;
+                have_non_hash_fallible_operation = true;
             } else if ((node.kind == AOTIntExpressionNodeKind::Shl
                     || node.kind == AOTIntExpressionNodeKind::Shr)
                     && (info.int_expression.nodes[node.rhs].kind
