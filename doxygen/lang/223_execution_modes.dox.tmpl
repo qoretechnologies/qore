@@ -124,6 +124,14 @@ qore --exec-mode=tiered --jit-ir-threshold=50 --jit-jit-threshold=500 script.qr
     carries QORD metadata with format version, feature flags, maximum IR opcode,
     dependencies, and optional diagnostic build information.
 
+    Unlike direct script execution with \c qore, a generated AOT executable
+    dispatches a named Qore entry function. The default entry is \c main(); use
+    \c -e \c FN or \c --entry=FN to select another function. Code intended to
+    start the application must therefore be inside that entry function;
+    top-level executable statements are not a substitute for it. If the selected
+    entry function is absent, the executable exits with a \c NO-FUNCTION
+    exception.
+
     @subsection aot_artifacts Artifact Types
 
     |!Artifact|!Command|!Description
