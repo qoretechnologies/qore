@@ -933,6 +933,12 @@ int64_t qore_rt_hash_keys_int_prehashed(uint64_t hash_val,
         const char* const* keys, const uint64_t* hashes64,
         const uint32_t* hashes32, int64_t* results, uint32_t count);
 
+//! Resolve several known float keys from one hash evaluation. Returns 1 only
+//! when every key exists and writes native float values to `results`.
+int64_t qore_rt_hash_keys_float_prehashed(uint64_t hash_val,
+        const char* const* keys, const uint64_t* hashes64,
+        const uint32_t* hashes32, double* results, uint32_t count);
+
 //! Select list hash elements whose constant-key value converts to an integer > 0.
 uint64_t qore_rt_select_hash_key_positive_int(uint64_t list_val, const char* key,
         ExceptionSink* xsink);

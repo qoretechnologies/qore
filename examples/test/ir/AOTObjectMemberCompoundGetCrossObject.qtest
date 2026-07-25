@@ -76,7 +76,7 @@ if (!is_file(provider_qo)) {
 
 string provider_index = backquote(sprintf(
     "%s %s --dump-index-json %s 2>&1", env, qcc_bin, provider_qo));
-if (provider_index !~ /"symbol_index_version", "value": "30"/
+if (provider_index !~ /"symbol_index_version", "value": "31"/
         || provider_index !~ /"qore_path": "CrossObjectCounter::add[^\n]*"native_symbol": "", "abi_kind": "qore_summary_v1"[^\n]*"object_compound_get_member": "value", "object_compound_get_param": 0, "object_compound_get_op": 0/) {
     printf("provider object compound/get metadata mismatch:\n%s", provider_index);
     exit(2);

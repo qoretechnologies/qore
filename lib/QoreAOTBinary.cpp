@@ -6921,6 +6921,7 @@ static void writeSymbolIndexRecord(QoreAOTBinaryWriter& writer,
         writer.writeU8(node.rhs);
         writer.writeU8(static_cast<uint8_t>(node.param));
         writer.writeF64(node.constant);
+        writer.writeStringRef(node.key.c_str());
     }
     assert(rec.string_expression_nodes.size()
         <= QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES);
@@ -8381,7 +8382,8 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         return false;
     }
     node_count = QoreAOTBinaryReader::readU32(ptr);
-    constexpr size_t float_node_size = 4 + sizeof(uint64_t);
+    size_t float_node_size = 4 + sizeof(uint64_t)
+        + (version >= 31 ? sizeof(uint32_t) : 0);
     if (node_count > QORE_AOT_WIRE_FLOAT_EXPRESSION_MAX_NODES
             || node_count > static_cast<uint32_t>((end - ptr) / float_node_size)) {
         error = "invalid SYMBOL_INDEX float expression node count";
@@ -8395,6 +8397,11 @@ static bool readSymbolIndexRecord(const QoreAOTBinaryReader& reader, const uint8
         node.rhs = QoreAOTBinaryReader::readU8(ptr);
         node.param = static_cast<int8_t>(QoreAOTBinaryReader::readU8(ptr));
         node.constant = QoreAOTBinaryReader::readF64(ptr);
+        if (version >= 31
+                && !readSymbolIndexString(reader, ptr, end, node.key,
+                    error, "float_expression_node_key")) {
+            return false;
+        }
         rec.float_expression_nodes.push_back(node);
     }
     if (version < 19) {

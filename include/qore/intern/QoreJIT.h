@@ -188,6 +188,7 @@ enum class AOTFloatExpressionNodeKind : uint8_t {
     BoolParam = 8,
     //! Select a float value; lhs is the condition, rhs the true value, and param the false value.
     Select = 9,
+    HashKeyFloat = 10,
 };
 
 constexpr size_t QORE_AOT_FLOAT_EXPRESSION_MAX_NODES = 64;
@@ -199,6 +200,7 @@ struct AOTFloatExpressionNodeInfo {
     uint8_t rhs = UINT8_MAX;
     int8_t param = -1;
     double constant = 0.0;
+    std::string key;
 };
 
 //! Bounded pure native-float expression; the last node is the result.

@@ -711,6 +711,7 @@ private:
     // Emit a bounded pure native-float expression summary without fast-math flags.
     llvm::Value* emitAOTFloatExpression(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args,
+            llvm::Function* fallback_fn,
             bool* proven_nothrow = nullptr);
 
     // Emit an imported encoding-aware string operation. Returns nullptr when

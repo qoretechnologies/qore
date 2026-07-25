@@ -59,6 +59,16 @@ float sub nested_float_expr(float a, float b, float c) {
     return bounded_float_expr(a, b, c) + a * 0.125;
 }
 
+float sub hash_float_expr(
+        hash<string, float> row, float adjustment) {
+    return row.a * 1.5 + row.b * 0.25 + adjustment;
+}
+
+float sub nested_hash_float_expr(
+        hash<string, float> row, float adjustment) {
+    return hash_float_expr(row, adjustment) * 2.0 + 1.0;
+}
+
 float sub divide_float_expr(float a, float b) {
     return a / b;
 }
@@ -447,6 +457,33 @@ string sub consumerCode() {
         nested_hash_value_expr(hash_present, 2),
         hash_value_expr(hash_missing, 2),
         hash_value_expr(hash_removed, 3));
+    hash<string, float> float_present = {\"a\": 4.0, \"b\": 8.0};
+    hash<string, float> float_missing = {\"a\": 4.0};
+    hash<string, float> float_removed = {\"a\": 4.0, \"b\": 8.0};
+    remove float_removed.b;
+    hash<string, float> float_unassigned;
+    bool float_unassigned_rejected = False;
+    try {
+        hash_float_expr(float_unassigned, 2.0);
+    } catch (hash<auto> ex) {
+        float_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, float> float_removed_lvalue = float_present;
+    remove float_removed_lvalue;
+    bool float_removed_lvalue_rejected = False;
+    try {
+        hash_float_expr(float_removed_lvalue, 2.0);
+    } catch (hash<auto> ex) {
+        float_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    printf(\"float-hash-expr:%.17g:%.17g:%.17g:%.17g:%d:%d\\n\",
+        hash_float_expr(float_present, 2.0),
+        nested_hash_float_expr(float_present, 2.0),
+        hash_float_expr(float_missing, 2.0),
+        hash_float_expr(float_removed, 3.0),
+        float_unassigned_rejected, float_removed_lvalue_rejected);
     hash<string, int> multi_present = {
         \"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4};
     hash<string, int> multi_missing = {\"a\": 1, \"b\": 2, \"d\": 4};
@@ -521,7 +558,7 @@ if (!is_file(provider_qo)) {
 }
 
 string provider_index = backquote(sprintf("%s --dump-index-json %s", qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"30\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"31\"/)
         || !(provider_index =~ /\"qore_path\": \"bounded_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"pair\(int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"positive_bool_expr\(int,int\)\"[^\n]*\"fast_return_kind\": 3[^\n]*\"int_expression_nodes\": \[\{/)
@@ -532,6 +569,9 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"30\"/)
         || !(provider_index =~ /\"qore_path\": \"nested_compare_select_expr\(int,int,int\)\"[^\n]*\"int_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"bounded_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"nested_hash_float_expr\([^\"]*\)\"[^\n]*\"float_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"kind\": 10[^\n]*\"key\": \"a\"/)
         || !(provider_index =~ /\"qore_path\": \"divide_float_expr\(float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"negate_float_expr\(float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"nested_divide_float_expr\(float,float,float\)\"[^\n]*\"float_expression_nodes\": \[\{/)
@@ -609,8 +649,10 @@ string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
 if (enabled_undefined !~ /qore_rt_hash_key_access_int_prehashed/
         || enabled_undefined !~ /qore_rt_hash_keys_int_prehashed/
+        || enabled_undefined !~ /qore_rt_hash_keys_float_prehashed/
         || disabled_undefined =~ /qore_rt_hash_key_access_int_prehashed/
-        || disabled_undefined =~ /qore_rt_hash_keys_int_prehashed/) {
+        || disabled_undefined =~ /qore_rt_hash_keys_int_prehashed/
+        || disabled_undefined =~ /qore_rt_hash_keys_float_prehashed/) {
     printf("hash projection import mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
     exit(2);

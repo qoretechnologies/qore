@@ -5258,6 +5258,7 @@ llvm::Value* QoreIRToLLVM::emitAOTIntExpression(const BatchCalleeInfo& info,
 
 llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args,
+        llvm::Function* fallback_fn,
         bool* proven_nothrow) {
     if (proven_nothrow) {
         *proven_nothrow = false;
@@ -5269,6 +5270,104 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
         return nullptr;
     }
     llvm::Module& module = *builder->GetInsertBlock()->getModule();
+    std::unordered_map<size_t, llvm::Value*> hash_values;
+    std::map<int8_t, std::vector<size_t>> hash_groups;
+    for (size_t i = 0; i < info.float_expression.nodes.size(); ++i) {
+        const auto& node = info.float_expression.nodes[i];
+        if (node.kind == AOTFloatExpressionNodeKind::HashKeyFloat) {
+            hash_groups[node.param].push_back(i);
+        }
+    }
+    llvm::BasicBlock* fallback_bb = nullptr;
+    llvm::BasicBlock* merge_bb = nullptr;
+    if (!hash_groups.empty()) {
+        if (!fallback_fn
+                || std::getenv("QORE_DISABLE_AOT_FLOAT_HASH_PROJECTION")) {
+            return nullptr;
+        }
+        for (const auto& [param, nodes] : hash_groups) {
+            (void)nodes;
+            if (param < 0 || static_cast<size_t>(param) >= native_args.size()
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(param))
+                        != BatchCalleeParamKind::Boxed
+                    || native_args[static_cast<size_t>(param)]->getType()
+                        != i64_type) {
+                return nullptr;
+            }
+        }
+        llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+        fallback_bb = llvm::BasicBlock::Create(
+            ctx, "aot.float.hash.fallback", llvm_func);
+        merge_bb = llvm::BasicBlock::Create(
+            ctx, "aot.float.hash.merge", llvm_func);
+        for (const auto& [param, nodes] : hash_groups) {
+            llvm::Value* base = native_args[static_cast<size_t>(param)];
+            std::vector<llvm::Constant*> keys;
+            std::vector<llvm::Constant*> hashes64;
+            std::vector<llvm::Constant*> hashes32;
+            keys.reserve(nodes.size());
+            hashes64.reserve(nodes.size());
+            hashes32.reserve(nodes.size());
+            for (size_t node_index : nodes) {
+                const auto& node = info.float_expression.nodes[node_index];
+                keys.push_back(builder->CreateGlobalString(
+                    node.key, "float_expression_hash_key"));
+                QoreIRPrecomputedStringHash hash =
+                    qore_ir_precompute_string_hash(node.key);
+                hashes64.push_back(
+                    llvm::ConstantInt::get(i64_type, hash.hash64));
+                hashes32.push_back(
+                    llvm::ConstantInt::get(i32_type, hash.hash32));
+            }
+            auto make_array = [&](llvm::Type* type,
+                    const std::vector<llvm::Constant*>& values,
+                    const char* name) {
+                llvm::ArrayType* array_type =
+                    llvm::ArrayType::get(type, values.size());
+                llvm::Constant* initializer =
+                    llvm::ConstantArray::get(array_type, values);
+                return new llvm::GlobalVariable(module, array_type, true,
+                    llvm::GlobalValue::PrivateLinkage, initializer, name);
+            };
+            llvm::GlobalVariable* key_array =
+                make_array(ptr_type, keys, "float_expression_hash_keys");
+            llvm::GlobalVariable* hash64_array =
+                make_array(i64_type, hashes64,
+                    "float_expression_hashes64");
+            llvm::GlobalVariable* hash32_array =
+                make_array(i32_type, hashes32,
+                    "float_expression_hashes32");
+            llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(),
+                llvm_func->getEntryBlock().begin());
+            llvm::Value* result_array = entry_builder.CreateAlloca(
+                double_type,
+                llvm::ConstantInt::get(i32_type, nodes.size()),
+                "float_expression_hash_values");
+            auto helper = module.getOrInsertFunction(
+                "qore_rt_hash_keys_float_prehashed",
+                llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type,
+                     i32_type}, false));
+            llvm::Value* success = builder->CreateCall(helper,
+                {base, key_array, hash64_array, hash32_array, result_array,
+                 llvm::ConstantInt::get(i32_type, nodes.size())});
+            llvm::BasicBlock* assigned =
+                llvm::BasicBlock::Create(
+                    ctx, "aot.float.hash.assigned", llvm_func);
+            builder->CreateCondBr(
+                builder->CreateICmpNE(success,
+                    llvm::ConstantInt::get(i64_type, 0)),
+                assigned, fallback_bb);
+            builder->SetInsertPoint(assigned);
+            for (size_t i = 0; i < nodes.size(); ++i) {
+                llvm::Value* value_ptr = builder->CreateGEP(double_type,
+                    result_array, llvm::ConstantInt::get(i32_type, i));
+                hash_values.emplace(nodes[i],
+                    builder->CreateLoad(double_type, value_ptr));
+            }
+        }
+    }
     std::vector<llvm::Value*> values;
     values.reserve(info.float_expression.nodes.size());
     bool expression_may_throw = false;
@@ -5303,6 +5402,13 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
             }
         } else if (node.kind == AOTFloatExpressionNodeKind::Constant) {
             value = llvm::ConstantFP::get(double_type, node.constant);
+        } else if (node.kind
+                == AOTFloatExpressionNodeKind::HashKeyFloat) {
+            auto found = hash_values.find(values.size());
+            if (found == hash_values.end()) {
+                return nullptr;
+            }
+            value = found->second;
         } else if (node.kind == AOTFloatExpressionNodeKind::Neg) {
             if (node.lhs >= values.size()
                     || values[node.lhs]->getType() != double_type) {
@@ -5354,10 +5460,26 @@ llvm::Value* QoreIRToLLVM::emitAOTFloatExpression(const BatchCalleeInfo& info,
         }
         values.push_back(value);
     }
-    if (proven_nothrow && !expression_may_throw) {
-        *proven_nothrow = true;
+    llvm::Value* result = values.back();
+    if (hash_groups.empty()) {
+        if (proven_nothrow && !expression_may_throw) {
+            *proven_nothrow = true;
+        }
+        return result;
     }
-    return values.back();
+    llvm::BasicBlock* assigned_bb = builder->GetInsertBlock();
+    builder->CreateBr(merge_bb);
+    builder->SetInsertPoint(fallback_bb);
+    llvm::Value* fallback_result =
+        builder->CreateCall(fallback_fn, native_args);
+    builder->CreateBr(merge_bb);
+    fallback_bb = builder->GetInsertBlock();
+    builder->SetInsertPoint(merge_bb);
+    llvm::PHINode* phi = builder->CreatePHI(
+        double_type, 2, "aot.float.hash.result");
+    phi->addIncoming(result, assigned_bb);
+    phi->addIncoming(fallback_result, fallback_bb);
+    return phi;
 }
 
 llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
@@ -6401,7 +6523,8 @@ llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
     }
     if (!result) {
         bool summary_nothrow = false;
-        result = emitAOTFloatExpression(info, native_args, &summary_nothrow);
+        result = emitAOTFloatExpression(
+            info, native_args, fallback_fn, &summary_nothrow);
         if (result && proven_nothrow && summary_nothrow
                 && !std::getenv(
                     "QORE_DISABLE_AOT_SUMMARY_EXCEPTION_ELISION")) {
