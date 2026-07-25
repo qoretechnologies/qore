@@ -1051,11 +1051,13 @@ module.exports = grammar({
     )),
 
     // Hash/object member slice: obj.('key1', 'key2') returns a hash subset
+    // A trailing comma is accepted, as in the core grammar's `list: exp ','` rule
     slice_expression: $ => prec.left(PREC.MEMBER, seq(
       field('object', $._expression),
       '.',
       '(',
       commaSep1($._expression),
+      optional(','),
       ')',
     )),
 

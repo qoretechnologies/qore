@@ -405,6 +405,7 @@ sub test() {
         addTestCase("Consecutive parse options in hash", \testConsecutiveParseOptionsInHash());
         addTestCase("Last index operator in hash", \testLastIndexOperatorInHash());
         addTestCase("Escaped quote in string", \testEscapedQuoteInString());
+        addTestCase("Hash slice trailing comma", \testHashSliceTrailingComma());
 %ifdef HasAstTreeSearcher
         addTestCase("Conditional parsing mode", \testConditionalParsingMode());
 %endif
@@ -2078,6 +2079,72 @@ list results = (
         tree = parser.parseString(code);
         assertEq(True, exists(tree), "parseString returns tree for Windows path pattern");
         assertEq(0, parser.getErrorCount(), "no parse errors for Windows path pattern");
+    }
+
+    # The hash slice operator accepts a trailing comma in the key list, as the core grammar's
+    # `list: exp ','` rule allows a trailing comma in any list context
+    testHashSliceTrailingComma() {
+        # single key with a trailing comma
+        string code = "%modern
+hash<auto> h = opts.(\"key\",);
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for single-key slice w/ trailing comma");
+        assertEq(0, parser.getErrorCount(), "no parse errors for single-key slice w/ trailing comma");
+
+        # multiple keys with a trailing comma, and the same slice without one
+        code = "%modern
+hash<auto> h = opts.(\"username\", \"password\",);
+hash<auto> h1 = opts.(\"username\", \"password\");
+";
+        parser = new AstParser();
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for multi-key slice w/ trailing comma");
+        assertEq(0, parser.getErrorCount(), "no parse errors for multi-key slice w/ trailing comma");
+
+        assertEq(2, countNodesByType(tree.getNodesInfo(), "slice_expression"),
+            "both slices present in the CST");
+
+        # the SmtpClient.qm pattern that broke the docs build: a slice with a trailing comma as the
+        # right-hand operand of `+` applied to a hash literal, and a slice in a `+=` assignment
+        code = "%modern
+sub test(hash<auto> opts, hash<auto> rtopts) {
+    hash<auto> copts = {
+        \"log\": rtopts.log,
+        \"dbglog\": rtopts.dbglog,
+    } + opts.(\"auth_mechanism\", \"token\",);
+    copts += opts.(\"username\", \"password\",);
+}
+";
+        parser = new AstParser();
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for SmtpClient.qm slice pattern");
+        assertEq(0, parser.getErrorCount(), "no parse errors for SmtpClient.qm slice pattern");
+
+        # slices over non-literal keys, on a call result, and split over multiple lines
+        code = "%modern
+sub test(hash<auto> opts, string k) {
+    hash<auto> h = opts.(k, \"lit\" + k, sprintf(\"%d\", 1),);
+    hash<auto> h1 = get_opts().(
+        \"a\",
+        \"b\",
+    );
+    hash<auto> h2 = opts.(\"a\",).(\"a\",);
+}
+";
+        parser = new AstParser();
+        tree = parser.parseString(code);
+        assertEq(True, exists(tree), "parseString returns tree for complex slice keys");
+        assertEq(0, parser.getErrorCount(), "no parse errors for complex slice keys");
+
+        # negative: a leading comma is a syntax error in the core grammar as well
+        code = "%modern
+hash<auto> h = opts.(, \"key\");
+";
+        parser = new AstParser();
+        parser.parseString(code);
+        assertGt(0, parser.getErrorCount(), "leading comma in a slice is a parse error");
     }
 
     testDateSubtypeParsing() {
