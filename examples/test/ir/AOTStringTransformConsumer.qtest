@@ -70,6 +70,40 @@ int sub lowerRFindOffset(string value, string pattern, int offset) {
     return value.lwr().rfind(pattern, offset);
 }
 
+int sub transformEqualityKinds(string value, string lower_value,
+        string upper_value) {
+    int result = 0;
+    if (value.lwr() == lower_value) {
+        result += 1;
+    }
+    if (upper_value == value.upr()) {
+        result += 2;
+    }
+    if (value.lwr() != upper_value) {
+        result += 4;
+    }
+    if (lower_value != value.upr()) {
+        result += 8;
+    }
+    return result;
+}
+
+bool sub upperEqualRight(string value, string expected) {
+    return expected == value.upr();
+}
+
+int sub typedComparisonBranches(string value, string same_value,
+        string other_value) {
+    int result = 0;
+    if (value == same_value) {
+        ++result;
+    }
+    if (value != other_value) {
+        ++result;
+    }
+    return result;
+}
+
 string sub sideEffectPattern() {
     printf(\"pattern-side-effect\\n\");
     return \"needle\";
@@ -77,6 +111,15 @@ string sub sideEffectPattern() {
 
 bool sub sideEffectContains(string value) {
     return value.lwr().contains(sideEffectPattern());
+}
+
+string sub sideEffectEqualityValue() {
+    printf(\"equality-side-effect\\n\");
+    return \"needle\";
+}
+
+bool sub sideEffectEquality(string value) {
+    return value.lwr() == sideEffectEqualityValue();
 }
 
 int sub main() {
@@ -109,6 +152,24 @@ int sub main() {
         upperStartsWith(latin1, latin1_pattern),
         upperFind(latin1, latin1_pattern));
     printf(\"side-effect:%d\\n\", sideEffectContains(\"Needle\"));
+    printf(\"equality-ascii:%d:%d\\n\",
+        transformEqualityKinds(\"AbC\", \"abc\", \"ABC\"),
+        typedComparisonBranches(\"same\", \"same\", \"other\"));
+    printf(\"equality-utf8:%d\\n\",
+        transformEqualityKinds(\"Stra\\u00dfe\", \"stra\\u00dfe\", \"STRASSE\"));
+    printf(\"equality-latin1:%d:%d\\n\",
+        transformEqualityKinds(latin1, \"caf\\u00e9 \\u00df\", \"CAF\\u00c9 SS\"),
+        upperEqualRight(latin1, \"CAF\\u00c9 SS\"));
+    printf(\"side-effect-equality:%d\\n\", sideEffectEquality(\"Needle\"));
+    string directional_error;
+    try {
+        transformEqualityKinds(convert_encoding(\"A\", \"ISO-8859-1\"),
+            \"\\u6f22\", \"A\");
+    } catch (hash<auto> ex) {
+        directional_error = ex.err;
+    }
+    printf(\"equality-direction:%s:%d\\n\", directional_error,
+        upperEqualRight(convert_encoding(\"A\", \"ISO-8859-1\"), \"\\u6f22\"));
     string latin1_error;
     try {
         upperSize(convert_encoding(\"\\u00b5\", \"ISO-8859-1\"));
@@ -144,9 +205,24 @@ int sub main() {
     } catch (hash<auto> ex) {
         removed_search_error = ex.err;
     }
-    printf(\"guards:%s:%s:%s:%s\\n\",
+    string unassigned_equality_error;
+    try {
+        bool ignored = unassigned.lwr() == \"value\";
+    } catch (hash<auto> ex) {
+        unassigned_equality_error = ex.err;
+    }
+    printf(\"guards:%s:%s:%s:%s:%s\\n\",
         unassigned_error, removed_error,
-        unassigned_search_error, removed_search_error);
+        unassigned_search_error, removed_search_error,
+        unassigned_equality_error);
+    string unassigned_other;
+    string removed_other = \"value\";
+    remove removed_other;
+    printf(\"equality-unassigned-other:%d:%d:%d:%d\\n\",
+        \"VALUE\".lwr() == unassigned_other,
+        unassigned_other != \"value\".upr(),
+        \"VALUE\".lwr() == removed_other,
+        removed_other != \"value\".upr());
     return 0;
 }
 
@@ -156,9 +232,11 @@ main();
 string root = "/tmp/qore-aot-string-transform-consumer-" + string(getpid());
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
+string native_disabled_dir = root + "/native-disabled";
 mkdir(root);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
+mkdir(native_disabled_dir);
 
 string source_path = root + "/source.qr";
 File file();
@@ -177,14 +255,20 @@ string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_TRANSFORM_CONSUMER_FUSION=1"
         + " %s -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, disabled_dir, source_path));
+string native_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_NATIVE_STRING_COMPARISON_RESULTS=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, native_disabled_dir, source_path));
 string enabled_qo = enabled_dir + "/source.qo";
 string disabled_qo = disabled_dir + "/source.qo";
-if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
-    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
-        enabled_compile, disabled_compile);
+string native_disabled_qo = native_disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)
+        || !is_file(native_disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%snative disabled:\n%s",
+        enabled_compile, disabled_compile, native_disabled_compile);
     exit(2);
 }
-if (enabled_compile !~ /string-transform-consumers=1/) {
+if (enabled_compile !~ /transformEqualityKinds.*string-transform-consumers=4/) {
     printf("string transform-consumer fusion mismatch:\n%s",
         enabled_compile);
     exit(2);
@@ -192,26 +276,40 @@ if (enabled_compile !~ /string-transform-consumers=1/) {
 
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+string native_disabled_undefined = backquote(sprintf(
+    "nm -u %s 2>&1", native_disabled_qo));
 if (enabled_undefined !~ /qore_rt_pseudo_string_case_measure_native_noguard/
         || disabled_undefined =~ /qore_rt_pseudo_string_case_measure_native_noguard/
         || enabled_undefined !~ /qore_rt_pseudo_string_case_consume_native_noguard/
-        || disabled_undefined =~ /qore_rt_pseudo_string_case_consume_native_noguard/) {
-    printf("string transform-consumer helper mismatch:\nenabled:\n%sdisabled:\n%s",
-        enabled_undefined, disabled_undefined);
+        || disabled_undefined =~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || enabled_undefined !~ /qore_rt_string_case_equal_native_noguard/
+        || disabled_undefined =~ /qore_rt_string_case_equal_native_noguard/
+        || enabled_undefined !~ /qore_rt_string_eq_typed_native/
+        || enabled_undefined !~ /qore_rt_string_ne_typed_native/
+        || native_disabled_undefined =~ /qore_rt_string_eq_typed_native/
+        || native_disabled_undefined =~ /qore_rt_string_ne_typed_native/) {
+    printf("string transform-consumer helper mismatch:\nenabled:\n%sdisabled:\n%s"
+        + "native disabled:\n%s",
+        enabled_undefined, disabled_undefined, native_disabled_undefined);
     exit(2);
 }
 
 string enabled_exe = root + "/enabled-aot";
 string disabled_exe = root + "/disabled-aot";
+string native_disabled_exe = root + "/native-disabled-aot";
 string enabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, enabled_exe, enabled_qo));
 string disabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_exe, disabled_qo));
-if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
-    printf("link failed:\nenabled:\n%sdisabled:\n%s",
-        enabled_link, disabled_link);
+string native_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, native_disabled_exe, native_disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)
+        || !is_file(native_disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%snative disabled:\n%s",
+        enabled_link, disabled_link, native_disabled_link);
     exit(2);
 }
 
@@ -219,8 +317,11 @@ string enabled = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, enabled_exe));
 string disabled = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, disabled_exe));
-if (ast != enabled || ast != disabled) {
-    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
-        ast, enabled, disabled);
+string native_disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, native_disabled_exe));
+if (ast != enabled || ast != disabled || ast != native_disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s"
+        + "Native disabled:\n%s",
+        ast, enabled, disabled, native_disabled);
     exit(2);
 }

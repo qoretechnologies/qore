@@ -953,6 +953,12 @@ struct QoreIRPhiIncoming;
 
 class QoreIRInstruction {
 public:
+    enum class AOTStringCaseComparisonKind : uint8_t {
+        None,
+        Eq,
+        Ne,
+    };
+
     explicit QoreIRInstruction(QoreIROpcode op) : opcode(op), cached_start_line(-1) {
     }
 
@@ -977,6 +983,10 @@ public:
     bool typed_value_prevalidated = false;  // Transient: a dominating typed store validated this scalar value
     bool list_reserve_only = false;  // Transient: CreateSizedList capacity is not the final list length
     bool redundant_store = false;  // Transient: store-back paired with an in-place mutation
+    AOTStringCaseComparisonKind aot_string_case_comparison =
+        AOTStringCaseComparisonKind::None;
+    uint8_t aot_string_case_comparison_operand = 0;
+    bool aot_string_case_comparison_upper = false;
 
     // Pairs a PushTempMark with its matching DiscardTemps (0 = unpaired).  Set
     // by the IR builder in correctly-nested call order during lowering, so the

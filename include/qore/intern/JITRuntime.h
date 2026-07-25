@@ -479,6 +479,17 @@ int64_t qore_rt_string_concat_multi_search(uint64_t* args, int nargs,
 //! Return true when an assigned boxed string equals a constant hash key.
 int32_t qore_rt_string_equals_cstr(uint64_t value, const char* key);
 
+//! Native boolean typed string equality and inequality.
+int64_t qore_rt_string_eq_typed_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+int64_t qore_rt_string_ne_typed_native(uint64_t left, uint64_t right,
+    ExceptionSink* xsink);
+
+//! Compare an assigned string after case conversion without retaining the result.
+int64_t qore_rt_string_case_equal_native_noguard(uint64_t value,
+    uint64_t other, int32_t upper, int32_t transform_left,
+    ExceptionSink* xsink);
+
 //! Execute a proven two-key hash-to-hash remap without a Qore call frame. Non-hash
 //! inputs use the original AOT call slot so parameter binding remains authoritative.
 uint64_t qore_rt_fixed_hash_remap2_aot(QoreAOTContext* ctx, int32_t slot, uint64_t value,

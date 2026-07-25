@@ -8061,18 +8061,30 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args,
     return toBits(QoreValue(result));
 }
 
-// Typed string equality - both operands are known to be strings at compile time
-// Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
-extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+static QORE_ALWAYS_INLINE int64_t qore_rt_string_eq_typed_native_impl(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
-        return toBits(QoreValue(false));
+        return 0;
     }
     QoreStringNodeValueHelper ls(lv);
     QoreStringNodeValueHelper rs(rv);
-    bool result = ls->equalSoft(**rs, xsink);
-    return toBits(QoreValue(result));
+    return ls->equalSoft(**rs, xsink) ? 1 : 0;
+}
+
+// Typed string equality - both operands are known to be strings at compile time
+// Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
+extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    return toBits(QoreValue(
+        qore_rt_string_eq_typed_native_impl(left, right, xsink) != 0));
+}
+
+//! Native boolean typed string equality.
+extern "C" DLLEXPORT int64_t qore_rt_string_eq_typed_native(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    return qore_rt_string_eq_typed_native_impl(left, right, xsink);
 }
 
 extern "C" DLLEXPORT int32_t qore_rt_string_equals_cstr(
@@ -8088,15 +8100,36 @@ extern "C" DLLEXPORT int32_t qore_rt_string_equals_cstr(
 // Typed string inequality - both operands are known to be strings at compile time
 // Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
 extern "C" DLLEXPORT uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
-    QoreValue lv = fromBits(left);
-    QoreValue rv = fromBits(right);
-    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
-        return toBits(QoreValue(true));
+    return toBits(QoreValue(
+        qore_rt_string_eq_typed_native_impl(left, right, xsink) == 0));
+}
+
+//! Native boolean typed string inequality.
+extern "C" DLLEXPORT int64_t qore_rt_string_ne_typed_native(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    return qore_rt_string_eq_typed_native_impl(left, right, xsink) ? 0 : 1;
+}
+
+//! Compare an assigned string after case conversion without retaining the transformed value.
+extern "C" DLLEXPORT int64_t qore_rt_string_case_equal_native_noguard(
+        uint64_t value, uint64_t other, int32_t upper,
+        int32_t transform_left, ExceptionSink* xsink) {
+    QoreValue v = fromBits(value);
+    QoreStringValueHelper str(v);
+    QoreString transformed(str->getEncoding());
+    int rc = upper
+        ? do_toupper(transformed, *str, xsink)
+        : do_tolower(transformed, *str, xsink);
+    if (rc || (xsink && *xsink)) {
+        return 0;
     }
-    QoreStringNodeValueHelper ls(lv);
-    QoreStringNodeValueHelper rs(rv);
-    bool result = !ls->equalSoft(**rs, xsink);
-    return toBits(QoreValue(result));
+
+    QoreValue other_value = fromBits(other);
+    QoreStringNodeValueHelper other_string(other_value);
+    bool result = transform_left
+        ? transformed.equalSoft(**other_string, xsink)
+        : other_string->equalSoft(transformed, xsink);
+    return xsink && *xsink ? 0 : result ? 1 : 0;
 }
 
 // Typed string less than - both operands are known to be strings at compile time

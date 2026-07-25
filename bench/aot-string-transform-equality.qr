@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub transformEquality(string value, string lower_value,
+        string upper_value, int rounds) {
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (value.lwr() == lower_value) {
+            ++result;
+        }
+        if (value.upr() == upper_value) {
+            ++result;
+        }
+        if (lower_value != value.lwr()) {
+            ++result;
+        }
+        if (upper_value != value.upr()) {
+            ++result;
+        }
+    }
+    return result;
+}
+
+int sub plainEquality(string value, string same_value,
+        string other_value, int rounds) {
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (value == same_value) {
+            ++result;
+        }
+        if (value != other_value) {
+            ++result;
+        }
+        if (same_value == value) {
+            ++result;
+        }
+        if (other_value != value) {
+            ++result;
+        }
+    }
+    return result;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    string value = "Prefix ABCDEFGHIJKLMNOPQRSTUVWXYZ "
+        + "abcdefghijklmnopqrstuvwxyz Needle";
+    int result = ENV.QORE_BENCH_PLAIN
+        ? plainEquality(value, value, "other", rounds)
+        : transformEquality(value, value.lwr(), value.upr(), rounds);
+    printf("%d\n", result);
+    return 0;
+}
+
+main();

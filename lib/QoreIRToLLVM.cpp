@@ -9425,6 +9425,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 case QoreIROpcode::BrIf: {
                     const auto* br = static_cast<const QoreIRBranchIfInstruction*>(inst_ptr.get());
                     operand_remaining_uses[br->condition.id]++;
+                    to_bool_uses[br->condition.id]++;
                     non_dot_eval_uses.insert(br->condition.id);
                     break;
                 }
@@ -10875,6 +10876,39 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
         llvm::Module& module, std::string& error) {
     printd(3, "LLVM-LOWER: opcode=%d result=%%%d\n", (int)inst->opcode, inst->result.id);
+    auto emit_string_case_comparison = [&]() -> llvm::Value* {
+        uint8_t transform_operand =
+            inst->aot_string_case_comparison_operand;
+        auto* base = getVal(
+            inst->operands[transform_operand].id, error);
+        auto* other = getVal(
+            inst->operands[1 - transform_operand].id, error);
+        if (!base || !other) {
+            return nullptr;
+        }
+        llvm::Value* base_boxed =
+            boxValue(base, inst->operands[transform_operand].id);
+        llvm::Value* other_boxed =
+            boxValue(other, inst->operands[1 - transform_operand].id);
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_string_case_equal_native_noguard",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, i32_type, i32_type, ptr_type},
+                false));
+        llvm::Value* equal = builder->CreateCall(helper,
+            {base_boxed, other_boxed,
+             llvm::ConstantInt::get(i32_type,
+                inst->aot_string_case_comparison_upper ? 1 : 0),
+             llvm::ConstantInt::get(i32_type,
+                transform_operand == 0 ? 1 : 0),
+             xsink_arg});
+        llvm::Value* result = builder->CreateICmpNE(equal,
+            llvm::ConstantInt::get(i64_type, 0));
+        return inst->aot_string_case_comparison
+                == QoreIRInstruction::
+                    AOTStringCaseComparisonKind::Ne
+            ? builder->CreateNot(result) : result;
+    };
     auto load_local_int_for_fused = [&](LocalVar* local, const void* key,
             std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
             const char* name) -> llvm::Value* {
@@ -19886,6 +19920,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Dynamic comparison operations ===
         // Phase 5b: EqAny..GeAny use inline fast-paths for int-vs-int and float-vs-float
         case QoreIROpcode::EqAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -19904,21 +19950,57 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::EqString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_eq_typed",
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_COMPARISON_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_eq_typed_native"
+                    : "qore_rt_string_eq_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::NeAny: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
@@ -19937,17 +20019,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::NeString: {
+            if (inst->aot_string_case_comparison
+                    != QoreIRInstruction::
+                        AOTStringCaseComparisonKind::None) {
+                llvm::Value* result =
+                    emit_string_case_comparison();
+                if (!result) {
+                    return false;
+                }
+                values[inst->result.id] = result;
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             auto* lhs = getVal(inst->operands[0].id, error);
             auto* rhs = getVal(inst->operands[1].id, error);
             if (!lhs || !rhs) { return false; }
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
-            auto helper = module.getOrInsertFunction("qore_rt_string_ne_typed",
+            bool native_result =
+                native_boolean_result_values.count(inst->result.id)
+                && !std::getenv(
+                    "QORE_DISABLE_NATIVE_STRING_COMPARISON_RESULTS");
+            auto helper = module.getOrInsertFunction(native_result
+                    ? "qore_rt_string_ne_typed_native"
+                    : "qore_rt_string_ne_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
+            if (native_result) {
+                result = builder->CreateICmpNE(result,
+                    llvm::ConstantInt::get(i64_type, 0));
+            }
             values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
-            trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (!native_result) {
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
