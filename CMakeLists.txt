@@ -3233,6 +3233,7 @@ qore_user_module("qlib/OpenApi3.qm")
 qore_user_module("qlib/RestHandler.qm")
 qore_user_module("qlib/Swagger.qm")
 qore_user_module("qlib/VscDebugAdapter.qm")
+qore_user_module("qlib/ImapClientDataProvider" "imap-logo-white.svg")
 qore_user_module("qlib/Pop3ClientDataProvider" "pop3-logo-white.svg")
 
 # base 6 modules

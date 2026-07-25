@@ -2193,6 +2193,12 @@ foreach string module_name in (registry.getProcessModules()) {
         (<a href="https://datatracker.ietf.org/doc/html/rfc7628">RFC 7628</a>) bearer-token authentication
         selected from the mechanisms the server advertises
 
+    - @ref imapclientdataproviderintro "ImapClientDataProvider" module
+      - new module providing a data provider API for IMAP servers, registered as a generic IMAP app so
+        that supporting another email provider is connection configuration rather than new code;
+        provides server-side search, message and single-MIME-part retrieval, flag changes, mailbox
+        moves, \c APPEND, and events for new mail and new attachments
+
     - @ref insightlydataproviderintro "InsightlyDataProvider" module
       - new module providing a data provider API for <a href="https://www.insightly.com/">Insightly</a> CRM
 

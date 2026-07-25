@@ -1,0 +1,543 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Mime
+%requires MailMessage
+%requires DataProvider
+%requires ConnectionProvider
+%requires ImapClient
+%requires ImapClientDataProvider
+%requires QUnit
+
+%exec-class ImapClientDataProviderTest
+
+#! Minimal mock IMAP server exercising the operations the data provider issues
+class MockImapDpServer {
+    private {
+        Socket listener();
+        int port;
+        #! guards state shared between the server thread and the test thread
+        Mutex lck();
+        list<string> received = ();
+        Counter done(1);
+        *string server_error;
+        #! canned message body returned for every fetch
+        binary body;
+        #! the last APPEND payload received
+        *binary append_payload;
+    }
+
+    constructor(binary body) {
+        self.body = body;
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    string getUrl() {
+        return sprintf("imap://localhost:%d", port);
+    }
+
+    start() {
+        background acceptAndServe();
+    }
+
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    list<string> getReceivedCommands() {
+        AutoLock al(lck);
+        return received;
+    }
+
+    *binary getAppendPayload() {
+        AutoLock al(lck);
+        return append_payload;
+    }
+
+    *string getServerError() {
+        AutoLock al(lck);
+        return server_error;
+    }
+
+    private record(string line) {
+        AutoLock al(lck);
+        received += line;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-CLOSED" && ex.err != "SOCKET-NOT-OPEN") {
+                AutoLock al(lck);
+                server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    private string readLine(Socket client, timeout to = 10s) {
+        string str = "";
+        while (True) {
+            int c = client.recvu1(to);
+            str += chr(c);
+            if (c == 10) {
+                break;
+            }
+        }
+        return str;
+    }
+
+    private serveClient(Socket client) {
+        client.send("* OK [CAPABILITY IMAP4rev1] MockImap ready\r\n");
+
+        while (True) {
+            string line = readLine(client);
+            trim line;
+            record(line);
+
+            *list<*string> m = (line =~ x/^(\S+)\s+(.*)$/);
+            if (!m) {
+                continue;
+            }
+            string tag = m[0];
+            *list<*string> cm = (m[1] =~ x/^(\S+)\s*(.*)$/);
+            string cmd = cm[0].upr();
+            string args = cm[1] ?? "";
+
+            switch (cmd) {
+                case "CAPABILITY":
+                    client.send("* CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN MOVE UIDPLUS LITERAL+\r\n");
+                    client.send(sprintf("%s OK CAPABILITY completed\r\n", tag));
+                    break;
+                case "AUTHENTICATE":
+                    client.send(sprintf("%s OK authenticated\r\n", tag));
+                    break;
+                case "LOGIN":
+                    client.send(sprintf("%s OK LOGIN completed\r\n", tag));
+                    break;
+                case "NOOP":
+                    client.send(sprintf("%s OK NOOP completed\r\n", tag));
+                    break;
+                case "LIST":
+                case "LSUB":
+                    client.send(sprintf("* %s (\\HasNoChildren) \"/\" \"INBOX\"\r\n", cmd));
+                    client.send(sprintf("* %s (\\Noselect) \"/\" \"Archive\"\r\n", cmd));
+                    client.send(sprintf("%s OK %s completed\r\n", tag, cmd));
+                    break;
+                case "SELECT":
+                case "EXAMINE":
+                    client.send("* 2 EXISTS\r\n");
+                    client.send("* 0 RECENT\r\n");
+                    client.send("* OK [UIDVALIDITY 12345] UIDs valid\r\n");
+                    client.send("* OK [UIDNEXT 103] next\r\n");
+                    client.send(sprintf("%s OK [%s] %s completed\r\n", tag,
+                        cmd == "EXAMINE" ? "READ-ONLY" : "READ-WRITE", cmd));
+                    break;
+                case "UID":
+                    handleUid(client, tag, args);
+                    break;
+                case "STORE":
+                case "COPY":
+                case "MOVE":
+                case "EXPUNGE":
+                    client.send(sprintf("%s OK %s completed\r\n", tag, cmd));
+                    break;
+                case "APPEND":
+                    handleAppend(client, tag, args);
+                    break;
+                case "LOGOUT":
+                    client.send("* BYE\r\n");
+                    client.send(sprintf("%s OK LOGOUT completed\r\n", tag));
+                    return;
+                default:
+                    client.send(sprintf("%s BAD unknown command %s\r\n", tag, cmd));
+                    break;
+            }
+        }
+    }
+
+    private handleUid(Socket client, string tag, string args) {
+        *list<*string> m = (args =~ x/^(\S+)\s*(.*)$/);
+        string subcmd = m[0].upr();
+        switch (subcmd) {
+            case "SEARCH":
+                client.send("* SEARCH 101 102\r\n");
+                client.send(sprintf("%s OK UID SEARCH completed\r\n", tag));
+                break;
+            case "FETCH": {
+                string items = (m[1] ?? "").upr();
+                *list<*string> pm = (items =~ x/BODY(?:\.PEEK)?\[([^\]]*)\]/);
+                string section = pm ? (pm[0] ?? "") : "";
+                binary payload = section == "1" ? binary("attachment-content") : body;
+                string head = "* 1 FETCH (UID 101";
+                if (items =~ /FLAGS/) {
+                    head += " FLAGS (\\Seen)";
+                }
+                if (items =~ /BODY/) {
+                    client.send(sprintf("%s BODY[%s] {%d}\r\n", head, section, payload.size()));
+                    client.send(payload);
+                    client.send(")\r\n");
+                } else {
+                    client.send(head + ")\r\n");
+                }
+                client.send(sprintf("%s OK UID FETCH completed\r\n", tag));
+                break;
+            }
+            default:
+                client.send(sprintf("%s OK UID %s completed\r\n", tag, subcmd));
+                break;
+        }
+    }
+
+    private handleAppend(Socket client, string tag, string args) {
+        *list<*string> m = (args =~ x/\{([0-9]+)(\+?)\}$/);
+        if (!m) {
+            client.send(sprintf("%s BAD malformed APPEND\r\n", tag));
+            return;
+        }
+        int count = m[0].toInt();
+        if (m[1] != "+") {
+            client.send("+ Ready\r\n");
+        }
+        binary payload = binary();
+        while (payload.size() < count) {
+            payload += client.recvBinary(count - payload.size(), 10s);
+        }
+        {
+            AutoLock al(lck);
+            append_payload = payload;
+        }
+        readLine(client);
+        client.send(sprintf("%s OK APPEND completed\r\n", tag));
+    }
+}
+
+public class ImapClientDataProviderTest inherits QUnit::Test {
+    public {
+        const TestBody = "From: Sender <sender@test.com>\r\n"
+            "To: Recipient <recipient@test.com>\r\n"
+            "Subject: Test Subject\r\n"
+            "Date: Wed, 17 Jul 1996 02:23:25 -0700\r\n"
+            "Message-ID: <abc123@test.com>\r\n"
+            "MIME-Version: 1.0\r\n"
+            "Content-Type: multipart/mixed; boundary=\"BOUND\"\r\n"
+            "\r\n"
+            "--BOUND\r\n"
+            "Content-Type: text/plain; charset=us-ascii\r\n"
+            "\r\n"
+            "Hello, World!\r\n"
+            "--BOUND\r\n"
+            "Content-Type: text/csv; name=\"report.csv\"\r\n"
+            "Content-Disposition: attachment; filename=\"report.csv\"\r\n"
+            "Content-Transfer-Encoding: base64\r\n"
+            "\r\n"
+            "YSxiLGMK\r\n"
+            "--BOUND--\r\n";
+    }
+
+    constructor() : Test("ImapClientDataProvider Test", "1.0") {
+        addTestCase("factory registration", \factoryTests());
+        addTestCase("provider children", \childrenTests());
+        addTestCase("search", \searchTests());
+        addTestCase("get message", \getMessageTests());
+        addTestCase("get attachment", \getAttachmentTests());
+        addTestCase("list mailboxes", \listMailboxesTests());
+        addTestCase("set flags", \setFlagsTests());
+        addTestCase("move messages", \moveTests());
+        addTestCase("append message", \appendTests());
+        addTestCase("action catalog registration", \actionCatalogTests());
+        addTestCase("watch provider options", \watchOptionTests());
+        set_return_value(main());
+    }
+
+    private ImapClientDataProvider makeProvider(MockImapDpServer server) {
+        return new ImapClientDataProvider({
+            "url": server.getUrl(),
+            "username": "user@test.com",
+            "password": "secret",
+        });
+    }
+
+    factoryTests() {
+        # the factory must be registered under the name the FactoryMap uses, or the module loads but
+        # the provider is never reachable
+        AbstractDataProvider dp = DataProvider::getFactoryObjectFromString(
+            "imap{url=imap://localhost:1143,username=u,password=p}");
+        assertEq("imap", dp.getName(), "factory resolved by name");
+        assertTrue(dp instanceof ImapClientDataProvider, "factory produced the right class");
+    }
+
+    childrenTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        list<string> names = dp.getChildProviderNames();
+        assertEq(7, names.size(), "all API children present");
+        foreach string name in (("search", "get-message", "get-attachment", "list-mailboxes",
+            "set-flags", "move-messages", "append-message")) {
+            assertTrue(inlist(name, names), sprintf("child %y present", name));
+            AbstractDataProvider child = dp.getChildProviderEx(name);
+            assertEq(name, child.getName(), sprintf("child %y resolves", name));
+            assertTrue(child.getInfo().supports_request, sprintf("child %y supports requests", name));
+        }
+    }
+
+    searchTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        hash<auto> rv = dp.getChildProviderEx("search").doRequest({
+            "mailbox": "INBOX",
+            "criteria": "UNSEEN",
+        });
+        assertEq((101, 102), rv.uids, "matching UIDs returned");
+        assertEq(2, rv.count, "match count returned");
+        assertEq(12345, rv.uidvalidity, "uidvalidity returned so stored UIDs can be validated");
+        assertEq(2, rv.message_count, "mailbox message count returned");
+
+        # a read-only search must not open the mailbox read-write
+        bool examined = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /EXAMINE/) {
+                examined = True;
+            }
+        }
+        assertTrue(examined, "read-only search used EXAMINE");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    getMessageTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        hash<auto> rv = dp.getChildProviderEx("get-message").doRequest({"uid": 101});
+        assertEq(101, rv.uid, "UID returned");
+        assertEq("Test Subject", rv.subject, "subject decoded");
+        assertRegex("sender@test\\.com", rv.from, "sender returned");
+        assertEq(("\\Seen",), rv.flags, "flags returned");
+        assertRegex("Hello, World!", rv.body, "body text decoded");
+        assertEq(1, rv.attachments.size(), "attachment summarized");
+        assertEq("report.csv", rv.attachments[0].name, "attachment name returned");
+        assertEq(binary(TestBody), rv.raw, "raw message returned byte-exact");
+
+        # attachment content must not be inlined in the message response
+        assertNothing(rv.attachments[0].data ?? NOTHING,
+            "attachment content not inlined in the message response");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    getAttachmentTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        hash<auto> rv = dp.getChildProviderEx("get-attachment").doRequest({
+            "uid": 101,
+            "part": "1",
+        });
+        assertEq(101, rv.uid, "UID returned");
+        assertEq("1", rv.part, "part specifier returned");
+        assertEq(binary("attachment-content"), rv.data, "part content returned byte-exact");
+        assertEq(18, rv.size, "part size returned");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    listMailboxesTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        hash<auto> rv = dp.getChildProviderEx("list-mailboxes").doRequest({});
+        assertEq(2, rv.count, "mailbox count returned");
+        assertEq("INBOX", rv.mailboxes[0].name, "mailbox name returned");
+        assertEq("/", rv.mailboxes[0].delimiter, "delimiter returned");
+        assertEq(("\\Noselect",), rv.mailboxes[1].flags, "flags returned");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    setFlagsTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        AbstractDataProvider child = dp.getChildProviderEx("set-flags");
+        hash<auto> rv = child.doRequest({
+            "uids": (101, 102),
+            "flags": ("\\Seen",),
+            "mode": "add",
+        });
+        assertEq((101, 102), rv.uids, "UIDs returned");
+        assertEq(2, rv.count, "count returned");
+
+        child.doRequest({"uids": (101,), "flags": ("\\Flagged",), "mode": "remove"});
+        child.doRequest({"uids": (101,), "flags": ("\\Seen",), "mode": "replace"});
+
+        hash<string, bool> sent = {};
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /STORE/) {
+                sent{(cmd =~ x/(STORE.*)$/)[0]} = True;
+            }
+        }
+        assertTrue(sent."STORE 101,102 +FLAGS (\\Seen)", "add mode sent +FLAGS");
+        assertTrue(sent."STORE 101 -FLAGS (\\Flagged)", "remove mode sent -FLAGS");
+        assertTrue(sent."STORE 101 FLAGS (\\Seen)", "replace mode sent FLAGS");
+
+        # the typed request layer rejects an invalid mode before the provider runs
+        assertThrows("RUNTIME-TYPE-ERROR", "does not accept value",
+            sub () { child.doRequest({"uids": (101,), "flags": ("\\Seen",), "mode": "bogus"}); },
+            NOTHING, "unknown mode rejected by request-type validation");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    moveTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        AbstractDataProvider child = dp.getChildProviderEx("move-messages");
+        hash<auto> rv = child.doRequest({"uids": (101,), "target": "Archive"});
+        assertEq((101,), rv.uids, "UIDs returned");
+
+        child.doRequest({"uids": (102,), "target": "Archive", "copy_only": True});
+
+        hash<string, bool> seen = {};
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /UID MOVE 101/) {
+                seen.move = True;
+            } else if (cmd =~ /UID COPY 102/) {
+                seen.copy = True;
+            }
+        }
+        assertTrue(seen.move, "move used MOVE when advertised");
+        assertTrue(seen.copy, "copy_only used COPY");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    appendTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        ImapClientDataProvider dp = makeProvider(server);
+        on_exit dp.getImapClient().disconnect();
+
+        binary msg = binary("Subject: appended\r\n\r\nbody\r\n");
+        hash<auto> rv = dp.getChildProviderEx("append-message").doRequest({
+            "mailbox": "Sent",
+            "message": msg,
+            "flags": ("\\Seen",),
+        });
+        assertEq("Sent", rv.mailbox, "mailbox returned");
+        assertEq(msg.size(), rv.size, "size returned");
+        assertEq(msg, server.getAppendPayload(), "append payload byte-exact");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    actionCatalogTests() {
+        # the app must be registered with a logo and be in the Email group
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("IMAP");
+        assertTrue(exists app, "IMAP app registered");
+        assertEq("IMAP", app.display_name, "app display name");
+        assertEq("imap", app.scheme, "app scheme");
+        assertEq("imap-logo-white.svg", app.logo_file_name, "app logo file name");
+        assertTrue(app.logo.val(), "app logo content loaded");
+        assertRegex("<svg", app.logo, "app logo is SVG content");
+        assertTrue(inlist(DataProvider::AppGroup::Email, app.groups), "app is in the Email group");
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx("IMAP");
+        assertEq(9, actions.size(), "all actions registered");
+
+        hash<string, hash<DataProviderActionInfo>> by_action = {};
+        foreach hash<DataProviderActionInfo> ai in (actions) {
+            by_action{ai.action} = ai;
+        }
+        foreach string name in (("search", "get-message", "get-attachment", "list-mailboxes",
+            "set-flags", "move-messages", "append-message", "watch", "watch-attachment")) {
+            assertTrue(exists by_action{name}, sprintf("action %y registered", name));
+            hash<DataProviderActionInfo> ai = by_action{name};
+            assertTrue(ai.display_name.val(), sprintf("action %y has a display name", name));
+            assertTrue(ai.short_desc.val(), sprintf("action %y has a short description", name));
+            assertTrue(ai.short_desc.size() < 80, sprintf("action %y short_desc is concise", name));
+            assertTrue(ai.desc.val(), sprintf("action %y has a description", name));
+            # without options the action renders as an empty, unusable form
+            assertTrue(ai.options.val(), sprintf("action %y has options", name));
+            assertTrue(exists ai.output_type || exists ai.get_output_type,
+                sprintf("action %y has an output type", name));
+        }
+
+        # the event actions must declare their event constants
+        assertEq(DPAT_EVENT, by_action.watch.action_code, "watch is an event action");
+        assertEq(EVENT_IMAP_MESSAGE_MATCHED, by_action.watch.action_val, "watch event constant");
+        assertEq(DPAT_EVENT, by_action."watch-attachment".action_code,
+            "watch-attachment is an event action");
+        assertEq(EVENT_IMAP_ATTACHMENT_MATCHED, by_action."watch-attachment".action_val,
+            "watch-attachment event constant");
+
+        # scheme-based apps must use "path" and must not set "cls"
+        foreach hash<DataProviderActionInfo> ai in (actions) {
+            assertTrue(ai.path.val(), sprintf("action %y uses a path", ai.action));
+            assertNothing(ai.cls ?? NOTHING,
+                sprintf("action %y does not set cls, which conflicts with a scheme-based app",
+                    ai.action));
+        }
+    }
+
+    watchOptionTests() {
+        # the watch options must not leak connection options into the action form: those come from
+        # the connection, not from the action
+        hash<auto> watch_opts = ImapMessageWatchDataProvider::WatchOptions;
+        foreach string name in (("mailbox", "criteria", "poll_interval", "mark_seen",
+            "delete_messages")) {
+            assertTrue(exists watch_opts{name}, sprintf("watch option %y present", name));
+        }
+
+        hash<auto> att_opts = ImapAttachmentWatchDataProvider::AttachmentWatchOptions;
+        foreach string name in (("attachment_glob", "ignore_case", "retrieve_attachments")) {
+            assertTrue(exists att_opts{name}, sprintf("attachment watch option %y present", name));
+        }
+
+        # sensitive options must be marked so they are never rendered or logged in the clear
+        hash<auto> con_opts = ImapClientDataProviderBase::ConstructorOptions;
+        assertTrue(con_opts.password.sensitive, "password marked sensitive");
+        assertTrue(con_opts.token.sensitive, "token marked sensitive");
+        assertTrue(con_opts.username.required, "username required");
+        assertTrue(con_opts.url.required, "url required");
+        assertEq(4, con_opts.auth_mechanism.allowed_values.size(), "all mechanisms listed");
+        foreach hash<AllowedValueInfo> av in (con_opts.auth_mechanism.allowed_values) {
+            assertTrue(av.display_name.val(),
+                sprintf("mechanism %y has a display name", av.value));
+        }
+    }
+}
