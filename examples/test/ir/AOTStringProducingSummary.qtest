@@ -103,6 +103,14 @@ string sub optionalConvert(*int value) {
 string sub formatHashRecord(hash<string, string> row, int value) {
     return row.first + \":\" + row.second + \":\" + string(value);
 }
+
+string sub wrappedHashRecord(hash<string, string> row, int value) {
+    return formatHashRecord(row, value);
+}
+
+string sub wrappedHashRecordTwice(hash<string, string> row, int value) {
+    return wrappedHashRecord(row, value);
+}
 ";
 }
 
@@ -242,18 +250,31 @@ string sub consumerCode() {
     }
     bool hash_encoding_rejected = False;
     try {
-        formatHashRecord({
+        wrappedHashRecordTwice({
             \"first\": convert_encoding(\"ascii\", \"US-ASCII\"),
-            \"second\": \"\u00df\"}, 42);
+            \"second\": \"\u00df\"}, 42).length();
     } catch (hash<auto> ex) {
         hash_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
-    printf(\"hash:%s:%s:%s:%d:%d:%d\\n\",
+    printf(\"hash:%s:%s:%s:%s:%s:%d:%d:%d\\n\",
         formatHashRecord(hash_present, 42),
         formatHashRecord(hash_missing, 42),
         formatHashRecord(hash_removed, 42),
+        wrappedHashRecord(hash_present, 42),
+        wrappedHashRecordTwice(hash_present, 42),
         hash_unassigned_rejected, hash_removed_lvalue_rejected,
         hash_encoding_rejected);
+    printf(\"hash-consumers:%d:%d:%d:%d:%y:%y:%y:%d:%d:%s\\n\",
+        wrappedHashRecordTwice(hash_present, 42).size(),
+        wrappedHashRecordTwice(hash_present, 42).length(),
+        wrappedHashRecordTwice(hash_missing, 42).size(),
+        wrappedHashRecordTwice(hash_removed, 42).length(),
+        wrappedHashRecordTwice(hash_present, 42).startsWith(\"Dvo\"),
+        wrappedHashRecordTwice(hash_present, 42).endsWith(\"42\"),
+        wrappedHashRecordTwice(hash_present, 42).contains(\"Smetana\"),
+        wrappedHashRecordTwice(hash_present, 42).find(\":\"),
+        wrappedHashRecordTwice(hash_present, 42).rfind(\":\"),
+        wrappedHashRecordTwice(hash_present, 42).substr(1, 3));
     return 0;
 }
 ";
@@ -314,6 +335,8 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"33\"/)
         || !(provider_index =~ /\"qore_path\": \"concatSlice\(string,string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"concatSliceTail\(string,string,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"formatHashRecord\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedHashRecord\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
+        || !(provider_index =~ /\"qore_path\": \"wrappedHashRecordTwice\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
         || !(provider_index =~ /\"qore_path\": \"optionalConcat\(\*string,\*string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
         || !(provider_index =~ /\"qore_path\": \"optionalConvert\(\*int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
         || provider_index =~ /\"qore_path\": \"effectfulWrapper\(string,string\)\"[^\n]*\"string_expression_nodes\": \[\{/

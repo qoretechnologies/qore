@@ -5562,6 +5562,27 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
     const std::unordered_set<const void*> native_unsafe_locals =
         qore_ir_get_native_unsafe_locals(ir_func, initially_assigned_locals);
 
+    bool has_context_independent_hash_access = false;
+    size_t hash_scan_count = 0;
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (++hash_scan_count > 100 && !(hash_scan_count % 100)
+                    && qore_check_cancel(nullptr,
+                        "AOT context-independent hash-access analysis")) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::HashKeyAccessHash
+                    || inst->opcode
+                        == QoreIROpcode::HashKeyAccessHashGuarded) {
+                has_context_independent_hash_access = true;
+                break;
+            }
+        }
+        if (has_context_independent_hash_access) {
+            break;
+        }
+    }
+
     std::unordered_set<const LocalVar*> context_independent_locals;
     context_independent_locals.reserve(sig->numParams()
         + ir_func.all_body_locals.size()
@@ -5670,6 +5691,22 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::CheckException:
                 case QoreIROpcode::PushTempMark:
                 case QoreIROpcode::DiscardTemps:
+                    break;
+                case QoreIROpcode::ConstString:
+                case QoreIROpcode::ToString:
+                case QoreIROpcode::AddAny:
+                case QoreIROpcode::AddString:
+                case QoreIROpcode::StringConcat:
+                    if (!has_context_independent_hash_access) {
+                        return false;
+                    }
+                    break;
+                case QoreIROpcode::HashKeyAccessHash:
+                case QoreIROpcode::HashKeyAccessHashGuarded:
+                    if (std::getenv(
+                            "QORE_DISABLE_AOT_CONTEXT_INDEPENDENT_HASH_ACCESS")) {
+                        return false;
+                    }
                     break;
                 case QoreIROpcode::LoadLocal: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
@@ -6161,7 +6198,11 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                     static_cast<int>(call->operands.size()))) {
             return -1;
         }
-        std::vector<uint8_t> args;
+        struct ComposedArgument {
+            uint8_t value = UINT8_MAX;
+            int8_t hash_param = -1;
+        };
+        std::vector<ComposedArgument> args;
         args.reserve(call->operands.size());
         for (size_t i = 0; i < call->operands.size(); ++i) {
             if (i && !(i % 100)
@@ -6170,21 +6211,33 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 return -1;
             }
             auto value = values.find(call->operands[i].id);
-            if (value == values.end() || !info.param_rejects_nothing[i]
-                    || info.param_may_modify[i]
-                    || composed_concat_roots.count(value->second)) {
+            auto hash_value = hash_values.find(call->operands[i].id);
+            if ((value == values.end() && hash_value == hash_values.end())
+                    || !info.param_rejects_nothing[i]
+                    || info.param_may_modify[i]) {
                 return -1;
             }
             BatchCalleeParamKind kind = info.param_kinds[i];
+            ComposedArgument arg;
+            if (value != values.end()) {
+                if (composed_concat_roots.count(value->second)) {
+                    return -1;
+                }
+                arg.value = value->second;
+            } else {
+                arg.hash_param = hash_value->second;
+            }
             if ((kind == BatchCalleeParamKind::Boxed
-                        && !is_string_node(value->second))
+                        && arg.value != UINT8_MAX
+                        && !is_string_node(arg.value))
                     || (kind == BatchCalleeParamKind::NativeInt
-                        && !is_int_node(value->second))
+                        && (arg.value == UINT8_MAX
+                            || !is_int_node(arg.value)))
                     || (kind != BatchCalleeParamKind::Boxed
                         && kind != BatchCalleeParamKind::NativeInt)) {
                 return -1;
             }
-            args.push_back(value->second);
+            args.push_back(arg);
         }
 
         if (info.string_expression) {
@@ -6204,7 +6257,11 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                             || static_cast<size_t>(source.param) >= args.size()) {
                         return -1;
                     }
-                    uint8_t value = args[static_cast<size_t>(source.param)];
+                    uint8_t value =
+                        args[static_cast<size_t>(source.param)].value;
+                    if (value == UINT8_MAX) {
+                        return -1;
+                    }
                     if ((source.kind
                                 == AOTStringExpressionNodeKind::StringParam
                                 && !is_string_node(value))
@@ -6214,6 +6271,24 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                         return -1;
                     }
                     remap[i] = value;
+                    continue;
+                }
+                if (source.kind
+                        == AOTStringExpressionNodeKind::HashKeyString) {
+                    if (source.param < 0
+                            || static_cast<size_t>(source.param) >= args.size()
+                            || args[static_cast<size_t>(source.param)]
+                                    .hash_param < 0) {
+                        return -1;
+                    }
+                    AOTStringExpressionNodeInfo node = source;
+                    node.param = args[static_cast<size_t>(source.param)]
+                        .hash_param;
+                    int index = append_node(std::move(node));
+                    if (index < 0) {
+                        return -1;
+                    }
+                    remap[i] = static_cast<uint8_t>(index);
                     continue;
                 }
                 if (source.kind == AOTStringExpressionNodeKind::Substr) {
@@ -6258,7 +6333,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 if (param < 0 || static_cast<size_t>(param) >= args.size()) {
                     return false;
                 }
-                target = args[static_cast<size_t>(param)];
+                target = args[static_cast<size_t>(param)].value;
                 return is_string_node(target);
             };
             node.kind = AOTStringExpressionNodeKind::Concat;
@@ -6277,7 +6352,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 return -1;
             }
             node.kind = AOTStringExpressionNodeKind::IntToString;
-            node.lhs = args[static_cast<size_t>(info.string_op.base_param)];
+            node.lhs =
+                args[static_cast<size_t>(info.string_op.base_param)].value;
             if (!is_int_node(node.lhs)) {
                 return -1;
             }
@@ -16586,7 +16662,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         supported = info->second.string_expression.nodes.back().kind
                             == AOTStringExpressionNodeKind::Concat;
                         if (supported) {
-                            supported = std::none_of(
+                            bool has_hash_string = std::any_of(
                                 info->second.string_expression.nodes.begin(),
                                 info->second.string_expression.nodes.end(),
                                 [](const AOTStringExpressionNodeInfo& node) {
@@ -16594,6 +16670,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                         == AOTStringExpressionNodeKind::
                                             HashKeyString;
                                 });
+                            if (has_hash_string) {
+                                supported =
+                                    info->second.context_independent_fast_entry
+                                    && call->opcode
+                                        != QoreIROpcode::CallMethodDirect
+                                    && !std::getenv(
+                                        "QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT");
+                            }
                         }
                     }
                     if (!supported

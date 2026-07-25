@@ -5777,7 +5777,7 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
     for (size_t i = 0; i < expression.nodes.size(); ++i) {
         const auto& node = expression.nodes[i];
         if (node.kind == AOTStringExpressionNodeKind::HashKeyString) {
-            if (fused_call || !fallback_fn
+            if (!fallback_fn
                     || std::getenv("QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT")
                     || node.param < 0
                     || static_cast<size_t>(node.param) >= native_args.size()
@@ -6052,11 +6052,150 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         builder->SetInsertPoint(fallback_bb);
         llvm::Value* fallback_result =
             builder->CreateCall(fallback_fn, native_args);
+        if (fused_call) {
+            llvm::BasicBlock* consume_bb = llvm::BasicBlock::Create(
+                ctx, "aot.string.hash.fallback.consume", llvm_func);
+            llvm::BasicBlock* exception_bb = llvm::BasicBlock::Create(
+                ctx, "aot.string.hash.fallback.exception", llvm_func);
+            llvm::BasicBlock* fallback_merge_bb = llvm::BasicBlock::Create(
+                ctx, "aot.string.hash.fallback.merge", llvm_func);
+            auto has_exception = module.getOrInsertFunction(
+                "qore_rt_has_exception",
+                llvm::FunctionType::get(i64_type, {ptr_type}, false));
+            llvm::Value* exception = builder->CreateCall(
+                has_exception, {xsink_arg});
+            builder->CreateCondBr(
+                builder->CreateICmpNE(exception,
+                    llvm::ConstantInt::get(i64_type, 0)),
+                exception_bb, consume_bb);
+
+            builder->SetInsertPoint(exception_bb);
+            llvm::Value* exception_result =
+                consumer
+                        == QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::StartsWith
+                    || consumer
+                        == QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::EndsWith
+                    || consumer
+                        == QoreIRCallDirectInstruction::
+                            AOTStringConsumerKind::Contains
+                ? static_cast<llvm::Value*>(
+                    llvm::ConstantInt::getFalse(ctx))
+                : static_cast<llvm::Value*>(llvm::ConstantInt::get(
+                    i64_type,
+                    consumer
+                            == QoreIRCallDirectInstruction::
+                                AOTStringConsumerKind::Substr
+                        ? VAL_NOTHING : 0));
+            builder->CreateBr(fallback_merge_bb);
+            exception_bb = builder->GetInsertBlock();
+
+            builder->SetInsertPoint(consume_bb);
+            llvm::Value* consumed_result = nullptr;
+            if (measure) {
+                const char* helper_name =
+                    consumer
+                            == QoreIRCallDirectInstruction::
+                                AOTStringConsumerKind::Length
+                        ? "qore_rt_pseudo_string_length_native_noguard"
+                        : "qore_rt_pseudo_string_size_native_noguard";
+                auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(
+                        i64_type, {i64_type}, false));
+                consumed_result =
+                    builder->CreateCall(helper, {fallback_result});
+            } else if (consumer
+                    == QoreIRCallDirectInstruction::
+                        AOTStringConsumerKind::Substr) {
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_pseudo_string_substr_noguard",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, i64_type, i32_type, ptr_type},
+                        false));
+                consumed_result = builder->CreateCall(helper,
+                    {fallback_result,
+                     llvm::ConstantInt::get(
+                        i64_type, fused_call->aot_string_consumer_arg0),
+                     llvm::ConstantInt::get(
+                        i64_type, fused_call->aot_string_consumer_arg1),
+                     llvm::ConstantInt::get(i32_type,
+                        fused_call->aot_string_consumer_has_arg1),
+                     xsink_arg});
+            } else {
+                int16_t pattern_operand =
+                    fused_call->aot_string_consumer_pattern_operand;
+                if (pattern_operand < 0
+                        || static_cast<size_t>(pattern_operand)
+                            >= native_args.size()) {
+                    return nullptr;
+                }
+                int32_t operation =
+                    consumer
+                            == QoreIRCallDirectInstruction::
+                                AOTStringConsumerKind::StartsWith
+                        ? 0
+                        : consumer
+                                == QoreIRCallDirectInstruction::
+                                    AOTStringConsumerKind::EndsWith
+                            ? 1
+                            : consumer
+                                    == QoreIRCallDirectInstruction::
+                                        AOTStringConsumerKind::Contains
+                                ? 2
+                                : consumer
+                                        == QoreIRCallDirectInstruction::
+                                            AOTStringConsumerKind::Find
+                                    ? 3 : 4;
+                llvm::Value* pattern =
+                    native_args[static_cast<size_t>(pattern_operand)];
+                if (operation <= 2) {
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_pseudo_string_predicate_native_noguard",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i32_type, ptr_type},
+                            false));
+                    llvm::Value* predicate = builder->CreateCall(helper,
+                        {fallback_result, pattern,
+                         llvm::ConstantInt::get(i32_type, operation),
+                         xsink_arg});
+                    consumed_result = builder->CreateICmpNE(predicate,
+                        llvm::ConstantInt::get(i64_type, 0));
+                } else {
+                    const char* helper_name = operation == 3
+                        ? "qore_rt_pseudo_string_find_native_noguard"
+                        : "qore_rt_pseudo_string_rfind_native_noguard";
+                    auto helper = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i64_type, ptr_type},
+                            false));
+                    consumed_result = builder->CreateCall(helper,
+                        {fallback_result, pattern,
+                         llvm::ConstantInt::get(i64_type,
+                            fused_call->aot_string_consumer_arg0),
+                         xsink_arg});
+                }
+            }
+            auto decref = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(
+                    void_type, {i64_type, ptr_type}, false));
+            builder->CreateCall(decref, {fallback_result, xsink_arg});
+            builder->CreateBr(fallback_merge_bb);
+            consume_bb = builder->GetInsertBlock();
+
+            builder->SetInsertPoint(fallback_merge_bb);
+            llvm::PHINode* fallback_phi = builder->CreatePHI(
+                result->getType(), 2, "aot.string.hash.fallback.result");
+            fallback_phi->addIncoming(exception_result, exception_bb);
+            fallback_phi->addIncoming(consumed_result, consume_bb);
+            fallback_result = fallback_phi;
+        }
         builder->CreateBr(merge_bb);
         fallback_bb = builder->GetInsertBlock();
         builder->SetInsertPoint(merge_bb);
         llvm::PHINode* phi =
-            builder->CreatePHI(i64_type, 2, "aot.string.hash.result");
+            builder->CreatePHI(result->getType(), 2,
+                "aot.string.hash.result");
         phi->addIncoming(result, assigned_bb);
         phi->addIncoming(fallback_result, fallback_bb);
         return phi;
@@ -6084,7 +6223,7 @@ llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
         const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args,
         const QoreIRStringConsumerCallInstruction& call,
-        llvm::Module& module) {
+        llvm::Module& module, llvm::Function* fallback_fn) {
     QoreIRCallDirectInstruction::AOTStringConsumerKind consumer =
         call.aot_string_consumer;
     if (consumer == QoreIRCallDirectInstruction::AOTStringConsumerKind::None
@@ -6092,7 +6231,14 @@ llvm::Value* QoreIRToLLVM::emitAOTStringProducerConsumer(
         return nullptr;
     }
     if (info.string_expression) {
-        return emitAOTStringExpression(info, native_args, module, &call);
+        if (!fallback_fn) {
+            return emitAOTStringExpression(info, native_args, module, &call);
+        }
+        std::vector<llvm::Value*> call_args = native_args;
+        call_args.push_back(aot_ctx_arg);
+        call_args.push_back(xsink_arg);
+        return emitAOTStringExpression(
+            info, call_args, module, &call, fallback_fn);
     }
 
     const AOTStringOpInfo& op = info.string_op;
@@ -16455,7 +16601,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (fused_string_consumer && aot_approach_b_callee) {
                 call_result = emitAOTStringProducerConsumer(
                     *aot_approach_b_callee, raw_args,
-                    *direct_inst, module);
+                    *direct_inst, module, aot_approach_b_fn);
                 if (!call_result) {
                     error = "internal error: fused AOT string producer"
                         " summary could not be emitted";
@@ -17400,7 +17546,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 : BatchCalleeReturnKind::Boxed;
             if (fused_string_consumer && aot_static_batch_callee) {
                 call_result = emitAOTStringProducerConsumer(
-                    *aot_static_batch_callee, raw_args, *direct_inst, module);
+                    *aot_static_batch_callee, raw_args, *direct_inst, module,
+                    aot_static_batch_fn);
                 if (!call_result) {
                     error = "internal error: fused AOT static-method string"
                         " producer summary could not be emitted";
