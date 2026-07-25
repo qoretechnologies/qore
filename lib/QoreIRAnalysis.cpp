@@ -12902,3 +12902,116 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     }
     return fusions.size() + phi_fusions.size();
 }
+
+size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
+    size_t check_count = 0;
+    QoreIRScalarUses uses;
+    if (!qore_ir_collect_scalar_uses(func, uses, check_count)) {
+        return 0;
+    }
+
+    struct Fusion {
+        QoreIRDotEvalMethodDirectInstruction* producer = nullptr;
+        QoreIRInstruction* consumer = nullptr;
+        QoreIRValue result;
+        QoreIRDotEvalMethodDirectInstruction::AOTStringTransformConsumerKind
+            kind = QoreIRDotEvalMethodDirectInstruction::
+                AOTStringTransformConsumerKind::None;
+    };
+    std::vector<Fusion> fusions;
+    std::unordered_set<QoreIRInstruction*> claimed;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR string transform-consumer analysis")) {
+                return 0;
+            }
+            if (!inst_ptr
+                    || inst_ptr->opcode
+                        != QoreIROpcode::DotEvalMethodDirect
+                    || inst_ptr->exception_target
+                    || !inst_ptr->result.isValid()
+                    || inst_ptr->operands.size() != 1) {
+                continue;
+            }
+            auto* producer =
+                static_cast<QoreIRDotEvalMethodDirectInstruction*>(
+                    inst_ptr.get());
+            if (!producer->pseudo
+                    || !producer->pseudo_base_known_assigned_string
+                    || (producer->intrinsic != QoreIRIntrinsic::StringLower
+                        && producer->intrinsic
+                            != QoreIRIntrinsic::StringUpper)) {
+                continue;
+            }
+            auto use = uses.find(producer->result.id);
+            if (use == uses.end() || use->second.size() != 1
+                    || use->second.front().block_id != block_id
+                    || !use->second.front().inst
+                    || use->second.front().inst->opcode
+                        != QoreIROpcode::DotEvalMethodDirect) {
+                continue;
+            }
+            auto* consumer =
+                const_cast<QoreIRDotEvalMethodDirectInstruction*>(
+                    static_cast<
+                        const QoreIRDotEvalMethodDirectInstruction*>(
+                            use->second.front().inst));
+            if (consumer->exception_target || !consumer->pseudo
+                    || consumer->operands.size() != 1
+                    || consumer->operands[0].id != producer->result.id
+                    || !consumer->result.isValid()
+                    || claimed.count(consumer)) {
+                continue;
+            }
+            auto kind = QoreIRDotEvalMethodDirectInstruction::
+                AOTStringTransformConsumerKind::None;
+            if (consumer->intrinsic == QoreIRIntrinsic::Size
+                    || consumer->intrinsic == QoreIRIntrinsic::StringStrlen) {
+                kind = QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::Size;
+            } else if (consumer->intrinsic
+                    == QoreIRIntrinsic::StringLength) {
+                kind = QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::Length;
+            } else {
+                continue;
+            }
+            claimed.insert(consumer);
+            fusions.push_back(
+                {producer, consumer, consumer->result, kind});
+        }
+    }
+    if (fusions.empty()) {
+        return 0;
+    }
+
+    std::unordered_set<QoreIRInstruction*> eliminated;
+    for (const Fusion& fusion : fusions) {
+        fusion.producer->aot_string_transform_consumer = fusion.kind;
+        fusion.producer->result = fusion.result;
+        eliminated.insert(fusion.consumer);
+
+        QoreIRValueFacts facts;
+        facts.type_info = bigIntTypeInfo;
+        facts.assigned_state = QoreIRAssignedState::Assigned;
+        facts.representation = QoreIRValueRepresentation::NativeInt;
+        facts.never_nothing = true;
+        func.setValueFacts(fusion.result, facts);
+    }
+    for (const auto& block : func.blocks) {
+        auto& instructions = block->instructions;
+        for (auto inst = instructions.begin(); inst != instructions.end();) {
+            if (++check_count % 100 == 0) {
+                (void)qore_check_cancel(nullptr,
+                    "IR string transform-consumer fusion");
+            }
+            if (eliminated.count(inst->get())) {
+                inst = instructions.erase(inst);
+            } else {
+                ++inst;
+            }
+        }
+    }
+    return fusions.size();
+}

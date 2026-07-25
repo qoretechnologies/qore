@@ -2384,6 +2384,12 @@ public:
     using AOTAggregateProjectionKind =
         QoreIRCallDirectInstruction::AOTAggregateProjectionKind;
 
+    enum class AOTStringTransformConsumerKind : uint8_t {
+        None,
+        Size,
+        Length,
+    };
+
     QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
             const AbstractQoreFunctionVariant* n_variant, const QoreValue& n_expr, bool n_pseudo)
             : QoreIRInstruction(QoreIROpcode::DotEvalMethodDirect),
@@ -2418,6 +2424,9 @@ public:
     AOTAggregateProjectionKind aot_aggregate_projection =
         AOTAggregateProjectionKind::None;
     int16_t aot_aggregate_projection_operand = -1;
+    //! Transient AOT-only scalar consumer of an exact case transformation.
+    AOTStringTransformConsumerKind aot_string_transform_consumer =
+        AOTStringTransformConsumerKind::None;
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible

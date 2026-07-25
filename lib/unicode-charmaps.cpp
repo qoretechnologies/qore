@@ -1639,10 +1639,80 @@ static int apply_unicode_map(const unicodemap_t& umap, ascii_func_t func, QoreSt
    return 0;
 }
 
+static size_t qore_utf8_unicode_size(unsigned code) {
+   return code > 0xffff ? 4 : code > 0x7ff ? 3 : code > 0x7f ? 2 : 1;
+}
+
+static int apply_unicode_map_measure(const unicodemap_t& umap, ascii_func_t func, const QoreString& src,
+        bool characters, int64_t& result, ExceptionSink* xsink, const unicodecharmap_t* multi_map = nullptr) {
+   const char* begin = src.getBuffer();
+   const char* end = begin + src.size();
+   const char* non_ascii = begin;
+   size_t scan_count = 0;
+   while (non_ascii < end && !(*non_ascii & 0x80)) {
+      if (++scan_count % 100 == 0
+            && qore_check_cancel(xsink, "string case measurement")) {
+         return -1;
+      }
+      ++non_ascii;
+   }
+   if (non_ascii == end) {
+      result = static_cast<int64_t>(src.size());
+      return 0;
+   }
+
+   if (src.getEncoding() != QCS_UTF8) {
+      QoreString transformed(src.getEncoding());
+      if (apply_unicode_map(umap, func, transformed, src, xsink, multi_map)) {
+         return -1;
+      }
+      result = static_cast<int64_t>(characters ? transformed.length() : transformed.size());
+      return 0;
+   }
+
+   size_t count = static_cast<size_t>(non_ascii - begin);
+   for (const char* p = non_ascii; p < end; ++p) {
+      if (++scan_count % 100 == 0
+            && qore_check_cancel(xsink, "string case measurement")) {
+         return -1;
+      }
+      if (!(*p & 0x80)) {
+         ++count;
+         continue;
+      }
+      unsigned len;
+      unsigned uc = src.getUnicodePointFromBytePos(p - begin, len, xsink);
+      if (*xsink) {
+         return -1;
+      }
+      if (multi_map) {
+         unicodecharmap_t::const_iterator mi = multi_map->find(uc);
+         if (mi != multi_map->end()) {
+            count += strlen(mi->second);
+            p += len - 1;
+            continue;
+         }
+      }
+      unicodemap_t::const_iterator i = umap.find(uc);
+      count += characters ? 1 : i == umap.end() ? len : qore_utf8_unicode_size(i->second);
+      p += len - 1;
+   }
+   result = static_cast<int64_t>(count);
+   return 0;
+}
+
 int do_tolower(QoreString& str, const QoreString& src, ExceptionSink* xsink) {
    return apply_unicode_map(ulmap, q_ascii_tolower, str, src, xsink);
 }
 
 int do_toupper(QoreString& str, const QoreString& src, ExceptionSink* xsink) {
    return apply_unicode_map(lumap, q_ascii_toupper, str, src, xsink, &lumap_multi);
+}
+
+int do_tolower_measure(const QoreString& src, bool characters, int64_t& result, ExceptionSink* xsink) {
+   return apply_unicode_map_measure(ulmap, q_ascii_tolower, src, characters, result, xsink);
+}
+
+int do_toupper_measure(const QoreString& src, bool characters, int64_t& result, ExceptionSink* xsink) {
+   return apply_unicode_map_measure(lumap, q_ascii_toupper, src, characters, result, xsink, &lumap_multi);
 }

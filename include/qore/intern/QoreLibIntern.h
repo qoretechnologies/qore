@@ -1323,6 +1323,10 @@ DLLLOCAL int do_unaccent(QoreString& str, const QoreString& src, ExceptionSink* 
 DLLLOCAL int do_unaccent(QoreString& str, const QoreString& src, ExceptionSink* xsink);
 DLLLOCAL int do_tolower(QoreString& str, const QoreString& src, ExceptionSink* xsink);
 DLLLOCAL int do_toupper(QoreString& str, const QoreString& src, ExceptionSink* xsink);
+DLLLOCAL int do_tolower_measure(const QoreString& src, bool characters,
+    int64_t& result, ExceptionSink* xsink);
+DLLLOCAL int do_toupper_measure(const QoreString& src, bool characters,
+    int64_t& result, ExceptionSink* xsink);
 
 DLLLOCAL int64 q_clock_getmillis();
 DLLLOCAL int64 q_clock_getmicros();

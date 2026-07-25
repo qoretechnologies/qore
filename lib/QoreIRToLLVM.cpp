@@ -18169,6 +18169,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 ? qore_ir_get_string_pseudo_xsink_helper(direct_inst->intrinsic,
                     direct_inst->pseudo_base_known_assigned_string)
                 : QoreIRPseudoHelperInfo{};
+            auto string_transform_consumer =
+                direct_inst->aot_string_transform_consumer;
             auto clear_fast_path_arg_cleanups = [&]() {
                 if (has_arg_cleanups) {
                     auto clear_helper = module.getOrInsertFunction(
@@ -18178,7 +18180,29 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
             };
-            if (string_predicate_id >= 0) {
+            if (string_transform_consumer
+                    != QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::None) {
+                bool upper =
+                    direct_inst->intrinsic == QoreIRIntrinsic::StringUpper;
+                bool characters = string_transform_consumer
+                    == QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::Length;
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_pseudo_string_case_measure_native_noguard",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i32_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper,
+                    {base_boxed,
+                     llvm::ConstantInt::get(i32_type, upper ? 1 : 0),
+                     llvm::ConstantInt::get(i32_type,
+                         characters ? 1 : 0),
+                     xsink_arg});
+                call_may_throw = true;
+                call_may_modify_runtime_locals = false;
+                result_needs_cleanup = false;
+                call_return_kind = BatchCalleeReturnKind::NativeInt;
+            } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }
                 llvm::Value* arg_boxed = boxValue(arg_val, inst->operands[1].id);

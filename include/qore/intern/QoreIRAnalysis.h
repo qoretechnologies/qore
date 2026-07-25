@@ -324,4 +324,7 @@ using QoreIRStringProducerQuery = std::function<bool(
 size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     const QoreIRStringProducerQuery& is_supported);
 
+//! Fuse exact string case transformations with sole size/length consumers.
+size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
+
 #endif

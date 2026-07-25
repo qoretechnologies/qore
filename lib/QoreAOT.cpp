@@ -16733,6 +16733,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             string_consumers =
                 qore_ir_fuse_string_producer_consumers(func, query);
         }
+        size_t string_transform_consumers = 0;
         size_t native_specializations = 0;
         size_t boxed_specializations = 0;
         size_t collection_specializations = 0;
@@ -16781,11 +16782,17 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             ++post_rewrite_rounds;
         }
+        if (!std::getenv(
+                "QORE_DISABLE_AOT_STRING_TRANSFORM_CONSUMER_FUSION")) {
+            string_transform_consumers =
+                qore_ir_fuse_string_transform_consumers(func);
+        }
         if ((exact_boxed_call_facts || folded_list_sizes || folded_hash_keys
                 || aggregate_projections
                 || boxed_return_calls
                 || changed
-                || string_consumers || cross_block_boxed_facts
+                || string_consumers || string_transform_consumers
+                || cross_block_boxed_facts
                 || boxed_specializations
                 || collection_specializations
                 || native_specializations || exception_edges_elided
@@ -16799,6 +16806,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 " boxed-return-calls=%zu"
                 " inplace-push=%zu"
                 " string-consumers=%zu"
+                " string-transform-consumers=%zu"
                 " post-rewrite-rounds=%zu"
                 " cross-block-boxed-facts=%zu"
                 " boxed-specializations=%zu"
@@ -16809,7 +16817,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 folded_list_sizes, folded_hash_keys,
                 aggregate_projections, borrowed_aggregate_projections,
                 boxed_return_calls, changed,
-                string_consumers, post_rewrite_rounds,
+                string_consumers, string_transform_consumers,
+                post_rewrite_rounds,
                 cross_block_boxed_facts,
                 boxed_specializations,
                 collection_specializations,

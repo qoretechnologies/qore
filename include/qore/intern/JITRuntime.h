@@ -1498,6 +1498,10 @@ uint64_t qore_rt_pseudo_string_lwr_noguard(uint64_t val_bits, ExceptionSink* xsi
 //! Fast no-guard pseudo-method: <string>::upr() for assigned string bases.
 uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsink);
 
+//! Measure an assigned string after lower/upper-case conversion without retaining the result.
+int64_t qore_rt_pseudo_string_case_measure_native_noguard(uint64_t val_bits,
+    int32_t upper, int32_t characters, ExceptionSink* xsink);
+
 //! Fast no-guard pseudo-method: <string>::toInt() for assigned string bases.
 uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink);
 

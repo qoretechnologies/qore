@@ -17000,6 +17000,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bit
     return qore_rt_pseudo_string_case_noguard(val_bits, xsink, true);
 }
 
+//! Measure an assigned string after case conversion without retaining the transformed value.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
+        uint64_t val_bits, int32_t upper, int32_t characters, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    int64_t result = 0;
+    int rc = upper
+        ? do_toupper_measure(*str, characters, result, xsink)
+        : do_tolower_measure(*str, characters, result, xsink);
+    return rc || (xsink && *xsink) ? 0 : result;
+}
+
 //! Fast pseudo-method: <string>::toInt() for bases known as string/NOTHING/NULL.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);
