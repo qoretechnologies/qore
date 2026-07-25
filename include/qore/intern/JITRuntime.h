@@ -54,6 +54,14 @@ const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count);
 //! Validates the central JIT runtime helper symbol registry.
 bool qore_jit_validate_runtime_symbols(std::string& error);
 
+enum class QoreStringCaseConsumer : int32_t {
+    StartsWith,
+    EndsWith,
+    Contains,
+    Find,
+    RFind,
+};
+
 // C ABI helpers called by JIT-generated code.
 // All functions use extern "C" linkage so LLVM can resolve them by name.
 //
@@ -1501,6 +1509,11 @@ uint64_t qore_rt_pseudo_string_upr_noguard(uint64_t val_bits, ExceptionSink* xsi
 //! Measure an assigned string after lower/upper-case conversion without retaining the result.
 int64_t qore_rt_pseudo_string_case_measure_native_noguard(uint64_t val_bits,
     int32_t upper, int32_t characters, ExceptionSink* xsink);
+
+//! Consume an assigned string after lower/upper-case conversion without retaining the result.
+int64_t qore_rt_pseudo_string_case_consume_native_noguard(uint64_t val_bits,
+    uint64_t arg_bits, int64_t offset, int32_t upper,
+    QoreStringCaseConsumer consumer, ExceptionSink* xsink);
 
 //! Fast no-guard pseudo-method: <string>::toInt() for assigned string bases.
 uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink);

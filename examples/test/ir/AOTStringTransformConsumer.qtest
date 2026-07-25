@@ -34,6 +34,51 @@ int sub lowerStrlen(string value) {
     return value.lwr().strlen();
 }
 
+bool sub lowerStartsWith(string value, string pattern) {
+    return value.lwr().startsWith(pattern);
+}
+
+bool sub upperStartsWith(string value, string pattern) {
+    return value.upr().startsWith(pattern);
+}
+
+bool sub upperEndsWith(string value, string pattern) {
+    return value.upr().endsWith(pattern);
+}
+
+bool sub lowerContains(string value, string pattern) {
+    return value.lwr().contains(pattern);
+}
+
+bool sub upperContains(string value, string pattern) {
+    return value.upr().contains(pattern);
+}
+
+int sub upperFind(string value, string pattern) {
+    return value.upr().find(pattern);
+}
+
+int sub lowerFindOffset(string value, string pattern, int offset) {
+    return value.lwr().find(pattern, offset);
+}
+
+int sub upperRFind(string value, string pattern) {
+    return value.upr().rfind(pattern);
+}
+
+int sub lowerRFindOffset(string value, string pattern, int offset) {
+    return value.lwr().rfind(pattern, offset);
+}
+
+string sub sideEffectPattern() {
+    printf(\"pattern-side-effect\\n\");
+    return \"needle\";
+}
+
+bool sub sideEffectContains(string value) {
+    return value.lwr().contains(sideEffectPattern());
+}
+
 int sub main() {
     string ascii = \"AbCdEf\";
     string utf8 = \"Stra\\u00dfe \\ufb01 \\u0391\\u0392\";
@@ -46,6 +91,24 @@ int sub main() {
         upperSize(utf8), upperLength(utf8));
     printf(\"latin1:%d:%d\\n\",
         upperSize(latin1), lowerLength(latin1));
+    printf(\"search-ascii:%d:%d:%d:%d:%d:%d:%d\\n\",
+        lowerStartsWith(\"Prefix\", \"prefix\"),
+        upperEndsWith(\"suffix\", \"FIX\"),
+        lowerContains(\"A Needle Z\", \"needle\"),
+        upperFind(\"a needle z\", \"NEEDLE\"),
+        lowerFindOffset(\"Needle needle\", \"needle\", 1),
+        upperRFind(\"needle NEEDLE\", \"NEEDLE\"),
+        lowerRFindOffset(\"Needle needle\", \"needle\", 7));
+    printf(\"search-utf8:%d:%d:%d:%d\\n\",
+        lowerStartsWith(utf8, \"stra\\u00dfe\"),
+        upperContains(utf8, \"SS\"),
+        upperFind(utf8, \"SS\"),
+        lowerRFindOffset(utf8, \"\\u03b1\\u03b2\", -1));
+    string latin1_pattern = convert_encoding(\"CAF\\u00c9\", \"ISO-8859-1\");
+    printf(\"search-latin1:%d:%d\\n\",
+        upperStartsWith(latin1, latin1_pattern),
+        upperFind(latin1, latin1_pattern));
+    printf(\"side-effect:%d\\n\", sideEffectContains(\"Needle\"));
     string latin1_error;
     try {
         upperSize(convert_encoding(\"\\u00b5\", \"ISO-8859-1\"));
@@ -69,7 +132,21 @@ int sub main() {
     } catch (hash<auto> ex) {
         removed_error = ex.err;
     }
-    printf(\"guards:%s:%s\\n\", unassigned_error, removed_error);
+    string unassigned_search_error;
+    try {
+        unassigned.lwr().contains(\"value\");
+    } catch (hash<auto> ex) {
+        unassigned_search_error = ex.err;
+    }
+    string removed_search_error;
+    try {
+        removed.upr().find(\"VALUE\");
+    } catch (hash<auto> ex) {
+        removed_search_error = ex.err;
+    }
+    printf(\"guards:%s:%s:%s:%s\\n\",
+        unassigned_error, removed_error,
+        unassigned_search_error, removed_search_error);
     return 0;
 }
 
@@ -116,7 +193,9 @@ if (enabled_compile !~ /string-transform-consumers=1/) {
 string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
 string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
 if (enabled_undefined !~ /qore_rt_pseudo_string_case_measure_native_noguard/
-        || disabled_undefined =~ /qore_rt_pseudo_string_case_measure_native_noguard/) {
+        || disabled_undefined =~ /qore_rt_pseudo_string_case_measure_native_noguard/
+        || enabled_undefined !~ /qore_rt_pseudo_string_case_consume_native_noguard/
+        || disabled_undefined =~ /qore_rt_pseudo_string_case_consume_native_noguard/) {
     printf("string transform-consumer helper mismatch:\nenabled:\n%sdisabled:\n%s",
         enabled_undefined, disabled_undefined);
     exit(2);

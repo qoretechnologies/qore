@@ -17012,6 +17012,52 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_measure_native_noguard(
     return rc || (xsink && *xsink) ? 0 : result;
 }
 
+//! Consume an assigned string after case conversion without retaining the transformed value.
+extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
+        uint64_t val_bits, uint64_t arg_bits, int64_t offset, int32_t upper,
+        QoreStringCaseConsumer consumer, ExceptionSink* xsink) {
+    QoreValue v = fromBits(val_bits);
+    QoreStringValueHelper str(v);
+    QoreString transformed(str->getEncoding());
+    int rc = upper
+        ? do_toupper(transformed, *str, xsink)
+        : do_tolower(transformed, *str, xsink);
+    if (rc || (xsink && *xsink)) {
+        return 0;
+    }
+
+    QoreValue arg = fromBits(arg_bits);
+    QoreStringValueHelper pattern(arg, transformed.getEncoding(), xsink);
+    if (xsink && *xsink) {
+        return 0;
+    }
+    switch (consumer) {
+        case QoreStringCaseConsumer::StartsWith:
+            return transformed.startsWith(pattern->c_str()) ? 1 : 0;
+        case QoreStringCaseConsumer::EndsWith:
+            return transformed.endsWith(pattern->c_str()) ? 1 : 0;
+        case QoreStringCaseConsumer::Contains:
+            return transformed.find(pattern->c_str()) >= 0 ? 1 : 0;
+        case QoreStringCaseConsumer::Find: {
+            qore_offset_t result =
+                transformed.index(**pattern, offset, xsink);
+            return xsink && *xsink ? 0 : static_cast<int64_t>(result);
+        }
+        case QoreStringCaseConsumer::RFind: {
+            qore_offset_t result =
+                transformed.rindex(**pattern, offset, xsink);
+            return xsink && *xsink ? 0 : static_cast<int64_t>(result);
+        }
+        default:
+            if (xsink) {
+                xsink->raiseException("IR-EXEC-ERROR",
+                    "invalid string transform-consumer id %d",
+                    static_cast<int32_t>(consumer));
+            }
+            return 0;
+    }
+}
+
 //! Fast pseudo-method: <string>::toInt() for bases known as string/NOTHING/NULL.
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_to_int_noguard(uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue v = fromBits(val_bits);

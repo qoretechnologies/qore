@@ -1,0 +1,29 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub transformSearch(string value, string lower_pattern,
+        string upper_pattern, int rounds) {
+    int result = 0;
+    for (int i = 0; i < rounds; ++i) {
+        result += value.lwr().find(lower_pattern);
+        result += value.upr().find(upper_pattern);
+        result += value.lwr().startsWith("prefix");
+        result += value.upr().contains(upper_pattern);
+    }
+    return result;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 1000000;
+    string value = "Prefix ABCDEFGHIJKLMNOPQRSTUVWXYZ "
+        + "abcdefghijklmnopqrstuvwxyz Needle "
+        + "ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz";
+    printf("%d\n",
+        transformSearch(value, "needle", "NEEDLE", rounds));
+    return 0;
+}
+
+main();

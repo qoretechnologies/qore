@@ -18471,25 +18471,100 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (string_transform_consumer
                     != QoreIRDotEvalMethodDirectInstruction::
                         AOTStringTransformConsumerKind::None) {
-                bool upper =
-                    direct_inst->intrinsic == QoreIRIntrinsic::StringUpper;
-                bool characters = string_transform_consumer
-                    == QoreIRDotEvalMethodDirectInstruction::
-                        AOTStringTransformConsumerKind::Length;
-                auto helper = module.getOrInsertFunction(
-                    "qore_rt_pseudo_string_case_measure_native_noguard",
-                    llvm::FunctionType::get(i64_type,
-                        {i64_type, i32_type, i32_type, ptr_type}, false));
-                call_result = builder->CreateCall(helper,
-                    {base_boxed,
-                     llvm::ConstantInt::get(i32_type, upper ? 1 : 0),
-                     llvm::ConstantInt::get(i32_type,
-                         characters ? 1 : 0),
-                     xsink_arg});
+                bool measure = string_transform_consumer
+                        == QoreIRDotEvalMethodDirectInstruction::
+                            AOTStringTransformConsumerKind::Size
+                    || string_transform_consumer
+                        == QoreIRDotEvalMethodDirectInstruction::
+                            AOTStringTransformConsumerKind::Length;
+                if (measure) {
+                    bool characters = string_transform_consumer
+                        == QoreIRDotEvalMethodDirectInstruction::
+                            AOTStringTransformConsumerKind::Length;
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_pseudo_string_case_measure_native_noguard",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i32_type, i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed,
+                         llvm::ConstantInt::get(i32_type,
+                            direct_inst->aot_string_transform_upper ? 1 : 0),
+                         llvm::ConstantInt::get(i32_type,
+                             characters ? 1 : 0),
+                         xsink_arg});
+                    call_return_kind = BatchCalleeReturnKind::NativeInt;
+                } else {
+                    auto* arg_val = getVal(inst->operands[1].id, error);
+                    if (!arg_val) {
+                        return false;
+                    }
+                    llvm::Value* arg_boxed =
+                        boxValue(arg_val, inst->operands[1].id);
+                    llvm::Value* offset =
+                        llvm::ConstantInt::get(i64_type,
+                            string_transform_consumer
+                                    == QoreIRDotEvalMethodDirectInstruction::
+                                        AOTStringTransformConsumerKind::RFind
+                                ? -1 : 0);
+                    if (nargs == 2) {
+                        auto* offset_val = getVal(
+                            inst->operands[2].id, error);
+                        if (!offset_val) {
+                            return false;
+                        }
+                        offset = ensureIntTypeInline(
+                            offset_val, inst->operands[2].id);
+                    }
+                    QoreStringCaseConsumer consumer =
+                        string_transform_consumer
+                            == QoreIRDotEvalMethodDirectInstruction::
+                                AOTStringTransformConsumerKind::StartsWith
+                        ? QoreStringCaseConsumer::StartsWith
+                        : string_transform_consumer
+                                == QoreIRDotEvalMethodDirectInstruction::
+                                    AOTStringTransformConsumerKind::EndsWith
+                            ? QoreStringCaseConsumer::EndsWith
+                            : string_transform_consumer
+                                    == QoreIRDotEvalMethodDirectInstruction::
+                                        AOTStringTransformConsumerKind::
+                                            Contains
+                                ? QoreStringCaseConsumer::Contains
+                                : string_transform_consumer
+                                        == QoreIRDotEvalMethodDirectInstruction::
+                                            AOTStringTransformConsumerKind::
+                                                Find
+                                    ? QoreStringCaseConsumer::Find
+                                    : QoreStringCaseConsumer::RFind;
+                    auto helper = module.getOrInsertFunction(
+                        "qore_rt_pseudo_string_case_consume_native_noguard",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, i64_type, i64_type, i32_type,
+                             i32_type, ptr_type}, false));
+                    call_result = builder->CreateCall(helper,
+                        {base_boxed, arg_boxed, offset,
+                         llvm::ConstantInt::get(i32_type,
+                            direct_inst->aot_string_transform_upper ? 1 : 0),
+                         llvm::ConstantInt::get(i32_type,
+                            static_cast<int32_t>(consumer)),
+                         xsink_arg});
+                    clear_fast_path_arg_cleanups();
+                    if (consumer == QoreStringCaseConsumer::StartsWith
+                            || consumer
+                                == QoreStringCaseConsumer::EndsWith
+                            || consumer
+                                == QoreStringCaseConsumer::Contains) {
+                        call_result = builder->CreateICmpNE(call_result,
+                            llvm::ConstantInt::get(i64_type, 0));
+                        call_return_kind =
+                            BatchCalleeReturnKind::NativeBool;
+                    } else {
+                        call_return_kind =
+                            BatchCalleeReturnKind::NativeInt;
+                    }
+                }
                 call_may_throw = true;
                 call_may_modify_runtime_locals = false;
                 result_needs_cleanup = false;
-                call_return_kind = BatchCalleeReturnKind::NativeInt;
             } else if (string_predicate_id >= 0) {
                 auto* arg_val = getVal(inst->operands[1].id, error);
                 if (!arg_val) { return false; }

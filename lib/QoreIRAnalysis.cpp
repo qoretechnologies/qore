@@ -12953,7 +12953,7 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
 
     struct Fusion {
         QoreIRDotEvalMethodDirectInstruction* producer = nullptr;
-        QoreIRInstruction* consumer = nullptr;
+        QoreIRDotEvalMethodDirectInstruction* consumer = nullptr;
         QoreIRValue result;
         QoreIRDotEvalMethodDirectInstruction::AOTStringTransformConsumerKind
             kind = QoreIRDotEvalMethodDirectInstruction::
@@ -12962,7 +12962,42 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
     std::vector<Fusion> fusions;
     std::unordered_set<QoreIRInstruction*> claimed;
     for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
-        for (const auto& inst_ptr : func.blocks[block_id]->instructions) {
+        const auto& instructions = func.blocks[block_id]->instructions;
+        std::unordered_map<const QoreIRInstruction*, size_t> positions;
+        for (size_t i = 0; i < instructions.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count,
+                    "IR string transform-consumer position analysis")) {
+                return 0;
+            }
+            positions.emplace(instructions[i].get(), i);
+        }
+        auto side_effect_free_interval = [&](const QoreIRInstruction* producer,
+                const QoreIRInstruction* consumer) {
+            auto producer_pos = positions.find(producer);
+            auto consumer_pos = positions.find(consumer);
+            if (producer_pos == positions.end()
+                    || consumer_pos == positions.end()
+                    || producer_pos->second >= consumer_pos->second) {
+                return false;
+            }
+            for (size_t offset = producer_pos->second + 1;
+                    offset < consumer_pos->second; ++offset) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR string transform-consumer interval analysis")) {
+                    return false;
+                }
+                switch (instructions[offset]->opcode) {
+                    case QoreIROpcode::LoadLocal:
+                    case QoreIROpcode::ConstInt:
+                    case QoreIROpcode::ConstString:
+                        break;
+                    default:
+                        return false;
+                }
+            }
+            return true;
+        };
+        for (const auto& inst_ptr : instructions) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR string transform-consumer analysis")) {
                 return 0;
@@ -12999,7 +13034,7 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                         const QoreIRDotEvalMethodDirectInstruction*>(
                             use->second.front().inst));
             if (consumer->exception_target || !consumer->pseudo
-                    || consumer->operands.size() != 1
+                    || consumer->operands.empty()
                     || consumer->operands[0].id != producer->result.id
                     || !consumer->result.isValid()
                     || claimed.count(consumer)) {
@@ -13009,12 +13044,56 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 AOTStringTransformConsumerKind::None;
             if (consumer->intrinsic == QoreIRIntrinsic::Size
                     || consumer->intrinsic == QoreIRIntrinsic::StringStrlen) {
+                if (consumer->operands.size() != 1) {
+                    continue;
+                }
                 kind = QoreIRDotEvalMethodDirectInstruction::
                     AOTStringTransformConsumerKind::Size;
             } else if (consumer->intrinsic
                     == QoreIRIntrinsic::StringLength) {
+                if (consumer->operands.size() != 1) {
+                    continue;
+                }
                 kind = QoreIRDotEvalMethodDirectInstruction::
                     AOTStringTransformConsumerKind::Length;
+            } else if (consumer->intrinsic
+                    == QoreIRIntrinsic::StringStartsWith
+                    || consumer->intrinsic
+                        == QoreIRIntrinsic::StringEndsWith
+                    || consumer->intrinsic
+                        == QoreIRIntrinsic::StringContains) {
+                if (consumer->operands.size() != 2
+                        || !consumer->pseudo_arg0_known_assigned_string
+                        || !side_effect_free_interval(producer, consumer)) {
+                    continue;
+                }
+                kind = consumer->intrinsic
+                        == QoreIRIntrinsic::StringStartsWith
+                    ? QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::StartsWith
+                    : consumer->intrinsic
+                            == QoreIRIntrinsic::StringEndsWith
+                        ? QoreIRDotEvalMethodDirectInstruction::
+                            AOTStringTransformConsumerKind::EndsWith
+                        : QoreIRDotEvalMethodDirectInstruction::
+                            AOTStringTransformConsumerKind::Contains;
+            } else if (consumer->intrinsic == QoreIRIntrinsic::StringFind
+                    || consumer->intrinsic
+                        == QoreIRIntrinsic::StringRFind) {
+                if ((consumer->operands.size() != 2
+                            && consumer->operands.size() != 3)
+                        || !consumer->pseudo_arg0_known_assigned_string
+                        || (consumer->operands.size() == 3
+                            && !consumer
+                                ->pseudo_arg1_known_assigned_int)
+                        || !side_effect_free_interval(producer, consumer)) {
+                    continue;
+                }
+                kind = consumer->intrinsic == QoreIRIntrinsic::StringFind
+                    ? QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::Find
+                    : QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::RFind;
             } else {
                 continue;
             }
@@ -13029,15 +13108,45 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
 
     std::unordered_set<QoreIRInstruction*> eliminated;
     for (const Fusion& fusion : fusions) {
-        fusion.producer->aot_string_transform_consumer = fusion.kind;
-        fusion.producer->result = fusion.result;
-        eliminated.insert(fusion.consumer);
+        bool measure = fusion.kind
+                == QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::Size
+            || fusion.kind
+                == QoreIRDotEvalMethodDirectInstruction::
+                    AOTStringTransformConsumerKind::Length;
+        auto* replacement = measure ? fusion.producer : fusion.consumer;
+        replacement->aot_string_transform_consumer = fusion.kind;
+        replacement->aot_string_transform_upper =
+            fusion.producer->intrinsic == QoreIRIntrinsic::StringUpper;
+        if (measure) {
+            fusion.producer->result = fusion.result;
+            eliminated.insert(fusion.consumer);
+        } else {
+            fusion.consumer->operands[0] = fusion.producer->operands[0];
+            fusion.consumer->pseudo_base_known_string = true;
+            fusion.consumer->pseudo_base_known_assigned_string = true;
+            fusion.consumer->pseudo_base_safe_value_dispatch = true;
+            eliminated.insert(fusion.producer);
+        }
 
         QoreIRValueFacts facts;
-        facts.type_info = bigIntTypeInfo;
         facts.assigned_state = QoreIRAssignedState::Assigned;
-        facts.representation = QoreIRValueRepresentation::NativeInt;
         facts.never_nothing = true;
+        if (fusion.kind
+                    == QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::StartsWith
+                || fusion.kind
+                    == QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::EndsWith
+                || fusion.kind
+                    == QoreIRDotEvalMethodDirectInstruction::
+                        AOTStringTransformConsumerKind::Contains) {
+            facts.type_info = boolTypeInfo;
+            facts.representation = QoreIRValueRepresentation::NativeBool;
+        } else {
+            facts.type_info = bigIntTypeInfo;
+            facts.representation = QoreIRValueRepresentation::NativeInt;
+        }
         func.setValueFacts(fusion.result, facts);
     }
     for (const auto& block : func.blocks) {

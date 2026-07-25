@@ -2388,6 +2388,11 @@ public:
         None,
         Size,
         Length,
+        StartsWith,
+        EndsWith,
+        Contains,
+        Find,
+        RFind,
     };
 
     QoreIRDotEvalMethodDirectInstruction(const QoreMethod* n_method, const QoreClass* n_qc,
@@ -2427,6 +2432,7 @@ public:
     //! Transient AOT-only scalar consumer of an exact case transformation.
     AOTStringTransformConsumerKind aot_string_transform_consumer =
         AOTStringTransformConsumerKind::None;
+    bool aot_string_transform_upper = false;
 
     // Cached inline IR call state for direct object-method calls.
     mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
