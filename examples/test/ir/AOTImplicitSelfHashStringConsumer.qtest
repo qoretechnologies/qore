@@ -35,6 +35,15 @@ final class HashStringFormatter {
             self.wrappedFormat(row).rfind(\":\"),
             self.wrappedFormat(row).substr(1, 3));
     }
+
+    string mutationBoundaries(hash<string, string> row) {
+        int before = self.wrappedFormat(row).size();
+        row.first = \"Bach\";
+        int after = self.wrappedFormat(row).size();
+        remove row.second;
+        return sprintf(\"%d:%d:%s\",
+            before, after, self.wrappedFormat(row));
+    }
 }
 
 int sub main() {
@@ -60,10 +69,11 @@ int sub main() {
     } catch (hash<auto> ex) {
         encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
-    printf(\"%s|%s|%s|%d|%d\\n\",
+    printf(\"%s|%s|%s|%s|%d|%d\\n\",
         formatter.consumers(present),
         formatter.consumers(missing),
         formatter.consumers(removed),
+        formatter.mutationBoundaries(present),
         unassigned_rejected, encoding_rejected);
     return 0;
 }
@@ -73,9 +83,11 @@ main();
 
 string root = "/tmp/qore-aot-implicit-self-hash-string-" + string(getpid());
 string enabled_dir = root + "/enabled";
+string reuse_disabled_dir = root + "/reuse-disabled";
 string disabled_dir = root + "/disabled";
 mkdir(root);
 mkdir(enabled_dir);
+mkdir(reuse_disabled_dir);
 mkdir(disabled_dir);
 
 string source_path = root + "/source.qr";
@@ -91,15 +103,22 @@ string enabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
         + " %s -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, enabled_dir, source_path));
+string reuse_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " QORE_DISABLE_AOT_HASH_STRING_EXTRACTION_REUSE=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, reuse_disabled_dir, source_path));
 string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " %s -O3 -c --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, disabled_dir, source_path));
 string enabled_qo = enabled_dir + "/source.qo";
+string reuse_disabled_qo = reuse_disabled_dir + "/source.qo";
 string disabled_qo = disabled_dir + "/source.qo";
-if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
-    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
-        enabled_compile, disabled_compile);
+if (!is_file(enabled_qo) || !is_file(reuse_disabled_qo)
+        || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sreuse disabled:\n%sdisabled:\n%s",
+        enabled_compile, reuse_disabled_compile, disabled_compile);
     exit(2);
 }
 if (!(enabled_compile =~ /AOT-EFFECTS: HashStringFormatter__consumers_[^\n]*string-consumers=[1-9][0-9]*/)) {
@@ -107,27 +126,48 @@ if (!(enabled_compile =~ /AOT-EFFECTS: HashStringFormatter__consumers_[^\n]*stri
         enabled_compile);
     exit(2);
 }
+if (!(enabled_compile
+        =~ /AOT-LOWERING: HashStringFormatter__consumers_[^\n]*hash-string-extraction-reuses=[1-9][0-9]*/)) {
+    printf("hash string extractions were not reused:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (reuse_disabled_compile
+        =~ /hash-string-extraction-reuses=[1-9][0-9]*/) {
+    printf("disabled hash string extraction reuse was applied:\n%s",
+        reuse_disabled_compile);
+    exit(2);
+}
 
 string enabled_exe = root + "/enabled-aot";
+string reuse_disabled_exe = root + "/reuse-disabled-aot";
 string disabled_exe = root + "/disabled-aot";
 string enabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, enabled_exe, enabled_qo));
+string reuse_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, reuse_disabled_exe, reuse_disabled_qo));
 string disabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_exe, disabled_qo));
-if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
-    printf("link failed:\nenabled:\n%sdisabled:\n%s",
-        enabled_link, disabled_link);
+if (!is_file(enabled_exe) || !is_file(reuse_disabled_exe)
+        || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sreuse disabled:\n%sdisabled:\n%s",
+        enabled_link, reuse_disabled_link, disabled_link);
     exit(2);
 }
 
 string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, enabled_exe));
+string reuse_disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, reuse_disabled_exe));
 string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe));
-if (ast != enabled || ast != disabled) {
-    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
-        ast, enabled, disabled);
+if (ast != enabled || ast != reuse_disabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
+        + "Reuse disabled:\n%sDisabled:\n%s",
+        ast, enabled, reuse_disabled, disabled);
     exit(2);
 }

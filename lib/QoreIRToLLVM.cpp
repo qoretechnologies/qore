@@ -5867,6 +5867,8 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         expression.nodes.size(), nullptr);
     bool borrow_hash_values =
         !std::getenv("QORE_DISABLE_AOT_BORROWED_HASH_STRING_VALUES");
+    bool reuse_hash_values = borrow_hash_values && aot_mode && fused_call
+        && !std::getenv("QORE_DISABLE_AOT_HASH_STRING_EXTRACTION_REUSE");
     if (!hash_groups.empty()) {
         llvm::Function* llvm_func =
             builder->GetInsertBlock()->getParent();
@@ -5878,57 +5880,129 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
             successful_hash_results;
         for (const auto& group : hash_groups) {
             const std::vector<size_t>& hash_nodes = group.second;
+            const LocalVar* source_local = nullptr;
+            if (reuse_hash_values
+                    && static_cast<size_t>(group.first)
+                        < fused_call->operands.size()) {
+                auto definition = value_definitions.find(
+                    fused_call->operands[static_cast<size_t>(
+                        group.first)].id);
+                if (definition != value_definitions.end()
+                        && definition->second->opcode
+                            == QoreIROpcode::LoadLocal) {
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(
+                            definition->second);
+                    if (load->local && !load->is_closure
+                            && !load->is_ref) {
+                        source_local = load->local;
+                    }
+                }
+            }
+            std::vector<std::string> key_names;
+            if (source_local) {
+                key_names.reserve(hash_nodes.size());
+                for (size_t node_index : hash_nodes) {
+                    key_names.push_back(
+                        expression.nodes[node_index].string_constant);
+                }
+            }
+
+            llvm::Value* hash_results = nullptr;
+            llvm::Value* success = nullptr;
+            if (source_local) {
+                auto cached = std::find_if(
+                    aot_hash_string_extraction_cache.begin(),
+                    aot_hash_string_extraction_cache.end(),
+                    [&](const auto& entry) {
+                        return entry.block == current_lowering_block_
+                            && entry.local == source_local
+                            && entry.keys == key_names
+                            && dominates(entry.dominance_block,
+                                builder->GetInsertBlock());
+                    });
+                if (cached
+                        != aot_hash_string_extraction_cache.end()) {
+                    hash_results = cached->results;
+                    success = cached->success;
+                    ++aot_hash_string_extraction_reuses;
+                }
+            }
+
             std::vector<llvm::Constant*> keys;
             std::vector<llvm::Constant*> hashes64;
             std::vector<llvm::Constant*> hashes32;
-            keys.reserve(hash_nodes.size());
-            hashes64.reserve(hash_nodes.size());
-            hashes32.reserve(hash_nodes.size());
-            for (size_t node_index : hash_nodes) {
-                const auto& node = expression.nodes[node_index];
-                keys.push_back(builder->CreateGlobalString(
-                    node.string_constant, "string_expression_hash_key"));
-                QoreIRPrecomputedStringHash hash =
-                    qore_ir_precompute_string_hash(node.string_constant);
-                hashes64.push_back(
-                    llvm::ConstantInt::get(i64_type, hash.hash64));
-                hashes32.push_back(
-                    llvm::ConstantInt::get(i32_type, hash.hash32));
-            }
-            auto make_array = [&](llvm::Type* type,
-                    const std::vector<llvm::Constant*>& values,
-                    const char* name) {
-                llvm::ArrayType* array_type =
-                    llvm::ArrayType::get(type, values.size());
-                llvm::Constant* initializer =
-                    llvm::ConstantArray::get(array_type, values);
-                return new llvm::GlobalVariable(module, array_type, true,
-                    llvm::GlobalValue::PrivateLinkage, initializer, name);
-            };
-            llvm::GlobalVariable* key_array =
-                make_array(ptr_type, keys, "string_expression_hash_keys");
-            llvm::GlobalVariable* hash64_array =
-                make_array(i64_type, hashes64, "string_expression_hashes64");
-            llvm::GlobalVariable* hash32_array =
-                make_array(i32_type, hashes32, "string_expression_hashes32");
+            if (!hash_results) {
+                keys.reserve(hash_nodes.size());
+                hashes64.reserve(hash_nodes.size());
+                hashes32.reserve(hash_nodes.size());
+                for (size_t node_index : hash_nodes) {
+                    const auto& node = expression.nodes[node_index];
+                    keys.push_back(builder->CreateGlobalString(
+                        node.string_constant,
+                        "string_expression_hash_key"));
+                    QoreIRPrecomputedStringHash hash =
+                        qore_ir_precompute_string_hash(
+                            node.string_constant);
+                    hashes64.push_back(
+                        llvm::ConstantInt::get(i64_type, hash.hash64));
+                    hashes32.push_back(
+                        llvm::ConstantInt::get(i32_type, hash.hash32));
+                }
+                auto make_array = [&](llvm::Type* type,
+                        const std::vector<llvm::Constant*>& values,
+                        const char* name) {
+                    llvm::ArrayType* array_type =
+                        llvm::ArrayType::get(type, values.size());
+                    llvm::Constant* initializer =
+                        llvm::ConstantArray::get(array_type, values);
+                    return new llvm::GlobalVariable(module, array_type, true,
+                        llvm::GlobalValue::PrivateLinkage, initializer, name);
+                };
+                llvm::GlobalVariable* key_array =
+                    make_array(
+                        ptr_type, keys, "string_expression_hash_keys");
+                llvm::GlobalVariable* hash64_array =
+                    make_array(i64_type, hashes64,
+                        "string_expression_hashes64");
+                llvm::GlobalVariable* hash32_array =
+                    make_array(i32_type, hashes32,
+                        "string_expression_hashes32");
 
-            llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(),
-                llvm_func->getEntryBlock().begin());
-            llvm::Value* hash_results = entry_builder.CreateAlloca(i64_type,
-                llvm::ConstantInt::get(i32_type, hash_nodes.size()),
-                "string_expression_hash_values");
-            auto helper = module.getOrInsertFunction(
-                borrow_hash_values
-                    ? "qore_rt_hash_keys_string_borrowed_prehashed"
-                    : "qore_rt_hash_keys_string_prehashed",
-                llvm::FunctionType::get(i64_type,
-                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type,
-                     i32_type},
-                    false));
-            llvm::Value* success = builder->CreateCall(helper,
-                {native_args[static_cast<size_t>(group.first)], key_array,
-                 hash64_array, hash32_array, hash_results,
-                 llvm::ConstantInt::get(i32_type, hash_nodes.size())});
+                llvm::IRBuilder<> entry_builder(
+                    &llvm_func->getEntryBlock(),
+                    llvm_func->getEntryBlock().begin());
+                hash_results = entry_builder.CreateAlloca(i64_type,
+                    llvm::ConstantInt::get(
+                        i32_type, hash_nodes.size()),
+                    "string_expression_hash_values");
+                auto helper = module.getOrInsertFunction(
+                    borrow_hash_values
+                        ? "qore_rt_hash_keys_string_borrowed_prehashed"
+                        : "qore_rt_hash_keys_string_prehashed",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, ptr_type, ptr_type, ptr_type, ptr_type,
+                         i32_type},
+                        false));
+                success = builder->CreateCall(helper,
+                    {native_args[static_cast<size_t>(group.first)],
+                     key_array, hash64_array, hash32_array, hash_results,
+                     llvm::ConstantInt::get(
+                         i32_type, hash_nodes.size())});
+                if (source_local) {
+                    constexpr size_t max_cached_extractions = 16;
+                    if (aot_hash_string_extraction_cache.size()
+                            == max_cached_extractions) {
+                        aot_hash_string_extraction_cache.erase(
+                            aot_hash_string_extraction_cache.begin());
+                    }
+                    aot_hash_string_extraction_cache.push_back(
+                        {current_lowering_block_, source_local,
+                         std::move(key_names), success, hash_results,
+                         fused_call, builder->GetInsertBlock(),
+                         &group == &hash_groups.front()});
+                }
+            }
             llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
                 ctx, "aot.string.hash.assigned", llvm_func);
             llvm::BasicBlock* failure_bb = llvm::BasicBlock::Create(
@@ -6265,6 +6339,23 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 "aot.string.hash.result");
         phi->addIncoming(result, assigned_bb);
         phi->addIncoming(fallback_result, fallback_bb);
+        if (fused_call && borrow_hash_values) {
+            // Only the first group executes on every path through this
+            // expression. Later groups are conditional on earlier extraction
+            // success, so their borrowed results cannot survive the merge.
+            for (auto it = aot_hash_string_extraction_cache.begin();
+                    it != aot_hash_string_extraction_cache.end();) {
+                if (it->instruction != fused_call) {
+                    ++it;
+                } else if (!it->cross_call_eligible) {
+                    it = aot_hash_string_extraction_cache.erase(it);
+                } else {
+                    it->dominance_block = merge_bb;
+                    ++it;
+                }
+            }
+            aot_hash_string_extraction_instruction = fused_call;
+        }
         return phi;
     }
     return result;
@@ -8846,6 +8937,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Clear value and local maps
     values.clear();
     value_definitions.clear();
+    aot_hash_string_extraction_cache.clear();
+    aot_hash_string_extraction_instruction = nullptr;
+    aot_hash_string_extraction_reuses = 0;
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -10009,6 +10103,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Lower each block
     for (const auto& block : func.blocks) {
+        aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
             error = "missing LLVM basic block mapping for '" + block->name + "'";
@@ -10035,6 +10130,50 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (!inst) {
                 continue;
             }
+            const QoreIRStringConsumerCallInstruction* string_consumer_call =
+                nullptr;
+            switch (inst->opcode) {
+                case QoreIROpcode::CallDirect:
+                    string_consumer_call =
+                        static_cast<
+                            const QoreIRCallDirectInstruction*>(inst);
+                    break;
+                case QoreIROpcode::CallMethodDirect:
+                    string_consumer_call =
+                        static_cast<
+                            const QoreIRCallMethodDirectInstruction*>(inst);
+                    break;
+                case QoreIROpcode::CallStaticDirect:
+                    string_consumer_call =
+                        static_cast<
+                            const QoreIRCallStaticDirectInstruction*>(inst);
+                    break;
+                default:
+                    break;
+            }
+            bool fused_string_call = string_consumer_call
+                && string_consumer_call->aot_string_consumer
+                    != QoreIRStringConsumerCallInstruction::
+                        AOTStringConsumerKind::None;
+            // Borrowed values remain valid through proven-pure imported calls
+            // and value construction only. Everything that can mutate a local,
+            // invoke arbitrary code, or end the source statement invalidates
+            // the cache before lowering continues.
+            bool preserves_hash_string_extraction =
+                fused_string_call
+                || inst->opcode == QoreIROpcode::LoadLocal
+                || inst->opcode == QoreIROpcode::ConstInt
+                || inst->opcode == QoreIROpcode::ConstFloat
+                || inst->opcode == QoreIROpcode::ConstBool
+                || inst->opcode == QoreIROpcode::ConstNothing
+                || inst->opcode == QoreIROpcode::ConstNull
+                || inst->opcode == QoreIROpcode::ConstString
+                || inst->opcode == QoreIROpcode::PushTempMark;
+            if (!preserves_hash_string_extraction) {
+                aot_hash_string_extraction_cache.clear();
+            }
+            aot_hash_string_extraction_instruction = nullptr;
+
             // Phase 2B — clear the EH-invoke one-shot flag at instruction
             // boundary so a dropped trackResultForCleanup from a prior
             // instruction cannot leak SSA-direct semantics into a later
@@ -10134,6 +10273,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     fflush(stderr);
                 }
                 return false;
+            }
+            if (fused_string_call
+                    && aot_hash_string_extraction_instruction != inst) {
+                aot_hash_string_extraction_cache.clear();
             }
 
             // Release DotEval BASE cleanup allocas at last use: when the base
@@ -10543,6 +10686,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     di_cu = nullptr;
     di_sp = nullptr;
     di_file_cache.clear();
+
+    if (aot_hash_string_extraction_reuses
+            && std::getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr,
+            "IR-OPT-AOT-LOWERING: %s:"
+            " hash-string-extraction-reuses=%zu\n",
+            fn_name.c_str(), aot_hash_string_extraction_reuses);
+    }
 
     // Reset per-function state
     current_ir_func = nullptr;

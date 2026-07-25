@@ -287,6 +287,23 @@ private:
     std::unordered_map<uint32_t, llvm::Value*> values;
     std::unordered_map<uint32_t, const QoreIRInstruction*> value_definitions;
 
+    struct AOTHashStringExtractionCacheEntry {
+        const QoreIRBasicBlock* block = nullptr;
+        const LocalVar* local = nullptr;
+        std::vector<std::string> keys;
+        llvm::Value* success = nullptr;
+        llvm::Value* results = nullptr;
+        const QoreIRInstruction* instruction = nullptr;
+        llvm::BasicBlock* dominance_block = nullptr;
+        bool cross_call_eligible = false;
+    };
+
+    // Borrowed hash-string values shared by adjacent imported pure calls.
+    std::vector<AOTHashStringExtractionCacheEntry>
+        aot_hash_string_extraction_cache;
+    const QoreIRInstruction* aot_hash_string_extraction_instruction = nullptr;
+    size_t aot_hash_string_extraction_reuses = 0;
+
     // Typed-map backing pointers materialized in loop preheaders.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
     std::unordered_set<uint32_t> direct_typed_list_read_sources;
