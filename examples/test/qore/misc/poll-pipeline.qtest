@@ -1,0 +1,405 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class PollPipelineTest
+
+#! Mock line-oriented server: reads a command line, then writes a canned raw response
+/** Used to drive PollPipeline steps deterministically without any external service.
+*/
+class MockLineServer {
+    private {
+        Socket listener();
+        int port;
+        #! raw responses sent in order, one per command line received
+        list<auto> responses;
+        #! commands received from the client
+        list<string> received = ();
+        #! signals server thread completion
+        Counter done(1);
+        #! error from the server thread, if any
+        *string server_error;
+        #! if True, close the connection after writing the last response
+        bool close_after;
+    }
+
+    constructor(list<auto> responses, bool close_after = False) {
+        self.responses = responses;
+        self.close_after = close_after;
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    string getTarget() {
+        return sprintf("localhost:%d", port);
+    }
+
+    start() {
+        background acceptAndServe();
+    }
+
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    list<string> getReceivedCommands() {
+        return received;
+    }
+
+    *string getServerError() {
+        return server_error;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+        } catch (hash<ExceptionInfo> ex) {
+            server_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
+    private serveClient(Socket client) {
+        foreach auto resp in (responses) {
+            received += readLine(client);
+            client.send(resp);
+        }
+        if (close_after) {
+            client.close();
+        } else {
+            # hold the connection open until the client disconnects so that the
+            # pipeline sees a clean end-of-response rather than an early EOF
+            try {
+                client.recv(1, 10s);
+            } catch (hash<ExceptionInfo> ex) {
+                # expected: the client closed first
+            }
+        }
+    }
+
+    private string readLine(Socket client, timeout to = 10s) {
+        string line = "";
+        while (True) {
+            string c = client.recv(1, to);
+            line += c;
+            if (c == "\n") {
+                break;
+            }
+        }
+        return line;
+    }
+}
+
+public class PollPipelineTest inherits QUnit::Test {
+    public {
+        const MaxSize = 1024 * 1024;
+    }
+
+    constructor() : Test("PollPipelineTest", "1.0") {
+        addTestCase("IMAP response: no literal", \imapNoLiteral());
+        addTestCase("IMAP response: single literal", \imapSingleLiteral());
+        addTestCase("IMAP response: multiple literals", \imapMultipleLiterals());
+        addTestCase("IMAP response: binary-safe literal", \imapBinarySafeLiteral());
+        addTestCase("IMAP response: large split literal", \imapLargeSplitLiteral());
+        addTestCase("IMAP response: literal size markers", \imapLiteralSizeMarkers());
+        addTestCase("IMAP response: non-literal brace lines", \imapNotALiteral());
+        addTestCase("IMAP response: zero-length literal", \imapZeroLengthLiteral());
+        addTestCase("IMAP response: continuation request", \imapContinuation());
+        addTestCase("IMAP response: NO and BAD completions", \imapErrorCompletions());
+        addTestCase("IMAP response: size cap enforcement", \imapSizeCap());
+        addTestCase("IMAP response: premature close", \imapPrematureClose());
+        addTestCase("IMAP response: tag matching", \imapTagMatching());
+        addTestCase("branch on context int", \branchOnContextInt());
+        set_return_value(main());
+    }
+
+    #! Builds a pipeline that sends one command and reads one IMAP response
+    private PollPipeline makeImapPipeline(Socket sock, string target, string tag, string cmd,
+            int max_size = MaxSize) {
+        PollPipeline p(sock);
+        p.addSetContextValue("tag", tag);
+        p.addSetContextBinary("cmd", cmd);
+        p.addConnect(target);
+        p.addSendFromContext("cmd");
+        p.addRecvImapResponse("tag", "response", "IMAP-TEST-ERROR", max_size);
+        return p;
+    }
+
+    #! Drives a poll operation to completion with a deterministic poll loop
+    private drivePollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
+        int start = clock_getmicros_monotonic();
+        int limit_us = to * 1000;
+        while (!op.goalReached()) {
+            if ((clock_getmicros_monotonic() - start) > limit_us) {
+                throw "POLL-TIMEOUT", sprintf("poll operation timed out in state %y",
+                    op.getState());
+            }
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (!pi) {
+                continue;
+            }
+            list<hash<SocketPollInfo>> poll_list = (pi,);
+            Socket::poll(poll_list, 5s);
+        }
+    }
+
+    #! Runs one IMAP request against a mock server and returns the raw response
+    private binary runImap(list<auto> responses, string tag = "a001",
+            string cmd = "a001 NOOP\r\n", int max_size = MaxSize) {
+        MockLineServer server(responses);
+        server.start();
+        on_exit server.wait();
+
+        Socket sock();
+        PollPipeline p = makeImapPipeline(sock, server.getTarget(), tag, cmd, max_size);
+        on_exit sock.close();
+        drivePollOp(p);
+        assertNothing(server.getServerError());
+        return p.getResult().extra.response;
+    }
+
+    imapNoLiteral() {
+        string raw = "* OK [CAPABILITY IMAP4rev1 SASL-IR] ready\r\n"
+            "* CAPABILITY IMAP4rev1 SASL-IR AUTH=XOAUTH2\r\n"
+            "a001 OK CAPABILITY completed\r\n";
+        binary response = runImap((raw,));
+        assertEq(raw, binary_to_string(response, "iso-8859-1"),
+            "raw response returned byte-exact");
+    }
+
+    imapSingleLiteral() {
+        string body = "Subject: test\r\n\r\nhello world\r\n";
+        string raw = sprintf("* 1 FETCH (UID 17 BODY[] {%d}\r\n%s)\r\n"
+            "a001 OK FETCH completed\r\n", body.size(), body);
+        binary response = runImap((raw,));
+        assertEq(raw, binary_to_string(response, "iso-8859-1"),
+            "literal payload preserved verbatim");
+        # the literal payload itself contains CRLFs that must not terminate the response
+        assertTrue(binary_to_string(response, "iso-8859-1").find("hello world") > 0,
+            "literal content present");
+    }
+
+    imapMultipleLiterals() {
+        string a = "first literal\r\nwith two lines\r\n";
+        string b = "second";
+        string raw = sprintf("* 1 FETCH (BODY[1] {%d}\r\n%s BODY[2] {%d}\r\n%s)\r\n"
+            "* 2 FETCH (BODY[1] {%d}\r\n%s)\r\n"
+            "a001 OK FETCH completed\r\n", a.size(), a, b.size(), b, b.size(), b);
+        binary response = runImap((raw,));
+        assertEq(raw, binary_to_string(response, "iso-8859-1"),
+            "multiple literals in one response handled");
+    }
+
+    imapBinarySafeLiteral() {
+        # a literal containing NUL and high-bit bytes must survive byte-exact
+        binary payload = <00010203fffefd0d0a2a20313233>;
+        binary raw = binary(sprintf("* 1 FETCH (BODY[] {%d}\r\n", payload.size()))
+            + payload
+            + binary(")\r\na001 OK FETCH completed\r\n");
+        binary response = runImap((raw,));
+        assertEq(raw, response, "binary literal preserved byte-exact");
+    }
+
+    imapLargeSplitLiteral() {
+        # a literal larger than any socket buffer necessarily spans multiple reads,
+        # exercising the partial-literal resume path without any timing dependency
+        string payload = strmul("0123456789abcdef", 16 * 1024);   # 256 KiB
+        assertEq(262144, payload.size(), "payload is 256 KiB");
+        string raw = sprintf("* 1 FETCH (BODY[] {%d}\r\n%s)\r\n"
+            "a001 OK FETCH completed\r\n", payload.size(), payload);
+        binary response = runImap((raw,), max_size: 4 * 1024 * 1024);
+        assertEq(raw.size(), response.size(), "large literal fully accumulated");
+        assertEq(raw, binary_to_string(response, "iso-8859-1"), "large literal byte-exact");
+    }
+
+    imapLiteralSizeMarkers() {
+        # LITERAL+ / LITERAL- non-synchronizing forms (RFC 7888) read identically
+        string p = "abc";
+        foreach string marker in ("+", "-") {
+            string raw = sprintf("* 1 FETCH (BODY[] {%d%s}\r\n%s)\r\n"
+                "a001 OK FETCH completed\r\n", p.size(), marker, p);
+            binary response = runImap((raw,));
+            assertEq(raw, binary_to_string(response, "iso-8859-1"),
+                sprintf("{N%s} literal handled", marker));
+        }
+    }
+
+    imapNotALiteral() {
+        # lines that end in '}' but do not carry a valid literal introducer must be
+        # treated as ordinary untagged lines, not as literals
+        list<string> lines = (
+            # no '{' before the digits
+            "* OK 12345}\r\n",
+            # digit run longer than any valid count (2^64-1 is 20 digits)
+            "* OK {123456789012345678901234567890}\r\n",
+            # no digits at all
+            "* OK {}\r\n",
+            "* OK {+}\r\n",
+            # quoted string that merely contains braces
+            "* OK \"{5}\"\r\n",
+        );
+        foreach string line in (lines) {
+            string raw = line + "a001 OK done\r\n";
+            binary response = runImap((raw,));
+            assertEq(raw, binary_to_string(response, "iso-8859-1"),
+                sprintf("not treated as a literal: %y", line));
+        }
+    }
+
+    imapZeroLengthLiteral() {
+        string raw = "* 1 FETCH (BODY[] {0}\r\n)\r\n"
+            "a001 OK FETCH completed\r\n";
+        binary response = runImap((raw,));
+        assertEq(raw, binary_to_string(response, "iso-8859-1"),
+            "zero-length literal consumes no octets");
+    }
+
+    imapContinuation() {
+        # a "+" line ends the response and sets the continuation flag
+        MockLineServer server(("+ eyJzdGF0dXMiOiI0MDEifQ==\r\n",));
+        server.start();
+        on_exit server.wait();
+
+        Socket sock();
+        PollPipeline p = makeImapPipeline(sock, server.getTarget(), "a001",
+            "a001 AUTHENTICATE XOAUTH2 dGVzdA==\r\n");
+        on_exit sock.close();
+        drivePollOp(p);
+
+        hash<auto> result = p.getResult();
+        assertTrue(result.extra.imap_continuation, "continuation flag set");
+        assertEq("+ eyJzdGF0dXMiOiI0MDEifQ==\r\n",
+            binary_to_string(result.extra.response, "iso-8859-1"),
+            "continuation line returned");
+    }
+
+    imapErrorCompletions() {
+        hash<string, string> cases = {
+            "NO": "a001 NO [AUTHENTICATIONFAILED] Invalid credentials\r\n",
+            "BAD": "a001 BAD Missing sequence set\r\n",
+        };
+        foreach string status in (keys cases) {
+            MockLineServer server((cases{status},));
+            server.start();
+            on_exit server.wait();
+
+            Socket sock();
+            PollPipeline p = makeImapPipeline(sock, server.getTarget(), "a001",
+                "a001 NOOP\r\n");
+            on_exit sock.close();
+            assertThrows("IMAP-TEST-ERROR", "IMAP command failed",
+                sub () { drivePollOp(p); },
+                NOTHING, sprintf("tagged %s raises with the server text", status));
+        }
+    }
+
+    imapSizeCap() {
+        # a literal that would push the response past max_size is rejected up front
+        string payload = strmul("x", 4096);
+        string raw = sprintf("* 1 FETCH (BODY[] {%d}\r\n%s)\r\n"
+            "a001 OK FETCH completed\r\n", payload.size(), payload);
+
+        MockLineServer server((raw,));
+        server.start();
+        on_exit server.wait();
+
+        Socket sock();
+        PollPipeline p = makeImapPipeline(sock, server.getTarget(), "a001", "a001 NOOP\r\n",
+            1024);
+        on_exit sock.close();
+        assertThrows("IMAP-TEST-ERROR", "maximum accepted size",
+            sub () { drivePollOp(p); }, NOTHING, "oversized literal rejected");
+
+        # max_size must be positive
+        Socket sock2();
+        PollPipeline p2(sock2);
+        assertThrows("POLL-PIPELINE-ERROR", "max_size must be > 0",
+            sub () { p2.addRecvImapResponse("tag", "response", "IMAP-TEST-ERROR", 0); },
+            NOTHING, "non-positive max_size rejected");
+    }
+
+    imapPrematureClose() {
+        # the server closes mid-response: this must surface as a clean error, not a hang
+        MockLineServer server(("* 1 FETCH (BODY[] {4096}\r\nshort",), True);
+        server.start();
+        on_exit server.wait();
+
+        Socket sock();
+        PollPipeline p = makeImapPipeline(sock, server.getTarget(), "a001", "a001 NOOP\r\n");
+        on_exit sock.close();
+        # the inner literal read detects EOF and reports how far it got; the pipeline
+        # propagates that rather than hanging or returning a truncated response
+        assertThrows("SOCKET-CLOSED", "peer closed the connection after 5 of 4096 bytes",
+            sub () { drivePollOp(p); }, NOTHING,
+            "connection closed mid-literal raises with byte counts");
+        assertTrue(p.isClosed(), "pipeline marked closed after the error");
+    }
+
+    imapTagMatching() {
+        # a line that merely starts with the tag as a prefix must not terminate the
+        # response; only "<tag> " does
+        string raw = "* OK a0011 is not the tag\r\n"
+            "a0011 OK neither is this\r\n"
+            "a001 OK NOOP completed\r\n";
+        binary response = runImap((raw,));
+        assertEq(raw, binary_to_string(response, "iso-8859-1"),
+            "tag prefix does not terminate the response early");
+
+        # tag matching is case-insensitive per RFC 3501 (tags are atoms)
+        binary response2 = runImap(("A001 OK done\r\n",));
+        assertEq("A001 OK done\r\n", binary_to_string(response2, "iso-8859-1"),
+            "tag match is case-insensitive");
+    }
+
+    branchOnContextInt() {
+        # true path: matching int takes true_step; false path: everything else
+        hash<string, list<auto>> cases = {
+            # value stored, expected branch result
+            "match": (334, True),
+            "mismatch": (250, False),
+        };
+        foreach string name in (keys cases) {
+            softint stored = cases{name}[0];
+            bool expected = cases{name}[1];
+
+            MockLineServer server((sprintf("%d ok\r\n", stored),));
+            server.start();
+            on_exit server.wait();
+
+            Socket sock();
+            PollPipeline p(sock);
+            p.addSetContextBinary("cmd", "PING\r\n");                 # 0
+            p.addConnect(server.getTarget());                          # 1
+            p.addSendFromContext("cmd");                               # 2
+            p.addRecvLineResponse("code", "text", "TEST-ERROR");       # 3
+            p.addBranchOnContextInt("code", 334, 5, 6);                # 4
+            p.addSetContextBool("took_true", True);                    # 5
+            p.addSetContextBool("done", True);                         # 6
+            on_exit sock.close();
+            drivePollOp(p);
+
+            hash<auto> result = p.getResult();
+            assertTrue(result.extra.done, sprintf("%s: pipeline completed", name));
+            assertEq(expected, result.extra.took_true ?? False,
+                sprintf("%s: branch taken as expected", name));
+            assertEq(stored, result.extra.code, sprintf("%s: code stored as int", name));
+        }
+
+        # a missing key never matches
+        Socket sock3();
+        PollPipeline p3(sock3);
+        assertEq(0, p3.addBranchOnContextInt("nonexistent", 1, 1, 2),
+            "branch step added at index 0");
+    }
+}

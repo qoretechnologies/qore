@@ -610,6 +610,24 @@ int PollPipelinePriv::addRecvLineResponse(const char* code_key, const char* text
     return (int)steps.size() - 1;
 }
 
+int PollPipelinePriv::addRecvImapResponse(const char* tag_key, const char* resp_key,
+        const char* err_code, size_t max_size) {
+    // Store resp_key and err_code in the string_data table
+    int resp_idx = (int)string_data.size();
+    string_data.push_back(new QoreStringNode(resp_key));
+    int err_idx = (int)string_data.size();
+    string_data.push_back(new QoreStringNode(err_code));
+
+    Step s;
+    s.type = StepType::RECV_IMAP_RESPONSE;
+    s.target = tag_key;        // reuse target for tag_key
+    s.pattern_idx = resp_idx;  // reuse pattern_idx for resp_key index
+    s.data_idx = err_idx;      // reuse data_idx for err_code index
+    s.recv_size = max_size;    // reuse recv_size for the max accumulated response size
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
 int PollPipelinePriv::addBranchOnContextKey(const char* key, int true_step, int false_step) {
     std::string k(key);
     return addBranch(
@@ -638,6 +656,23 @@ int PollPipelinePriv::addBranchOnContextValue(const char* key, const char* value
             }
             QoreStringValueHelper str(v);
             return strcmp(str->c_str(), val.c_str()) == 0;
+        },
+        true_step, false_step);
+}
+
+int PollPipelinePriv::addBranchOnContextInt(const char* key, int64_t value,
+        int true_step, int false_step) {
+    std::string k(key);
+    return addBranch(
+        [k, value](const Context& ctx) {
+            if (!ctx.extra) {
+                return false;
+            }
+            QoreValue v = ctx.extra->getKeyValue(k.c_str());
+            if (v.isNullOrNothing()) {
+                return false;
+            }
+            return v.getAsBigInt() == value;
         },
         true_step, false_step);
 }
@@ -937,6 +972,215 @@ void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
     result_action = action;
 }
 
+// --- RECV_IMAP_RESPONSE helpers (I/O thread) ---
+
+int PollPipelinePriv::armImapLineRead(ExceptionSink* xsink) {
+    sock_obj->ref();
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    // read in binary mode: the raw response is kept byte-exact for the caller to parse
+    ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, false), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    op->setSelf(*self);
+    current_op = op.release();
+    return 0;
+}
+
+int PollPipelinePriv::armImapLiteralRead(size_t count, ExceptionSink* xsink) {
+    sock_obj->ref();
+    ReferenceHolder<SocketRecvPollOperation> op(
+        new SocketRecvPollOperation(xsink, (ssize_t)count, sock_obj, false), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    op->setSelf(*self);
+    current_op = op.release();
+    return 0;
+}
+
+int PollPipelinePriv::handleImapResponse(ExceptionSink* xsink) {
+    // 2^64 - 1 is 20 digits, so a longer run cannot be a valid IMAP literal count;
+    // bounding the backward scan at this length keeps literal detection O(1) regardless
+    // of how long the line is
+    constexpr size_t MaxImapLiteralDigits = 20;
+
+    const Step& step = steps[current_step];
+    const char* err_code = (step.data_idx >= 0 && step.data_idx < (int)string_data.size())
+        ? string_data[step.data_idx]->c_str()
+        : "IMAP-RESPONSE-ERROR";
+
+    if (!ctx.imap_accum) {
+        ctx.imap_accum = new BinaryNode();
+    }
+
+    // Append the chunk just read to the raw accumulator, enforcing the size cap before
+    // allocating.  The inner ops are created in binary mode; strings are handled
+    // defensively in case a step is ever re-armed differently.
+    const size_t prev_size = ctx.imap_accum->size();
+    size_t chunk_len = 0;
+    if (ctx.last_output.getType() == NT_BINARY) {
+        const BinaryNode* b = ctx.last_output.get<const BinaryNode>();
+        if (b) {
+            chunk_len = b->size();
+            if (prev_size + chunk_len > step.recv_size) {
+                xsink->raiseException(err_code, "IMAP response exceeds the maximum accepted "
+                    "size of %zu bytes", step.recv_size);
+                return -1;
+            }
+            if (chunk_len) {
+                ctx.imap_accum->append(b->getPtr(), chunk_len);
+            }
+        }
+    } else if (ctx.last_output.getType() == NT_STRING) {
+        QoreStringValueHelper s(ctx.last_output);
+        chunk_len = s->size();
+        if (prev_size + chunk_len > step.recv_size) {
+            xsink->raiseException(err_code, "IMAP response exceeds the maximum accepted "
+                "size of %zu bytes", step.recv_size);
+            return -1;
+        }
+        if (chunk_len) {
+            ctx.imap_accum->append(s->c_str(), chunk_len);
+        }
+    }
+    ctx.last_output.discard(xsink);
+    ctx.last_output = QoreValue();
+
+    if (!chunk_len) {
+        xsink->raiseException(err_code, "the connection was closed before a complete IMAP "
+            "response was received");
+        return -1;
+    }
+
+    // Completes the step: publish the raw response and clear per-step state
+    auto finish = [this, &step, xsink]() -> int {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        if (step.pattern_idx >= 0 && step.pattern_idx < (int)string_data.size()) {
+            ctx.extra->setKeyValue(string_data[step.pattern_idx]->c_str(),
+                ctx.imap_accum->binRefSelf(), xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+        ctx.extra->setKeyValue("imap_continuation", ctx.imap_continuation, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        // leave the raw response in last_output as well
+        ctx.last_output = ctx.imap_accum->binRefSelf();
+        ctx.imap_accum->deref(xsink);
+        ctx.imap_accum = nullptr;
+        ctx.imap_literal_remaining = 0;
+        return 1;
+    };
+
+    // --- literal mode: we just consumed literal payload octets ---
+    if (ctx.imap_literal_remaining) {
+        if (chunk_len >= ctx.imap_literal_remaining) {
+            ctx.imap_literal_remaining = 0;
+        } else {
+            ctx.imap_literal_remaining -= chunk_len;
+        }
+        if (ctx.imap_literal_remaining) {
+            return armImapLiteralRead(ctx.imap_literal_remaining, xsink) ? -1 : 0;
+        }
+        // the remainder of the line follows the literal payload
+        return armImapLineRead(xsink) ? -1 : 0;
+    }
+
+    // --- line mode: inspect the CRLF-terminated line just read ---
+    const char* line = static_cast<const char*>(ctx.imap_accum->getPtr()) + prev_size;
+    size_t len = chunk_len;
+    // strip the trailing CRLF for inspection (it stays in the accumulator)
+    if (len && line[len - 1] == '\n') {
+        --len;
+    }
+    if (len && line[len - 1] == '\r') {
+        --len;
+    }
+
+    // Literal introducer: the line ends with "{N}", "{N+}" or "{N-}" (RFC 3501, RFC 7888).
+    // Atoms cannot contain braces and quoted strings end with '"', so a trailing '}' with a
+    // matching '{' and only digits between them unambiguously introduces a literal.
+    if (len >= 3 && line[len - 1] == '}') {
+        size_t p = len - 1;
+        if (p && (line[p - 1] == '+' || line[p - 1] == '-')) {
+            --p;
+        }
+        const size_t digits_end = p;
+        // a literal count cannot exceed 20 digits, so bound the backward scan rather than
+        // walking the whole line: this keeps the scan O(1) for any input
+        const size_t scan_floor = digits_end > MaxImapLiteralDigits
+            ? digits_end - MaxImapLiteralDigits
+            : 0;
+        while (p > scan_floor && isdigit((unsigned char)line[p - 1])) {
+            --p;
+        }
+        const size_t ndigits = digits_end - p;
+        if (ndigits && ndigits <= MaxImapLiteralDigits && p && line[p - 1] == '{') {
+            char buf[MaxImapLiteralDigits + 1];
+            memcpy(buf, line + p, ndigits);
+            buf[ndigits] = '\0';
+            errno = 0;
+            char* ep = nullptr;
+            unsigned long long n = strtoull(buf, &ep, 10);
+            if (!errno && ep && !*ep) {
+                if (ctx.imap_accum->size() + (size_t)n > step.recv_size) {
+                    xsink->raiseException(err_code, "IMAP literal of %llu bytes would take the "
+                        "response past the maximum accepted size of %zu bytes", n,
+                        step.recv_size);
+                    return -1;
+                }
+                if (!n) {
+                    // zero-length literal: nothing to read, continue with the next line
+                    return armImapLineRead(xsink) ? -1 : 0;
+                }
+                ctx.imap_literal_remaining = (size_t)n;
+                return armImapLiteralRead(ctx.imap_literal_remaining, xsink) ? -1 : 0;
+            }
+        }
+    }
+
+    // Command continuation request
+    if (len && line[0] == '+') {
+        ctx.imap_continuation = true;
+        return finish();
+    }
+
+    // Tagged completion line?
+    QoreValue tagv = ctx.extra ? ctx.extra->getKeyValue(step.target.c_str()) : QoreValue();
+    if (tagv.getType() == NT_STRING) {
+        QoreStringValueHelper tag(tagv);
+        const size_t tlen = tag->size();
+        if (tlen && len > tlen && !strncasecmp(line, tag->c_str(), tlen) && line[tlen] == ' ') {
+            const char* st = line + tlen + 1;
+            size_t st_len = len - tlen - 1;
+            while (st_len && *st == ' ') {
+                ++st;
+                --st_len;
+            }
+            const bool is_no = st_len >= 2 && !strncasecmp(st, "NO", 2)
+                && (st_len == 2 || st[2] == ' ');
+            const bool is_bad = st_len >= 3 && !strncasecmp(st, "BAD", 3)
+                && (st_len == 3 || st[3] == ' ');
+            if (is_no || is_bad) {
+                QoreString desc;
+                desc.concat(st, st_len);
+                xsink->raiseException(err_code, "IMAP command failed: %s", desc.c_str());
+                return -1;
+            }
+            return finish();
+        }
+    }
+
+    // Untagged (or unrecognized) line: keep reading
+    return armImapLineRead(xsink) ? -1 : 0;
+}
+
 // --- continuePoll state machine (I/O thread) ---
 
 QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
@@ -1129,6 +1373,25 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                         ctx.has_frame = true;
                     }
                     // Advance (has_frame set or not — BRANCH decides next)
+                    if (steps[current_step].next_step >= 0) {
+                        current_step = steps[current_step].next_step;
+                    } else {
+                        ++current_step;
+                    }
+                    continue;
+                }
+
+                // Special handling for RECV_IMAP_RESPONSE: consume literals and keep
+                // reading until the tagged completion or continuation line
+                if (steps[current_step].type == StepType::RECV_IMAP_RESPONSE) {
+                    int rc = handleImapResponse(xsink);
+                    if (rc < 0) {
+                        return nullptr;
+                    }
+                    if (!rc) {
+                        // a new inner op was armed; loop back to drive it
+                        continue;
+                    }
                     if (steps[current_step].next_step >= 0) {
                         current_step = steps[current_step].next_step;
                     } else {
@@ -1573,6 +1836,26 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             return op.release();
         }
 
+        case StepType::RECV_IMAP_RESPONSE: {
+            // (re)initialize the raw accumulator and literal state for this step
+            if (ctx.imap_accum) {
+                ctx.imap_accum->deref(xsink);
+            }
+            ctx.imap_accum = new BinaryNode();
+            ctx.imap_literal_remaining = 0;
+            ctx.imap_continuation = false;
+
+            sock_obj->ref();
+            SimpleRefHolder<QoreStringNode> imap_pattern(new QoreStringNode("\r\n"));
+            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
+                new SocketRecvUntilBytesPollOperation(xsink, *imap_pattern, sock_obj, false),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
         case StepType::RECV_LINE_RESPONSE: {
             // Initialize accumulator in ctx.extra
             // Initialize dedicated accumulator field (no hash lookup needed)
@@ -1774,6 +2057,7 @@ const char* PollPipelinePriv::getStateImpl() const {
         case StepType::PUSH_QUEUE: return "push-queue";
         case StepType::DRAIN_QUEUE_SEND: return "drain-queue-send";
         case StepType::YIELD: return "yield";
+        case StepType::RECV_IMAP_RESPONSE: return "recv-imap-response";
     }
     return "unknown";
 }
@@ -2182,6 +2466,89 @@ int PollPipeline::addBranchOnContextValue(
         string context_key, string value, int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranchOnContextValue(context_key->c_str(), value->c_str(),
         (int)true_step, (int)false_step);
+}
+
+//! Adds a branch step based on whether a context extra integer equals a value
+/** Compares ctx.extra[context_key] against the expected value as an integer. Jumps to
+    \a true_step on match, \a false_step otherwise; a missing or unset key never matches.
+
+    Use this to branch on protocol reply codes, which addRecvLineResponse() stores as
+    integers (addBranchOnContextValue() only compares strings and would never match).
+
+    @param context_key the context extra key to check
+    @param value the expected integer value
+    @param true_step the step index on match
+    @param false_step the step index on mismatch
+    @return the step index
+
+    @par Example:
+    @code{.py}
+# on an SMTP SASL failure the server answers 334 with a base64 error payload instead of
+# an error code, and expects an empty line before it will report the real failure
+pipeline.addBranchOnContextInt("login_code", 334, challenge_step, done_step);
+    @endcode
+
+    @since %Qore 3.0
+*/
+int PollPipeline::addBranchOnContextInt(
+        string context_key, int value, int true_step, int false_step) [flags=NAMED_ARGS] {
+    return priv->addBranchOnContextInt(context_key->c_str(), value,
+        (int)true_step, (int)false_step);
+}
+
+//! Adds a step that reads one complete IMAP response, transparently consuming literals
+/** Reads CRLF-delimited lines from the socket, and whenever a line ends with an IMAP
+    literal introducer (\c "{N}", \c "{N+}" or \c "{N-}") reads exactly \c N further octets
+    before resuming line reads. Reading stops at either:
+    - a line beginning with the command tag held in \c ctx.extra[tag_key] followed by a
+      space (the tagged completion line), or
+    - a line beginning with \c "+" (a command continuation request).
+
+    The complete raw response — literal introducers and literal octets included, exactly as
+    received — is stored as a binary in \c ctx.extra[resp_key] and is also left in
+    \c ctx.last_output. Response parsing is intentionally left to the caller, so no encoding
+    or structural assumptions are imposed on message payloads.
+
+    \c ctx.extra["imap_continuation"] is set to @ref True "True" when the response terminated
+    with a continuation request rather than a tagged completion line; branch on it with
+    addBranchOnContextKey().
+
+    If the tagged completion line's status is \c NO or \c BAD, an exception is raised with
+    error code \a error_code and the server's response text.
+
+    @param tag_key the context extra key holding the command tag (e.g. \c "a001")
+    @param resp_key the context extra key to receive the raw response binary
+    @param error_code the exception error code raised on a \c NO / \c BAD completion, on a
+    premature connection close, or when \a max_size is exceeded
+    @param max_size the maximum accumulated response size in bytes; exceeding it raises
+    \a error_code rather than allocating without bound
+    @return the step index
+
+    @par Example:
+    @code{.py}
+pipeline.addSetContextValue("tag", "a001");
+pipeline.addSetContextBinary("cmd", "a001 CAPABILITY\r\n");
+pipeline.addSendFromContext("cmd");
+pipeline.addRecvImapResponse("tag", "response", "IMAP-SERVER-ERROR", 64 * 1024 * 1024);
+    @endcode
+
+    @throw POLL-PIPELINE-ERROR \a max_size is not greater than zero
+
+    @note The exception raised at runtime for a \c NO / \c BAD completion, a premature
+    connection close, or an oversized response uses the caller-supplied \a error_code, not
+    \c POLL-PIPELINE-ERROR.
+
+    @since %Qore 3.0
+*/
+int PollPipeline::addRecvImapResponse(string tag_key, string resp_key, string error_code,
+        int max_size = 67108864) [dom=NETWORK; flags=NAMED_ARGS] {
+    if (max_size <= 0) {
+        xsink->raiseException("POLL-PIPELINE-ERROR", "max_size must be > 0; got %d",
+            (int)max_size);
+        return -1;
+    }
+    return priv->addRecvImapResponse(tag_key->c_str(), resp_key->c_str(), error_code->c_str(),
+        (size_t)max_size);
 }
 
 //! Adds a transform step that sets a string value in the context extra hash

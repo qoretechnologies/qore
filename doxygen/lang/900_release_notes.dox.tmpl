@@ -1121,6 +1121,14 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()": blocking companion to
         @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" that executes the I/O work
         through the async I/O controller and waits for the result
+      - @ref Qore::PollPipeline::addRecvImapResponse() "PollPipeline::addRecvImapResponse()": reads one
+        complete IMAP response in non-blocking mode, transparently consuming IMAP literals
+        (\c "{N}", \c "{N+}", \c "{N-}") and stopping at the tagged completion line or a \c "+" command
+        continuation request; the raw response is returned byte-exact so message payloads survive
+        unmodified, and a caller-supplied size cap bounds allocation
+      - @ref Qore::PollPipeline::addBranchOnContextInt() "PollPipeline::addBranchOnContextInt()": branches on
+        an integer context value, such as the reply code stored by
+        @ref Qore::PollPipeline::addRecvLineResponse() "addRecvLineResponse()"
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
       - @ref Qore::Socket::startPollSendHttpResponseWithStream() "Socket::startPollSendHttpResponseWithStream()":
