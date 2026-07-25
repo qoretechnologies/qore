@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+final class HashStringFormatter {
+    string format(hash<string, string> row) {
+        return row.first + \":\" + row.second;
+    }
+
+    string wrappedFormat(hash<string, string> row) {
+        return self.format(row);
+    }
+
+    string consumers(hash<string, string> row) {
+        return sprintf(\"%d:%d:%y:%y:%y:%d:%d:%s\",
+            self.wrappedFormat(row).size(),
+            self.wrappedFormat(row).length(),
+            self.wrappedFormat(row).startsWith(\"Dvo\"),
+            self.wrappedFormat(row).endsWith(\"Smetana\"),
+            self.wrappedFormat(row).contains(\":\"),
+            self.wrappedFormat(row).find(\":\"),
+            self.wrappedFormat(row).rfind(\":\"),
+            self.wrappedFormat(row).substr(1, 3));
+    }
+}
+
+int sub main() {
+    HashStringFormatter formatter();
+    hash<string, string> present = {
+        \"first\": \"Dvo\u0159\u00e1k\", \"second\": \"Smetana\"};
+    hash<string, string> missing = {\"first\": \"Dvo\u0159\u00e1k\"};
+    hash<string, string> removed = present;
+    remove removed.second;
+    hash<string, string> unassigned;
+    bool unassigned_rejected = False;
+    try {
+        formatter.consumers(unassigned);
+    } catch (hash<auto> ex) {
+        unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool encoding_rejected = False;
+    try {
+        formatter.consumers({
+            \"first\": convert_encoding(\"ascii\", \"US-ASCII\"),
+            \"second\": \"\u00df\"});
+    } catch (hash<auto> ex) {
+        encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    printf(\"%s|%s|%s|%d|%d\\n\",
+        formatter.consumers(present),
+        formatter.consumers(missing),
+        formatter.consumers(removed),
+        unassigned_rejected, encoding_rejected);
+    return 0;
+}
+
+main();
+";
+
+string root = "/tmp/qore-aot-implicit-self-hash-string-" + string(getpid());
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string source_path = root + "/source.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, source_path));
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_dir, source_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_dir, source_path));
+string enabled_qo = enabled_dir + "/source.qo";
+string disabled_qo = disabled_dir + "/source.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (!(enabled_compile =~ /AOT-EFFECTS: HashStringFormatter__consumers_[^\n]*string-consumers=[1-9][0-9]*/)) {
+    printf("implicit-self hash string consumers were not fused:\n%s",
+        enabled_compile);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, enabled_exe));
+string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}

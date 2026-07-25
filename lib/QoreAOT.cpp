@@ -16669,12 +16669,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                     return node.kind
                                         == AOTStringExpressionNodeKind::
                                             HashKeyString;
-                                });
+                            });
                             if (has_hash_string) {
                                 supported =
-                                    info->second.context_independent_fast_entry
-                                    && call->opcode
-                                        != QoreIROpcode::CallMethodDirect
+                                    (info->second.context_independent_fast_entry
+                                        || (call->opcode
+                                                == QoreIROpcode::CallMethodDirect
+                                            && info->second
+                                                .implicit_self_method))
                                     && !std::getenv(
                                         "QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT");
                             }

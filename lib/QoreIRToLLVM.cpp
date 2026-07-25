@@ -17089,7 +17089,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             } else if (fused_string_consumer && aot_self_batch_callee) {
                 call_result = emitAOTStringProducerConsumer(
-                    *aot_self_batch_callee, raw_args, *direct_inst, module);
+                    *aot_self_batch_callee, raw_args, *direct_inst, module,
+                    aot_self_batch_fn);
                 if (!call_result) {
                     error = "internal error: fused AOT exact-method string"
                         " producer summary could not be emitted";
