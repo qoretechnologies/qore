@@ -292,7 +292,7 @@ private:
         const LocalVar* local = nullptr;
         std::vector<std::string> keys;
         llvm::Value* success = nullptr;
-        llvm::Value* results = nullptr;
+        std::vector<std::pair<llvm::Value*, size_t>> sources;
         const QoreIRInstruction* instruction = nullptr;
         llvm::BasicBlock* dominance_block = nullptr;
         bool cross_call_eligible = false;
@@ -303,6 +303,7 @@ private:
         aot_hash_string_extraction_cache;
     const QoreIRInstruction* aot_hash_string_extraction_instruction = nullptr;
     size_t aot_hash_string_extraction_reuses = 0;
+    size_t aot_hash_string_extraction_overlap_reuses = 0;
 
     // Typed-map backing pointers materialized in loop preheaders.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;

@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+final class HashStringFormatter {
+    string formatFirst(hash<string, string> row) {
+        return row.first + ":";
+    }
+
+    string format(hash<string, string> row) {
+        return row.first + ":" + row.second;
+    }
+
+    string formatReversed(hash<string, string> row) {
+        return row.second + ":" + row.first;
+    }
+
+    string consume(hash<string, string> row, int offset) {
+        return sprintf("%d:%d:%d:%d",
+            self.formatFirst(row).size(),
+            self.format(row).length(),
+            self.formatReversed(row).size(),
+            offset);
+    }
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 5000000;
+    HashStringFormatter formatter();
+    hash<string, string> row = {
+        "first": "Dvo\u0159\u00e1k",
+        "second": "Smetana",
+    };
+    int checksum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        checksum += formatter.consume(row, i & 7).size();
+    }
+    printf("%d\n", checksum);
+    return 0;
+}
+
+main();

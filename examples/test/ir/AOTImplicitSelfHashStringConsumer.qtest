@@ -24,6 +24,21 @@ final class HashStringFormatter {
         return self.format(row);
     }
 
+    string formatFirst(hash<string, string> row) {
+        return row.first + \":\";
+    }
+
+    string formatReversed(hash<string, string> row) {
+        return row.second + \":\" + row.first;
+    }
+
+    string overlapConsumers(hash<string, string> row) {
+        return sprintf(\"%d:%d:%d\",
+            self.formatFirst(row).size(),
+            self.wrappedFormat(row).length(),
+            self.formatReversed(row).size());
+    }
+
     string consumers(hash<string, string> row) {
         return sprintf(\"%d:%d:%y:%y:%y:%d:%d:%s\",
             self.wrappedFormat(row).size(),
@@ -69,11 +84,14 @@ int sub main() {
     } catch (hash<auto> ex) {
         encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
-    printf(\"%s|%s|%s|%s|%d|%d\\n\",
+    printf(\"%s|%s|%s|%s|%s|%s|%s|%d|%d\\n\",
         formatter.consumers(present),
         formatter.consumers(missing),
         formatter.consumers(removed),
         formatter.mutationBoundaries(present),
+        formatter.overlapConsumers(present),
+        formatter.overlapConsumers(missing),
+        formatter.overlapConsumers(removed),
         unassigned_rejected, encoding_rejected);
     return 0;
 }
@@ -129,6 +147,12 @@ if (!(enabled_compile =~ /AOT-EFFECTS: HashStringFormatter__consumers_[^\n]*stri
 if (!(enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__consumers_[^\n]*hash-string-extraction-reuses=[1-9][0-9]*/)) {
     printf("hash string extractions were not reused:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (!(enabled_compile
+        =~ /AOT-LOWERING: HashStringFormatter__overlapConsumers_[^\n]*hash-string-extraction-overlap-reuses=[1-9][0-9]*/)) {
+    printf("overlapping hash string extractions were not reused:\n%s",
         enabled_compile);
     exit(2);
 }

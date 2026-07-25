@@ -5900,50 +5900,90 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 }
             }
             std::vector<std::string> key_names;
+            key_names.reserve(hash_nodes.size());
+            for (size_t node_index : hash_nodes) {
+                key_names.push_back(
+                    expression.nodes[node_index].string_constant);
+            }
+
+            std::vector<std::pair<llvm::Value*, size_t>> hash_result_sources(
+                hash_nodes.size(), {nullptr, 0});
+            llvm::Value* success = nullptr;
+            auto cached = aot_hash_string_extraction_cache.end();
             if (source_local) {
-                key_names.reserve(hash_nodes.size());
-                for (size_t node_index : hash_nodes) {
-                    key_names.push_back(
-                        expression.nodes[node_index].string_constant);
+                size_t best_missing = key_names.size() + 1;
+                for (auto it = aot_hash_string_extraction_cache.begin();
+                        it != aot_hash_string_extraction_cache.end(); ++it) {
+                    if (it->block != current_lowering_block_
+                            || it->local != source_local
+                            || !dominates(it->dominance_block,
+                                builder->GetInsertBlock())) {
+                        continue;
+                    }
+                    size_t missing = 0;
+                    for (const auto& key : key_names) {
+                        if (std::find(it->keys.begin(), it->keys.end(), key)
+                                == it->keys.end()) {
+                            ++missing;
+                        }
+                    }
+                    bool cached_is_subset = std::all_of(
+                        it->keys.begin(), it->keys.end(),
+                        [&](const auto& key) {
+                            return std::find(key_names.begin(),
+                                key_names.end(), key) != key_names.end();
+                        });
+                    if (missing && !cached_is_subset) {
+                        continue;
+                    }
+                    if (missing < best_missing) {
+                        cached = it;
+                        best_missing = missing;
+                    }
+                }
+                if (cached != aot_hash_string_extraction_cache.end()) {
+                    success = cached->success;
+                    ++aot_hash_string_extraction_reuses;
+                    if (cached->keys != key_names) {
+                        ++aot_hash_string_extraction_overlap_reuses;
+                    }
                 }
             }
 
-            llvm::Value* hash_results = nullptr;
-            llvm::Value* success = nullptr;
-            if (source_local) {
-                auto cached = std::find_if(
-                    aot_hash_string_extraction_cache.begin(),
-                    aot_hash_string_extraction_cache.end(),
-                    [&](const auto& entry) {
-                        return entry.block == current_lowering_block_
-                            && entry.local == source_local
-                            && entry.keys == key_names
-                            && dominates(entry.dominance_block,
-                                builder->GetInsertBlock());
-                    });
-                if (cached
-                        != aot_hash_string_extraction_cache.end()) {
-                    hash_results = cached->results;
-                    success = cached->success;
-                    ++aot_hash_string_extraction_reuses;
+            std::vector<size_t> lookup_positions;
+            std::vector<std::string> lookup_key_names;
+            lookup_positions.reserve(hash_nodes.size());
+            lookup_key_names.reserve(hash_nodes.size());
+            for (size_t i = 0; i < key_names.size(); ++i) {
+                if (cached != aot_hash_string_extraction_cache.end()) {
+                    auto key = std::find(
+                        cached->keys.begin(), cached->keys.end(), key_names[i]);
+                    if (key != cached->keys.end()) {
+                        size_t index = static_cast<size_t>(
+                            std::distance(cached->keys.begin(), key));
+                        hash_result_sources[i] = cached->sources[index];
+                        continue;
+                    }
                 }
+                lookup_positions.push_back(i);
+                lookup_key_names.push_back(key_names[i]);
             }
 
             std::vector<llvm::Constant*> keys;
             std::vector<llvm::Constant*> hashes64;
             std::vector<llvm::Constant*> hashes32;
-            if (!hash_results) {
-                keys.reserve(hash_nodes.size());
-                hashes64.reserve(hash_nodes.size());
-                hashes32.reserve(hash_nodes.size());
-                for (size_t node_index : hash_nodes) {
-                    const auto& node = expression.nodes[node_index];
+            llvm::Value* lookup_results = nullptr;
+            if (!lookup_positions.empty()) {
+                keys.reserve(lookup_positions.size());
+                hashes64.reserve(lookup_positions.size());
+                hashes32.reserve(lookup_positions.size());
+                for (const auto& key_name : lookup_key_names) {
                     keys.push_back(builder->CreateGlobalString(
-                        node.string_constant,
+                        key_name,
                         "string_expression_hash_key"));
                     QoreIRPrecomputedStringHash hash =
                         qore_ir_precompute_string_hash(
-                            node.string_constant);
+                            key_name);
                     hashes64.push_back(
                         llvm::ConstantInt::get(i64_type, hash.hash64));
                     hashes32.push_back(
@@ -5972,9 +6012,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 llvm::IRBuilder<> entry_builder(
                     &llvm_func->getEntryBlock(),
                     llvm_func->getEntryBlock().begin());
-                hash_results = entry_builder.CreateAlloca(i64_type,
+                lookup_results = entry_builder.CreateAlloca(i64_type,
                     llvm::ConstantInt::get(
-                        i32_type, hash_nodes.size()),
+                        i32_type, lookup_positions.size()),
                     "string_expression_hash_values");
                 auto helper = module.getOrInsertFunction(
                     borrow_hash_values
@@ -5984,11 +6024,18 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                         {i64_type, ptr_type, ptr_type, ptr_type, ptr_type,
                          i32_type},
                         false));
-                success = builder->CreateCall(helper,
+                llvm::Value* lookup_success = builder->CreateCall(helper,
                     {native_args[static_cast<size_t>(group.first)],
-                     key_array, hash64_array, hash32_array, hash_results,
+                     key_array, hash64_array, hash32_array, lookup_results,
                      llvm::ConstantInt::get(
-                         i32_type, hash_nodes.size())});
+                         i32_type, lookup_positions.size())});
+                success = success
+                    ? builder->CreateAnd(success, lookup_success)
+                    : lookup_success;
+                for (size_t i = 0; i < lookup_positions.size(); ++i) {
+                    hash_result_sources[lookup_positions[i]] = {
+                        lookup_results, i};
+                }
                 if (source_local) {
                     constexpr size_t max_cached_extractions = 16;
                     if (aot_hash_string_extraction_cache.size()
@@ -5998,7 +6045,7 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                     }
                     aot_hash_string_extraction_cache.push_back(
                         {current_lowering_block_, source_local,
-                         std::move(key_names), success, hash_results,
+                         key_names, success, hash_result_sources,
                          fused_call, builder->GetInsertBlock(),
                          &group == &hash_groups.front()});
                 }
@@ -6032,14 +6079,18 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
             builder->CreateBr(fallback_bb);
             builder->SetInsertPoint(assigned_bb);
             for (size_t i = 0; i < hash_nodes.size(); ++i) {
+                assert(hash_result_sources[i].first);
                 llvm::Value* value_ptr = builder->CreateGEP(i64_type,
-                    hash_results,
-                    llvm::ConstantInt::get(i32_type, i));
+                    hash_result_sources[i].first,
+                    llvm::ConstantInt::get(
+                        i32_type, hash_result_sources[i].second));
                 hash_values[hash_nodes[i]] =
                     builder->CreateLoad(i64_type, value_ptr);
             }
-            successful_hash_results.emplace_back(
-                hash_results, hash_nodes.size());
+            if (!borrow_hash_values) {
+                successful_hash_results.emplace_back(
+                    lookup_results, lookup_positions.size());
+            }
         }
     }
 
@@ -8940,6 +8991,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_cache.clear();
     aot_hash_string_extraction_instruction = nullptr;
     aot_hash_string_extraction_reuses = 0;
+    aot_hash_string_extraction_overlap_reuses = 0;
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -10691,8 +10743,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             && std::getenv("QORE_IR_OPT_STATS")) {
         fprintf(stderr,
             "IR-OPT-AOT-LOWERING: %s:"
-            " hash-string-extraction-reuses=%zu\n",
-            fn_name.c_str(), aot_hash_string_extraction_reuses);
+            " hash-string-extraction-reuses=%zu"
+            " hash-string-extraction-overlap-reuses=%zu\n",
+            fn_name.c_str(), aot_hash_string_extraction_reuses,
+            aot_hash_string_extraction_overlap_reuses);
     }
 
     // Reset per-function state
