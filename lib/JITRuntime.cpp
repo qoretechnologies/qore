@@ -15747,6 +15747,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         descriptor ? descriptor->info : nullptr;
     qore_object_private* object_priv = qore_object_private::get(*object);
 
+    static const bool single_lvalue =
+        !std::getenv("QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE");
+    ValueHolder value(xsink);
     {
         LValueHelper helper(xsink);
         int rc = member_info
@@ -15757,15 +15760,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_object_member_set_get_aot(
         if (rc) {
             return toBits(QoreValue());
         }
-        QoreValue value = fromBits(args[value_param]);
-        if (helper.assign(value.hasNode() ? value.refSelf() : value)
+        QoreValue assigned_value = fromBits(args[value_param]);
+        if (helper.assign(assigned_value.hasNode()
+                ? assigned_value.refSelf() : assigned_value)
                 || *xsink) {
             return toBits(QoreValue());
         }
+        if (single_lvalue) {
+            value = helper.getReferencedValue();
+        }
     }
 
-    ValueHolder value(qore_rt_get_aot_object_member(object, object_priv,
-        target.qc, member_name, descriptor, xsink), xsink);
+    if (!single_lvalue) {
+        value = qore_rt_get_aot_object_member(object, object_priv,
+            target.qc, member_name, descriptor, xsink);
+    }
     if (*xsink) {
         return toBits(QoreValue());
     }

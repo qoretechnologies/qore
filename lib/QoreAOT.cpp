@@ -11766,14 +11766,30 @@ static bool resolveAOTBatchFunctionEffectSummaries(
             uint8_t compound_op = 0;
             if (get_object_set_get(func, sig, set_member, set_param,
                     compound_member, compound_param, compound_op)) {
-                callee_it->second.object_set_get_member =
-                    std::move(set_member);
-                callee_it->second.object_set_get_param = set_param;
-                callee_it->second.object_compound_get_member =
-                    std::move(compound_member);
-                callee_it->second.object_compound_get_param =
-                    compound_param;
-                callee_it->second.object_compound_get_op = compound_op;
+                auto member_is_reference = [&](const std::string& name) {
+                    if (name.empty()) {
+                        return false;
+                    }
+                    const qore_class_private* member_class = nullptr;
+                    ClassAccess access;
+                    const QoreMemberInfo* info =
+                        qore_class_private::get(*method->getClass())
+                            ->parseFindMember(name.c_str(), member_class,
+                                access);
+                    return info && QoreTypeInfo::isReference(
+                        info->getTypeInfo());
+                };
+                if (!member_is_reference(set_member)
+                        && !member_is_reference(compound_member)) {
+                    callee_it->second.object_set_get_member =
+                        std::move(set_member);
+                    callee_it->second.object_set_get_param = set_param;
+                    callee_it->second.object_compound_get_member =
+                        std::move(compound_member);
+                    callee_it->second.object_compound_get_param =
+                        compound_param;
+                    callee_it->second.object_compound_get_op = compound_op;
+                }
             }
         }
         AOTStringOpInfo string_op;

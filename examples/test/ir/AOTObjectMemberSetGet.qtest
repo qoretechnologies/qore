@@ -17,6 +17,8 @@ mkdir(root);
 string source_path = root + "/case.qr";
 string source = "%modern
 
+int reference_value = 2;
+
 class GenericBox<T> {
     private {
         T value;
@@ -51,6 +53,21 @@ class InheritedMemberBase {
 
 class InheritedMemberBox inherits InheritedMemberBase {
     int echo(int value) {
+        self.value = value;
+        return self.value;
+    }
+}
+
+class ReferenceBox {
+    private {
+        reference<int> value;
+    }
+
+    constructor() {
+        self.value = \\reference_value;
+    }
+
+    reference<int> echo(int value) {
         self.value = value;
         return self.value;
     }
@@ -140,13 +157,16 @@ int sub main() {
     OverrideBase base = new OverrideChild();
     NearMiss near_miss();
     LocalNoNarrowNearMiss local_no_narrow();
+    ReferenceBox reference_box();
     *int absent = NOTHING;
     auto flexible = local_no_narrow.echo({\"n\": 1});
     flexible.s = \"x\";
-    printf(\"%d:%y:%d:%d:%d:%s:%d:%d\\n\", generic.echo(7),
+    reference<int> reference_result = reference_box.echo(13);
+    printf(\"%d:%y:%d:%d:%d:%s:%d:%d:%d:%d\\n\", generic.echo(7),
         optional.echo(absent) === NOTHING, callOverride(base),
         near_miss.echo(9), near_miss.getWrites(), flexible.fullType(),
-        inherited.echo(11), concurrentChecksum());
+        inherited.echo(11), reference_result, reference_value,
+        concurrentChecksum());
     return 0;
 }
 
@@ -189,10 +209,14 @@ if (!enabled_symbols.regex("qore_rt_object_member_set_get_aot")
 }
 
 string enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
+string separate_read = backquote(sprintf(
+    "%s QORE_DISABLE_AOT_OBJECT_SET_GET_SINGLE_LVALUE=1 %s 2>&1",
+    env, enabled_exe));
 string disabled = backquote(sprintf("%s %s 2>&1", env, disabled_exe));
-if (ast != "7:True:1004:9:1:hash<auto>:11:8020\n"
-        || enabled != ast || disabled != ast) {
-    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
-        ast, enabled, disabled);
+if (ast != "7:True:1004:9:1:hash<auto>:11:13:13:8020\n"
+        || enabled != ast || separate_read != ast || disabled != ast) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%s"
+        "Separate read:\n%sDisabled:\n%s",
+        ast, enabled, separate_read, disabled);
     exit(2);
 }
