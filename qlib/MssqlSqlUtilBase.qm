@@ -116,6 +116,8 @@ module MssqlSqlUtilBase {
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
     - added temporary-table support (\c "#"-prefixed local temporary tables); see
       @ref SqlUtil::AbstractDatabase::createTempTable() "AbstractDatabase::createTempTable()"
+    - fixed column renaming; \c sp_rename was called with an \c "@objtype" of \c "COLUMNS", which the server
+      rejects, and with a quoted new column name, which would have made the quoting part of the name
 
     @subsection MssqlSqlUtilBasev10 MssqlSqlUtilBase v1.0
     - added targeted logical partition-name metadata lookup without loading all partition-function boundaries
@@ -415,7 +417,12 @@ string str = col.getRenameSql(t, "new_name");
         @return a string that can be used to rename the column
     */
     string getRenameSql(AbstractTable t, string new_name) {
-        return sprintf("sp_rename '%s.%s', '%s', 'COLUMNS'", t.getSqlName(), ddl_name, getDdlName(new_name));
+        # the "@objtype" argument is "COLUMN"; "COLUMNS" is rejected with "Explicit @objtype 'COLUMNS' is
+        # unrecognized", so column renames never worked
+        # "@newname" is a literal, not an identifier: quoting a reserved word here would make the brackets part
+        # of the new column name, so the unquoted name must be used ("@objname" is parsed as an identifier and
+        # does take the quoted name)
+        return sprintf("sp_rename '%s.%s', '%s', 'COLUMN'", t.getSqlName(), ddl_name, new_name);
     }
 
     #! returns the column name with quoting in case the column name is a reserved word
