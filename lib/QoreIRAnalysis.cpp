@@ -2329,14 +2329,17 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
             continue;
         }
         bool retain_aggregate_owner = false;
-        for (QoreIRValue operand : aggregate_values) {
+        for (size_t operand_index = 0;
+                operand_index < aggregate_values.size(); ++operand_index) {
             if (qore_ir_analysis_cancelled(check_count,
                     "IR fixed-aggregate scalar operand analysis")) {
                 return {};
             }
+            QoreIRValue operand = aggregate_values[operand_index];
             const QoreIRValueFacts* facts = func.getValueFacts(operand);
             bool exact_string_constant = false;
             bool exact_aggregate_constructor = false;
+            bool exact_owned_hashdecl_aggregate = false;
             if (facts
                     && facts->representation
                         == QoreIRValueRepresentation::Boxed
@@ -2371,6 +2374,40 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     && QoreTypeInfo::isInputIdentical(
                         expected_type, constructor_type);
             }
+            if (hashdecl_type && facts
+                    && facts->representation
+                        == QoreIRValueRepresentation::Boxed
+                    && operand_index < hash_keys.size()) {
+                auto definition = definitions.find(operand.id);
+                const auto* load = definition != definitions.end()
+                        && definition->second.inst->opcode
+                            == QoreIROpcode::LoadLocal
+                    ? static_cast<const QoreIRLocalInstruction*>(
+                        definition->second.inst) : nullptr;
+                const HashDeclMemberInfo* member =
+                    typed_hash_decl_private::get(*hashdecl_type)->findMember(
+                        hash_keys[operand_index].c_str());
+                const QoreTypeInfo* member_type = member
+                    ? func.specializeType(member->getTypeInfo()) : nullptr;
+                const QoreTypeInfo* value_type =
+                    qore_get_value_type(func.specializeType(facts->type_info));
+                auto exact_type =
+                    func.exact_assigned_boxed_local_types.find(operand.id);
+                if (exact_type
+                        != func.exact_assigned_boxed_local_types.end()) {
+                    value_type = exact_type->second;
+                }
+                bool aggregate_type =
+                    QoreTypeInfo::getUniqueReturnComplexList(member_type)
+                        || QoreTypeInfo::getUniqueReturnComplexHash(
+                            member_type);
+                exact_owned_hashdecl_aggregate = load && load->local
+                    && constant_local_assignments.count(load->local)
+                    && aggregate_type
+                    && QoreTypeInfo::hasType(value_type)
+                    && QoreTypeInfo::isInputIdentical(
+                        member_type, value_type);
+            }
             bool expected_scalar = hashdecl_type
                 ? facts && (facts->representation
                         == QoreIRValueRepresentation::NativeInt
@@ -2378,7 +2415,8 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         == QoreIRValueRepresentation::NativeFloat
                     || facts->representation
                         == QoreIRValueRepresentation::NativeBool
-                    || exact_string_constant)
+                    || exact_string_constant
+                    || exact_owned_hashdecl_aggregate)
                 : exact_aggregate_constructor
                     || (facts
                         && facts->representation == expected_representation
@@ -7273,9 +7311,24 @@ bool qore_ir_hashdecl_literal_values_prechecked(const QoreIRFunction& func,
             func.specializeType(member->getTypeInfo());
         const QoreTypeInfo* value_type =
             qore_get_value_type(func.specializeType(facts->type_info));
+        auto exact_local_type =
+            func.exact_assigned_boxed_local_types.find(
+                initializer->operands[i].id);
+        if (exact_local_type
+                != func.exact_assigned_boxed_local_types.end()) {
+            value_type = exact_local_type->second;
+        }
         if (!QoreTypeInfo::hasType(member_type)
                 || !QoreTypeInfo::hasType(value_type)
                 || !QoreTypeInfo::isInputIdentical(member_type, value_type)) {
+            if (std::getenv("QORE_AOT_DEBUG")) {
+                fprintf(stderr,
+                    "AOT: hashdecl literal value mismatch for '%s': "
+                    "member='%s' value='%s'\n",
+                    make->keys[i].c_str(),
+                    QoreTypeInfo::getName(member_type),
+                    QoreTypeInfo::getName(value_type));
+            }
             return false;
         }
     }
@@ -7564,8 +7617,17 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
         }
         return;
     }
-    QoreIRFixedAggregateScalarizationStats aggregate_stats =
-        qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
+    QoreIRFixedAggregateScalarizationStats aggregate_stats;
+    constexpr size_t max_aggregate_scalarization_rounds = 8;
+    for (size_t round = 0; round < max_aggregate_scalarization_rounds; ++round) {
+        QoreIRFixedAggregateScalarizationStats round_stats =
+            qore_ir_scalar_replace_fixed_aggregates(func, cfg, check_count);
+        aggregate_stats.lists += round_stats.lists;
+        aggregate_stats.hashes += round_stats.hashes;
+        if (!round_stats.lists && !round_stats.hashes) {
+            break;
+        }
+    }
     local_stats.fixed_lists_scalarized = aggregate_stats.lists;
     local_stats.fixed_hashes_scalarized = aggregate_stats.hashes;
     local_stats.local_value_facts_refined =
@@ -11113,6 +11175,7 @@ size_t qore_ir_import_exact_boxed_call_facts(QoreIRFunction& func,
 size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
         bool propagate_positive) {
     func.exact_assigned_boxed_local_loads.clear();
+    func.exact_assigned_boxed_local_types.clear();
     if (func.blocks.empty() || func.has_opaque_ast_local_access) {
         return 0;
     }
@@ -11512,6 +11575,13 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
                         && fact->second) {
                     func.exact_assigned_boxed_local_loads.insert(
                         inst->result.id);
+                    const QoreTypeInfo* declared_type =
+                        func.specializeType(qore_get_value_type(
+                            load->local->getTypeInfo()));
+                    if (QoreTypeInfo::hasType(declared_type)) {
+                        func.exact_assigned_boxed_local_types.emplace(
+                            inst->result.id, declared_type);
+                    }
                     QoreIRValueFacts next;
                     next.type_info = fact->second;
                     next.assigned_state = QoreIRAssignedState::Assigned;

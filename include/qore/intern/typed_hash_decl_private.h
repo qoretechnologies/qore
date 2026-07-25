@@ -255,6 +255,9 @@ public:
     DLLLOCAL bool matchesLiteralMemberOrder(
             const std::vector<std::string>& keys) const;
 
+    //! Return a stable direct-member ordinal, or -1 for inherited/unknown members.
+    DLLLOCAL int getDirectMemberOffset(const char* key) const;
+
     DLLLOCAL void parseAdd(std::pair<char*, HashDeclMemberInfo*> pair) {
         members.addNoCheck(pair);
     }

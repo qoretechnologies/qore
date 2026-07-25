@@ -739,6 +739,25 @@ bool typed_hash_decl_private::matchesLiteralMemberOrder(
     return true;
 }
 
+int typed_hash_decl_private::getDirectMemberOffset(const char* key) const {
+    if (!key || parentHashDecl) {
+        return -1;
+    }
+    int offset = 0;
+    for (const auto& member : members.member_list) {
+        if (offset && !(offset % 100)
+                && qore_check_cancel(nullptr,
+                    "hashdecl direct member offset analysis")) {
+            return -1;
+        }
+        if (!strcmp(member.first, key)) {
+            return offset;
+        }
+        ++offset;
+    }
+    return -1;
+}
+
 int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
     int rc = initHashIntern(h, init, xsink);
     // xsink may be nullptr when being executed in a try block

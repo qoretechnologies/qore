@@ -1093,7 +1093,8 @@ private:
             llvm::Function* llvm_func);
 
     // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
-    llvm::Value* boxValue(llvm::Value* val, uint32_t id);
+    llvm::Value* boxValue(llvm::Value* val, uint32_t id,
+        bool allow_dynamic_inline = true);
 
     // Emit exception check: if xsink has exception, branch to exception_target
     // unless the caller requests the function-level error path.

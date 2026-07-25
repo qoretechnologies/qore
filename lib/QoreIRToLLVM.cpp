@@ -4319,7 +4319,8 @@ void QoreIRToLLVM::invalidateLocalsForCallee(
     }
 }
 
-llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id) {
+llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id,
+        bool allow_dynamic_inline) {
     if (nanboxed_values.count(id)) {
         return val;  // Already NaN-boxed
     }
@@ -4335,6 +4336,9 @@ llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id) {
                 llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
             result = builder->CreateOr(masked,
                 llvm::ConstantInt::get(i64_type, TAG_INT48));
+        } else if (allow_dynamic_inline && aot_mode && !std::getenv(
+                "QORE_DISABLE_AOT_INLINE_DYNAMIC_INT_BOXING")) {
+            result = boxIntInline(val);
         } else {
             result = boxInt(val);
         }
@@ -9622,7 +9626,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
                 case QoreIRPhiValueKind::QoreValue:
                 default:
-                    val = boxValue(val, inc.value.id);
+                    // PHI fixup inserts before an existing predecessor
+                    // terminator. Dynamic inline boxing creates control-flow
+                    // blocks, so use the branch-free helper form here.
+                    val = boxValue(val, inc.value.id, false);
                     break;
             }
             phi_node->addIncoming(val, bb);
@@ -20868,6 +20875,79 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 return true;
             }
+            int hashdecl_member_slot = -1;
+            bool hashdecl_base_assigned = false;
+            if (aot_mode && !preserve_weak_result
+                    && !std::getenv(
+                        "QORE_DISABLE_AOT_HASHDECL_MEMBER_SLOT")) {
+                const QoreTypeInfo* base_type = nullptr;
+                if (const QoreIRValueFacts* facts =
+                        current_ir_func->getValueFacts(inst->operands[0])) {
+                    base_type = specializeType(facts->type_info);
+                }
+                auto definition =
+                    value_definitions.find(inst->operands[0].id);
+                if (definition != value_definitions.end()
+                        && definition->second->opcode
+                            == QoreIROpcode::LoadLocal) {
+                    const auto* load = static_cast<const
+                        QoreIRLocalInstruction*>(definition->second);
+                    if (load->local) {
+                        base_type = specializeType(qore_get_value_type(
+                            load->local->getTypeInfo()));
+                    }
+                }
+                const TypedHashDecl* hashdecl =
+                    QoreTypeInfo::getUniqueReturnHashDecl(base_type);
+                if (hashdecl) {
+                    hashdecl_member_slot = typed_hash_decl_private::get(
+                        *hashdecl)->getDirectMemberOffset(
+                            hka_inst->key_name.c_str());
+                    constexpr int max_direct_hashdecl_member_slot = 3;
+                    if (hashdecl_member_slot > max_direct_hashdecl_member_slot) {
+                        hashdecl_member_slot = -1;
+                    }
+                    std::vector<QoreIRValue> assigned_values{
+                        inst->operands[0]};
+                    hashdecl_base_assigned =
+                        qore_ir_values_proven_assigned_at(
+                            *current_ir_func, inst, assigned_values);
+                }
+                if (std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: hashdecl member slot in '%s': key='%s' "
+                        "base='%s' hashdecl=%d slot=%d assigned=%d\n",
+                        current_ir_func->getDisplayName().c_str(),
+                        hka_inst->key_name.c_str(),
+                        QoreTypeInfo::getName(base_type), hashdecl != nullptr,
+                        hashdecl_member_slot, hashdecl_base_assigned);
+                }
+            }
+            if (hashdecl_member_slot >= 0) {
+                const char* helper_name = hashdecl_base_assigned
+                    ? "qore_rt_hashdecl_member_access_slot"
+                    : "qore_rt_hashdecl_member_access_slot_guarded";
+                const char* helper_throwing_name = hashdecl_base_assigned
+                    ? "qore_rt_hashdecl_member_access_slot_throwing"
+                    : "qore_rt_hashdecl_member_access_slot_guarded_throwing";
+                auto ft = llvm::FunctionType::get(i64_type,
+                    {i64_type, ptr_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(helper_name, ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                    helper_throwing_name, ft);
+                values[inst->result.id] = emitMaybeInvoke(
+                    helper, helper_throwing,
+                    {base_boxed, key_const,
+                        llvm::ConstantInt::get(
+                            i32_type, hashdecl_member_slot),
+                        xsink_arg},
+                    module, llvm_func, inst);
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(
+                    values[inst->result.id], inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             const char* helper_name = preserve_weak_result
                     ? (prehashed ? "qore_rt_hash_key_access_for_call_prehashed"
                         : "qore_rt_hash_key_access_for_call")
@@ -22859,12 +22939,102 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 llvm::Value* key0 = builder->CreateGlobalString(mhck->keys[0], "hck_" + mhck->keys[0]);
                 llvm::Value* key1 = builder->CreateGlobalString(mhck->keys[1], "hck_" + mhck->keys[1]);
+                bool known_auto_type = false;
+                const QoreTypeInfo* analyzed_type0 = nullptr;
+                const QoreTypeInfo* analyzed_type1 = nullptr;
+                const QoreTypeInfo* analyzed_common = nullptr;
+                if (aot_mode && current_ir_func
+                        && std::getenv(
+                            "QORE_DISABLE_AOT_FIXED_HASH_AUTO_TYPE")
+                            == nullptr) {
+                    bool operands_assigned =
+                        qore_ir_values_proven_assigned_at(
+                            *current_ir_func, inst, inst->operands);
+                    const QoreIRValueFacts* facts0 =
+                        current_ir_func->getValueFacts(inst->operands[0]);
+                    const QoreIRValueFacts* facts1 =
+                        current_ir_func->getValueFacts(inst->operands[1]);
+                    if (operands_assigned && facts0 && facts1) {
+                        const QoreTypeInfo* type0 =
+                            specializeType(facts0->type_info);
+                        const QoreTypeInfo* type1 =
+                            specializeType(facts1->type_info);
+                        auto definition0 =
+                            value_definitions.find(inst->operands[0].id);
+                        auto definition1 =
+                            value_definitions.find(inst->operands[1].id);
+                        if (definition0 != value_definitions.end()
+                                && definition0->second->opcode
+                                    == QoreIROpcode::LoadLocal) {
+                            const auto* load = static_cast<const
+                                QoreIRLocalInstruction*>(
+                                    definition0->second);
+                            if (load->local) {
+                                type0 = specializeType(qore_get_value_type(
+                                    load->local->getTypeInfo()));
+                            }
+                        }
+                        if (definition1 != value_definitions.end()
+                                && definition1->second->opcode
+                                    == QoreIROpcode::LoadLocal) {
+                            const auto* load = static_cast<const
+                                QoreIRLocalInstruction*>(
+                                    definition1->second);
+                            if (load->local) {
+                                type1 = specializeType(qore_get_value_type(
+                                    load->local->getTypeInfo()));
+                            }
+                        }
+                        auto exact0 = current_ir_func
+                            ->exact_assigned_boxed_local_types.find(
+                                inst->operands[0].id);
+                        auto exact1 = current_ir_func
+                            ->exact_assigned_boxed_local_types.find(
+                                inst->operands[1].id);
+                        if (exact0 != current_ir_func
+                                ->exact_assigned_boxed_local_types.end()) {
+                            type0 = exact0->second;
+                        }
+                        if (exact1 != current_ir_func
+                                ->exact_assigned_boxed_local_types.end()) {
+                            type1 = exact1->second;
+                        }
+                        const QoreTypeInfo* common = type0;
+                        bool common_type = QoreTypeInfo::hasType(type0)
+                            && QoreTypeInfo::hasType(type1)
+                            && QoreTypeInfo::matchCommonType(common, type1);
+                        known_auto_type = QoreTypeInfo::hasType(type0)
+                            && QoreTypeInfo::hasType(type1)
+                            && (!common_type
+                                || !common || common == autoTypeInfo
+                                || common == anyTypeInfo);
+                        analyzed_type0 = type0;
+                        analyzed_type1 = type1;
+                        analyzed_common = common;
+                    }
+                }
+                if (aot_mode && std::getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr,
+                        "AOT: fixed hash literal in '%s': first='%s' "
+                        "second='%s' common='%s' known_auto=%d\n",
+                        current_ir_func->getDisplayName().c_str(),
+                        QoreTypeInfo::getName(analyzed_type0),
+                        QoreTypeInfo::getName(analyzed_type1),
+                        QoreTypeInfo::getName(analyzed_common),
+                        known_auto_type);
+                }
                 auto direct_ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction(
-                    "qore_rt_make_hash_const_keys_2_unique", direct_ft);
+                    known_auto_type
+                        ? "qore_rt_make_hash_const_keys_2_unique_auto"
+                        : "qore_rt_make_hash_const_keys_2_unique",
+                    direct_ft);
                 auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_make_hash_const_keys_2_unique_throwing", direct_ft);
+                    known_auto_type
+                        ? "qore_rt_make_hash_const_keys_2_unique_auto_throwing"
+                        : "qore_rt_make_hash_const_keys_2_unique_throwing",
+                    direct_ft);
                 llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
                     {key0, boxValue(val0, inst->operands[0].id), key1,
                         boxValue(val1, inst->operands[1].id), xsink_arg},

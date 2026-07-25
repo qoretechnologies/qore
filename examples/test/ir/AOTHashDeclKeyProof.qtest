@@ -111,6 +111,27 @@ string sub deletedValue() {
     });
 }
 
+int sub slotAssigned(Item item) {
+    return item.value;
+}
+
+bool sub slotUnassigned() {
+    Item item;
+    return item.value === NOTHING;
+}
+
+bool sub slotRemoved() {
+    Item item((\"base\": 1, \"value\": 2));
+    remove item.value;
+    return item.value === NOTHING;
+}
+
+bool sub slotDeleted() {
+    Item item((\"base\": 1, \"value\": 2));
+    delete item.value;
+    return item.value === NOTHING;
+}
+
 int sub main() {
     Item value = known();
     Item full = fullExact(3, 4, \"full\");
@@ -123,6 +144,8 @@ int sub main() {
         partial.base, partial.value, partial.label,
         softValue(), optionalValue(),
         invalidValue(), invalidKey(), unassignedValue(), removedValue(), deletedValue());
+    printf(\"%d:%y:%y:%y\\n\", slotAssigned(full), slotUnassigned(),
+        slotRemoved(), slotDeleted());
     return 0;
 }
 
@@ -165,6 +188,16 @@ string value_checked_compile = backquote(sprintf(
     env, qcc_bin, value_checked_exe, source_path));
 if (!is_file(value_checked_exe)) {
     printf("value-checked compile failed:\n%s", value_checked_compile);
+    exit(2);
+}
+
+string slot_checked_exe = root + "/slot-checked";
+string slot_checked_compile = backquote(sprintf(
+    "%s QORE_AOT_DEBUG=1 QORE_DISABLE_AOT_HASHDECL_MEMBER_SLOT=1 "
+        + "%s -O3 --strip-source -o %s %s 2>&1",
+    env, qcc_bin, slot_checked_exe, source_path));
+if (!is_file(slot_checked_exe)) {
+    printf("slot-checked compile failed:\n%s", slot_checked_compile);
     exit(2);
 }
 
@@ -213,13 +246,25 @@ if (enabled_compile.regex(
     exit(2);
 }
 
+if (!enabled_compile.regex(
+        "hashdecl member slot in '[^']*slotAssigned.*key='value'.*assigned=1")
+        || !enabled_compile.regex(
+            "hashdecl member slot in '[^']*slotUnassigned.*key='value'.*assigned=0")
+        || slot_checked_compile.regex("hashdecl member slot")) {
+    printf("unexpected hashdecl member slot proof:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, slot_checked_compile);
+    exit(2);
+}
+
 outputs.enabled = backquote(sprintf("%s %s 2>&1", env, enabled_exe));
 outputs.checked = backquote(sprintf("%s %s 2>&1", env, checked_exe));
 outputs.value_checked = backquote(sprintf("%s %s 2>&1", env, value_checked_exe));
+outputs.slot_checked = backquote(sprintf(
+    "%s %s 2>&1", env, slot_checked_exe));
 
 string expected = "1:2:default:3:4:full:5:6:reordered:7:8:default:10:True:"
     + "RUNTIME-TYPE-ERROR:HASHDECL-INIT-ERROR:RUNTIME-TYPE-ERROR:RUNTIME-TYPE-ERROR:"
-    + "RUNTIME-TYPE-ERROR\n";
+    + "RUNTIME-TYPE-ERROR\n4:True:True:True\n";
 foreach string mode in (keys outputs) {
     string output = outputs{mode};
     if (output != expected) {

@@ -19,6 +19,11 @@ hashdecl StringPair {
     string right;
 }
 
+hashdecl AggregatePair {
+    int value;
+    list<int> values;
+}
+
 string sub hashStringExact() {
     hash<string, string> values = {\"left\": \"a\", \"right\": \"b\"};
     return values.right;
@@ -121,14 +126,28 @@ int sub nestedListAlias() {
     return values[0][0] + child[0];
 }
 
-printf(\"%s:%s:%s:%d:%d:%d:%s:%s:%s:%s:%s:%d:%d:%d:%d:%d:%d\\n\",
+int sub nestedHashdeclListExact(int value) {
+    list<int> child = (value, value + 1);
+    AggregatePair values((\"value\": value, \"values\": child));
+    return values.value + values.values[1];
+}
+
+int sub nestedHashdeclListAlias() {
+    list<int> child = (3, 4);
+    AggregatePair values((\"value\": 1, \"values\": child));
+    child[0] = 9;
+    return values.values[0] + child[0];
+}
+
+printf(\"%s:%s:%s:%d:%d:%d:%s:%s:%s:%s:%s:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
     hashStringExact(), listStringExact(), hashdeclStringExact(),
     hashStringQueries(), listStringQueries(), hashdeclStringQueries(),
     hashStringDynamic(\"x\"), listStringDynamic(\"x\"),
     hashdeclStringDynamic(\"x\"), hashStringMutation(),
     listStringMutation(), nestedHashExact(), nestedListExact(),
     nestedHashMutation(), nestedListMutation(), nestedHashAlias(),
-    nestedListAlias());
+    nestedListAlias(), nestedHashdeclListExact(5),
+    nestedHashdeclListAlias());
 ";
 
 string script_path = "/tmp/qore-ir-fixed-boxed-scalar-" + string(getpid()) + ".qr";
@@ -142,7 +161,7 @@ string sub runMode(string mode) {
         libqore_dir, qore_bin, mode, script_path));
 }
 
-string expected = "b:b:b:2:2:2:x:x:x:ax:ax:10:10:16:16:12:12\n";
+string expected = "b:b:b:2:2:2:x:x:x:ax:ax:10:10:16:16:12:12:11:12\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
@@ -167,9 +186,16 @@ foreach string name in (("listStringQueries", "nestedListExact")) {
         exit(2);
     }
 }
+if (!stats.regex(
+        "IR-OPT: nestedHashdeclListExact:.*scalar-lists=1.*scalar-hashes=1")) {
+    printf("missing iterative nested hashdecl/list scalar replacement:\n%s",
+        stats);
+    exit(2);
+}
 foreach string name in (("hashStringExact", "hashdeclStringExact",
         "hashStringDynamic", "hashdeclStringDynamic", "hashStringMutation",
-        "nestedHashMutation", "nestedHashAlias")) {
+        "nestedHashMutation", "nestedHashAlias",
+        "nestedHashdeclListAlias")) {
     if (!stats.regex(sprintf("IR-OPT: %s:.*scalar-hashes=0", name))) {
         printf("unsafe fixed boxed hash scalar replacement for %s:\n%s", name, stats);
         exit(2);
@@ -202,7 +228,9 @@ if (enabled_compile !~ /IR-OPT-AOT: hashStringQueries:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: listStringQueries:.*scalar-lists=1/
         || enabled_compile !~ /IR-OPT-AOT: hashdeclStringQueries:.*scalar-hashes=1/
         || enabled_compile !~ /IR-OPT-AOT: nestedHashExact:.*scalar-hashes=1/
-        || enabled_compile !~ /IR-OPT-AOT: nestedListExact:.*scalar-lists=1/) {
+        || enabled_compile !~ /IR-OPT-AOT: nestedListExact:.*scalar-lists=1/
+        || enabled_compile !~
+            /IR-OPT-AOT: nestedHashdeclListExact:.*scalar-lists=1.*scalar-hashes=1/) {
     printf("missing AOT fixed boxed aggregate scalar replacement:\n%s",
         enabled_compile);
     exit(2);

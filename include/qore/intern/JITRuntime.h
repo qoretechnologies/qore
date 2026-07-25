@@ -420,9 +420,14 @@ uint64_t qore_rt_make_hash_const_keys_unique(const char** keys, uint64_t* vals, 
 uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_2_unique(const char* key0, uint64_t val0,
-        const char* key1, uint64_t val1, ExceptionSink* xsink);
+    const char* key1, uint64_t val1, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(const char* key0, uint64_t val0,
-        const char* key1, uint64_t val1, ExceptionSink* xsink);
+    const char* key1, uint64_t val1, ExceptionSink* xsink);
+//! Build a proven heterogeneous two-key literal whose inferred value type is auto.
+uint64_t qore_rt_make_hash_const_keys_2_unique_auto(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_2_unique_auto_throwing(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, ExceptionSink* xsink);
 
 //! Convert an assigned native integer to a referenced string without boxing it first.
 uint64_t qore_rt_int_to_string(int64_t value);
@@ -877,6 +882,13 @@ uint64_t qore_rt_hash_key_access_hash_prehashed(uint64_t hash_val, const char* k
 uint64_t qore_rt_hash_key_access_hash_guarded(uint64_t hash_val, const char* key, ExceptionSink* xsink);
 uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uint64_t hash_val, const char* key,
         uint64_t hash64, uint32_t hash32, ExceptionSink* xsink);
+
+//! Access a direct hashdecl member by its declared ordinal. The guarded form
+//! accepts NOTHING; both forms fall back to key lookup if the layout changed.
+uint64_t qore_rt_hashdecl_member_access_slot(uint64_t hash_val, const char* key,
+        int32_t slot, ExceptionSink* xsink);
+uint64_t qore_rt_hashdecl_member_access_slot_guarded(uint64_t hash_val,
+        const char* key, int32_t slot, ExceptionSink* xsink);
 
 //! Test the truth value of a constant hash key without materializing an owned
 //! lookup result. Guarded variants accept NOTHING and other non-hash values.

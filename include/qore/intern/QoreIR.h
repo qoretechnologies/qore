@@ -2936,6 +2936,9 @@ public:
         assigned. Transient AOT shortcuts that omit NOTHING guards require this
         stronger proof. */
     std::unordered_set<uint32_t> exact_assigned_boxed_local_loads;
+    //! Enforced declared value type for each exact assigned boxed local load.
+    std::unordered_map<uint32_t, const QoreTypeInfo*>
+        exact_assigned_boxed_local_types;
 
     // Maximum value ID assigned in this function (used to right-size value vector in interpreter)
     uint32_t max_value_id = 0;

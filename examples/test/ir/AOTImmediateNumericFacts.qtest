@@ -110,9 +110,14 @@ hash<string, string> sub compile(string suffix, string compile_env) {
 hash<string, string> enabled = compile("enabled", "");
 hash<string, string> disabled = compile("disabled",
     "QORE_DISABLE_AOT_IMMEDIATE_NUMERIC_FACTS=1");
-if (enabled.run != expected || disabled.run != expected) {
-    printf("execution mismatch:\nexpected:\n%sEnabled:\n%sDisabled:\n%s",
-        expected, enabled.run, disabled.run);
+hash<string, string> helper_boxing = compile("helper-boxing",
+    "QORE_DISABLE_AOT_IMMEDIATE_NUMERIC_FACTS=1 "
+        + "QORE_DISABLE_AOT_INLINE_DYNAMIC_INT_BOXING=1");
+if (enabled.run != expected || disabled.run != expected
+        || helper_boxing.run != expected) {
+    printf("execution mismatch:\nexpected:\n%sEnabled:\n%sDisabled:\n%s"
+        + "Helper boxing:\n%s",
+        expected, enabled.run, disabled.run, helper_boxing.run);
     exit(2);
 }
 
@@ -145,4 +150,13 @@ foreach string name in (
             name, enabled_ir, disabled_ir);
         exit(2);
     }
+}
+
+string guarded_phi = functionIr(disabled.compile, "boundedPhi_int_bool");
+string helper_phi = functionIr(helper_boxing.compile, "boundedPhi_int_bool");
+if (guarded_phi.find("box_inline") < 0
+        || helper_phi.find("box_inline") >= 0) {
+    printf("guarded dynamic integer boxing was not isolated correctly:\n"
+        + "guarded:\n%s\nhelper:\n%s", guarded_phi, helper_phi);
+    exit(2);
 }

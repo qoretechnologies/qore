@@ -233,6 +233,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique) },
     { "qore_rt_make_hash_const_keys_2_unique_throwing",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_throwing) },
+    { "qore_rt_make_hash_const_keys_2_unique_auto",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_auto) },
+    { "qore_rt_make_hash_const_keys_2_unique_auto_throwing",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique_auto_throwing) },
     { "qore_rt_fixed_hash_remap2_aot",
         reinterpret_cast<void*>(&qore_rt_fixed_hash_remap2_aot) },
     { "qore_rt_fixed_hash_remap2_aot_throwing",
@@ -262,6 +266,10 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_hash_key_access_prehashed", reinterpret_cast<void*>(&qore_rt_hash_key_access_prehashed) },
     { "qore_rt_hash_key_access_for_call_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call_prehashed) },
+    { "qore_rt_hashdecl_member_access_slot",
+        reinterpret_cast<void*>(&qore_rt_hashdecl_member_access_slot) },
+    { "qore_rt_hashdecl_member_access_slot_guarded",
+        reinterpret_cast<void*>(&qore_rt_hashdecl_member_access_slot_guarded) },
     { "qore_rt_hash_key_truthy", reinterpret_cast<void*>(&qore_rt_hash_key_truthy) },
     { "qore_rt_hash_key_truthy_prehashed",
         reinterpret_cast<void*>(&qore_rt_hash_key_truthy_prehashed) },
@@ -4221,9 +4229,9 @@ static uint64_t qore_rt_make_hash_const_keys_impl(const char** keys, uint64_t* v
     return toBits(QoreValue(hash.release()));
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
+static uint64_t qore_rt_make_hash_const_keys_2_unique_impl(
         const char* key0, uint64_t val0_bits, const char* key1, uint64_t val1_bits,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool infer_value_type) {
     static const bool enabled =
         std::getenv("QORE_DISABLE_AOT_FIXED_HASH_2_BUILD") == nullptr;
     if (!enabled) {
@@ -4247,19 +4255,47 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
     hp->setKeyValueKnownAbsentIntern(key0, val0);
     hp->setKeyValueKnownAbsentIntern(key1, val1);
 
-    const QoreTypeInfo* value_type = val0.getFullTypeInfo();
-    bool common_type = QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
-    if (!value_type || value_type == anyTypeInfo || !common_type) {
-        value_type = autoTypeInfo;
+    const QoreTypeInfo* value_type = autoTypeInfo;
+    if (infer_value_type) {
+        value_type = val0.getFullTypeInfo();
+        bool common_type =
+            QoreTypeInfo::matchCommonType(value_type, val1.getFullTypeInfo());
+        if (!value_type || value_type == anyTypeInfo || !common_type) {
+            value_type = autoTypeInfo;
+        }
     }
     hp->complexTypeInfo = qore_get_complex_hash_type(value_type);
     return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique(
+        const char* key0, uint64_t val0_bits, const char* key1,
+        uint64_t val1_bits, ExceptionSink* xsink) {
+    return qore_rt_make_hash_const_keys_2_unique_impl(
+        key0, val0_bits, key1, val1_bits, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(
         const char* key0, uint64_t val0, const char* key1, uint64_t val1,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash_const_keys_2_unique(key0, val0, key1, val1, xsink);
+    QORE_RT_CHECK_THROW(xsink);
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_2_unique_auto(
+        const char* key0, uint64_t val0, const char* key1, uint64_t val1,
+        ExceptionSink* xsink) {
+    return qore_rt_make_hash_const_keys_2_unique_impl(
+        key0, val0, key1, val1, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t
+qore_rt_make_hash_const_keys_2_unique_auto_throwing(
+        const char* key0, uint64_t val0, const char* key1, uint64_t val1,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys_2_unique_auto(
+        key0, val0, key1, val1, xsink);
     QORE_RT_CHECK_THROW(xsink);
     return result;
 }
@@ -4725,6 +4761,42 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_hash_guarded_prehashed(uin
         ? qore_rt_hash_key_access_hash_impl(hash_val, key,
             qore_rt_select_precomputed_hash(hash64, hash32), true, xsink)
         : toBits(QoreValue());
+}
+
+static uint64_t qore_rt_hashdecl_member_access_slot_impl(uint64_t hash_val,
+        const char* key, int32_t slot, bool guarded, ExceptionSink* xsink) {
+    QoreValue hash_value = fromBits(hash_val);
+    if (guarded && hash_value.getType() != NT_HASH) {
+        return toBits(QoreValue());
+    }
+    const QoreHashNode* hash = hash_value.get<const QoreHashNode>();
+    const qore_hash_private* hp = qore_hash_private::get(*hash);
+    if (hp->hashdecl && slot >= 0
+            && static_cast<size_t>(slot) < hp->member_list.size()) {
+        auto member = hp->member_list.begin();
+        std::advance(member, slot);
+        if ((*member)->key == key) {
+            QoreValue result = (*member)->val.refSelf();
+            qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+            return *xsink ? toBits(QoreValue()) : toBits(result);
+        }
+    }
+    return qore_rt_hash_key_access_hash_impl(
+        hash_val, key, 0, false, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hashdecl_member_access_slot(
+        uint64_t hash_val, const char* key, int32_t slot,
+        ExceptionSink* xsink) {
+    return qore_rt_hashdecl_member_access_slot_impl(
+        hash_val, key, slot, false, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hashdecl_member_access_slot_guarded(
+        uint64_t hash_val, const char* key, int32_t slot,
+        ExceptionSink* xsink) {
+    return qore_rt_hashdecl_member_access_slot_impl(
+        hash_val, key, slot, true, xsink);
 }
 
 static int64_t qore_rt_hash_key_truthy_impl(uint64_t hash_val, const char* key,
@@ -5405,6 +5477,24 @@ qore_rt_hash_key_access_hash_guarded_prehashed_throwing(uint64_t hash_val, const
     if (xsink && *xsink) {
         throw QoreJITException();
     }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_hashdecl_member_access_slot_throwing(uint64_t hash_val,
+        const char* key, int32_t slot, ExceptionSink* xsink) {
+    uint64_t result =
+        qore_rt_hashdecl_member_access_slot(hash_val, key, slot, xsink);
+    QORE_RT_CHECK_THROW(xsink);
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_hashdecl_member_access_slot_guarded_throwing(uint64_t hash_val,
+        const char* key, int32_t slot, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hashdecl_member_access_slot_guarded(
+        hash_val, key, slot, xsink);
+    QORE_RT_CHECK_THROW(xsink);
     return result;
 }
 
