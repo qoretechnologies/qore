@@ -1197,6 +1197,16 @@ llm.chatStream(
             if (msg.name.val()) {
                 out_h.name = msg.name;
             }
+            # provider reasoning blocks have to survive the round trip
+            # through this neutral OpenAI-shaped format the same way the
+            # Gemini reasoning signature does: an Anthropic thinking turn
+            # replayed without its blocks is rejected, and the blocks are
+            # only ever carried, never inspected.  Other providers ignore
+            # the extra key.
+            if (msg.reasoning_blocks.typeCode() == NT_LIST
+                    && msg.reasoning_blocks) {
+                out_h.reasoning_blocks = msg.reasoning_blocks;
+            }
             push messages, out_h;
         }
         return messages;
@@ -1277,6 +1287,14 @@ llm.chatStream(
                 push tool_calls, chatToolCallToOpenAi(tc, tools);
             }
             message.tool_calls = tool_calls;
+        }
+        # emit provider reasoning blocks on the assistant message so a
+        # caller that replays this turn through the OpenAI-shaped facade
+        # sends them back; openAiMessagesToChatMessages() reads the key
+        # back into ChatMessage::reasoning_blocks
+        if (response.reasoning_blocks.typeCode() == NT_LIST
+                && response.reasoning_blocks) {
+            message.reasoning_blocks = response.reasoning_blocks;
         }
         hash<auto!> rv = {
             "object": "chat.completion",

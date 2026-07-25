@@ -734,14 +734,14 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = {
+        hash<auto> body = addReasoningControls({
             "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
             "max_tokens": getRequestMaxOutputTokens(opts),
             "system": system_prompt,
             "messages": (
                 {"role": "user", "content": user_prompt},
             ),
-        };
+        }, opts);
 
         # When an output schema is provided, use tool-use extraction:
         # define a synthetic tool whose input_schema matches the desired
@@ -809,6 +809,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         *string text_content;
         *list<hash<QoreLlmUtils::ChatToolCall>> parsed_tool_calls;
+        *list<auto> reasoning_blocks;
         list<auto> content_blocks = resp.body.content ?? ();
         foreach hash<auto> block in (content_blocks) {
             if (block.type == "text") {
@@ -822,6 +823,14 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                     "name": block.name,
                     "arguments": block.input,
                 };
+            } else if (block.type == "thinking"
+                    || block.type == "redacted_thinking") {
+                # carried verbatim; the caller replays these on the
+                # assistant turn via ChatMessage::reasoning_blocks
+                if (!reasoning_blocks) {
+                    reasoning_blocks = ();
+                }
+                push reasoning_blocks, block;
             }
         }
 
@@ -831,6 +840,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "stop_reason": resp.body.stop_reason ?? "end_turn",
             "content": text_content,
             "tool_calls": parsed_tool_calls,
+            "reasoning_blocks": reasoning_blocks,
             "usage": resp.body.usage ?? {},
             "raw": resp.body,
         };
@@ -936,6 +946,52 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Builds an Anthropic Messages API request body
+    #! Adds the Anthropic reasoning controls the caller asked for
+    /** Maps the provider-neutral reasoning options onto the Messages API:
+
+        - @ref QoreLlmUtils::LlmRequestOptions::disable_reasoning maps to
+          \c thinking.type \c "disabled"
+        - @ref QoreLlmUtils::LlmRequestOptions::reasoning_effort maps to
+          \c output_config.effort, with \c thinking.type \c "adaptive"
+
+        When the caller expressed no preference, no reasoning control is
+        sent and the model's own default applies.  That default is not
+        uniform across models: Claude Opus 5, Claude Sonnet 5, and the
+        Fable / Mythos families reason when no \c thinking parameter is
+        present, while Opus 4.8 and earlier do not — and on every one of
+        them reasoning is billed against the same \c max_tokens ceiling
+        that must carry the visible response.  Callers that need a
+        predictable budget should set one of the two options rather than
+        relying on the model default.
+
+        @ref QoreLlmUtils::LlmRequestOptions::reasoning_token_budget is
+        deliberately NOT mapped: Anthropic removed numeric thinking budgets
+        with Claude Opus 4.7 and rejects them with HTTP 400.
+
+        @param body the request body being built
+        @param opts the per-call request options
+        @return the body with any requested reasoning controls added
+    */
+    private hash<auto> addReasoningControls(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *bool disable_reasoning = getRequestDisableReasoning(opts);
+        if (disable_reasoning) {
+            body.thinking = {"type": "disabled"};
+            return body;
+        }
+        *string effort = getRequestReasoningEffort(opts);
+        if (effort.val()) {
+            body.thinking = {"type": "adaptive"};
+            hash<auto!> output_config;
+            if (body.output_config.typeCode() == NT_HASH) {
+                output_config += body.output_config;
+            }
+            output_config.effort = effort;
+            body.output_config = output_config;
+        }
+        return body;
+    }
+
     private hash<auto> buildAnthropicBody(
             list<hash<QoreLlmUtils::ChatMessage>> messages,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
@@ -970,8 +1026,15 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 continue;
             }
 
-            if (msg.role == "assistant" && msg.tool_calls) {
+            if (msg.role == "assistant"
+                    && (msg.tool_calls || msg.reasoning_blocks)) {
                 list<auto> content_blocks = ();
+                # thinking blocks must lead the assistant content array and
+                # be replayed byte-for-byte; the API verifies the signature
+                # each one carries and rejects a turn that dropped them
+                foreach auto reasoning_block in (msg.reasoning_blocks) {
+                    push content_blocks, reasoning_block;
+                }
                 if (msg.content.val()) {
                     push content_blocks, {
                         "type": "text", "text": msg.content,
@@ -1021,6 +1084,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (system_prompt.typeCode() != NT_NOTHING) {
             body.system = system_prompt;
         }
+        body = addReasoningControls(body, opts);
 
         if (tools) {
             list<auto> tool_defs = ();

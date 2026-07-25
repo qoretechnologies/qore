@@ -201,6 +201,12 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiOpenAiToolTurnsFacadeTest());
         addTestCase("LlmBackend Anthropic facade preserves cache markers "
             "and file blocks", \anthropicOpenAiFacadeCacheAndFileTest());
+        addTestCase("LlmBackend Anthropic reasoning controls",
+            \anthropicReasoningControlsTest());
+        addTestCase("LlmBackend Anthropic reasoning blocks round-trip",
+            \anthropicReasoningBlockRoundTripTest());
+        addTestCase("LlmBackend Anthropic reasoning blocks survive the "
+            "OpenAI facade", \anthropicReasoningBlockOpenAiFacadeTest());
         addTestCase("LlmBackend provider registry - factory lookup",
             \registryFactoryLookupTest());
         addTestCase("LlmBackend provider registry - register / deregister",
@@ -2836,6 +2842,239 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("application/pdf",
             body.messages[0].content[1].source.media_type,
             "document MIME type is preserved");
+    }
+
+    anthropicReasoningControlsTest() {
+        checkGeminiModule();
+        hash<auto> reply = {
+            "code": 200,
+            "body": {
+                "id": "msg-reasoning-controls",
+                "model": "claude-test",
+                "role": "assistant",
+                "content": ({"type": "text", "text": "ok"},),
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 3, "output_tokens": 1},
+            },
+        };
+        installGeminiHandler({"/v1/messages": reply});
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-test-key",
+        });
+        list<hash<ChatMessage>> msgs = (
+            <ChatMessage>{"role": "user", "content": "hi"},
+        );
+
+        # no reasoning preference -> no reasoning control on the wire, so
+        # the model's own default applies and existing callers are unaffected
+        llm.chat(msgs);
+        hash<auto> body = gemini_handler.requests[0].body;
+        assertFalse(body.hasKey("thinking"),
+            "no thinking control is sent when the caller expressed none");
+        assertFalse(body.hasKey("output_config"));
+
+        # disable_reasoning -> thinking disabled
+        installGeminiHandler({"/v1/messages": reply});
+        llm.chat(msgs, NOTHING, <LlmRequestOptions>{
+            "disable_reasoning": True,
+        });
+        body = gemini_handler.requests[0].body;
+        assertEq("disabled", body.thinking.type,
+            "disable_reasoning turns Anthropic thinking off");
+        assertFalse(body.hasKey("output_config"));
+
+        # reasoning_effort -> adaptive thinking at the requested effort
+        installGeminiHandler({"/v1/messages": reply});
+        llm.chat(msgs, NOTHING, <LlmRequestOptions>{
+            "reasoning_effort": "xhigh",
+        });
+        body = gemini_handler.requests[0].body;
+        assertEq("adaptive", body.thinking.type,
+            "reasoning_effort selects adaptive thinking");
+        assertEq("xhigh", body.output_config.effort,
+            "reasoning_effort maps to output_config.effort");
+
+        # a numeric reasoning budget is NOT mapped: Anthropic removed
+        # thinking budget_tokens with Opus 4.7 and rejects it with HTTP 400
+        installGeminiHandler({"/v1/messages": reply});
+        llm.chat(msgs, NOTHING, <LlmRequestOptions>{
+            "reasoning_token_budget": 8000,
+        });
+        body = gemini_handler.requests[0].body;
+        assertFalse(body.hasKey("thinking"),
+            "reasoning_token_budget is not mapped to a thinking budget");
+        assertFalse(exists body.budget_tokens,
+            "budget_tokens never reaches the Anthropic request");
+    }
+
+    anthropicReasoningBlockRoundTripTest() {
+        checkGeminiModule();
+        hash<auto> thinking_block = {
+            "type": "thinking",
+            "thinking": "considering the options",
+            "signature": "sig-abc123",
+        };
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-reasoning-roundtrip",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": (
+                        thinking_block,
+                        {"type": "text", "text": "let me check"},
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_1",
+                            "name": "answer",
+                            "input": {"ok": True},
+                        },
+                    ),
+                    "stop_reason": "tool_use",
+                    "usage": {"input_tokens": 3, "output_tokens": 4},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-test-key",
+        });
+        hash<ChatResponse> rv = llm.chat((
+            <ChatMessage>{"role": "user", "content": "hi"},
+        ));
+
+        # the thinking block is surfaced rather than dropped
+        assertEq(1, rv.reasoning_blocks.size(),
+            "the thinking block is captured on the response");
+        assertEq(thinking_block, rv.reasoning_blocks[0],
+            "the thinking block is carried verbatim");
+        assertEq("let me check", rv.content,
+            "text content is still extracted alongside reasoning");
+        assertEq("toolu_1", rv.tool_calls[0].id);
+
+        # replaying the assistant turn puts the block back, first, unchanged
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-reasoning-roundtrip-2",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": ({"type": "text", "text": "done"},),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 5, "output_tokens": 1},
+                },
+            },
+        });
+        llm.chat((
+            <ChatMessage>{"role": "user", "content": "hi"},
+            <ChatMessage>{
+                "role": "assistant",
+                "content": rv.content,
+                "tool_calls": rv.tool_calls,
+                "reasoning_blocks": rv.reasoning_blocks,
+            },
+            <ChatMessage>{
+                "role": "tool",
+                "tool_call_id": "toolu_1",
+                "content": "42",
+            },
+        ));
+        list<auto> replayed =
+            gemini_handler.requests[0].body.messages[1].content;
+        assertEq("thinking", replayed[0].type,
+            "the thinking block leads the replayed assistant turn");
+        assertEq(thinking_block, replayed[0],
+            "the replayed thinking block is byte-identical, so the "
+            "signature the API verifies survives the round trip");
+        assertEq("text", replayed[1].type);
+        assertEq("tool_use", replayed[2].type);
+    }
+
+    anthropicReasoningBlockOpenAiFacadeTest() {
+        checkGeminiModule();
+        hash<auto> thinking_block = {
+            "type": "thinking",
+            "thinking": "weighing the tool options",
+            "signature": "sig-facade-1",
+        };
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-facade-reasoning",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": (
+                        thinking_block,
+                        {
+                            "type": "tool_use",
+                            "id": "toolu_facade",
+                            "name": "answer",
+                            "input": {"ok": True},
+                        },
+                    ),
+                    "stop_reason": "tool_use",
+                    "usage": {"input_tokens": 3, "output_tokens": 4},
+                },
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-test-key",
+        });
+        hash<auto> rv = llm.chatCompletions({
+            "messages": ({"role": "user", "content": "hi"},),
+        });
+
+        # the OpenAI-shaped facade is the neutral conversation format, so
+        # the blocks have to survive it or a caller replaying the turn
+        # through chatCompletions() loses them
+        hash<auto> assistant_msg = rv.choices[0].message;
+        assertEq(1, assistant_msg.reasoning_blocks.size(),
+            "reasoning blocks reach the OpenAI-shaped assistant message");
+        assertEq(thinking_block, assistant_msg.reasoning_blocks[0]);
+
+        # replay that exact assistant message back through the facade
+        installGeminiHandler({
+            "/v1/messages": {
+                "code": 200,
+                "body": {
+                    "id": "msg-facade-reasoning-2",
+                    "model": "claude-test",
+                    "role": "assistant",
+                    "content": ({"type": "text", "text": "done"},),
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 5, "output_tokens": 1},
+                },
+            },
+        });
+        llm.chatCompletions({
+            "messages": (
+                {"role": "user", "content": "hi"},
+                assistant_msg,
+                {
+                    "role": "tool",
+                    "tool_call_id": "toolu_facade",
+                    "content": "42",
+                },
+            ),
+        });
+        list<auto> replayed =
+            gemini_handler.requests[0].body.messages[1].content;
+        assertEq(thinking_block, replayed[0],
+            "the facade round trip replays the thinking block verbatim");
     }
 
     hashdeclDefaultsTest() {
