@@ -1,10 +1,60 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg width="100%" height="100%" viewBox="0 0 200 200" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-    <g id="envelope" transform="matrix(0.2,0,0,0.2,13.9977,2.26353)">
-        <path d="M797.934,175.43C794.328,157.264 786.273,140.641 775.025,126.908C772.653,123.916 770.175,121.236 767.489,118.556C747.559,98.528 719.588,86.034 689.03,86.034L110.97,86.034C80.412,86.034 52.541,98.528 32.517,118.556C29.837,121.236 27.359,123.916 24.981,126.908C13.727,140.639 5.672,157.264 2.166,175.43C0.725,182.441 0,189.686 0,197.011L0,603C0,618.575 3.303,633.547 9.194,647.067C14.658,659.973 22.714,671.652 32.516,681.444C35,683.922 37.467,686.2 40.159,688.466C59.356,704.364 84.136,713.966 110.97,713.966L689.03,713.966C715.873,713.966 740.761,704.364 759.847,688.366C762.531,686.2 765.011,683.922 767.489,681.444C777.286,671.652 785.341,659.973 790.917,647.067L790.917,646.967C796.806,633.447 799.998,618.575 799.998,603.002L799.998,197.011C800,189.686 799.286,182.441 797.934,175.43ZM72.67,158.705C82.584,148.802 95.898,142.806 110.97,142.806L689.03,142.806C704.102,142.806 717.533,148.802 727.33,158.705C729.083,160.469 730.734,162.434 732.192,164.387L429.213,428.442C420.856,435.766 410.534,439.383 400,439.383C389.572,439.383 379.256,435.766 370.789,428.442L67.925,164.275C69.266,162.322 70.917,160.469 72.67,158.705ZM56.772,603L56.772,223.023L276.028,414.297L56.883,605.367C56.772,604.642 56.772,603.827 56.772,603ZM689.03,657.183L110.97,657.183C101.156,657.183 91.973,654.603 84.136,650.07L315.352,448.572L336.938,467.35C355.002,483.047 377.606,490.997 400,490.997C422.509,490.997 445.113,483.047 463.175,467.35L484.75,448.572L715.875,650.07C708.027,654.603 698.844,657.183 689.03,657.183ZM743.228,603C743.228,603.827 743.228,604.642 743.122,605.367L523.978,414.408L743.228,223.125L743.228,603Z" style="fill:rgb(249,249,249);fill-rule:nonzero;"/>
+<svg
+   width="100%"
+   height="100%"
+   viewBox="0 0 200 200"
+   version="1.1"
+   xml:space="preserve"
+   style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;"
+   id="svg1"
+   sodipodi:docname="imap-logo-white.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><defs
+   id="defs1" /><sodipodi:namedview
+   id="namedview1"
+   pagecolor="#ffffff"
+   bordercolor="#999999"
+   borderopacity="1"
+   inkscape:showpageshadow="0"
+   inkscape:pageopacity="0"
+   inkscape:pagecheckerboard="0"
+   inkscape:deskcolor="#d1d1d1"
+   inkscape:zoom="9.045"
+   inkscape:cx="99.944721"
+   inkscape:cy="99.944721"
+   inkscape:window-width="3231"
+   inkscape:window-height="1999"
+   inkscape:window-x="26"
+   inkscape:window-y="23"
+   inkscape:window-maximized="0"
+   inkscape:current-layer="svg1" />
+    <g
+   id="envelope"
+   transform="matrix(0.2,0,0,0.2,13.9977,0.26353)">
+        <path
+   d="m 797.934,175.43 c -3.606,-18.166 -11.661,-34.789 -22.909,-48.522 -2.372,-2.992 -4.85,-5.672 -7.536,-8.352 C 747.559,98.528 719.588,86.034 689.03,86.034 H 110.97 c -30.558,0 -58.429,12.494 -78.453,32.522 -2.68,2.68 -5.158,5.36 -7.536,8.352 C 13.727,140.639 5.672,157.264 2.166,175.43 0.725,182.441 0,189.686 0,197.011 V 603 c 0,15.575 3.303,30.547 9.194,44.067 5.464,12.906 13.52,24.585 23.322,34.377 2.484,2.478 4.951,4.756 7.643,7.022 19.197,15.898 43.977,25.5 70.811,25.5 h 578.06 c 26.843,0 51.731,-9.602 70.817,-25.6 2.684,-2.166 5.164,-4.444 7.642,-6.922 9.797,-9.792 17.852,-21.471 23.428,-34.377 v -0.1 c 5.889,-13.52 9.081,-28.392 9.081,-43.965 V 197.011 c 0.002,-7.325 -0.712,-14.57 -2.064,-21.581 z M 72.67,158.705 c 9.914,-9.903 23.228,-15.899 38.3,-15.899 h 578.06 c 15.072,0 28.503,5.996 38.3,15.899 1.753,1.764 3.404,3.729 4.862,5.682 L 429.213,428.442 c -8.357,7.324 -18.679,10.941 -29.213,10.941 -10.428,0 -20.744,-3.617 -29.211,-10.941 L 67.925,164.275 c 1.341,-1.953 2.992,-3.806 4.745,-5.57 z M 56.772,603 V 223.023 L 276.028,414.297 56.883,605.367 C 56.772,604.642 56.772,603.827 56.772,603 Z M 689.03,657.183 H 110.97 c -9.814,0 -18.997,-2.58 -26.834,-7.113 l 231.216,-201.498 21.586,18.778 c 18.064,15.697 40.668,23.647 63.062,23.647 22.509,0 45.113,-7.95 63.175,-23.647 L 484.75,448.572 715.875,650.07 c -7.848,4.533 -17.031,7.113 -26.845,7.113 z M 743.228,603 c 0,0.827 0,1.642 -0.106,2.367 L 523.978,414.408 743.228,223.125 Z"
+   style="fill:#f9f9f9;fill-rule:nonzero"
+   id="path1" />
     </g>
-    <g id="label">
-        <text x="100" y="176" text-anchor="middle" style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:600;font-size:46px;fill:rgb(170,212,0);letter-spacing:1px;">IMAP</text>
-    </g>
-</svg>
+    
+<text
+   xml:space="preserve"
+   style="font-size:46px;line-height:1.25;font-family:'Neo Sans Pro';-inkscape-font-specification:'Neo Sans Pro, Normal'"
+   x="57.158649"
+   y="165.72691"
+   id="text1"><tspan
+     sodipodi:role="line"
+     id="tspan1"></tspan></text><text
+   xml:space="preserve"
+   style="font-weight:bold;font-size:46px;line-height:1.25;font-family:'Neo Sans Pro';-inkscape-font-specification:'Neo Sans Pro, Bold'"
+   x="42.867973"
+   y="184.52184"
+   id="text2"><tspan
+     sodipodi:role="line"
+     id="tspan2"
+     x="42.867973"
+     y="184.52184"
+     style="fill:#ccff00">IMAP</tspan></text></svg>

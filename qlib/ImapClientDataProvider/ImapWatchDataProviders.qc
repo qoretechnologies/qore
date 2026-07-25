@@ -53,6 +53,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
                 "desc": "The mailbox to watch for new messages",
                 "default_value": "INBOX",
                 "example_value": "INBOX",
+                "preselected": True,
             },
             "criteria": <DataProviderOptionInfo>{
                 "display_name": "Search Criteria",
@@ -64,6 +65,7 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
                     "unread mail from one sender",
                 "default_value": "ALL",
                 "example_value": "UNSEEN",
+                "preselected": True,
             },
             "poll_interval": <DataProviderOptionInfo>{
                 "display_name": "Poll Interval",
@@ -124,11 +126,27 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
     constructor(*hash<auto> options, hash<string, hash<DataProviderOptionInfo>> con_opts = WatchOptions)
             : ImapClientDataProviderBase(options, con_opts),
               AbstractWatchDataProviderBase(options.poll_interval ?? 60) {
+        setWatchOptions(options);
+    }
+
+    #! Creates the object from an existing IMAP client
+    /** Used when the provider is acquired as a child of the root provider, which supplies the
+        connection; the watch options then come from the action's own option values.
+    */
+    constructor(ImapClient::ImapClient imap, *hash<auto> options)
+            : ImapClientDataProviderBase(imap),
+              AbstractWatchDataProviderBase(options.poll_interval ?? 60) {
+        setWatchOptions(options);
+    }
+
+    #! @cond nodoc
+    private setWatchOptions(*hash<auto> options) {
         mailbox = options.mailbox ?? "INBOX";
         criteria = options.criteria ?? "ALL";
         mark_seen = options.mark_seen ?? False;
         delete_messages = options.delete_messages ?? False;
     }
+    #! @endcond
 
     #! Returns the mailbox being watched
     string getMailbox() {
@@ -252,6 +270,12 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
             logArgs(LoggerLevel::ERROR, "ImapWatch: " + msg, argv);
         }
     }
+
+    private logDbg(string msg) {
+        if (logger) {
+            logArgs(LoggerLevel::DEBUG, "ImapWatch: " + msg, argv);
+        }
+    }
     #! @endcond
 
     #! Reports a single matching message
@@ -291,6 +315,11 @@ public class ImapMessageWatchDataProvider inherits ImapWatchDataProviderBase {
     constructor(*hash<auto> options) : ImapWatchDataProviderBase(options) {
     }
 
+    #! Creates the object from an existing IMAP client
+    constructor(ImapClient::ImapClient imap, *hash<auto> options)
+            : ImapWatchDataProviderBase(imap, options) {
+    }
+
     #! Returns the data provider name
     string getName() {
         return "watch";
@@ -307,7 +336,59 @@ public class ImapMessageWatchDataProvider inherits ImapWatchDataProviderBase {
         return ProviderInfo;
     }
 
+    #! Returns the event types raised by this provider
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            EVENT_IMAP_MESSAGE_MATCHED: <DataProviderMessageInfo>{
+                "desc": "Raised when a new message matching the search criteria arrives",
+                "type": ImapMessageEventType,
+            },
+        };
+    }
+
+    #! Returns example event data
+    /** Returns a real message from the watched mailbox when one is available, so the example
+        reflects the account's actual mail; falls back to representative data when the mailbox is
+        empty or unreachable.
+    */
+    private auto getExampleEventDataImpl(string event_id) {
+        if (event_id == EVENT_IMAP_MESSAGE_MATCHED) {
+            try {
+                imap.examineMailbox(mailbox);
+                list<int> uids = imap.uidSearch(criteria);
+                if (uids) {
+                    return ImapClientDataProvider::describeMessage(imap, uids.last()) + {
+                        "mailbox": mailbox,
+                    };
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                logDbg("could not retrieve example event data: %s: %s", ex.err, ex.desc);
+            }
+            return ImapMessageWatchDataProvider::getFakeExampleData(mailbox);
+        }
+        return AbstractDataProvider::getExampleEventDataImpl(event_id);
+    }
+
     #! @cond nodoc
+    #! Returns representative event data for when no live message is available
+    private static hash<auto> getFakeExampleData(string mailbox) {
+        return {
+            "mailbox": mailbox,
+            "uid": 4392,
+            "subject": "Order confirmation #10583",
+            "from": "orders@example.com",
+            "to": ("purchasing@example.com",),
+            "date": 2026-07-25T09:14:22Z,
+            "message_id": "<10583.20260725@example.com>",
+            "flags": ("\\Recent",),
+            "body": "Your order #10583 has been confirmed and will ship on 2026-07-28.",
+            "attachments": (
+                {"name": "invoice-10583.pdf", "mime": "application/pdf", "size": 24576},
+            ),
+            "raw": NOTHING,
+        };
+    }
+
     private reportMessage(int uid) {
         hash<auto> msg = ImapClientDataProvider::describeMessage(imap, uid) + {
             "mailbox": mailbox,
@@ -333,6 +414,7 @@ public class ImapAttachmentWatchDataProvider inherits ImapWatchDataProviderBase 
                     "filename matches are reported, so a mailbox carrying mixed content can be "
                     "narrowed to just the files of interest (ex: `*.csv`)",
                 "example_value": "*.csv",
+                "preselected": True,
             },
             "ignore_case": <DataProviderOptionInfo>{
                 "display_name": "Ignore Pattern Case?",
@@ -349,7 +431,7 @@ public class ImapAttachmentWatchDataProvider inherits ImapWatchDataProviderBase 
                 "desc": "Include the decoded attachment content in the event.\n\n"
                     "Leave this `False` to receive only the attachment metadata, which keeps events "
                     "small when attachments are large; the content can then be retrieved on demand "
-                    "with the `messages/attachment/get` action",
+                    "with the `get-attachment` action",
                 "default_value": True,
             },
         };
@@ -391,10 +473,22 @@ public class ImapAttachmentWatchDataProvider inherits ImapWatchDataProviderBase 
 
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : ImapWatchDataProviderBase(options, AttachmentWatchOptions) {
+        setAttachmentOptions(options);
+    }
+
+    #! Creates the object from an existing IMAP client
+    constructor(ImapClient::ImapClient imap, *hash<auto> options)
+            : ImapWatchDataProviderBase(imap, options) {
+        setAttachmentOptions(options);
+    }
+
+    #! @cond nodoc
+    private setAttachmentOptions(*hash<auto> options) {
         attachment_glob = options.attachment_glob;
         ignore_case = options.ignore_case ?? True;
         retrieve_attachments = options.retrieve_attachments ?? True;
     }
+    #! @endcond
 
     #! Returns the data provider name
     string getName() {
@@ -412,7 +506,79 @@ public class ImapAttachmentWatchDataProvider inherits ImapWatchDataProviderBase 
         return ProviderInfo;
     }
 
+    #! Returns the event types raised by this provider
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            EVENT_IMAP_ATTACHMENT_MATCHED: <DataProviderMessageInfo>{
+                "desc": "Raised for each attachment on a new message matching the search criteria",
+                "type": ImapAttachmentEventType,
+            },
+        };
+    }
+
+    #! Returns example event data
+    /** Returns a real attachment from the watched mailbox when one is available; falls back to
+        representative data when none is found or the mailbox is unreachable.
+    */
+    private auto getExampleEventDataImpl(string event_id) {
+        if (event_id == EVENT_IMAP_ATTACHMENT_MATCHED) {
+            try {
+                imap.examineMailbox(mailbox);
+                foreach int uid in (imap.uidSearch(criteria)) {
+                    *hash<auto> ev = getExampleAttachment(uid);
+                    if (ev) {
+                        return ev;
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                logDbg("could not retrieve example event data: %s: %s", ex.err, ex.desc);
+            }
+            return ImapAttachmentWatchDataProvider::getFakeExampleData(mailbox);
+        }
+        return AbstractDataProvider::getExampleEventDataImpl(event_id);
+    }
+
     #! @cond nodoc
+    #! Returns the first matching attachment of a message as event data, if any
+    private *hash<auto> getExampleAttachment(int uid) {
+        hash<string, hash<ImapClient::ImapMessageInfo>> info = imap.fetch(string(uid),
+            ("BODY.PEEK[]",), True);
+        *binary raw = info.firstValue().body."BODY[]";
+        if (!exists raw) {
+            return;
+        }
+        MailMessage::Message m(binary_to_string(raw, ImapClient::ProtocolEncoding));
+        foreach MailMessage::Attachment att in (m.getAttachments()) {
+            string name = att.getName();
+            if (attachment_glob.val() && !ImapAttachmentWatchDataProvider::matchesGlob(name,
+                attachment_glob, ignore_case)) {
+                continue;
+            }
+            return {
+                "mailbox": mailbox,
+                "uid": uid,
+                "subject": m.getSubject(),
+                "from": m.getFrom(),
+                "name": name,
+                "mime": att.getMime(),
+                "size": att.getData().size(),
+            };
+        }
+    }
+
+    #! Returns representative event data for when no live attachment is available
+    private static hash<auto> getFakeExampleData(string mailbox) {
+        return {
+            "mailbox": mailbox,
+            "uid": 4392,
+            "subject": "Daily sales export",
+            "from": "reports@example.com",
+            "name": "sales-20260725.csv",
+            "mime": "text/csv",
+            "size": 18432,
+        };
+    }
+
     private reportMessage(int uid) {
         hash<string, hash<ImapClient::ImapMessageInfo>> info = imap.fetch(string(uid),
             ("BODY.PEEK[]",), True);

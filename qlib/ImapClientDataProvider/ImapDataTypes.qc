@@ -35,6 +35,7 @@ public class ImapSearchRequestDataType inherits DataProvider::HashDataType {
                 "desc": "The mailbox to search; the mailbox is selected before the search runs",
                 "default_value": "INBOX",
                 "example_value": "INBOX",
+                "preselected": True,
             },
             "criteria": {
                 "display_name": "Search Criteria",
@@ -47,6 +48,7 @@ public class ImapSearchRequestDataType inherits DataProvider::HashDataType {
                     "`UNSEEN FROM \"boss@example.com\" SINCE 1-Jan-2026`",
                 "default_value": "ALL",
                 "example_value": "UNSEEN FROM \"boss@example.com\"",
+                "preselected": True,
             },
             "charset": {
                 "display_name": "Charset",
@@ -329,6 +331,7 @@ public class ImapListMailboxesRequestDataType inherits DataProvider::HashDataTyp
                     "within a single hierarchy level",
                 "default_value": "*",
                 "example_value": "*",
+                "preselected": True,
             },
             "reference": {
                 "display_name": "Reference",
@@ -344,6 +347,7 @@ public class ImapListMailboxesRequestDataType inherits DataProvider::HashDataTyp
                 "desc": "List only mailboxes the account is subscribed to, using `LSUB` instead of "
                     "`LIST`",
                 "default_value": False,
+                "preselected": True,
             },
         };
     }

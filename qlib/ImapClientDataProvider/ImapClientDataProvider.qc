@@ -48,6 +48,9 @@ public class ImapClientDataProvider inherits ImapClientDataProviderBase {
             "set-flags": Class::forName("ImapClientDataProvider::ImapSetFlagsDataProvider"),
             "move-messages": Class::forName("ImapClientDataProvider::ImapMoveMessagesDataProvider"),
             "append-message": Class::forName("ImapClientDataProvider::ImapAppendMessageDataProvider"),
+            "watch": Class::forName("ImapClientDataProvider::ImapMessageWatchDataProvider"),
+            "watch-attachment":
+                Class::forName("ImapClientDataProvider::ImapAttachmentWatchDataProvider"),
         };
     }
 

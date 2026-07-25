@@ -68,7 +68,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/search",
+            "path": "/search",
             "action": "search",
             "display_name": "Search for Messages",
             "short_desc": "Search a mailbox for messages",
@@ -84,7 +84,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/get",
+            "path": "/get-message",
             "action": "get-message",
             "display_name": "Retrieve a Message",
             "short_desc": "Retrieve a message by UID",
@@ -100,7 +100,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/attachment/get",
+            "path": "/get-attachment",
             "action": "get-attachment",
             "display_name": "Retrieve an Attachment",
             "short_desc": "Retrieve a single MIME part of a message",
@@ -116,7 +116,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/mailboxes/list",
+            "path": "/list-mailboxes",
             "action": "list-mailboxes",
             "display_name": "List Mailboxes",
             "short_desc": "List the mailboxes in the account",
@@ -131,7 +131,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/set-flags",
+            "path": "/set-flags",
             "action": "set-flags",
             "display_name": "Change Message Flags",
             "short_desc": "Add, remove, or replace message flags",
@@ -147,7 +147,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/move",
+            "path": "/move-messages",
             "action": "move-messages",
             "display_name": "Move Messages",
             "short_desc": "Move or copy messages to another mailbox",
@@ -163,7 +163,7 @@ module ImapClientDataProvider {
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": ImapClientDataProvider::AppName,
-            "path": "/messages/append",
+            "path": "/append-message",
             "action": "append-message",
             "display_name": "Store a Message",
             "short_desc": "Store a message in a mailbox",

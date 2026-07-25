@@ -255,6 +255,8 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         addTestCase("append message", \appendTests());
         addTestCase("action catalog registration", \actionCatalogTests());
         addTestCase("watch provider options", \watchOptionTests());
+        addTestCase("action paths resolve", \actionPathResolutionTests());
+        addTestCase("event provider contract", \eventProviderTests());
         set_return_value(main());
     }
 
@@ -284,13 +286,22 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         on_exit dp.getImapClient().disconnect();
 
         list<string> names = dp.getChildProviderNames();
-        assertEq(7, names.size(), "all API children present");
+        assertEq(9, names.size(), "all children present");
         foreach string name in (("search", "get-message", "get-attachment", "list-mailboxes",
             "set-flags", "move-messages", "append-message")) {
             assertTrue(inlist(name, names), sprintf("child %y present", name));
             AbstractDataProvider child = dp.getChildProviderEx(name);
             assertEq(name, child.getName(), sprintf("child %y resolves", name));
             assertTrue(child.getInfo().supports_request, sprintf("child %y supports requests", name));
+        }
+
+        # the event providers are children too, so their actions can resolve
+        foreach string name in (("watch", "watch-attachment")) {
+            assertTrue(inlist(name, names), sprintf("event child %y present", name));
+            AbstractDataProvider child = dp.getChildProviderEx(name);
+            assertEq(name, child.getName(), sprintf("event child %y resolves", name));
+            assertTrue(child.getInfo().supports_observable,
+                sprintf("event child %y supports observers", name));
         }
     }
 
@@ -495,6 +506,21 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
             assertTrue(ai.options.val(), sprintf("action %y has options", name));
             assertTrue(exists ai.output_type || exists ai.get_output_type,
                 sprintf("action %y has an output type", name));
+
+            # an action with no required options shows an empty form unless something is
+            # preselected, so the user has nothing to fill in
+            bool has_required = False;
+            bool has_preselected = False;
+            foreach hash<auto> opt in (ai.options.iterator()) {
+                if (opt.required) {
+                    has_required = True;
+                }
+                if (opt.preselected) {
+                    has_preselected = True;
+                }
+            }
+            assertTrue(has_required || has_preselected,
+                sprintf("action %y has a required or preselected option", name));
         }
 
         # the event actions must declare their event constants
@@ -511,6 +537,77 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
             assertNothing(ai.cls ?? NOTHING,
                 sprintf("action %y does not set cls, which conflicts with a scheme-based app",
                     ai.action));
+        }
+    }
+
+    #! Every action path must resolve to a child of the root provider
+    /** A path that does not resolve leaves the action's data provider null: ref_data lookups return
+        nothing and doRequestImpl() is never reached, with no error at registration time. Registration
+        alone therefore proves nothing — the path has to be walked.
+    */
+    actionPathResolutionTests() {
+        ImapClientDataProvider dp({
+            "url": "imap://localhost:1143",
+            "username": "u",
+            "password": "p",
+        });
+
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx("IMAP");
+        assertEq(9, actions.size(), "all actions registered");
+
+        foreach hash<DataProviderActionInfo> ai in (actions) {
+            AbstractDataProvider cur = dp;
+            string walked = "";
+            foreach string seg in (select ai.path.split("/"), $1.val()) {
+                walked += "/" + seg;
+                *AbstractDataProvider child = cur.getChildProvider(seg);
+                assertTrue(exists child, sprintf("action %y: path segment %y resolves", ai.action,
+                    walked));
+                if (!child) {
+                    break;
+                }
+                cur = child;
+            }
+        }
+
+        # every child in the root ChildMap is reachable and reports the name it is keyed under
+        foreach string name in (dp.getChildProviderNames()) {
+            assertEq(name, dp.getChildProviderEx(name).getName(),
+                sprintf("child %y reports its own name", name));
+        }
+    }
+
+    #! Event providers must implement the contract the framework calls
+    eventProviderTests() {
+        ImapClientDataProvider dp({
+            "url": "imap://localhost:1143",
+            "username": "u",
+            "password": "p",
+        });
+
+        hash<string, string> event_for = {
+            "watch": EVENT_IMAP_MESSAGE_MATCHED,
+            "watch-attachment": EVENT_IMAP_ATTACHMENT_MATCHED,
+        };
+        foreach string name in (keys event_for) {
+            AbstractDataProvider child = dp.getChildProviderEx(name);
+            assertTrue(child.getInfo().supports_observable,
+                sprintf("%y supports observers", name));
+
+            hash<string, hash<DataProviderMessageInfo>> events = child.getEventTypes();
+            assertEq(1, events.size(), sprintf("%y declares one event type", name));
+            assertTrue(exists events{event_for{name}},
+                sprintf("%y declares the event its action references", name));
+            assertTrue(events{event_for{name}}.desc.val(),
+                sprintf("%y event has a description", name));
+            assertTrue(exists events{event_for{name}}.type,
+                sprintf("%y event has a type", name));
+
+            # no server is reachable here, so this exercises the fallback path
+            auto example = child.getExampleEventData(event_for{name});
+            assertTrue(exists example, sprintf("%y returns example event data", name));
+            assertEq("INBOX", example.mailbox, sprintf("%y example names the mailbox", name));
+            assertEq(NT_INT, example.uid.typeCode(), sprintf("%y example carries a UID", name));
         }
     }
 
