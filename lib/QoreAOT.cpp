@@ -6083,7 +6083,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
     if (std::getenv("QORE_DISABLE_AOT_STRING_EXPRESSION_IMPORT")
             || !sig.numParams() || sig.numParams() > INT8_MAX
             || func.blocks.size() != 1 || !func.blocks.front()
-            || func.blocks.front()->instructions.size() > 32) {
+            || func.blocks.front()->instructions.size()
+                > QORE_AOT_STRING_EXPRESSION_MAX_NODES + 8) {
         return false;
     }
 

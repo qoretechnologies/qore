@@ -33,6 +33,11 @@ string sub formatRecord(string prefix, int value, string suffix) {
     return prefix + \":\" + string(value) + \":\" + suffix;
 }
 
+string sub wideStringExpression(string left, int value, string right) {
+    return \"<\" + left + \":\" + string(value) + \":\" + right + \":\"
+        + left + \":\" + right + \":\" + string(value) + \">\";
+}
+
 string sub wrappedPair(string left, string right) {
     return concatPair(left, right);
 }
@@ -205,6 +210,10 @@ string sub consumerCode() {
         concatTriple(\"one\", \"two\", \"three\").length(),
         convertInt(9223372036854775807).size(),
         convertInt(-9223372036854775807 - 1).length());
+    printf(\"wide:%s:%d:%d\\n\",
+        wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\"),
+        wideStringExpression(\"left\", 42, \"right\").size(),
+        wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\").length());
     return 0;
 }
 ";
@@ -254,6 +263,7 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"29\"/)
         || !(provider_index =~ /\"qore_path\": \"convertInt\(int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 11/)
         || !(provider_index =~ /\"qore_path\": \"sliceString\(string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 8/)
         || !(provider_index =~ /\"qore_path\": \"formatRecord\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"wideStringExpression\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"wrappedPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"wrappedPairTwice\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"wrappedRecord\(string,int,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)

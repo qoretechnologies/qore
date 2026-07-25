@@ -326,7 +326,7 @@ struct QoreAOTFloatExpressionNodeRecord {
 };
 
 //! Serialized node in a bounded typed string expression summary.
-constexpr size_t QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES = 16;
+constexpr size_t QORE_AOT_WIRE_STRING_EXPRESSION_MAX_NODES = 64;
 
 struct QoreAOTStringExpressionNodeRecord {
     uint8_t kind = 0;

@@ -253,7 +253,7 @@ enum class AOTStringExpressionNodeKind : uint8_t {
     Substr = 7,
 };
 
-constexpr size_t QORE_AOT_STRING_EXPRESSION_MAX_NODES = 16;
+constexpr size_t QORE_AOT_STRING_EXPRESSION_MAX_NODES = 64;
 
 //! One topologically ordered node in a bounded typed string expression.
 struct AOTStringExpressionNodeInfo {
