@@ -194,15 +194,30 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
             processNewMessages();
         }
 
-        # wait for the server to push a change when it can, so new mail is reported immediately
-        # rather than on the next interval
-        waitForChange();
+        # Wait for the server to push a change when it can. A pushed update is swept immediately
+        # rather than on the next cycle: the base class sleeps for the poll interval after pollOnce()
+        # returns, so returning here without sweeping would delay every pushed message by up to that
+        # interval — exactly what IDLE exists to avoid.
+        if (waitForChange()) {
+            processNewMessages();
+        }
     }
 
     #! Reports every message newer than the baseline that matches the criteria
-    private processNewMessages() {
+    /** @return the number of messages reported
+
+        @note The baseline is advanced and the follow-up actions applied only for messages that were
+        reported successfully. Advancing past a message whose delivery failed would drop it
+        permanently on a transient error, and flagging or deleting a message that observers never
+        received would destroy mail that was never handled — so a failed message is left in place and
+        retried on the next cycle.
+    */
+    private int processNewMessages() {
         string search = sprintf("UID %d:* %s", last_uid + 1, criteria);
         list<int> uids = imap.uidSearch(search);
+
+        int reported = 0;
+        bool expunge_needed = False;
         foreach int uid in (uids) {
             # "UID n:*" is inclusive of the baseline on some servers, so filter explicitly
             if (uid <= last_uid) {
@@ -212,46 +227,75 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
                 reportMessage(uid);
             } catch (hash<ExceptionInfo> ex) {
                 logPollError(ex);
+                # leave the baseline where it is so this message is retried
+                continue;
             }
-            last_uid = uid;
+            ++reported;
+            # max(): stay correct even if a server ever returns UIDs out of order
+            if (uid > last_uid) {
+                last_uid = uid;
+            }
 
             if (mark_seen) {
                 imap.markSeen(uid);
             }
             if (delete_messages) {
                 imap.markDeleted(uid);
+                expunge_needed = True;
             }
         }
-        if (delete_messages && uids) {
+        if (expunge_needed) {
             imap.expunge();
         }
+        return reported;
     }
 
     #! Waits for the server to report a mailbox change, when it supports doing so
-    private waitForChange() {
+    /** @return @ref True if the server reported a change that warrants an immediate sweep
+
+        @note the wait is bounded by the poll interval here, and
+        @ref ImapClient::ImapClient::waitForIdleEvent() "waitForIdleEvent()" bounds it again by the
+        time left in the RFC 2177 window, re-issuing \c IDLE when that expires — so a long
+        \c poll_interval cannot hold a session open past the 29-minute limit
+    */
+    private bool waitForChange() {
         if (!imap.hasCapability("IDLE")) {
             # the base class sleeps for the poll interval before calling pollOnce() again
-            return;
+            return False;
         }
+        bool changed = False;
         try {
             if (!idling) {
                 imap.startIdle();
                 idling = True;
             }
             # a timeout simply means nothing arrived; the next poll cycle sweeps anyway
-            imap.waitForIdleEvent(getPollIntervalSeconds() * 1000);
+            *hash<ImapClient::ImapIdleEvent> event =
+                imap.waitForIdleEvent(getPollIntervalSeconds() * 1000);
+            # EXISTS and RECENT announce new mail; other updates (ex: EXPUNGE, FLAGS) do not add
+            # messages, so they do not warrant a sweep
+            if (event && (event.type == "EXISTS" || event.type == "RECENT")) {
+                changed = True;
+            }
         } catch (hash<ExceptionInfo> ex) {
             logPollError(ex);
         }
         # leave IDLE so the next cycle can issue commands on the connection
         if (idling) {
             try {
-                imap.stopIdle();
+                list<hash<ImapClient::ImapIdleEvent>> trailing = imap.stopIdle();
+                # updates reported while leaving IDLE count too
+                foreach hash<ImapClient::ImapIdleEvent> ev in (trailing) {
+                    if (ev.type == "EXISTS" || ev.type == "RECENT") {
+                        changed = True;
+                    }
+                }
             } catch (hash<ExceptionInfo> ex) {
                 logPollError(ex);
             }
             idling = False;
         }
+        return changed;
     }
 
     #! Logs an error raised during a polling cycle
@@ -259,19 +303,19 @@ public class ImapWatchDataProviderBase inherits ImapClientDataProviderBase,
         logError("error watching mailbox %y: %s: %s", mailbox, ex.err, ex.desc);
     }
 
-    private logInfo(string msg) {
+    private logInfo(string msg, ...) {
         if (logger) {
             logArgs(LoggerLevel::INFO, "ImapWatch: " + msg, argv);
         }
     }
 
-    private logError(string msg) {
+    private logError(string msg, ...) {
         if (logger) {
             logArgs(LoggerLevel::ERROR, "ImapWatch: " + msg, argv);
         }
     }
 
-    private logDbg(string msg) {
+    private logDbg(string msg, ...) {
         if (logger) {
             logArgs(LoggerLevel::DEBUG, "ImapWatch: " + msg, argv);
         }

@@ -11,6 +11,7 @@
 %requires ConnectionProvider
 %requires ImapClient
 %requires ImapClientDataProvider
+%requires Logger
 %requires QUnit
 
 %exec-class ImapClientDataProviderTest
@@ -220,6 +221,44 @@ class MockImapDpServer {
     }
 }
 
+#! Watch provider whose reportMessage() always fails, to exercise the failure path
+class FailingWatchDataProvider inherits ImapClientDataProvider::ImapWatchDataProviderBase {
+    private {
+        int attempts = 0;
+        int reports = 0;
+    }
+
+    constructor(*hash<auto> options) : ImapWatchDataProviderBase(options) {
+    }
+
+    string getName() {
+        return "failing-watch";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{"type": "FailingWatchDataProvider", "supports_observable": True};
+    }
+
+    private reportMessage(int uid) {
+        ++attempts;
+        throw "TEST-DELIVERY-ERROR", sprintf("simulated delivery failure for UID %d", uid);
+    }
+
+    int getAttemptCount() { return attempts; }
+    int getReportCount() { return reports; }
+    int getLastUid() { return last_uid; }
+    forceBaseline(int uid) { last_uid = uid; }
+    runPoll() { pollOnce(); }
+    int runProcess() { return processNewMessages(); }
+
+    #! Calls each log helper with format arguments
+    exerciseLogging() {
+        logInfo("info %y with %d args", "test", 2);
+        logError("error %y: %s", "test", "detail");
+        logDbg("debug %y", "test");
+    }
+}
+
 public class ImapClientDataProviderTest inherits QUnit::Test {
     public {
         const TestBody = "From: Sender <sender@test.com>\r\n"
@@ -257,6 +296,7 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
         addTestCase("watch provider options", \watchOptionTests());
         addTestCase("action paths resolve", \actionPathResolutionTests());
         addTestCase("event provider contract", \eventProviderTests());
+        addTestCase("watch failure and logging semantics", \watchSemanticsTests());
         set_return_value(main());
     }
 
@@ -609,6 +649,44 @@ public class ImapClientDataProviderTest inherits QUnit::Test {
             assertEq("INBOX", example.mailbox, sprintf("%y example names the mailbox", name));
             assertEq(NT_INT, example.uid.typeCode(), sprintf("%y example carries a UID", name));
         }
+    }
+
+    #! A failed report must not advance the baseline, and log helpers must accept format args
+    watchSemanticsTests() {
+        MockImapDpServer server(binary(TestBody));
+        server.start();
+        on_exit server.wait();
+
+        # a watch provider whose reportMessage() always throws
+        FailingWatchDataProvider w({
+            "url": server.getUrl(),
+            "username": "u",
+            "password": "p",
+            "mailbox": "INBOX",
+        });
+        on_exit w.getImapClient().disconnect();
+
+        # establish the baseline, then attempt a sweep that fails for every message
+        w.runPoll();
+        int baseline = w.getLastUid();
+        assertEq(0, w.getReportCount(), "baseline poll reports nothing");
+
+        w.forceBaseline(0);
+        int reported = w.runProcess();
+        assertEq(0, reported, "no message counted as reported when reporting throws");
+        assertEq(0, w.getLastUid(),
+            "baseline not advanced past a message whose delivery failed, so it is retried");
+        assertTrue(w.getAttemptCount() > 0, "delivery was attempted");
+
+        # a second cycle retries the same messages rather than skipping them
+        int attempts = w.getAttemptCount();
+        w.runProcess();
+        assertTrue(w.getAttemptCount() > attempts, "failed messages are retried on the next cycle");
+
+        # the log helpers are variadic: calling with format args must not throw
+        w.setLogger(new Logger("imap-watch-test", LoggerLevel::getLevelInfo()));
+        assertNothing(w.exerciseLogging(), "variadic log helpers accept format arguments");
+        assertNothing(server.getServerError(), "no server errors");
     }
 
     watchOptionTests() {
