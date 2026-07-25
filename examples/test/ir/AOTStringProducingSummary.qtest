@@ -99,6 +99,10 @@ string sub optionalConcat(*string left, *string right) {
 string sub optionalConvert(*int value) {
     return string(value);
 }
+
+string sub formatHashRecord(hash<string, string> row, int value) {
+    return row.first + \":\" + row.second + \":\" + string(value);
+}
 ";
 }
 
@@ -214,6 +218,42 @@ string sub consumerCode() {
         wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\"),
         wideStringExpression(\"left\", 42, \"right\").size(),
         wideStringExpression(\"Dvo\u0159\u00e1k\", 42, \"Smetana\").length());
+    hash<string, string> hash_present = {
+        \"first\": \"Dvo\u0159\u00e1k\", \"second\": \"Smetana\"};
+    hash<string, string> hash_missing = {\"first\": \"Dvo\u0159\u00e1k\"};
+    hash<string, string> hash_removed = hash_present;
+    remove hash_removed.second;
+    hash<string, string> hash_unassigned;
+    bool hash_unassigned_rejected = False;
+    try {
+        formatHashRecord(hash_unassigned, 42);
+    } catch (hash<auto> ex) {
+        hash_unassigned_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    hash<string, string> hash_removed_lvalue = hash_present;
+    remove hash_removed_lvalue;
+    bool hash_removed_lvalue_rejected = False;
+    try {
+        formatHashRecord(hash_removed_lvalue, 42);
+    } catch (hash<auto> ex) {
+        hash_removed_lvalue_rejected = ex.err == \"RUNTIME-OVERLOAD-ERROR\"
+            || ex.err == \"RUNTIME-TYPE-ERROR\";
+    }
+    bool hash_encoding_rejected = False;
+    try {
+        formatHashRecord({
+            \"first\": convert_encoding(\"ascii\", \"US-ASCII\"),
+            \"second\": \"\u00df\"}, 42);
+    } catch (hash<auto> ex) {
+        hash_encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
+    }
+    printf(\"hash:%s:%s:%s:%d:%d:%d\\n\",
+        formatHashRecord(hash_present, 42),
+        formatHashRecord(hash_missing, 42),
+        formatHashRecord(hash_removed, 42),
+        hash_unassigned_rejected, hash_removed_lvalue_rejected,
+        hash_encoding_rejected);
     return 0;
 }
 ";
@@ -223,10 +263,12 @@ string root = "/tmp/qore-aot-string-producing-summary-" + string(getpid());
 string provider_dir = root + "/provider";
 string enabled_dir = root + "/enabled";
 string disabled_dir = root + "/disabled";
+string hash_disabled_dir = root + "/hash-disabled";
 mkdir(root);
 mkdir(provider_dir);
 mkdir(enabled_dir);
 mkdir(disabled_dir);
+mkdir(hash_disabled_dir);
 
 string provider_path = root + "/provider.qr";
 string consumer_path = root + "/consumer.qr";
@@ -257,7 +299,7 @@ if (!is_file(provider_qo)) {
 
 string provider_index = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --dump-index-json %s", libqore_dir, qcc_bin, provider_qo));
-if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"32\"/)
+if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"33\"/)
         || !(provider_index =~ /\"qore_path\": \"concatPair\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 9/)
         || !(provider_index =~ /\"qore_path\": \"concatTriple\(string,string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 10/)
         || !(provider_index =~ /\"qore_path\": \"convertInt\(int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 11/)
@@ -271,6 +313,7 @@ if (!(provider_index =~ /\"symbol_index_version\", \"value\": \"32\"/)
         || !(provider_index =~ /\"qore_path\": \"ComposedStringFactory::wrapInstance\(string,string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"concatSlice\(string,string,int,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
         || !(provider_index =~ /\"qore_path\": \"concatSliceTail\(string,string,int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[\{/)
+        || !(provider_index =~ /\"qore_path\": \"formatHashRecord\([^\"]*\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_expression_nodes\": \[[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"first\"[^\n]*\"kind\": 8[^\n]*\"string_constant\": \"second\"/)
         || !(provider_index =~ /\"qore_path\": \"optionalConcat\(\*string,\*string\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
         || !(provider_index =~ /\"qore_path\": \"optionalConvert\(\*int\)\"[^\n]*\"abi_kind\": \"qore_fast_v1\"[^\n]*\"string_op_kind\": 0/)
         || provider_index =~ /\"qore_path\": \"effectfulWrapper\(string,string\)\"[^\n]*\"string_expression_nodes\": \[\{/
@@ -288,11 +331,17 @@ string disabled_compile = backquote(sprintf(
     "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
         + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
     libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string hash_disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, hash_disabled_dir, consumer_path));
 string enabled_qo = enabled_dir + "/consumer.qo";
 string disabled_qo = disabled_dir + "/consumer.qo";
-if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
-    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
-        enabled_compile, disabled_compile);
+string hash_disabled_qo = hash_disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)
+        || !is_file(hash_disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%s",
+        enabled_compile, disabled_compile, hash_disabled_compile);
     exit(2);
 }
 if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
@@ -300,17 +349,32 @@ if (!(enabled_compile =~ /string-consumers=[1-9][0-9]*/)) {
         enabled_compile);
     exit(2);
 }
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string hash_disabled_undefined =
+    backquote(sprintf("nm -u %s 2>&1", hash_disabled_qo));
+if (enabled_undefined !~ /qore_rt_hash_keys_string_prehashed/
+        || hash_disabled_undefined =~ /qore_rt_hash_keys_string_prehashed/) {
+    printf("hash string expression import mismatch:\nenabled:\n%shash disabled:\n%s",
+        enabled_undefined, hash_disabled_undefined);
+    exit(2);
+}
 
 string enabled_exe = root + "/enabled-aot";
 string disabled_exe = root + "/disabled-aot";
+string hash_disabled_exe = root + "/hash-disabled-aot";
 string enabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
     libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
 string disabled_link = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
     libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
-if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
-    printf("link failed:\nenabled:\n%sdisabled:\n%s", enabled_link, disabled_link);
+string hash_disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, hash_disabled_exe, provider_qo, hash_disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)
+        || !is_file(hash_disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%shash disabled:\n%s",
+        enabled_link, disabled_link, hash_disabled_link);
     exit(2);
 }
 
@@ -318,8 +382,10 @@ string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, enabled_exe));
 string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
     libqore_dir, disabled_exe));
-if (ast != enabled || ast != disabled) {
-    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
-        ast, enabled, disabled);
+string hash_disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, hash_disabled_exe));
+if (ast != enabled || ast != disabled || ast != hash_disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%sHash disabled:\n%s",
+        ast, enabled, disabled, hash_disabled);
     exit(2);
 }

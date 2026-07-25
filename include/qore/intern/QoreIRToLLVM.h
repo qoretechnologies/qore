@@ -722,7 +722,8 @@ private:
     //! Emit an imported bounded typed string expression.
     llvm::Value* emitAOTStringExpression(const BatchCalleeInfo& info,
             const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-            const QoreIRStringConsumerCallInstruction* fused_call = nullptr);
+            const QoreIRStringConsumerCallInstruction* fused_call = nullptr,
+            llvm::Function* fallback_fn = nullptr);
 
     //! Emit an imported string producer directly into a supported consumer.
     llvm::Value* emitAOTStringProducerConsumer(const BatchCalleeInfo& info,

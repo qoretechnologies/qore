@@ -5737,7 +5737,8 @@ llvm::Value* QoreIRToLLVM::emitAOTScalarLeaf(const BatchCalleeInfo& info,
 
 llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         const std::vector<llvm::Value*>& native_args, llvm::Module& module,
-        const QoreIRStringConsumerCallInstruction* fused_call) {
+        const QoreIRStringConsumerCallInstruction* fused_call,
+        llvm::Function* fallback_fn) {
     const AOTStringExpressionInfo& expression = info.string_expression;
     const AOTStringExpressionNodeInfo* final = expression
         ? &expression.nodes.back() : nullptr;
@@ -5771,7 +5772,28 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         return nullptr;
     }
 
-    for (const auto& node : expression.nodes) {
+    std::vector<size_t> hash_nodes;
+    int8_t hash_param = -1;
+    for (size_t i = 0; i < expression.nodes.size(); ++i) {
+        const auto& node = expression.nodes[i];
+        if (node.kind == AOTStringExpressionNodeKind::HashKeyString) {
+            if (fused_call || !fallback_fn
+                    || std::getenv("QORE_DISABLE_AOT_HASH_STRING_EXPRESSION_IMPORT")
+                    || node.param < 0
+                    || static_cast<size_t>(node.param) >= native_args.size()
+                    || native_args[static_cast<size_t>(node.param)]->getType()
+                        != i64_type
+                    || getFastEntryParamKind(info,
+                        static_cast<unsigned>(node.param))
+                        != BatchCalleeParamKind::Boxed
+                    || node.string_constant.empty()
+                    || (hash_param >= 0 && hash_param != node.param)) {
+                return nullptr;
+            }
+            hash_param = node.param;
+            hash_nodes.push_back(i);
+            continue;
+        }
         if (node.kind != AOTStringExpressionNodeKind::StringParam
                 && node.kind != AOTStringExpressionNodeKind::IntParam) {
             continue;
@@ -5809,8 +5831,75 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         return nullptr;
     }
 
+    llvm::BasicBlock* fallback_bb = nullptr;
+    llvm::BasicBlock* merge_bb = nullptr;
+    llvm::Value* hash_results = nullptr;
+    if (!hash_nodes.empty()) {
+        std::vector<llvm::Constant*> keys;
+        std::vector<llvm::Constant*> hashes64;
+        std::vector<llvm::Constant*> hashes32;
+        keys.reserve(hash_nodes.size());
+        hashes64.reserve(hash_nodes.size());
+        hashes32.reserve(hash_nodes.size());
+        for (size_t node_index : hash_nodes) {
+            const auto& node = expression.nodes[node_index];
+            keys.push_back(builder->CreateGlobalString(
+                node.string_constant, "string_expression_hash_key"));
+            QoreIRPrecomputedStringHash hash =
+                qore_ir_precompute_string_hash(node.string_constant);
+            hashes64.push_back(
+                llvm::ConstantInt::get(i64_type, hash.hash64));
+            hashes32.push_back(
+                llvm::ConstantInt::get(i32_type, hash.hash32));
+        }
+        auto make_array = [&](llvm::Type* type,
+                const std::vector<llvm::Constant*>& values,
+                const char* name) {
+            llvm::ArrayType* array_type =
+                llvm::ArrayType::get(type, values.size());
+            llvm::Constant* initializer =
+                llvm::ConstantArray::get(array_type, values);
+            return new llvm::GlobalVariable(module, array_type, true,
+                llvm::GlobalValue::PrivateLinkage, initializer, name);
+        };
+        llvm::GlobalVariable* key_array =
+            make_array(ptr_type, keys, "string_expression_hash_keys");
+        llvm::GlobalVariable* hash64_array =
+            make_array(i64_type, hashes64, "string_expression_hashes64");
+        llvm::GlobalVariable* hash32_array =
+            make_array(i32_type, hashes32, "string_expression_hashes32");
+
+        llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+        llvm::IRBuilder<> entry_builder(&llvm_func->getEntryBlock(),
+            llvm_func->getEntryBlock().begin());
+        hash_results = entry_builder.CreateAlloca(i64_type,
+            llvm::ConstantInt::get(i32_type, hash_nodes.size()),
+            "string_expression_hash_values");
+        auto helper = module.getOrInsertFunction(
+            "qore_rt_hash_keys_string_prehashed",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type},
+                false));
+        llvm::Value* success = builder->CreateCall(helper,
+            {native_args[static_cast<size_t>(hash_param)], key_array,
+             hash64_array, hash32_array, hash_results,
+             llvm::ConstantInt::get(i32_type, hash_nodes.size())});
+        llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
+            ctx, "aot.string.hash.assigned", llvm_func);
+        fallback_bb = llvm::BasicBlock::Create(
+            ctx, "aot.string.hash.fallback", llvm_func);
+        merge_bb = llvm::BasicBlock::Create(
+            ctx, "aot.string.hash.merge", llvm_func);
+        builder->CreateCondBr(
+            builder->CreateICmpNE(success,
+                llvm::ConstantInt::get(i64_type, 0)),
+            assigned_bb, fallback_bb);
+        builder->SetInsertPoint(assigned_bb);
+    }
+
     std::vector<llvm::Value*> values(expression.nodes.size(), nullptr);
     std::vector<uint8_t> owned_values;
+    size_t hash_result_index = 0;
     for (size_t i = 0; i < expression.nodes.size(); ++i) {
         const auto& node = expression.nodes[i];
         switch (node.kind) {
@@ -5835,6 +5924,14 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 auto helper = module.getOrInsertFunction("qore_rt_int_to_string",
                     llvm::FunctionType::get(i64_type, {i64_type}, false));
                 values[i] = builder->CreateCall(helper, {values[node.lhs]});
+                owned_values.push_back(static_cast<uint8_t>(i));
+                break;
+            }
+            case AOTStringExpressionNodeKind::HashKeyString: {
+                llvm::Value* value_ptr = builder->CreateGEP(i64_type,
+                    hash_results,
+                    llvm::ConstantInt::get(i32_type, hash_result_index++));
+                values[i] = builder->CreateLoad(i64_type, value_ptr);
                 owned_values.push_back(static_cast<uint8_t>(i));
                 break;
             }
@@ -5948,6 +6045,21 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
         for (uint8_t index : owned_values) {
             builder->CreateCall(decref, {values[index], xsink_arg});
         }
+    }
+    if (fallback_bb) {
+        llvm::BasicBlock* assigned_bb = builder->GetInsertBlock();
+        builder->CreateBr(merge_bb);
+        builder->SetInsertPoint(fallback_bb);
+        llvm::Value* fallback_result =
+            builder->CreateCall(fallback_fn, native_args);
+        builder->CreateBr(merge_bb);
+        fallback_bb = builder->GetInsertBlock();
+        builder->SetInsertPoint(merge_bb);
+        llvm::PHINode* phi =
+            builder->CreatePHI(i64_type, 2, "aot.string.hash.result");
+        phi->addIncoming(result, assigned_bb);
+        phi->addIncoming(fallback_result, fallback_bb);
+        return phi;
     }
     return result;
 }
@@ -6663,7 +6775,8 @@ llvm::Value* QoreIRToLLVM::emitAOTImportedSummary(const BatchCalleeInfo& info,
         }
     }
     if (!result) {
-        result = emitAOTStringExpression(info, native_args, module);
+        result = emitAOTStringExpression(
+            info, native_args, module, nullptr, fallback_fn);
     }
     if (!result) {
         result = emitAOTStringOp(info, native_args, module);

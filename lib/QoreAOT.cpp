@@ -6119,7 +6119,8 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             || kind == AOTStringExpressionNodeKind::StringConstant
             || kind == AOTStringExpressionNodeKind::IntToString
             || kind == AOTStringExpressionNodeKind::Concat
-            || kind == AOTStringExpressionNodeKind::Substr;
+            || kind == AOTStringExpressionNodeKind::Substr
+            || kind == AOTStringExpressionNodeKind::HashKeyString;
     };
     auto is_int_node = [&](uint8_t index) {
         if (index >= result.nodes.size()) {
@@ -6131,6 +6132,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
     };
 
     std::unordered_map<uint32_t, uint8_t> values;
+    std::unordered_map<uint32_t, int8_t> hash_values;
     std::unordered_map<int8_t, uint8_t> param_nodes;
     std::unordered_set<uint8_t> composed_concat_roots;
     const QoreIRReturnInstruction* ret = nullptr;
@@ -6305,13 +6307,19 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 if (param == params.end() || !inst->result.isValid()) {
                     return false;
                 }
+                const QoreTypeInfo* ti = load->local->getTypeInfo();
+                if (QoreTypeInfo::getBaseType(ti) == NT_HASH
+                        && QoreTypeInfo::getUniqueReturnComplexHash(ti)
+                            == stringTypeInfo) {
+                    hash_values.emplace(inst->result.id, param->second);
+                    break;
+                }
                 auto existing = param_nodes.find(param->second);
                 if (existing != param_nodes.end()) {
                     values.emplace(inst->result.id, existing->second);
                     break;
                 }
                 AOTStringExpressionNodeInfo node;
-                const QoreTypeInfo* ti = load->local->getTypeInfo();
                 if (QoreTypeInfo::isType(ti, NT_STRING)) {
                     node.kind = AOTStringExpressionNodeKind::StringParam;
                 } else if (QoreTypeInfo::isType(ti, NT_INT)) {
@@ -6327,6 +6335,41 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
                 uint8_t node_index = static_cast<uint8_t>(index);
                 param_nodes.emplace(param->second, node_index);
                 values.emplace(inst->result.id, node_index);
+                break;
+            }
+            case QoreIROpcode::HashKeyAccessHash:
+            case QoreIROpcode::HashKeyAccessHashGuarded: {
+                if (!inst->result.isValid() || inst->operands.size() != 1) {
+                    return false;
+                }
+                auto base = hash_values.find(inst->operands[0].id);
+                const auto* access =
+                    static_cast<const QoreIRHashKeyAccessInstruction*>(inst);
+                if (base == hash_values.end() || access->key_name.empty()) {
+                    return false;
+                }
+                int index = -1;
+                for (size_t i = 0; i < result.nodes.size(); ++i) {
+                    const auto& existing = result.nodes[i];
+                    if (existing.kind
+                                == AOTStringExpressionNodeKind::HashKeyString
+                            && existing.param == base->second
+                            && existing.string_constant == access->key_name) {
+                        index = static_cast<int>(i);
+                        break;
+                    }
+                }
+                if (index < 0) {
+                    AOTStringExpressionNodeInfo node;
+                    node.kind = AOTStringExpressionNodeKind::HashKeyString;
+                    node.param = base->second;
+                    node.string_constant = access->key_name;
+                    index = append_node(std::move(node));
+                }
+                if (index < 0) {
+                    return false;
+                }
+                values.emplace(inst->result.id, static_cast<uint8_t>(index));
                 break;
             }
             case QoreIROpcode::ConstString:
@@ -6536,7 +6579,8 @@ static bool qore_aot_string_expression_fast_entry_compatible(
     }
     for (const auto& node : expression.nodes) {
         if (node.kind != AOTStringExpressionNodeKind::StringParam
-                && node.kind != AOTStringExpressionNodeKind::IntParam) {
+                && node.kind != AOTStringExpressionNodeKind::IntParam
+                && node.kind != AOTStringExpressionNodeKind::HashKeyString) {
             continue;
         }
         if (node.param < 0
@@ -6548,9 +6592,9 @@ static bool qore_aot_string_expression_fast_entry_compatible(
             return false;
         }
         BatchCalleeParamKind expected =
-            node.kind == AOTStringExpressionNodeKind::StringParam
-            ? BatchCalleeParamKind::Boxed
-            : BatchCalleeParamKind::NativeInt;
+            node.kind == AOTStringExpressionNodeKind::IntParam
+            ? BatchCalleeParamKind::NativeInt
+            : BatchCalleeParamKind::Boxed;
         if (info.param_kinds[static_cast<size_t>(node.param)] != expected) {
             return false;
         }
@@ -14060,7 +14104,8 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
             if (input.kind
                         < static_cast<uint8_t>(AOTStringExpressionNodeKind::StringParam)
                     || input.kind
-                        > static_cast<uint8_t>(AOTStringExpressionNodeKind::Substr)) {
+                        > static_cast<uint8_t>(
+                            AOTStringExpressionNodeKind::HashKeyString)) {
                 return false;
             }
             AOTStringExpressionNodeInfo node;
@@ -14085,6 +14130,20 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                         || !node.string_constant.empty()
                         || info.param_kinds[static_cast<unsigned>(node.param)]
                             != expected
+                        || !info.param_rejects_nothing[
+                            static_cast<unsigned>(node.param)]) {
+                    return false;
+                }
+            } else if (node.kind
+                    == AOTStringExpressionNodeKind::HashKeyString) {
+                if (node.param < 0
+                        || node.param >= static_cast<int>(info.num_params)
+                        || node.lhs != UINT8_MAX || node.rhs != UINT8_MAX
+                        || node.third != UINT8_MAX || node.int_constant
+                        || node.string_constant.empty()
+                        || info.param_kinds[
+                            static_cast<unsigned>(node.param)]
+                            != BatchCalleeParamKind::Boxed
                         || !info.param_rejects_nothing[
                             static_cast<unsigned>(node.param)]) {
                     return false;
@@ -16526,6 +16585,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (!supported && info->second.string_expression) {
                         supported = info->second.string_expression.nodes.back().kind
                             == AOTStringExpressionNodeKind::Concat;
+                        if (supported) {
+                            supported = std::none_of(
+                                info->second.string_expression.nodes.begin(),
+                                info->second.string_expression.nodes.end(),
+                                [](const AOTStringExpressionNodeInfo& node) {
+                                    return node.kind
+                                        == AOTStringExpressionNodeKind::
+                                            HashKeyString;
+                                });
+                        }
                     }
                     if (!supported
                             && (consumer
