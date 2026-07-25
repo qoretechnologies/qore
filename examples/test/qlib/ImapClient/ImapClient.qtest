@@ -1,0 +1,1368 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Mime
+%requires MailMessage
+%requires ConnectionProvider
+%requires ImapClient
+%requires QUnit
+
+%exec-class ImapClientTest
+
+#! Mock IMAP4rev1 server driving the client through complete command sequences
+class MockImapServer {
+    public {
+        #! Self-signed localhost certificate used for the STARTTLS tests
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+XVCJ0S2CDpVMEtEmVLnPFOPPFvGpaFOdcSEP4hAiSKA6ZWLGePSFWvgCiZ+wPBhX
+1DHNCJRRJdfCbHDG1M/gAdaFtQGXTZ8FVYbGCkw1IQAcMOOaLmjGGl9BAoGAKZ0F
+Sk3ir8skEbFCDCLNjKJlPfMTDsQGMPMxKsRnCXvKQlbvCxSaFJmR7bfKM1MnCoiK
+5AK1w8m0FJRYqPfvIVSQzQEGgBWnR/kJVfKrGw2MOyPUBl0KP9AJgAQNZOgVDdY0
+qPBGKcnGSKAWQdKGF+jHKCLdVJBLGGdOWjHZTgECgYEAoFTdlYQF6bWJqL9nqNBH
+ao4v1oj1i0ELdMdlB7f1s2vLPKPd8gJKKcVKnrRQCEXlvKA4qUlBTLdCFhOMTNXK
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        Socket listener();
+        int port;
+        #! guards every member below that the server thread writes and the test thread reads;
+        #! without it those reads are unsynchronized cross-thread accesses
+        Mutex lck();
+        #! every command line received from the client
+        list<string> received = ();
+        #! signals server thread completion
+        Counter done(1);
+        #! error from the server thread
+        *string server_error;
+        #! capabilities advertised before authentication
+        string capabilities = "IMAP4rev1 SASL-IR AUTH=XOAUTH2 AUTH=PLAIN STARTTLS";
+        #! capabilities advertised on a secure connection before authentication; when empty the
+        #! pre-TLS list is reused
+        string secure_capabilities = "";
+        #! capabilities advertised after authentication
+        string post_auth_capabilities = "IMAP4rev1 SASL-IR MOVE UIDPLUS ID LITERAL+ IDLE";
+        #! canned messages keyed by UID: "flags", "internaldate", "envelope", "body"
+        hash<string, hash<auto>> messages;
+        #! if True, offer STARTTLS and upgrade when asked
+        bool offer_starttls = False;
+        #! True once the connection has been upgraded to TLS
+        bool secure = False;
+        #! True once the client has authenticated
+        bool authenticated = False;
+        #! if True, reject the bearer login with a "+" challenge then NO
+        bool reject_bearer = False;
+        #! number of CAPABILITY commands received
+        int capability_count = 0;
+        #! the last AUTHENTICATE mechanism and payload received
+        *string auth_mechanism;
+        *string auth_payload;
+        #! the last APPEND payload received
+        *binary append_payload;
+        #! unsolicited lines to push once the client enters the IDLE state
+        list<string> idle_pushes = ();
+        #! if True, do not answer IDLE with a continuation request
+        bool refuse_idle = False;
+    }
+
+    constructor(*hash<string, hash<auto>> messages) {
+        self.messages = messages ?? {};
+        listener.bind("localhost:0");
+        listener.listen(1);
+        port = listener.getSocketInfo().port;
+    }
+
+    int getPort() {
+        return port;
+    }
+
+    string getUrl(string scheme = "imap") {
+        return sprintf("%s://localhost:%d", scheme, port);
+    }
+
+    setCapabilities(string caps) {
+        capabilities = caps;
+    }
+
+    setSecureCapabilities(string caps) {
+        secure_capabilities = caps;
+    }
+
+    setPostAuthCapabilities(string caps) {
+        post_auth_capabilities = caps;
+    }
+
+    setStartTls(bool offer) {
+        offer_starttls = offer;
+    }
+
+    setRejectBearer(bool reject = True) {
+        reject_bearer = reject;
+    }
+
+    #! Sets unsolicited lines to send as soon as the client enters the IDLE state
+    setIdlePushes(list<string> lines) {
+        idle_pushes = lines;
+    }
+
+    setRefuseIdle(bool refuse = True) {
+        refuse_idle = refuse;
+    }
+
+    bool isSecure() {
+        AutoLock al(lck);
+        return secure;
+    }
+
+    int getCapabilityCount() {
+        AutoLock al(lck);
+        return capability_count;
+    }
+
+    *string getAuthMechanism() {
+        AutoLock al(lck);
+        return auth_mechanism;
+    }
+
+    *string getDecodedAuthPayload() {
+        AutoLock al(lck);
+        return auth_payload.val() ? parse_base64_string_to_string(auth_payload) : NOTHING;
+    }
+
+    *binary getAppendPayload() {
+        AutoLock al(lck);
+        return append_payload;
+    }
+
+    list<string> getReceivedCommands() {
+        AutoLock al(lck);
+        return received;
+    }
+
+    *string getServerError() {
+        AutoLock al(lck);
+        return server_error;
+    }
+
+    start() {
+        background acceptAndServe();
+    }
+
+    wait(timeout to = 30s) {
+        done.waitForZero(to);
+    }
+
+    #! Records a received command line under the lock
+    private record(string line) {
+        AutoLock al(lck);
+        received += line;
+    }
+
+    private setAuth(string mech, *string payload) {
+        AutoLock al(lck);
+        auth_mechanism = mech;
+        auth_payload = payload;
+    }
+
+    private setAuthPayload(string payload) {
+        AutoLock al(lck);
+        auth_payload = payload;
+    }
+
+    private setAuthenticated() {
+        AutoLock al(lck);
+        authenticated = True;
+    }
+
+    #! Returns the capability list matching the connection's current state
+    private string currentCapabilities() {
+        AutoLock al(lck);
+        if (authenticated) {
+            return post_auth_capabilities;
+        }
+        return secure && secure_capabilities.val() ? secure_capabilities : capabilities;
+    }
+
+    private acceptAndServe() {
+        on_exit done.dec();
+        try {
+            Socket client = listener.accept(15s);
+            serveClient(client);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-CLOSED" && ex.err != "SOCKET-NOT-OPEN") {
+                AutoLock al(lck);
+                server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    private string readLine(Socket client, timeout to = 10s) {
+        string str = "";
+        while (True) {
+            int c = client.recvu1(to);
+            str += chr(c);
+            if (c == 10) {
+                break;
+            }
+        }
+        return str;
+    }
+
+    private serveClient(Socket client) {
+        client.send("* OK [CAPABILITY IMAP4rev1] MockImap ready\r\n");
+
+        while (True) {
+            string line = readLine(client);
+            trim line;
+            record(line);
+
+            *list<*string> m = (line =~ x/^(\S+)\s+(.*)$/);
+            if (!m) {
+                continue;
+            }
+            string tag = m[0];
+            string rest = m[1];
+            *list<*string> cm = (rest =~ x/^(\S+)\s*(.*)$/);
+            string cmd = cm[0].upr();
+            string args = cm[1] ?? "";
+
+            switch (cmd) {
+                case "CAPABILITY": {
+                    {
+                        AutoLock al(lck);
+                        ++capability_count;
+                    }
+                    string caps = currentCapabilities();
+                    client.send(sprintf("* CAPABILITY %s\r\n", caps));
+                    client.send(sprintf("%s OK CAPABILITY completed\r\n", tag));
+                    break;
+                }
+                case "STARTTLS": {
+                    client.send(sprintf("%s OK Begin TLS negotiation now\r\n", tag));
+                    client.setCertificate(CertPem);
+                    client.setPrivateKey(KeyPem);
+                    client.upgradeServerToSSL(15s);
+                    {
+                        AutoLock al(lck);
+                        secure = True;
+                    }
+                    break;
+                }
+                case "AUTHENTICATE": {
+                    *list<*string> am = (args =~ x/^(\S+)\s*(\S*)$/);
+                    setAuth(am[0].upr(), am[1]);
+                    if (!auth_payload.val()) {
+                        # the client is using the two-step exchange
+                        client.send("+ \r\n");
+                        string payload = readLine(client);
+                        trim payload;
+                        setAuthPayload(payload);
+                        record(sprintf("<auth-payload:%s>", getAuthMechanism()));
+                    }
+                    if (reject_bearer) {
+                        client.send("+ eyJzdGF0dXMiOiI0MDEifQ==\r\n");
+                        string empty = readLine(client);
+                        record(sprintf("<challenge-response:%d bytes>", empty.size()));
+                        client.send(sprintf("%s NO [AUTHENTICATIONFAILED] Invalid credentials\r\n", tag));
+                    } else {
+                        setAuthenticated();
+                        client.send(sprintf("%s OK %s authentication successful\r\n", tag,
+                            getAuthMechanism()));
+                    }
+                    break;
+                }
+                case "LOGIN": {
+                    setAuth("LOGIN", NOTHING);
+                    setAuthenticated();
+                    client.send(sprintf("%s OK LOGIN completed\r\n", tag));
+                    break;
+                }
+                case "NOOP": {
+                    client.send(sprintf("%s OK NOOP completed\r\n", tag));
+                    break;
+                }
+                case "ID": {
+                    client.send("* ID (\"name\" \"MockImap\")\r\n");
+                    client.send(sprintf("%s OK ID completed\r\n", tag));
+                    break;
+                }
+                case "LIST":
+                case "LSUB": {
+                    client.send(sprintf("* %s (\\HasNoChildren) \"/\" \"INBOX\"\r\n", cmd));
+                    client.send(sprintf("* %s (\\Noselect \\HasChildren) \"/\" \"Archive\"\r\n", cmd));
+                    client.send(sprintf("* %s (\\HasNoChildren) NIL \"Sent Items\"\r\n", cmd));
+                    client.send(sprintf("%s OK %s completed\r\n", tag, cmd));
+                    break;
+                }
+                case "SELECT":
+                case "EXAMINE": {
+                    client.send(sprintf("* %d EXISTS\r\n", messages.size()));
+                    client.send("* 1 RECENT\r\n");
+                    client.send("* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n");
+                    client.send("* OK [UIDVALIDITY 3857529045] UIDs valid\r\n");
+                    client.send("* OK [UIDNEXT 4392] Predicted next UID\r\n");
+                    client.send("* OK [UNSEEN 2] Message 2 is first unseen\r\n");
+                    client.send("* OK [PERMANENTFLAGS (\\Deleted \\Seen \\*)] Limited\r\n");
+                    client.send(sprintf("%s OK [%s] %s completed\r\n", tag,
+                        cmd == "EXAMINE" ? "READ-ONLY" : "READ-WRITE", cmd));
+                    break;
+                }
+                case "STATUS": {
+                    client.send("* STATUS \"INBOX\" (MESSAGES 231 RECENT 1 UNSEEN 12)\r\n");
+                    client.send(sprintf("%s OK STATUS completed\r\n", tag));
+                    break;
+                }
+                case "UID": {
+                    handleUid(client, tag, args);
+                    break;
+                }
+                case "SEARCH": {
+                    client.send("* SEARCH 1 2\r\n");
+                    client.send(sprintf("%s OK SEARCH completed\r\n", tag));
+                    break;
+                }
+                case "FETCH": {
+                    sendFetch(client, tag, args, False);
+                    break;
+                }
+                case "STORE": {
+                    client.send(sprintf("%s OK STORE completed\r\n", tag));
+                    break;
+                }
+                case "EXPUNGE": {
+                    client.send("* 3 EXPUNGE\r\n");
+                    client.send("* 3 EXPUNGE\r\n");
+                    client.send(sprintf("%s OK EXPUNGE completed\r\n", tag));
+                    break;
+                }
+                case "CREATE":
+                case "DELETE":
+                case "RENAME":
+                case "SUBSCRIBE":
+                case "UNSUBSCRIBE":
+                case "COPY":
+                case "MOVE": {
+                    client.send(sprintf("%s OK %s completed\r\n", tag, cmd));
+                    break;
+                }
+                case "APPEND": {
+                    handleAppend(client, tag, args);
+                    break;
+                }
+                case "IDLE": {
+                    if (refuse_idle) {
+                        client.send(sprintf("%s NO IDLE not permitted here\r\n", tag));
+                        break;
+                    }
+                    client.send("+ idling\r\n");
+                    # push any queued updates immediately so the client sees them without waiting
+                    foreach string push_line in (idle_pushes) {
+                        client.send(push_line + "\r\n");
+                    }
+                    # DONE is sent as a bare line with no tag
+                    while (True) {
+                        string done = readLine(client);
+                        trim done;
+                        record(done);
+                        if (done.upr() == "DONE") {
+                            break;
+                        }
+                    }
+                    client.send("* 9 EXPUNGE\r\n");
+                    client.send(sprintf("%s OK IDLE terminated\r\n", tag));
+                    break;
+                }
+                case "LOGOUT": {
+                    client.send("* BYE MockImap signing off\r\n");
+                    client.send(sprintf("%s OK LOGOUT completed\r\n", tag));
+                    return;
+                }
+                default: {
+                    client.send(sprintf("%s BAD unknown command %s\r\n", tag, cmd));
+                    break;
+                }
+            }
+        }
+    }
+
+    private handleUid(Socket client, string tag, string args) {
+        *list<*string> m = (args =~ x/^(\S+)\s*(.*)$/);
+        string subcmd = m[0].upr();
+        string rest = m[1] ?? "";
+        switch (subcmd) {
+            case "SEARCH": {
+                client.send(sprintf("* SEARCH %s\r\n", (keys messages).join(" ")));
+                client.send(sprintf("%s OK UID SEARCH completed\r\n", tag));
+                break;
+            }
+            case "FETCH": {
+                sendFetch(client, tag, rest, True);
+                break;
+            }
+            default: {
+                client.send(sprintf("%s OK UID %s completed\r\n", tag, subcmd));
+                break;
+            }
+        }
+    }
+
+    private sendFetch(Socket client, string tag, string args, bool uid) {
+        *list<*string> m = (args =~ x/^(\S+)\s+\((.*)\)$/);
+        if (!m) {
+            client.send(sprintf("%s BAD malformed FETCH\r\n", tag));
+            return;
+        }
+        string set = m[0];
+        string items = m[1].upr();
+
+        list<string> want = set == "1:*" ? (keys messages) : set.split(",");
+        int seq = 0;
+        foreach string uid_key in (want) {
+            ++seq;
+            *hash<auto> msg = messages{uid_key};
+            if (!msg) {
+                continue;
+            }
+            string head = sprintf("* %d FETCH (UID %s", seq, uid_key);
+            if (items =~ /FLAGS/) {
+                head += sprintf(" FLAGS (%s)", (msg.flags ?? ()).join(" "));
+            }
+            if (items =~ /RFC822\.SIZE/) {
+                head += sprintf(" RFC822.SIZE %d", msg.body.size());
+            }
+            if (items =~ /INTERNALDATE/) {
+                head += sprintf(" INTERNALDATE \"%s\"", msg.internaldate);
+            }
+            if (items =~ /ENVELOPE/) {
+                head += sprintf(" ENVELOPE %s", msg.envelope);
+            }
+
+            # body sections are sent as literals, which is what makes the response framing non-trivial
+            if (items =~ /BODY/) {
+                *list<*string> pm = (items =~ x/BODY(?:\.PEEK)?\[([^\]]*)\]/);
+                string section = pm ? (pm[0] ?? "") : "";
+                binary payload = section.val() && msg.parts{section}
+                    ? msg.parts{section}
+                    : msg.body;
+                client.send(sprintf("%s BODY[%s] {%d}\r\n", head, section, payload.size()));
+                client.send(payload);
+                client.send(")\r\n");
+            } else {
+                client.send(head + ")\r\n");
+            }
+        }
+        client.send(sprintf("%s OK %sFETCH completed\r\n", tag, uid ? "UID " : ""));
+    }
+
+    private handleAppend(Socket client, string tag, string args) {
+        *list<*string> m = (args =~ x/\{([0-9]+)(\+?)\}$/);
+        if (!m) {
+            client.send(sprintf("%s BAD malformed APPEND\r\n", tag));
+            return;
+        }
+        int count = m[0].toInt();
+        bool literal_plus = m[1] == "+";
+        if (!literal_plus) {
+            client.send("+ Ready for literal data\r\n");
+        }
+        binary payload = binary();
+        while (payload.size() < count) {
+            payload += client.recvBinary(count - payload.size(), 10s);
+        }
+        {
+            AutoLock al(lck);
+            append_payload = payload;
+        }
+        # consume the CRLF that terminates the APPEND command
+        readLine(client);
+        client.send(sprintf("%s OK [APPENDUID 3857529045 4392] APPEND completed\r\n", tag));
+    }
+}
+
+public class ImapClientTest inherits QUnit::Test {
+    public {
+        #! a small multipart message used as canned FETCH content
+        const TestBody = "From: Sender <sender@test.com>\r\n"
+            "To: Recipient <recipient@test.com>\r\n"
+            "Subject: Test Subject\r\n"
+            "Date: Wed, 17 Jul 1996 02:23:25 -0700\r\n"
+            "Message-ID: <abc123@test.com>\r\n"
+            "MIME-Version: 1.0\r\n"
+            "Content-Type: text/plain; charset=us-ascii\r\n"
+            "\r\n"
+            "Hello, World!\r\n";
+
+        const TestEnvelope = "(\"Wed, 17 Jul 1996 02:23:25 -0700\" \"Test Subject\" "
+            "((\"Sender\" NIL \"sender\" \"test.com\")) "
+            "((\"Sender\" NIL \"sender\" \"test.com\")) "
+            "((\"Sender\" NIL \"sender\" \"test.com\")) "
+            "((\"Recipient\" NIL \"recipient\" \"test.com\")) NIL NIL NIL "
+            "\"<abc123@test.com>\")";
+    }
+
+    constructor() : Test("ImapClientTest", "1.0") {
+        addTestCase("URL and option validation", \urlAndOptionTests());
+        addTestCase("response segmentation", \segmentationTests());
+        addTestCase("response parsing", \parsingTests());
+        addTestCase("date parsing", \dateParsingTests());
+        addTestCase("capability parsing", \capabilityParsingTests());
+        addTestCase("quoting", \quotingTests());
+        addTestCase("auth info construction", \authInfoTests());
+        addTestCase("connect and capabilities", \connectTests());
+        addTestCase("XOAUTH2 login", \xoauth2Tests());
+        addTestCase("two-step login without SASL-IR", \twoStepAuthTests());
+        addTestCase("password login", \passwordAuthTests());
+        addTestCase("bearer auth failure", \bearerFailureTests());
+        addTestCase("STARTTLS and capability re-read", \startTlsTests());
+        addTestCase("mailbox operations", \mailboxTests());
+        addTestCase("search", \searchTests());
+        addTestCase("fetch and message retrieval", \fetchTests());
+        addTestCase("body part retrieval", \bodyPartTests());
+        addTestCase("flags and expunge", \flagTests());
+        addTestCase("move with and without MOVE", \moveTests());
+        addTestCase("append", \appendTests());
+        addTestCase("connection class", \connectionTests());
+        addTestCase("IDLE", \idleTests());
+        addTestCase("IDLE unsupported", \idleUnsupportedTests());
+        set_return_value(main());
+    }
+
+    private hash<string, hash<auto>> makeMessages() {
+        return {
+            "101": {
+                "flags": ("\\Seen",),
+                "internaldate": "17-Jul-1996 02:44:25 -0700",
+                "envelope": TestEnvelope,
+                "body": binary(TestBody),
+                "parts": {
+                    "1": binary("Hello, World!\r\n"),
+                    "HEADER": binary("Subject: Test Subject\r\n\r\n"),
+                },
+            },
+            "102": {
+                "flags": (),
+                "internaldate": "18-Jul-1996 12:00:00 +0200",
+                "envelope": TestEnvelope,
+                "body": binary(TestBody),
+                "parts": {},
+            },
+        };
+    }
+
+    private ImapClient makeClient(MockImapServer server, *hash<auto> extra) {
+        return new ImapClient(server.getUrl(), {
+            "username": "user@test.com",
+            "token": "test-token",
+        } + extra);
+    }
+
+    urlAndOptionTests() {
+        ImapClient c1("imap://host.com", {"username": "u", "password": "p"});
+        assertEq("host.com:143", c1.getTarget(), "imap default port");
+
+        ImapClient c2("imaps://host.com", {"username": "u", "password": "p"});
+        assertEq("host.com:993", c2.getTarget(), "imaps default port");
+
+        ImapClient c3("host.com:1143", {"username": "u", "password": "p"});
+        assertEq("host.com:1143", c3.getTarget(), "explicit port with no scheme");
+
+        ImapClient c4("imap://u:p@host.com", {});
+        assertEq("host.com:143", c4.getTarget(), "credentials in the URL");
+
+        assertThrows("IMAP-URL-ERROR", "unknown scheme",
+            sub () { new ImapClient("imapx://host", {"username": "u", "password": "p"}); },
+            NOTHING, "unknown scheme rejected");
+        assertThrows("IMAP-URL-ERROR", "missing username",
+            sub () { new ImapClient("imap://host", {"password": "p"}); },
+            NOTHING, "missing username rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "missing both password and token",
+            sub () { new ImapClient("imap://host", {"username": "u"}); },
+            NOTHING, "missing credentials rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "both a password and a token",
+            sub () { new ImapClient("imap://host", {"username": "u", "password": "p", "token": "t"}); },
+            NOTHING, "password and token conflict rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "already carries a username and password",
+            sub () { new ImapClient("imap://u:p@host", {"token": "t"}); },
+            NOTHING, "token plus URL credentials rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "unknown auth_mechanism",
+            sub () {
+                new ImapClient("imap://host", {"username": "u", "token": "t",
+                    "auth_mechanism": "SCRAM-SHA-1"});
+            }, NOTHING, "unknown mechanism rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "max_response_size must be > 0",
+            sub () {
+                new ImapClient("imap://host", {"username": "u", "token": "t",
+                    "max_response_size": 0});
+            }, NOTHING, "non-positive max_response_size rejected");
+
+        # mechanism names are normalized
+        ImapClient c5("imap://host", {"username": "u", "token": "t", "auth_mechanism": "xoauth2"});
+        assertEq("XOAUTH2", c5.getAuthMechanism(), "mechanism normalized to upper case");
+        ImapClient c6("imap://host", {"username": "u", "token": "t", "auth_mechanism": "AUTO"});
+        assertEq("auto", c6.getAuthMechanism(), "auto normalized to lower case");
+
+        # token refresh clears any password
+        ImapClient c7("imap://host", {"username": "u", "password": "p"});
+        assertNothing(c7.getToken(), "no token initially");
+        c7.setToken("new-token");
+        assertEq("new-token", c7.getToken(), "token installed");
+        c7.setToken(NOTHING);
+        assertNothing(c7.getToken(), "token cleared");
+    }
+
+    segmentationTests() {
+        # no literals
+        hash<ImapRawResponse> r1 = ImapResponseParser::segment(
+            binary("* OK ready\r\na001 OK done\r\n"));
+        assertEq("* OK ready\r\na001 OK done\r\n", r1.text, "text preserved with no literals");
+        assertEq(0, r1.literals.size(), "no literals found");
+
+        # one literal containing CRLF, which must not be mistaken for protocol framing
+        binary payload = binary("line1\r\nline2\r\n");
+        binary raw = binary(sprintf("* 1 FETCH (BODY[] {%d}\r\n", payload.size())) + payload
+            + binary(")\r\na001 OK done\r\n");
+        hash<ImapRawResponse> r2 = ImapResponseParser::segment(raw);
+        assertEq(1, r2.literals.size(), "one literal found");
+        assertEq(payload, r2.literals[0], "literal payload byte-exact");
+        assertEq("* 1 FETCH (BODY[] {14}\r\n)\r\na001 OK done\r\n", r2.text,
+            "literal payload removed from the text");
+
+        # binary-safe literal
+        binary bin_payload = <00010203fffefd0d0a>;
+        binary raw3 = binary(sprintf("* 1 FETCH (BODY[] {%d}\r\n", bin_payload.size())) + bin_payload
+            + binary(")\r\na001 OK done\r\n");
+        hash<ImapRawResponse> r3 = ImapResponseParser::segment(raw3);
+        assertEq(bin_payload, r3.literals[0], "binary literal preserved byte-exact");
+
+        # zero-length literal
+        hash<ImapRawResponse> r4 = ImapResponseParser::segment(
+            binary("* 1 FETCH (BODY[] {0}\r\n)\r\na001 OK done\r\n"));
+        assertEq(1, r4.literals.size(), "zero-length literal recorded");
+        assertEq(0, r4.literals[0].size(), "zero-length literal is empty");
+
+        # truncated literal must be reported, not silently accepted
+        assertThrows("IMAP-PARSE-ERROR", "only 5 bytes remain",
+            sub () { ImapResponseParser::segment(binary("* 1 FETCH (BODY[] {100}\r\nshort")); },
+            NOTHING, "truncated literal rejected");
+
+        # literal count detection
+        assertEq(42, ImapResponseParser::getLiteralCount("* 1 FETCH (BODY[] {42}\r\n"),
+            "literal count read");
+        assertEq(42, ImapResponseParser::getLiteralCount("* 1 FETCH (BODY[] {42+}\r\n"),
+            "LITERAL+ count read");
+        assertNothing(ImapResponseParser::getLiteralCount("* OK no literal here\r\n"),
+            "no literal detected");
+        assertNothing(ImapResponseParser::getLiteralCount("* OK \"{5}\" quoted\r\n"),
+            "brace inside a quoted string is not a literal");
+    }
+
+    parsingTests() {
+        # tagged completion with a response code
+        hash<ImapResponse> r1 = ImapResponseParser::parse(
+            binary("* 5 EXISTS\r\n* OK [UIDVALIDITY 1] valid\r\na001 OK [READ-WRITE] SELECT done\r\n"),
+            "a001");
+        assertEq("OK", r1.status, "status parsed");
+        assertEq("SELECT done", r1.text, "trailing text parsed");
+        assertEq(("READ-WRITE",), r1.code, "response code parsed");
+        assertEq(2, r1.untagged.size(), "two untagged lines");
+        assertEq(("*", 5, "EXISTS"), r1.untagged[0], "numeric untagged line parsed");
+        assertEq(("*", "OK", ("UIDVALIDITY", 1), "valid"), r1.untagged[1],
+            "bracketed response code parsed as a list");
+
+        # NIL becomes NOTHING; quoted strings are unescaped
+        hash<ImapResponse> r2 = ImapResponseParser::parse(
+            binary("* LIST (\\HasNoChildren) NIL \"a \\\"quoted\\\" name\"\r\na001 OK done\r\n"),
+            "a001");
+        list<auto> line = r2.untagged[0];
+        assertEq(("\\HasNoChildren",), line[2], "flag list parsed");
+        assertNothing(line[3], "NIL parsed as NOTHING");
+        assertEq("a \"quoted\" name", line[4], "escaped quotes resolved");
+
+        # a section specifier containing spaces stays one atom
+        hash<ImapResponse> r3 = ImapResponseParser::parse(
+            binary("* 1 FETCH (BODY[HEADER.FIELDS (DATE FROM)] \"x\")\r\na001 OK done\r\n"), "a001");
+        assertEq("BODY[HEADER.FIELDS (DATE FROM)]", r3.untagged[0][3][0],
+            "bracketed section specifier read as a single atom");
+
+        # a literal spanning the middle of a parenthesized list
+        binary payload = binary("body\r\ncontent");
+        binary raw = binary(sprintf("* 1 FETCH (UID 7 BODY[] {%d}\r\n", payload.size())) + payload
+            + binary(")\r\na001 OK done\r\n");
+        hash<ImapResponse> r4 = ImapResponseParser::parse(raw, "a001");
+        list<auto> items = r4.untagged[0][3];
+        assertEq(("UID", 7, "BODY[]", payload), items, "literal spliced into the item list");
+
+        # continuation request
+        hash<ImapResponse> r5 = ImapResponseParser::parse(binary("+ Ready for literal data\r\n"),
+            "a001");
+        assertTrue(r5.continuation, "continuation flag set");
+        assertEq("Ready for literal data", r5.text, "continuation text parsed");
+
+        # a tag prefix must not be mistaken for the tag
+        hash<ImapResponse> r6 = ImapResponseParser::parse(
+            binary("* OK a0011 is not the tag\r\na001 OK done\r\n"), "a001");
+        assertEq(1, r6.untagged.size(), "tag prefix did not terminate the response early");
+    }
+
+    dateParsingTests() {
+        date d = ImapResponseParser::parseInternalDate("17-Jul-1996 02:44:25 -0700");
+        assertEq(1996, d.years(), "year parsed");
+        assertEq(7, d.months(), "month parsed");
+        assertEq(17, d.days(), "day parsed");
+        assertEq(2, d.hours(), "hour parsed");
+        assertEq(44, d.minutes(), "minute parsed");
+        assertEq(25, d.seconds(), "second parsed");
+        assertEq(-25200, d.getUtcOffset(), "UTC offset applied");
+
+        # space-padded single-digit day
+        date d2 = ImapResponseParser::parseInternalDate(" 7-Jul-1996 02:44:25 +0000");
+        assertEq(7, d2.days(), "space-padded day parsed");
+
+        assertNothing(ImapResponseParser::parseInternalDate("not a date"), "garbage rejected");
+        assertNothing(ImapResponseParser::parseInternalDate(NOTHING), "NOTHING passed through");
+
+        date e = ImapResponseParser::parseEnvelopeDate("Wed, 17 Jul 1996 02:23:25 -0700");
+        assertEq(1996, e.years(), "envelope year parsed");
+        assertEq(23, e.minutes(), "envelope minute parsed");
+        assertEq(-25200, e.getUtcOffset(), "envelope UTC offset applied");
+
+        # without the day of week and without seconds
+        date e2 = ImapResponseParser::parseEnvelopeDate("17 Jul 1996 02:23 +0000");
+        assertEq(0, e2.seconds(), "missing seconds default to 0");
+
+        assertNothing(ImapResponseParser::parseEnvelopeDate("nonsense"), "garbage rejected");
+    }
+
+    capabilityParsingTests() {
+        hash<string, bool> caps = ImapClient::parseCapabilities(
+            binary("* CAPABILITY IMAP4rev1 SASL-IR AUTH=XOAUTH2 MOVE\r\nc1 OK done\r\n"));
+        assertTrue(caps."IMAP4REV1", "IMAP4rev1 detected");
+        assertTrue(caps."SASL-IR", "SASL-IR detected");
+        assertTrue(caps."AUTH=XOAUTH2", "AUTH=XOAUTH2 detected");
+        assertTrue(caps.MOVE, "MOVE detected");
+        assertFalse(caps.UIDPLUS ?? False, "absent capability reported as absent");
+
+        # the greeting form carries capabilities in a response code
+        hash<string, bool> caps2 = ImapClient::parseCapabilities(
+            binary("* OK [CAPABILITY IMAP4rev1 LITERAL+] ready\r\n"));
+        assertTrue(caps2."LITERAL+", "capability in a response code detected");
+    }
+
+    quotingTests() {
+        assertEq("\"INBOX\"", ImapClient::quoteString("INBOX"), "plain name quoted");
+        assertEq("\"a\\\"b\"", ImapClient::quoteString("a\"b"), "embedded quote escaped");
+        assertEq("\"a\\\\b\"", ImapClient::quoteString("a\\b"), "embedded backslash escaped");
+
+        date d = 1996-07-17T02:44:25+02:00;
+        assertRegex("^17-Jul-1996 02:44:25 \\+0200$", ImapClient::formatInternalDate(d),
+            "INTERNALDATE formatted with its UTC offset");
+
+        assertEq(("host.com", "993"), ImapClient::splitTarget("host.com:993"), "target split");
+        assertEq(("/tmp/sock", ""), ImapClient::splitTarget("/tmp/sock"), "socket target split");
+    }
+
+    authInfoTests() {
+        # bearer token: both mechanisms prepared so the capability list can choose
+        hash<ImapAuthInfo> ai = ImapClient::getAuthInfo({
+            "user": "user@test.com",
+            "token": "tok",
+            "target": "imap.test.com:993",
+            "auth_mechanism": "auto",
+        });
+        assertTrue(ai.do_auth, "authentication configured");
+        assertTrue(ai.use_bearer, "bearer mechanism selected");
+        assertEq("XOAUTH2", ai.mechanism, "XOAUTH2 is the default bearer mechanism");
+        assertEq(sprintf("user=user@test.com%sauth=Bearer tok%s%s", chr(1), chr(1), chr(1)),
+            parse_base64_string_to_string(ai.xoauth2_ir), "XOAUTH2 payload framed correctly");
+        string ob = parse_base64_string_to_string(ai.oauthbearer_ir);
+        assertRegex("^n,a=user@test\\.com,", ob, "OAUTHBEARER GS2 header present");
+        assertRegex("host=imap\\.test\\.com", ob, "OAUTHBEARER host present");
+        assertRegex("port=993", ob, "OAUTHBEARER port present");
+
+        # forcing a mechanism makes both slots identical, so the capability check cannot override it
+        hash<ImapAuthInfo> forced = ImapClient::getAuthInfo({
+            "user": "u", "token": "t", "target": "h:993", "auth_mechanism": "OAUTHBEARER",
+        });
+        assertEq("OAUTHBEARER", forced.mechanism, "forced mechanism reported");
+        assertEq(forced.xoauth2_ir, forced.oauthbearer_ir,
+            "forced mechanism used regardless of the capability check");
+
+        # password: SASL PLAIN plus a LOGIN fallback
+        hash<ImapAuthInfo> pw = ImapClient::getAuthInfo({
+            "user": "u", "pass": "p", "target": "h:143", "auth_mechanism": "auto",
+        });
+        assertTrue(pw.do_auth, "password authentication configured");
+        assertFalse(pw.use_bearer, "not a bearer mechanism");
+        assertEq(sprintf("%su%sp", chr(0), chr(0)), parse_base64_string_to_string(pw.plain_ir),
+            "SASL PLAIN payload framed correctly");
+        assertEq("\"u\" \"p\"", pw.login_args, "LOGIN arguments quoted");
+
+        assertThrows("IMAP-CONFIG-ERROR", "requires an OAuth2 bearer token",
+            sub () {
+                ImapClient::getAuthInfo({"user": "u", "pass": "p", "target": "h:143",
+                    "auth_mechanism": "XOAUTH2"});
+            }, NOTHING, "forced bearer mechanism without a token rejected");
+        assertThrows("IMAP-CONFIG-ERROR", "cannot be used with an OAuth2 bearer token",
+            sub () {
+                ImapClient::getAuthInfo({"user": "u", "token": "t", "target": "h:143",
+                    "auth_mechanism": "PLAIN"});
+            }, NOTHING, "forced PLAIN with a token rejected");
+    }
+
+    connectTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+
+        imap.connect();
+        assertTrue(imap.isConnected(), "connected");
+
+        hash<string, bool> caps = imap.getCapabilities();
+        assertTrue(caps.MOVE, "post-authentication capability list in effect");
+        assertTrue(imap.hasCapability("uidplus"), "capability lookup is case-insensitive");
+        assertFalse(imap.hasCapability("NONEXISTENT"), "absent capability reported as absent");
+
+        # RFC 3501 §6.2.1: the capability list is re-read after login
+        assertEq(2, server.getCapabilityCount(), "CAPABILITY sent before and after login");
+
+        imap.noop();
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    xoauth2Tests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.connect();
+
+        assertEq("XOAUTH2", server.getAuthMechanism(), "XOAUTH2 selected from the capability list");
+        assertEq(sprintf("user=user@test.com%sauth=Bearer test-token%s%s", chr(1), chr(1), chr(1)),
+            server.getDecodedAuthPayload(), "XOAUTH2 payload framed correctly on the wire");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    twoStepAuthTests() {
+        # without SASL-IR the payload must be sent as a separate line after a "+" challenge
+        MockImapServer server(makeMessages());
+        server.setCapabilities("IMAP4rev1 AUTH=XOAUTH2");
+        server.setPostAuthCapabilities("IMAP4rev1 AUTH=XOAUTH2 MOVE");
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.connect();
+
+        assertEq("XOAUTH2", server.getAuthMechanism(), "XOAUTH2 used");
+        assertEq(sprintf("user=user@test.com%sauth=Bearer test-token%s%s", chr(1), chr(1), chr(1)),
+            server.getDecodedAuthPayload(), "payload sent in the second step");
+
+        bool two_step = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd == "<auth-payload:XOAUTH2>") {
+                two_step = True;
+            }
+        }
+        assertTrue(two_step, "two-step exchange used when SASL-IR is absent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    passwordAuthTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap(server.getUrl(), {"username": "user@test.com", "password": "secret"});
+        on_exit imap.disconnect();
+        imap.connect();
+
+        assertEq("PLAIN", server.getAuthMechanism(), "SASL PLAIN used with SASL-IR");
+        assertEq(sprintf("%suser@test.com%ssecret", chr(0), chr(0)),
+            server.getDecodedAuthPayload(), "SASL PLAIN payload framed correctly");
+
+        # without SASL-IR the client must fall back to LOGIN
+        MockImapServer server2(makeMessages());
+        server2.setCapabilities("IMAP4rev1 AUTH=PLAIN");
+        server2.setPostAuthCapabilities("IMAP4rev1");
+        server2.start();
+        on_exit server2.wait();
+
+        ImapClient imap2(server2.getUrl(), {"username": "user@test.com", "password": "secret"});
+        on_exit imap2.disconnect();
+        imap2.connect();
+        assertEq("LOGIN", server2.getAuthMechanism(), "LOGIN used when SASL-IR is absent");
+        assertNothing(server2.getServerError(), "no server errors");
+    }
+
+    bearerFailureTests() {
+        MockImapServer server(makeMessages());
+        server.setRejectBearer(True);
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server, {"token": "expired-token"});
+
+        # the server answers "+" instead of a tagged NO, and will not report the failure until the
+        # client sends an empty line
+        assertThrows("IMAP-POLL-ERROR", "AUTHENTICATIONFAILED",
+            sub () { imap.connect(); }, NOTHING,
+            "bearer failure surfaces the server's tagged NO");
+        assertFalse(imap.isConnected(), "socket closed after a failed login");
+
+        bool answered = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /^<challenge-response:/) {
+                answered = True;
+                assertEq("<challenge-response:2 bytes>", cmd, "challenge answered with a bare CRLF");
+            }
+        }
+        assertTrue(answered, "challenge response sent");
+    }
+
+    startTlsTests() {
+        MockImapServer server(makeMessages());
+        server.setStartTls(True);
+        # XOAUTH2 is only advertised on the secure connection, so a client that kept the pre-TLS
+        # capability list would never see it
+        server.setCapabilities("IMAP4rev1 STARTTLS LOGINDISABLED");
+        server.setSecureCapabilities("IMAP4rev1 SASL-IR AUTH=XOAUTH2");
+        server.setPostAuthCapabilities("IMAP4rev1 SASL-IR AUTH=XOAUTH2 MOVE");
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server, {"tls": True});
+        on_exit imap.disconnect();
+        imap.connect();
+
+        assertTrue(server.isSecure(), "connection upgraded to TLS");
+        assertEq("XOAUTH2", server.getAuthMechanism(),
+            "mechanism selected from the post-STARTTLS capability list");
+        # CAPABILITY is issued before STARTTLS, again after the upgrade, and again after login
+        assertEq(3, server.getCapabilityCount(), "capability list re-read after STARTTLS and login");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    mailboxTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+
+        list<hash<ImapMailboxInfo>> boxes = imap.listMailboxes();
+        assertEq(3, boxes.size(), "three mailboxes listed");
+        assertEq("INBOX", boxes[0].name, "mailbox name parsed");
+        assertEq("/", boxes[0].delimiter, "delimiter parsed");
+        assertEq(("\\HasNoChildren",), boxes[0].flags, "mailbox flags parsed");
+        assertEq(("\\Noselect", "\\HasChildren"), boxes[1].flags, "multiple flags parsed");
+        assertEq("", boxes[2].delimiter, "NIL delimiter becomes an empty string");
+        assertEq("Sent Items", boxes[2].name, "quoted name with a space parsed");
+
+        assertEq(3, imap.listSubscribed().size(), "LSUB returns subscribed mailboxes");
+
+        hash<ImapMailboxStatus> status = imap.selectMailbox("INBOX");
+        assertEq("INBOX", status.mailbox, "mailbox recorded");
+        assertEq(2, status.message_count, "EXISTS parsed");
+        assertEq(1, status.recent, "RECENT parsed");
+        assertEq(3857529045, status.uidvalidity, "UIDVALIDITY parsed");
+        assertEq(4392, status.uidnext, "UIDNEXT parsed");
+        assertEq(2, status.unseen, "UNSEEN parsed");
+        assertEq(5, status.flags.size(), "FLAGS parsed");
+        assertEq(("\\Deleted", "\\Seen", "\\*"), status.permanent_flags, "PERMANENTFLAGS parsed");
+        assertFalse(status.read_only, "SELECT is read-write");
+
+        hash<ImapMailboxStatus> ro = imap.examineMailbox("INBOX");
+        assertTrue(ro.read_only, "EXAMINE is read-only");
+
+        hash<auto> mstatus = imap.getMailboxStatus("INBOX", ("MESSAGES", "RECENT", "UNSEEN"));
+        assertEq(231, mstatus.MESSAGES, "STATUS MESSAGES parsed");
+        assertEq(12, mstatus.UNSEEN, "STATUS UNSEEN parsed");
+
+        imap.createMailbox("Test");
+        imap.renameMailbox("Test", "Test2");
+        imap.subscribe("Test2");
+        imap.unsubscribe("Test2");
+        imap.deleteMailbox("Test2");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    searchTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+
+        # searching without a selected mailbox is a client-side error, not a server round trip
+        assertThrows("IMAP-NOT-SELECTED", "no mailbox is selected",
+            sub () { imap.search("ALL"); }, NOTHING, "search without SELECT rejected");
+
+        imap.selectMailbox("INBOX");
+        assertEq((1, 2), imap.search("UNSEEN"), "sequence-number search parsed");
+        assertEq((101, 102), imap.uidSearch("UNSEEN"), "UID search parsed");
+
+        # the criteria reach the server verbatim
+        bool found = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /UID SEARCH UNSEEN$/) {
+                found = True;
+            }
+        }
+        assertTrue(found, "UID SEARCH criteria sent verbatim");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    fetchTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+
+        hash<string, hash<ImapMessageInfo>> info = imap.fetch("101", ("FLAGS", "RFC822.SIZE",
+            "INTERNALDATE", "ENVELOPE"));
+        assertEq(1, info.size(), "one message fetched");
+        hash<ImapMessageInfo> msg = info."101";
+        assertEq(101, msg.uid, "UID parsed");
+        assertEq(("\\Seen",), msg.flags, "flags parsed");
+        assertEq(binary(TestBody).size(), msg.size, "RFC822.SIZE parsed");
+        assertEq(1996, msg.internal_date.years(), "INTERNALDATE parsed");
+        assertEq("Test Subject", msg.envelope.subject, "envelope subject parsed");
+        assertEq("sender@test.com", msg.envelope.from[0].address, "envelope from address built");
+        assertEq("Sender", msg.envelope.from[0].name, "envelope from display name parsed");
+        assertEq("recipient@test.com", msg.envelope.to[0].address, "envelope to address built");
+        assertNothing(msg.envelope.cc, "NIL address list parsed as NOTHING");
+        assertEq("<abc123@test.com>", msg.envelope.message_id, "envelope message-id parsed");
+        assertEq(1996, msg.envelope.date.years(), "envelope date parsed");
+
+        # whole-message retrieval reaches MailMessage
+        MailMessage::Message m = imap.getMessage(101);
+        assertEq("Test Subject", m.getSubject(), "message subject parsed by MailMessage");
+        assertRegex("sender@test\\.com", m.getFrom(), "message sender parsed");
+
+        hash<string, MailMessage::Message> msgs = imap.getMessages((101, 102));
+        assertEq(2, msgs.size(), "two messages retrieved");
+        assertEq("Test Subject", msgs."102".getSubject(), "second message parsed");
+
+        *hash<ImapEnvelopeInfo> env = imap.getEnvelope(101);
+        assertEq("Test Subject", env.subject, "envelope retrieved on its own");
+
+        assertThrows("IMAP-MESSAGE-NOT-FOUND", "no message body was returned",
+            sub () { imap.getMessage(999); }, NOTHING, "missing message reported");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    bodyPartTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+
+        # a single MIME part is retrieved without downloading the whole message
+        binary part = imap.getBodyPart(101, "1");
+        assertEq(binary("Hello, World!\r\n"), part, "body part returned byte-exact");
+
+        binary hdr = imap.getBodyPart(101, "HEADER");
+        assertEq(binary("Subject: Test Subject\r\n\r\n"), hdr, "header section returned");
+
+        assertThrows("IMAP-MESSAGE-NOT-FOUND", "was not returned by the server",
+            sub () { imap.getBodyPart(999, "1"); }, NOTHING, "missing part reported");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    flagTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+
+        imap.setFlags("101", ("\\Seen",));
+        imap.addFlags("101", ("\\Flagged",));
+        imap.removeFlags("101", ("\\Flagged",));
+        imap.markSeen(101);
+        imap.markDeleted(101);
+
+        list<int> expunged = imap.expunge();
+        assertEq((3, 3), expunged, "EXPUNGE sequence numbers parsed");
+
+        hash<string, bool> sent = {};
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /STORE/) {
+                sent{(cmd =~ x/(STORE.*)$/)[0]} = True;
+            }
+        }
+        assertTrue(sent."STORE 101 FLAGS (\\Seen)", "SET flags command sent");
+        assertTrue(sent."STORE 101 +FLAGS (\\Flagged)", "ADD flags command sent");
+        assertTrue(sent."STORE 101 -FLAGS (\\Flagged)", "REMOVE flags command sent");
+        assertTrue(sent."STORE 101 +FLAGS (\\Deleted)", "markDeleted sent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    moveTests() {
+        # server with MOVE
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+        imap.moveMessages("101", "Archive");
+
+        bool used_move = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /UID MOVE 101/) {
+                used_move = True;
+            }
+        }
+        assertTrue(used_move, "MOVE used when advertised");
+
+        # server without MOVE must get the COPY + STORE + EXPUNGE fallback, never a silent no-op
+        MockImapServer server2(makeMessages());
+        server2.setPostAuthCapabilities("IMAP4rev1 SASL-IR UIDPLUS");
+        server2.start();
+        on_exit server2.wait();
+
+        ImapClient imap2 = makeClient(server2);
+        on_exit imap2.disconnect();
+        imap2.selectMailbox("INBOX");
+        imap2.moveMessages("101", "Archive");
+
+        hash<string, bool> seen = {};
+        foreach string cmd in (server2.getReceivedCommands()) {
+            if (cmd =~ /UID COPY 101/) {
+                seen.copy = True;
+            } else if (cmd =~ /UID STORE 101 \+FLAGS \(\\Deleted\)/) {
+                seen.store = True;
+            } else if (cmd =~ /UID EXPUNGE 101/) {
+                seen.expunge = True;
+            } else if (cmd =~ /UID MOVE/) {
+                seen.move = True;
+            }
+        }
+        assertTrue(seen.copy, "fallback issued COPY");
+        assertTrue(seen.store, "fallback flagged the message deleted");
+        assertTrue(seen.expunge, "fallback used UID EXPUNGE with UIDPLUS");
+        assertFalse(seen.move ?? False, "MOVE not used when unavailable");
+        assertNothing(server2.getServerError(), "no server errors");
+    }
+
+    appendTests() {
+        # LITERAL+ server: the payload follows the command with no round trip
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.connect();
+
+        MailMessage::Message msg("sender@test.com", "Appended");
+        msg.addTO("recipient@test.com");
+        msg.setBody("appended body");
+        imap.appendMessage("Sent", msg, ("\\Seen",));
+
+        *binary payload = server.getAppendPayload();
+        assertTrue(payload.val(), "append payload received");
+        assertRegex("Subject: Appended", binary_to_string(payload, "ISO-8859-1"),
+            "appended message content received");
+
+        bool literal_plus = False;
+        foreach string cmd in (server.getReceivedCommands()) {
+            if (cmd =~ /APPEND "Sent" \(\\Seen\) \{[0-9]+\+\}$/) {
+                literal_plus = True;
+            }
+        }
+        assertTrue(literal_plus, "non-synchronizing literal used when LITERAL+ is advertised");
+
+        # server without LITERAL+ must wait for the "+" continuation request
+        MockImapServer server2(makeMessages());
+        server2.setPostAuthCapabilities("IMAP4rev1 SASL-IR");
+        server2.start();
+        on_exit server2.wait();
+
+        ImapClient imap2 = makeClient(server2);
+        on_exit imap2.disconnect();
+        imap2.connect();
+        imap2.appendRawMessage("Sent", binary("Subject: raw\r\n\r\nbody\r\n"));
+
+        assertEq(binary("Subject: raw\r\n\r\nbody\r\n"), server2.getAppendPayload(),
+            "raw append payload byte-exact");
+        bool sync_literal = False;
+        foreach string cmd in (server2.getReceivedCommands()) {
+            if (cmd =~ /APPEND "Sent" \{[0-9]+\}$/) {
+                sync_literal = True;
+            }
+        }
+        assertTrue(sync_literal, "synchronizing literal used without LITERAL+");
+        assertNothing(server2.getServerError(), "no server errors");
+    }
+
+    idleTests() {
+        MockImapServer server(makeMessages());
+        server.setIdlePushes(("* 3 EXISTS", "* 1 RECENT", "* OK Still here"));
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+
+        # IDLE requires a selected mailbox
+        imap.connect();
+        assertThrows("IMAP-NOT-SELECTED", "no mailbox is selected",
+            sub () { imap.startIdle(); }, NOTHING, "IDLE without SELECT rejected");
+
+        imap.selectMailbox("INBOX");
+        assertFalse(imap.isIdling(), "not idling before startIdle()");
+        imap.startIdle();
+        assertTrue(imap.isIdling(), "idling after startIdle()");
+
+        # the server pushed three updates; each is delivered as its own event
+        *hash<ImapIdleEvent> e1 = imap.waitForIdleEvent(10s);
+        assertEq("EXISTS", e1.type, "EXISTS update type parsed");
+        assertEq(3, e1.number, "EXISTS message number parsed");
+        assertEq("* 3 EXISTS", e1.line, "raw line preserved");
+
+        *hash<ImapIdleEvent> e2 = imap.waitForIdleEvent(10s);
+        assertEq("RECENT", e2.type, "RECENT update type parsed");
+        assertEq(1, e2.number, "RECENT number parsed");
+
+        *hash<ImapIdleEvent> e3 = imap.waitForIdleEvent(10s);
+        assertEq("OK", e3.type, "non-numeric untagged line typed");
+        assertNothing(e3.number, "no message number on a non-numeric line");
+
+        # no further updates: a timeout is reported as "nothing happened", not an error
+        assertNothing(imap.waitForIdleEvent(1s), "timeout returns NOTHING");
+        assertTrue(imap.isIdling(), "still idling after a timeout");
+
+        # other commands are refused while idling rather than corrupting the session
+        assertThrows("IMAP-IDLING", "call ImapClient::stopIdle",
+            sub () { imap.noop(); }, NOTHING, "commands refused while idling");
+
+        list<hash<ImapIdleEvent>> trailing = imap.stopIdle();
+        assertFalse(imap.isIdling(), "not idling after stopIdle()");
+        assertEq(1, trailing.size(), "trailing update reported");
+        assertEq("EXPUNGE", trailing[0].type, "trailing update type parsed");
+        assertEq(9, trailing[0].number, "trailing update number parsed");
+
+        # stopping when not idling is a no-op
+        assertEq((), imap.stopIdle(), "stopIdle() when not idling is a no-op");
+
+        # commands work again
+        imap.noop();
+
+        # waiting when not idling is an error
+        assertThrows("IMAP-NOT-IDLING", "not in the IDLE state",
+            sub () { imap.waitForIdleEvent(1s); }, NOTHING, "wait without startIdle() rejected");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    idleUnsupportedTests() {
+        # a server without the IDLE capability must produce a clear error naming the alternative
+        MockImapServer server(makeMessages());
+        server.setPostAuthCapabilities("IMAP4rev1 SASL-IR MOVE");
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+
+        assertThrows("IMAP-NOT-SUPPORTED", "does not advertise the IDLE capability",
+            sub () { imap.startIdle(); }, NOTHING, "missing IDLE capability reported");
+        assertFalse(imap.isIdling(), "not idling after a failed start");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    connectionTests() {
+        MockImapServer server(makeMessages());
+        server.start();
+        on_exit server.wait();
+
+        ImapConnection conn("test", "test", server.getUrl(), {}, {
+            "username": "user@test.com",
+            "token": "conn-token",
+        });
+        assertEq("imap", conn.getType(), "connection type");
+        assertTrue(conn.supportsPollingApi(), "polling API supported");
+
+        ImapClient client = conn.get(False);
+        assertEq("conn-token", client.getToken(), "token option reached the client");
+
+        # the scheme must advertise the authentication options
+        hash<auto> opts = ImapConnection::ConnectionScheme.options;
+        assertTrue(opts.token.sensitive, "token option marked sensitive");
+        assertTrue(opts.password.sensitive, "password option marked sensitive");
+        assertEq(4, opts.auth_mechanism.allowed_values.size(), "all mechanisms listed");
+        assertTrue(exists opts.max_response_size, "max_response_size option present");
+
+        # a real ping through the polling API
+        conn.ping();
+        assertNothing(server.getServerError(), "no server errors");
+
+        # connection serialization round trip
+        ImapConnection conn2 = Serializable::deserialize(conn.serialize());
+        assertEq("imap", conn2.getType(), "deserialized connection type");
+    }
+}

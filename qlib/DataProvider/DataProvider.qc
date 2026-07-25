@@ -261,6 +261,7 @@ public class DataProvider {
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
             "segment": "SegmentDataProvider",
+            "imap": "ImapClientDataProvider",
             "pop3": "Pop3ClientDataProvider",
             "stability-ai": "StabilityAiDataProvider",
 

@@ -177,6 +177,26 @@ smtp.sendMessage(msg);@endcode
     @section smtpclient_relnotes SmtpClient Release Notes
 
     @subsection smtpclient_v2_2 SmtpClient 2.2
+    - Added OAuth2 bearer-token authentication with SASL \c XOAUTH2 and \c OAUTHBEARER
+      (<a href="https://datatracker.ietf.org/doc/html/rfc7628">RFC 7628</a>), so accounts with password
+      logins disabled can send mail
+      - Added the @ref SmtpClient::SmtpClient::constructor(string, hash<auto>) "option-hash constructor",
+        accepting \c token, \c username, \c password, \c auth_mechanism, \c connect_timeout, and
+        \c read_timeout
+      - Added @ref SmtpClient::SmtpClient::setToken() "SmtpClient::setToken()" and
+        @ref SmtpClient::SmtpClient::getToken() "SmtpClient::getToken()" so expiring access tokens can be
+        refreshed on an existing object
+      - Added the \c token and \c auth_mechanism connection options to
+        @ref SmtpClient::SmtpConnection "SmtpConnection"
+      - The mechanism is selected from the mechanisms the server advertises, never from the hostname; a
+        specific mechanism can be forced with the \c auth_mechanism option
+      - A bearer-token failure is reported with the server's own error rather than being mistaken for
+        success: servers answer \c 334 with a base64 payload instead of an error code and will not report
+        the real failure until the client sends an empty line, which the authentication sequence now does
+    - Fixed the SMTP handshake to re-issue \c EHLO after \c STARTTLS as required by
+      <a href="https://datatracker.ietf.org/doc/html/rfc3207">RFC 3207</a> §4.2; the capability list
+      learned before the TLS upgrade was previously kept, even though servers commonly advertise their
+      \c AUTH mechanisms only once the connection is secure
     - Added support for inline attachments with Content-ID in the data provider API
       - Added \c "content-id" field to the send email attachment type
       - Inline attachments are used for embedding images in HTML emails (referenced as \c "cid:content-id")
@@ -277,6 +297,37 @@ public hashdecl SmtpResponseInfo {
     string desc;
 }
 
+#! SASL authentication setup derived from a connection's configuration
+/** Returned by @ref SmtpClient::SmtpClient::getAuthInfo() "SmtpClient::getAuthInfo()" and consumed by the
+    poll operation classes to build their authentication steps.
+
+    @since %SmtpClient 2.2
+*/
+public hashdecl SmtpAuthInfo {
+    #! @ref True if any authentication should be attempted
+    bool do_auth = False;
+
+    #! @ref True if a bearer-token mechanism (\c XOAUTH2 or \c OAUTHBEARER) is in use
+    bool use_bearer = False;
+
+    #! The mechanism that will be used, or an empty string if no authentication is configured
+    string mechanism = "";
+
+    #! The SASL \c PLAIN command including the trailing CRLF, or an empty string
+    string plain_cmd = "";
+
+    #! The SASL \c XOAUTH2 command including the trailing CRLF, or an empty string
+    string xoauth2_cmd = "";
+
+    #! The SASL \c OAUTHBEARER command including the trailing CRLF, or an empty string
+    string oauthbearer_cmd = "";
+
+    #! The command to use when the server's capability list is not available
+    /** Set to the \c XOAUTH2 command unless \c OAUTHBEARER was explicitly requested.
+    */
+    string default_bearer_cmd = "";
+}
+
 #! for backwards-compatibility and convenience
 public class Message inherits MailMessage::Message {
     #! creates a Message object from the arguments given
@@ -335,6 +386,12 @@ public class SmtpClient {
         *string user;
         *string pass;
 
+        # OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins
+        *string token;
+
+        # forced SASL mechanism; AuthMechanismAuto selects from the server's EHLO reply
+        string auth_mechanism = SmtpClient::AuthMechanismAuto;
+
         # logged in flag
         bool logged_in = False;
 
@@ -364,6 +421,41 @@ public class SmtpClient {
 
         #! default ESMTP port
         const EsmtpPort = 587;
+
+        #! Separator byte used in the SASL XOAUTH2 and OAUTHBEARER payloads
+        /** @since %SmtpClient 2.2
+        */
+        const CtrlA = chr(1);
+
+        #! Selects the SASL mechanism from the server's \c EHLO capability list
+        /** @since %SmtpClient 2.2
+        */
+        const AuthMechanismAuto = "auto";
+
+        #! SASL \c PLAIN authentication with a username and password
+        /** @since %SmtpClient 2.2
+        */
+        const AuthMechanismPlain = "PLAIN";
+
+        #! SASL \c XOAUTH2 bearer-token authentication
+        /** @since %SmtpClient 2.2
+        */
+        const AuthMechanismXoauth2 = "XOAUTH2";
+
+        #! SASL \c OAUTHBEARER bearer-token authentication (RFC 7628)
+        /** @since %SmtpClient 2.2
+        */
+        const AuthMechanismOauthBearer = "OAUTHBEARER";
+
+        #! All supported values for the \c auth_mechanism option
+        /** @since %SmtpClient 2.2
+        */
+        const AuthMechanisms = {
+            AuthMechanismAuto: True,
+            AuthMechanismPlain: True,
+            AuthMechanismXoauth2: True,
+            AuthMechanismOauthBearer: True,
+        };
 
         #! procotol config
         const Protocols = {
@@ -441,6 +533,117 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         log_info = log;
         log_debug = dbglog;
 
+        setupUrl(url);
+    }
+
+    #! creates the SmtpClient object from a URL and an option hash
+    /** @par Example:
+        @code{.py}
+# SASL XOAUTH2 login with an OAuth2 bearer token
+SmtpClient smtp("esmtptls://smtp.gmail.com", {
+    "username": "user@gmail.com",
+    "token": token,
+});
+        @endcode
+
+        @param url the URL of the SMTP server; parsed exactly as in
+        @ref SmtpClient::SmtpClient::constructor(string, __7_ code, __7_ code) "the URL constructor"
+        @param opts options for the object; supported options:
+        - \c auth_mechanism (string): forces a specific SASL mechanism instead of selecting one from the
+          server's \c EHLO capability list; one of @ref AuthMechanismAuto (the default),
+          @ref AuthMechanismPlain, @ref AuthMechanismXoauth2, or @ref AuthMechanismOauthBearer
+        - \c connect_timeout (int): the connect timeout in milliseconds
+        - \c dbglog (code): a closure or call reference for debugging/technical log messages
+        - \c log (code): a closure or call reference for log messages
+        - \c password (string): the password for authentication; conflicts with the \c token option
+        - \c read_timeout (int): the read timeout in milliseconds
+        - \c token (string): an OAuth2 bearer token; when set, a bearer-token SASL mechanism is used for
+          authentication; conflicts with the \c password option and requires the \c username option
+        - \c username (string): the username for authentication
+
+        @throw PARSE-URL-ERROR the \a url argument could not be parsed with parse_url()
+        @throw SMTPCLIENT-UNKNOWN-PROTOCOL the protocol (scheme) given is unknown or unsupported
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION conflicting or incomplete authentication credentials were
+        given, or an unknown \c auth_mechanism was requested
+
+        @note Credentials given in the URL take precedence; supplying a \c username or \c password option as
+        well as credentials in the URL raises an exception rather than silently ignoring one of them.
+
+        @since %SmtpClient 2.2
+    */
+    constructor(string url, hash<auto> opts) {
+        log_info = opts.log;
+        log_debug = opts.dbglog;
+
+        setupUrl(url);
+
+        *string username = opts.username;
+        *string password = opts.password;
+        *string tok = opts.token;
+
+        if (user.val()) {
+            # credentials came from the URL; options must not also supply them
+            if (username.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("username is set in URL %y and also as an "
+                    "option: %y", get_safe_url(url), username);
+            }
+            if (password.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("password is set in URL %y and also as an "
+                    "option", get_safe_url(url));
+            }
+            if (tok.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("a token was given for URL %y that already "
+                    "carries a username and password; to use a token, give the username as an option and leave "
+                    "the credentials out of the URL", get_safe_url(url));
+            }
+        } else if (tok.val()) {
+            if (password.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("cannot provide both a password and a token "
+                    "for connection %y", get_safe_url(url));
+            }
+            if (!username.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("a token was given for connection %y without "
+                    "a username; bearer-token logins require the account name", get_safe_url(url));
+            }
+            user = username;
+            token = tok;
+        } else if (username.val() || password.val()) {
+            if (!username.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("password option is set but username is "
+                    "missing for connection %y", get_safe_url(url));
+            }
+            if (!password.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("username option is set but password is "
+                    "missing for connection %y", get_safe_url(url));
+            }
+            user = username;
+            pass = password;
+        }
+
+        if (opts.auth_mechanism.val()) {
+            string mech = opts.auth_mechanism;
+            string norm = mech.lwr() == AuthMechanismAuto ? AuthMechanismAuto : mech.upr();
+            if (!AuthMechanisms{norm}) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("unknown auth_mechanism %y; known "
+                    "mechanisms: %y", mech, keys AuthMechanisms);
+            }
+            auth_mechanism = norm;
+        }
+
+        if (exists opts.connect_timeout) {
+            connectTimeout = opts.connect_timeout;
+        }
+        if (exists opts.read_timeout) {
+            readTimeout = opts.read_timeout;
+        }
+
+        if (user.val()) {
+            logDbg("set authentication credentials to %s/%s", user, token ? "<token>" : "xxx");
+        }
+    }
+
+    #! Parses the URL and sets the connection target and any credentials it carries
+    private setupUrl(string url) {
         hash<UrlInfo> uh = parse_url(url, True);
 
         if (uh.protocol) {
@@ -494,6 +697,8 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         - \c ssl: the ssl flag
         - \c user: any username for the connection
         - \c pass: any password for the connection
+        - \c token: any OAuth2 bearer token for the connection (@since %SmtpClient 2.2)
+        - \c auth_mechanism: the configured SASL mechanism (@since %SmtpClient 2.2)
     */
     hash<auto> getInfo() {
         return {
@@ -502,6 +707,8 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
             "ssl": ssl,
             "user": user,
             "pass": pass,
+            "token": token,
+            "auth_mechanism": auth_mechanism,
         };
     }
 
@@ -561,13 +768,68 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         @param n_pass the password to set for authentication
 
         @note
-        - Currently this class only knows how to do AUTH PLAIN authentication
+        - This selects SASL \c PLAIN authentication; any OAuth2 bearer token previously set with
+          @ref setToken() is cleared, since the two are mutually exclusive
         - This method is subject to thread serialization
     */
     setUserPass(string n_user, string n_pass) {
         AutoLock am(mutex);
         user = n_user;
         pass = n_pass;
+        token = NOTHING;
+    }
+
+    #! Sets or clears the OAuth2 bearer token used for SASL XOAUTH2 / OAUTHBEARER logins
+    /** @par Example:
+        @code{.py}
+# refresh an expiring access token without recreating the client
+smtp.setToken(new_access_token);
+        @endcode
+
+        @param tok the OAuth2 bearer token, or @ref nothing to clear it
+
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION a token was given but no username is set, or a password is
+        already set for the connection
+
+        @note
+        - OAuth2 access tokens expire; use this method to install a refreshed token on an existing object
+        - Any password previously set is cleared, since the two are mutually exclusive
+        - This method is subject to thread serialization
+
+        @since %SmtpClient 2.2
+    */
+    setToken(*string tok) {
+        AutoLock am(mutex);
+        if (tok.val()) {
+            if (!user.val()) {
+                throw "SMTPCLIENT-INVALID-AUTHENTICATION", "cannot set a token without a username; "
+                    "bearer-token logins require the account name";
+            }
+            pass = NOTHING;
+        }
+        token = tok;
+    }
+
+    #! Returns the OAuth2 bearer token set for the connection, if any
+    /** @return the OAuth2 bearer token, or @ref nothing if none is set
+
+        @note This method is subject to thread serialization
+
+        @since %SmtpClient 2.2
+    */
+    *string getToken() {
+        AutoLock am(mutex);
+        return token;
+    }
+
+    #! Returns the configured SASL mechanism
+    /** @return one of @ref AuthMechanismAuto, @ref AuthMechanismPlain, @ref AuthMechanismXoauth2, or
+        @ref AuthMechanismOauthBearer
+
+        @since %SmtpClient 2.2
+    */
+    string getAuthMechanism() {
+        return auth_mechanism;
     }
 
     #! sets or disables test mode; no connections are made in test mode
@@ -821,6 +1083,161 @@ smtp.setEventQueue();
         sock.setEventQueue();
     }
 
+    #! Builds the SASL commands implied by a connection info hash
+    /** @param info a connection info hash as returned by @ref getInfo()
+
+        @return the authentication setup to drive the poll operation pipelines
+
+        @throw SMTPCLIENT-INVALID-AUTHENTICATION a bearer mechanism was forced without a token, or
+        @ref AuthMechanismPlain was forced with a token
+
+        @note
+        - When no mechanism is forced and a token is set, both the \c XOAUTH2 and \c OAUTHBEARER commands
+          are built so the pipeline can pick one from the server's advertised capability list; the
+          selection is never made from the hostname
+        - Called on the application thread while building a pipeline, never on the I/O thread
+
+        @since %SmtpClient 2.2
+    */
+    static hash<SmtpAuthInfo> getAuthInfo(hash<auto> info) {
+        hash<SmtpAuthInfo> rv();
+
+        string mech = info.auth_mechanism ?? AuthMechanismAuto;
+        bool wants_bearer = mech == AuthMechanismXoauth2 || mech == AuthMechanismOauthBearer;
+
+        if (wants_bearer && !info.token.val()) {
+            throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("auth_mechanism %y requires an OAuth2 bearer "
+                "token, but none is set for the connection", mech);
+        }
+        if (mech == AuthMechanismPlain && info.token.val()) {
+            throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("auth_mechanism %y cannot be used with an "
+                "OAuth2 bearer token", mech);
+        }
+
+        if (!info.user.val()) {
+            return rv;
+        }
+
+        if (info.token.val()) {
+            rv.do_auth = True;
+            rv.use_bearer = True;
+            rv.mechanism = mech == AuthMechanismAuto ? AuthMechanismXoauth2 : mech;
+
+            string xoauth2 = sprintf("AUTH XOAUTH2 %s\r\n",
+                sprintf("user=%s%sauth=Bearer %s%s%s", info.user, CtrlA, info.token, CtrlA, CtrlA).toBase64());
+            # RFC 7628 GS2 header + host/port channel information
+            (*string host, *string port) = SmtpClient::splitTarget(info.target);
+            string oauthbearer = sprintf("AUTH OAUTHBEARER %s\r\n",
+                sprintf("n,a=%s,%shost=%s%sport=%s%sauth=Bearer %s%s%s", info.user, CtrlA, host, CtrlA, port,
+                    CtrlA, info.token, CtrlA, CtrlA).toBase64());
+
+            if (mech == AuthMechanismXoauth2) {
+                # forced: use the same command whichever way the capability check goes
+                rv.xoauth2_cmd = rv.oauthbearer_cmd = xoauth2;
+            } else if (mech == AuthMechanismOauthBearer) {
+                rv.xoauth2_cmd = rv.oauthbearer_cmd = oauthbearer;
+            } else {
+                rv.xoauth2_cmd = xoauth2;
+                rv.oauthbearer_cmd = oauthbearer;
+            }
+            rv.default_bearer_cmd = mech == AuthMechanismOauthBearer ? oauthbearer : xoauth2;
+            return rv;
+        }
+
+        if (info.pass.val()) {
+            rv.do_auth = True;
+            rv.mechanism = AuthMechanismPlain;
+            rv.plain_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
+                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
+        }
+        return rv;
+    }
+
+    #! Splits a \c "host:port" connection target into its parts
+    /** @param target the connection target string
+        @return a list of the host and the port as a string; the port is an empty string for targets
+        without one (UNIX domain sockets)
+
+        @since %SmtpClient 2.2
+    */
+    static list<string> splitTarget(string target) {
+        int pos = target.rfind(":");
+        if (pos < 0) {
+            return (target, "");
+        }
+        return (target.substr(0, pos), target.substr(pos + 1));
+    }
+
+    #! Adds the authentication context slots consumed by @ref addAuthSteps() to a pipeline
+    /** @param p the pipeline to add the steps to
+        @param ai the authentication setup from @ref getAuthInfo()
+
+        @since %SmtpClient 2.2
+    */
+    static addAuthContext(Qore::PollPipeline p, hash<SmtpAuthInfo> ai) {
+        p.addSetContextBool("do_auth", ai.do_auth);
+        p.addSetContextBool("use_bearer", ai.use_bearer);
+        p.addSetContextBinary("auth_plain_cmd", ai.plain_cmd);
+        p.addSetContextBinary("xoauth2_cmd", ai.xoauth2_cmd);
+        p.addSetContextBinary("oauthbearer_cmd", ai.oauthbearer_cmd);
+        # used when no capability list is available; overwritten by addAuthDetectSteps()
+        p.addSetContextBinary("bearer_auth_cmd", ai.default_bearer_cmd);
+    }
+
+    #! Adds the steps that pick a bearer mechanism from the server's \c EHLO capability list
+    /** Must be added after the final \c EHLO reply has been read into the \c "hello_text" context slot —
+        that is, after any \c STARTTLS upgrade and its mandatory second \c EHLO, since servers commonly
+        advertise \c AUTH mechanisms only once the connection is secure.
+
+        @param p the pipeline to add the steps to
+
+        @since %SmtpClient 2.2
+    */
+    static addAuthDetectSteps(Qore::PollPipeline p) {
+        p.addCheckContains("hello_text", AuthMechanismXoauth2, "server_has_xoauth2");
+        p.addSelectContextValue("bearer_auth_cmd", "server_has_xoauth2", "xoauth2_cmd", "oauthbearer_cmd");
+    }
+
+    #! Adds the SASL authentication steps to a pipeline
+    /** Emits a self-contained block that authenticates with a bearer token or with \c PLAIN and then falls
+        through to whatever is added next; all branch targets are patched after the block is complete, so
+        callers never need to know step indices.
+
+        @param p the pipeline to add the steps to
+        @param err_code the exception error code to raise for SMTP error replies
+
+        @note On a bearer-token failure the server answers \c 334 with a base64 payload describing the
+        problem instead of an error code, and will not report the real failure until the client sends an
+        empty line; the emitted block does that, so the final \c 535 surfaces as a normal error rather than
+        leaving the connection wedged mid-SASL
+
+        @since %SmtpClient 2.2
+    */
+    static addAuthSteps(Qore::PollPipeline p, string err_code) {
+        int br_auth = p.addBranchOnContextKey("do_auth", -1, -1);
+        int br_bearer = p.addBranchOnContextKey("use_bearer", -1, -1);
+
+        int bearer_start = p.getStepCount();
+        p.addSendFromContext("bearer_auth_cmd");
+        p.addRecvLineResponse("login_code", "login_text", err_code);
+        int br_challenge = p.addBranchOnContextInt("login_code", 334, -1, -1);
+
+        int challenge_start = p.getStepCount();
+        p.addSend("\r\n");
+        p.addRecvLineResponse("login_code2", "login_text2", err_code);
+        int goto_done = p.addGoto(-1);
+
+        int plain_start = p.getStepCount();
+        p.addSendFromContext("auth_plain_cmd");
+        p.addRecvLineResponse("login_code", "login_text", err_code);
+
+        int done = p.getStepCount();
+        p.setStepTarget(br_auth, br_bearer, done);
+        p.setStepTarget(br_bearer, bearer_start, plain_start);
+        p.setStepTarget(br_challenge, challenge_start, done);
+        p.setStepTarget(goto_done, done, done);
+    }
+
     #! @cond nodoc
     # don't reimplement this method; fix/enhance it in the module
     final private disconnectIntern() {
@@ -919,24 +1336,28 @@ public enum SmtpPingState : string {
 }
 
 #! Class for SMTP non-blocking / polling pings using PollPipeline
-/** Expresses the entire SMTP handshake (connect, EHLO/HELO, optional STARTTLS,
-    optional AUTH PLAIN) as a declarative sequence of PollPipeline steps.
+/** Expresses the entire SMTP handshake (connect, EHLO/HELO, optional STARTTLS, optional SASL
+    authentication) as a declarative sequence of PollPipeline steps.
 
-    The pipeline layout (step indices are fixed):
-    - Steps 0-4: configuration transforms (set context booleans, pre-computed commands)
-    - Step 5: TCP connect (plain or SSL based on config)
-    - Step 6: receive server greeting line
-    - Step 7: detect ESMTP in greeting
-    - Step 8: select EHLO or HELO command
-    - Step 9: send EHLO/HELO
-    - Step 10: read multi-line EHLO/HELO reply
-    - Step 11: detect STARTTLS capability in reply
-    - Step 12: compute effective TLS decision (config OR server capability)
-    - Step 13: branch - TLS path (step 14) or auth check (step 17)
-    - Steps 14-16: STARTTLS handshake (send, read reply, SSL upgrade)
-    - Step 17: branch - auth path (step 18) or done (step 20)
-    - Steps 18-19: AUTH PLAIN (send, read reply)
-    - Step 20 (past end): pipeline complete
+    The pipeline layout:
+    - configuration transforms (set context booleans, pre-computed commands)
+    - TCP connect (plain or SSL based on config)
+    - receive server greeting line
+    - detect ESMTP in greeting
+    - select EHLO or HELO command
+    - send EHLO/HELO and read the multi-line reply
+    - detect STARTTLS capability in the reply
+    - compute the effective TLS decision (config OR server capability)
+    - branch: STARTTLS handshake (send, read reply, SSL upgrade, re-issue EHLO and re-read the reply)
+      or straight to mechanism detection
+    - detect the bearer mechanism from the (post-TLS) capability list
+    - the SASL authentication block emitted by
+      @ref SmtpClient::SmtpClient::addAuthSteps() "SmtpClient::addAuthSteps()"
+    - past end: pipeline complete
+
+    @note RFC 3207 §4.2 requires the client to discard the capability list learned before \c STARTTLS
+    and re-issue \c EHLO afterwards; servers commonly advertise \c AUTH mechanisms only on the secure
+    connection, so mechanism detection always runs against the post-TLS reply.
 
     @since SmtpClient 2.2
 */
@@ -970,80 +1391,67 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         goal = "ping";
 
         string hostname = gethostname();
-        bool do_auth = info.user.val() && info.pass.val();
+        hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
 
-        # Pre-compute the AUTH PLAIN command (empty string if no auth)
-        string auth_cmd = "";
-        if (do_auth) {
-            auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
-                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
-        }
-
-        # --- Steps 0-4: configuration transforms ---
-        # Step 0: store TLS flag from config
+        # --- configuration transforms ---
+        # store TLS flag from config
         addSetContextBool("force_tls", info.tls ? True : False);
-        # Step 1: store auth flag
-        addSetContextBool("do_auth", do_auth);
-        # Step 2: pre-compute EHLO command
+        # pre-compute EHLO / HELO commands
         addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
-        # Step 3: pre-compute HELO command
         addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
-        # Step 4: pre-compute AUTH command (empty if unused; step 18 never executes)
-        addSetContextBinary("auth_cmd", auth_cmd);
+        # pre-compute the SASL commands (empty when no authentication is configured)
+        SmtpClient::addAuthContext(self, ai);
 
-        # --- Step 5: connect ---
+        # --- connect ---
         if (info.ssl) {
             addConnectSsl(info.target);
         } else {
             addConnect(info.target);
         }
 
-        # --- Step 6: read server greeting ---
+        # --- read server greeting ---
         addRecvUntilBytes("\n");
 
-        # --- Step 7: detect ESMTP in greeting (checks last_output) ---
+        # --- detect ESMTP in greeting (checks last_output) ---
         addCheckContains("", "ESMTP", "esmtp");
 
-        # --- Step 8: select EHLO or HELO based on ESMTP flag ---
+        # --- select EHLO or HELO based on ESMTP flag ---
         addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
 
-        # --- Step 9: send the selected EHLO/HELO command ---
+        # --- send the selected EHLO/HELO command ---
         addSendFromContext("send_cmd");
 
-        # --- Step 10: read multi-line EHLO/HELO reply ---
+        # --- read multi-line EHLO/HELO reply ---
         addRecvLineResponse("hello_code", "hello_text", "SMTP-POLL-ERROR");
 
-        # --- Step 11: detect STARTTLS capability in reply ---
+        # --- detect STARTTLS capability in reply ---
         addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
 
-        # --- Step 12: combine config TLS flag with server capability ---
+        # --- combine config TLS flag with server capability ---
         addContextOr("do_tls", "force_tls", "server_has_starttls");
 
-        # --- Step 13: branch on TLS decision ---
-        # true (step 14): start STARTTLS handshake
-        # false (step 17): skip to auth check
-        addBranchOnContextKey("do_tls", 14, 17);
+        # --- branch on TLS decision ---
+        int br_tls = addBranchOnContextKey("do_tls", -1, -1);
 
-        # --- Steps 14-16: STARTTLS handshake ---
-        # Step 14: send STARTTLS command
+        # --- STARTTLS handshake ---
+        int tls_start = getStepCount();
         addSend("STARTTLS\r\n");
-        # Step 15: read STARTTLS reply
         addRecvLineResponse("starttls_code", "starttls_text", "SMTP-POLL-ERROR");
-        # Step 16: upgrade connection to SSL
         addSslUpgrade();
+        # RFC 3207 §4.2: the pre-TLS capability list must be discarded and EHLO re-issued; most
+        # servers only advertise AUTH mechanisms once the connection is secure
+        addSendFromContext("send_cmd");
+        addRecvLineResponse("hello_code", "hello_text", "SMTP-POLL-ERROR");
 
-        # --- Step 17: branch on auth decision ---
-        # true (step 18): start AUTH PLAIN
-        # false (step 20 = past end): pipeline complete
-        addBranchOnContextKey("do_auth", 18, 20);
+        # --- both paths converge here: pick the bearer mechanism from the capability list ---
+        int detect_start = getStepCount();
+        setStepTarget(br_tls, tls_start, detect_start);
+        SmtpClient::addAuthDetectSteps(self);
 
-        # --- Steps 18-19: AUTH PLAIN ---
-        # Step 18: send AUTH PLAIN command
-        addSendFromContext("auth_cmd");
-        # Step 19: read auth reply (throws on error codes >= 400)
-        addRecvLineResponse("login_code", "login_text", "SMTP-POLL-ERROR");
+        # --- SASL authentication ---
+        SmtpClient::addAuthSteps(self, "SMTP-POLL-ERROR");
 
-        # --- Step 20 (past end): pipeline completes automatically ---
+        # --- past end: pipeline completes automatically ---
     }
 
     #! Returns the goal
@@ -1073,11 +1481,22 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         return extra.esmtp ? True : False;
     }
 
-    #! Returns True if AUTH PLAIN was run
+    #! Returns True if SASL authentication was run
     bool didAuth() {
         hash<auto> result = getResult();
         hash<auto> extra = result.extra ?? {};
         return extra.do_auth ? True : False;
+    }
+
+    #! Returns True if a bearer-token SASL mechanism was used for authentication
+    /** @return @ref True if \c XOAUTH2 or \c OAUTHBEARER was used
+
+        @since %SmtpClient 2.2
+    */
+    bool didBearerAuth() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+        return (extra.do_auth && extra.use_bearer) ? True : False;
     }
 
     #! Returns True if STARTTLS was run
@@ -1173,71 +1592,67 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         string mstr = message.serialize();
 
         string hostname = gethostname();
-        bool do_auth = info.user.val() && info.pass.val();
+        hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
 
-        # Pre-compute the AUTH PLAIN command (empty string if no auth)
-        string auth_cmd = "";
-        if (do_auth) {
-            auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
-                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
-        }
-
-        # --- Steps 0-4: configuration transforms (same as SmtpPingPollOperation) ---
+        # --- configuration transforms (same as SmtpPingPollOperation) ---
         addSetContextBool("force_tls", info.tls ? True : False);
-        addSetContextBool("do_auth", do_auth);
         addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
         addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
-        addSetContextBinary("auth_cmd", auth_cmd);
+        SmtpClient::addAuthContext(self, ai);
 
-        # --- Step 5: connect ---
+        # --- connect ---
         if (info.ssl) {
             addConnectSsl(info.target);
         } else {
             addConnect(info.target);
         }
 
-        # --- Step 6: read server greeting ---
+        # --- read server greeting ---
         addRecvUntilBytes("\n");
 
-        # --- Step 7: detect ESMTP in greeting ---
+        # --- detect ESMTP in greeting ---
         addCheckContains("", "ESMTP", "esmtp");
 
-        # --- Step 8: select EHLO or HELO ---
+        # --- select EHLO or HELO ---
         addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
 
-        # --- Step 9: send EHLO/HELO ---
+        # --- send EHLO/HELO ---
         addSendFromContext("send_cmd");
 
-        # --- Step 10: read multi-line EHLO/HELO reply ---
+        # --- read multi-line EHLO/HELO reply ---
         addRecvLineResponse("hello_code", "hello_text", "SMTP-SEND-ERROR");
 
-        # --- Step 11: detect STARTTLS capability ---
+        # --- detect STARTTLS capability ---
         addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
 
-        # --- Step 12: combine config TLS flag with server capability ---
+        # --- combine config TLS flag with server capability ---
         addContextOr("do_tls", "force_tls", "server_has_starttls");
 
-        # --- Step 13: branch on TLS ---
-        addBranchOnContextKey("do_tls", 14, 17);
+        # --- branch on TLS ---
+        int br_tls = addBranchOnContextKey("do_tls", -1, -1);
 
-        # --- Steps 14-16: STARTTLS handshake ---
+        # --- STARTTLS handshake ---
+        int tls_start = getStepCount();
         addSend("STARTTLS\r\n");
         addRecvLineResponse("starttls_code", "starttls_text", "SMTP-SEND-ERROR");
         addSslUpgrade();
+        # RFC 3207 §4.2: re-issue EHLO so mechanism detection sees the post-TLS capability list
+        addSendFromContext("send_cmd");
+        addRecvLineResponse("hello_code", "hello_text", "SMTP-SEND-ERROR");
 
-        # --- Step 17: branch on auth ---
-        addBranchOnContextKey("do_auth", 18, 20);
+        # --- both paths converge here ---
+        int detect_start = getStepCount();
+        setStepTarget(br_tls, tls_start, detect_start);
+        SmtpClient::addAuthDetectSteps(self);
 
-        # --- Steps 18-19: AUTH PLAIN ---
-        addSendFromContext("auth_cmd");
-        addRecvLineResponse("login_code", "login_text", "SMTP-SEND-ERROR");
+        # --- SASL authentication ---
+        SmtpClient::addAuthSteps(self, "SMTP-SEND-ERROR");
 
-        # --- Step 20: MAIL FROM ---
+        # --- MAIL FROM ---
         addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
-        # Step 21: read MAIL FROM reply
         addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
 
-        # --- Steps 22+: unrolled RCPT TO per recipient ---
+        # --- unrolled RCPT TO per recipient ---
         int i = 0;
         foreach string rcpt in (recipients) {
             addSend(sprintf("RCPT TO: <%s>\r\n", rcpt));
@@ -1268,7 +1683,8 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @param sock the already-connected socket to use for I/O
         @param message the email message to send
         @param hello_reply the legacy HELO/EHLO reply hash to preserve
-        @param do_auth if True, run AUTH PLAIN before MAIL FROM
+        @param do_auth if True, run SASL authentication before MAIL FROM; the mechanism comes from the
+        client configuration, since no \c EHLO capability list is available on an already-connected socket
 
         @throw SMTP-SEND-ERROR if the SMTP server returns an error response
         @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
@@ -1292,10 +1708,13 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         string mstr = message.serialize();
 
         if (do_auth) {
-            string auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
-                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
-            addSend(auth_cmd);
-            addRecvLineResponse("login_code", "login_text", "SMTP-SEND-ERROR");
+            # no EHLO reply is available on an already-connected socket, so the mechanism comes from
+            # the client configuration rather than from a capability list
+            hash<SmtpAuthInfo> ai = SmtpClient::getAuthInfo(info);
+            if (ai.do_auth) {
+                SmtpClient::addAuthContext(self, ai);
+                SmtpClient::addAuthSteps(self, "SMTP-SEND-ERROR");
+            }
         }
 
         addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
@@ -1400,12 +1819,45 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
                 "smtp": True,
             },
             "options": HttpConnection::ConnectionScheme.options + {
+                "auth_mechanism": <ConnectionOptionInfo>{
+                    "display_name": "Auth Mechanism",
+                    "short_desc": "Forces a specific SASL authentication mechanism",
+                    "type": "string",
+                    "desc": "Forces a specific SASL authentication mechanism instead of selecting one from the "
+                        "mechanisms the server advertises in its `EHLO` reply.\n\n"
+                        "Leave this at `auto` unless a server advertises a mechanism it cannot actually complete; "
+                        "the automatic selection always uses the capability list read after `STARTTLS`, which is "
+                        "the list that reflects what the secure connection really supports",
+                    "default_value": SmtpClient::AuthMechanismAuto,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": SmtpClient::AuthMechanismAuto,
+                            "display_name": "Automatic",
+                            "desc": "Select the mechanism from the server's `EHLO` capability list",
+                        }, <AllowedValueInfo>{
+                            "value": SmtpClient::AuthMechanismPlain,
+                            "display_name": "SASL PLAIN",
+                            "desc": "Username and password authentication with SASL `PLAIN`",
+                        }, <AllowedValueInfo>{
+                            "value": SmtpClient::AuthMechanismXoauth2,
+                            "display_name": "SASL XOAUTH2",
+                            "desc": "OAuth2 bearer-token authentication with SASL `XOAUTH2`; requires the "
+                                "`token` option",
+                        }, <AllowedValueInfo>{
+                            "value": SmtpClient::AuthMechanismOauthBearer,
+                            "display_name": "SASL OAUTHBEARER",
+                            "desc": "OAuth2 bearer-token authentication with SASL `OAUTHBEARER` "
+                                "([RFC 7628](https://datatracker.ietf.org/doc/html/rfc7628)); requires the "
+                                "`token` option",
+                        },
+                    ),
+                },
                 "password": <ConnectionOptionInfo>{
                     "display_name": "Password",
                     "short_desc": "The password to use for authentication",
                     "type": "string",
                     "desc": "The password for authentication; only used if no username or password is set in the URL "
-                        "and if the `username` option is also used",
+                        "and if the `username` option is also used; conflicts with the `token` option",
                     "sensitive": True,
                 },
                 "security": <ConnectionOptionInfo>{
@@ -1428,12 +1880,25 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
                         },
                     ),
                 },
+                "token": <ConnectionOptionInfo>{
+                    "display_name": "Authorization Token",
+                    "short_desc": "An OAuth2 bearer token for SASL XOAUTH2 / OAUTHBEARER logins",
+                    "type": "string",
+                    "desc": "An OAuth2 bearer token to use for authentication.\n\n"
+                        "When set, the connection authenticates with a bearer-token SASL mechanism "
+                        "(`XOAUTH2` or `OAUTHBEARER`) instead of a password, which is what providers that have "
+                        "retired password logins require.\n\n"
+                        "**Requires the `username` option** and conflicts with the `password` option and with "
+                        "credentials given in the URL. Access tokens expire; refresh them on the connection "
+                        "rather than relying on a token captured once",
+                    "sensitive": True,
+                },
                 "username": <ConnectionOptionInfo>{
                     "display_name": "Username",
                     "short_desc": "The username to use for authentication",
                     "type": "string",
                     "desc": "The username for authentication; only used if no username or password is set in the URL "
-                        "and if the `password` option is also used",
+                        "and if either the `password` or the `token` option is also used",
                 },
             },
         };
@@ -1572,18 +2037,24 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
     */
     private SmtpClient getImpl(bool connect = True, *hash<auto> rtopts) {
         string url = self.url;
-        if (opts.username.val() && opts.password.val() && (!urlh.username.val() || !urlh.password.val())) {
-            url = sprintf("%s://%s:%s@%s", urlh.protocol, opts.username, opts.password, urlh.host);
-            if (urlh.port) {
-                url += sprintf(":%d", urlh.port);
-            }
-        }
         if (opts.security == "tls") {
             url =~ s/^(e)?[a-z]+:/$1smtptls:/;
         } else if (opts.security == "ssl") {
             url =~ s/^(e)?[a-z]+:/$1smtps:/;
         }
-        SmtpClient sc(url, rtopts.log, rtopts.dbglog);
+
+        hash<auto> copts = {
+            "log": rtopts.log,
+            "dbglog": rtopts.dbglog,
+        } + opts.("auth_mechanism", "token",);
+        # credentials in the URL take precedence, as documented for the username / password options;
+        # the token is always passed through so that combining it with URL credentials is reported as
+        # the conflict it is rather than being silently dropped
+        if (!urlh.username.val() || !urlh.password.val()) {
+            copts += opts.("username", "password",);
+        }
+
+        SmtpClient sc(url, copts);
         if (connect) {
             sc.connect();
         }
