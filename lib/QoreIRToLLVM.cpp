@@ -22965,6 +22965,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             int count = static_cast<int>(mhck->keys.size());
             assert(count == static_cast<int>(inst->operands.size()));
             bool unique_keys = mhck->unique_keys && qore_ir_use_unique_hash_literal_insert();
+            if (aot_mode && count == 3 && unique_keys && !mhck->typeInfo
+                    && !std::getenv("QORE_DISABLE_AOT_FIXED_HASH_3_BUILD")) {
+                std::vector<llvm::Value*> args;
+                args.reserve(7);
+                for (size_t operand = 0; operand < 3; ++operand) {
+                    llvm::Value* value =
+                        getVal(inst->operands[operand].id, error);
+                    if (!value) {
+                        return false;
+                    }
+                    args.push_back(builder->CreateGlobalString(
+                        mhck->keys[operand], "hck_" + mhck->keys[operand]));
+                    args.push_back(
+                        boxValue(value, inst->operands[operand].id));
+                }
+                args.push_back(xsink_arg);
+                auto fixed_ft = llvm::FunctionType::get(i64_type,
+                    {ptr_type, i64_type, ptr_type, i64_type, ptr_type,
+                        i64_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction(
+                    "qore_rt_make_hash_const_keys_3_unique", fixed_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                    "qore_rt_make_hash_const_keys_3_unique_throwing",
+                    fixed_ft);
+                llvm::Value* hash_result = emitMaybeInvoke(
+                    helper, helper_throwing, args, module, llvm_func, inst);
+                values[inst->result.id] = hash_result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(
+                    hash_result, inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                return true;
+            }
             if (count == 2 && unique_keys && !mhck->typeInfo) {
                 auto* val0 = getVal(inst->operands[0].id, error);
                 auto* val1 = getVal(inst->operands[1].id, error);

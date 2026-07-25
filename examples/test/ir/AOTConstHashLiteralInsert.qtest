@@ -22,6 +22,30 @@ hash<auto> sub makeMixedPair(int number, string text) {
     };
 }
 
+hash<auto> sub makeTriple(int number) {
+    return {
+        \"first\": number,
+        \"second\": number + 1,
+        \"third\": number + 2,
+    };
+}
+
+hash<auto> sub makeMixedTriple(int number, string text, list<int> values) {
+    return {
+        \"number\": number,
+        \"text\": text,
+        \"values\": values,
+    };
+}
+
+hash<auto> sub makeNothingTriple(int number) {
+    return {
+        \"nothing\": NOTHING,
+        \"first\": number,
+        \"second\": number + 1,
+    };
+}
+
 hash<auto> unique = {
     \"alpha-long-key\": 1,
     \"beta-long-key\": \"two\",
@@ -56,6 +80,9 @@ hash<auto> pair_nothing = {
     \"pair-nothing-b\": 30,
 };
 hash<auto> function_mixed = makeMixedPair(40, \"forty\");
+hash<auto> function_triple = makeTriple(50);
+hash<auto> function_mixed_triple = makeMixedTriple(60, \"sixty\", (60, 61));
+hash<auto> function_nothing_triple = makeNothingTriple(70);
 
 printf(\"%y|%y|%y|%s|%d\\n\", unique, duplicate, typed,
     join(\",\", keys duplicate), duplicate{\"same-long-key\"});
@@ -66,6 +93,14 @@ printf(\"%s|%s|%s\\n\", pair_nothing.fullType(), join(\",\", keys pair_nothing),
     exists pair_nothing{\"pair-nothing-a\"} ? \"exists\" : \"nothing\");
 printf(\"%s|%d|%s\\n\", function_mixed.fullType(),
     function_mixed.number, function_mixed.text);
+printf(\"%s|%d|%d\\n\", function_triple.fullType(),
+    function_triple.first, function_triple.third);
+printf(\"%s|%d|%s|%d\\n\", function_mixed_triple.fullType(),
+    function_mixed_triple.number, function_mixed_triple.text,
+    function_mixed_triple.values[1]);
+printf(\"%s|%s|%d\\n\", function_nothing_triple.fullType(),
+    exists function_nothing_triple.nothing ? \"exists\" : \"nothing\",
+    function_nothing_triple.second);
 ";
 
 list<string> large_entries;
@@ -98,6 +133,7 @@ string sub runMode(string mode, string env) {
 }
 
 hash<string, string> aot_compile_outputs;
+hash<string, string> aot_symbol_outputs;
 
 string sub runAot(string suffix, string env) {
     string exe = "/tmp/qore-aot-const-hash-literal-" + string(getpid()) + suffix;
@@ -110,6 +146,8 @@ string sub runAot(string suffix, string env) {
         printf("AOT compile failed (%s):\n%s", suffix, compile_out);
         exit(2);
     }
+    aot_symbol_outputs{suffix} =
+        backquote(sprintf("nm -D %s 2>&1", exe));
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
 }
 
@@ -119,6 +157,9 @@ string expected = "{alpha-long-key: 1, beta-long-key: \"two\", gamma-long-key: n
     + "hash<string, int>|hash<auto>|hash<string, list<int>>|20|twenty\n"
     + "hash<string, *int>|pair-nothing-a,pair-nothing-b|nothing\n"
     + "hash<auto>|40|forty\n"
+    + "hash<string, int>|50|52\n"
+    + "hash<auto>|60|sixty|61\n"
+    + "hash<auto>|nothing|71\n"
     + "40|39|40|99\n101|100\n";
 
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
@@ -136,6 +177,7 @@ hash<string, string> aot_modes = {
     "-optimized": "",
     "-fallback": "QORE_DISABLE_IR_UNIQUE_HASH_LITERAL_INSERT=1",
     "-pair-fallback": "QORE_DISABLE_AOT_FIXED_HASH_2_BUILD=1",
+    "-triple-fallback": "QORE_DISABLE_AOT_FIXED_HASH_3_BUILD=1",
     "-auto-fallback": "QORE_DISABLE_AOT_FIXED_HASH_AUTO_TYPE=1",
 };
 foreach string suffix in (keys aot_modes) {
@@ -144,6 +186,16 @@ foreach string suffix in (keys aot_modes) {
         printf("AOT mismatch in %s\nexpected:\n%sactual:\n%s", suffix, expected, actual);
         exit(2);
     }
+}
+if (!aot_symbol_outputs{"-optimized"}.regex(
+        "qore_rt_make_hash_const_keys_3_unique")
+        || aot_symbol_outputs{"-triple-fallback"}.regex(
+            "qore_rt_make_hash_const_keys_3_unique")) {
+    printf("unexpected fixed three-key hash helper selection:\n"
+        + "optimized:\n%sdisabled:\n%s",
+        aot_symbol_outputs{"-optimized"},
+        aot_symbol_outputs{"-triple-fallback"});
+    exit(2);
 }
 if (!aot_compile_outputs{"-optimized"}.regex(
         "fixed hash literal in 'makeMixedPair'.*known_auto=1")

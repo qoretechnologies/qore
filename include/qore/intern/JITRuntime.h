@@ -439,6 +439,12 @@ uint64_t qore_rt_make_hash_const_keys_2_unique(const char* key0, uint64_t val0,
     const char* key1, uint64_t val1, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(const char* key0, uint64_t val0,
     const char* key1, uint64_t val1, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_3_unique(const char* key0, uint64_t val0,
+    const char* key1, uint64_t val1, const char* key2, uint64_t val2,
+    ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_3_unique_throwing(const char* key0,
+    uint64_t val0, const char* key1, uint64_t val1, const char* key2,
+    uint64_t val2, ExceptionSink* xsink);
 //! Build a proven heterogeneous two-key literal whose inferred value type is auto.
 uint64_t qore_rt_make_hash_const_keys_2_unique_auto(const char* key0,
     uint64_t val0, const char* key1, uint64_t val1, ExceptionSink* xsink);
