@@ -731,6 +731,12 @@ private:
             const QoreIRStringConsumerCallInstruction& call,
             llvm::Module& module, llvm::Function* fallback_fn = nullptr);
 
+    //! Append and validate dynamic integer operands used only by a fused string consumer.
+    bool appendAOTStringConsumerOperands(
+            const QoreIRStringConsumerCallInstruction& call,
+            std::vector<llvm::Value*>& raw_args,
+            std::vector<uint32_t>& raw_arg_ids, std::string& error);
+
     // Emit an imported typed collection operation. Returns nullptr when no
     // valid summary is available for the supplied fast-entry arguments.
     llvm::Value* emitAOTCollectionOp(const BatchCalleeInfo& info,
@@ -1261,7 +1267,8 @@ private:
             bool needs_fallback_array, llvm::Value*& args_array, int& nargs,
             std::vector<llvm::Value*>& raw_args,
             std::vector<uint32_t>& raw_arg_ids,
-            std::vector<llvm::Value*>& boxed_args, std::string& error);
+            std::vector<llvm::Value*>& boxed_args, std::string& error,
+            int operand_count = -1);
 
     // Build an entry-block alloca'd array of cleanup slot pointers for
     // operands[arg_start..].  The runtime uses this to clear consumed

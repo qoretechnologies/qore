@@ -7961,25 +7961,28 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         uint64_t* args, int nargs, uint64_t pattern_bits, int32_t operation,
         int64_t offset, ExceptionSink* xsink) {
-    const QoreEncoding* encoding = nullptr;
-    bool same_encoding = nargs > 0;
-    for (int i = 0; i < nargs; ++i) {
-        QoreValue value = fromBits(args[i]);
-        const QoreEncoding* current;
-        if (value.isShortString()) {
-            current = QCS_DEFAULT;
-        } else if (value.getType() == NT_STRING) {
-            const QoreStringNode* string = value.get<const QoreStringNode>();
-            current = string ? string->getEncoding() : QCS_DEFAULT;
-        } else {
-            same_encoding = false;
-            break;
-        }
-        if (!encoding) {
-            encoding = current;
-        } else if (encoding != current) {
-            same_encoding = false;
-            break;
+    bool same_encoding = false;
+    if (operation <= 2) {
+        const QoreEncoding* encoding = nullptr;
+        same_encoding = nargs > 0;
+        for (int i = 0; i < nargs; ++i) {
+            QoreValue value = fromBits(args[i]);
+            const QoreEncoding* current;
+            if (value.isShortString()) {
+                current = QCS_DEFAULT;
+            } else if (value.getType() == NT_STRING) {
+                const QoreStringNode* string = value.get<const QoreStringNode>();
+                current = string ? string->getEncoding() : QCS_DEFAULT;
+            } else {
+                same_encoding = false;
+                break;
+            }
+            if (!encoding) {
+                encoding = current;
+            } else if (encoding != current) {
+                same_encoding = false;
+                break;
+            }
         }
     }
     if (same_encoding) {
@@ -7998,8 +8001,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         }
     }
 
-    ValueHolder concatenated(
-        fromBits(qore_rt_string_concat_multi(args, nargs, xsink)), xsink);
+    uint64_t concatenated_bits = nargs == 2
+        ? qore_rt_string_add_typed(args[0], args[1], xsink)
+        : qore_rt_string_concat_multi(args, nargs, xsink);
+    ValueHolder concatenated(fromBits(concatenated_bits), xsink);
     if (xsink && *xsink) {
         return 0;
     }
@@ -8036,7 +8041,10 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
 //! Concatenate a bounded string expression and apply substr() before releasing the intermediate string.
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi_substr(uint64_t* args, int nargs,
         int64_t start, int64_t length, int32_t has_length, ExceptionSink* xsink) {
-    ValueHolder concatenated(fromBits(qore_rt_string_concat_multi(args, nargs, xsink)), xsink);
+    uint64_t concatenated_bits = nargs == 2
+        ? qore_rt_string_add_typed(args[0], args[1], xsink)
+        : qore_rt_string_concat_multi(args, nargs, xsink);
+    ValueHolder concatenated(fromBits(concatenated_bits), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }

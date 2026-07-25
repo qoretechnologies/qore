@@ -2138,10 +2138,14 @@ public:
     AOTStringConsumerKind aot_string_consumer = AOTStringConsumerKind::None;
     //! Producer operand reused as the pattern by a fused search consumer.
     int16_t aot_string_consumer_pattern_operand = -1;
-    //! Constant offset/start and optional length for fused find/substr consumers.
+    //! Producer operands reused as dynamic offset/start and optional length.
+    int16_t aot_string_consumer_arg0_operand = -1;
+    int16_t aot_string_consumer_arg1_operand = -1;
+    //! Constant offset/start and optional length when no operand is recorded.
     int64_t aot_string_consumer_arg0 = 0;
     int64_t aot_string_consumer_arg1 = 0;
     bool aot_string_consumer_has_arg1 = false;
+    uint8_t aot_string_consumer_extra_operands = 0;
 };
 
 //! Direct function call instruction - bypasses AST round-trip for resolved function calls

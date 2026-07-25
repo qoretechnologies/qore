@@ -12174,33 +12174,33 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         result = constant->constant.int_value;
         return true;
     };
-    auto get_pattern_operand = [&](
+    auto get_reused_operand = [&](
             const QoreIRStringConsumerCallInstruction* producer,
-            QoreIRValue pattern, bool cross_block) -> int16_t {
-        auto pattern_definition = definitions.find(pattern.id);
+            QoreIRValue value, bool cross_block) -> int16_t {
+        auto value_definition = definitions.find(value.id);
         for (size_t i = 0; i < producer->operands.size(); ++i) {
             if (qore_ir_analysis_cancelled(check_count,
-                    "IR string producer-consumer pattern analysis")) {
+                    "IR string producer-consumer operand analysis")) {
                 return -1;
             }
             QoreIRValue operand = producer->operands[i];
-            if (operand.id == pattern.id) {
+            if (operand.id == value.id) {
                 return static_cast<int16_t>(i);
             }
             auto operand_definition = definitions.find(operand.id);
-            if (pattern_definition == definitions.end()
+            if (value_definition == definitions.end()
                     || operand_definition == definitions.end()) {
                 continue;
             }
-            QoreIRInstruction* pattern_inst =
-                pattern_definition->second.inst;
+            QoreIRInstruction* value_inst =
+                value_definition->second.inst;
             QoreIRInstruction* operand_inst =
                 operand_definition->second.inst;
-            if (pattern_inst->opcode == QoreIROpcode::LoadLocal
+            if (value_inst->opcode == QoreIROpcode::LoadLocal
                     && operand_inst->opcode == QoreIROpcode::LoadLocal) {
                 const LocalVar* local =
                     static_cast<const QoreIRLocalInstruction*>(
-                        pattern_inst)->local;
+                        value_inst)->local;
                 if (local
                         && local
                             == static_cast<const QoreIRLocalInstruction*>(
@@ -12211,10 +12211,10 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     return static_cast<int16_t>(i);
                 }
             }
-            if (pattern_inst->opcode == QoreIROpcode::ConstString
+            if (value_inst->opcode == QoreIROpcode::ConstString
                     && operand_inst->opcode == QoreIROpcode::ConstString
                     && static_cast<const QoreIRConstInstruction*>(
-                        pattern_inst)->constant.string_value
+                        value_inst)->constant.string_value
                         == static_cast<const QoreIRConstInstruction*>(
                             operand_inst)->constant.string_value) {
                 return static_cast<int16_t>(i);
@@ -12224,15 +12224,25 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
     };
 
     struct Fusion {
+        struct LateLoadOperand {
+            size_t extra_operand = 0;
+            const QoreIRLocalInstruction* source = nullptr;
+            QoreIRValueFacts facts;
+        };
+
         QoreIRStringConsumerCallInstruction* producer = nullptr;
         QoreIRInstruction* consumer = nullptr;
         QoreIRCallDirectInstruction::AOTStringConsumerKind kind =
             QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
         QoreIRValue result;
         int16_t pattern_operand = -1;
+        int16_t arg0_operand = -1;
+        int16_t arg1_operand = -1;
         int64_t arg0 = 0;
         int64_t arg1 = 0;
         bool has_arg1 = false;
+        std::vector<QoreIRValue> extra_operands;
+        std::vector<LateLoadOperand> late_load_operands;
         bool preserve_producer_result = false;
         std::vector<QoreIRInstruction*> eliminated;
         std::vector<std::pair<uint32_t, QoreIRValue>> replacements;
@@ -12261,9 +12271,97 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         }
         auto kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::None;
         int16_t pattern_operand = -1;
+        int16_t arg0_operand = -1;
+        int16_t arg1_operand = -1;
         int64_t arg0 = 0;
         int64_t arg1 = 0;
         bool has_arg1 = false;
+        std::vector<QoreIRValue> extra_operands;
+        std::vector<Fusion::LateLoadOperand> late_load_operands;
+        auto get_int_argument = [&](QoreIRValue value, int64_t& constant,
+                int16_t& operand) {
+            if (get_const_int(value, constant)) {
+                return true;
+            }
+            const QoreIRValueFacts* facts = func.getValueFacts(value);
+            bool exact_int = facts
+                && facts->type_info
+                && QoreTypeInfo::isType(
+                    qore_get_value_type(facts->type_info), NT_INT);
+            if (!facts
+                    || (facts->representation
+                            != QoreIRValueRepresentation::NativeInt
+                        && (facts->representation
+                                != QoreIRValueRepresentation::Boxed
+                            || !exact_int))) {
+                return false;
+            }
+            operand = get_reused_operand(producer, value, cross_block);
+            if (operand >= 0) {
+                return true;
+            }
+            for (size_t i = 0; i < extra_operands.size(); ++i) {
+                if (extra_operands[i].id == value.id) {
+                    operand = static_cast<int16_t>(
+                        producer->operands.size() + i);
+                    return true;
+                }
+            }
+            auto definition = definitions.find(value.id);
+            auto producer_position = positions.find(producer);
+            if (definition == definitions.end()
+                    || producer_position == positions.end()) {
+                return false;
+            }
+            if (definition->second.block
+                    == producer_position->second.block) {
+                if (definition->second.offset
+                        >= producer_position->second.offset) {
+                    auto consumer_position = positions.find(consumer);
+                    if (cross_block
+                            || consumer_position == positions.end()
+                            || consumer_position->second.block
+                                != definition->second.block
+                            || definition->second.offset
+                                >= consumer_position->second.offset
+                            || definition->second.inst->opcode
+                                != QoreIROpcode::LoadLocal) {
+                        return false;
+                    }
+                    const auto* load =
+                        static_cast<const QoreIRLocalInstruction*>(
+                            definition->second.inst);
+                    if (!load->local || load->is_ref
+                            || load->local->closureUse()
+                            || QoreTypeInfo::isReference(
+                                load->local->getTypeInfo())) {
+                        return false;
+                    }
+                    late_load_operands.push_back({
+                        extra_operands.size(), load, *facts,
+                    });
+                }
+            } else {
+                if (!cfg) {
+                    cfg = std::make_unique<QoreIRControlFlowGraph>(func);
+                    if (cfg->cancelled) {
+                        return false;
+                    }
+                }
+                if (!cfg->dominates(definition->second.block,
+                        producer_position->second.block)) {
+                    return false;
+                }
+            }
+            if (producer->operands.size() + extra_operands.size()
+                    >= static_cast<size_t>(INT16_MAX)) {
+                return false;
+            }
+            operand = static_cast<int16_t>(
+                producer->operands.size() + extra_operands.size());
+            extra_operands.push_back(value);
+            return true;
+        };
         if (intrinsic == QoreIRIntrinsic::Size
                 || intrinsic == QoreIRIntrinsic::StringStrlen) {
             if (consumer->operands.size() != 1) {
@@ -12282,7 +12380,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     || !method->pseudo_arg0_known_assigned_string) {
                 return false;
             }
-            pattern_operand = get_pattern_operand(
+            pattern_operand = get_reused_operand(
                 producer, consumer->operands[1], cross_block);
             if (pattern_operand < 0) {
                 return false;
@@ -12299,11 +12397,12 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                     || !method->pseudo_arg0_known_assigned_string
                     || (consumer->operands.size() == 3
                         && (!method->pseudo_arg1_known_assigned_int
-                            || !get_const_int(
-                                consumer->operands[2], arg0)))) {
+                            || !get_int_argument(
+                                consumer->operands[2], arg0,
+                                arg0_operand)))) {
                 return false;
             }
-            pattern_operand = get_pattern_operand(
+            pattern_operand = get_reused_operand(
                 producer, consumer->operands[1], cross_block);
             if (pattern_operand < 0) {
                 return false;
@@ -12318,11 +12417,13 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             if ((consumer->operands.size() != 2
                         && consumer->operands.size() != 3)
                     || !method->pseudo_arg0_known_assigned_int
-                    || !get_const_int(consumer->operands[1], arg0)
+                    || !get_int_argument(
+                        consumer->operands[1], arg0, arg0_operand)
                     || (consumer->operands.size() == 3
                         && (!method->pseudo_arg1_known_assigned_int
-                            || !get_const_int(
-                                consumer->operands[2], arg1)))) {
+                            || !get_int_argument(
+                                consumer->operands[2], arg1,
+                                arg1_operand)))) {
                 return false;
             }
             has_arg1 = consumer->operands.size() == 3;
@@ -12343,9 +12444,13 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         fusion.kind = kind;
         fusion.result = consumer->result;
         fusion.pattern_operand = pattern_operand;
+        fusion.arg0_operand = arg0_operand;
+        fusion.arg1_operand = arg1_operand;
         fusion.arg0 = arg0;
         fusion.arg1 = arg1;
         fusion.has_arg1 = has_arg1;
+        fusion.extra_operands = std::move(extra_operands);
+        fusion.late_load_operands = std::move(late_load_operands);
         return true;
     };
     std::vector<Fusion> fusions;
@@ -12491,9 +12596,15 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 candidate.result = consumer_fusion.result;
                 candidate.pattern_operand =
                     consumer_fusion.pattern_operand;
+                candidate.arg0_operand = consumer_fusion.arg0_operand;
+                candidate.arg1_operand = consumer_fusion.arg1_operand;
                 candidate.arg0 = consumer_fusion.arg0;
                 candidate.arg1 = consumer_fusion.arg1;
                 candidate.has_arg1 = consumer_fusion.has_arg1;
+                candidate.extra_operands =
+                    std::move(consumer_fusion.extra_operands);
+                candidate.late_load_operands =
+                    std::move(consumer_fusion.late_load_operands);
                 if (candidate.kind
                         == QoreIRCallDirectInstruction::
                             AOTStringConsumerKind::Substr) {
@@ -12634,6 +12745,17 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 "IR string producer-consumer rewrite preparation")) {
             return 0;
         }
+        for (const Fusion::LateLoadOperand& request :
+                fusion.late_load_operands) {
+            auto source_uses = uses.find(request.source->result.id);
+            if (source_uses != uses.end()
+                    && source_uses->second.size() == 1
+                    && source_uses->second.front().inst
+                        == fusion.consumer) {
+                fusion.eliminated.push_back(
+                    const_cast<QoreIRLocalInstruction*>(request.source));
+            }
+        }
         producers.emplace(fusion.producer, &fusion);
         eliminated.insert(
             fusion.eliminated.begin(), fusion.eliminated.end());
@@ -12707,13 +12829,45 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             auto producer = producers.find(inst->get());
             if (producer != producers.end()) {
                 Fusion& fusion = *producer->second;
+                for (const Fusion::LateLoadOperand& request :
+                        fusion.late_load_operands) {
+                    auto clone = std::make_unique<QoreIRLocalInstruction>(
+                        QoreIROpcode::LoadLocal, request.source->local,
+                        request.source->auto_ref);
+                    clone->loc = request.source->loc;
+                    clone->cached_start_line =
+                        request.source->cached_start_line;
+                    clone->temp_scope_id = request.source->temp_scope_id;
+                    clone->is_closure = request.source->is_closure;
+                    clone->is_ref = request.source->is_ref;
+                    clone->slot_id = request.source->slot_id;
+                    clone->result = func.createValue();
+                    func.setValueFacts(clone->result, request.facts);
+                    fusion.extra_operands[request.extra_operand] =
+                        clone->result;
+                    size_t offset = static_cast<size_t>(
+                        std::distance(instructions.begin(), inst));
+                    instructions.insert(inst, std::move(clone));
+                    inst = instructions.begin()
+                        + static_cast<std::ptrdiff_t>(offset + 1);
+                }
                 fusion.producer->aot_string_consumer = fusion.kind;
                 fusion.producer->aot_string_consumer_pattern_operand =
                     fusion.pattern_operand;
+                fusion.producer->aot_string_consumer_arg0_operand =
+                    fusion.arg0_operand;
+                fusion.producer->aot_string_consumer_arg1_operand =
+                    fusion.arg1_operand;
                 fusion.producer->aot_string_consumer_arg0 = fusion.arg0;
                 fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
                 fusion.producer->aot_string_consumer_has_arg1 =
                     fusion.has_arg1;
+                fusion.producer->aot_string_consumer_extra_operands =
+                    static_cast<uint8_t>(fusion.extra_operands.size());
+                fusion.producer->operands.insert(
+                    fusion.producer->operands.end(),
+                    fusion.extra_operands.begin(),
+                    fusion.extra_operands.end());
                 if (!fusion.preserve_producer_result) {
                     fusion.producer->result = fusion.result;
                 }
@@ -12727,10 +12881,20 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 fusion.producer->aot_string_consumer = fusion.kind;
                 fusion.producer->aot_string_consumer_pattern_operand =
                     fusion.pattern_operand;
+                fusion.producer->aot_string_consumer_arg0_operand =
+                    fusion.arg0_operand;
+                fusion.producer->aot_string_consumer_arg1_operand =
+                    fusion.arg1_operand;
                 fusion.producer->aot_string_consumer_arg0 = fusion.arg0;
                 fusion.producer->aot_string_consumer_arg1 = fusion.arg1;
                 fusion.producer->aot_string_consumer_has_arg1 =
                     fusion.has_arg1;
+                fusion.producer->aot_string_consumer_extra_operands =
+                    static_cast<uint8_t>(fusion.extra_operands.size());
+                fusion.producer->operands.insert(
+                    fusion.producer->operands.end(),
+                    fusion.extra_operands.begin(),
+                    fusion.extra_operands.end());
                 set_result_facts(fusion.producer->result, fusion.kind);
             }
             ++inst;

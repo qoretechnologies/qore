@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string provider_code = "string sub concatPair(string left, string right) {
+    return left + right;
+}
+
+final class DynamicStringFactory {
+    static string joinStatic(string left, string right) {
+        return left + right;
+    }
+
+    string joinInstance(string left, string right) {
+        return left + right;
+    }
+
+    int searchInstance(string left, string right, int offset) {
+        return self.joinInstance(left, right).find(right, offset);
+    }
+}
+";
+
+string consumer_code = "int sub main() {
+    string left = \"Dvorak-Smetana-\";
+    string right = \"Janacek-Martinu\";
+    int offset = 2;
+    int start = 1;
+    int length = 7;
+    DynamicStringFactory factory();
+    printf(\"%d|%d|%s|%s\\n\",
+        concatPair(left, right).find(right, offset),
+        DynamicStringFactory::joinStatic(left, right).rfind(right, offset),
+        concatPair(left, right).substr(start, length),
+        concatPair(left, right).substr(start));
+    printf(\"method:%d\\n\",
+        factory.searchInstance(left, right, offset));
+    int big_offset = 9223372036854775807;
+    printf(\"big:%d:%d\\n\",
+        concatPair(left, right).find(right, big_offset),
+        concatPair(left, right).rfind(right, big_offset));
+
+    int unassigned;
+    bool unassigned_rejected = False;
+    try {
+        concatPair(left, right).find(right, unassigned);
+    } catch (hash<auto> ex) {
+        unassigned_rejected = True;
+    }
+    int removed = 3;
+    remove removed;
+    bool removed_rejected = False;
+    try {
+        concatPair(left, right).substr(start, removed);
+    } catch (hash<auto> ex) {
+        removed_rejected = True;
+    }
+    printf(\"guards:%d:%d\\n\", unassigned_rejected, removed_rejected);
+    return 0;
+}
+";
+
+string root = "/tmp/qore-aot-dynamic-string-consumer-" + string(getpid());
+string provider_dir = root + "/provider";
+string enabled_dir = root + "/enabled";
+string disabled_dir = root + "/disabled";
+mkdir(root);
+mkdir(provider_dir);
+mkdir(enabled_dir);
+mkdir(disabled_dir);
+
+string provider_path = root + "/provider.qr";
+string consumer_path = root + "/consumer.qr";
+string combined_path = root + "/combined.qr";
+File file();
+file.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write("%modern\n\n" + provider_code);
+file.close();
+file.open2(consumer_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write("%modern\n\n" + consumer_code);
+file.close();
+file.open2(combined_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write("%modern\n\n" + provider_code + consumer_code + "\nmain();\n");
+file.close();
+
+string ast = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s 2>&1",
+    libqore_dir, qore_bin, combined_path));
+string provider_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, provider_path));
+string provider_qo = provider_dir + "/provider.qo";
+if (!is_file(provider_qo)) {
+    printf("provider compile failed:\n%s", provider_compile);
+    exit(2);
+}
+if (provider_compile !~ /string-consumers=1/) {
+    printf("implicit-self dynamic string consumer fusion mismatch:\n%s",
+        provider_compile);
+    exit(2);
+}
+
+string enabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_IR_OPT_STATS=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, enabled_dir, consumer_path));
+string disabled_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1"
+        + " %s -O3 -c -L %s --output-dir=%s %s 2>&1",
+    libqore_dir, qcc_bin, provider_dir, disabled_dir, consumer_path));
+string enabled_qo = enabled_dir + "/consumer.qo";
+string disabled_qo = disabled_dir + "/consumer.qo";
+if (!is_file(enabled_qo) || !is_file(disabled_qo)) {
+    printf("consumer compile failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_compile, disabled_compile);
+    exit(2);
+}
+if (enabled_compile !~ /string-consumers=6/) {
+    printf("dynamic string consumer fusion mismatch:\n%s",
+        enabled_compile);
+    exit(2);
+}
+
+string enabled_undefined = backquote(sprintf("nm -u %s 2>&1", enabled_qo));
+string disabled_undefined = backquote(sprintf("nm -u %s 2>&1", disabled_qo));
+if (enabled_undefined !~ /qore_rt_string_concat_multi_search/
+        || enabled_undefined !~ /qore_rt_string_concat_multi_substr/
+        || disabled_undefined =~ /qore_rt_string_concat_multi_(search|substr)/) {
+    printf("dynamic string helper mismatch:\nenabled:\n%sdisabled:\n%s",
+        enabled_undefined, disabled_undefined);
+    exit(2);
+}
+
+string enabled_exe = root + "/enabled-aot";
+string disabled_exe = root + "/disabled-aot";
+string enabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, enabled_exe, provider_qo, enabled_qo));
+string disabled_link = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, disabled_exe, provider_qo, disabled_qo));
+if (!is_file(enabled_exe) || !is_file(disabled_exe)) {
+    printf("link failed:\nenabled:\n%sdisabled:\n%s",
+        enabled_link, disabled_link);
+    exit(2);
+}
+
+string enabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, enabled_exe));
+string disabled = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, disabled_exe));
+if (ast != enabled || ast != disabled) {
+    printf("execution mismatch:\nAST:\n%sEnabled:\n%sDisabled:\n%s",
+        ast, enabled, disabled);
+    exit(2);
+}
