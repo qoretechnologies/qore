@@ -1661,6 +1661,31 @@ static bool qore_ir_is_assigned_boxed_string_or_list(
         || QoreTypeInfo::getUniqueReturnComplexList(facts->type_info);
 }
 
+static bool qore_ir_is_boxed_hash_type(const QoreTypeInfo* type_info) {
+    return type_info == hashTypeInfo
+        || QoreTypeInfo::getReturnComplexHashOrNothing(type_info)
+        || QoreTypeInfo::getUniqueReturnHashDecl(type_info);
+}
+
+static bool qore_ir_is_boxed_hash(
+        const QoreIRFunction& func, QoreIRValue value) {
+    const QoreIRValueFacts* facts = func.getValueFacts(value);
+    return facts
+        && facts->representation == QoreIRValueRepresentation::Boxed
+        && qore_ir_is_boxed_hash_type(facts->type_info);
+}
+
+static bool qore_ir_is_assigned_boxed_hash(
+        const QoreIRFunction& func, QoreIRValue value) {
+    const QoreIRValueFacts* facts = func.getValueFacts(value);
+    if (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+            || !facts->never_nothing
+            || facts->representation != QoreIRValueRepresentation::Boxed) {
+        return false;
+    }
+    return qore_ir_is_boxed_hash_type(facts->type_info);
+}
+
 static bool qore_ir_is_hoistable_read_only_query(
         const QoreIRFunction& func, const QoreIRInstruction& inst) {
     if (!inst.result.isValid() || inst.exception_target) {
@@ -1670,6 +1695,14 @@ static bool qore_ir_is_hoistable_read_only_query(
         return inst.operands.size() == 1
             && qore_ir_is_assigned_boxed_string_or_list(
                 func, inst.operands[0]);
+    }
+    if (inst.opcode == QoreIROpcode::HashKeyAccessInt) {
+        return !std::getenv("QORE_DISABLE_IR_HASH_PROJECTION_LICM")
+            && inst.operands.size() == 1
+            && (qore_ir_is_assigned_boxed_hash(func, inst.operands[0])
+                || (qore_ir_is_boxed_hash(func, inst.operands[0])
+                    && qore_ir_values_proven_assigned_at(
+                        func, &inst, inst.operands)));
     }
     if (inst.opcode != QoreIROpcode::DotEvalMethodDirect) {
         return false;
@@ -4820,7 +4853,11 @@ static bool qore_ir_is_hoistable_query_load(
     const auto& load = static_cast<const QoreIRLocalInstruction&>(inst);
     return load.local && !load.is_closure && !load.is_ref
         && !load.local->closureUse() && !mutated.count(load.local)
-        && qore_ir_is_assigned_boxed_string_or_list(func, inst.result);
+        && (qore_ir_is_assigned_boxed_string_or_list(func, inst.result)
+            || qore_ir_is_assigned_boxed_hash(func, inst.result)
+            || (qore_ir_is_boxed_hash(func, inst.result)
+                && qore_ir_values_proven_assigned_at(
+                    func, &inst, {inst.result})));
 }
 
 static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& inst,
@@ -6760,6 +6797,10 @@ static bool qore_ir_value_is_proven_assigned(
     auto definition = definitions.find(value.id);
     if (definition != definitions.end() && definition->second) {
         const QoreIRInstruction* inst = definition->second;
+        if (inst->opcode == QoreIROpcode::MakeHash
+                || inst->opcode == QoreIROpcode::MakeHashConstKeys) {
+            return finish(true);
+        }
         if (inst->opcode == QoreIROpcode::LoadLocal && known_locals) {
             const auto* load =
                 static_cast<const QoreIRLocalInstruction*>(inst);

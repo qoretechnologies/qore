@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+int sub invariantProjection(int rounds) {
+    *hash<string, int> values;
+    values = {"enabled": 1};
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) {
+            ++sum;
+        }
+    }
+    return sum;
+}
+
+int sub main() {
+    int rounds = ENV.QORE_BENCH_ROUNDS
+        ? ENV.QORE_BENCH_ROUNDS.toInt() : 100000000;
+    printf("%d\n", invariantProjection(rounds));
+    return 0;
+}
+
+main();

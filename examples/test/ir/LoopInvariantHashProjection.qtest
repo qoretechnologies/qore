@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc"
+        : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = "%modern
+
+nothing sub replaceHash(reference<hash<string, int>> values, int index) {
+    values = {\"enabled\": index & 1};
+}
+
+int sub invariantProjection(hash<string, int> values, int rounds) {
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) ++sum;
+    }
+    return sum;
+}
+
+int sub missingProjection(hash<string, int> values, int rounds) {
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) ++sum;
+    }
+    return sum;
+}
+
+int sub localMutation() {
+    hash<string, int> values = {\"enabled\": 1};
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (values.enabled) ++sum;
+        values.enabled = i & 1;
+    }
+    return sum;
+}
+
+int sub referenceMutation() {
+    hash<string, int> values = {\"enabled\": 1};
+    int sum = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (values.enabled) ++sum;
+        replaceHash(\\values, i);
+    }
+    return sum;
+}
+
+int sub removedProjection() {
+    hash<string, int> values = {\"enabled\": 1};
+    remove values.enabled;
+    return invariantProjection(values, 4);
+}
+
+int sub unassignedLocalProjection(int rounds) {
+    *hash<string, int> values;
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) ++sum;
+    }
+    return sum;
+}
+
+int sub assignedLocalProjection(int rounds) {
+    *hash<string, int> values;
+    values = {\"enabled\": 1};
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) ++sum;
+    }
+    return sum;
+}
+
+int sub removedLocalProjection(int rounds) {
+    *hash<string, int> values = {\"enabled\": 1};
+    remove values;
+    int sum = 0;
+    for (int i = 0; i < rounds; ++i) {
+        if (values.enabled) ++sum;
+    }
+    return sum;
+}
+
+printf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    invariantProjection({\"enabled\": 1}, 5),
+    invariantProjection({\"enabled\": 1}, 0),
+    missingProjection({}, 5),
+    localMutation(), referenceMutation(), removedProjection(),
+    unassignedLocalProjection(4), assignedLocalProjection(4),
+    removedLocalProjection(4));
+";
+
+string root = "/tmp/qore-loop-invariant-hash-projection-"
+    + string(getpid());
+string source_path = root + ".qr";
+string exe = root + ".aot";
+on_exit {
+    backquote(sprintf("rm -f %s %s", source_path, exe));
+}
+
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string sub runMode(string mode, string extra_env = "") {
+    return backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+        extra_env, libqore_dir, qore_bin, mode, source_path));
+}
+
+string ast = runMode("ast");
+if (ast != "5:0:0:2:2:0:0:4:0\n") {
+    printf("unexpected AST output:\n%s", ast);
+    exit(2);
+}
+foreach string mode in (("ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != ast) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s",
+            mode, ast, actual);
+        exit(2);
+    }
+}
+
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe, source_path));
+if (!is_file(exe)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
+if (aot != ast) {
+    printf("AOT mismatch:\nexpected:\n%sactual:\n%s", ast, aot);
+    exit(2);
+}
+
+string stats = runMode("ir", "QORE_IR_OPT_STATS=1");
+if (stats !~ /IR-OPT: invariantProjection:.*hoisted=([3-9]|[1-9][0-9]+)/
+        || stats !~ /IR-OPT: assignedLocalProjection:.*hoisted=([3-9]|[1-9][0-9]+)/
+        || stats !~ /IR-OPT: unassignedLocalProjection:.*hoisted=0/
+        || stats !~ /IR-OPT: removedLocalProjection:.*hoisted=0/
+        || stats !~ /5:0:0:2:2:0:0:4:0/) {
+    printf("missing hash projection LICM selection:\n%s", stats);
+    exit(2);
+}
+string disabled_stats = runMode("ir",
+    "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_HASH_PROJECTION_LICM=1");
+if (disabled_stats !~ /IR-OPT: invariantProjection:.*hoisted=0/
+        || disabled_stats !~ /IR-OPT: assignedLocalProjection:.*hoisted=0/
+        || disabled_stats !~ /5:0:0:2:2:0:0:4:0/) {
+    printf("unexpected disabled hash projection LICM selection:\n%s",
+        disabled_stats);
+    exit(2);
+}
