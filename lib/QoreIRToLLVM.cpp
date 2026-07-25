@@ -5947,6 +5947,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                     if (cached->keys != key_names) {
                         ++aot_hash_string_extraction_overlap_reuses;
                     }
+                    if (cached->imported_across_block) {
+                        ++aot_hash_string_extraction_cross_block_reuses;
+                    }
                 }
             }
 
@@ -6047,7 +6050,7 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                         {current_lowering_block_, source_local,
                          key_names, success, hash_result_sources,
                          fused_call, builder->GetInsertBlock(),
-                         &group == &hash_groups.front()});
+                         &group == &hash_groups.front(), false});
                 }
             }
             llvm::BasicBlock* assigned_bb = llvm::BasicBlock::Create(
@@ -8992,6 +8995,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_instruction = nullptr;
     aot_hash_string_extraction_reuses = 0;
     aot_hash_string_extraction_overlap_reuses = 0;
+    aot_hash_string_extraction_cross_block_reuses = 0;
     typed_list_data_ptrs.clear();
     direct_typed_list_read_sources.clear();
     elided_typed_foreach_refself_values.clear();
@@ -10153,6 +10157,22 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     entry_block_for_idom = &llvm_func->getEntryBlock();
     immediate_dominator[entry_block_for_idom] = nullptr;
 
+    const bool cross_block_hash_string_extraction_reuse = aot_mode
+        && !std::getenv("QORE_DISABLE_AOT_HASH_STRING_EXTRACTION_REUSE")
+        && !std::getenv(
+            "QORE_DISABLE_AOT_CROSS_BLOCK_HASH_STRING_EXTRACTION_REUSE");
+    std::unique_ptr<QoreIRControlFlowGraph>
+        hash_string_extraction_cfg;
+    std::unordered_map<const QoreIRBasicBlock*,
+        std::vector<AOTHashStringExtractionCacheEntry>>
+            hash_string_extraction_block_outputs;
+    if (cross_block_hash_string_extraction_reuse) {
+        auto cfg = std::make_unique<QoreIRControlFlowGraph>(func);
+        if (!cfg->cancelled) {
+            hash_string_extraction_cfg = std::move(cfg);
+        }
+    }
+
     // Lower each block
     for (const auto& block : func.blocks) {
         aot_hash_string_extraction_cache.clear();
@@ -10176,6 +10196,36 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // currently-wired predecessors.  No behavioural change in Step 1;
         // consumed by Step 2's per-invoke cleanup LP predicate.
         updateImmediateDominator(llvm_block);
+
+        if (hash_string_extraction_cfg && !block->is_loop_header
+                && !block->has_phi_nodes) {
+            auto block_id =
+                hash_string_extraction_cfg->block_ids.find(block.get());
+            if (block_id != hash_string_extraction_cfg->block_ids.end()
+                    && hash_string_extraction_cfg
+                            ->reachable[block_id->second]
+                    && hash_string_extraction_cfg
+                            ->predecessors[block_id->second].size() == 1) {
+                size_t predecessor_id = hash_string_extraction_cfg
+                    ->predecessors[block_id->second].front();
+                const QoreIRBasicBlock* predecessor =
+                    hash_string_extraction_cfg->blocks[predecessor_id];
+                auto available =
+                    hash_string_extraction_block_outputs.find(predecessor);
+                if (predecessor != block.get()
+                        && hash_string_extraction_cfg->dominates(
+                            predecessor_id, block_id->second)
+                        && available
+                            != hash_string_extraction_block_outputs.end()) {
+                    aot_hash_string_extraction_cache = available->second;
+                    for (auto& entry :
+                            aot_hash_string_extraction_cache) {
+                        entry.block = block.get();
+                        entry.imported_across_block = true;
+                    }
+                }
+            }
+        }
 
         for (const auto& inst_ptr : block->instructions) {
             const QoreIRInstruction* inst = inst_ptr.get();
@@ -10207,6 +10257,29 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 && string_consumer_call->aot_string_consumer
                     != QoreIRStringConsumerCallInstruction::
                         AOTStringConsumerKind::None;
+            bool safe_hash_string_branch =
+                inst->opcode == QoreIROpcode::Br;
+            bool safe_hash_string_to_bool = false;
+            if (inst->opcode == QoreIROpcode::ToBool
+                    && inst->operands.size() == 1) {
+                auto source = values.find(inst->operands.front().id);
+                safe_hash_string_to_bool = source != values.end()
+                    && (source->second->getType() == i1_type
+                        || source->second->getType() == double_type
+                        || (source->second->getType() == i64_type
+                            && !nanboxed_values.count(
+                                inst->operands.front().id)));
+            }
+            if (inst->opcode == QoreIROpcode::BrIf) {
+                const auto* branch =
+                    static_cast<const QoreIRBranchIfInstruction*>(inst);
+                auto condition = values.find(branch->condition.id);
+                safe_hash_string_branch = condition != values.end()
+                    && (condition->second->getType() == i1_type
+                        || (condition->second->getType() == i64_type
+                            && !nanboxed_values.count(
+                                branch->condition.id)));
+            }
             // Borrowed values remain valid through proven-pure imported calls
             // and value construction only. Everything that can mutate a local,
             // invoke arbitrary code, or end the source statement invalidates
@@ -10220,7 +10293,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 || inst->opcode == QoreIROpcode::ConstNothing
                 || inst->opcode == QoreIROpcode::ConstNull
                 || inst->opcode == QoreIROpcode::ConstString
-                || inst->opcode == QoreIROpcode::PushTempMark;
+                || inst->opcode == QoreIROpcode::PushTempMark
+                || safe_hash_string_to_bool
+                || safe_hash_string_branch;
             if (!preserves_hash_string_extraction) {
                 aot_hash_string_extraction_cache.clear();
             }
@@ -10415,6 +10490,12 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // the builder ends up in a different block than the initial one.
         // This is needed for correct PHI predecessor resolution.
         final_block_map[block.get()] = builder->GetInsertBlock();
+
+        if (hash_string_extraction_cfg
+                && !aot_hash_string_extraction_cache.empty()) {
+            hash_string_extraction_block_outputs.emplace(
+                block.get(), aot_hash_string_extraction_cache);
+        }
 
         // Verify the final insert block has a terminator.
         // Note: the insert block may have changed (e.g., guards create continuation blocks).
@@ -10744,9 +10825,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         fprintf(stderr,
             "IR-OPT-AOT-LOWERING: %s:"
             " hash-string-extraction-reuses=%zu"
-            " hash-string-extraction-overlap-reuses=%zu\n",
+            " hash-string-extraction-overlap-reuses=%zu"
+            " hash-string-extraction-cross-block-reuses=%zu\n",
             fn_name.c_str(), aot_hash_string_extraction_reuses,
-            aot_hash_string_extraction_overlap_reuses);
+            aot_hash_string_extraction_overlap_reuses,
+            aot_hash_string_extraction_cross_block_reuses);
     }
 
     // Reset per-function state

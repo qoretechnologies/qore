@@ -23,6 +23,13 @@ final class HashStringFormatter {
             self.formatReversed(row).size(),
             offset);
     }
+
+    int consumeAcrossBranch(hash<string, string> row, bool take) {
+        return self.format(row).size()
+            ? (take ? self.formatFirst(row).size()
+                : self.formatReversed(row).length())
+            : 0;
+    }
 }
 
 int sub main() {
@@ -36,6 +43,7 @@ int sub main() {
     int checksum = 0;
     for (int i = 0; i < rounds; ++i) {
         checksum += formatter.consume(row, i & 7).size();
+        checksum += formatter.consumeAcrossBranch(row, (i & 1) == 1);
     }
     printf("%d\n", checksum);
     return 0;

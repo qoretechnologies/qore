@@ -39,6 +39,21 @@ final class HashStringFormatter {
             self.formatReversed(row).size());
     }
 
+    int crossBlockConsumers(hash<string, string> row) {
+        return self.format(row).size()
+            ? self.formatFirst(row).size()
+                + self.formatReversed(row).length()
+            : 0;
+    }
+
+    string crossBlockMutation(hash<string, string> row) {
+        if (self.format(row).size()) {
+            row.first = \"Bach\";
+            return self.formatFirst(row);
+        }
+        return \"false\";
+    }
+
     string consumers(hash<string, string> row) {
         return sprintf(\"%d:%d:%y:%y:%y:%d:%d:%s\",
             self.wrappedFormat(row).size(),
@@ -84,7 +99,7 @@ int sub main() {
     } catch (hash<auto> ex) {
         encoding_rejected = ex.err == \"ENCODING-CONVERSION-ERROR\";
     }
-    printf(\"%s|%s|%s|%s|%s|%s|%s|%d|%d\\n\",
+    printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%d\\n\",
         formatter.consumers(present),
         formatter.consumers(missing),
         formatter.consumers(removed),
@@ -92,6 +107,9 @@ int sub main() {
         formatter.overlapConsumers(present),
         formatter.overlapConsumers(missing),
         formatter.overlapConsumers(removed),
+        formatter.crossBlockConsumers(present),
+        formatter.crossBlockConsumers(missing),
+        formatter.crossBlockMutation(present),
         unassigned_rejected, encoding_rejected);
     return 0;
 }
@@ -153,6 +171,18 @@ if (!(enabled_compile
 if (!(enabled_compile
         =~ /AOT-LOWERING: HashStringFormatter__overlapConsumers_[^\n]*hash-string-extraction-overlap-reuses=[1-9][0-9]*/)) {
     printf("overlapping hash string extractions were not reused:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (!(enabled_compile
+        =~ /AOT-LOWERING: HashStringFormatter__crossBlockConsumers_[^\n]*hash-string-extraction-cross-block-reuses=[1-9][0-9]*/)) {
+    printf("cross-block hash string extractions were not reused:\n%s",
+        enabled_compile);
+    exit(2);
+}
+if (enabled_compile
+        =~ /AOT-LOWERING: HashStringFormatter__crossBlockMutation_[^\n]*hash-string-extraction-cross-block-reuses=[1-9][0-9]*/) {
+    printf("cross-block hash string extraction survived mutation:\n%s",
         enabled_compile);
     exit(2);
 }

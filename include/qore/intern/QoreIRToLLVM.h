@@ -296,6 +296,7 @@ private:
         const QoreIRInstruction* instruction = nullptr;
         llvm::BasicBlock* dominance_block = nullptr;
         bool cross_call_eligible = false;
+        bool imported_across_block = false;
     };
 
     // Borrowed hash-string values shared by adjacent imported pure calls.
@@ -304,6 +305,7 @@ private:
     const QoreIRInstruction* aot_hash_string_extraction_instruction = nullptr;
     size_t aot_hash_string_extraction_reuses = 0;
     size_t aot_hash_string_extraction_overlap_reuses = 0;
+    size_t aot_hash_string_extraction_cross_block_reuses = 0;
 
     // Typed-map backing pointers materialized in loop preheaders.
     std::unordered_map<uint32_t, llvm::Value*> typed_list_data_ptrs;
