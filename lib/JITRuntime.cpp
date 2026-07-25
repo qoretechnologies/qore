@@ -219,16 +219,24 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lvalue_ternary", reinterpret_cast<void*>(&qore_rt_lvalue_ternary) },
     { "qore_rt_make_list", reinterpret_cast<void*>(&qore_rt_make_list) },
     { "qore_rt_make_list_by_type_path", reinterpret_cast<void*>(&qore_rt_make_list_by_type_path) },
+    { "qore_rt_make_list_by_type_path_cached",
+        reinterpret_cast<void*>(&qore_rt_make_list_by_type_path_cached) },
     { "qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash) },
     { "qore_rt_make_hash_by_type_path", reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path) },
+    { "qore_rt_make_hash_by_type_path_cached",
+        reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path_cached) },
     { "qore_rt_hash_reserve", reinterpret_cast<void*>(&qore_rt_hash_reserve) },
     { "qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys) },
     { "qore_rt_make_hash_const_keys_by_type_path",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path) },
+    { "qore_rt_make_hash_const_keys_by_type_path_cached",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path_cached) },
     { "qore_rt_make_hash_const_keys_unique",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_unique) },
     { "qore_rt_make_hash_const_keys_unique_by_type_path",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_unique_by_type_path) },
+    { "qore_rt_make_hash_const_keys_unique_by_type_path_cached",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_unique_by_type_path_cached) },
     { "qore_rt_make_hash_const_keys_2_unique",
         reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_2_unique) },
     { "qore_rt_make_hash_const_keys_2_unique_throwing",
@@ -4066,6 +4074,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path(uint64_t* vals, int
     return qore_rt_make_list(vals, count, typeInfo, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path_cached(QoreAOTContext* ctx,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "MakeList", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_list(vals, count, type_info, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
     bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
@@ -4115,6 +4133,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs,
         return toBits(QoreValue());
     }
     return qore_rt_make_hash(kv_pairs, count, typeInfo, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path_cached(QoreAOTContext* ctx,
+        uint64_t* kv_pairs, int count, const char* type_path,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "MakeHash", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_hash(kv_pairs, count, type_info, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
@@ -4319,6 +4348,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_by_type_path(const ch
     return qore_rt_make_hash_const_keys(keys, vals, count, typeInfo, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_by_type_path_cached(
+        QoreAOTContext* ctx, const char** keys, uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "MakeHashConstKeys", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_hash_const_keys(keys, vals, count, type_info, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(const char** keys,
         uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink) {
     const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(
@@ -4327,6 +4367,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(c
         return toBits(QoreValue());
     }
     return qore_rt_make_hash_const_keys_unique(keys, vals, count, typeInfo, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t
+qore_rt_make_hash_const_keys_unique_by_type_path_cached(QoreAOTContext* ctx,
+        const char** keys, uint64_t* vals, int count, const char* type_path,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = qore_rt_resolve_full_type_path_cached(
+        ctx, type_path, "MakeHashConstKeys", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_hash_const_keys_unique(
+        keys, vals, count, type_info, xsink);
 }
 
 // --- Statement execution helpers ---
@@ -4496,6 +4549,18 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_list_by_typ
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_make_list_by_type_path_cached_throwing(QoreAOTContext* ctx,
+        uint64_t* vals, int count, const char* type_path,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_list_by_type_path_cached(
+        ctx, vals, count, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_throwing(
         uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash(kv_pairs, count, typeInfo, xsink);
@@ -4508,6 +4573,18 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_throwi
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_by_type_path_throwing(
         uint64_t* kv_pairs, int count, const char* type_path, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash_by_type_path(kv_pairs, count, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_make_hash_by_type_path_cached_throwing(QoreAOTContext* ctx,
+        uint64_t* kv_pairs, int count, const char* type_path,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_by_type_path_cached(
+        ctx, kv_pairs, count, type_path, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -4533,6 +4610,18 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_const_
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t
+qore_rt_make_hash_const_keys_by_type_path_cached_throwing(QoreAOTContext* ctx,
+        const char** keys, uint64_t* vals, int count, const char* type_path,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys_by_type_path_cached(
+        ctx, keys, vals, count, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_const_keys_unique_throwing(
         const char** keys, uint64_t* vals, int count,
         const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
@@ -4548,6 +4637,19 @@ uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_throwing(
         const char** keys, uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash_const_keys_unique_by_type_path(
         keys, vals, count, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline))
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_cached_throwing(
+        QoreAOTContext* ctx, const char** keys, uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink) {
+    uint64_t result =
+        qore_rt_make_hash_const_keys_unique_by_type_path_cached(
+            ctx, keys, vals, count, type_path, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

@@ -1091,10 +1091,18 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_make_list_by_type_path", make_seq_ft);
     module.getOrInsertFunction("qore_rt_make_hash", make_seq_ft);
     module.getOrInsertFunction("qore_rt_make_hash_by_type_path", make_seq_ft);
+    auto* make_seq_cached_ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+    module.getOrInsertFunction("qore_rt_make_list_by_type_path_cached", make_seq_cached_ft);
+    module.getOrInsertFunction("qore_rt_make_hash_by_type_path_cached", make_seq_cached_ft);
     auto* make_hash_const_keys_ft = llvm::FunctionType::get(i64_type,
             {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
     module.getOrInsertFunction("qore_rt_make_hash_const_keys", make_hash_const_keys_ft);
     module.getOrInsertFunction("qore_rt_make_hash_const_keys_by_type_path", make_hash_const_keys_ft);
+    auto* make_hash_const_keys_cached_ft = llvm::FunctionType::get(i64_type,
+            {ptr_type, ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+    module.getOrInsertFunction("qore_rt_make_hash_const_keys_by_type_path_cached",
+            make_hash_const_keys_cached_ft);
 
     // Statement execution helpers
     // exec_statement: (i32, ptr, ptr) -> i64
@@ -22847,21 +22855,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_arg;
             const char* helper_name = "qore_rt_make_list";
             const char* helper_throwing_name = "qore_rt_make_list_throwing";
+            bool cached_type_path = false;
             if (aot_mode && ml->typeInfo) {
                 ti_arg = getTypePathArg(ml->typeInfo);
-                helper_name = "qore_rt_make_list_by_type_path";
-                helper_throwing_name = "qore_rt_make_list_by_type_path_throwing";
+                helper_name = "qore_rt_make_list_by_type_path_cached";
+                helper_throwing_name =
+                    "qore_rt_make_list_by_type_path_cached_throwing";
+                cached_type_path = true;
             } else {
                 ti_arg = aot_mode
                     ? llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type))
                     : getTypeInfoPointerArg(ml->typeInfo);
             }
-            auto ml_ft = llvm::FunctionType::get(i64_type,
-                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto ml_ft = cached_type_path
+                ? llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx),
+                        ptr_type, ptr_type}, false)
+                : llvm::FunctionType::get(i64_type,
+                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type},
+                    false);
             auto helper = module.getOrInsertFunction(helper_name, ml_ft);
             auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, ml_ft);
-            llvm::Value* list_result = emitMaybeInvoke(helper, helper_throwing,
-                    {arr, count_val, ti_arg, xsink_arg}, module, llvm_func, inst);
+            std::vector<llvm::Value*> args =
+                {arr, count_val, ti_arg, xsink_arg};
+            if (cached_type_path) {
+                args.insert(args.begin(), aot_ctx_arg);
+            }
+            llvm::Value* list_result = emitMaybeInvoke(
+                helper, helper_throwing, args, module, llvm_func, inst);
             values[inst->result.id] = list_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(list_result, inst->result.id, llvm_func);
@@ -22893,21 +22914,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_arg;
             const char* helper_name = "qore_rt_make_hash";
             const char* helper_throwing_name = "qore_rt_make_hash_throwing";
+            bool cached_type_path = false;
             if (aot_mode && mh->typeInfo) {
                 ti_arg = getTypePathArg(mh->typeInfo);
-                helper_name = "qore_rt_make_hash_by_type_path";
-                helper_throwing_name = "qore_rt_make_hash_by_type_path_throwing";
+                helper_name = "qore_rt_make_hash_by_type_path_cached";
+                helper_throwing_name =
+                    "qore_rt_make_hash_by_type_path_cached_throwing";
+                cached_type_path = true;
             } else {
                 ti_arg = aot_mode
                     ? llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type))
                     : getTypeInfoPointerArg(mh->typeInfo);
             }
-            auto mh_ft = llvm::FunctionType::get(i64_type,
-                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false);
+            auto mh_ft = cached_type_path
+                ? llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx),
+                        ptr_type, ptr_type}, false)
+                : llvm::FunctionType::get(i64_type,
+                    {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type},
+                    false);
             auto helper = module.getOrInsertFunction(helper_name, mh_ft);
             auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, mh_ft);
-            llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
-                    {arr, count_val, ti_arg, xsink_arg}, module, llvm_func, inst);
+            std::vector<llvm::Value*> args =
+                {arr, count_val, ti_arg, xsink_arg};
+            if (cached_type_path) {
+                args.insert(args.begin(), aot_ctx_arg);
+            }
+            llvm::Value* hash_result = emitMaybeInvoke(
+                helper, helper_throwing, args, module, llvm_func, inst);
             if (has_capacity) {
                 llvm::Value* capacity = getVal(inst->operands.back().id, error);
                 if (!capacity || capacity->getType() != i64_type
@@ -23073,6 +23107,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ti_arg;
             const char* helper_name = "qore_rt_make_hash_const_keys";
             const char* helper_throwing_name = "qore_rt_make_hash_const_keys_throwing";
+            bool cached_type_path = false;
             if (unique_keys) {
                 helper_name = "qore_rt_make_hash_const_keys_unique";
                 helper_throwing_name = "qore_rt_make_hash_const_keys_unique_throwing";
@@ -23080,25 +23115,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (aot_mode && mhck->typeInfo) {
                 ti_arg = getTypePathArg(mhck->typeInfo);
                 helper_name = unique_keys
-                    ? "qore_rt_make_hash_const_keys_unique_by_type_path"
-                    : "qore_rt_make_hash_const_keys_by_type_path";
+                    ? "qore_rt_make_hash_const_keys_unique_by_type_path_cached"
+                    : "qore_rt_make_hash_const_keys_by_type_path_cached";
                 helper_throwing_name = unique_keys
-                    ? "qore_rt_make_hash_const_keys_unique_by_type_path_throwing"
-                    : "qore_rt_make_hash_const_keys_by_type_path_throwing";
+                    ? "qore_rt_make_hash_const_keys_unique_by_type_path_cached_throwing"
+                    : "qore_rt_make_hash_const_keys_by_type_path_cached_throwing";
+                cached_type_path = true;
             } else {
                 ti_arg = aot_mode
                     ? llvm::ConstantPointerNull::get(llvm::dyn_cast<llvm::PointerType>(ptr_type))
                     : getTypeInfoPointerArg(mhck->typeInfo);
             }
-            auto mhck_ft = llvm::FunctionType::get(i64_type,
-                    {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type},
-                    false);
+            auto mhck_ft = cached_type_path
+                ? llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, ptr_type,
+                        llvm::Type::getInt32Ty(ctx), ptr_type, ptr_type}, false)
+                : llvm::FunctionType::get(i64_type,
+                    {ptr_type, ptr_type, llvm::Type::getInt32Ty(ctx),
+                        ptr_type, ptr_type}, false);
             auto helper = module.getOrInsertFunction(helper_name, mhck_ft);
             auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, mhck_ft);
-            llvm::Value* hash_result = emitMaybeInvoke(helper, helper_throwing,
-                    {keys_arr, vals_arr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count),
-                     ti_arg, xsink_arg},
-                    module, llvm_func, inst);
+            std::vector<llvm::Value*> args = {
+                keys_arr, vals_arr,
+                llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count),
+                ti_arg, xsink_arg};
+            if (cached_type_path) {
+                args.insert(args.begin(), aot_ctx_arg);
+            }
+            llvm::Value* hash_result = emitMaybeInvoke(
+                helper, helper_throwing, args, module, llvm_func, inst);
             values[inst->result.id] = hash_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(hash_result, inst->result.id, llvm_func);

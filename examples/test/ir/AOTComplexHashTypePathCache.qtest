@@ -121,6 +121,8 @@ if (!enabled_symbols.regex(
         "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")
         || !enabled_symbols.regex(
             "qore_rt_new_complex_hash_from_hash_by_type_path_cached")
+        || !enabled_symbols.regex(
+            "qore_rt_make_hash_const_keys_unique_by_type_path_cached")
         || checked_symbols.regex(
             "qore_rt_new_complex_hash_from_hash_by_type_path_cached_prechecked")) {
     printf("unexpected helper symbols:\nenabled:\n%schecked:\n%s",

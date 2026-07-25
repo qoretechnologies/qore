@@ -400,25 +400,41 @@ uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue_bits, uint64_t first
 //! MakeList: takes array of NaN-boxed values with optional parse-time type info, returns NaN-boxed list
 uint64_t qore_rt_make_list(uint64_t* values, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_list_by_type_path(uint64_t* values, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_list_by_type_path_cached(QoreAOTContext* ctx, uint64_t* values, int count,
+        const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_list_by_type_path_throwing(uint64_t* values, int count, const char* type_path,
         ExceptionSink* xsink);
+uint64_t qore_rt_make_list_by_type_path_cached_throwing(QoreAOTContext* ctx, uint64_t* values, int count,
+        const char* type_path, ExceptionSink* xsink);
 
 //! MakeHash: takes array of key-value pairs (alternating) with optional parse-time type info, returns NaN-boxed hash
 uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_by_type_path_cached(QoreAOTContext* ctx, uint64_t* kv_pairs, int count,
+        const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_by_type_path_throwing(uint64_t* kv_pairs, int count, const char* type_path,
         ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_by_type_path_cached_throwing(QoreAOTContext* ctx, uint64_t* kv_pairs, int count,
+        const char* type_path, ExceptionSink* xsink);
 
 //! MakeHashConstKeys: takes array of const keys and NaN-boxed values with optional parse-time type info, returns NaN-boxed hash
 uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_by_type_path_cached(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_by_type_path_cached_throwing(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_unique(const char** keys, uint64_t* vals, int count,
         const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_unique_by_type_path(const char** keys, uint64_t* vals, int count,
         const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_cached(QoreAOTContext* ctx, const char** keys,
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
+uint64_t qore_rt_make_hash_const_keys_unique_by_type_path_cached_throwing(QoreAOTContext* ctx,
+        const char** keys, uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_2_unique(const char* key0, uint64_t val0,
     const char* key1, uint64_t val1, ExceptionSink* xsink);
 uint64_t qore_rt_make_hash_const_keys_2_unique_throwing(const char* key0, uint64_t val0,
