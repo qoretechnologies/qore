@@ -274,6 +274,28 @@ public hashdecl ImapMessageInfo {
     *hash<string, binary> body;
 }
 
+#! The maximum time an \c IDLE session may run before it must be re-issued
+/** <a href="https://datatracker.ietf.org/doc/html/rfc2177">RFC 2177</a> requires clients to terminate and
+    re-issue \c IDLE at least every 29 minutes so that servers and intervening NAT devices do not drop an
+    apparently-dead connection.
+*/
+public const MaxIdleDuration = 29m;
+
+#! An unsolicited mailbox update delivered while in the \c IDLE state
+public hashdecl ImapIdleEvent {
+    #! the update type in upper case (ex: \c "EXISTS", \c "EXPUNGE", \c "RECENT", \c "FETCH")
+    string type;
+
+    #! the message number the update refers to, when the update carries one
+    *int number;
+
+    #! the complete parsed line
+    list<auto> values = ();
+
+    #! the raw line as received, without its trailing CRLF
+    string line;
+}
+
 #! A raw IMAP response split into protocol text and literal payloads
 /** Literal payloads are kept as binary and never decoded, so message and attachment content survives
     byte-exact regardless of what a server puts on the wire.

@@ -70,6 +70,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     private {
         Socket listener();
         int port;
+        #! guards every member below that the server thread writes and the test thread reads;
+        #! without it those reads are unsynchronized cross-thread accesses
+        Mutex lck();
         #! every command line received from the client
         list<string> received = ();
         #! signals server thread completion
@@ -82,7 +85,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         #! pre-TLS list is reused
         string secure_capabilities = "";
         #! capabilities advertised after authentication
-        string post_auth_capabilities = "IMAP4rev1 SASL-IR MOVE UIDPLUS ID LITERAL+";
+        string post_auth_capabilities = "IMAP4rev1 SASL-IR MOVE UIDPLUS ID LITERAL+ IDLE";
         #! canned messages keyed by UID: "flags", "internaldate", "envelope", "body"
         hash<string, hash<auto>> messages;
         #! if True, offer STARTTLS and upgrade when asked
@@ -100,6 +103,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *string auth_payload;
         #! the last APPEND payload received
         *binary append_payload;
+        #! unsolicited lines to push once the client enters the IDLE state
+        list<string> idle_pushes = ();
+        #! if True, do not answer IDLE with a continuation request
+        bool refuse_idle = False;
     }
 
     constructor(*hash<string, hash<auto>> messages) {
@@ -137,31 +144,47 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         reject_bearer = reject;
     }
 
+    #! Sets unsolicited lines to send as soon as the client enters the IDLE state
+    setIdlePushes(list<string> lines) {
+        idle_pushes = lines;
+    }
+
+    setRefuseIdle(bool refuse = True) {
+        refuse_idle = refuse;
+    }
+
     bool isSecure() {
+        AutoLock al(lck);
         return secure;
     }
 
     int getCapabilityCount() {
+        AutoLock al(lck);
         return capability_count;
     }
 
     *string getAuthMechanism() {
+        AutoLock al(lck);
         return auth_mechanism;
     }
 
     *string getDecodedAuthPayload() {
+        AutoLock al(lck);
         return auth_payload.val() ? parse_base64_string_to_string(auth_payload) : NOTHING;
     }
 
     *binary getAppendPayload() {
+        AutoLock al(lck);
         return append_payload;
     }
 
     list<string> getReceivedCommands() {
+        AutoLock al(lck);
         return received;
     }
 
     *string getServerError() {
+        AutoLock al(lck);
         return server_error;
     }
 
@@ -173,6 +196,37 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         done.waitForZero(to);
     }
 
+    #! Records a received command line under the lock
+    private record(string line) {
+        AutoLock al(lck);
+        received += line;
+    }
+
+    private setAuth(string mech, *string payload) {
+        AutoLock al(lck);
+        auth_mechanism = mech;
+        auth_payload = payload;
+    }
+
+    private setAuthPayload(string payload) {
+        AutoLock al(lck);
+        auth_payload = payload;
+    }
+
+    private setAuthenticated() {
+        AutoLock al(lck);
+        authenticated = True;
+    }
+
+    #! Returns the capability list matching the connection's current state
+    private string currentCapabilities() {
+        AutoLock al(lck);
+        if (authenticated) {
+            return post_auth_capabilities;
+        }
+        return secure && secure_capabilities.val() ? secure_capabilities : capabilities;
+    }
+
     private acceptAndServe() {
         on_exit done.dec();
         try {
@@ -180,6 +234,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             serveClient(client);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "SOCKET-CLOSED" && ex.err != "SOCKET-NOT-OPEN") {
+                AutoLock al(lck);
                 server_error = sprintf("%s: %s", ex.err, ex.desc);
             }
         }
@@ -203,7 +258,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         while (True) {
             string line = readLine(client);
             trim line;
-            received += line;
+            record(line);
 
             *list<*string> m = (line =~ x/^(\S+)\s+(.*)$/);
             if (!m) {
@@ -217,10 +272,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
             switch (cmd) {
                 case "CAPABILITY": {
-                    ++capability_count;
-                    string caps = authenticated
-                        ? post_auth_capabilities
-                        : (secure && secure_capabilities.val() ? secure_capabilities : capabilities);
+                    {
+                        AutoLock al(lck);
+                        ++capability_count;
+                    }
+                    string caps = currentCapabilities();
                     client.send(sprintf("* CAPABILITY %s\r\n", caps));
                     client.send(sprintf("%s OK CAPABILITY completed\r\n", tag));
                     break;
@@ -230,36 +286,38 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     client.setCertificate(CertPem);
                     client.setPrivateKey(KeyPem);
                     client.upgradeServerToSSL(15s);
-                    secure = True;
+                    {
+                        AutoLock al(lck);
+                        secure = True;
+                    }
                     break;
                 }
                 case "AUTHENTICATE": {
                     *list<*string> am = (args =~ x/^(\S+)\s*(\S*)$/);
-                    auth_mechanism = am[0].upr();
-                    auth_payload = am[1];
+                    setAuth(am[0].upr(), am[1]);
                     if (!auth_payload.val()) {
                         # the client is using the two-step exchange
                         client.send("+ \r\n");
                         string payload = readLine(client);
                         trim payload;
-                        auth_payload = payload;
-                        received += sprintf("<auth-payload:%s>", auth_mechanism);
+                        setAuthPayload(payload);
+                        record(sprintf("<auth-payload:%s>", getAuthMechanism()));
                     }
                     if (reject_bearer) {
                         client.send("+ eyJzdGF0dXMiOiI0MDEifQ==\r\n");
                         string empty = readLine(client);
-                        received += sprintf("<challenge-response:%d bytes>", empty.size());
+                        record(sprintf("<challenge-response:%d bytes>", empty.size()));
                         client.send(sprintf("%s NO [AUTHENTICATIONFAILED] Invalid credentials\r\n", tag));
                     } else {
-                        authenticated = True;
+                        setAuthenticated();
                         client.send(sprintf("%s OK %s authentication successful\r\n", tag,
-                            auth_mechanism));
+                            getAuthMechanism()));
                     }
                     break;
                 }
                 case "LOGIN": {
-                    auth_mechanism = "LOGIN";
-                    authenticated = True;
+                    setAuth("LOGIN", NOTHING);
+                    setAuthenticated();
                     client.send(sprintf("%s OK LOGIN completed\r\n", tag));
                     break;
                 }
@@ -333,6 +391,29 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 }
                 case "APPEND": {
                     handleAppend(client, tag, args);
+                    break;
+                }
+                case "IDLE": {
+                    if (refuse_idle) {
+                        client.send(sprintf("%s NO IDLE not permitted here\r\n", tag));
+                        break;
+                    }
+                    client.send("+ idling\r\n");
+                    # push any queued updates immediately so the client sees them without waiting
+                    foreach string push_line in (idle_pushes) {
+                        client.send(push_line + "\r\n");
+                    }
+                    # DONE is sent as a bare line with no tag
+                    while (True) {
+                        string done = readLine(client);
+                        trim done;
+                        record(done);
+                        if (done.upr() == "DONE") {
+                            break;
+                        }
+                    }
+                    client.send("* 9 EXPUNGE\r\n");
+                    client.send(sprintf("%s OK IDLE terminated\r\n", tag));
                     break;
                 }
                 case "LOGOUT": {
@@ -432,7 +513,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         while (payload.size() < count) {
             payload += client.recvBinary(count - payload.size(), 10s);
         }
-        append_payload = payload;
+        {
+            AutoLock al(lck);
+            append_payload = payload;
+        }
         # consume the CRLF that terminates the APPEND command
         readLine(client);
         client.send(sprintf("%s OK [APPENDUID 3857529045 4392] APPEND completed\r\n", tag));
@@ -482,6 +566,8 @@ public class ImapClientTest inherits QUnit::Test {
         addTestCase("move with and without MOVE", \moveTests());
         addTestCase("append", \appendTests());
         addTestCase("connection class", \connectionTests());
+        addTestCase("IDLE", \idleTests());
+        addTestCase("IDLE unsupported", \idleUnsupportedTests());
         set_return_value(main());
     }
 
@@ -1170,6 +1256,83 @@ public class ImapClientTest inherits QUnit::Test {
         }
         assertTrue(sync_literal, "synchronizing literal used without LITERAL+");
         assertNothing(server2.getServerError(), "no server errors");
+    }
+
+    idleTests() {
+        MockImapServer server(makeMessages());
+        server.setIdlePushes(("* 3 EXISTS", "* 1 RECENT", "* OK Still here"));
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+
+        # IDLE requires a selected mailbox
+        imap.connect();
+        assertThrows("IMAP-NOT-SELECTED", "no mailbox is selected",
+            sub () { imap.startIdle(); }, NOTHING, "IDLE without SELECT rejected");
+
+        imap.selectMailbox("INBOX");
+        assertFalse(imap.isIdling(), "not idling before startIdle()");
+        imap.startIdle();
+        assertTrue(imap.isIdling(), "idling after startIdle()");
+
+        # the server pushed three updates; each is delivered as its own event
+        *hash<ImapIdleEvent> e1 = imap.waitForIdleEvent(10s);
+        assertEq("EXISTS", e1.type, "EXISTS update type parsed");
+        assertEq(3, e1.number, "EXISTS message number parsed");
+        assertEq("* 3 EXISTS", e1.line, "raw line preserved");
+
+        *hash<ImapIdleEvent> e2 = imap.waitForIdleEvent(10s);
+        assertEq("RECENT", e2.type, "RECENT update type parsed");
+        assertEq(1, e2.number, "RECENT number parsed");
+
+        *hash<ImapIdleEvent> e3 = imap.waitForIdleEvent(10s);
+        assertEq("OK", e3.type, "non-numeric untagged line typed");
+        assertNothing(e3.number, "no message number on a non-numeric line");
+
+        # no further updates: a timeout is reported as "nothing happened", not an error
+        assertNothing(imap.waitForIdleEvent(1s), "timeout returns NOTHING");
+        assertTrue(imap.isIdling(), "still idling after a timeout");
+
+        # other commands are refused while idling rather than corrupting the session
+        assertThrows("IMAP-IDLING", "call ImapClient::stopIdle",
+            sub () { imap.noop(); }, NOTHING, "commands refused while idling");
+
+        list<hash<ImapIdleEvent>> trailing = imap.stopIdle();
+        assertFalse(imap.isIdling(), "not idling after stopIdle()");
+        assertEq(1, trailing.size(), "trailing update reported");
+        assertEq("EXPUNGE", trailing[0].type, "trailing update type parsed");
+        assertEq(9, trailing[0].number, "trailing update number parsed");
+
+        # stopping when not idling is a no-op
+        assertEq((), imap.stopIdle(), "stopIdle() when not idling is a no-op");
+
+        # commands work again
+        imap.noop();
+
+        # waiting when not idling is an error
+        assertThrows("IMAP-NOT-IDLING", "not in the IDLE state",
+            sub () { imap.waitForIdleEvent(1s); }, NOTHING, "wait without startIdle() rejected");
+
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    idleUnsupportedTests() {
+        # a server without the IDLE capability must produce a clear error naming the alternative
+        MockImapServer server(makeMessages());
+        server.setPostAuthCapabilities("IMAP4rev1 SASL-IR MOVE");
+        server.start();
+        on_exit server.wait();
+
+        ImapClient imap = makeClient(server);
+        on_exit imap.disconnect();
+        imap.selectMailbox("INBOX");
+
+        assertThrows("IMAP-NOT-SUPPORTED", "does not advertise the IDLE capability",
+            sub () { imap.startIdle(); }, NOTHING, "missing IDLE capability reported");
+        assertFalse(imap.isIdling(), "not idling after a failed start");
+        assertNothing(server.getServerError(), "no server errors");
     }
 
     connectionTests() {

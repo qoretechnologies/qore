@@ -114,6 +114,18 @@ public class ImapClient inherits Logger::LoggerWrapper, ConnectionProvider::Opti
         #! command tag counter
         int tag_counter = 0;
 
+        #! the tag of the active IDLE command, if the connection is idling
+        *string idle_tag;
+
+        #! monotonic microsecond timestamp when the current IDLE session started
+        int idle_started_us = 0;
+
+        #! the read operation pending on the idling connection
+        *ImapIdleReadPollOperation idle_read;
+
+        #! the queue delivering the pending IDLE read's result, or NOTHING if it already completed
+        *Queue<hash<SocketPollResultInfo>> idle_queue;
+
         #! maximum length of a single debug log line
         const MaxDebugLine = 2048;
     }
@@ -346,6 +358,10 @@ ImapClient imap("imaps://imap.example.com", {
         }
         capabilities = NOTHING;
         selected = NOTHING;
+        idle_tag = NOTHING;
+        idle_started_us = 0;
+        idle_read = NOTHING;
+        idle_queue = NOTHING;
     }
 
     #! Returns the capabilities advertised by the server
@@ -866,6 +882,116 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
         appendIntern(mailbox, message, flags, internal_date);
     }
 
+    #! Enters the \c IDLE state so the server can report mailbox changes as they happen
+    /** @par Example:
+        @code{.py}
+imap.selectMailbox("INBOX");
+imap.startIdle();
+on_exit imap.stopIdle();
+while (True) {
+    *hash<ImapIdleEvent> event = imap.waitForIdleEvent(5m);
+    if (event && event.type == "EXISTS") {
+        printf("mailbox now holds %d messages\n", event.number);
+    }
+}
+        @endcode
+
+        \c IDLE (<a href="https://datatracker.ietf.org/doc/html/rfc2177">RFC 2177</a>) replaces polling: the
+        server pushes updates as they occur, so new mail is seen immediately instead of on the next poll.
+
+        @throw IMAP-NOT-SELECTED no mailbox is selected
+        @throw IMAP-NOT-SUPPORTED the server does not advertise the \c IDLE capability
+        @throw IMAP-IDLE-ERROR the server refused to enter the \c IDLE state
+
+        @note while idling, no other command may be sent on the connection; call @ref stopIdle() first
+    */
+    startIdle() {
+        AutoLock am(mutex);
+        startIdleIntern();
+    }
+
+    #! Waits for the next unsolicited mailbox update
+    /** @param to the maximum time to wait; capped at the time remaining in the current \c IDLE window
+
+        @return the update, or @ref nothing if none arrived before the timeout expired
+
+        @throw IMAP-NOT-IDLING @ref startIdle() has not been called
+
+        @note
+        - when the \c IDLE window set by @ref MaxIdleDuration expires, the session is transparently
+          re-issued and @ref nothing is returned, so a caller looping on this method keeps working
+          indefinitely without having to track the window itself
+        - the server may send updates that are not mailbox changes (ex: \c "* OK Still here"); these are
+          returned with their own type so the caller can decide what to do with them
+    */
+    *hash<ImapIdleEvent> waitForIdleEvent(timeout to = 5m) {
+        AutoLock am(mutex);
+        if (!idle_tag.val()) {
+            throw "IMAP-NOT-IDLING", "the connection is not in the IDLE state; call "
+                "ImapClient::startIdle() first";
+        }
+
+        # never wait past the end of the IDLE window; RFC 2177 requires it to be re-issued
+        int remaining_us = MaxIdleDuration.durationMicroseconds()
+            - (clock_getmicros_monotonic() - idle_started_us);
+        if (remaining_us <= 0) {
+            refreshIdleIntern();
+            return;
+        }
+        int wait_ms = to;
+        if (wait_ms > (remaining_us / 1000)) {
+            wait_ms = remaining_us / 1000;
+        }
+
+        *string line = waitIdleLineIntern(wait_ms);
+        if (!exists line) {
+            if ((clock_getmicros_monotonic() - idle_started_us)
+                >= MaxIdleDuration.durationMicroseconds()) {
+                refreshIdleIntern();
+            }
+            return;
+        }
+        return ImapClient::parseIdleLine(line);
+    }
+
+    #! Leaves the \c IDLE state
+    /** @return any updates the server reported while terminating the session
+
+        @note it is not an error to call this when not idling
+    */
+    list<hash<ImapIdleEvent>> stopIdle() {
+        AutoLock am(mutex);
+        return stopIdleIntern();
+    }
+
+    #! Returns True if the connection is in the \c IDLE state
+    bool isIdling() {
+        AutoLock am(mutex);
+        return idle_tag.val() ? True : False;
+    }
+
+    #! Parses an unsolicited line received while idling
+    /** @param line the raw line without its trailing CRLF
+
+        @return the parsed update
+    */
+    static hash<ImapIdleEvent> parseIdleLine(string line) {
+        list<auto> values = ImapResponseParser::parseTokens(line);
+        hash<ImapIdleEvent> rv(<ImapIdleEvent>{"line": line, "values": values});
+
+        # untagged updates take either "* <n> <TYPE>" or "* <TYPE> ..." form
+        if (values.size() >= 3 && values[1].typeCode() == NT_INT
+            && values[2].typeCode() == NT_STRING) {
+            rv.number = values[1];
+            rv.type = values[2].upr();
+        } else if (values.size() >= 2 && values[1].typeCode() == NT_STRING) {
+            rv.type = values[1].upr();
+        } else {
+            rv.type = "UNKNOWN";
+        }
+        return rv;
+    }
+
     #! Runs an arbitrary IMAP command on the connection and returns the parsed response
     /** Provided as an escape hatch for commands this class does not model directly.
 
@@ -1067,6 +1193,8 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
             execPollOperation(op, sprintf("imap-connect:%s", connect), connectTimeout);
             capabilities = op.getCapabilities();
             selected = NOTHING;
+            idle_tag = NOTHING;
+            idle_started_us = 0;
             logDbg("connected to %y; capabilities: %y", connect, keys capabilities);
             if (client_id) {
                 sendClientIdIntern();
@@ -1097,6 +1225,14 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
 
     private disconnectIntern() {
         if (sock.isOpen()) {
+            if (idle_tag.val()) {
+                try {
+                    stopIdleIntern();
+                } catch (hash<ExceptionInfo> ex) {
+                    logDbg("leaving the IDLE state failed: %s: %s", ex.err, ex.desc);
+                    idle_tag = NOTHING;
+                }
+            }
             try {
                 commandIntern("LOGOUT");
             } catch (hash<ExceptionInfo> ex) {
@@ -1106,10 +1242,18 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
         }
         capabilities = NOTHING;
         selected = NOTHING;
+        idle_tag = NOTHING;
+        idle_started_us = 0;
+        idle_read = NOTHING;
+        idle_queue = NOTHING;
     }
 
     # Runs one command on the open socket and returns the parsed response
     private hash<ImapResponse> commandIntern(string command) {
+        if (idle_tag.val()) {
+            throw "IMAP-IDLING", sprintf("cannot send %y while the connection is in the IDLE state; "
+                "call ImapClient::stopIdle() first", (command =~ x/^(\S+)/)[0]);
+        }
         string tag = nextTag();
         ImapCommandPollOperation op(sock, tag, command, max_response_size);
         execPollOperation(op, sprintf("imap-command:%s:%s", connect, command));
@@ -1388,8 +1532,147 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
         execPollOperation(op, sprintf("imap-append:%s:%s", connect, mailbox), connectTimeout);
     }
 
+    private startIdleIntern() {
+        checkSelectedIntern();
+        if (!capabilities.IDLE) {
+            throw "IMAP-NOT-SUPPORTED", sprintf("the server at %y does not advertise the IDLE "
+                "capability; poll with ImapClient::uidSearch() instead. Advertised capabilities: %y",
+                connect, keys capabilities);
+        }
+        if (idle_tag.val()) {
+            return;
+        }
+        string tag = nextTag();
+        ImapIdleStartPollOperation op(sock, tag);
+        execPollOperation(op, sprintf("imap-idle-start:%s", connect));
+        idle_tag = tag;
+        idle_started_us = clock_getmicros_monotonic();
+        submitIdleReadIntern();
+        logDbg("entered the IDLE state with tag %y", tag);
+    }
+
+    # Submits a single-line read that stays pending in the controller between waits
+    /** Keeping the read submitted is what makes a wait timeout harmless: giving up on the wait never
+        cancels the read, so a line that is only partly on the wire when the caller stops waiting is
+        still there when the caller comes back.
+    */
+    private submitIdleReadIntern() {
+        ImapIdleReadPollOperation op(sock);
+        idle_read = op;
+        idle_queue = NOTHING;
+
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            # data was already buffered; the line is available without any I/O wait
+            return;
+        }
+        idle_queue = AsyncIoController::submit(operation_info: <SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": sprintf("imap-idle:%s", connect),
+            "to": MaxIdleDuration.durationMilliseconds(),
+        });
+    }
+
+    private list<hash<ImapIdleEvent>> stopIdleIntern() {
+        if (!idle_tag.val()) {
+            return ();
+        }
+        string tag = idle_tag;
+        # clear the state first so a failure here cannot leave the object believing it is idling
+        idle_tag = NOTHING;
+        idle_started_us = 0;
+
+        list<hash<ImapIdleEvent>> rv = ();
+        try {
+            # DONE is sent as a send-only operation under its own controller key, so a read that is
+            # still pending on this socket keeps ownership of the incoming direction and no buffered
+            # data is discarded
+            ImapIdleDoneSendPollOperation send_op(sock);
+            execPollOperation(send_op, sprintf("imap-idle-done-send:%s", connect), ioTimeout,
+                sprintf("%s-idle-done", sock.uniqueHash()));
+
+            # drain until the tagged completion for the IDLE command
+            while (True) {
+                *string line = waitIdleLineIntern(ioTimeout);
+                if (!exists line) {
+                    throw "IMAP-IDLE-ERROR", sprintf("timed out waiting for the tagged completion of "
+                        "the IDLE command %y", tag);
+                }
+                if (line.size() > tag.size() && line.substr(0, tag.size()).lwr() == tag.lwr()
+                    && line[tag.size()] == " ") {
+                    *string status = (line =~ x/^\S+\s+(\S+)/)[0];
+                    if (status.val() && (status.upr() == "NO" || status.upr() == "BAD")) {
+                        throw "IMAP-IDLE-ERROR", sprintf("IDLE terminated with an error: %s", line);
+                    }
+                    break;
+                }
+                rv += ImapClient::parseIdleLine(line);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            idle_read = NOTHING;
+            idle_queue = NOTHING;
+            rethrow;
+        }
+
+        idle_read = NOTHING;
+        idle_queue = NOTHING;
+        logDbg("left the IDLE state; %d update%s reported", rv.size(), rv.size() == 1 ? "" : "s");
+        return rv;
+    }
+
+    # Waits for the next line on the idling connection; returns NOTHING on timeout
+    /** A read is kept in flight for the duration of a wait, so a wait that times out leaves the read —
+        and any partly-received line — untouched in the controller. The completed read is consumed here
+        and the next one is only submitted when the caller asks for another line, so no read is left
+        pending once the caller stops reading.
+    */
+    private *string waitIdleLineIntern(timeout to) {
+        if (!idle_read) {
+            submitIdleReadIntern();
+        }
+        if (!idle_read.goalReached()) {
+            if (!idle_queue) {
+                return;
+            }
+            try {
+                hash<SocketPollResultInfo> result = idle_queue.get(to);
+                if (result.ex) {
+                    idle_read = NOTHING;
+                    idle_queue = NOTHING;
+                    throw result.ex.err, result.ex.desc;
+                }
+                if (result.canceled) {
+                    idle_read = NOTHING;
+                    idle_queue = NOTHING;
+                    return;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    idle_read = NOTHING;
+                    idle_queue = NOTHING;
+                    rethrow;
+                }
+                # the read stays pending in the controller, so nothing is lost by giving up here
+                return;
+            }
+        }
+        string line = idle_read.getLine();
+        idle_read = NOTHING;
+        idle_queue = NOTHING;
+        return line;
+    }
+
+    # Re-issues IDLE after the RFC 2177 window expires
+    private refreshIdleIntern() {
+        logDbg("IDLE window expired after %y; re-issuing", MaxIdleDuration);
+        stopIdleIntern();
+        startIdleIntern();
+    }
+
     # Executes a poll operation synchronously through the global AsyncIoController
-    private execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = ioTimeout) {
+    private execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = ioTimeout,
+            *string key) {
         *hash<SocketPollInfo> pi = op.continuePoll();
         if (!pi) {
             if (!op.goalReached()) {
@@ -1399,12 +1682,17 @@ imap.appendMessage("Sent", msg, ("\\Seen",));
             return;
         }
 
-        hash<SocketPollResultInfo> result = AsyncIoController::exec(operation_info: <SocketPollOperationInfo>{
+        hash<SocketPollOperationInfo> info(<SocketPollOperationInfo>{
             "sock": pi.socket,
             "spop": op,
             "owner": owner,
             "to": to,
         });
+        if (key.val()) {
+            # a distinct key lets this operation run alongside another on the same socket
+            info.key = key;
+        }
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(operation_info: info);
         if (result.ex) {
             throw result.ex.err, result.ex.desc;
         }

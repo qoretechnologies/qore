@@ -356,6 +356,181 @@ public class ImapCommandPollOperation inherits Qore::PollPipeline {
     }
 }
 
+#! Poll operation that enters the \c IDLE state
+/** Sends \c IDLE and reads the server's command continuation request, after which the server may send
+    unsolicited mailbox updates at any time until \c DONE is sent.
+
+    @since %ImapClient 1.0
+*/
+public class ImapIdleStartPollOperation inherits Qore::PollPipeline {
+    #! Sends \c IDLE and waits for the continuation request
+    /** @param sock the connected, authenticated socket
+        @param tag the command tag
+
+        @throw IMAP-IDLE-ERROR the server did not grant the continuation request
+    */
+    constructor(Socket sock, string tag) : PollPipeline(sock) {
+        goal = "idle-start";
+        addSetContextBinary("idle_cmd", sprintf("%s IDLE\r\n", tag));
+        addSendFromContext("idle_cmd");
+        # a single line: the server answers "+ idling" to grant the continuation request
+        addRecvUntilBytes("\r\n");
+        addValidateResponsePrefix("+", "IMAP-IDLE-ERROR");
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "idle-start";
+    }
+
+    #! Returns the current state
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+}
+
+#! Poll operation that reads one unsolicited line while in the \c IDLE state
+/** Completes as soon as a single line arrives, so each mailbox update is delivered to the caller as it
+    happens rather than being accumulated.
+
+    @since %ImapClient 1.0
+*/
+public class ImapIdleReadPollOperation inherits Qore::PollPipeline {
+    #! Reads one line from the idling connection
+    /** @param sock the connected, idling socket
+    */
+    constructor(Socket sock) : PollPipeline(sock) {
+        goal = "idle-read";
+        addRecvUntilBytes("\r\n");
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "idle-read";
+    }
+
+    #! Returns the current state
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+
+    #! Returns the line that was read, without its trailing CRLF
+    string getLine() {
+        auto out = getResult().output;
+        string line = out.typeCode() == NT_BINARY
+            ? binary_to_string(out, ProtocolEncoding)
+            : out.toString();
+        trim line;
+        return line;
+    }
+}
+
+#! Poll operation that sends \c DONE to leave the \c IDLE state
+/** Send-only, so it can run alongside the read that is already pending on the idling connection; the
+    tagged completion is then read by that pending read rather than by a second reader.
+
+    @since %ImapClient 1.0
+*/
+public class ImapIdleDoneSendPollOperation inherits Qore::PollPipeline {
+    #! Sends \c DONE on the idling connection
+    /** @param sock the connected, idling socket
+    */
+    constructor(Socket sock) : PollPipeline(sock) {
+        goal = "idle-done-send";
+        addSend("DONE\r\n");
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "idle-done-send";
+    }
+
+    #! Returns the current state
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+}
+
+#! Poll operation that leaves the \c IDLE state
+/** Sends \c DONE and reads everything the server still has to say, ending with the tagged completion
+    line for the original \c IDLE command.
+
+    @since %ImapClient 1.0
+*/
+public class ImapIdleDonePollOperation inherits Qore::PollPipeline {
+    #! @cond nodoc
+    private {
+        #! the tag of the IDLE command being terminated
+        string tag;
+    }
+    #! @endcond
+
+    #! Sends \c DONE and reads the tagged completion
+    /** @param sock the connected, idling socket
+        @param tag the tag of the \c IDLE command being terminated
+        @param max_size the maximum accepted response size in bytes
+
+        @throw IMAP-IDLE-ERROR the server returned a \c NO or \c BAD completion
+    */
+    constructor(Socket sock, string tag, int max_size = DefaultMaxResponseSize) : PollPipeline(sock) {
+        self.tag = tag;
+        goal = "idle-done";
+        addSetContextValue("tag", tag);
+        addSend("DONE\r\n");
+        addRecvImapResponse("tag", "response", "IMAP-IDLE-ERROR", max_size);
+    }
+
+    #! Returns the command tag
+    string getTag() {
+        return tag;
+    }
+
+    #! Returns the goal
+    string getGoal() {
+        return "idle-done";
+    }
+
+    #! Returns the current state
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+
+    #! Returns the raw response as received
+    binary getRawResponse() {
+        hash<auto> extra = getResult().extra ?? {};
+        return extra.response ?? binary();
+    }
+
+    #! Returns the parsed response
+    hash<ImapResponse> getResponse() {
+        return ImapResponseParser::parse(getRawResponse(), tag);
+    }
+}
+
 #! Poll operation that appends a message to a mailbox
 /** \c APPEND sends the message as a literal, which requires the server to grant a command continuation
     request before the payload may be sent — unless the server advertises \c LITERAL+, in which case the
