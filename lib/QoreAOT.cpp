@@ -13698,7 +13698,7 @@ static bool loadAOTFastEntryInfo(const QoreAOTSymbolIndexRecord& rec,
                         || node.third != UINT8_MAX
                         || node.constant
                         || info.param_kinds[static_cast<unsigned>(node.param)]
-                            != BatchCalleeParamKind::NativeBool
+                            != BatchCalleeParamKind::NativeInt
                         || !info.param_rejects_nothing[static_cast<unsigned>(node.param)]) {
                     return false;
                 }
