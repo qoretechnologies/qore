@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires QUnit
+
+%exec-class BulkRecordTemporalColumnsTest
+
+#! Bulk record interface returning a single ColumnarResult block
+class ColumnarBulkRecordInterface inherits DataProvider::AbstractDataProviderBulkRecordInterface {
+    private {
+        *ColumnarResult block;
+    }
+
+    constructor(ColumnarResult block, int block_size = 100)
+            : AbstractDataProviderBulkRecordInterface(block_size) {
+        self.block = block;
+    }
+
+    private *hash<auto> getValueImpl() {
+        # not used: getShapedValueImpl() delivers the columnar block
+        return;
+    }
+
+    private auto getShapedValueImpl() {
+        *ColumnarResult rv = block;
+        remove block;
+        return rv;
+    }
+
+    *hash<string, AbstractDataField> getRecordType() {
+        return;
+    }
+}
+
+public class BulkRecordTemporalColumnsTest inherits QUnit::Test {
+    public {
+        const Dates = (
+            2026-01-15T08:30:00Z,
+            2026-02-20T14:45:30Z,
+            2026-03-25T23:59:59Z,
+        );
+    }
+
+    constructor() : Test("BulkRecordTemporalColumnsTest", "1.0") {
+        addTestCase("getValue() materializes temporal columns", \temporalColumnTests());
+        addTestCase("non-temporal columns unaffected", \nonTemporalColumnTests());
+        set_return_value(main());
+    }
+
+    private ColumnarResult makeBlock() {
+        return ColumnarResult::fromColumnHash({
+            "id": new buffer<int64>((1, 2, 3)),
+            "name": new buffer<string>(("alpha", "beta", "gamma")),
+            "created": Dates,
+        });
+    }
+
+    #! getValue() is the compatibility accessor, so date columns must come back as dates
+    /** Without materialization the columnar schema hands back a buffer<int64> of epoch
+        microseconds, and the compatibility accessor silently degrades every date column to an
+        integer — which is exactly what a caller using this accessor cannot handle.
+    */
+    temporalColumnTests() {
+        ColumnarBulkRecordInterface i(makeBlock());
+        *hash<auto> rv = i.getValue();
+        assertTrue(exists rv, "a block was returned");
+        assertEq(3, rv.created.size(), "all rows returned");
+
+        foreach auto value in (rv.created) {
+            assertEq(NT_DATE, value.typeCode(),
+                sprintf("temporal column value %d is a date, not an epoch integer", $#));
+        }
+        assertEq(Dates, rv.created, "temporal column values round-trip unchanged");
+
+        # the same conversion through AbstractDataProcessor must agree; the two paths disagreeing
+        # is what this test pins down
+        list<auto> converted = AbstractDataProcessor::convertShape(makeBlock(),
+            DataProviderShape::BufferColumns, DataProviderShape::HashOfLists);
+        assertEq(rv.created, converted[0].created,
+            "getValue() agrees with AbstractDataProcessor::convertShape()");
+    }
+
+    nonTemporalColumnTests() {
+        ColumnarBulkRecordInterface i(makeBlock());
+        *hash<auto> rv = i.getValue();
+
+        assertEq((1, 2, 3), rv.id, "integer column returned as a list of ints");
+        assertEq(("alpha", "beta", "gamma"), rv.name, "string column returned as a list of strings");
+        foreach auto value in (rv.id) {
+            assertEq(NT_INT, value.typeCode(), sprintf("integer column value %d is an int", $#));
+        }
+
+        # the block is consumed, so a second call reports end of data
+        assertNothing(i.getValue(), "second call returns no data");
+    }
+}
