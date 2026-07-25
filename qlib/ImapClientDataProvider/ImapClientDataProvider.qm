@@ -1,0 +1,264 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ImapClientDataProvider.qm Qore user module providing a data provider API for IMAP servers
+
+/*  ImapClientDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+%requires(reexport) DataProvider
+%requires(reexport) ImapClient
+%requires MailMessage
+%requires Mime
+%requires Util
+
+# assume local var scope, do not use "$" for vars, members, and method calls
+%modern
+
+module ImapClientDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for IMAP servers";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new ImapClientDataProviderFactory());
+
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": ImapClientDataProvider::AppName,
+            "display_name": "IMAP",
+            "short_desc": "IMAP email services",
+            "desc": "Read and manage email on any IMAP server.\n\n"
+                "- search a mailbox with server-side criteria, so only matching messages are transferred\n"
+                "- retrieve a whole message, or a single MIME part when only one attachment is needed\n"
+                "- react to new mail as it arrives, using server push where the server supports it\n"
+                "- change flags, move messages between mailboxes, and file messages with `APPEND`\n\n"
+                "IMAP ([RFC 3501](https://datatracker.ietf.org/doc/html/rfc3501)) is the standard "
+                "mailbox protocol, and for many email providers it is the only programmatic access "
+                "they offer. Because messages stay on the server, an integration can watch a mailbox "
+                "and act on what arrives without taking over the account's mail.\n\n"
+                "Both password and OAuth2 bearer-token authentication are supported; the mechanism is "
+                "chosen from what the server advertises",
+            "scheme": "imap",
+            "logo": ImapLogoWhite,
+            "logo_file_name": "imap-logo-white.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Email,),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Search for Messages",
+            "short_desc": "Search a mailbox for messages",
+            "desc": "Search a mailbox with server-side IMAP criteria and return the UIDs of the "
+                "matching messages.\n\n"
+                "Searching on the server means a mailbox with thousands of messages can be narrowed to "
+                "the handful that matter without transferring the rest",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapSearchRequestDataType::Fields),
+            "output_type": ImapSearchResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/get-message",
+            "action": "get-message",
+            "display_name": "Retrieve a Message",
+            "short_desc": "Retrieve a message by UID",
+            "desc": "Retrieve a complete message by UID, including its headers, decoded body text, and "
+                "a summary of its attachments.\n\n"
+                "Retrieval does not change any flags unless `mark_seen` is set, so a message can be "
+                "inspected without the account showing it as read",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapGetMessageRequestDataType::Fields),
+            "output_type": ImapMessageResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/get-attachment",
+            "action": "get-attachment",
+            "display_name": "Retrieve an Attachment",
+            "short_desc": "Retrieve a single MIME part of a message",
+            "desc": "Retrieve a single MIME part of a message without transferring the whole message.\n\n"
+                "This matters when one attachment is needed from a message carrying several large "
+                "ones; use the `attachments` list returned by `Retrieve a Message` to find the part "
+                "specifier",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapGetAttachmentRequestDataType::Fields),
+            "output_type": ImapAttachmentResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/list-mailboxes",
+            "action": "list-mailboxes",
+            "display_name": "List Mailboxes",
+            "short_desc": "List the mailboxes in the account",
+            "desc": "List the mailboxes in the account, optionally restricted to those the account is "
+                "subscribed to.\n\n"
+                "A mailbox carrying the `\\Noselect` flag is a hierarchy node that cannot hold messages",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapListMailboxesRequestDataType::Fields),
+            "output_type": ImapListMailboxesResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/set-flags",
+            "action": "set-flags",
+            "display_name": "Change Message Flags",
+            "short_desc": "Add, remove, or replace message flags",
+            "desc": "Add, remove, or replace the flags on a set of messages.\n\n"
+                "Flags are how IMAP records state such as read (`\\Seen`), flagged (`\\Flagged`), and "
+                "pending deletion (`\\Deleted`); setting them is the usual way to record that an "
+                "integration has handled a message",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapSetFlagsRequestDataType::Fields),
+            "output_type": ImapMessageSetResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/move-messages",
+            "action": "move-messages",
+            "display_name": "Move Messages",
+            "short_desc": "Move or copy messages to another mailbox",
+            "desc": "Move or copy messages to another mailbox.\n\n"
+                "Moving processed mail into an archive mailbox keeps the working mailbox small and "
+                "makes it obvious what has already been handled. Servers without the `MOVE` capability "
+                "are handled with the equivalent copy-and-delete sequence",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapMoveMessagesRequestDataType::Fields),
+            "output_type": ImapMessageSetResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/append-message",
+            "action": "append-message",
+            "display_name": "Store a Message",
+            "short_desc": "Store a message in a mailbox",
+            "desc": "Store a complete RFC 822 message in a mailbox.\n\n"
+                "Use this to file a copy of a message that was sent by other means, or to import mail "
+                "from another system",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapAppendRequestDataType::Fields),
+            "output_type": ImapAppendResponseType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/watch",
+            "action": "watch",
+            "display_name": "New Email",
+            "short_desc": "React to new emails",
+            "desc": "React to new emails arriving in a mailbox.\n\n"
+                "When a message matching the search criteria arrives, the whole message — headers, "
+                "body text, and a summary of its attachments — is returned as output data. On servers "
+                "that support `IDLE` the message is reported as soon as it arrives rather than on the "
+                "next poll interval",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_IMAP_MESSAGE_MATCHED,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapMessageWatchDataProvider::WatchOptions - keys
+                    ImapClientDataProviderBase::ConstructorOptions),
+            "output_type": ImapMessageEventType,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": ImapClientDataProvider::AppName,
+            "path": "/watch-attachment",
+            "action": "watch-attachment",
+            "display_name": "New Email Attachments",
+            "short_desc": "React to new email attachments",
+            "desc": "React to attachments on new emails arriving in a mailbox.\n\n"
+                "One event is raised per matching attachment, so a message carrying several files "
+                "produces several events. Set `attachment_glob` to narrow a mixed mailbox to just the "
+                "files of interest, and leave `retrieve_attachments` off to receive metadata only when "
+                "attachments are large",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_IMAP_ATTACHMENT_MATCHED,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                ImapAttachmentWatchDataProvider::AttachmentWatchOptions - keys
+                    ImapClientDataProviderBase::ConstructorOptions),
+            "output_type": ImapAttachmentEventType,
+        });
+    };
+}
+
+/** @mainpage ImapClientDataProvider Module
+
+    @tableofcontents
+
+    @section imapclientdataproviderintro ImapClientDataProvider Module Introduction
+
+    The %ImapClientDataProvider module provides a @ref dataproviderintro "data provider" API for IMAP
+    servers, built on the @ref imapclientintro "ImapClient" module.
+
+    It is registered as a generic IMAP app rather than as a set of branded per-provider apps: everything
+    that varies between providers — host, port, SASL mechanism, and OAuth2 endpoints — is connection
+    configuration, so supporting another provider does not require changes to this module.
+
+    The following operations are provided:
+    |!Name|!Description
+    |\c search|Searches a mailbox with server-side criteria and returns matching message UIDs
+    |\c get-message|Retrieves a complete message by UID
+    |\c get-attachment|Retrieves a single MIME part of a message
+    |\c list-mailboxes|Lists the mailboxes in the account
+    |\c set-flags|Adds, removes, or replaces message flags
+    |\c move-messages|Moves or copies messages to another mailbox
+    |\c append-message|Stores a complete message in a mailbox
+    |\c watch|Raises an event for every new message matching the search criteria
+    |\c watch-attachment|Raises an event for every attachment on a new matching message
+
+    @section imapclientdataprovider_factory IMAP Data Provider Factory
+
+    The name of the IMAP data provider factory is <b><tt>imap</tt></b>.
+
+    @section imapclientdataprovider_relnotes ImapClientDataProvider Release Notes
+
+    @subsection imapclientdataprovider_v1_0 ImapClientDataProvider 1.0
+    - initial release of the module
+*/
+
+#! Contains all public definitions in the ImapClientDataProvider module
+public namespace ImapClientDataProvider {
+#! The application name
+public const AppName = "IMAP";
+}
+
+#! @cond nodoc
+namespace Priv {
+public const ImapLogoWhite = File::readTextFile(get_script_dir() + "/imap-logo-white.svg");
+}
+#! @endcond

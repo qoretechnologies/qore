@@ -189,7 +189,12 @@ public class AbstractDataProviderBulkRecordInterface {
                 return rv;
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(rv)) {
-                    return AbstractDataProcessor::bufferColumnsToHashList(rv.toColumnHash());
+                    # NOTE: toMaterializedColumnHash() must be used here, not toColumnHash();
+                    # it is the only accessor that reconstructs temporal columns as list<date>
+                    # from the columnar schema.  toColumnHash() returns the raw buffers, which
+                    # turns date and timestamp columns into int64 epoch microsecond values.
+                    # This mirrors AbstractDataProcessor::convertShape() for the same conversion
+                    return AbstractDataProcessor::bufferColumnsToHashList(rv.toMaterializedColumnHash());
                 }
                 return AbstractDataProcessor::bufferColumnsToHashList(rv);
             case DataProviderShape::DataFrameBlock:

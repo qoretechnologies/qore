@@ -84,7 +84,8 @@ public:
         RECV_FRAMED,       //!< Non-blocking framed receive with persistent buffer
         PUSH_QUEUE,        //!< Push ctx.last_output to an internal Queue
         DRAIN_QUEUE_SEND,  //!< Drain an internal Queue and send via socket
-        YIELD              //!< Return to event loop, resume at target step
+        YIELD,             //!< Return to event loop, resume at target step
+        RECV_IMAP_RESPONSE //!< Read one complete IMAP response (literal-aware)
     };
 
     //! Pipeline execution context — accumulated across steps on I/O thread
@@ -98,6 +99,9 @@ public:
         BinaryNode* frame_buf = nullptr;    //!< RECV_FRAMED persistent buffer (ref'd)
         bool has_frame = false;             //!< set by RECV_FRAMED when a complete frame is available
         bool eof = false;                   //!< set by RECV_FRAMED on EOF (empty recv)
+        BinaryNode* imap_accum = nullptr;   //!< RECV_IMAP_RESPONSE raw response accumulator (ref'd)
+        size_t imap_literal_remaining = 0;  //!< RECV_IMAP_RESPONSE: octets left in the current literal
+        bool imap_continuation = false;     //!< RECV_IMAP_RESPONSE: response ended in a "+" continuation
 
         DLLEXPORT void cleanup(ExceptionSink* xsink) {
             if (headers) { headers->deref(xsink); headers = nullptr; }
@@ -109,6 +113,9 @@ public:
             if (frame_buf) { frame_buf->deref(xsink); frame_buf = nullptr; }
             has_frame = false;
             eof = false;
+            if (imap_accum) { imap_accum->deref(xsink); imap_accum = nullptr; }
+            imap_literal_remaining = 0;
+            imap_continuation = false;
         }
     };
 
@@ -247,6 +254,39 @@ public:
 
     //! Branches on whether a context extra string key equals a value
     DLLEXPORT int addBranchOnContextValue(const char* key, const char* value, int true_step, int false_step);
+
+    //! Branches on whether a context extra integer key equals a value
+    /** Used for protocols whose reply codes are stored as integers, such as the code
+        slot populated by addRecvLineResponse().
+    */
+    DLLEXPORT int addBranchOnContextInt(const char* key, int64_t value, int true_step, int false_step);
+
+    //! Reads one complete IMAP response, transparently consuming literals
+    /** Reads CRLF-delimited lines from the socket, and whenever a line ends with an
+        IMAP literal introducer (<tt>{N}</tt>, <tt>{N+}</tt> or <tt>{N-}</tt>) reads
+        exactly N further octets before resuming line reads. Reading stops at either:
+        - a line beginning with the command tag held in ctx.extra[\a tag_key] followed
+          by a space (the tagged completion line), or
+        - a line beginning with <tt>"+"</tt> (a command continuation request).
+
+        The complete raw response — literal introducers and literal octets included,
+        exactly as received — is stored as a binary in ctx.extra[\a resp_key] and also
+        left in ctx.last_output. Response parsing is intentionally left to the caller.
+
+        ctx.extra["imap_continuation"] is set to True when the response terminated with
+        a continuation request rather than a tagged completion line.
+
+        If the tagged completion line's status is \c NO or \c BAD, an exception is
+        raised with error code \a err_code and the server's response text.
+
+        @param tag_key context key holding the command tag (e.g. \c "a001")
+        @param resp_key context key to receive the raw response binary
+        @param err_code the exception error code raised on a NO/BAD completion
+        @param max_size maximum accumulated response size in bytes; exceeding it raises
+        \a err_code rather than allocating without bound
+    */
+    DLLEXPORT int addRecvImapResponse(const char* tag_key, const char* resp_key, const char* err_code,
+        size_t max_size);
 
     //! Sets a string value in context extra
     DLLEXPORT int addSetContextValue(const char* key, const char* value);
@@ -482,6 +522,26 @@ private:
 
     //! Create the inner poll operation for a step
     DLLLOCAL SocketPollOperationBase* createInnerOp(const Step& step, ExceptionSink* xsink);
+
+    //! Handles completion of an inner op for a RECV_IMAP_RESPONSE step
+    /** Appends the chunk just read to ctx.imap_accum, then either arms the next inner
+        read (line or literal) or completes the step.
+
+        @return 1 if the step is complete and execution should advance, 0 if a new inner
+        op was armed and the continuePoll loop should iterate, -1 on error (an exception
+        has been raised)
+    */
+    DLLLOCAL int handleImapResponse(ExceptionSink* xsink);
+
+    //! Arms a CRLF-delimited line read as the current inner op (RECV_IMAP_RESPONSE)
+    /** @return 0 on success, -1 on error (an exception has been raised)
+    */
+    DLLLOCAL int armImapLineRead(ExceptionSink* xsink);
+
+    //! Arms a fixed-size literal read as the current inner op (RECV_IMAP_RESPONSE)
+    /** @return 0 on success, -1 on error (an exception has been raised)
+    */
+    DLLLOCAL int armImapLiteralRead(size_t count, ExceptionSink* xsink);
 
     //! Extract output from current_op into context
     DLLLOCAL void extractOutput(ExceptionSink* xsink);
